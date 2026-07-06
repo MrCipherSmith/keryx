@@ -1,7 +1,9 @@
 export function renderIndexMarkdown({
   enableGdgraph,
+  ruleSources,
 }: {
   enableGdgraph: boolean;
+  ruleSources: string[];
 }): string {
   const moduleRows = enableGdgraph
     ? "| gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |\n"
@@ -16,8 +18,18 @@ export function renderIndexMarkdown({
     : "- No module data generated yet.";
 
   const skillsRefs = enableGdgraph
-    ? "- `skills/gdgraph/`"
-    : "- No module skills installed yet.";
+    ? "| gdgraph | Code graph context and affected-file discovery | skills/gdgraph/ |\n"
+    : "";
+
+  const rulesRows =
+    ruleSources.length > 0
+      ? ruleSources
+          .map((source) => {
+            const ruleFile = `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
+            return `| ${source} | Imported repository agent instructions | rules/${ruleFile} |`;
+          })
+          .join("\n")
+      : "| _none_ | No project rules imported yet | - |";
 
   return `# Metaproject Index
 
@@ -30,21 +42,32 @@ This \`.metaproject\` folder contains agent-readable context, tools, generated d
 | Module | Purpose | Entry |
 |--------|---------|-------|
 ${moduleRows || "| _none_ | No modules enabled yet | - |\n"}
+## Rules
+
+| Source | Purpose | Entry |
+|--------|---------|-------|
+${rulesRows}
+
+## Skills
+
+| Skill | Purpose | Entry |
+|-------|---------|-------|
+| project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
+${skillsRefs || ""}
+
 ## Agent Workflow
 
 1. Read this file first.
 2. Check enabled modules.
-3. Use module manifests before reading raw generated data.
-4. Prefer curated artifacts in \`data/*/artifacts\`.
-5. Run module CLI commands when generated data is stale.
+3. Load relevant rules from \`rules/\`.
+4. Use relevant skills from \`skills/\`.
+5. Use module manifests before reading raw generated data.
+6. Prefer curated artifacts in \`data/*/artifacts\`.
+7. Run module CLI commands when generated data is stale.
 
 ## Data
 
 ${dataRefs}
-
-## Skills
-
-${skillsRefs}
 
 ## Refresh
 
@@ -52,6 +75,75 @@ ${skillsRefs}
 gd-metapro index refresh
 ${enableGdgraph ? "gd-metapro gdgraph build" : ""}
 \`\`\`
+`;
+}
+
+export function renderAgentEntrypoint({ source }: { source: string }): string {
+  return `# ${source.replace(/\.md$/i, "")} Instructions
+
+<!-- gd-metapro:index -->
+## Metaproject
+
+Read [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.
+`;
+}
+
+export function renderProjectRulesReadme(): string {
+  return `# Project Rules
+
+This directory stores repository-level instructions imported from root agent entrypoints such as \`AGENTS.md\` or \`CLAUDE.md\`.
+
+Rules:
+
+- treat files here as agent-readable mirrors of root instructions;
+- update the root entrypoint first when changing project-wide instructions;
+- rerun \`gd-metapro init\` to resync imported rule files.
+`;
+}
+
+export function renderImportedAgentRules({
+  source,
+  content,
+}: {
+  source: string;
+  content: string;
+}): string {
+  return `# Imported Rules: ${source}
+
+Source: \`${source}\`
+
+This file is generated from the repository root agent entrypoint. Edit \`${source}\`, then rerun \`gd-metapro init\`.
+
+---
+
+${content.trim()}
+`;
+}
+
+export function renderProjectRulesSkillReadme({
+  sources,
+}: {
+  sources: string[];
+}): string {
+  const sourceList =
+    sources.length > 0
+      ? sources.map((source) => `- \`${source}\``).join("\n")
+      : "- No root agent entrypoint was found during init.";
+
+  return `# project-rules Skill
+
+Use this skill before planning, implementing, or reviewing work in this repository.
+
+## Sources
+
+${sourceList}
+
+## Workflow
+
+1. Start from \`.metaproject/index.md\`.
+2. Read the relevant imported files in \`.metaproject/rules/\`.
+3. Apply those rules before module-specific guidance.
+4. If root instructions changed, rerun \`gd-metapro init\` to refresh this mirror.
 `;
 }
 

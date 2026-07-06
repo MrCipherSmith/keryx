@@ -21,6 +21,7 @@
 - **Module** - подключаемая функциональная область: `gdgraph`, wiki, memory, tasks, health, testing, skills.
 - **Core** - служебный код модуля.
 - **Data** - output, который читают агенты: индексы, summary, отчеты, графы, curated context.
+- **Rules** - импортированные проектные инструкции из `AGENTS.md`/`CLAUDE.md`.
 - **Agent entrypoint** - `.metaproject/index.md`, главный файл для AI-агентов.
 
 ## 3. Цели
@@ -31,6 +32,9 @@
 - Генерировать `index.md` как точку входа для AI-агентов.
 - Генерировать `README.md` как описание Metaproject для человека.
 - Создавать machine-readable manifest `metaproject.json`.
+- Импортировать существующие `AGENTS.md`/`CLAUDE.md` в `.metaproject/rules/`.
+- Если root agent entrypoint отсутствует, создавать `AGENTS.md`.
+- Добавлять в root agent entrypoint ссылку на `.metaproject/index.md`.
 - Разделять служебную логику и output: `core/` отдельно от `data/`.
 - Поддержать повторный запуск `gd-metapro init` без потери пользовательских изменений.
 - Заложить расширяемую систему модулей.
@@ -114,6 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scr
 - скачать туда runtime CLI;
 - выполнить `gd-metapro init` через локальный runtime;
 - создать `.metaproject/index.md`, `.metaproject/README.md`, `.metaproject/metaproject.json`;
+- синхронизировать root agent entrypoints с `.metaproject/rules/`;
 - создать выбранные module structures.
 
 ### 5.3 Локальная разработческая установка
@@ -188,8 +193,13 @@ CLI должен:
 6. Создать `metaproject.json`.
 7. Создать `.metaproject/index.md`.
 8. Создать `.metaproject/README.md`.
-9. Создать структуру `core/`, `data/`, `skills/`, `modules/`.
-10. Запустить post-init hooks включенных модулей.
+9. Найти `AGENTS.md`, `agents.md`, `CLAUDE.md`, `claude.md`.
+10. Если agent entrypoint не найден, создать `AGENTS.md`.
+11. Добавить в найденные или созданный entrypoint ссылку на `.metaproject/index.md`.
+12. Импортировать их содержимое в `.metaproject/rules/`.
+13. Создать `.metaproject/skills/project-rules/`.
+14. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
+15. Запустить post-init hooks включенных модулей.
 
 ### 7.2 Интерактивные вопросы
 
@@ -242,7 +252,11 @@ Which AI entrypoints should be generated?
   metaproject.json
   core/
   data/
+  rules/
+    README.md
+    agents-md.md
   skills/
+    project-rules/
   modules/
   reports/
   templates/
@@ -286,6 +300,7 @@ Which AI entrypoints should be generated?
     "root": ".metaproject",
     "core": ".metaproject/core",
     "data": ".metaproject/data",
+    "rules": ".metaproject/rules",
     "skills": ".metaproject/skills",
     "modules": ".metaproject/modules"
   },
@@ -309,7 +324,8 @@ Which AI entrypoints should be generated?
   },
   "agentEntrypoints": {
     "index": ".metaproject/index.md",
-    "readme": ".metaproject/README.md"
+    "readme": ".metaproject/README.md",
+    "root": ["AGENTS.md"]
   }
 }
 ```
@@ -325,6 +341,7 @@ Which AI entrypoints should be generated?
 - Project identity.
 - How to use this Metaproject.
 - Enabled modules.
+- Rules references.
 - Agent workflow.
 - Module references.
 - Data locations.
@@ -347,23 +364,34 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 |--------|---------|-------|
 | gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |
 
+## Rules
+
+| Source | Purpose | Entry |
+|--------|---------|-------|
+| AGENTS.md | Imported repository agent instructions | rules/agents-md.md |
+
+## Skills
+
+| Skill | Purpose | Entry |
+|-------|---------|-------|
+| project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
+| gdgraph | Code graph context and affected-file discovery | skills/gdgraph/ |
+
 ## Agent Workflow
 
 1. Read this file first.
 2. Check enabled modules.
-3. Use module manifests before reading raw generated data.
-4. Prefer curated artifacts in `data/*/artifacts`.
-5. Run module CLI commands when generated data is stale.
+3. Load relevant rules from `rules/`.
+4. Use relevant skills from `skills/`.
+5. Use module manifests before reading raw generated data.
+6. Prefer curated artifacts in `data/*/artifacts`.
+7. Run module CLI commands when generated data is stale.
 
 ## Data
 
 - `data/gdgraph/artifacts/summary.md`
 - `data/gdgraph/artifacts/module-map.json`
 - `data/gdgraph/queries/latest.md`
-
-## Skills
-
-- `skills/gdgraph/`
 
 ## Refresh
 

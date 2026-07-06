@@ -69,11 +69,20 @@ Project-local install stores the CLI runtime under:
   metaproject.json
   core/
   data/
+  rules/
   skills/
   modules/
   reports/
   templates/
 ```
+
+It also connects repository-level agent entrypoints:
+
+- imports existing `AGENTS.md`, `agents.md`, `CLAUDE.md`, or `claude.md` into `.metaproject/rules/`;
+- creates `AGENTS.md` when none of those files exist;
+- appends a reference from each root entrypoint to `.metaproject/index.md`;
+- creates `.metaproject/skills/project-rules/`;
+- lists imported rules and skills in `.metaproject/index.md`.
 
 If `gdgraph` is enabled, it also creates:
 
@@ -88,6 +97,13 @@ If `gdgraph` is enabled, it also creates:
   data/gdgraph/
   modules/gdgraph.md
   skills/gdgraph/
+```
+
+Agent rule files are mirrored into:
+
+```text
+.metaproject/rules/
+.metaproject/skills/project-rules/
 ```
 
 ## Commands
