@@ -588,10 +588,29 @@ Runs common project context commands with token-aware filtering and stores raw o
 - \`data/gdctx/raw/\`
 - \`data/gdctx/queries/\`
 
+## Config
+
+- \`gdctx.config.json\`
+
 ## Skills
 
 - \`skills/gdctx/\`
 `;
+}
+
+export function renderGdctxConfig(): string {
+  return `${JSON.stringify(
+    {
+      maxOutputLines: 120,
+      maxImportantLines: 60,
+      maxGroupItems: 12,
+      compactHeadLines: 120,
+      compactTailLines: 80,
+      outlineMaxEntries: 160,
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 export function renderGdctxCoreReadme(): string {

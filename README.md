@@ -124,6 +124,7 @@ If `gdctx` is enabled, init also creates:
     raw/
     artifacts/
     queries/
+  gdctx.config.json
   modules/gdctx.md
   skills/gdctx/SKILL.md
 ```
