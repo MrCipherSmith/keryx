@@ -1,10 +1,15 @@
 # Documentation Memory requirements
 
-Version: 0.1.0
+Version: 0.2.0
+Status: production-ready specification (v1 scope frozen via best-practices research + interview; not yet implemented)
 
 `Documentation Memory` - модуль Metaproject для долговременной проектной памяти: lessons learned, decisions, constraints, known mistakes, historical context и повторно используемые patterns.
 
 Markdown остается source of truth, а TS/Bun используется для индексации, chunking, поиска, dedup/conflict checks и будущих embeddings.
+
+## Статус
+
+Пакет доведён до production-ready: решения зафиксированы через best-practices research (Generative Agents scoring, Mem0 extract→update, Zep, MemGuard) + два раунда интервью (D1-D12). Заданы: retrieval + ranking-формула (embedding-free, детерминированный), ingest propose-as-draft, детерминированный dedup/conflict, decay-in-ranking, `memory.config.json`, `MemoryService`-контракт, versioned search-JSON и фазовый план. Готов к имплементации Phase 1. См. [specification.md](specification.md) sections 2 и 21.
 
 ## Документы
 
