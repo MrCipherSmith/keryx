@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## 1. Purpose
 
@@ -14,7 +14,8 @@ registry to human-readable status and points at each module's requirements.
 
 - `implemented` - shipped and enabled by default in `gd-metapro init`.
 - `in progress` - partially shipped; some phases remain.
-- `planned` - specified or drafted, not yet implemented (manifest entry disabled).
+- `spec ready` - production-ready requirements frozen; implementation not started.
+- `planned` - drafted or idea stage, not yet spec-frozen (manifest entry disabled).
 
 ## 3. Module Status
 
@@ -26,7 +27,7 @@ registry to human-readable status and points at each module's requirements.
 | gdwiki | `gd-metapro wiki` | `wiki` | implemented (MVP) | [wiki/](wiki/) |
 | Documentation Memory | `gd-metapro memory` | `memory` | planned | - |
 | Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
-| Code Health | `gd-metapro health` | `health` | planned | - |
+| Code Health | `gd-metapro health` | `health` | spec ready (production v1) | [code-health/](code-health/) |
 | Testing Tools | `gd-metapro test` | `testing` | planned | - |
 | gdskills / Domain Skills | `gd-metapro skills` | `domain-skills` | planned | - |
 
@@ -51,11 +52,10 @@ Remaining (Phase 3):
 
 Order is indicative, not committed:
 
-1. Documentation Memory (`gd-metapro memory`) - typed memory registry with search.
-2. Code Health (`gd-metapro health`) - quality gate and health/risk scoring.
-3. gdskills / Project Skills (`gd-metapro skills`) - entity-skill lifecycle.
-4. Task Manager (`gd-metapro tasks`).
-5. Testing Tools (`gd-metapro test`).
+1. Code Health (`gd-metapro health`) - spec ready (production v1); next to implement. See [code-health/specification.md](code-health/specification.md) section 21.
+2. Documentation Memory (`gd-metapro memory`) - typed memory registry with search.
+3. Task Manager (`gd-metapro tasks`).
+4. Testing Tools (`gd-metapro test`).
 
 ## 6. Maintenance
 
