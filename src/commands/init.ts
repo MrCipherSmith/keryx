@@ -485,34 +485,57 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     "For code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
   const graphPolicy =
     "For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
+  const oldCtxPolicy =
+    "When gdctx is enabled, use the Metaproject gdctx skill for commands, search, diff, test logs, and large file reads that can produce long output.";
+  const ctxPolicy =
+    "For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.";
 
   if (content.includes(marker)) {
+    let next = content;
     if (content.includes(oldGraphPolicy)) {
-      await writeFile(
-        filePath,
-        content.replaceAll(oldGraphPolicy, graphPolicy),
-        "utf8",
-      );
-      return;
+      next = next.replaceAll(oldGraphPolicy, graphPolicy);
+    }
+    if (next.includes(oldCtxPolicy)) {
+      next = next.replaceAll(oldCtxPolicy, ctxPolicy);
+    }
+    next = collapseDuplicatePolicy(next, graphPolicy);
+    next = collapseDuplicatePolicy(next, ctxPolicy);
+
+    const missingPolicies = [
+      ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
+      ...(next.includes(ctxPolicy) ? [] : [ctxPolicy]),
+    ];
+    if (missingPolicies.length > 0) {
+      const suffix = next.endsWith("\n") ? "" : "\n";
+      next = `${next}${suffix}\n${missingPolicies.join("\n\n")}\n`;
     }
 
-    if (!content.includes(graphPolicy)) {
-      const suffix = content.endsWith("\n") ? "" : "\n";
-      await writeFile(filePath, `${content}${suffix}\n${graphPolicy}\n`, "utf8");
+    if (next !== content) {
+      await writeFile(filePath, next, "utf8");
     }
+
     return;
   }
 
   const suffix = content.endsWith("\n") ? "" : "\n";
   await writeFile(
     filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n`,
+    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${ctxPolicy}\n`,
     "utf8",
   );
 }
 
 function ruleFileNameFor(source: string): string {
   return `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
+}
+
+function collapseDuplicatePolicy(content: string, policy: string): string {
+  const parts = content.split(policy);
+  if (parts.length <= 2) {
+    return content;
+  }
+
+  return `${parts[0]}${policy}${parts.slice(1).join("").replace(/^\s+/, "\n")}`;
 }
 
 async function syncGitignore(projectRoot: string): Promise<void> {

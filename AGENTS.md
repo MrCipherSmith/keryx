@@ -6,3 +6,5 @@
 Read [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.
 
 For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.
+
+For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.

@@ -48,11 +48,11 @@ export function renderIndexMarkdown({
     "Check enabled modules.",
     "Load relevant rules from `rules/`.",
     enableGdgraph
-      ? "For project navigation, file discovery, code understanding, implementation, review, debugging, or refactoring, use `skills/gdgraph/SKILL.md` before broad raw file search when gdgraph is enabled."
+      ? "Use `skills/gdgraph/SKILL.md` by default for project navigation, file discovery, code understanding, implementation, review, debugging, refactoring, architecture, dependency, impact, and relationship questions. The user does not need to request graph usage explicitly."
       : "Use relevant skills from `skills/` before broad raw file search.",
     ...(enableGdctx
       ? [
-          "For commands, search, diff, test logs, and large file reads that can produce long output, use `skills/gdctx/SKILL.md` when gdctx is enabled.",
+          "Use `skills/gdctx/SKILL.md` by default for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.",
         ]
       : []),
     "Use relevant skills from `skills/`.",
@@ -124,7 +124,7 @@ Read [.metaproject/index.md](.metaproject/index.md) before planning, implementin
 
 For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.
 
-When gdctx is enabled, use the Metaproject gdctx skill for commands, search, diff, test logs, and large file reads that can produce long output.
+For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.
 `;
 }
 
@@ -136,6 +136,7 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/**/raw/
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
+.metaproject/data/gdctx/artifacts/
 .metaproject/reports/
 `;
 }
@@ -492,6 +493,8 @@ description: Use by default for project navigation and file discovery before bro
 
 Use this skill by default for project navigation and file discovery. The user does not need to explicitly ask for graph usage.
 
+When command output, search results, diff, logs, or large file reads may be long, pair this with \`skills/gdctx/SKILL.md\` so graph narrows the file set and gdctx compresses the output.
+
 Run gdgraph before broad raw file search when the task involves finding relevant files, understanding project structure, implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation.
 
 Skip gdgraph only when the request is clearly unrelated to project files, asks for a single known file's literal contents, or when gdgraph is unavailable.
@@ -638,12 +641,12 @@ description: Use for commands, search, diff, test logs, lint/build output, and l
 
 # gdctx Skill
 
-Use this skill when a task needs command output, search results, git diff/status, test logs, lint/build output, or large file reads that may produce more context than the agent should load directly.
+Use this skill by default when a task needs command output, search results, git diff/status, test logs, lint/build output, or large file reads that may produce more context than the agent should load directly. The user does not need to explicitly ask for gdctx usage.
 
 ## Workflow
 
 1. Check whether \`.metaproject/modules/gdctx.md\` exists.
-2. For potentially long output, prefer \`gd-metapro ctx ...\` over raw shell output.
+2. For potentially long output, prefer \`gd-metapro ctx ...\` over raw shell output by default.
 3. For project navigation or file relationship questions, use gdgraph first when available, then use gdctx for compact command/file output.
 4. Treat gdctx summaries as navigation context. Verify important claims against source files before editing or reporting.
 5. Use raw output only when the compact summary is insufficient.
