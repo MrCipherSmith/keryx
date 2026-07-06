@@ -11,5 +11,6 @@ coverage/
 .metaproject/data/**/raw/
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
+.metaproject/data/gdctx/artifacts/
 .metaproject/reports/
 # gd-metapro:end

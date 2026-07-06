@@ -144,6 +144,7 @@ Versioned by default:
 - `.metaproject/skills/`
 - `.metaproject/modules/`
 - `.metaproject/data/*/artifacts/`
+- except `.metaproject/data/gdctx/artifacts/`, which is transient command output
 
 Ignored by default:
 
@@ -153,6 +154,7 @@ Ignored by default:
 - `.metaproject/data/**/raw/`
 - `.metaproject/data/**/queries/`
 - `.metaproject/data/**/summaries/`
+- `.metaproject/data/gdctx/artifacts/`
 - `.metaproject/reports/`
 
 ## Commands

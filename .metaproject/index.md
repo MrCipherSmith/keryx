@@ -29,8 +29,8 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 1. Read this file first.
 2. Check enabled modules.
 3. Load relevant rules from `rules/`.
-4. For project navigation, file discovery, code understanding, implementation, review, debugging, or refactoring, use `skills/gdgraph/SKILL.md` before broad raw file search when gdgraph is enabled.
-5. For commands, search, diff, test logs, and large file reads that can produce long output, use `skills/gdctx/SKILL.md` when gdctx is enabled.
+4. Use `skills/gdgraph/SKILL.md` by default for project navigation, file discovery, code understanding, implementation, review, debugging, refactoring, architecture, dependency, impact, and relationship questions. The user does not need to request graph usage explicitly.
+5. Use `skills/gdctx/SKILL.md` by default for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.
 6. Use relevant skills from `skills/`.
 7. Use module manifests before reading raw generated data.
 8. Prefer curated artifacts in `data/*/artifacts`.

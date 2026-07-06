@@ -7,6 +7,8 @@ description: Use by default for project navigation and file discovery before bro
 
 Use this skill by default for project navigation and file discovery. The user does not need to explicitly ask for graph usage.
 
+When command output, search results, diff, logs, or large file reads may be long, pair this with `skills/gdctx/SKILL.md` so graph narrows the file set and gdctx compresses the output.
+
 Run gdgraph before broad raw file search when the task involves finding relevant files, understanding project structure, implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation.
 
 Skip gdgraph only when the request is clearly unrelated to project files, asks for a single known file's literal contents, or when gdgraph is unavailable.
