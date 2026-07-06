@@ -1,6 +1,7 @@
 # Documentation Memory: PRD
 
-Version: 0.1.0
+Version: 0.2.0
+Status: production-ready scope frozen (see [specification.md](specification.md) section 2 and [brainstorm.md](brainstorm.md) section 5)
 
 ## 1. Purpose
 

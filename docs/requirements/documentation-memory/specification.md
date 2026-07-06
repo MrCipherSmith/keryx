@@ -1,17 +1,40 @@
 # Documentation Memory: technical specification
 
-Version: 0.1.0
+Version: 0.2.0
+Status: production-ready specification (v1 scope frozen via best-practices research + interview)
 
 ## 1. Purpose
 
-Documentation Memory is a Metaproject module for long-term project knowledge. It stores structured Markdown entries, builds local indexes, supports compact search output and provides memory signals for `skill-verify-skill`.
+Documentation Memory is a Metaproject module for long-term project knowledge.
+It stores typed, versioned Markdown entries, builds a local deterministic index,
+ranks retrieval by relevance/recency/confidence, reconciles new information
+through dedup/conflict checks, and exposes accepted memory as a signal for
+`skill-verify-skill` and `gd-metapro skills learn --from-memory`.
 
-## 2. Placement
+## 2. Design decisions (frozen for v1)
 
-When enabled, `gd-metapro init` should create:
+| # | Decision | Choice |
+|---|---|---|
+| D1 | Direction | Memory + skill feedback loop (search, conflict detection, learn). |
+| D2 | Source of truth | Markdown in `.metaproject/memory/**`; generated data is derived. |
+| D3 | Retrieval (MVP) | Keyword + metadata index with relevance/recency/confidence ranking. Embedding-free and deterministic. Embeddings are a Phase 3 overlay. |
+| D4 | Ranking | Documented default weighted formula (relevance + recency + confidence + status + scope); overridable in config. |
+| D5 | Ingest lifecycle | Propose-as-`draft` with provenance + dedup/conflict flags; a human accepts. Auto ADD/UPDATE reconcile is Phase 2. |
+| D6 | Config location | Separate `.metaproject/memory.config.json`. |
+| D7 | Dedup/conflict | Deterministic similarity: title + tag/scope overlap + token Jaccard on summary, with thresholds. Conflict = contradicts an accepted decision/constraint in the same scope. |
+| D8 | Retention/decay | Recency decay affects ranking only; Markdown is never auto-deleted; deprecated/superseded are retained for history. |
+| D9 | Reflection/consolidation | Deferred to Phase 2. |
+| D10 | Search JSON contract | Versioned (`schemaVersion`), stable, validated by gdskills. |
+| D11 | Entry types | Typed registry (11 types); MVP templates for `lesson`, `decision`, `constraint`, `known-mistake`. |
+| D12 | Skill influence | Only `accepted` entries can affect skills; `draft`/`conflict` are advisory only (contamination prevention). |
+
+## 3. Placement
+
+When enabled, `gd-metapro init` creates:
 
 ```text
 .metaproject/
+  memory.config.json
   memory/
     index.md
     lessons/
@@ -24,16 +47,19 @@ When enabled, `gd-metapro init` should create:
   core/
     memory/
       cli.ts
+      types.ts
+      config.ts
       index.ts
       search.ts
       ingest.ts
       dedup.ts
-      types.ts
       README.md
   data/
     memory/
       index/
       artifacts/
+        latest.md
+        latest.json
       queries/
       raw/
   skills/
@@ -43,17 +69,33 @@ When enabled, `gd-metapro init` should create:
     memory.md
 ```
 
-## 3. Source of truth
+## 4. Configuration
 
-Markdown files in `.metaproject/memory/**/*.md` are the source of truth.
+Config lives in `.metaproject/memory.config.json`; the manifest stores only
+`enabled` and paths. Default written on enable:
 
-Generated data is stored under `.metaproject/data/memory/`.
+```json
+{
+  "schemaVersion": 1,
+  "ranking": {
+    "weights": { "relevance": 1.0, "recency": 0.5, "confidence": 0.5, "status": 0.5, "scope": 0.5 },
+    "recencyDecayPerDay": 0.995,
+    "maxResults": 10
+  },
+  "confidence": { "default": "medium", "values": { "low": 0.34, "medium": 0.67, "high": 1.0 } },
+  "statusBoost": { "accepted": 1.0, "draft": 0.4, "conflict": 0.2, "deprecated": 0.1, "superseded": 0.1 },
+  "dedup": { "titleSimilarity": 0.8, "summaryJaccard": 0.6, "minSharedScopeOrTags": 1 },
+  "ingest": { "defaultStatus": "draft", "allowAutoAccept": false }
+}
+```
 
-Embeddings are optional future generated data and must not replace Markdown as the canonical source.
+## 5. Source of truth
 
-## 4. Entry types
+Markdown files in `.metaproject/memory/**/*.md` are canonical. Generated indexes
+and query artifacts live under `.metaproject/data/memory/`. Embeddings, if added
+in Phase 3, are optional derived data and never replace Markdown.
 
-Typed memory registry:
+## 6. Entry types
 
 | Type | Folder | MVP Template | Purpose |
 |---|---|---:|---|
@@ -62,16 +104,14 @@ Typed memory registry:
 | `constraint` | `constraints/` | yes | Project or module constraints |
 | `known-mistake` | `known-mistakes/` | yes | Repeated or costly mistakes to avoid |
 | `historical-context` | `historical-context/` | no | Why the project evolved this way |
-| `pattern` | `patterns/` | no | Reusable implementation or architecture pattern |
+| `pattern` | `patterns/` | no | Reusable implementation/architecture pattern |
 | `task-note` | `task-notes/` | no | Task-specific durable note |
 | `review-note` | `review-notes/` | no | Review-derived durable note |
 | `incident` | `incidents/` | no | Incident and remediation memory |
 | `migration-note` | `migration-notes/` | no | Migration history and pitfalls |
 | `integration-note` | `integration-notes/` | no | External integration constraints and history |
 
-## 5. Entry template
-
-MVP uses simple Markdown fields:
+## 7. Entry template
 
 ```markdown
 # <Title>
@@ -94,6 +134,7 @@ Main memory content.
 - Source: review|health|orchestrator|manual|skill-verifier
 - Link: <path or URL>
 - Created: YYYY-MM-DD
+- Updated: YYYY-MM-DD
 
 ## Related Scopes
 
@@ -114,75 +155,59 @@ Main memory content.
 - 0.1.0 - Initial version.
 ```
 
-## 6. Status workflow
+`Confidence` semantics (default `medium`):
 
-Allowed statuses:
+- `high` - accepted decision/constraint, or a lesson confirmed by multiple sources;
+- `medium` - a single reliable source (review/health/manual);
+- `low` - a single weak observation or a draft proposal.
 
-- `draft` - proposed, not authoritative.
-- `accepted` - authoritative memory; can affect `skill-verify-skill`.
-- `deprecated` - no longer valid but kept for history.
-- `conflict` - contradicts accepted memory and requires resolution.
-- `superseded` - replaced by another entry.
+Ingest sets `Confidence` from the source by default; a human may raise it on accept.
 
-Only `accepted` entries can automatically update skills according to autonomy policy. `draft` entries are advisory context only.
+## 8. Status workflow
 
-## 7. CLI
+- `draft` - proposed, advisory only.
+- `accepted` - authoritative; can influence `skill-verify-skill`.
+- `deprecated` - no longer valid, kept for history.
+- `conflict` - contradicts accepted memory; requires resolution; never auto-applies.
+- `superseded` - replaced by another entry (linked in `Related`).
 
-Namespace:
+Only `accepted` entries can automatically influence skills (contamination
+prevention). `draft` and `conflict` are advisory context only.
 
-```bash
-gd-metapro memory <command>
+## 9. Indexing and chunking
+
+`memory index` scans `.metaproject/memory/**/*.md`, parses metadata + headings,
+and builds a deterministic inverted index under `data/memory/index/`:
+
+- tokenize `Title + Summary + Details + Tags` (lowercase, split on non-word);
+- store per-entry metadata: type, status, confidence, updated date, scopes, tags;
+- chunk large `Details` by heading/paragraph for snippet extraction;
+- record index freshness (source mtime/hash) for `check`.
+
+## 10. Retrieval and ranking
+
+`memory search "<query>"` ranks entries with a documented, config-weighted score:
+
+```text
+score = w.relevance   * relevance(query, entry)
+      + w.recency     * recency(entry.updated)
+      + w.confidence  * confidence.values[entry.confidence]
+      + w.status      * statusBoost[entry.status]
+      + w.scope       * scopeMatch(filters, entry.scopes)
 ```
 
-### 7.1 new
+- `relevance` - normalized keyword overlap (BM25-lite) over title/summary/tags/details, 0-1;
+- `recency` - `recencyDecayPerDay ^ daysSince(entry.updated)`, 0-1;
+- `confidence` / `status` - table lookups (section 4);
+- `scopeMatch` - 1 when `--module/--entity/--status` filters match, else partial/0.
+
+Results are capped at `ranking.maxResults`. Filters:
 
 ```bash
-gd-metapro memory new lesson
-gd-metapro memory new decision
-gd-metapro memory new constraint
-gd-metapro memory new known-mistake
+gd-metapro memory search "<query>" --module pipelines --entity http-step --status accepted
 ```
 
-Behavior:
-
-1. Validate type against registry.
-2. Create Markdown entry from template.
-3. Set `Version: 0.1.0`.
-4. Set `Status: draft` by default.
-5. Run dedup/conflict check.
-6. Print created path and any warnings.
-
-### 7.2 index
-
-```bash
-gd-metapro memory index
-```
-
-Behavior:
-
-- scan `.metaproject/memory/**/*.md`;
-- parse metadata and headings;
-- chunk entries;
-- write index to `.metaproject/data/memory/index/`;
-- optionally build embeddings if enabled.
-
-### 7.3 search
-
-```bash
-gd-metapro memory search "<query>"
-gd-metapro memory search "<query>" --module pipelines
-gd-metapro memory search "<query>" --entity http-step
-gd-metapro memory search "<query>" --status accepted
-```
-
-Behavior:
-
-- query local index;
-- rank by metadata, text match, related scopes and optional embeddings;
-- return compact Markdown summary;
-- save full JSON results.
-
-### 7.4 ingest
+## 11. Ingest lifecycle
 
 ```bash
 gd-metapro memory ingest --from-job <path>
@@ -191,32 +216,43 @@ gd-metapro memory ingest --from-health <path>
 gd-metapro memory ingest --from-skill-verifier <path>
 ```
 
-Behavior:
+Behavior (propose-as-draft, D5):
 
-- parse source artifact;
-- propose memory entries;
-- attach provenance;
-- run dedup/conflict checks;
-- write entries as `draft` unless config allows direct accepted entries.
+1. parse the source artifact into candidate entries;
+2. attach provenance (source, link, created) and a source-derived `Confidence`;
+3. run dedup and conflict checks (section 12);
+4. write entries as `draft` (never `accepted` unless `ingest.allowAutoAccept`);
+5. print created paths and dedup/conflict warnings.
 
-### 7.5 check
+A human reviews drafts and promotes them to `accepted`. Mem0-style automatic
+ADD/UPDATE/DELETE reconciliation is Phase 2.
 
-```bash
-gd-metapro memory check
-```
+## 12. Dedup and conflict
 
-Runs:
+Deterministic, offline (D7).
 
-- metadata validation;
-- version field check;
-- link check;
-- dedup check;
-- conflict check;
-- index freshness check.
+Dedup - two entries are near-duplicates when:
 
-## 8. Search output
+- `titleSimilarity(a, b) >= dedup.titleSimilarity` (normalized edit/trigram similarity), OR
+- `jaccard(tokens(a.summary), tokens(b.summary)) >= dedup.summaryJaccard`
+  AND they share at least `dedup.minSharedScopeOrTags` scope/tag.
 
-Layered output:
+Action: suggest merge or a `Related` link; do not auto-merge.
+
+Conflict - a new `decision`/`constraint` whose scope overlaps an existing
+`accepted` `decision`/`constraint` is flagged `conflict` for human resolution.
+Semantic contradiction detection beyond scope overlap is advisory (flagged for
+review), since deterministic checks cannot prove contradiction. Conflict entries
+never influence skills.
+
+## 13. Retention and decay
+
+- Recency decay (section 10) affects ranking only.
+- Markdown entries are never auto-deleted; `deprecated`/`superseded` are retained
+  for history and rank low via `statusBoost`.
+- Pruning is a manual, explicit human action.
+
+## 14. Search output
 
 ```text
 .metaproject/data/memory/
@@ -227,94 +263,122 @@ Layered output:
   raw/
 ```
 
-Agent-facing Markdown includes:
+Agent-facing `latest.md`: 3-10 ranked snippets with type, status, confidence,
+provenance, related module/entity/files/skills, why-matched, and links to raw
+entries. Tool-facing `latest.json` carries `schemaVersion`, full ranked results,
+chunks, metadata, and scores (versioned contract, D10).
 
-- 3-10 snippets;
-- type;
-- status;
-- confidence;
-- provenance;
-- related module/entity/files/skills;
-- why this entry matched;
-- links to raw Markdown entries.
+## 15. CLI
 
-Tool-facing JSON contains full ranked results, chunks, metadata and scores.
+```bash
+gd-metapro memory new <lesson|decision|constraint|known-mistake> [--title "<t>"]
+gd-metapro memory index
+gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
+gd-metapro memory ingest --from-<source> <path>
+gd-metapro memory check
+```
 
-## 9. Dedup and conflicts
+`check` runs: metadata validation, `Version` field check, link check, dedup
+check, conflict check, and index-freshness check; non-zero exit on failures.
+`memory reflect` (consolidation) is Phase 2.
 
-Dedup suggestions:
+## 16. Service contract
 
-- detect similar titles;
-- detect overlapping tags/scopes;
-- detect near-duplicate summaries;
-- suggest merge or `Related` links.
+```ts
+export interface MemoryService {
+  create(input: MemoryCreateInput): Promise<MemoryCreateResult>;
+  index(input: MemoryIndexInput): Promise<MemoryIndexResult>;
+  search(input: MemorySearchInput): Promise<MemorySearchResult>;
+  ingest(input: MemoryIngestInput): Promise<MemoryIngestResult>;
+  check(input: MemoryCheckInput): Promise<MemoryCheckResult>;
+}
+```
 
-Conflict workflow:
+`MemorySearchResult` includes `schemaVersion`, ranked entries with scores, and
+artifact paths.
 
-- new entry contradicting accepted `decision` or `constraint` receives `conflict` status or requires resolution;
-- conflict entries must not automatically affect `skill-verify-skill`;
-- accepted decisions/constraints outrank draft entries.
+## 17. gdskills integration (decoupled)
 
-## 10. Integration with gdskills
-
-Documentation Memory is an official verification signal for `skill-verify-skill`.
-
-Supported command:
+- Documentation Memory produces `data/memory/artifacts/latest.json`; it does not
+  call gdskills at runtime.
+- gdskills consumes accepted memory:
 
 ```bash
 gd-metapro skills learn --from-memory .metaproject/data/memory/artifacts/latest.json
 ```
 
-Verifier usage:
+- `schemaVersion` is the contract; gdskills validates it.
+- Verifier usage: search memory by skill target/module/entity/files; detect
+  conflicts between skill instructions and accepted decisions/constraints/known
+  mistakes; use accepted lessons/patterns to update skill sections/checklists.
+- Only `accepted` entries influence skills; `draft`/`conflict` are advisory.
+- Memory-derived skill changes update `skill-changelog.md` with entry ids,
+  status, and provenance.
 
-- search memory by skill target, module, entity, files and related skills;
-- detect conflicts between skill instructions and accepted decisions/constraints/known mistakes;
-- use accepted lessons/patterns to update skill sections/checklists/templates;
-- include draft entries as advisory context only.
+## 18. Orchestrator integration
 
-Memory-derived skill changes must update `skill-changelog.md` with memory entry ids, status and provenance.
+Orchestrators use Documentation Memory before planning (retrieve accepted
+decisions/constraints/known mistakes), after implementation/review (propose
+durable lessons/decisions via ingest), and in the final report (mention created
+or suggested entries).
 
-## 11. Integration with orchestrators
+## 19. Init flow
 
-Orchestrators should use Documentation Memory:
-
-- before planning, to retrieve accepted decisions/constraints/known mistakes;
-- after implementation/review, to propose durable lessons and decisions;
-- before final report, to mention created or suggested memory entries.
-
-## 12. Init flow
-
-`gd-metapro init` must ask:
+`gd-metapro init` asks:
 
 ```text
 Enable Documentation Memory?
-
 Y. Yes - store lessons, decisions, constraints and known mistakes as searchable Markdown
 N. No
 ```
 
-If enabled, init creates memory folders, templates, module manifest and `skills/memory/SKILL.md`.
+If enabled: write `.metaproject/memory.config.json`, create memory folders and
+templates, module manifest, and `skills/memory/SKILL.md`. Flag: `--no-memory`.
 
-## 13. Git policy
+## 20. Git policy
 
-Versioned:
+Versioned: `.metaproject/memory/**/*.md`, `.metaproject/memory.config.json`,
+`.metaproject/modules/memory.md`, `.metaproject/skills/memory/SKILL.md`.
 
-- `.metaproject/memory/**/*.md`;
-- `.metaproject/modules/memory.md`;
-- `.metaproject/skills/memory/SKILL.md`.
+Ignored: `.metaproject/data/memory/index/**`, `.metaproject/data/memory/artifacts/latest.*`,
+`.metaproject/data/memory/raw/**`, `.metaproject/core/memory/**/*.ts`, embedding/vector caches.
 
-Ignored:
+## 21. Implementation phases
 
-- `.metaproject/data/memory/index/**`;
-- `.metaproject/data/memory/artifacts/latest.*`;
-- `.metaproject/data/memory/raw/**`;
-- embedding/vector cache files.
+### Phase 1 - v1 production (frozen)
 
-## 14. Acceptance criteria
+- `memory.config.json` + init integration (`--no-memory`);
+- typed registry + MVP templates + entry validation;
+- `memory new`, `memory index` (inverted index + chunking);
+- `memory search` with the documented ranking formula and filters;
+- `memory ingest` (propose-as-draft + provenance);
+- deterministic dedup/conflict + `memory check`;
+- versioned layered search output; manifest, module doc, skill.
 
-- `gd-metapro init` can enable Documentation Memory.
-- `gd-metapro memory new <type>` creates versioned Markdown entries.
-- `gd-metapro memory index` builds local index.
-- `gd-metapro memory search` returns compact layered output.
-- Dedup/conflict checks exist for new and ingested entries.
-- `gd-metapro skills learn --from-memory <path>` can consume accepted memory entries.
+### Phase 2 - reconcile and consolidation
+
+- Mem0-style ingest reconciliation (ADD/UPDATE/supersede);
+- `memory reflect` (consolidate related entries into higher-level lessons/patterns);
+- end-to-end `skills learn --from-memory` loop and `skill-verify-skill` usage.
+
+### Phase 3 - semantic
+
+- optional embeddings overlay (hybrid keyword + vector);
+- temporal/graph relationships between entries.
+
+## 22. Acceptance criteria (production v1)
+
+- `gd-metapro init` enables Documentation Memory and writes `memory.config.json`.
+- `gd-metapro memory new <type>` creates versioned Markdown entries with required metadata.
+- `gd-metapro memory index` builds a deterministic local index.
+- `gd-metapro memory search` returns layered output ranked by the documented formula, honoring filters and config overrides.
+- `gd-metapro memory ingest` writes provenance-tagged `draft` entries with dedup/conflict warnings.
+- `gd-metapro memory check` fails on missing metadata, broken links, or a stale index.
+- `latest.json` carries `schemaVersion` and is consumable by `gd-metapro skills learn --from-memory`.
+
+## 23. Decision record
+
+Frozen via best-practices research and a two-round interview (see
+[brainstorm.md](brainstorm.md) section 5). Decisions D1-D12 are listed in
+section 2. Research inputs: Generative Agents retrieval scoring, Mem0
+extract/update, Zep temporal lifecycle, MemGuard contamination prevention.
