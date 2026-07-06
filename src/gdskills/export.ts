@@ -105,7 +105,7 @@ async function resolveProjectSkill(
   projectRoot: string,
   input: string,
   registry: ProjectSkillRegistryEntry[],
-): Promise<{ packageRoot: string; entry?: ProjectSkillRegistryEntry } | undefined> {
+): Promise<{ packageRoot: string; entry?: ProjectSkillRegistryEntry | undefined } | undefined> {
   const directPath = path.resolve(projectRoot, input);
   const directPackage = await normalizePackagePath(directPath);
   if (directPackage) {
@@ -207,7 +207,8 @@ async function listFiles(root: string): Promise<string[]> {
 function inferModuleFromPackageRoot(packageRoot: string): string {
   const parts = toPosix(packageRoot).split("/");
   const index = parts.indexOf("project-skills");
-  return index >= 0 && parts[index + 1] ? parts[index + 1] : "general";
+  const next = parts[index + 1];
+  return index >= 0 && next ? next : "general";
 }
 
 function toPosix(value: string): string {

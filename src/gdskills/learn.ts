@@ -8,8 +8,8 @@ export type LearningSourceType = "review" | "test" | "failure" | "health" | "mem
 export type LearnProjectSkillOptions = {
   sourceType: LearningSourceType;
   sourcePath: string;
-  skill?: string;
-  dryRun?: boolean;
+  skill?: string | undefined;
+  dryRun?: boolean | undefined;
 };
 
 export type LearningProposal = {
@@ -190,7 +190,7 @@ function resolveSkillForLearning({
   sourcePath,
 }: {
   registry: ProjectSkillRegistryEntry[];
-  explicitSkill?: string;
+  explicitSkill?: string | undefined;
   source: string;
   sourcePath: string;
 }): ProjectSkillRegistryEntry | undefined {

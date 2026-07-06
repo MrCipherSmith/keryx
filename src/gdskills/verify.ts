@@ -14,7 +14,7 @@ export type VerificationSignal = {
   name: string;
   status: "pass" | "warn" | "fail";
   message: string;
-  path?: string;
+  path?: string | undefined;
 };
 
 export type ProjectSkillVerificationReport = {
@@ -32,11 +32,11 @@ export type ProjectSkillVerificationReport = {
 };
 
 type SkillMetadata = {
-  version?: string;
-  target?: string;
-  module?: string;
-  status?: string;
-  lastVerified?: string;
+  version?: string | undefined;
+  target?: string | undefined;
+  module?: string | undefined;
+  status?: string | undefined;
+  lastVerified?: string | undefined;
 };
 
 type MetaprojectManifest = {
@@ -125,7 +125,7 @@ async function resolveProjectSkill(
   projectRoot: string,
   input: string,
   registry: ProjectSkillRegistryEntry[],
-): Promise<{ packageRoot: string; entry?: ProjectSkillRegistryEntry } | undefined> {
+): Promise<{ packageRoot: string; entry?: ProjectSkillRegistryEntry | undefined } | undefined> {
   const directPath = path.resolve(projectRoot, input);
   const directPackage = await normalizePackagePath(directPath);
   if (directPackage) {
@@ -192,7 +192,7 @@ async function collectVerificationSignals({
   skillMdPath: string;
   metadata: SkillMetadata;
   target: string;
-  registryEntry?: ProjectSkillRegistryEntry;
+  registryEntry?: ProjectSkillRegistryEntry | undefined;
 }): Promise<VerificationSignal[]> {
   const signals: VerificationSignal[] = [];
   const requiredFiles = [
@@ -411,7 +411,8 @@ function updateLastVerified(skillMd: string, verifiedAt: string): string {
 function inferModuleFromPath(packageRoot: string): string {
   const parts = toPosix(packageRoot).split("/");
   const index = parts.indexOf("project-skills");
-  return index >= 0 && parts[index + 1] ? parts[index + 1] : "general";
+  const next = parts[index + 1];
+  return index >= 0 && next ? next : "general";
 }
 
 function escapeRegExp(value: string): string {

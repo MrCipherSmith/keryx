@@ -6,10 +6,10 @@ export type ProjectSkillFormat = "auto" | "single" | "package";
 
 export type CreateProjectSkillOptions = {
   target: string;
-  module?: string;
-  name?: string;
-  format?: ProjectSkillFormat;
-  dryRun?: boolean;
+  module?: string | undefined;
+  name?: string | undefined;
+  format?: ProjectSkillFormat | undefined;
+  dryRun?: boolean | undefined;
 };
 
 export type ProjectSkillRegistryEntry = {
@@ -43,7 +43,7 @@ type MetaprojectManifest = {
 type Evidence = {
   targetExists: boolean;
   targetKind: "file" | "directory" | "symbol-or-concept";
-  targetPath?: string;
+  targetPath?: string | undefined;
   graphArtifacts: string[];
   ctxArtifacts: string[];
   wikiArtifacts: string[];

@@ -8,7 +8,9 @@
   },
   "scripts": {
     "gd-metapro": "bun ./src/cli.ts",
-    "check": "bun ./src/cli.ts --version"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "tsc --noEmit && bun test"
   },
   "files": [
     "src",
@@ -17,7 +19,9 @@
     "package.json"
   ],
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "bun-types": "latest",
+    "typescript": "^5"
   },
   "engines": {
     "bun": ">=1.1.0"

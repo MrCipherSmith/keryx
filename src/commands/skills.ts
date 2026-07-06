@@ -270,9 +270,9 @@ function resolveProjectSkillRegistryEntry(
 }
 
 function parseProjectSkillMetadata(content: string): {
-  version?: string;
-  status?: string;
-  lastVerified?: string;
+  version?: string | undefined;
+  status?: string | undefined;
+  lastVerified?: string | undefined;
 } {
   return {
     version: content.match(/^Version:\s*(.+)$/m)?.[1]?.trim(),
