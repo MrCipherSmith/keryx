@@ -112,7 +112,7 @@ Code graph navigation skill:
 .metaproject/skills/gdgraph/SKILL.md
 ```
 
-This skill tells agents to use `gd-metapro gdgraph ...` first for code structure, dependency, architecture, and affected-file questions.
+This skill tells agents to use `gd-metapro gdgraph ...` by default for most code-related work before broad raw file search. The user does not need to ask for graph usage explicitly.
 
 ## Commands
 
