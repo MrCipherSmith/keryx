@@ -18,7 +18,7 @@ export function renderIndexMarkdown({
     : "- No module data generated yet.";
 
   const skillsRefs = enableGdgraph
-    ? "| gdgraph | Decide when to use the code graph and run gdgraph commands | skills/gdgraph/SKILL.md |"
+    ? "| gdgraph | Default navigation layer for code work; use before broad raw file search | skills/gdgraph/SKILL.md |"
     : "";
 
   const rulesRows =
@@ -60,10 +60,11 @@ ${skillsRefs}
 1. Read this file first.
 2. Check enabled modules.
 3. Load relevant rules from \`rules/\`.
-4. Use relevant skills from \`skills/\`.
-5. Use module manifests before reading raw generated data.
-6. Prefer curated artifacts in \`data/*/artifacts\`.
-7. Run module CLI commands when generated data is stale.
+4. For code-related tasks, use \`skills/gdgraph/SKILL.md\` before broad raw file search when gdgraph is enabled.
+5. Use relevant skills from \`skills/\`.
+6. Use module manifests before reading raw generated data.
+7. Prefer curated artifacts in \`data/*/artifacts\`.
+8. Run module CLI commands when generated data is stale.
 
 ## Data
 
@@ -85,6 +86,8 @@ export function renderAgentEntrypoint({ source }: { source: string }): string {
 ## Metaproject
 
 Read [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.
+
+For code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.
 `;
 }
 
@@ -372,15 +375,23 @@ Responsibilities:
 export function renderGdgraphSkillReadme(): string {
   return `---
 name: gdgraph
-description: Use when the user asks about code structure, architecture, dependencies, affected files, module relationships, import cycles, orphan files, or where to start reading code. This skill decides whether the local code graph should be queried first and runs the relevant gd-metapro gdgraph command before falling back to raw file search.
+description: Use by default for most code-related tasks, including implementation, review, refactoring, debugging, code navigation, architecture questions, dependencies, affected files, module relationships, import cycles, orphan files, or where to start reading code. This skill queries the local gdgraph code graph before broad raw file search.
 ---
 
 # gdgraph Skill
 
-Use this skill before broad code reading whenever the request is about code understanding, impact analysis, architecture, dependencies, or navigation.
+Use this skill by default for most work with code. The user does not need to explicitly ask for graph usage.
+
+Run gdgraph before broad raw file search when the task involves implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation.
+
+Skip gdgraph only when the request is clearly not about code, asks for a single known file's literal contents, or when gdgraph is unavailable.
 
 ## Trigger Examples
 
+- "Добавь обработку ошибки в init."
+- "Проверь этот модуль."
+- "Почему этот импорт ломается?"
+- "Где лучше изменить эту логику?"
 - "Что затронет изменение этого файла?"
 - "Где используется этот модуль?"
 - "Как связаны эти части кода?"
@@ -391,13 +402,14 @@ Use this skill before broad code reading whenever the request is about code unde
 ## Workflow
 
 1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
-2. If graph storage is missing or likely stale, run:
+2. If the task is code-related and gdgraph is enabled, use graph context before broad \`rg\` or reading many files.
+3. If graph storage is missing or likely stale, run:
 
 \`\`\`bash
 gd-metapro gdgraph build
 \`\`\`
 
-3. Choose the graph command:
+4. Choose the graph command:
 
 - Known file path or changed file:
 
@@ -417,9 +429,9 @@ gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
 \`\`\`
 
-4. Use graph output to select the smallest relevant file set.
-5. Read those files directly and verify any conclusion against source code.
-6. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+5. Use graph output to select the smallest relevant file set.
+6. Read those files directly and verify any conclusion against source code.
+7. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
 
 ## Reporting
 
