@@ -12,5 +12,10 @@ coverage/
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
 .metaproject/data/gdctx/artifacts/
+.metaproject/data/gdwiki/artifacts/
+.metaproject/data/gdwiki/link-check/
+.metaproject/data/health/history/
+.metaproject/data/health/artifacts/latest.md
+.metaproject/data/health/artifacts/latest.json
 .metaproject/reports/
 # gd-metapro:end

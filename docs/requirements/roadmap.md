@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.3.0
+Version: 0.4.0
 
 ## 1. Purpose
 
@@ -25,11 +25,11 @@ registry to human-readable status and points at each module's requirements.
 | gdgraph | `gd-metapro gdgraph` | `gdgraph` | implemented | [gdgraph/](gdgraph/) |
 | gdctx | `gd-metapro ctx` | `gdctx` | implemented | [gdctx/](gdctx/) |
 | gdwiki | `gd-metapro wiki` | `wiki` | implemented (MVP) | [wiki/](wiki/) |
-| Documentation Memory | `gd-metapro memory` | `memory` | planned | - |
+| Documentation Memory | `gd-metapro memory` | `memory` | spec ready | [documentation-memory/](documentation-memory/) |
 | Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
 | Code Health | `gd-metapro health` | `health` | in progress (Phase 1 shipped) | [code-health/](code-health/) |
 | Testing Tools | `gd-metapro test` | `testing` | planned | - |
-| gdskills / Domain Skills | `gd-metapro skills` | `domain-skills` | planned | - |
+| gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (MVP) | [gdskills/](gdskills/) |
 
 ## 4. gdwiki (implemented, MVP)
 
@@ -48,16 +48,39 @@ Remaining (Phase 3):
 
 - release metrics.
 
-## 5. Next Candidates
+## 5. gdskills (implemented, MVP)
+
+Version: `0.19.0`. See [gdskills/specification.md](gdskills/specification.md).
+
+Shipped:
+
+- init scaffold: bundled project-local gdskills, catalog, module manifest, data/core folders;
+- CLI: `status`, `list`, `inspect`, `route`, `catalog`, `install`, `create`, `verify`, `learn`, `export`, `sync`, `contracts`;
+- root alias: `gd-metapro skill-verify-skill`;
+- project-skill package creation under `.metaproject/project-skills/<module>/<entity>/`;
+- verifier reports under `.metaproject/data/gdskills/reports/`;
+- learning proposals and explicit apply flow under `.metaproject/data/gdskills/proposals/`;
+- runtime export/sync for Codex and Claude artifacts;
+- JSON Schema contracts for orchestrator and subagent communication;
+- optional git post-commit hook for project-skill verification;
+- local-first agent routing through `.metaproject/index.md` and `.metaproject/skills/catalog.md`.
+
+Remaining:
+
+- deeper semantic verification against entity ownership maps;
+- richer health and memory evidence once those modules mature;
+- production test expansion beyond current smoke/contract checks.
+
+## 6. Next Candidates
 
 Order is indicative, not committed:
 
-1. Code Health Phase 2 (`gd-metapro health`) - Sonar/complexity adapters, entity/skill scopes, gdskills learning, trend history.
-2. Documentation Memory (`gd-metapro memory`) - typed memory registry with search.
+1. Documentation Memory (`gd-metapro memory`) - typed memory registry with search.
+2. Code Health Phase 2 (`gd-metapro health`) - Sonar/complexity adapters, entity/skill scopes, gdskills learning, trend history.
 3. Task Manager (`gd-metapro tasks`).
 4. Testing Tools (`gd-metapro test`).
 
-## 6. Maintenance
+## 7. Maintenance
 
 - Update the status table when a module's manifest entry flips to enabled.
 - Bump this document's `Version` on every change per

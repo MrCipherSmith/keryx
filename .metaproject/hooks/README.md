@@ -12,6 +12,16 @@ Purpose:
 - avoid broad raw file search when graph context is stale;
 - leave generated graph storage local while versioning curated artifacts.
 
+## git post-commit gdskills hook
+
+When enabled during `gd-metapro init`, the Git `post-commit` hook runs lightweight project-skill verification after relevant project or Metaproject context changes.
+
+Purpose:
+
+- keep generated project-skills from silently drifting after code/wiki/rule changes;
+- write verification reports under `.metaproject/data/gdskills/reports`;
+- keep the hook local, optional and non-blocking.
+
 ## post-update.d
 
 Executable files in `post-update.d/` run after `gd-metapro update`.

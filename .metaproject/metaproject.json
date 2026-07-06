@@ -43,7 +43,41 @@
       ]
     },
     "wiki": {
-      "enabled": false
+      "enabled": true,
+      "core": ".metaproject/wiki",
+      "data": ".metaproject/data/gdwiki",
+      "manifest": ".metaproject/modules/gdwiki.md",
+      "commands": [
+        "status",
+        "new",
+        "index",
+        "check-links",
+        "validate"
+      ]
+    },
+    "gdskills": {
+      "enabled": true,
+      "core": ".metaproject/core/gdskills",
+      "data": ".metaproject/data/gdskills",
+      "manifest": ".metaproject/modules/gdskills.md",
+      "commands": [
+        "status",
+        "catalog",
+        "install",
+        "generate",
+        "verify",
+        "learn",
+        "export",
+        "sync"
+      ],
+      "profile": "recommended",
+      "skills": ".metaproject/skills/gdskills",
+      "catalog": ".metaproject/skills/catalog.md",
+      "projectSkills": ".metaproject/project-skills",
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
     },
     "memory": {
       "enabled": false
@@ -52,12 +86,20 @@
       "enabled": false
     },
     "health": {
-      "enabled": false
+      "enabled": true,
+      "core": ".metaproject/core/health",
+      "data": ".metaproject/data/health",
+      "manifest": ".metaproject/modules/health.md",
+      "commands": [
+        "run",
+        "status",
+        "gate",
+        "sources",
+        "explain",
+        "baseline"
+      ]
     },
     "testing": {
-      "enabled": false
-    },
-    "domain-skills": {
       "enabled": false
     }
   },
