@@ -9,8 +9,8 @@ The public command is `gd-metapro`.
 Private repository install through GitHub CLI:
 
 ```bash
-gh auth setup-git
-gh api repos/MrCipherSmith/meta-project/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --global
+/opt/homebrew/bin/gh auth setup-git
+/opt/homebrew/bin/gh api repos/MrCipherSmith/meta-project/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --global
 gd-metapro init
 ```
 
@@ -36,8 +36,8 @@ Use this when you do not want to install a global command. It installs the runti
 Private repository:
 
 ```bash
-gh auth setup-git
-gh api repos/MrCipherSmith/meta-project/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --project
+/opt/homebrew/bin/gh auth setup-git
+/opt/homebrew/bin/gh api repos/MrCipherSmith/meta-project/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --project
 ```
 
 Public/raw:

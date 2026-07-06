@@ -57,6 +57,25 @@ require_command() {
   fi
 }
 
+resolve_command() {
+  local name="$1"
+  shift
+
+  if command -v "$name" >/dev/null 2>&1; then
+    command -v "$name"
+    return
+  fi
+
+  for candidate in "$@"; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return
+    fi
+  done
+
+  echo ""
+}
+
 clone_or_update() {
   local target="$1"
   mkdir -p "$(dirname "$target")"
@@ -72,10 +91,17 @@ clone_or_update() {
 }
 
 require_command git
-require_command bun
 
-if command -v gh >/dev/null 2>&1; then
-  gh auth setup-git >/dev/null 2>&1 || true
+BUN_BIN="$(resolve_command bun "$HOME/.bun/bin/bun" "/opt/homebrew/bin/bun")"
+if [ -z "$BUN_BIN" ]; then
+  echo "Missing required command: bun" >&2
+  echo "Install Bun first: https://bun.sh" >&2
+  exit 1
+fi
+
+GH_BIN="$(resolve_command gh "/opt/homebrew/bin/gh" "/usr/local/bin/gh")"
+if [ -n "$GH_BIN" ]; then
+  "$GH_BIN" auth setup-git >/dev/null 2>&1 || true
 fi
 
 if [ "$MODE" = "global" ]; then
@@ -98,7 +124,7 @@ PROJECT_ROOT="$(pwd)"
 RUNTIME_DIR="$PROJECT_ROOT/.metaproject/runtime/gd-metapro"
 
 clone_or_update "$RUNTIME_DIR"
-bun "$RUNTIME_DIR/src/cli.ts" init ${YES_FLAG:+$YES_FLAG} ${NO_GDGRAPH_FLAG:+$NO_GDGRAPH_FLAG}
+"$BUN_BIN" "$RUNTIME_DIR/src/cli.ts" init ${YES_FLAG:+$YES_FLAG} ${NO_GDGRAPH_FLAG:+$NO_GDGRAPH_FLAG}
 
 echo "gd-metapro installed for project:"
 echo "  $RUNTIME_DIR"
