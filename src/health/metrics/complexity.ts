@@ -45,7 +45,9 @@ function countDecisions(text: string): number {
   count += matches(text, /&&/g);
   count += matches(text, /\|\|/g);
   count += matches(text, /\?\?/g);
-  count += matches(text, /\?(?![.?:])/g);
+  // Ternary `?`: exclude optional chaining (`?.`), the `?:` token, and the
+  // second `?` of a `??` nullish operator (already counted above).
+  count += matches(text, /(?<!\?)\?(?![.?:])/g);
   return count;
 }
 
