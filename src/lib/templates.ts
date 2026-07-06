@@ -125,6 +125,108 @@ Rules:
 `;
 }
 
+export function renderGdgraphCoreCli(): string {
+  return `#!/usr/bin/env bun
+
+import { buildGraph } from "./build";
+import { getAffected, getCycles, getOrphans, loadGraph } from "./query";
+
+const args = process.argv.slice(2);
+const command = args[0];
+
+if (!command || command === "--help" || command === "-h") {
+  printHelp();
+  process.exit(0);
+}
+
+if (command === "build") {
+  const result = await buildGraph(process.cwd());
+  console.log(\`gdgraph build complete: \${result.nodes} nodes, \${result.edges} edges\`);
+  console.log(\`summary: \${result.summaryPath}\`);
+  process.exit(0);
+}
+
+if (command === "query") {
+  const query = args.slice(1).join(" ").trim();
+  const graph = await loadGraph(process.cwd());
+
+  if (query === "cycles") {
+    const cycles = getCycles(graph);
+    if (cycles.length === 0) {
+      console.log("No cycles found.");
+      process.exit(0);
+    }
+    for (const cycle of cycles) {
+      console.log(cycle.join(" -> "));
+    }
+    process.exit(0);
+  }
+
+  if (query === "orphans") {
+    const orphans = getOrphans(graph);
+    if (orphans.length === 0) {
+      console.log("No orphan modules found.");
+      process.exit(0);
+    }
+    for (const orphan of orphans) {
+      console.log(orphan);
+    }
+    process.exit(0);
+  }
+
+  console.error(\`Unsupported gdgraph query: \${query || "<empty>"}\`);
+  console.error("Supported queries: cycles, orphans");
+  process.exit(1);
+}
+
+if (command === "affected") {
+  const target = args[1];
+  if (!target) {
+    console.error("Usage: gd-metapro gdgraph affected <file>");
+    process.exit(1);
+  }
+
+  const graph = await loadGraph(process.cwd());
+  const affected = getAffected(graph, target);
+
+  console.log(\`# Affected context for \${affected.target}\`);
+  console.log("");
+  console.log("## Dependencies");
+  printList(affected.dependencies);
+  console.log("");
+  console.log("## Dependents");
+  printList(affected.dependents);
+  process.exit(0);
+}
+
+console.error(\`Unknown gdgraph command: \${command}\`);
+printHelp();
+process.exit(1);
+
+function printHelp(): void {
+  console.log(\`gd-metapro gdgraph
+
+Usage:
+  gd-metapro gdgraph build
+  gd-metapro gdgraph query cycles
+  gd-metapro gdgraph query orphans
+  gd-metapro gdgraph affected <file>
+\`);
+}
+
+function printList(items: string[]): void {
+  if (items.length === 0) {
+    console.log("- none");
+    return;
+  }
+
+  for (const item of items) {
+    console.log(\`- \${item}\`);
+  }
+}
+`;
+}
+
 export function renderGdgraphManifest(): string {
   return `# gdgraph
 
@@ -156,9 +258,16 @@ Builds code graph, symbol graph, dependency map, and affected context.
 export function renderGdgraphCoreReadme(): string {
   return `# gdgraph Core
 
-Placeholder for the local gdgraph service layer.
+Local gdgraph service layer installed by \`gd-metapro init\`.
 
-Planned responsibilities:
+Files:
+
+- \`cli.ts\` - local runner used by \`gd-metapro gdgraph ...\`
+- \`build.ts\` - builds file dependency graph
+- \`query.ts\` - reads graph storage and answers built-in queries
+- \`types.ts\` - local graph schema
+
+Responsibilities:
 
 - build file dependency graph;
 - build TypeScript/JavaScript symbol graph;

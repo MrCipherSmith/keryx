@@ -69,11 +69,11 @@
 .metaproject/
   core/
     gdgraph/
-      index.ts
-      adapters/
-      builders/
-      queries/
-      storage/
+      cli.ts
+      build.ts
+      query.ts
+      types.ts
+      README.md
   data/
     gdgraph/
       storage/
@@ -92,6 +92,7 @@
 - CLI-команды;
 - JSON/Markdown output в `.metaproject/data/gdgraph`;
 - внутренний service layer, пригодный для будущего MCP-сервера.
+- project-local scripts в `.metaproject/core/gdgraph`, установленные во время `gd-metapro init`.
 
 MCP не обязателен для MVP, но API нельзя проектировать как набор CLI-only скриптов без переиспользуемого ядра.
 
@@ -328,38 +329,14 @@ gd-metapro gdgraph path src/a.ts src/b.ts
 
 ```text
 .metaproject/core/gdgraph/
-  index.ts
   cli.ts
-  config/
-    load-config.ts
-    schema.ts
-  adapters/
-    language-adapter.ts
-    typescript-adapter.ts
-  scanners/
-    file-scanner.ts
-    tsconfig-resolver.ts
-  builders/
-    dependency-graph-builder.ts
-    symbol-graph-builder.ts
-    module-map-builder.ts
-  storage/
-    graph-store.ts
-    sqlite-graph-store.ts
-    jsonl-graph-store.ts
-  queries/
-    query-engine.ts
-    affected-query.ts
-    explain-query.ts
-    path-query.ts
-    cycle-query.ts
-  artifacts/
-    artifact-writer.ts
-    summary-writer.ts
-    module-summary-writer.ts
-  mcp/
-    README.md
+  build.ts
+  query.ts
+  types.ts
+  README.md
 ```
+
+Глобальный runtime содержит fallback-реализацию. При выполнении `gd-metapro gdgraph ...` CLI сначала ищет `.metaproject/core/gdgraph/cli.ts` в текущем проекте и делегирует выполнение туда. Если local runner отсутствует, используется встроенный fallback из установленного runtime.
 
 ## 10. Service layer contract
 

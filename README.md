@@ -80,6 +80,11 @@ If `gdgraph` is enabled, it also creates:
 ```text
 .metaproject/
   core/gdgraph/
+    cli.ts
+    build.ts
+    query.ts
+    types.ts
+    README.md
   data/gdgraph/
   modules/gdgraph.md
   skills/gdgraph/
@@ -106,6 +111,18 @@ gd-metapro gdgraph affected src/example.ts
 - `gdgraph`: code graph module for dependencies and affected context.
 
 ## gdgraph MVP
+
+`gdgraph` installs local project scripts into:
+
+```text
+.metaproject/core/gdgraph/
+```
+
+The global command delegates to the local runner first:
+
+```text
+.metaproject/core/gdgraph/cli.ts
+```
 
 Build graph data:
 

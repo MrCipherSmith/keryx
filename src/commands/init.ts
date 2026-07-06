@@ -1,8 +1,10 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
 import { confirm } from "../lib/prompt";
 import {
+  renderGdgraphCoreCli,
   renderGdgraphManifest,
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
@@ -67,6 +69,7 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableGdgraph) {
     await createGdgraphStructure(metaprojectRoot);
+    await installGdgraphCoreScripts(metaprojectRoot);
   }
 
   const manifest = buildManifest({
@@ -156,6 +159,32 @@ async function createGdgraphStructure(root: string): Promise<void> {
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
 }
 
+async function installGdgraphCoreScripts(root: string): Promise<void> {
+  const gdgraphCoreRoot = path.join(root, "core", "gdgraph");
+  await mkdir(gdgraphCoreRoot, { recursive: true });
+
+  await copyFileIfMissing(
+    runtimeSourcePath("../gdgraph/build.ts"),
+    path.join(gdgraphCoreRoot, "build.ts"),
+  );
+  await copyFileIfMissing(
+    runtimeSourcePath("../gdgraph/query.ts"),
+    path.join(gdgraphCoreRoot, "query.ts"),
+  );
+  await copyFileIfMissing(
+    runtimeSourcePath("../gdgraph/types.ts"),
+    path.join(gdgraphCoreRoot, "types.ts"),
+  );
+  await writeTextIfMissing(
+    path.join(gdgraphCoreRoot, "cli.ts"),
+    renderGdgraphCoreCli(),
+  );
+}
+
+function runtimeSourcePath(relativePath: string): string {
+  return fileURLToPath(new URL(relativePath, import.meta.url));
+}
+
 function buildManifest({
   projectName,
   enableGdgraph,
@@ -222,4 +251,11 @@ async function writeTextIfMissing(
     return;
   }
   await writeFile(filePath, content, "utf8");
+}
+
+async function copyFileIfMissing(from: string, to: string): Promise<void> {
+  if (await pathExists(to)) {
+    return;
+  }
+  await copyFile(from, to);
 }

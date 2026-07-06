@@ -1,7 +1,17 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { buildGraph } from "../gdgraph/build";
 import { getAffected, getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 
 export async function gdgraphCommand(args: string[]): Promise<void> {
+  if (process.env.GD_METAPRO_GDGRAPH_LOCAL !== "1") {
+    const delegated = await delegateToLocalRunner(args);
+    if (delegated) {
+      return;
+    }
+  }
+
   const command = args[0];
 
   if (!command || command === "--help" || command === "-h") {
@@ -74,6 +84,39 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
   console.error(`Unknown gdgraph command: ${command}`);
   printHelp();
   process.exitCode = 1;
+}
+
+async function delegateToLocalRunner(args: string[]): Promise<boolean> {
+  const localRunner = path.join(
+    process.cwd(),
+    ".metaproject",
+    "core",
+    "gdgraph",
+    "cli.ts",
+  );
+
+  if (!existsSync(localRunner)) {
+    return false;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, [localRunner, ...args], {
+      cwd: process.cwd(),
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        GD_METAPRO_GDGRAPH_LOCAL: "1",
+      },
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      process.exitCode = code ?? 1;
+      resolve();
+    });
+  });
+
+  return true;
 }
 
 function printHelp(): void {

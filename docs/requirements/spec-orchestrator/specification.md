@@ -254,6 +254,11 @@ Which AI entrypoints should be generated?
 .metaproject/
   core/
     gdgraph/
+      cli.ts
+      build.ts
+      query.ts
+      types.ts
+      README.md
   data/
     gdgraph/
       storage/
