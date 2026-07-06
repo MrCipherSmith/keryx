@@ -200,8 +200,9 @@ CLI должен:
 12. Импортировать их содержимое в `.metaproject/rules/`.
 13. Создать `.metaproject/skills/project-rules/`.
 14. Синхронизировать `.gitignore` через managed-блок `gd-metapro`.
-15. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
-16. Запустить post-init hooks включенных модулей.
+15. Если пользователь включил `gdgraph`, предложить установить Git `post-commit` hook для обновления графа после релевантных изменений.
+16. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
+17. Запустить post-init hooks включенных модулей.
 
 ### 7.2 Интерактивные вопросы
 
@@ -241,6 +242,15 @@ Which AI entrypoints should be generated?
 [ ] AGENTS.md reference snippet
 [ ] CLAUDE.md reference snippet
 [ ] Cursor rules reference snippet
+```
+
+Если выбран `gdgraph`, следующий вопрос:
+
+```text
+Install git post-commit hook to refresh gdgraph only after relevant file changes?
+
+Y. Yes (recommended) - keeps graph artifacts current after commits without rebuilding on every agent question
+N. No - refresh graph manually with gd-metapro gdgraph build
 ```
 
 ## 8. Структура `.metaproject/`

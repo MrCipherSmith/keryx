@@ -50,7 +50,7 @@ function printHelp(): void {
   console.log(`gd-metapro ${VERSION}
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdgraph-hook]
   gd-metapro status
   gd-metapro update
   gd-metapro gdgraph build

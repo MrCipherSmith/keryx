@@ -31,13 +31,14 @@ Skip gdgraph only when the request is clearly unrelated to project files, asks f
 
 1. Check whether `.metaproject/modules/gdgraph.md` exists.
 2. If the task requires finding relevant project files or understanding relationships, use graph context before broad `rg` or reading many files.
-3. If graph storage is missing or likely stale, run:
+3. Do not rebuild the graph on every user question. Prefer existing graph storage and curated artifacts.
+4. Run build only when graph storage is missing, obviously stale, or the user explicitly asks to refresh it:
 
 ```bash
 gd-metapro gdgraph build
 ```
 
-4. Choose the graph command:
+5. Choose the graph command:
 
 - Known file path or changed file:
 
@@ -57,9 +58,17 @@ gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
 ```
 
-5. Use graph output to select the smallest relevant file set.
-6. Read those files directly and verify any conclusion against source code.
-7. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+6. Use graph output to select the smallest relevant file set.
+7. Read those files directly and verify any conclusion against source code.
+8. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+
+## Refresh Policy
+
+Graph refresh should happen through one of these paths:
+
+- user or agent explicitly runs `gd-metapro gdgraph build`;
+- Git `post-commit` hook refreshes graph after relevant file changes;
+- graph storage is missing and the task needs graph context.
 
 ## Reporting
 

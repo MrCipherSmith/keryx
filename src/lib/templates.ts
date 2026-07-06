@@ -218,6 +218,16 @@ export function renderHooksReadme(): string {
 
 Hooks are local project scripts executed by selected \`gd-metapro\` lifecycle commands.
 
+## git post-commit gdgraph hook
+
+When enabled during \`gd-metapro init\`, the Git \`post-commit\` hook refreshes gdgraph only after commits that touched files relevant to the graph.
+
+Purpose:
+
+- keep graph artifacts current without rebuilding on every agent question;
+- avoid broad raw file search when graph context is stale;
+- leave generated graph storage local while versioning curated artifacts.
+
 ## post-update.d
 
 Executable files in \`post-update.d/\` run after \`gd-metapro update\`.
@@ -228,6 +238,49 @@ Rules:
 - keep hooks project-local;
 - do not require network access unless the hook clearly documents it;
 - use generated data under \`.metaproject/data\` for outputs.
+`;
+}
+
+export function renderGdgraphPostCommitHook(): string {
+  return `gd_metapro_gdgraph_post_commit() {
+  # Refresh gdgraph only when a commit touched graph-relevant files.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v gd-metapro >/dev/null 2>&1; then
+    gd-metapro gdgraph build >/dev/null 2>&1 || {
+      echo "gd-metapro post-commit: gdgraph build failed" >&2
+      return 0
+    }
+    echo "gd-metapro post-commit: gdgraph refreshed"
+    return 0
+  fi
+
+  if [ -x "$HOME/.local/bin/gd-metapro" ]; then
+    "$HOME/.local/bin/gd-metapro" gdgraph build >/dev/null 2>&1 || {
+      echo "gd-metapro post-commit: gdgraph build failed" >&2
+      return 0
+    }
+    echo "gd-metapro post-commit: gdgraph refreshed"
+    return 0
+  fi
+
+  echo "gd-metapro post-commit: gd-metapro command not found, skipped gdgraph refresh" >&2
+  return 0
+}
+
+gd_metapro_gdgraph_post_commit
 `;
 }
 
@@ -417,13 +470,14 @@ Skip gdgraph only when the request is clearly unrelated to project files, asks f
 
 1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
 2. If the task requires finding relevant project files or understanding relationships, use graph context before broad \`rg\` or reading many files.
-3. If graph storage is missing or likely stale, run:
+3. Do not rebuild the graph on every user question. Prefer existing graph storage and curated artifacts.
+4. Run build only when graph storage is missing, obviously stale, or the user explicitly asks to refresh it:
 
 \`\`\`bash
 gd-metapro gdgraph build
 \`\`\`
 
-4. Choose the graph command:
+5. Choose the graph command:
 
 - Known file path or changed file:
 
@@ -443,9 +497,17 @@ gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
 \`\`\`
 
-5. Use graph output to select the smallest relevant file set.
-6. Read those files directly and verify any conclusion against source code.
-7. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+6. Use graph output to select the smallest relevant file set.
+7. Read those files directly and verify any conclusion against source code.
+8. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+
+## Refresh Policy
+
+Graph refresh should happen through one of these paths:
+
+- user or agent explicitly runs \`gd-metapro gdgraph build\`;
+- Git \`post-commit\` hook refreshes graph after relevant file changes;
+- graph storage is missing and the task needs graph context.
 
 ## Reporting
 

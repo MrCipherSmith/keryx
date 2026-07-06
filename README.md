@@ -144,6 +144,7 @@ gd-metapro --version
 gd-metapro init
 gd-metapro init --yes
 gd-metapro init --no-gdgraph
+gd-metapro init --no-gdgraph-hook
 gd-metapro status
 gd-metapro update
 gd-metapro gdgraph build
@@ -193,6 +194,21 @@ gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
 gd-metapro gdgraph affected <file>
 ```
+
+## gdgraph Refresh Policy
+
+Agents should not rebuild the graph on every question. The graph is refreshed:
+
+- when the user explicitly runs `gd-metapro gdgraph build`;
+- by the optional Git `post-commit` hook installed during `gd-metapro init`.
+
+When `gdgraph` is enabled, interactive init asks whether to install the hook. In `--yes` mode the hook is installed by default; disable it with:
+
+```bash
+gd-metapro init --yes --no-gdgraph-hook
+```
+
+The hook checks files changed in the last commit and runs `gd-metapro gdgraph build` only when graph-relevant files changed.
 
 ## Update
 

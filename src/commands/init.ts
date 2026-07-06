@@ -1,5 +1,6 @@
 import {
   copyFile,
+  chmod,
   mkdir,
   readdir,
   readFile,
@@ -14,6 +15,7 @@ import {
   renderAgentEntrypoint,
   renderGdgraphCoreCli,
   renderGdgraphManifest,
+  renderGdgraphPostCommitHook,
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
   renderHooksReadme,
@@ -29,6 +31,7 @@ import {
 type InitOptions = {
   yes: boolean;
   noGdgraph: boolean;
+  noGdgraphHook: boolean;
 };
 
 type ModuleConfig =
@@ -39,6 +42,7 @@ type ModuleConfig =
       manifest: string;
       commands: string[];
       hooks?: {
+        gitPostCommit?: string;
         postUpdate?: string;
       };
     }
@@ -73,10 +77,24 @@ export async function initCommand(args: string[]): Promise<void> {
   const alreadyExists = await pathExists(metaprojectRoot);
 
   let enableGdgraph = true;
+  let enableGdgraphHook = false;
   if (options.noGdgraph) {
     enableGdgraph = false;
   } else if (!options.yes) {
     enableGdgraph = await confirm("Enable gdgraph module? Recommended", true);
+  }
+
+  if (enableGdgraph) {
+    if (options.noGdgraphHook) {
+      enableGdgraphHook = false;
+    } else if (options.yes) {
+      enableGdgraphHook = true;
+    } else {
+      enableGdgraphHook = await confirm(
+        "Install git post-commit hook to refresh gdgraph only after relevant file changes? Recommended",
+        true,
+      );
+    }
   }
 
   await createBaseStructure(metaprojectRoot);
@@ -86,11 +104,15 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableGdgraph) {
     await createGdgraphStructure(metaprojectRoot);
     await installGdgraphCoreScripts(metaprojectRoot);
+    if (enableGdgraphHook) {
+      await installGdgraphPostCommitHook(projectRoot);
+    }
   }
 
   const manifest = buildManifest({
     projectName: path.basename(projectRoot),
     enableGdgraph,
+    enableGdgraphHook,
     agentRuleSources,
   });
 
@@ -107,7 +129,7 @@ export async function initCommand(args: string[]): Promise<void> {
     path.join(metaprojectRoot, "core", "README.md"),
     renderMetaprojectCoreReadme(),
   );
-  await writeTextIfMissing(
+  await writeTextIfChanged(
     path.join(metaprojectRoot, "hooks", "README.md"),
     renderHooksReadme(),
   );
@@ -147,12 +169,16 @@ export async function initCommand(args: string[]): Promise<void> {
       : "Created .metaproject structure.",
   );
   console.log(`gdgraph: ${enableGdgraph ? "enabled" : "disabled"}`);
+  if (enableGdgraph) {
+    console.log(`gdgraph post-commit hook: ${enableGdgraphHook ? "enabled" : "disabled"}`);
+  }
 }
 
 function parseInitArgs(args: string[]): InitOptions {
   return {
     yes: args.includes("--yes") || args.includes("-y"),
     noGdgraph: args.includes("--no-gdgraph"),
+    noGdgraphHook: args.includes("--no-gdgraph-hook"),
   };
 }
 
@@ -209,6 +235,33 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
   );
 }
 
+async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> {
+  const gitRoot = path.join(projectRoot, ".git");
+  if (!(await pathExists(gitRoot))) {
+    return;
+  }
+
+  const hooksRoot = path.join(gitRoot, "hooks");
+  await mkdir(hooksRoot, { recursive: true });
+
+  const hookPath = path.join(hooksRoot, "post-commit");
+  const blockStart = "# gd-metapro:gdgraph-post-commit:begin";
+  const blockEnd = "# gd-metapro:gdgraph-post-commit:end";
+  const managedBlock = `${blockStart}\n${renderGdgraphPostCommitHook().trim()}\n${blockEnd}`;
+  const existing = (await pathExists(hookPath))
+    ? await readFile(hookPath, "utf8")
+    : "#!/usr/bin/env sh\n";
+  const blockPattern = new RegExp(
+    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+  );
+  const next = blockPattern.test(existing)
+    ? existing.replace(blockPattern, managedBlock)
+    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
+
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
   const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
   if (!(await pathExists(legacyReadmePath))) {
@@ -239,10 +292,12 @@ function runtimeSourcePath(relativePath: string): string {
 function buildManifest({
   projectName,
   enableGdgraph,
+  enableGdgraphHook,
   agentRuleSources,
 }: {
   projectName: string;
   enableGdgraph: boolean;
+  enableGdgraphHook: boolean;
   agentRuleSources: string[];
 }): MetaprojectManifest {
   return {
@@ -266,6 +321,9 @@ function buildManifest({
             manifest: ".metaproject/modules/gdgraph.md",
             commands: ["build", "query", "affected", "explain", "path"],
             hooks: {
+              ...(enableGdgraphHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
               postUpdate: ".metaproject/hooks/post-update.d",
             },
           }

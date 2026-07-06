@@ -2,6 +2,16 @@
 
 Hooks are local project scripts executed by selected `gd-metapro` lifecycle commands.
 
+## git post-commit gdgraph hook
+
+When enabled during `gd-metapro init`, the Git `post-commit` hook refreshes gdgraph only after commits that touched files relevant to the graph.
+
+Purpose:
+
+- keep graph artifacts current without rebuilding on every agent question;
+- avoid broad raw file search when graph context is stale;
+- leave generated graph storage local while versioning curated artifacts.
+
 ## post-update.d
 
 Executable files in `post-update.d/` run after `gd-metapro update`.

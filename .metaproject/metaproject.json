@@ -24,6 +24,7 @@
         "path"
       ],
       "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
         "postUpdate": ".metaproject/hooks/post-update.d"
       }
     },
