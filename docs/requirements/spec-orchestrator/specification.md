@@ -18,7 +18,7 @@
 - **Global CLI** - установленная команда `gd-metapro`, доступная из любого проекта.
 - **Target project** - проект, в котором пользователь запускает `gd-metapro init`.
 - **Local Metaproject** - папка `.metaproject/`, созданная внутри target project.
-- **Module** - подключаемая функциональная область: `gdgraph`, wiki, memory, tasks, health, testing, skills.
+- **Module** - подключаемая функциональная область: `gdgraph`, `gdctx`, wiki, memory, tasks, health, testing, skills.
 - **Core** - служебный код модуля.
 - **Data** - output, который читают агенты: индексы, summary, отчеты, графы, curated context.
 - **Rules** - импортированные проектные инструкции из `AGENTS.md`/`CLAUDE.md`.
@@ -212,6 +212,7 @@ CLI должен:
 Which Metaproject modules do you want to enable?
 
 [x] gdgraph - code graph, dependencies, symbols, affected context (recommended)
+[x] gdctx - token-aware command output and context compression (recommended)
 [ ] wiki - project knowledge base
 [ ] memory - long-term project memory
 [ ] tasks - local task manager
@@ -298,6 +299,30 @@ N. No - refresh graph manually with gd-metapro gdgraph build
     gdgraph.md
 ```
 
+Если включен `gdctx`:
+
+```text
+.metaproject/
+  core/
+    gdctx/
+      cli.ts
+      commands.ts
+      filters.ts
+      summarize.ts
+      types.ts
+      README.md
+  data/
+    gdctx/
+      raw/
+      artifacts/
+      queries/
+  skills/
+    gdctx/
+      SKILL.md
+  modules/
+    gdctx.md
+```
+
 ## 9. `metaproject.json`
 
 `metaproject.json` - машинный манифест локального Metaproject.
@@ -324,6 +349,13 @@ N. No - refresh graph manually with gd-metapro gdgraph build
       "data": ".metaproject/data/gdgraph",
       "manifest": ".metaproject/modules/gdgraph.md",
       "commands": ["build", "query", "affected", "explain", "path"]
+    },
+    "gdctx": {
+      "enabled": true,
+      "core": ".metaproject/core/gdctx",
+      "data": ".metaproject/data/gdctx",
+      "manifest": ".metaproject/modules/gdctx.md",
+      "commands": ["status", "diff", "rg", "read", "run", "show"]
     },
     "wiki": {
       "enabled": false
@@ -376,6 +408,7 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 | Module | Purpose | Entry |
 |--------|---------|-------|
 | gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |
+| gdctx | Token-aware command output and context compression | modules/gdctx.md |
 
 ## Rules
 
@@ -389,6 +422,7 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 |-------|---------|-------|
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
 | gdgraph | Default graph-first navigation for finding relevant project files before broad raw search | skills/gdgraph/SKILL.md |
+| gdctx | Use compact command/search/read outputs before loading large raw output | skills/gdctx/SKILL.md |
 
 ## Agent Workflow
 
@@ -396,16 +430,18 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 2. Check enabled modules.
 3. Load relevant rules from `rules/`.
 4. For project navigation, file discovery, code understanding, implementation, review, debugging, or refactoring, use `skills/gdgraph/SKILL.md` before broad raw file search when gdgraph is enabled.
-5. Use relevant skills from `skills/`.
-6. Use module manifests before reading raw generated data.
-7. Prefer curated artifacts in `data/*/artifacts`.
-8. Run module CLI commands when generated data is stale.
+5. For commands, search, diff, test logs, and large file reads that can produce long output, use `skills/gdctx/SKILL.md` when gdctx is enabled.
+6. Use relevant skills from `skills/`.
+7. Use module manifests before reading raw generated data.
+8. Prefer curated artifacts in `data/*/artifacts`.
+9. Run module CLI commands when generated data is stale.
 
 ## Data
 
 - `data/gdgraph/artifacts/summary.md`
 - `data/gdgraph/artifacts/module-map.json`
 - `data/gdgraph/queries/latest.md`
+- `data/gdctx/artifacts/latest.md`
 
 ## Refresh
 
@@ -440,6 +476,7 @@ This folder contains local Metaproject configuration, tools, generated data, and
 ## Installed Modules
 
 - `gdgraph`: code graph and affected context.
+- `gdctx`: compact command/search/read output and raw output archive.
 
 ## Common Commands
 
@@ -448,6 +485,8 @@ gd-metapro status
 gd-metapro index refresh
 gd-metapro gdgraph build
 gd-metapro gdgraph query "module pipelines"
+gd-metapro ctx status
+gd-metapro ctx diff
 ```
 
 ## Editing Policy
@@ -487,6 +526,35 @@ Builds code graph, symbol graph, dependency map, and affected context.
 ## Skills
 
 - `skills/gdgraph/`
+```
+
+Пример `.metaproject/modules/gdctx.md`:
+
+```markdown
+# gdctx
+
+## Purpose
+
+Runs common project context commands with token-aware filtering and stores raw output separately.
+
+## Commands
+
+- `gd-metapro ctx status`
+- `gd-metapro ctx diff`
+- `gd-metapro ctx rg "<pattern>"`
+- `gd-metapro ctx read <file>`
+- `gd-metapro ctx run -- <command...>`
+- `gd-metapro ctx show latest`
+
+## Data
+
+- `data/gdctx/artifacts/latest.md`
+- `data/gdctx/raw/`
+- `data/gdctx/queries/`
+
+## Skills
+
+- `skills/gdctx/`
 ```
 
 ## 13. Module lifecycle
