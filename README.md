@@ -93,12 +93,56 @@ gd-metapro init
 gd-metapro init --yes
 gd-metapro init --no-gdgraph
 gd-metapro status
+gd-metapro update
+gd-metapro gdgraph build
+gd-metapro gdgraph query cycles
+gd-metapro gdgraph query orphans
+gd-metapro gdgraph affected src/example.ts
 ```
 
 ## Current Modules
 
 - `spec-orchestrator`: CLI, install, init, manifest, and `.metaproject` structure.
-- `gdgraph`: planned code graph module for dependencies, symbols, and affected context.
+- `gdgraph`: code graph module for dependencies and affected context.
+
+## gdgraph MVP
+
+Build graph data:
+
+```bash
+gd-metapro gdgraph build
+```
+
+Generated output:
+
+```text
+.metaproject/data/gdgraph/storage/nodes.jsonl
+.metaproject/data/gdgraph/storage/edges.jsonl
+.metaproject/data/gdgraph/artifacts/summary.md
+.metaproject/data/gdgraph/artifacts/module-map.json
+```
+
+Run built-in queries:
+
+```bash
+gd-metapro gdgraph query cycles
+gd-metapro gdgraph query orphans
+gd-metapro gdgraph affected <file>
+```
+
+## Update
+
+Update the managed runtime and run executable project hooks:
+
+```bash
+gd-metapro update
+```
+
+Project hooks live in:
+
+```text
+.metaproject/hooks/post-update.d/
+```
 
 ## Requirements
 

@@ -148,6 +148,7 @@ gd-metapro --version
 gd-metapro doctor
 gd-metapro init
 gd-metapro status
+gd-metapro update
 gd-metapro modules list
 gd-metapro modules enable <module>
 gd-metapro modules disable <module>
@@ -433,7 +434,8 @@ Builds code graph, symbol graph, dependency map, and affected context.
 
 - `data/gdgraph/artifacts/summary.md`
 - `data/gdgraph/artifacts/module-map.json`
-- `data/gdgraph/storage/graph.sqlite`
+- `data/gdgraph/storage/nodes.jsonl`
+- `data/gdgraph/storage/edges.jsonl`
 
 ## Skills
 
@@ -451,6 +453,7 @@ export interface MetaprojectModule {
   recommended: boolean;
   init(input: ModuleInitInput): Promise<ModuleInitResult>;
   status(input: ModuleStatusInput): Promise<ModuleStatusResult>;
+  postUpdate?(input: ModulePostUpdateInput): Promise<ModulePostUpdateResult>;
   refresh?(input: ModuleRefreshInput): Promise<ModuleRefreshResult>;
 }
 ```
@@ -461,7 +464,14 @@ Lifecycle:
 2. `prompt` - CLI показывает вопросы пользователю.
 3. `init` - модуль создает core/data/skills/modules entries.
 4. `status` - модуль сообщает состояние.
-5. `refresh` - модуль обновляет generated artifacts.
+5. `postUpdate` - модуль выполняет idempotent обновления после `gd-metapro update`.
+6. `refresh` - модуль обновляет generated artifacts.
+
+Команда `gd-metapro update` должна:
+
+- обновить managed runtime, если он установлен глобально или project-local;
+- выполнить executable hooks из `.metaproject/hooks/post-update.d/`;
+- не перезаписывать user-authored файлы без явного подтверждения.
 
 ## 14. Generated vs user-authored files
 

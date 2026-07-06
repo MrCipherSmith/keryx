@@ -6,6 +6,7 @@ import {
   renderGdgraphManifest,
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
+  renderHooksReadme,
   renderMetaprojectCoreReadme,
   renderIndexMarkdown,
   renderMetaprojectReadme,
@@ -23,6 +24,9 @@ type ModuleConfig =
       data: string;
       manifest: string;
       commands: string[];
+      hooks?: {
+        postUpdate?: string;
+      };
     }
   | {
       enabled: false;
@@ -83,6 +87,10 @@ export async function initCommand(args: string[]): Promise<void> {
     path.join(metaprojectRoot, "core", "README.md"),
     renderMetaprojectCoreReadme(),
   );
+  await writeTextIfMissing(
+    path.join(metaprojectRoot, "hooks", "README.md"),
+    renderHooksReadme(),
+  );
 
   await writeTextIfMissing(
     path.join(metaprojectRoot, "index.md"),
@@ -128,6 +136,8 @@ async function createBaseStructure(root: string): Promise<void> {
     path.join(root, "modules"),
     path.join(root, "reports"),
     path.join(root, "templates"),
+    path.join(root, "hooks"),
+    path.join(root, "hooks", "post-update.d"),
   ];
 
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
@@ -172,6 +182,9 @@ function buildManifest({
             data: ".metaproject/data/gdgraph",
             manifest: ".metaproject/modules/gdgraph.md",
             commands: ["build", "query", "affected", "explain", "path"],
+            hooks: {
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
           }
         : {
             enabled: false,

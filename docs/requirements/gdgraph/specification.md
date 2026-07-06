@@ -305,7 +305,6 @@ gd-metapro gdgraph path src/a.ts src/b.ts
 ```text
 .metaproject/data/gdgraph/
   storage/
-    graph.sqlite
     nodes.jsonl
     edges.jsonl
     symbols.jsonl
@@ -411,8 +410,8 @@ export interface GdGraphService {
     }
   ],
   "storage": {
-    "kind": "sqlite",
-    "path": ".metaproject/data/gdgraph/storage/graph.sqlite"
+    "kind": "jsonl",
+    "path": ".metaproject/data/gdgraph/storage"
   },
   "artifacts": {
     "path": ".metaproject/data/gdgraph/artifacts"
