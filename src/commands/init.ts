@@ -14,6 +14,7 @@ import { confirm } from "../lib/prompt";
 import {
   renderAgentEntrypoint,
   renderGdctxCoreReadme,
+  renderGdctxConfig,
   renderGdctxManifest,
   renderGdctxSkillReadme,
   renderGdgraphCoreCli,
@@ -193,6 +194,10 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   if (enableGdctx) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "gdctx.config.json"),
+      renderGdctxConfig(),
+    );
     await writeTextIfMissing(
       path.join(metaprojectRoot, "modules", "gdctx.md"),
       renderGdctxManifest(),

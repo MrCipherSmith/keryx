@@ -19,6 +19,10 @@ Runs common project context commands with token-aware filtering and stores raw o
 - `data/gdctx/raw/`
 - `data/gdctx/queries/`
 
+## Config
+
+- `gdctx.config.json`
+
 ## Skills
 
 - `skills/gdctx/`
