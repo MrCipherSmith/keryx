@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.2.0
+Version: 0.3.0
 
 ## 1. Purpose
 
@@ -27,7 +27,7 @@ registry to human-readable status and points at each module's requirements.
 | gdwiki | `gd-metapro wiki` | `wiki` | implemented (MVP) | [wiki/](wiki/) |
 | Documentation Memory | `gd-metapro memory` | `memory` | planned | - |
 | Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
-| Code Health | `gd-metapro health` | `health` | spec ready (production v1) | [code-health/](code-health/) |
+| Code Health | `gd-metapro health` | `health` | in progress (Phase 1 shipped) | [code-health/](code-health/) |
 | Testing Tools | `gd-metapro test` | `testing` | planned | - |
 | gdskills / Domain Skills | `gd-metapro skills` | `domain-skills` | planned | - |
 
@@ -52,7 +52,7 @@ Remaining (Phase 3):
 
 Order is indicative, not committed:
 
-1. Code Health (`gd-metapro health`) - spec ready (production v1); next to implement. See [code-health/specification.md](code-health/specification.md) section 21.
+1. Code Health Phase 2 (`gd-metapro health`) - Sonar/complexity adapters, entity/skill scopes, gdskills learning, trend history.
 2. Documentation Memory (`gd-metapro memory`) - typed memory registry with search.
 3. Task Manager (`gd-metapro tasks`).
 4. Testing Tools (`gd-metapro test`).

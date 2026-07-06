@@ -1,7 +1,7 @@
 # Code Health: technical specification
 
-Version: 0.2.0
-Status: production-ready specification (v1 scope frozen via brainstorm + interview)
+Version: 0.3.0
+Status: Phase 1 implemented (v1 scope; see section 21). Complexity is a token-based approximation; AST precision deferred.
 
 ## 1. Purpose
 
@@ -23,7 +23,7 @@ Markdown/JSON reports with a quality gate suitable for orchestrators and CI.
 | D7 | Source extensibility | Typed `SourceAdapter` contract; Core-5 built in, others added through the same contract. |
 | D8 | Determinism | `auto` = import-if-present else safe local run; `--strict` forbids run fallback and fails on missing required source; provenance recorded. |
 | D9 | Scopes in v1 | project + module + file (mapped via gdgraph). entity/component/store and skill-owned scope in a later phase. |
-| D10 | Scope metrics in v1 | finding counts, coverage, churn (git), cyclomatic complexity (AST). |
+| D10 | Scope metrics in v1 | finding counts, coverage, churn (git), cyclomatic complexity (token-based). |
 | D11 | Source failure semantics | Sources are `required` or `optional`; missing/failed required -> fail in `--strict`, warn otherwise; optional -> skipped, no gate impact. |
 | D12 | Finding schema | Versioned (`schemaVersion`) stable public contract; changes follow semver; consumers validate. |
 
@@ -55,9 +55,7 @@ When enabled, `gd-metapro init` should create:
       README.md
   health/
     baselines/
-      project.json
-      modules/
-      files/
+      scores.json
   data/
     health/
       artifacts/
@@ -112,7 +110,7 @@ Default config written on enable:
 }
 ```
 
-`complexity.mode: auto` refers to the built-in AST metric (section 9), not an
+`complexity.mode: auto` refers to the built-in token-based metric (section 9), not an
 external tool. External complexity tools are added as adapters (section 5).
 
 ## 5. Sources and the SourceAdapter contract
@@ -228,7 +226,7 @@ Each scope carries:
 - finding counts by severity/source/category/priority;
 - `coverage` (from the coverage source, when available);
 - `churn` - changed-line count over `churnWindowDays` from `git log`;
-- `complexity` - cyclomatic complexity per function via TypeScript AST, with
+- `complexity` - cyclomatic complexity per function via a token-based scan (comment/string-stripped, function bodies located by brace matching), with
   per-scope max and count above `complexityThreshold`;
 - `health_score`, `risk_score`, `trend`, `regression_score` (section 10).
 
@@ -241,7 +239,7 @@ All formulas use `scoring` config; defaults below.
 ```text
 risk_score(scope)   = Σ priorityWeights[finding.priority] for findings in scope
 coverage_penalty    = max(0, coverageTarget - coverage) * coverageWeight
-complexity_penalty  = Σ max(0, fnComplexity - complexityThreshold) * complexityWeight
+complexity_penalty  = count(functions with complexity > complexityThreshold) * complexityWeight
 normalized_penalty  = (risk_score + coverage_penalty + complexity_penalty)
                       * normalizePerLoc / max(loc(scope), normalizePerLoc)
 health_score(scope) = clamp(100 - normalized_penalty, 0, 100)
@@ -411,7 +409,7 @@ Ignored:
 
 ## 20. Language scope
 
-v1 is TS/JS-first: complexity (AST) and churn cover `.ts/.tsx/.js/.jsx`.
+v1 is TS/JS-first: complexity (token-based) and churn cover `.ts/.tsx/.js/.jsx`.
 Finding sources that are language-agnostic (audit) apply regardless. Other
 languages are supported later through adapters and are reported as `skipped`
 when unsupported.
