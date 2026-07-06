@@ -1,0 +1,25 @@
+{
+  "name": "gd-metapro",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "gd-metapro": "./src/cli.ts"
+  },
+  "scripts": {
+    "gd-metapro": "bun ./src/cli.ts",
+    "check": "bun ./src/cli.ts --version"
+  },
+  "files": [
+    "src",
+    "scripts",
+    "README.md",
+    "package.json"
+  ],
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
