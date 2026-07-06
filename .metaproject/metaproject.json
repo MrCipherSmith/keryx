@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "name": "goodpro-manager-metaproject",
+  "createdBy": "gd-metapro",
+  "paths": {
+    "root": ".metaproject",
+    "core": ".metaproject/core",
+    "data": ".metaproject/data",
+    "rules": ".metaproject/rules",
+    "skills": ".metaproject/skills",
+    "modules": ".metaproject/modules"
+  },
+  "modules": {
+    "gdgraph": {
+      "enabled": true,
+      "core": ".metaproject/core/gdgraph",
+      "data": ".metaproject/data/gdgraph",
+      "manifest": ".metaproject/modules/gdgraph.md",
+      "commands": [
+        "build",
+        "query",
+        "affected",
+        "explain",
+        "path"
+      ],
+      "hooks": {
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
+    },
+    "wiki": {
+      "enabled": false
+    },
+    "memory": {
+      "enabled": false
+    },
+    "tasks": {
+      "enabled": false
+    },
+    "health": {
+      "enabled": false
+    },
+    "testing": {
+      "enabled": false
+    },
+    "domain-skills": {
+      "enabled": false
+    }
+  },
+  "agentEntrypoints": {
+    "index": ".metaproject/index.md",
+    "readme": ".metaproject/README.md",
+    "root": [
+      "AGENTS.md"
+    ]
+  }
+}

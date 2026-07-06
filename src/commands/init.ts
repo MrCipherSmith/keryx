@@ -1,4 +1,11 @@
-import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
@@ -12,6 +19,7 @@ import {
   renderHooksReadme,
   renderImportedAgentRules,
   renderMetaprojectCoreReadme,
+  renderMetaprojectGitignoreBlock,
   renderIndexMarkdown,
   renderMetaprojectReadme,
   renderProjectRulesReadme,
@@ -72,6 +80,7 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   await createBaseStructure(metaprojectRoot);
+  await syncGitignore(projectRoot);
   const agentRuleSources = await syncAgentRules(projectRoot, metaprojectRoot);
 
   if (enableGdgraph) {
@@ -129,6 +138,7 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"),
       renderGdgraphSkillReadme(),
     );
+    await removeLegacyGdgraphSkillReadme(metaprojectRoot);
   }
 
   console.log(
@@ -197,6 +207,29 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
     path.join(gdgraphCoreRoot, "cli.ts"),
     renderGdgraphCoreCli(),
   );
+}
+
+async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
+  const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
+  if (!(await pathExists(legacyReadmePath))) {
+    return;
+  }
+
+  const legacyContent = `# gdgraph Skill
+
+Use this skill when a task requires code graph context, dependency impact analysis, module explanation, or affected-file discovery.
+
+## Workflow
+
+1. Check \`.metaproject/modules/gdgraph.md\`.
+2. Prefer curated artifacts in \`.metaproject/data/gdgraph/artifacts\`.
+3. Run \`gd-metapro gdgraph build\` when graph data is stale.
+4. Use \`gd-metapro gdgraph affected <target>\` before implementation or review.
+`;
+
+  if ((await readFile(legacyReadmePath, "utf8")) === legacyContent) {
+    await unlink(legacyReadmePath);
+  }
 }
 
 function runtimeSourcePath(relativePath: string): string {
@@ -331,6 +364,45 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
 
 function ruleFileNameFor(source: string): string {
   return `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
+}
+
+async function syncGitignore(projectRoot: string): Promise<void> {
+  const gitignorePath = path.join(projectRoot, ".gitignore");
+  const blockStart = "# gd-metapro:begin";
+  const blockEnd = "# gd-metapro:end";
+  const metaprojectIgnoreBlock = renderMetaprojectGitignoreBlock().trim();
+  const managedBlock = `${blockStart}\n${metaprojectIgnoreBlock}\n${blockEnd}`;
+  const existing = (await pathExists(gitignorePath))
+    ? await readFile(gitignorePath, "utf8")
+    : "";
+
+  const blockPattern = new RegExp(
+    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+  );
+  const metaprojectIgnoreLines = new Set(metaprojectIgnoreBlock.split("\n"));
+  const withoutExistingManagedBlock = existing.replace(blockPattern, "");
+  const withoutLegacyMetaprojectIgnore = withoutExistingManagedBlock
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return (
+        trimmed !== ".metaproject/" &&
+        !metaprojectIgnoreLines.has(trimmed)
+      );
+    })
+    .join("\n");
+
+  const next = `${withoutLegacyMetaprojectIgnore.trimEnd()}\n\n${managedBlock}\n`;
+
+  if (existing === next) {
+    return;
+  }
+
+  await writeFile(gitignorePath, next, "utf8");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function writeJsonIfChanged(

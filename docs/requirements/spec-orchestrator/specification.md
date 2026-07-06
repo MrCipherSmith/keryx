@@ -35,6 +35,7 @@
 - Импортировать существующие `AGENTS.md`/`CLAUDE.md` в `.metaproject/rules/`.
 - Если root agent entrypoint отсутствует, создавать `AGENTS.md`.
 - Добавлять в root agent entrypoint ссылку на `.metaproject/index.md`.
+- Настраивать `.gitignore` так, чтобы agent-facing Metaproject файлы версионировались, а технические runtime/storage файлы игнорировались.
 - Разделять служебную логику и output: `core/` отдельно от `data/`.
 - Поддержать повторный запуск `gd-metapro init` без потери пользовательских изменений.
 - Заложить расширяемую систему модулей.
@@ -198,8 +199,9 @@ CLI должен:
 11. Добавить в найденные или созданный entrypoint ссылку на `.metaproject/index.md`.
 12. Импортировать их содержимое в `.metaproject/rules/`.
 13. Создать `.metaproject/skills/project-rules/`.
-14. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
-15. Запустить post-init hooks включенных модулей.
+14. Синхронизировать `.gitignore` через managed-блок `gd-metapro`.
+15. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
+16. Запустить post-init hooks включенных модулей.
 
 ### 7.2 Интерактивные вопросы
 
@@ -526,6 +528,32 @@ Lifecycle:
 - `.metaproject/reports/**`.
 
 CLI не должен перетирать user-authored файлы без подтверждения. Для generated files перезапись допустима.
+
+### 14.1 Git versioning policy
+
+`gd-metapro init` должен поддерживать managed-блок в `.gitignore`.
+
+Версионируются по умолчанию:
+
+- `.metaproject/index.md`;
+- `.metaproject/README.md`;
+- `.metaproject/metaproject.json`;
+- `.metaproject/rules/**`;
+- `.metaproject/skills/**`;
+- `.metaproject/modules/**`;
+- `.metaproject/data/*/artifacts/**`;
+- README/документация внутри `.metaproject/core/**` и `.metaproject/hooks/**`.
+
+Игнорируются по умолчанию:
+
+- `.metaproject/runtime/`;
+- `.metaproject/core/**/*.ts`;
+- `.metaproject/data/**/storage/`;
+- `.metaproject/data/**/queries/`;
+- `.metaproject/data/**/summaries/`;
+- `.metaproject/reports/`.
+
+Если в `.gitignore` есть устаревшая строка `.metaproject/`, `gd-metapro init` должен удалить ее и заменить granular managed-блоком.
 
 ## 15. Refresh behavior
 

@@ -1,0 +1,21 @@
+{
+  "cli.ts": [
+    "src/cli.ts"
+  ],
+  "commands": [
+    "src/commands/gdgraph.ts",
+    "src/commands/init.ts",
+    "src/commands/status.ts",
+    "src/commands/update.ts"
+  ],
+  "gdgraph": [
+    "src/gdgraph/build.ts",
+    "src/gdgraph/query.ts",
+    "src/gdgraph/types.ts"
+  ],
+  "lib": [
+    "src/lib/fs.ts",
+    "src/lib/prompt.ts",
+    "src/lib/templates.ts"
+  ]
+}

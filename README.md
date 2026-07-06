@@ -114,6 +114,29 @@ Graph navigation skill:
 
 This skill tells agents to use `gd-metapro gdgraph ...` by default for project navigation, file discovery, and code-related work before broad raw file search. The user does not need to ask for graph usage explicitly.
 
+## Versioning Policy
+
+`gd-metapro init` keeps agent-facing Metaproject files versioned and ignores executable/generated internals.
+
+Versioned by default:
+
+- `.metaproject/index.md`
+- `.metaproject/README.md`
+- `.metaproject/metaproject.json`
+- `.metaproject/rules/`
+- `.metaproject/skills/`
+- `.metaproject/modules/`
+- `.metaproject/data/*/artifacts/`
+
+Ignored by default:
+
+- `.metaproject/runtime/`
+- `.metaproject/core/**/*.ts`
+- `.metaproject/data/**/storage/`
+- `.metaproject/data/**/queries/`
+- `.metaproject/data/**/summaries/`
+- `.metaproject/reports/`
+
 ## Commands
 
 ```bash

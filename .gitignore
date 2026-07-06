@@ -1,5 +1,14 @@
-.metaproject/
 node_modules/
 dist/
 coverage/
 .DS_Store
+
+# gd-metapro:begin
+# Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
+.metaproject/runtime/
+.metaproject/core/**/*.ts
+.metaproject/data/**/storage/
+.metaproject/data/**/queries/
+.metaproject/data/**/summaries/
+.metaproject/reports/
+# gd-metapro:end

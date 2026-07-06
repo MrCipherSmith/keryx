@@ -91,6 +91,17 @@ For project navigation, file discovery, and code-related tasks, use the Metaproj
 `;
 }
 
+export function renderMetaprojectGitignoreBlock(): string {
+  return `# Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
+.metaproject/runtime/
+.metaproject/core/**/*.ts
+.metaproject/data/**/storage/
+.metaproject/data/**/queries/
+.metaproject/data/**/summaries/
+.metaproject/reports/
+`;
+}
+
 export function renderProjectRulesReadme(): string {
   return `# Project Rules
 
