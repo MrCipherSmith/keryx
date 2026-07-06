@@ -1,7 +1,7 @@
 # Code Health: technical specification
 
-Version: 0.5.0
-Status: Phase 1 + skill-owned scope loop + history trends implemented (see section 21). Complexity is a token-based approximation; AST precision deferred.
+Version: 0.6.0
+Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation; AST precision deferred.
 
 ## 1. Purpose
 
@@ -116,8 +116,9 @@ external tool. External complexity tools are added as adapters (section 5).
 ## 5. Sources and the SourceAdapter contract
 
 Core-5 first-class sources: `eslint`, `typescript`, `tests`, `coverage`,
-`dependencyAudit`. `sonarqube` and external complexity tools ship as adapters
-through the same contract.
+`dependencyAudit`, plus a `sonarqube` adapter (import-oriented, disabled by
+default). The built-in complexity metric is also emitted as P2 findings.
+Further external tools plug in through the same `SourceAdapter` contract.
 
 ```ts
 export type SourceStatus =
@@ -216,9 +217,11 @@ v1 computes metrics for:
 - `module` (from gdgraph module-map when available, else top-level `src/*` dirs);
 - `file`.
 
-`skill-owned` scope is shipped (Phase 2): Code Health maps files to the owning
-project-skill via the gdskills registry and emits `skill:<module>/<name>` scope
-metrics. `entity/component/store` scopes remain reserved.
+`skill-owned` scope and directory-level `component` scope are shipped (Phase 2):
+Code Health maps files to the owning project-skill via the gdskills registry
+(`skill:<module>/<name>`) and to their directory below the module
+(`component:<dir>`). Semantic `entity/store` detection remains deferred to
+Phase 3.
 
 ## 9. Scope metrics
 
@@ -228,7 +231,8 @@ Each scope carries:
 - `coverage` (from the coverage source, when available);
 - `churn` - changed-line count over `churnWindowDays` from `git log`;
 - `complexity` - cyclomatic complexity per function via a token-based scan (comment/string-stripped, function bodies located by brace matching), with
-  per-scope max and count above `complexityThreshold`;
+  per-scope max and count above `complexityThreshold`, and emitted as P2
+  findings for files over the threshold;
 - `health_score`, `risk_score`, `trend`, `regression_score` (section 10).
 
 Complexity and churn are computed for TS/JS in v1 (section 20).
@@ -430,14 +434,17 @@ when unsupported.
 - layered outputs + provenance + `--strict`;
 - manifest, module doc, skill.
 
-### Phase 2 - adapters and feedback (in progress)
+### Phase 2 - adapters and feedback (complete)
 
 - [x] skill-owned scope: Code Health reads the gdskills project-skill registry,
   tags findings with `scope.skill`, and emits `skill:<module>/<name>` metrics;
 - [x] gdskills consumption end-to-end: `skills learn --from-health` auto-resolves
   the owning skill and scopes learned lessons to it;
-- [ ] entity/component/store scopes;
-- [ ] adapters: SonarQube, external complexity tools;
+- [x] component scopes: directory-level granularity below the module; semantic
+  entity/store detection deferred to Phase 3;
+- [x] adapters: SonarQube adapter (import-oriented, disabled by default), and the
+  built-in complexity metric emitted as P2 findings; further external tools plug
+  in via the SourceAdapter contract;
 - [x] history-based trends: `gd-metapro health trend` over `data/health/history` snapshots.
 
 ### Phase 3 - advanced

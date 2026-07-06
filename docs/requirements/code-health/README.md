@@ -1,7 +1,7 @@
 # Code Health requirements
 
-Version: 0.5.0
-Status: Phase 1 + skill-owned scope loop + history trends implemented. CLI `gd-metapro health` (incl. `trend`), init scaffold, and the gdskills `learn --from-health` loop shipped.
+Version: 0.6.0
+Status: Phase 1 + Phase 2 complete (module implemented). Sonar adapter, complexity findings, skill/component scopes, gdskills learn-loop, and history trends shipped. Phase 3 (advanced) is future.
 
 `Code Health` - модуль Metaproject для агрегации качества кода. Он собирает технические источники качества, нормализует findings, считает health/risk metrics на разных уровнях гранулярности и превращает сырые логи в agent-readable Markdown/JSON reports.
 
@@ -9,9 +9,9 @@ Status: Phase 1 + skill-owned scope loop + history trends implemented. CLI `gd-m
 
 Phase 1 реализована: модуль `src/health/` (адаптеры Core-5, scoring, gate, baseline, метрики churn/complexity), CLI `gd-metapro health run|status|gate|sources|explain|baseline update`, интеграция в `gd-metapro init` (`--no-health`, `health.config.json`, manifest, skill). Decoupled-контракт findings (`data/health/artifacts/latest.json`) для `gd-metapro skills learn --from-health`.
 
-Phase 2 (частично): skill-owned scope — Code Health читает реестр project-skills gdskills, проставляет `scope.skill` на findings и считает `skill:<module>/<name>` метрики; `skills learn --from-health` авто-резолвит владеющий skill и скоупит уроки по нему.
+Phase 2 (завершена): skill-owned scope (`scope.skill` + `skills learn --from-health` loop), directory-level component scopes, SonarQube-адаптер (import), complexity → P2 findings, и multi-run тренды (`gd-metapro health trend` по `data/health/history`).
 
-Complexity — token-based приближение (не полный AST). `gd-metapro health trend` даёт multi-run тренды по `data/health/history`. Остаток Phase 2: Sonar/complexity-tools адаптеры, entity/component scopes. См. [specification.md](specification.md) sections 2 и 21.
+Complexity — token-based приближение (не полный AST). Phase 3 (future): семантический entity/store detection, мульти-язык, richer analytics/dashboards. См. [specification.md](specification.md) sections 2 и 21.
 
 ## Документы
 

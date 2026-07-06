@@ -5,6 +5,7 @@ import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
 import { loadBaseline, writeBaseline } from "./baseline";
 import { getChurn } from "./metrics/churn";
+import { getComplexityFindings } from "./metrics/complexity-findings";
 import { getCoverage } from "./metrics/coverage";
 import { renderReportMarkdown } from "./report";
 import { loadSkillOwnership } from "./skills";
@@ -80,6 +81,11 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   }
   if (!filter || filter.has("complexity")) {
     const cfg = config.sources.complexity ?? { mode: "auto", required: false };
+    const enabled = cfg.mode !== "disabled" && sourceFiles.length > 0;
+    const complexityFindings = enabled
+      ? await getComplexityFindings(cwd, sourceFiles, config)
+      : [];
+    findings.push(...complexityFindings);
     sourceInfos.push({
       source: "complexity",
       status: cfg.mode === "disabled" ? "skipped" : sourceFiles.length > 0 ? "available" : "skipped",
@@ -88,22 +94,10 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
       imported: false,
       command: "builtin: cyclomatic (token-based)",
       toolVersion: null,
-      findings: 0,
+      findings: complexityFindings.length,
     });
   }
-  if (!filter || filter.has("sonarqube")) {
-    const cfg = config.sources.sonarqube ?? { mode: "disabled", required: false };
-    sourceInfos.push({
-      source: "sonarqube",
-      status: cfg.mode === "disabled" ? "skipped" : "missing",
-      mode: cfg.mode,
-      required: cfg.required,
-      imported: false,
-      command: null,
-      toolVersion: null,
-      findings: 0,
-    });
-  }
+  // sonarqube is a real adapter now (handled in the FINDING_ADAPTERS loop).
 
   // Tag findings with the owning project-skill (gdskills registry) so the
   // report and gdskills `learn --from-health` can work per skill.

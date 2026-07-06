@@ -137,6 +137,33 @@ export async function computeMetrics(input: {
     );
   }
 
+  // Component scopes: directory-level granularity below the module (e.g.
+  // src/health/metrics). Only emitted for nested directories that differ from
+  // their module. Semantic entity/store detection is deferred to Phase 3.
+  const components = new Map<string, string[]>();
+  for (const file of sourceFiles) {
+    const dir = path.posix.dirname(file);
+    if (dir === "." || dir === moduleOfFile(file)) {
+      continue;
+    }
+    components.set(dir, [...(components.get(dir) ?? []), file]);
+  }
+  for (const [name, files] of [...components.entries()].sort()) {
+    const compFindings = findings.filter(
+      (f) => f.file && path.posix.dirname(f.file) === name,
+    );
+    scopes.push(
+      build(
+        "component",
+        `component:${name}`,
+        name,
+        files,
+        compFindings,
+        averageCoverage(files, coverage),
+      ),
+    );
+  }
+
   const findingFiles = findings.map((f) => f.file).filter((f): f is string => Boolean(f));
   const scopedFiles =
     scopeSelector?.kind === "file" && sourceFiles.includes(scopeSelector.path)

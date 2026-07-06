@@ -80,7 +80,12 @@ export type RawSourceResult = {
   imported: boolean;
 };
 
-export type ScopeKind = "project" | "module" | "file" | "skill";
+export type ScopeKind =
+  | "project"
+  | "module"
+  | "component"
+  | "file"
+  | "skill";
 
 export type ScopeMetrics = {
   key: string;
