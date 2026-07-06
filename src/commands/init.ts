@@ -76,6 +76,15 @@ type ModuleConfig =
       skills?: string;
       catalog?: string;
       projectSkills?: string;
+      projectSkillRegistry?: Array<{
+        module: string;
+        name: string;
+        target: string;
+        path: string;
+        version: string;
+        status: string;
+        updatedAt: string;
+      }>;
       hooks?: {
         gitPostCommit?: string;
         postUpdate?: string;
@@ -115,6 +124,7 @@ export async function initCommand(args: string[]): Promise<void> {
   const projectRoot = process.cwd();
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
   const alreadyExists = await pathExists(metaprojectRoot);
+  const existingManifest = await readExistingManifest(metaprojectRoot);
 
   let enableGdgraph = true;
   let enableGdctx = true;
@@ -241,6 +251,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableGdgraphHook,
     enableGdskillsHook,
     agentRuleSources,
+    existingManifest,
   });
 
   await writeJsonIfChanged(
@@ -579,6 +590,21 @@ function runtimeSourcePath(relativePath: string): string {
   return fileURLToPath(new URL(relativePath, import.meta.url));
 }
 
+async function readExistingManifest(
+  metaprojectRoot: string,
+): Promise<MetaprojectManifest | undefined> {
+  const manifestPath = path.join(metaprojectRoot, "metaproject.json");
+  if (!(await pathExists(manifestPath))) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildManifest({
   projectName,
   enableGdgraph,
@@ -590,6 +616,7 @@ function buildManifest({
   enableGdgraphHook,
   enableGdskillsHook,
   agentRuleSources,
+  existingManifest,
 }: {
   projectName: string;
   enableGdgraph: boolean;
@@ -601,7 +628,13 @@ function buildManifest({
   enableGdgraphHook: boolean;
   enableGdskillsHook: boolean;
   agentRuleSources: string[];
+  existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
+  const existingProjectSkillRegistry =
+    existingManifest?.modules.gdskills?.enabled === true
+      ? existingManifest.modules.gdskills.projectSkillRegistry
+      : undefined;
+
   return {
     schemaVersion: 1,
     name: `${projectName}-metaproject`,
@@ -665,6 +698,9 @@ function buildManifest({
             skills: ".metaproject/skills/gdskills",
             catalog: ".metaproject/skills/catalog.md",
             projectSkills: ".metaproject/project-skills",
+            ...(existingProjectSkillRegistry
+              ? { projectSkillRegistry: existingProjectSkillRegistry }
+              : {}),
             hooks: {
               ...(enableGdskillsHook
                 ? { gitPostCommit: ".git/hooks/post-commit" }

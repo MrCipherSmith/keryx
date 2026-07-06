@@ -19,7 +19,8 @@ When enabled during `gd-metapro init`, the Git `post-commit` hook runs lightweig
 Purpose:
 
 - keep generated project-skills from silently drifting after code/wiki/rule changes;
-- write verification reports under `.metaproject/data/gdskills/reports`;
+- run non-mutating dry-run verification and report failures without changing files;
+- write verification reports only during explicit `gd-metapro skills verify` runs or orchestrator-controlled checks;
 - keep the hook local, optional and non-blocking.
 
 ## post-update.d

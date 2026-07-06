@@ -6,7 +6,7 @@ Status: fresh
 Module: metaproject
 Skill: init-command
 Target: src/commands/init.ts
-Last Verified: 2026-07-06T18:45:14.849Z
+Last Verified: 2026-07-06T18:48:52.635Z
 Report: .metaproject/data/gdskills/reports/metaproject-init-command-verification.json
 
 ## Signals
@@ -17,7 +17,7 @@ Report: .metaproject/data/gdskills/reports/metaproject-init-command-verification
 | required:skill-changelog.md | pass | Required package file exists. | .metaproject/project-skills/metaproject/init-command/skill-changelog.md |
 | metadata:version | pass | Version 0.1.0 | .metaproject/project-skills/metaproject/init-command/SKILL.md |
 | metadata:target | pass | Target src/commands/init.ts | .metaproject/project-skills/metaproject/init-command/SKILL.md |
-| metadata:last-verified | pass | Last verified at 2026-07-06T18:43:55.086Z | .metaproject/project-skills/metaproject/init-command/SKILL.md |
+| metadata:last-verified | pass | Last verified at 2026-07-06T18:48:45.653Z | .metaproject/project-skills/metaproject/init-command/SKILL.md |
 | registry | pass | Skill is registered in metaproject manifest. | .metaproject/metaproject.json |
 | target | pass | Target path exists. | src/commands/init.ts |
 | evidence:gdgraph | pass | Evidence available: .metaproject/data/gdgraph/artifacts/summary.md, .metaproject/data/gdgraph/artifacts/module-map.json | .metaproject/data/gdgraph/artifacts/summary.md |

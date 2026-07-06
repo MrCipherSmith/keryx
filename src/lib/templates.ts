@@ -366,7 +366,8 @@ When enabled during \`gd-metapro init\`, the Git \`post-commit\` hook runs light
 Purpose:
 
 - keep generated project-skills from silently drifting after code/wiki/rule changes;
-- write verification reports under \`.metaproject/data/gdskills/reports\`;
+- run non-mutating dry-run verification and report failures without changing files;
+- write verification reports only during explicit \`gd-metapro skills verify\` runs or orchestrator-controlled checks;
 - keep the hook local, optional and non-blocking.
 
 ## post-update.d
@@ -443,7 +444,7 @@ export function renderGdskillsPostCommitHook(): string {
   fi
 
   if command -v gd-metapro >/dev/null 2>&1; then
-    gd-metapro skills verify --all >/dev/null 2>&1 || {
+    gd-metapro skills verify --all --dry-run >/dev/null 2>&1 || {
       echo "gd-metapro post-commit: gdskills verification failed" >&2
       return 0
     }
@@ -452,7 +453,7 @@ export function renderGdskillsPostCommitHook(): string {
   fi
 
   if [ -x "$HOME/.local/bin/gd-metapro" ]; then
-    "$HOME/.local/bin/gd-metapro" skills verify --all >/dev/null 2>&1 || {
+    "$HOME/.local/bin/gd-metapro" skills verify --all --dry-run >/dev/null 2>&1 || {
       echo "gd-metapro post-commit: gdskills verification failed" >&2
       return 0
     }

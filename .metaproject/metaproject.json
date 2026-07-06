@@ -74,10 +74,6 @@
       "skills": ".metaproject/skills/gdskills",
       "catalog": ".metaproject/skills/catalog.md",
       "projectSkills": ".metaproject/project-skills",
-      "hooks": {
-        "gitPostCommit": ".git/hooks/post-commit",
-        "postUpdate": ".metaproject/hooks/post-update.d"
-      },
       "projectSkillRegistry": [
         {
           "module": "metaproject",
@@ -86,9 +82,13 @@
           "path": ".metaproject/project-skills/metaproject/init-command",
           "version": "0.1.0",
           "status": "active",
-          "updatedAt": "2026-07-06T18:43:45.720Z"
+          "updatedAt": "2026-07-06T18:48:25.291Z"
         }
-      ]
+      ],
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
     },
     "memory": {
       "enabled": false

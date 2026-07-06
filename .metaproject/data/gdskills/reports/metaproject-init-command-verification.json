@@ -6,7 +6,7 @@
   "target": "src/commands/init.ts",
   "skillPath": ".metaproject/project-skills/metaproject/init-command",
   "reportPath": ".metaproject/data/gdskills/reports/metaproject-init-command-verification.json",
-  "verifiedAt": "2026-07-06T18:45:14.849Z",
+  "verifiedAt": "2026-07-06T18:48:52.635Z",
   "signals": [
     {
       "name": "required:SKILL.md",
@@ -35,7 +35,7 @@
     {
       "name": "metadata:last-verified",
       "status": "pass",
-      "message": "Last verified at 2026-07-06T18:43:55.086Z",
+      "message": "Last verified at 2026-07-06T18:48:45.653Z",
       "path": ".metaproject/project-skills/metaproject/init-command/SKILL.md"
     },
     {

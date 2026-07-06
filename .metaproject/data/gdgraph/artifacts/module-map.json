@@ -39,6 +39,7 @@
     "src/health/parsers.test.ts",
     "src/health/report.ts",
     "src/health/run.ts",
+    "src/health/scopes.test.ts",
     "src/health/scopes.ts",
     "src/health/scoring.test.ts",
     "src/health/scoring.ts",
