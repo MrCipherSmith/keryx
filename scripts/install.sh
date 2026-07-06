@@ -110,7 +110,11 @@ if [ "$MODE" = "global" ]; then
 
   clone_or_update "$INSTALL_DIR"
   mkdir -p "$BIN_DIR"
-  ln -sf "$INSTALL_DIR/src/cli.ts" "$BIN_DIR/gd-metapro"
+  cat > "$BIN_DIR/gd-metapro" <<EOF
+#!/usr/bin/env bash
+exec "$BUN_BIN" "$INSTALL_DIR/src/cli.ts" "\$@"
+EOF
+  chmod +x "$BIN_DIR/gd-metapro"
 
   echo "gd-metapro installed globally:"
   echo "  $BIN_DIR/gd-metapro"
