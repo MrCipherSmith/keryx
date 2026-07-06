@@ -96,7 +96,7 @@ If `gdgraph` is enabled, it also creates:
     README.md
   data/gdgraph/
   modules/gdgraph.md
-  skills/gdgraph/
+  skills/gdgraph/SKILL.md
 ```
 
 Agent rule files are mirrored into:
@@ -105,6 +105,14 @@ Agent rule files are mirrored into:
 .metaproject/rules/
 .metaproject/skills/project-rules/
 ```
+
+Code graph navigation skill:
+
+```text
+.metaproject/skills/gdgraph/SKILL.md
+```
+
+This skill tells agents to use `gd-metapro gdgraph ...` first for code structure, dependency, architecture, and affected-file questions.
 
 ## Commands
 

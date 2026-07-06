@@ -125,8 +125,8 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "core", "gdgraph", "README.md"),
       renderGdgraphCoreReadme(),
     );
-    await writeTextIfMissing(
-      path.join(metaprojectRoot, "skills", "gdgraph", "README.md"),
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"),
       renderGdgraphSkillReadme(),
     );
   }

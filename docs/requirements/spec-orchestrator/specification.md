@@ -281,6 +281,7 @@ Which AI entrypoints should be generated?
       queries/
   skills/
     gdgraph/
+      SKILL.md
   modules/
     gdgraph.md
 ```
@@ -375,7 +376,7 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 | Skill | Purpose | Entry |
 |-------|---------|-------|
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
-| gdgraph | Code graph context and affected-file discovery | skills/gdgraph/ |
+| gdgraph | Decide when to use gdgraph before reading raw code | skills/gdgraph/SKILL.md |
 
 ## Agent Workflow
 

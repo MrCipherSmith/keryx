@@ -18,7 +18,7 @@ export function renderIndexMarkdown({
     : "- No module data generated yet.";
 
   const skillsRefs = enableGdgraph
-    ? "| gdgraph | Code graph context and affected-file discovery | skills/gdgraph/ |\n"
+    ? "| gdgraph | Decide when to use the code graph and run gdgraph commands | skills/gdgraph/SKILL.md |"
     : "";
 
   const rulesRows =
@@ -53,7 +53,7 @@ ${rulesRows}
 | Skill | Purpose | Entry |
 |-------|---------|-------|
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
-${skillsRefs || ""}
+${skillsRefs}
 
 ## Agent Workflow
 
@@ -370,15 +370,64 @@ Responsibilities:
 }
 
 export function renderGdgraphSkillReadme(): string {
-  return `# gdgraph Skill
+  return `---
+name: gdgraph
+description: Use when the user asks about code structure, architecture, dependencies, affected files, module relationships, import cycles, orphan files, or where to start reading code. This skill decides whether the local code graph should be queried first and runs the relevant gd-metapro gdgraph command before falling back to raw file search.
+---
 
-Use this skill when a task requires code graph context, dependency impact analysis, module explanation, or affected-file discovery.
+# gdgraph Skill
+
+Use this skill before broad code reading whenever the request is about code understanding, impact analysis, architecture, dependencies, or navigation.
+
+## Trigger Examples
+
+- "Что затронет изменение этого файла?"
+- "Где используется этот модуль?"
+- "Как связаны эти части кода?"
+- "Есть ли циклы импортов?"
+- "С чего начать читать этот модуль?"
+- "Проанализируй архитектуру этой области."
 
 ## Workflow
 
-1. Check \`.metaproject/modules/gdgraph.md\`.
-2. Prefer curated artifacts in \`.metaproject/data/gdgraph/artifacts\`.
-3. Run \`gd-metapro gdgraph build\` when graph data is stale.
-4. Use \`gd-metapro gdgraph affected <target>\` before implementation or review.
+1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
+2. If graph storage is missing or likely stale, run:
+
+\`\`\`bash
+gd-metapro gdgraph build
+\`\`\`
+
+3. Choose the graph command:
+
+- Known file path or changed file:
+
+\`\`\`bash
+gd-metapro gdgraph affected <file>
+\`\`\`
+
+- Dependency cycle question:
+
+\`\`\`bash
+gd-metapro gdgraph query cycles
+\`\`\`
+
+- Orphan/unreferenced module question:
+
+\`\`\`bash
+gd-metapro gdgraph query orphans
+\`\`\`
+
+4. Use graph output to select the smallest relevant file set.
+5. Read those files directly and verify any conclusion against source code.
+6. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+
+## Reporting
+
+When answering, include a short graph context note:
+
+- \`graph_context: used\` with commands run;
+- \`graph_context: unavailable\` with the reason.
+
+Graph output is navigation context, not proof. Verify behavior in actual code before making claims.
 `;
 }

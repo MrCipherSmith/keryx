@@ -82,6 +82,7 @@
       queries/
   skills/
     gdgraph/
+      SKILL.md
   metaproject.json
 ```
 
@@ -228,6 +229,35 @@ gd-metapro gdgraph path src/a.ts src/b.ts
 ```
 
 Показывает путь зависимостей между двумя файлами или символами.
+
+### 6.7 gdgraph skill
+
+При включенном модуле `gdgraph` команда `gd-metapro init` должна создавать:
+
+```text
+.metaproject/skills/gdgraph/SKILL.md
+```
+
+Назначение skill:
+
+- определить, относится ли вопрос пользователя к структуре кода, зависимостям, affected context, архитектуре или навигации;
+- перед чтением большого количества файлов вызвать подходящую команду `gd-metapro gdgraph ...`;
+- использовать вывод графа для выбора минимального набора файлов;
+- затем проверить вывод графа по реальному исходному коду.
+
+Минимальные команды, которые skill должен уметь выбирать:
+
+```bash
+gd-metapro gdgraph build
+gd-metapro gdgraph affected <file>
+gd-metapro gdgraph query cycles
+gd-metapro gdgraph query orphans
+```
+
+Ответ агента должен фиксировать:
+
+- `graph_context: used` и список команд, если граф использовался;
+- `graph_context: unavailable` и причину, если граф недоступен.
 
 ## 7. Структура данных
 
