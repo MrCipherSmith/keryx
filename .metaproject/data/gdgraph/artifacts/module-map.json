@@ -3,6 +3,7 @@
     "src/cli.ts"
   ],
   "commands": [
+    "src/commands/ctx.ts",
     "src/commands/gdgraph.ts",
     "src/commands/init.ts",
     "src/commands/status.ts",
