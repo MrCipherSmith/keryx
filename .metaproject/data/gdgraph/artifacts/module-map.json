@@ -5,18 +5,62 @@
   "commands": [
     "src/commands/ctx.ts",
     "src/commands/gdgraph.ts",
+    "src/commands/health.ts",
     "src/commands/init.ts",
+    "src/commands/skills.ts",
     "src/commands/status.ts",
-    "src/commands/update.ts"
+    "src/commands/update.ts",
+    "src/commands/wiki.ts"
   ],
   "gdgraph": [
     "src/gdgraph/build.ts",
     "src/gdgraph/query.ts",
     "src/gdgraph/types.ts"
   ],
+  "gdskills": [
+    "src/gdskills/catalog.ts",
+    "src/gdskills/contracts.ts",
+    "src/gdskills/export.ts",
+    "src/gdskills/install.ts",
+    "src/gdskills/learn.ts",
+    "src/gdskills/project-skills.ts",
+    "src/gdskills/sync.ts",
+    "src/gdskills/verify.ts"
+  ],
+  "health": [
+    "src/health/baseline.ts",
+    "src/health/config.ts",
+    "src/health/gate.test.ts",
+    "src/health/gate.ts",
+    "src/health/metrics/churn.ts",
+    "src/health/metrics/complexity.test.ts",
+    "src/health/metrics/complexity.ts",
+    "src/health/metrics/coverage.ts",
+    "src/health/parsers.test.ts",
+    "src/health/report.ts",
+    "src/health/run.ts",
+    "src/health/scopes.ts",
+    "src/health/scoring.test.ts",
+    "src/health/scoring.ts",
+    "src/health/service.ts",
+    "src/health/sources/dependency-audit.ts",
+    "src/health/sources/eslint.ts",
+    "src/health/sources/helpers.ts",
+    "src/health/sources/index.ts",
+    "src/health/sources/tests.ts",
+    "src/health/sources/typescript.ts",
+    "src/health/templates.ts",
+    "src/health/types.ts",
+    "src/health/util.ts"
+  ],
   "lib": [
     "src/lib/fs.ts",
     "src/lib/prompt.ts",
     "src/lib/templates.ts"
+  ],
+  "wiki": [
+    "src/wiki/service.ts",
+    "src/wiki/templates.ts",
+    "src/wiki/types.ts"
   ]
 }

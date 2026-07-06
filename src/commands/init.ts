@@ -10,7 +10,13 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
-import { confirm } from "../lib/prompt";
+import { choice, confirm } from "../lib/prompt";
+import {
+  GDSKILLS_PROFILES,
+  type GdskillsProfile,
+  normalizeGdskillsProfile,
+} from "../gdskills/catalog";
+import { installGdskills } from "../gdskills/install";
 import {
   renderGdwikiManifest,
   renderGdwikiSkillReadme,
@@ -18,6 +24,12 @@ import {
   renderWikiPageTemplate,
 } from "../wiki/templates";
 import { WIKI_PAGE_TYPES } from "../wiki/types";
+import { renderHealthConfig } from "../health/config";
+import {
+  renderHealthCoreReadme,
+  renderHealthManifest,
+  renderHealthSkillReadme,
+} from "../health/templates";
 import {
   renderAgentEntrypoint,
   renderGdctxCoreReadme,
@@ -27,6 +39,7 @@ import {
   renderGdgraphCoreCli,
   renderGdgraphManifest,
   renderGdgraphPostCommitHook,
+  renderGdskillsPostCommitHook,
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
   renderHooksReadme,
@@ -45,7 +58,11 @@ type InitOptions = {
   noGdgraph: boolean;
   noGdctx: boolean;
   noGdwiki: boolean;
+  noGdskills: boolean;
+  gdskillsProfile: GdskillsProfile;
+  noHealth: boolean;
   noGdgraphHook: boolean;
+  noGdskillsHook: boolean;
 };
 
 type ModuleConfig =
@@ -55,6 +72,10 @@ type ModuleConfig =
       data: string;
       manifest: string;
       commands: string[];
+      profile?: GdskillsProfile;
+      skills?: string;
+      catalog?: string;
+      projectSkills?: string;
       hooks?: {
         gitPostCommit?: string;
         postUpdate?: string;
@@ -98,7 +119,11 @@ export async function initCommand(args: string[]): Promise<void> {
   let enableGdgraph = true;
   let enableGdctx = true;
   let enableGdwiki = true;
+  let enableGdskills = true;
+  let gdskillsProfile = options.gdskillsProfile;
+  let enableHealth = true;
   let enableGdgraphHook = false;
+  let enableGdskillsHook = false;
   if (options.noGdgraph) {
     enableGdgraph = false;
   } else if (!options.yes) {
@@ -123,6 +148,31 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (options.noGdskills) {
+    enableGdskills = false;
+  } else if (!options.yes) {
+    enableGdskills = await confirm(
+      "Enable gdskills module with project-local bundled working skills? Recommended",
+      true,
+    );
+    if (enableGdskills) {
+      gdskillsProfile = await choice(
+        "Select gdskills install profile",
+        GDSKILLS_PROFILES,
+        gdskillsProfile === "custom" ? "recommended" : gdskillsProfile,
+      );
+    }
+  }
+
+  if (options.noHealth) {
+    enableHealth = false;
+  } else if (!options.yes) {
+    enableHealth = await confirm(
+      "Enable Code Health reports (lint, type, test, coverage, audit)? Recommended",
+      true,
+    );
+  }
+
   if (enableGdgraph) {
     if (options.noGdgraphHook) {
       enableGdgraphHook = false;
@@ -131,6 +181,19 @@ export async function initCommand(args: string[]): Promise<void> {
     } else {
       enableGdgraphHook = await confirm(
         "Install git post-commit hook to refresh gdgraph only after relevant file changes? Recommended",
+        true,
+      );
+    }
+  }
+
+  if (enableGdskills) {
+    if (options.noGdskillsHook) {
+      enableGdskillsHook = false;
+    } else if (options.yes) {
+      enableGdskillsHook = true;
+    } else {
+      enableGdskillsHook = await confirm(
+        "Install git post-commit hook to verify project-skills after relevant changes? Recommended",
         true,
       );
     }
@@ -156,12 +219,27 @@ export async function initCommand(args: string[]): Promise<void> {
     await createGdwikiStructure(metaprojectRoot);
   }
 
+  if (enableGdskills) {
+    await installGdskills(metaprojectRoot, gdskillsProfile);
+    if (enableGdskillsHook) {
+      await installGdskillsPostCommitHook(projectRoot);
+    }
+  }
+
+  if (enableHealth) {
+    await createHealthStructure(metaprojectRoot);
+  }
+
   const manifest = buildManifest({
     projectName: path.basename(projectRoot),
     enableGdgraph,
     enableGdctx,
     enableGdwiki,
+    enableGdskills,
+    gdskillsProfile,
+    enableHealth,
     enableGdgraphHook,
+    enableGdskillsHook,
     agentRuleSources,
   });
 
@@ -172,7 +250,7 @@ export async function initCommand(args: string[]): Promise<void> {
 
   await writeTextIfMissing(
     path.join(metaprojectRoot, "README.md"),
-    renderMetaprojectReadme({ enableGdgraph, enableGdctx, enableGdwiki }),
+    renderMetaprojectReadme({ enableGdgraph, enableGdctx, enableGdwiki, enableGdskills, enableHealth }),
   );
   await writeTextIfMissing(
     path.join(metaprojectRoot, "core", "README.md"),
@@ -197,6 +275,8 @@ export async function initCommand(args: string[]): Promise<void> {
       enableGdgraph,
       enableGdctx,
       enableGdwiki,
+      enableGdskills,
+      enableHealth,
       ruleSources: agentRuleSources,
     }),
   );
@@ -255,6 +335,25 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (enableHealth) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "health.config.json"),
+      renderHealthConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "health.md"),
+      renderHealthManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "health", "README.md"),
+      renderHealthCoreReadme(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "health", "SKILL.md"),
+      renderHealthSkillReadme(),
+    );
+  }
+
   console.log(
     alreadyExists
       ? "Updated .metaproject structure."
@@ -263,8 +362,13 @@ export async function initCommand(args: string[]): Promise<void> {
   console.log(`gdgraph: ${enableGdgraph ? "enabled" : "disabled"}`);
   console.log(`gdctx: ${enableGdctx ? "enabled" : "disabled"}`);
   console.log(`gdwiki: ${enableGdwiki ? "enabled" : "disabled"}`);
+  console.log(`gdskills: ${enableGdskills ? `enabled (${gdskillsProfile})` : "disabled"}`);
+  console.log(`health: ${enableHealth ? "enabled" : "disabled"}`);
   if (enableGdgraph) {
     console.log(`gdgraph post-commit hook: ${enableGdgraphHook ? "enabled" : "disabled"}`);
+  }
+  if (enableGdskills) {
+    console.log(`gdskills post-commit hook: ${enableGdskillsHook ? "enabled" : "disabled"}`);
   }
 }
 
@@ -275,7 +379,11 @@ function parseInitArgs(args: string[]): InitOptions {
     noGdgraph: args.includes("--no-gdgraph"),
     noGdctx: args.includes("--no-gdctx"),
     noGdwiki: args.includes("--no-gdwiki"),
+    noGdskills: args.includes("--no-gdskills"),
+    gdskillsProfile: normalizeGdskillsProfile(getArgValue(args, "--gdskills-profile")),
+    noHealth: args.includes("--no-health"),
     noGdgraphHook: args.includes("--no-gdgraph-hook"),
+    noGdskillsHook: args.includes("--no-gdskills-hook"),
   };
 }
 
@@ -283,14 +391,18 @@ function printInitHelp(): void {
   console.log(`gd-metapro init
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdgraph-hook]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-gdgraph-hook] [--no-gdskills-hook]
 
 Options:
   --yes, -y             Use recommended defaults.
   --no-gdgraph          Do not enable gdgraph.
   --no-gdctx            Do not enable gdctx.
   --no-gdwiki           Do not enable gdwiki.
+  --no-gdskills         Do not install bundled gdskills.
+  --gdskills-profile    Install profile: minimal, recommended, full, custom.
+  --no-health           Do not enable Code Health.
   --no-gdgraph-hook     Do not install the gdgraph post-commit hook.
+  --no-gdskills-hook    Do not install the gdskills post-commit hook.
 `);
 }
 
@@ -350,6 +462,20 @@ async function createGdwikiStructure(root: string): Promise<void> {
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
 }
 
+async function createHealthStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "health", "sources"),
+    path.join(root, "core", "health", "metrics"),
+    path.join(root, "health", "baselines"),
+    path.join(root, "data", "health", "artifacts"),
+    path.join(root, "data", "health", "history"),
+    path.join(root, "data", "health", "raw"),
+    path.join(root, "skills", "health"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
 async function installGdgraphCoreScripts(root: string): Promise<void> {
   const gdgraphCoreRoot = path.join(root, "core", "gdgraph");
   await mkdir(gdgraphCoreRoot, { recursive: true });
@@ -399,6 +525,33 @@ async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> 
   await chmod(hookPath, 0o755);
 }
 
+async function installGdskillsPostCommitHook(projectRoot: string): Promise<void> {
+  const gitRoot = path.join(projectRoot, ".git");
+  if (!(await pathExists(gitRoot))) {
+    return;
+  }
+
+  const hooksRoot = path.join(gitRoot, "hooks");
+  await mkdir(hooksRoot, { recursive: true });
+
+  const hookPath = path.join(hooksRoot, "post-commit");
+  const blockStart = "# gd-metapro:gdskills-post-commit:begin";
+  const blockEnd = "# gd-metapro:gdskills-post-commit:end";
+  const managedBlock = `${blockStart}\n${renderGdskillsPostCommitHook().trim()}\n${blockEnd}`;
+  const existing = (await pathExists(hookPath))
+    ? await readFile(hookPath, "utf8")
+    : "#!/usr/bin/env sh\n";
+  const blockPattern = new RegExp(
+    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+  );
+  const next = blockPattern.test(existing)
+    ? existing.replace(blockPattern, managedBlock)
+    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
+
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
   const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
   if (!(await pathExists(legacyReadmePath))) {
@@ -431,14 +584,22 @@ function buildManifest({
   enableGdgraph,
   enableGdctx,
   enableGdwiki,
+  enableGdskills,
+  gdskillsProfile,
+  enableHealth,
   enableGdgraphHook,
+  enableGdskillsHook,
   agentRuleSources,
 }: {
   projectName: string;
   enableGdgraph: boolean;
   enableGdctx: boolean;
   enableGdwiki: boolean;
+  enableGdskills: boolean;
+  gdskillsProfile: GdskillsProfile;
+  enableHealth: boolean;
   enableGdgraphHook: boolean;
+  enableGdskillsHook: boolean;
   agentRuleSources: string[];
 }): MetaprojectManifest {
   return {
@@ -493,11 +654,41 @@ function buildManifest({
         : {
             enabled: false,
           },
+      gdskills: enableGdskills
+        ? {
+            enabled: true,
+            core: ".metaproject/core/gdskills",
+            data: ".metaproject/data/gdskills",
+            manifest: ".metaproject/modules/gdskills.md",
+            commands: ["status", "catalog", "install", "generate", "verify", "learn", "export", "sync"],
+            profile: gdskillsProfile,
+            skills: ".metaproject/skills/gdskills",
+            catalog: ".metaproject/skills/catalog.md",
+            projectSkills: ".metaproject/project-skills",
+            hooks: {
+              ...(enableGdskillsHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
+          }
+        : {
+            enabled: false,
+          },
       memory: { enabled: false },
       tasks: { enabled: false },
-      health: { enabled: false },
+      health: enableHealth
+        ? {
+            enabled: true,
+            core: ".metaproject/core/health",
+            data: ".metaproject/data/health",
+            manifest: ".metaproject/modules/health.md",
+            commands: ["run", "status", "gate", "sources", "explain", "baseline"],
+          }
+        : {
+            enabled: false,
+          },
       testing: { enabled: false },
-      "domain-skills": { enabled: false },
     },
     agentEntrypoints: {
       index: ".metaproject/index.md",
@@ -505,6 +696,15 @@ function buildManifest({
       root: agentRuleSources,
     },
   };
+}
+
+function getArgValue(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index === -1) {
+    return undefined;
+  }
+
+  return args[index + 1];
 }
 
 async function syncAgentRules(
@@ -562,6 +762,8 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     "When gdctx is enabled, use the Metaproject gdctx skill for commands, search, diff, test logs, and large file reads that can produce long output.";
   const ctxPolicy =
     "For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.";
+  const gdskillsPolicy =
+    "For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.";
 
   if (content.includes(marker)) {
     let next = content;
@@ -574,11 +776,13 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     next = collapseDuplicatePolicy(next, graphPolicy);
     next = collapseDuplicatePolicy(next, wikiPolicy);
     next = collapseDuplicatePolicy(next, ctxPolicy);
+    next = collapseDuplicatePolicy(next, gdskillsPolicy);
 
     const missingPolicies = [
       ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
       ...(next.includes(wikiPolicy) ? [] : [wikiPolicy]),
       ...(next.includes(ctxPolicy) ? [] : [ctxPolicy]),
+      ...(next.includes(gdskillsPolicy) ? [] : [gdskillsPolicy]),
     ];
     if (missingPolicies.length > 0) {
       const suffix = next.endsWith("\n") ? "" : "\n";
@@ -595,7 +799,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
   const suffix = content.endsWith("\n") ? "" : "\n";
   await writeFile(
     filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n`,
+    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n\n${gdskillsPolicy}\n`,
     "utf8",
   );
 }

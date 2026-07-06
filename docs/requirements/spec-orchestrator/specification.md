@@ -1,6 +1,6 @@
 # spec-orchestrator: спецификация Metaproject CLI и инициализации
 
-Version: 0.1.0
+Version: 0.8.0
 
 ## 1. Назначение
 
@@ -20,11 +20,14 @@ Version: 0.1.0
 - **Global CLI** - установленная команда `gd-metapro`, доступная из любого проекта.
 - **Target project** - проект, в котором пользователь запускает `gd-metapro init`.
 - **Local Metaproject** - папка `.metaproject/`, созданная внутри target project.
-- **Module** - подключаемая функциональная область: `gdgraph`, `gdctx`, `gdwiki`, memory, tasks, health, testing, skills.
+- **Module** - подключаемая функциональная область: `gdgraph`, `gdctx`, `gdwiki`, `gdskills`, memory, tasks, health, testing.
 - **Core** - служебный код модуля.
 - **Data** - output, который читают агенты: индексы, summary, отчеты, графы, curated context.
 - **Rules** - импортированные проектные инструкции из `AGENTS.md`/`CLAUDE.md`.
 - **Agent entrypoint** - `.metaproject/index.md`, главный файл для AI-агентов.
+- **gdskills** - рабочие skills/orchestrators Metaproject.
+- **project-skills** - generated skills, завязанные на контент и компоненты целевого проекта.
+- **Bundled working skills** - native reusable skills shipped with `gd-metapro` and installed into the local Metaproject skill domain.
 
 ## 3. Цели
 
@@ -41,6 +44,10 @@ Version: 0.1.0
 - Разделять служебную логику и output: `core/` отдельно от `data/`.
 - Поддержать повторный запуск `gd-metapro init` без потери пользовательских изменений.
 - Заложить расширяемую систему модулей.
+- Поддержать инициализацию `gdskills`, включая optional hook для проверки актуальности entity skills.
+- При включенном `gdskills` настраивать local-first routing, чтобы `AGENTS.md`/`CLAUDE.md` сначала ссылались на `.metaproject`, а не на внешние глобальные наборы skills.
+- Поддержать инициализацию Code Health, включая optional lightweight hook для changed-scope health checks.
+- Поддержать инициализацию Documentation Memory как searchable Markdown memory с local index.
 
 ## 4. Не цели первой версии
 
@@ -203,8 +210,13 @@ CLI должен:
 13. Создать `.metaproject/skills/project-rules/`.
 14. Синхронизировать `.gitignore` через managed-блок `gd-metapro`.
 15. Если пользователь включил `gdgraph`, предложить установить Git `post-commit` hook для обновления графа после релевантных изменений.
-16. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
-17. Запустить post-init hooks включенных модулей.
+16. Если пользователь включил `gdskills`, установить bundled working skills из текущего `gd-metapro` package в `.metaproject/skills/gdskills/`.
+17. Если пользователь включил `gdskills`, сгенерировать `.metaproject/skills/catalog.md` и local-first routing block для `AGENTS.md`/`CLAUDE.md`.
+18. Если пользователь включил `gdskills`, предложить установить Git hook для проверки актуальности entity skills после релевантных изменений.
+19. Если пользователь включил `health`, предложить установить Git hook для lightweight health checks по changed/affected scopes.
+20. Если пользователь включил `memory`, создать memory folders, templates, module manifest и `skills/memory/SKILL.md`.
+21. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
+22. Запустить post-init hooks включенных модулей.
 
 ### 7.2 Интерактивные вопросы
 
@@ -216,11 +228,11 @@ Which Metaproject modules do you want to enable?
 [x] gdgraph - code graph, dependencies, symbols, affected context (recommended)
 [x] gdctx - token-aware command output and context compression (recommended)
 [ ] gdwiki - Markdown project knowledge base
-[ ] memory - long-term project memory
+[ ] memory - searchable lessons, decisions, constraints and known mistakes
 [ ] tasks - local task manager
-[ ] health - code health reports
+[ ] health - code health reports, quality gate, metrics and trends
 [ ] testing - normalized test runner reports
-[ ] domain-skills - module-specific AI skills
+[ ] gdskills - skill lifecycle tools and project-skill management
 ```
 
 Для MVP `gdgraph` должен быть рекомендован, но не включаться молча без подтверждения.
@@ -256,6 +268,41 @@ Y. Yes (recommended) - keeps graph artifacts current after commits without rebui
 N. No - refresh graph manually with gd-metapro gdgraph build
 ```
 
+Если выбран `gdskills`, следующий вопрос:
+
+```text
+Install project-local bundled gdskills?
+
+Y. Yes - copy native gd-metapro working skills into .metaproject/skills so agents route locally first
+N. No - keep only CLI/runtime discovery; project-skills can still be generated later
+```
+
+Следующий вопрос:
+
+```text
+Install git hook to verify entity skills after relevant code/wiki changes?
+
+Y. Yes - keeps generated skills aligned with code, graph, wiki and review lessons
+N. No - verify manually with gd-metapro skills verify or through orchestrators
+```
+
+CLI flag:
+
+```bash
+gd-metapro init --no-gdskills-hook
+```
+
+Если выбран `health`, следующий вопрос:
+
+```text
+Install lightweight git hook for changed-scope health checks?
+
+Y. Yes - runs lightweight health checks only for changed/affected scopes
+N. No - run health manually with gd-metapro health run or through orchestrators
+```
+
+Если выбран `memory`, дополнительных hook-вопросов в MVP нет. Модуль создает Markdown memory structure и локальный индекс, который обновляется вручную или оркестраторами.
+
 ## 8. Структура `.metaproject/`
 
 Базовая структура после `gd-metapro init`:
@@ -272,6 +319,7 @@ N. No - refresh graph manually with gd-metapro gdgraph build
     agents-md.md
   skills/
     project-rules/
+  project-skills/
   modules/
   reports/
   templates/
@@ -325,6 +373,114 @@ N. No - refresh graph manually with gd-metapro gdgraph build
     gdctx.md
 ```
 
+Если включен `gdskills`:
+
+```text
+.metaproject/
+  core/
+    gdskills/
+      cli.ts
+      generate.ts
+      verify.ts
+      learn.ts
+      types.ts
+      README.md
+  data/
+    gdskills/
+      artifacts/
+      reports/
+      proposals/
+  skills/
+    gdskills/
+      catalog.md
+      entity-skill-router/
+        SKILL.md
+      entity-skill-creator/
+        SKILL.md
+      entity-skill-verifier/
+        SKILL.md
+      entity-skill-learner/
+        SKILL.md
+      core/
+      orchestration/
+      review/
+      project-docs/
+  project-skills/
+    <module>/
+      <entity>/
+        SKILL.md
+        references/
+        templates/
+        verification.md
+        skill-changelog.md
+  modules/
+    gdskills.md
+```
+
+Если включен `health`:
+
+```text
+.metaproject/
+  core/
+    health/
+      cli.ts
+      run.ts
+      sources/
+      scoring.ts
+      types.ts
+      README.md
+  health/
+    baselines/
+      project.json
+      modules/
+      entities/
+  data/
+    health/
+      artifacts/
+      history/
+      raw/
+  skills/
+    health/
+      SKILL.md
+  modules/
+    health.md
+```
+
+Если включен `memory`:
+
+```text
+.metaproject/
+  memory/
+    index.md
+    lessons/
+    decisions/
+    constraints/
+    known-mistakes/
+    historical-context/
+    patterns/
+    templates/
+  core/
+    memory/
+      cli.ts
+      index.ts
+      search.ts
+      ingest.ts
+      dedup.ts
+      types.ts
+      README.md
+  data/
+    memory/
+      index/
+      artifacts/
+      queries/
+      raw/
+  skills/
+    memory/
+      SKILL.md
+  modules/
+    memory.md
+```
+
 ## 9. `metaproject.json`
 
 `metaproject.json` - машинный манифест локального Metaproject.
@@ -366,8 +522,49 @@ N. No - refresh graph manually with gd-metapro gdgraph build
       "manifest": ".metaproject/modules/gdwiki.md",
       "commands": ["status", "new", "index", "check-links", "validate"]
     },
+    "gdskills": {
+      "enabled": false,
+      "core": ".metaproject/core/gdskills",
+      "data": ".metaproject/data/gdskills",
+      "skills": ".metaproject/skills",
+      "projectSkills": ".metaproject/project-skills",
+      "manifest": ".metaproject/modules/gdskills.md",
+      "commands": ["generate", "verify", "learn", "status", "export", "sync"],
+      "autonomy": "fully-autonomous",
+      "hooks": {
+        "verifySkills": false
+      }
+    },
+    "health": {
+      "enabled": false,
+      "core": ".metaproject/core/health",
+      "data": ".metaproject/data/health",
+      "baseline": ".metaproject/health/baselines",
+      "manifest": ".metaproject/modules/health.md",
+      "commands": ["run", "status", "baseline", "explain"],
+      "hooks": {
+        "changedScopeHealth": false
+      },
+      "sources": {
+        "eslint": { "mode": "auto" },
+        "typescript": { "mode": "auto" },
+        "tests": { "mode": "auto" },
+        "coverage": { "mode": "import" },
+        "sonarqube": { "mode": "import" },
+        "complexity": { "mode": "auto" },
+        "dependencyAudit": { "mode": "auto" }
+      }
+    },
     "memory": {
-      "enabled": false
+      "enabled": false,
+      "core": ".metaproject/core/memory",
+      "memory": ".metaproject/memory",
+      "data": ".metaproject/data/memory",
+      "manifest": ".metaproject/modules/memory.md",
+      "commands": ["new", "index", "search", "ingest", "check"],
+      "embeddings": {
+        "enabled": false
+      }
     },
     "tasks": {
       "enabled": false
@@ -415,6 +612,9 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 |--------|---------|-------|
 | gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |
 | gdctx | Token-aware command output and context compression | modules/gdctx.md |
+| gdskills | Skill lifecycle tools and working Metaproject skills | modules/gdskills.md |
+| health | Code quality reports, quality gate, metrics and trends | modules/health.md |
+| memory | Searchable project memory: lessons, decisions, constraints and known mistakes | modules/memory.md |
 
 ## Rules
 
@@ -429,6 +629,19 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
 | gdgraph | Default graph-first navigation for finding relevant project files before broad raw search | skills/gdgraph/SKILL.md |
 | gdctx | Use compact command/search/read outputs before loading large raw output | skills/gdctx/SKILL.md |
+| gdskills | Use skill lifecycle tools and project-skill routing before implementing, refactoring or reviewing known project entities | skills/gdskills/entity-skill-router/SKILL.md |
+| health | Use normalized health reports before reading raw lint/type/test/audit logs | skills/health/SKILL.md |
+| memory | Use project memory search before relying on broad historical context or assumptions | skills/memory/SKILL.md |
+
+## Skill Resolution Priority
+
+When `gdskills` is enabled, agents must resolve skills and rules in this order:
+
+1. `.metaproject/index.md`.
+2. `.metaproject/skills/catalog.md`.
+3. `.metaproject/project-skills/**`.
+4. `.metaproject/skills/gdskills/**`.
+5. Global runtime skills only as optional fallback when the project explicitly allows it.
 
 ## Agent Workflow
 
@@ -437,10 +650,13 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 3. Load relevant rules from `rules/`.
 4. For project navigation, file discovery, code understanding, implementation, review, debugging, or refactoring, use `skills/gdgraph/SKILL.md` before broad raw file search when gdgraph is enabled.
 5. For commands, search, diff, test logs, and large file reads that can produce long output, use `skills/gdctx/SKILL.md` when gdctx is enabled.
-6. Use relevant skills from `skills/`.
-7. Use module manifests before reading raw generated data.
-8. Prefer curated artifacts in `data/*/artifacts`.
-9. Run module CLI commands when generated data is stale.
+6. For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` when gdskills is enabled.
+7. For lint/type/test/coverage/complexity/audit questions, read normalized health artifacts before raw logs when health is enabled.
+8. For lessons, prior decisions, project constraints, known mistakes, patterns and historical context, use memory search before reading all memory files when memory is enabled.
+9. Use relevant skills from `skills/`.
+10. Use module manifests before reading raw generated data.
+11. Prefer curated artifacts in `data/*/artifacts`.
+12. Run module CLI commands when generated data is stale.
 
 ## Data
 
@@ -448,6 +664,11 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 - `data/gdgraph/artifacts/module-map.json`
 - `data/gdgraph/queries/latest.md`
 - `data/gdctx/artifacts/latest.md`
+- `data/gdskills/artifacts/latest.md`
+- `data/health/artifacts/latest.md`
+- `data/health/artifacts/latest.json`
+- `data/memory/artifacts/latest.md`
+- `data/memory/artifacts/latest.json`
 
 ## Refresh
 
@@ -456,6 +677,9 @@ Run:
 ```bash
 gd-metapro index refresh
 gd-metapro gdgraph build
+gd-metapro skills status
+gd-metapro health status
+gd-metapro memory index
 ```
 ```
 

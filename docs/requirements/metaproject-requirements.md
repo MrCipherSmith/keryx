@@ -1,6 +1,6 @@
 # Требования к Metaproject
 
-Version: 0.1.0
+Version: 0.7.0
 
 ## 1. Идея
 
@@ -16,6 +16,7 @@ Metaproject - это проект-оркестратор для разработ
 - Поддержать доменные скилы, заточенные под конкретные модули проекта.
 - Позволить агентам анализировать код через инструменты, а не только через ручное чтение файлов.
 - Позволить агентам получать короткий релевантный output команд, поиска, diff и чтения файлов без загрузки лишних токенов.
+- Поддержать generation, verification и learning lifecycle для entity-specific skills.
 - Сделать структуру расширяемой: новые модули, скилы и инструменты должны добавляться без переписывания всей системы.
 
 ## 3. Основное архитектурное разделение
@@ -137,8 +138,18 @@ Markdown-часть:
 Ожидаемая реализация:
 
 - основа: TS/Bun;
-- результат: нормализованный Markdown/JSON отчет;
-- агент читает не сырые логи, а агрегированную выжимку с приоритетами.
+- CLI namespace: `gd-metapro health`;
+- auto-detected sources с режимами `auto`, `run`, `import`, `disabled`;
+- layered output: Markdown summary для агента, JSON full report для инструментов, raw logs отдельно;
+- quality gate со статусами `pass`, `warn`, `fail`;
+- health metrics на уровнях project, module, entity/component/service/store, file и skill-owned scope;
+- hybrid scoring: `health_score`, `risk_score`, `trend`, `regression_score`;
+- versioned baseline в `.metaproject/health/baselines/`;
+- runtime history в `.metaproject/data/health/history/`;
+- ручной запуск, orchestrator/review integration и optional lightweight hook;
+- integration with `gdskills`: health findings являются signal для `skill-verify-skill` и `gd-metapro skills learn --from-health`.
+
+Документация модуля: `docs/requirements/code-health/`.
 
 ### 4.5 Documentation Memory
 
@@ -155,9 +166,19 @@ Markdown-часть:
 
 Ожидаемая реализация:
 
-- Markdown как исходник знаний;
-- TS/Bun для индексации, поиска, chunking и возможных embeddings;
-- результат поиска должен возвращать короткий релевантный контекст, а не всю память целиком.
+- Markdown как source of truth;
+- CLI namespace: `gd-metapro memory`;
+- typed memory registry: lessons, decisions, constraints, known mistakes, historical context, patterns, task notes, review notes, incidents, migration notes, integration notes;
+- MVP-шаблоны для `lesson`, `decision`, `constraint`, `known-mistake`;
+- обязательные поля: `Version`, `Type`, `Status`, `Confidence`, `Provenance`, related scopes, tags, changelog;
+- статусы: `draft`, `accepted`, `deprecated`, `conflict`, `superseded`;
+- TS/Bun для индексации, поиска, chunking, dedup/conflict checks и возможных embeddings;
+- layered search output: короткий Markdown summary для агента, full JSON для инструментов, ссылки на raw Markdown entries;
+- результат поиска должен возвращать короткий релевантный контекст, а не всю память целиком;
+- пополнение через CLI, orchestrator/job reports, review findings, Code Health findings и `skill-verify-skill`;
+- integration with `gdskills`: accepted memory entries являются signal для `skill-verify-skill` и `gd-metapro skills learn --from-memory`.
+
+Документация модуля: `docs/requirements/documentation-memory/`.
 
 ### 4.6 Task Manager
 
@@ -179,24 +200,52 @@ Markdown-часть:
 - автоматизация статусов и отчетов: TS/Bun;
 - опциональная синхронизация с GitHub Issues, Jira или другим внешним трекером.
 
-### 4.7 Domain Skills
+### 4.7 gdskills / Project Skills
 
-Назначение: наборы специальных скилов для разработки, заточенные под предметную область и конкретные модули проекта.
+Назначение: управление lifecycle skills в двух доменах:
 
-Пример: если в основном проекте есть модуль `pipelines`, то внутри Metaproject должна быть отдельная папка скилов для работы именно с этим модулем.
+- `gdskills` - native рабочие Metaproject skills и orchestrators: creator, verifier, learner, router, review, orchestration, project-docs и utility skills, поставляемые вместе с `gd-metapro`;
+- `project-skills` - контентно/компонентно зависимые skills целевого проекта: модули, компоненты, stores, feature components, сервисы, domain concepts и wiki-сущности.
 
-Примерная структура:
+Пример: если в основном проекте есть модуль `pipelines`, то Metaproject должен уметь создать `project-skill` для `pipelines/step`, который описывает общий каркас component + store + tests, фиксирует архитектурные правила и заставляет агента спросить о специфичной бизнес-логике перед генерацией или изменением step.
+
+Ожидаемая реализация:
+
+- CLI namespace: `gd-metapro skills`;
+- рабочие skills: `entity-skill-router`, `entity-skill-creator`, `entity-skill-verifier`, `entity-skill-learner`;
+- reusable working skills/orchestrators должны поставляться внутри текущего `gd-metapro` package; установленный проект не должен зависеть от `goodai-base`;
+- `AGENTS.md`/`CLAUDE.md` должны использовать local-first routing: `.metaproject/index.md`, `.metaproject/skills/catalog.md`, `.metaproject/project-skills`, `.metaproject/skills/gdskills`, и только затем явно разрешенные глобальные runtime skills;
+- генерация skill по path, symbol или wiki reference;
+- источники контекста: `gdgraph`, `gdctx`, `gdwiki`;
+- хранение canonical generated project skills в `.metaproject/project-skills/<module>/<entity>/`;
+- гибридный формат: один `SKILL.md` для простых сущностей, skill package для сложных;
+- обязательное поле `Version` в каждом `SKILL.md`;
+- обязательный `skill-changelog.md` рядом со skill;
+- verifier `skill-verify-skill` / `gd-metapro skills verify`;
+- learning loop на основе review findings, test failures, code changes и wiki decisions;
+- configurable autonomy: `suggest-only`, `auto-high-confidence`, `fully-autonomous`;
+- protected manual sections и machine-managed sections;
+- optional git hook, который предлагается при `gd-metapro init`;
+- интеграция с orchestrator/review pipeline.
+- runtime/exported skills для Codex/Claude должны быть компактными best-practice artifacts, с `SKILL.md`, `references/`, `scripts/`, `assets/`, без management-only файлов вроде `skill-changelog.md`.
+
+Пример структуры skill package:
 
 ```text
-skills/
-  pipelines/
-    README.md
-    architecture.md
-    business-logic.md
-    patterns.md
-    testing.md
-    review.md
-    implementation.md
+.metaproject/
+  project-skills/
+    pipelines/
+      http-step/
+        SKILL.md
+        references/
+          context.md
+          patterns.md
+        templates/
+          component.template.md
+          store.template.md
+          test.template.md
+        verification.md
+        skill-changelog.md
 ```
 
 Смысл этих скилов:
@@ -209,9 +258,12 @@ skills/
 - помогать писать новые фичи;
 - помогать ревьюить изменения;
 - помогать генерировать тесты;
+- обновляться при изменении архитектуры или review lessons;
 - предотвращать типовые ошибки.
 
 Важно: доменные скилы не должны быть просто общей документацией. Они должны быть операционными инструкциями для агента: что делать, что читать, какие проверки выполнить, какие правила применить.
+
+Документация модуля: `docs/requirements/gdskills/`.
 
 ### 4.8 Testing Tools
 
@@ -308,6 +360,7 @@ metaproject/
     pipelines/
     analytics/
     auth/
+    gdskills/
   tasks/
     backlog/
     active/
@@ -347,6 +400,26 @@ metaproject/
       "type": "knowledge",
       "entry": "wiki/index.md"
     },
+    "gdskills": {
+      "type": "skills-tool",
+      "entry": "core/gdskills/index.ts",
+      "docs": "docs/requirements/gdskills/specification.md",
+      "skillsRoot": "skills/"
+    },
+    "health": {
+      "type": "quality-tool",
+      "entry": "core/health/index.ts",
+      "docs": "docs/requirements/code-health/specification.md",
+      "data": "data/health",
+      "baseline": "health/baselines"
+    },
+    "memory": {
+      "type": "knowledge-tool",
+      "entry": "core/memory/index.ts",
+      "docs": "docs/requirements/documentation-memory/specification.md",
+      "memory": "memory",
+      "data": "data/memory"
+    },
     "skills": {
       "type": "skills",
       "entry": "skills/"
@@ -371,7 +444,6 @@ metaproject/
 - Нужно ли поддерживать несколько целевых проектов одновременно?
 - Нужна ли совместимость с Codex, Claude Code, Cursor и другими агентами сразу?
 - Где должен храниться индекс памяти: только Markdown/JSON или SQLite/vector store?
-- Должны ли скилы автоматически выбираться по измененным файлам?
 - Нужно ли делать MCP-сервер для инструментов или достаточно CLI-команд на Bun?
 - Должен ли `gdctx` быть включен по умолчанию вместе с `gdgraph` или предлагаться отдельным вопросом?
 

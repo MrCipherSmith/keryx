@@ -2,11 +2,15 @@ export function renderIndexMarkdown({
   enableGdgraph,
   enableGdctx,
   enableGdwiki,
+  enableGdskills,
+  enableHealth,
   ruleSources,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
   enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
   ruleSources: string[];
 }): string {
   const moduleRows = [
@@ -18,6 +22,12 @@ export function renderIndexMarkdown({
       : "",
     enableGdwiki
       ? "| gdwiki | Project knowledge base: architecture, domain, rules, decisions | modules/gdwiki.md |"
+      : "",
+    enableGdskills
+      ? "| gdskills | Native bundled working skills, orchestration, review, and project-skill lifecycle | modules/gdskills.md |"
+      : "",
+    enableHealth
+      ? "| health | Code quality aggregation, scoring, and quality gate | modules/health.md |"
       : "",
   ]
     .filter(Boolean)
@@ -33,6 +43,15 @@ export function renderIndexMarkdown({
       : []),
     ...(enableGdctx ? ["- `data/gdctx/artifacts/latest.md`"] : []),
     ...(enableGdwiki ? ["- `wiki/index.md`"] : []),
+    ...(enableGdskills
+      ? [
+          "- `skills/catalog.md`",
+          "- `skills/gdskills/`",
+          "- `project-skills/`",
+          "- `data/gdskills/artifacts/latest.md`",
+        ]
+      : []),
+    ...(enableHealth ? ["- `data/health/artifacts/latest.md`"] : []),
   ];
   const dataRefs = dataRefItems.length > 0
     ? dataRefItems.join("\n")
@@ -47,6 +66,12 @@ export function renderIndexMarkdown({
       : "",
     enableGdwiki
       ? "| gdwiki | Read wiki/index.md first for architecture, domain, business rules, and decisions | skills/gdwiki/SKILL.md |"
+      : "",
+    enableGdskills
+      ? "| gdskills | Use project-local bundled working skills and project-skill routing before external/global skills | skills/catalog.md |"
+      : "",
+    enableHealth
+      ? "| health | Read data/health/artifacts/latest.md before claiming quality status or gate results | skills/health/SKILL.md |"
       : "",
   ]
     .filter(Boolean)
@@ -68,6 +93,17 @@ export function renderIndexMarkdown({
     ...(enableGdctx
       ? [
           "In parallel, use `skills/gdctx/SKILL.md` for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.",
+        ]
+      : []),
+    ...(enableGdskills
+      ? [
+          "For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.",
+          "For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.",
+        ]
+      : []),
+    ...(enableHealth
+      ? [
+          "For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `gd-metapro health run`; do not claim quality status from raw logs.",
         ]
       : []),
     "Use relevant skills from `skills/`.",
@@ -142,6 +178,8 @@ For project navigation, file discovery, and code-related tasks, use the Metaproj
 For architecture, domain models, business rules, user scenarios, auth and other flows, integrations, and known decisions, consult the Metaproject gdwiki skill and read the wiki index before deep code reads; use gdgraph to move from a wiki concept to code.
 
 For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.
+
+For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.
 `;
 }
 
@@ -156,6 +194,9 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/gdctx/artifacts/
 .metaproject/data/gdwiki/artifacts/
 .metaproject/data/gdwiki/link-check/
+.metaproject/data/health/history/
+.metaproject/data/health/artifacts/latest.md
+.metaproject/data/health/artifacts/latest.json
 .metaproject/reports/
 `;
 }
@@ -223,10 +264,14 @@ export function renderMetaprojectReadme({
   enableGdgraph,
   enableGdctx,
   enableGdwiki,
+  enableGdskills,
+  enableHealth,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
   enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
 }): string {
   const moduleItems = [
     enableGdgraph ? "- `gdgraph`: code graph and affected context." : "",
@@ -235,6 +280,12 @@ export function renderMetaprojectReadme({
       : "",
     enableGdwiki
       ? "- `gdwiki`: local project knowledge base from business logic to implementation."
+      : "",
+    enableGdskills
+      ? "- `gdskills`: project-local bundled working skills, orchestration, review, and project-skill lifecycle."
+      : "",
+    enableHealth
+      ? "- `health`: code quality aggregation, scoring, and quality gate."
       : "",
   ].filter(Boolean);
   const modules = moduleItems.length > 0
@@ -248,6 +299,14 @@ export function renderMetaprojectReadme({
       : []),
     ...(enableGdctx ? ["gd-metapro ctx status", "gd-metapro ctx diff"] : []),
     ...(enableGdwiki ? ["gd-metapro wiki status", "gd-metapro wiki index"] : []),
+    ...(enableGdskills
+      ? [
+          "gd-metapro skills status",
+          "gd-metapro skills catalog --profile recommended",
+          "gd-metapro skills install --profile recommended",
+        ]
+      : []),
+    ...(enableHealth ? ["gd-metapro health run", "gd-metapro health gate"] : []),
   ];
 
   return `# Project Metaproject
@@ -299,6 +358,16 @@ Purpose:
 - keep graph artifacts current without rebuilding on every agent question;
 - avoid broad raw file search when graph context is stale;
 - leave generated graph storage local while versioning curated artifacts.
+
+## git post-commit gdskills hook
+
+When enabled during \`gd-metapro init\`, the Git \`post-commit\` hook runs lightweight project-skill verification after relevant project or Metaproject context changes.
+
+Purpose:
+
+- keep generated project-skills from silently drifting after code/wiki/rule changes;
+- write verification reports under \`.metaproject/data/gdskills/reports\`;
+- keep the hook local, optional and non-blocking.
 
 ## post-update.d
 
@@ -353,6 +422,49 @@ export function renderGdgraphPostCommitHook(): string {
 }
 
 gd_metapro_gdgraph_post_commit
+`;
+}
+
+export function renderGdskillsPostCommitHook(): string {
+  return `gd_metapro_gdskills_post_commit() {
+  # Verify registered project-skills only when a commit touched relevant files.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^docs/|^\\.metaproject/(project-skills|wiki|modules|rules|skills)/|AGENTS\\.md$|CLAUDE\\.md$)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v gd-metapro >/dev/null 2>&1; then
+    gd-metapro skills verify --all >/dev/null 2>&1 || {
+      echo "gd-metapro post-commit: gdskills verification failed" >&2
+      return 0
+    }
+    echo "gd-metapro post-commit: gdskills verified"
+    return 0
+  fi
+
+  if [ -x "$HOME/.local/bin/gd-metapro" ]; then
+    "$HOME/.local/bin/gd-metapro" skills verify --all >/dev/null 2>&1 || {
+      echo "gd-metapro post-commit: gdskills verification failed" >&2
+      return 0
+    }
+    echo "gd-metapro post-commit: gdskills verified"
+    return 0
+  fi
+
+  echo "gd-metapro post-commit: gd-metapro command not found, skipped gdskills verification" >&2
+  return 0
+}
+
+gd_metapro_gdskills_post_commit
 `;
 }
 
