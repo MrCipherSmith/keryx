@@ -12,6 +12,13 @@ import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
 import { confirm } from "../lib/prompt";
 import {
+  renderGdwikiManifest,
+  renderGdwikiSkillReadme,
+  renderWikiIndexScaffold,
+  renderWikiPageTemplate,
+} from "../wiki/templates";
+import { WIKI_PAGE_TYPES } from "../wiki/types";
+import {
   renderAgentEntrypoint,
   renderGdctxCoreReadme,
   renderGdctxConfig,
@@ -37,6 +44,7 @@ type InitOptions = {
   yes: boolean;
   noGdgraph: boolean;
   noGdctx: boolean;
+  noGdwiki: boolean;
   noGdgraphHook: boolean;
 };
 
@@ -89,6 +97,7 @@ export async function initCommand(args: string[]): Promise<void> {
 
   let enableGdgraph = true;
   let enableGdctx = true;
+  let enableGdwiki = true;
   let enableGdgraphHook = false;
   if (options.noGdgraph) {
     enableGdgraph = false;
@@ -101,6 +110,15 @@ export async function initCommand(args: string[]): Promise<void> {
   } else if (!options.yes) {
     enableGdctx = await confirm(
       "Enable gdctx module for compact command/search/read output? Recommended",
+      true,
+    );
+  }
+
+  if (options.noGdwiki) {
+    enableGdwiki = false;
+  } else if (!options.yes) {
+    enableGdwiki = await confirm(
+      "Enable gdwiki module for a local project knowledge base? Recommended",
       true,
     );
   }
@@ -134,10 +152,15 @@ export async function initCommand(args: string[]): Promise<void> {
     await createGdctxStructure(metaprojectRoot);
   }
 
+  if (enableGdwiki) {
+    await createGdwikiStructure(metaprojectRoot);
+  }
+
   const manifest = buildManifest({
     projectName: path.basename(projectRoot),
     enableGdgraph,
     enableGdctx,
+    enableGdwiki,
     enableGdgraphHook,
     agentRuleSources,
   });
@@ -149,7 +172,7 @@ export async function initCommand(args: string[]): Promise<void> {
 
   await writeTextIfMissing(
     path.join(metaprojectRoot, "README.md"),
-    renderMetaprojectReadme({ enableGdgraph, enableGdctx }),
+    renderMetaprojectReadme({ enableGdgraph, enableGdctx, enableGdwiki }),
   );
   await writeTextIfMissing(
     path.join(metaprojectRoot, "core", "README.md"),
@@ -173,6 +196,7 @@ export async function initCommand(args: string[]): Promise<void> {
     renderIndexMarkdown({
       enableGdgraph,
       enableGdctx,
+      enableGdwiki,
       ruleSources: agentRuleSources,
     }),
   );
@@ -212,6 +236,25 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (enableGdwiki) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "wiki", "index.md"),
+      renderWikiIndexScaffold(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "wiki", "templates", "page.md"),
+      renderWikiPageTemplate(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "gdwiki.md"),
+      renderGdwikiManifest(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"),
+      renderGdwikiSkillReadme(),
+    );
+  }
+
   console.log(
     alreadyExists
       ? "Updated .metaproject structure."
@@ -219,6 +262,7 @@ export async function initCommand(args: string[]): Promise<void> {
   );
   console.log(`gdgraph: ${enableGdgraph ? "enabled" : "disabled"}`);
   console.log(`gdctx: ${enableGdctx ? "enabled" : "disabled"}`);
+  console.log(`gdwiki: ${enableGdwiki ? "enabled" : "disabled"}`);
   if (enableGdgraph) {
     console.log(`gdgraph post-commit hook: ${enableGdgraphHook ? "enabled" : "disabled"}`);
   }
@@ -230,6 +274,7 @@ function parseInitArgs(args: string[]): InitOptions {
     yes: args.includes("--yes") || args.includes("-y"),
     noGdgraph: args.includes("--no-gdgraph"),
     noGdctx: args.includes("--no-gdctx"),
+    noGdwiki: args.includes("--no-gdwiki"),
     noGdgraphHook: args.includes("--no-gdgraph-hook"),
   };
 }
@@ -238,12 +283,13 @@ function printInitHelp(): void {
   console.log(`gd-metapro init
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdgraph-hook]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdgraph-hook]
 
 Options:
   --yes, -y             Use recommended defaults.
   --no-gdgraph          Do not enable gdgraph.
   --no-gdctx            Do not enable gdctx.
+  --no-gdwiki           Do not enable gdwiki.
   --no-gdgraph-hook     Do not install the gdgraph post-commit hook.
 `);
 }
@@ -286,6 +332,19 @@ async function createGdctxStructure(root: string): Promise<void> {
     path.join(root, "data", "gdctx", "artifacts"),
     path.join(root, "data", "gdctx", "queries"),
     path.join(root, "skills", "gdctx"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createGdwikiStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "wiki"),
+    path.join(root, "wiki", "templates"),
+    ...WIKI_PAGE_TYPES.map((entry) => path.join(root, "wiki", entry.folder)),
+    path.join(root, "data", "gdwiki", "artifacts"),
+    path.join(root, "data", "gdwiki", "link-check"),
+    path.join(root, "skills", "gdwiki"),
   ];
 
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
@@ -371,12 +430,14 @@ function buildManifest({
   projectName,
   enableGdgraph,
   enableGdctx,
+  enableGdwiki,
   enableGdgraphHook,
   agentRuleSources,
 }: {
   projectName: string;
   enableGdgraph: boolean;
   enableGdctx: boolean;
+  enableGdwiki: boolean;
   enableGdgraphHook: boolean;
   agentRuleSources: string[];
 }): MetaprojectManifest {
@@ -421,7 +482,17 @@ function buildManifest({
         : {
             enabled: false,
           },
-      wiki: { enabled: false },
+      wiki: enableGdwiki
+        ? {
+            enabled: true,
+            core: ".metaproject/wiki",
+            data: ".metaproject/data/gdwiki",
+            manifest: ".metaproject/modules/gdwiki.md",
+            commands: ["status", "new", "index", "check-links", "validate"],
+          }
+        : {
+            enabled: false,
+          },
       memory: { enabled: false },
       tasks: { enabled: false },
       health: { enabled: false },
@@ -485,6 +556,8 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     "For code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
   const graphPolicy =
     "For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
+  const wikiPolicy =
+    "For architecture, domain models, business rules, user scenarios, auth and other flows, integrations, and known decisions, consult the Metaproject gdwiki skill and read the wiki index before deep code reads; use gdgraph to move from a wiki concept to code.";
   const oldCtxPolicy =
     "When gdctx is enabled, use the Metaproject gdctx skill for commands, search, diff, test logs, and large file reads that can produce long output.";
   const ctxPolicy =
@@ -499,10 +572,12 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
       next = next.replaceAll(oldCtxPolicy, ctxPolicy);
     }
     next = collapseDuplicatePolicy(next, graphPolicy);
+    next = collapseDuplicatePolicy(next, wikiPolicy);
     next = collapseDuplicatePolicy(next, ctxPolicy);
 
     const missingPolicies = [
       ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
+      ...(next.includes(wikiPolicy) ? [] : [wikiPolicy]),
       ...(next.includes(ctxPolicy) ? [] : [ctxPolicy]),
     ];
     if (missingPolicies.length > 0) {
@@ -520,7 +595,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
   const suffix = content.endsWith("\n") ? "" : "\n";
   await writeFile(
     filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${ctxPolicy}\n`,
+    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n`,
     "utf8",
   );
 }

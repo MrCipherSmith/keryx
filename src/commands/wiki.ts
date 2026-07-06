@@ -1,0 +1,160 @@
+import {
+  wikiCheckLinks,
+  wikiCreatePage,
+  wikiGenerateIndex,
+  wikiStatus,
+  wikiValidate,
+} from "../wiki/service";
+
+export async function wikiCommand(args: string[]): Promise<void> {
+  const command = args[0];
+
+  if (!command || command === "--help" || command === "-h") {
+    printHelp();
+    return;
+  }
+
+  if (command === "status") {
+    await runStatus();
+    return;
+  }
+
+  if (command === "new") {
+    await runNew(args.slice(1));
+    return;
+  }
+
+  if (command === "index") {
+    await runIndex();
+    return;
+  }
+
+  if (command === "check-links") {
+    await runCheckLinks();
+    return;
+  }
+
+  if (command === "validate") {
+    await runValidate();
+    return;
+  }
+
+  console.error(`Unknown wiki command: ${command}`);
+  printHelp();
+  process.exitCode = 1;
+}
+
+async function runStatus(): Promise<void> {
+  const status = await wikiStatus(process.cwd());
+
+  console.log("# gdwiki status");
+  console.log("");
+  console.log(`enabled: ${status.enabled ? "yes" : "no"}`);
+  console.log(`wiki root: ${status.wikiRoot}`);
+  console.log(`total pages: ${status.totalPages}`);
+  console.log("");
+  console.log("## Pages by type");
+  for (const entry of status.countsByType) {
+    console.log(`- ${entry.type}: ${entry.count}`);
+  }
+  console.log("");
+  console.log(
+    `last index generated: ${status.lastIndexGeneratedAt ?? "never"}`,
+  );
+  if (status.lastLinkCheck) {
+    console.log(
+      `last link check: ${status.lastLinkCheck.generatedAt} (${status.lastLinkCheck.broken} broken)`,
+    );
+  } else {
+    console.log("last link check: never");
+  }
+}
+
+async function runNew(args: string[]): Promise<void> {
+  const type = args[0];
+  const slug = args[1];
+  if (!type || !slug) {
+    console.error(
+      'Usage: gd-metapro wiki new <type> <slug> --title "<title>" [--force]',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = await wikiCreatePage({
+    cwd: process.cwd(),
+    type,
+    slug,
+    title: valueAfter(args, "--title"),
+    force: args.includes("--force"),
+  });
+
+  console.log(`Created ${result.type} page: ${result.path}`);
+}
+
+async function runIndex(): Promise<void> {
+  const result = await wikiGenerateIndex(process.cwd());
+  console.log(`Generated ${result.path} (${result.pageCount} pages).`);
+}
+
+async function runCheckLinks(): Promise<void> {
+  const result = await wikiCheckLinks(process.cwd());
+
+  console.log("# gdwiki check-links");
+  console.log("");
+  console.log(`checked pages: ${result.checkedPages}`);
+  console.log(`checked internal links: ${result.checkedLinks}`);
+  console.log(`skipped external links: ${result.skippedExternal}`);
+  console.log(`broken links: ${result.broken.length}`);
+  console.log("");
+
+  if (result.broken.length > 0) {
+    console.log("## Broken");
+    for (const broken of result.broken) {
+      console.log(`- ${broken.page} -> ${broken.target} (${broken.reason})`);
+    }
+    console.log("");
+  }
+
+  console.log(`report: ${result.reportPath}`);
+  process.exitCode = result.broken.length > 0 ? 1 : 0;
+}
+
+async function runValidate(): Promise<void> {
+  const result = await wikiValidate(process.cwd());
+
+  console.log("# gdwiki validate");
+  console.log("");
+  if (result.ok) {
+    console.log("All checks passed.");
+    return;
+  }
+
+  console.log(`issues: ${result.issues.length}`);
+  console.log("");
+  for (const issue of result.issues) {
+    console.log(`- [${issue.kind}] ${issue.page}: ${issue.message}`);
+  }
+  process.exitCode = 1;
+}
+
+function valueAfter(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+function printHelp(): void {
+  console.log(`gd-metapro wiki
+
+Usage:
+  gd-metapro wiki status
+  gd-metapro wiki new <type> <slug> --title "<title>" [--force]
+  gd-metapro wiki index
+  gd-metapro wiki check-links
+  gd-metapro wiki validate
+
+Page types:
+  architecture, domain-model, business-rule, user-scenario,
+  component, service, integration, decision
+`);
+}

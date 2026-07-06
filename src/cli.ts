@@ -3,6 +3,7 @@
 import { initCommand } from "./commands/init";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
+import { wikiCommand } from "./commands/wiki";
 import { statusCommand } from "./commands/status";
 import { updateCommand } from "./commands/update";
 
@@ -47,6 +48,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "wiki") {
+    await wikiCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -63,6 +69,10 @@ Usage:
   gd-metapro gdgraph query <cycles|orphans>
   gd-metapro gdgraph affected <file>
   gd-metapro ctx status
+  gd-metapro wiki status
+  gd-metapro wiki new <type> <slug> --title "<title>"
+  gd-metapro wiki index
+  gd-metapro wiki check-links
   gd-metapro --version
 
 Commands:
@@ -71,6 +81,7 @@ Commands:
   update    Update installed runtime and run project hooks
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
+  wiki      Manage the local project knowledge base
 `);
 }
 

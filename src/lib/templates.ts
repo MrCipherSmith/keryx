@@ -1,10 +1,12 @@
 export function renderIndexMarkdown({
   enableGdgraph,
   enableGdctx,
+  enableGdwiki,
   ruleSources,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
+  enableGdwiki: boolean;
   ruleSources: string[];
 }): string {
   const moduleRows = [
@@ -13,6 +15,9 @@ export function renderIndexMarkdown({
       : "",
     enableGdctx
       ? "| gdctx | Token-aware command output and context compression | modules/gdctx.md |"
+      : "",
+    enableGdwiki
+      ? "| gdwiki | Project knowledge base: architecture, domain, rules, decisions | modules/gdwiki.md |"
       : "",
   ]
     .filter(Boolean)
@@ -27,6 +32,7 @@ export function renderIndexMarkdown({
         ]
       : []),
     ...(enableGdctx ? ["- `data/gdctx/artifacts/latest.md`"] : []),
+    ...(enableGdwiki ? ["- `wiki/index.md`"] : []),
   ];
   const dataRefs = dataRefItems.length > 0
     ? dataRefItems.join("\n")
@@ -39,6 +45,9 @@ export function renderIndexMarkdown({
     enableGdctx
       ? "| gdctx | Use compact command/search/read outputs before loading large raw output | skills/gdctx/SKILL.md |"
       : "",
+    enableGdwiki
+      ? "| gdwiki | Read wiki/index.md first for architecture, domain, business rules, and decisions | skills/gdwiki/SKILL.md |"
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -47,12 +56,18 @@ export function renderIndexMarkdown({
     "Read this file first.",
     "Check enabled modules.",
     "Load relevant rules from `rules/`.",
+    "Route by question type: structural questions go to gdgraph first; conceptual questions go to gdwiki first; gdctx runs in parallel to keep output compact.",
     enableGdgraph
-      ? "Use `skills/gdgraph/SKILL.md` by default for project navigation, file discovery, code understanding, implementation, review, debugging, refactoring, architecture, dependency, impact, and relationship questions. The user does not need to request graph usage explicitly."
+      ? "For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before broad raw file search. The user does not need to request graph usage explicitly."
       : "Use relevant skills from `skills/` before broad raw file search.",
+    ...(enableGdwiki
+      ? [
+          "For conceptual questions (how does X work, why, architecture, domain models, business rules, user scenarios, auth and other flows, integrations, known decisions) read `wiki/index.md` first via `skills/gdwiki/SKILL.md`, then use gdgraph to jump from the wiki page to code.",
+        ]
+      : []),
     ...(enableGdctx
       ? [
-          "Use `skills/gdctx/SKILL.md` by default for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.",
+          "In parallel, use `skills/gdctx/SKILL.md` for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.",
         ]
       : []),
     "Use relevant skills from `skills/`.",
@@ -124,6 +139,8 @@ Read [.metaproject/index.md](.metaproject/index.md) before planning, implementin
 
 For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.
 
+For architecture, domain models, business rules, user scenarios, auth and other flows, integrations, and known decisions, consult the Metaproject gdwiki skill and read the wiki index before deep code reads; use gdgraph to move from a wiki concept to code.
+
 For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.
 `;
 }
@@ -137,6 +154,8 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/**/queries/
 .metaproject/data/**/summaries/
 .metaproject/data/gdctx/artifacts/
+.metaproject/data/gdwiki/artifacts/
+.metaproject/data/gdwiki/link-check/
 .metaproject/reports/
 `;
 }
@@ -203,14 +222,19 @@ ${sourceList}
 export function renderMetaprojectReadme({
   enableGdgraph,
   enableGdctx,
+  enableGdwiki,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
+  enableGdwiki: boolean;
 }): string {
   const moduleItems = [
     enableGdgraph ? "- `gdgraph`: code graph and affected context." : "",
     enableGdctx
       ? "- `gdctx`: compact command/search/read output and raw output archive."
+      : "",
+    enableGdwiki
+      ? "- `gdwiki`: local project knowledge base from business logic to implementation."
       : "",
   ].filter(Boolean);
   const modules = moduleItems.length > 0
@@ -223,6 +247,7 @@ export function renderMetaprojectReadme({
       ? ["gd-metapro gdgraph build", 'gd-metapro gdgraph query "module pipelines"']
       : []),
     ...(enableGdctx ? ["gd-metapro ctx status", "gd-metapro ctx diff"] : []),
+    ...(enableGdwiki ? ["gd-metapro wiki status", "gd-metapro wiki index"] : []),
   ];
 
   return `# Project Metaproject

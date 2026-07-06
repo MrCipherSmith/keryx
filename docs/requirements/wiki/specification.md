@@ -1,6 +1,7 @@
 # gdwiki: technical specification
 
-Version: 0.1.0
+Version: 0.2.0
+Status: MVP implemented (Phase 1 and Phase 2 complete, Phase 3 in progress)
 
 ## 1. Purpose
 
@@ -271,25 +272,43 @@ And summary каждой страницы доступен без чтения �
 
 ## 12. Implementation Phases
 
-### Phase 1: Documentation and scaffold
+Legend: `[x]` done, `[~]` partial, `[ ]` not started.
 
-- requirements docs;
-- init integration;
-- module manifest;
-- skill;
-- folder structure;
-- page templates.
+### Phase 1: Documentation and scaffold — done
 
-### Phase 2: CLI MVP
+- [x] requirements docs;
+- [x] init integration (`--no-gdwiki`, prompt, scaffold);
+- [x] module manifest (`modules/gdwiki.md` + `metaproject.json`);
+- [x] skill (`skills/gdwiki/SKILL.md`);
+- [x] folder structure (`wiki/<type>/`, `data/gdwiki/`);
+- [x] page templates (`wiki/templates/page.md`).
 
-- `wiki new`;
-- `wiki index`;
-- `wiki check-links`;
-- `wiki status`.
+### Phase 2: CLI MVP — done
 
-### Phase 3: Integration
+- [x] `wiki new`;
+- [x] `wiki index`;
+- [x] `wiki check-links`;
+- [x] `wiki status`;
+- [x] `wiki validate` (see 6.5).
 
-- `gdgraph` references;
-- `gdctx` usage guidance;
-- validation reports;
-- release metrics.
+### Phase 3: Integration — in progress
+
+- [x] `gdgraph` references (skill routing: conceptual → gdwiki → gdgraph to code);
+- [x] `gdctx` usage guidance (skill routing, gdctx in parallel);
+- [x] validation reports (`wiki validate` + `data/gdwiki/link-check/latest.md`);
+- [ ] release metrics.
+
+## 13. Implementation Notes
+
+Version 0.2.0 ships the MVP. Source layout:
+
+- `src/wiki/types.ts` — page-type registry and `GdWikiService` contract (see 10);
+- `src/wiki/templates.ts` — page, index scaffold, manifest, and skill renderers;
+- `src/wiki/service.ts` — status, createPage, generateIndex, checkLinks, validate;
+- `src/commands/wiki.ts` — `gd-metapro wiki` CLI router;
+- `src/commands/init.ts`, `src/lib/templates.ts` — init scaffold and agent-entrypoint routing.
+
+Routing decision: agents route by question type — structural questions go to
+`gdgraph` first, conceptual questions (architecture, domain, business rules,
+user scenarios, auth and other flows, integrations, known decisions) go to
+`gdwiki` first and then to code via `gdgraph`; `gdctx` runs in parallel.
