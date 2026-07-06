@@ -405,3 +405,7 @@ And сохраняет полный stdout/stderr.
 - Какие limits выбрать по умолчанию: bytes, lines, max files, max matches?
 - Должны ли curated artifacts версионироваться всегда или только после явной команды `ctx save`?
 - Нужен ли shell hook после MVP или достаточно явных команд и agent skill?
+
+## 15. Метрики
+
+Текущие baseline-замеры сокращения контекста и процедура повторной проверки описаны в [metrics-and-validation.md](metrics-and-validation.md).

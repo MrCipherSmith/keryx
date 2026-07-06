@@ -7,6 +7,7 @@
 ## Документы
 
 - [specification.md](specification.md) - спецификация модуля, CLI-контракт, структура данных и acceptance criteria.
+- [metrics-and-validation.md](metrics-and-validation.md) - текущие замеры сокращения контекста, формулы и процедура проверки.
 
 ## Связанные модули
 
