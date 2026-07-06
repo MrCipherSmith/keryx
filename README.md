@@ -106,13 +106,13 @@ Agent rule files are mirrored into:
 .metaproject/skills/project-rules/
 ```
 
-Code graph navigation skill:
+Graph navigation skill:
 
 ```text
 .metaproject/skills/gdgraph/SKILL.md
 ```
 
-This skill tells agents to use `gd-metapro gdgraph ...` by default for most code-related work before broad raw file search. The user does not need to ask for graph usage explicitly.
+This skill tells agents to use `gd-metapro gdgraph ...` by default for project navigation, file discovery, and code-related work before broad raw file search. The user does not need to ask for graph usage explicitly.
 
 ## Commands
 

@@ -376,14 +376,14 @@ This `.metaproject` folder contains agent-readable context, tools, generated dat
 | Skill | Purpose | Entry |
 |-------|---------|-------|
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
-| gdgraph | Default graph-first navigation for most code-related work | skills/gdgraph/SKILL.md |
+| gdgraph | Default graph-first navigation for finding relevant project files before broad raw search | skills/gdgraph/SKILL.md |
 
 ## Agent Workflow
 
 1. Read this file first.
 2. Check enabled modules.
 3. Load relevant rules from `rules/`.
-4. For code-related tasks, use `skills/gdgraph/SKILL.md` before broad raw file search when gdgraph is enabled.
+4. For project navigation, file discovery, code understanding, implementation, review, debugging, or refactoring, use `skills/gdgraph/SKILL.md` before broad raw file search when gdgraph is enabled.
 5. Use relevant skills from `skills/`.
 6. Use module manifests before reading raw generated data.
 7. Prefer curated artifacts in `data/*/artifacts`.

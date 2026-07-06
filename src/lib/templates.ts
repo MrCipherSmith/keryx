@@ -18,7 +18,7 @@ export function renderIndexMarkdown({
     : "- No module data generated yet.";
 
   const skillsRefs = enableGdgraph
-    ? "| gdgraph | Default navigation layer for code work; use before broad raw file search | skills/gdgraph/SKILL.md |"
+    ? "| gdgraph | Default navigation layer for finding relevant project files before broad raw search | skills/gdgraph/SKILL.md |"
     : "";
 
   const rulesRows =
@@ -60,7 +60,7 @@ ${skillsRefs}
 1. Read this file first.
 2. Check enabled modules.
 3. Load relevant rules from \`rules/\`.
-4. For code-related tasks, use \`skills/gdgraph/SKILL.md\` before broad raw file search when gdgraph is enabled.
+4. For project navigation, file discovery, code understanding, implementation, review, debugging, or refactoring, use \`skills/gdgraph/SKILL.md\` before broad raw file search when gdgraph is enabled.
 5. Use relevant skills from \`skills/\`.
 6. Use module manifests before reading raw generated data.
 7. Prefer curated artifacts in \`data/*/artifacts\`.
@@ -87,7 +87,7 @@ export function renderAgentEntrypoint({ source }: { source: string }): string {
 
 Read [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.
 
-For code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.
+For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.
 `;
 }
 
@@ -375,16 +375,16 @@ Responsibilities:
 export function renderGdgraphSkillReadme(): string {
   return `---
 name: gdgraph
-description: Use by default for most code-related tasks, including implementation, review, refactoring, debugging, code navigation, architecture questions, dependencies, affected files, module relationships, import cycles, orphan files, or where to start reading code. This skill queries the local gdgraph code graph before broad raw file search.
+description: Use by default for project navigation and file discovery before broad raw search, especially when the user asks where something is, what files are related, what might be affected, or needs implementation, review, refactoring, debugging, architecture, dependency, module relationship, import cycle, or orphan-file context.
 ---
 
 # gdgraph Skill
 
-Use this skill by default for most work with code. The user does not need to explicitly ask for graph usage.
+Use this skill by default for project navigation and file discovery. The user does not need to explicitly ask for graph usage.
 
-Run gdgraph before broad raw file search when the task involves implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation.
+Run gdgraph before broad raw file search when the task involves finding relevant files, understanding project structure, implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation.
 
-Skip gdgraph only when the request is clearly not about code, asks for a single known file's literal contents, or when gdgraph is unavailable.
+Skip gdgraph only when the request is clearly unrelated to project files, asks for a single known file's literal contents, or when gdgraph is unavailable.
 
 ## Trigger Examples
 
@@ -392,6 +392,9 @@ Skip gdgraph only when the request is clearly not about code, asks for a single 
 - "Проверь этот модуль."
 - "Почему этот импорт ломается?"
 - "Где лучше изменить эту логику?"
+- "Где лежит логика инициализации?"
+- "Какие файлы связаны с модулем gdgraph?"
+- "Найди, где описаны rules/skills."
 - "Что затронет изменение этого файла?"
 - "Где используется этот модуль?"
 - "Как связаны эти части кода?"
@@ -402,7 +405,7 @@ Skip gdgraph only when the request is clearly not about code, asks for a single 
 ## Workflow
 
 1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
-2. If the task is code-related and gdgraph is enabled, use graph context before broad \`rg\` or reading many files.
+2. If the task requires finding relevant project files or understanding relationships, use graph context before broad \`rg\` or reading many files.
 3. If graph storage is missing or likely stale, run:
 
 \`\`\`bash
