@@ -76,6 +76,15 @@
       "projectSkills": ".metaproject/project-skills",
       "projectSkillRegistry": [
         {
+          "module": "gdgraph",
+          "name": "module",
+          "target": "src/gdgraph",
+          "path": ".metaproject/project-skills/gdgraph/module",
+          "version": "0.1.0",
+          "status": "active",
+          "updatedAt": "2026-07-06T19:04:32.307Z"
+        },
+        {
           "module": "metaproject",
           "name": "init-command",
           "target": "src/commands/init.ts",
@@ -108,7 +117,11 @@
         "sources",
         "explain",
         "baseline"
-      ]
+      ],
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
     },
     "testing": {
       "enabled": false

@@ -1,7 +1,7 @@
 # Code Health: technical specification
 
-Version: 0.3.0
-Status: Phase 1 implemented (v1 scope; see section 21). Complexity is a token-based approximation; AST precision deferred.
+Version: 0.4.0
+Status: Phase 1 + skill-owned scope loop implemented (see section 21). Complexity is a token-based approximation; AST precision deferred.
 
 ## 1. Purpose
 
@@ -205,8 +205,8 @@ Default severity -> priority mapping (overridable):
 | P2 | ESLint `warning`; complexity above `complexityThreshold`. |
 | P3 | `info` and advisory signals (not gating). |
 
-`scope.entity` and `scope.skill` are populated in a later phase; in v1 they are
-`null` and reserved for the gdskills consumer.
+`scope.skill` is populated (Phase 2) from the gdskills project-skill registry;
+`scope.entity` remains reserved (`null`).
 
 ## 8. Scopes and granularity
 
@@ -216,8 +216,9 @@ v1 computes metrics for:
 - `module` (from gdgraph module-map when available, else top-level `src/*` dirs);
 - `file`.
 
-`entity/component/store` and `skill-owned` scopes are reserved (schema present,
-values null) and shipped in a later phase once ownership mapping matures.
+`skill-owned` scope is shipped (Phase 2): Code Health maps files to the owning
+project-skill via the gdskills registry and emits `skill:<module>/<name>` scope
+metrics. `entity/component/store` scopes remain reserved.
 
 ## 9. Scope metrics
 
@@ -350,9 +351,8 @@ gd-metapro skills learn --from-health .metaproject/data/health/artifacts/latest.
 
 - The `schemaVersion` is the contract between the two modules; gdskills
   validates it before consuming.
-- `scope.skill` is reserved in v1 and populated when skill-owned scope ships;
-  gdskills may also map findings to skills via its own ownership maps and
-  `gdgraph affected`.
+- `scope.skill` is populated from the gdskills project-skill registry; `skills
+  learn --from-health` auto-resolves the owning skill and scopes lessons to it.
 
 ## 17. Init flow
 
@@ -429,12 +429,15 @@ when unsupported.
 - layered outputs + provenance + `--strict`;
 - manifest, module doc, skill.
 
-### Phase 2 - adapters and feedback
+### Phase 2 - adapters and feedback (in progress)
 
-- adapters: SonarQube, external complexity tools;
-- entity/component/store and skill-owned scopes;
-- gdskills consumption (`skills learn --from-health`) end-to-end;
-- history-based trends beyond single baseline.
+- [x] skill-owned scope: Code Health reads the gdskills project-skill registry,
+  tags findings with `scope.skill`, and emits `skill:<module>/<name>` metrics;
+- [x] gdskills consumption end-to-end: `skills learn --from-health` auto-resolves
+  the owning skill and scopes learned lessons to it;
+- [ ] entity/component/store scopes;
+- [ ] adapters: SonarQube, external complexity tools;
+- [ ] history-based trends beyond single baseline.
 
 ### Phase 3 - advanced
 

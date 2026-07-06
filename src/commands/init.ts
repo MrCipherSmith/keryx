@@ -39,6 +39,7 @@ import {
   renderGdgraphCoreCli,
   renderGdgraphManifest,
   renderGdgraphPostCommitHook,
+  renderHealthPostCommitHook,
   renderGdskillsPostCommitHook,
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
@@ -63,6 +64,7 @@ type InitOptions = {
   noHealth: boolean;
   noGdgraphHook: boolean;
   noGdskillsHook: boolean;
+  noHealthHook: boolean;
 };
 
 type ModuleConfig =
@@ -134,6 +136,7 @@ export async function initCommand(args: string[]): Promise<void> {
   let enableHealth = true;
   let enableGdgraphHook = false;
   let enableGdskillsHook = false;
+  let enableHealthHook = false;
   if (options.noGdgraph) {
     enableGdgraph = false;
   } else if (!options.yes) {
@@ -209,6 +212,19 @@ export async function initCommand(args: string[]): Promise<void> {
     }
   }
 
+  if (enableHealth) {
+    if (options.noHealthHook) {
+      enableHealthHook = false;
+    } else if (options.yes) {
+      enableHealthHook = true;
+    } else {
+      enableHealthHook = await confirm(
+        "Install git post-commit hook for lightweight changed-scope Code Health checks? Recommended",
+        true,
+      );
+    }
+  }
+
   await createBaseStructure(metaprojectRoot);
   await syncGitignore(projectRoot);
   const agentRuleSources = await syncAgentRules(projectRoot, metaprojectRoot);
@@ -238,6 +254,9 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableHealth) {
     await createHealthStructure(metaprojectRoot);
+    if (enableHealthHook) {
+      await installHealthPostCommitHook(projectRoot);
+    }
   }
 
   const manifest = buildManifest({
@@ -250,6 +269,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableHealth,
     enableGdgraphHook,
     enableGdskillsHook,
+    enableHealthHook,
     agentRuleSources,
     existingManifest,
   });
@@ -381,6 +401,9 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableGdskills) {
     console.log(`gdskills post-commit hook: ${enableGdskillsHook ? "enabled" : "disabled"}`);
   }
+  if (enableHealth) {
+    console.log(`health post-commit hook: ${enableHealthHook ? "enabled" : "disabled"}`);
+  }
 }
 
 function parseInitArgs(args: string[]): InitOptions {
@@ -395,6 +418,7 @@ function parseInitArgs(args: string[]): InitOptions {
     noHealth: args.includes("--no-health"),
     noGdgraphHook: args.includes("--no-gdgraph-hook"),
     noGdskillsHook: args.includes("--no-gdskills-hook"),
+    noHealthHook: args.includes("--no-health-hook"),
   };
 }
 
@@ -402,7 +426,7 @@ function printInitHelp(): void {
   console.log(`gd-metapro init
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-gdgraph-hook] [--no-gdskills-hook]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook]
 
 Options:
   --yes, -y             Use recommended defaults.
@@ -414,6 +438,7 @@ Options:
   --no-health           Do not enable Code Health.
   --no-gdgraph-hook     Do not install the gdgraph post-commit hook.
   --no-gdskills-hook    Do not install the gdskills post-commit hook.
+  --no-health-hook      Do not install the health post-commit hook.
 `);
 }
 
@@ -563,6 +588,33 @@ async function installGdskillsPostCommitHook(projectRoot: string): Promise<void>
   await chmod(hookPath, 0o755);
 }
 
+async function installHealthPostCommitHook(projectRoot: string): Promise<void> {
+  const gitRoot = path.join(projectRoot, ".git");
+  if (!(await pathExists(gitRoot))) {
+    return;
+  }
+
+  const hooksRoot = path.join(gitRoot, "hooks");
+  await mkdir(hooksRoot, { recursive: true });
+
+  const hookPath = path.join(hooksRoot, "post-commit");
+  const blockStart = "# gd-metapro:health-post-commit:begin";
+  const blockEnd = "# gd-metapro:health-post-commit:end";
+  const managedBlock = `${blockStart}\n${renderHealthPostCommitHook().trim()}\n${blockEnd}`;
+  const existing = (await pathExists(hookPath))
+    ? await readFile(hookPath, "utf8")
+    : "#!/usr/bin/env sh\n";
+  const blockPattern = new RegExp(
+    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+  );
+  const next = blockPattern.test(existing)
+    ? existing.replace(blockPattern, managedBlock)
+    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
+
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
   const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
   if (!(await pathExists(legacyReadmePath))) {
@@ -615,6 +667,7 @@ function buildManifest({
   enableHealth,
   enableGdgraphHook,
   enableGdskillsHook,
+  enableHealthHook,
   agentRuleSources,
   existingManifest,
 }: {
@@ -627,6 +680,7 @@ function buildManifest({
   enableHealth: boolean;
   enableGdgraphHook: boolean;
   enableGdskillsHook: boolean;
+  enableHealthHook: boolean;
   agentRuleSources: string[];
   existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
@@ -720,6 +774,12 @@ function buildManifest({
             data: ".metaproject/data/health",
             manifest: ".metaproject/modules/health.md",
             commands: ["run", "status", "gate", "sources", "explain", "baseline"],
+            hooks: {
+              ...(enableHealthHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
           }
         : {
             enabled: false,

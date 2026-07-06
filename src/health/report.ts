@@ -55,6 +55,10 @@ ${renderFindings(top)}
 
 ${renderAffected(report.metrics)}
 
+## Skill Scopes
+
+${renderSkills(report.metrics)}
+
 ## Next Action
 
 ${renderNextAction(report)}
@@ -100,6 +104,22 @@ function renderAffected(metrics: ScopeMetrics[]): string {
     return "- none";
   }
   return modules
+    .map(
+      (m) =>
+        `- ${m.name}: score ${m.health_score}, findings ${m.findingCounts.total}, risk ${m.risk_score}`,
+    )
+    .join("\n");
+}
+
+function renderSkills(metrics: ScopeMetrics[]): string {
+  const skills = metrics
+    .filter((m) => m.kind === "skill")
+    .sort((a, b) => b.risk_score - a.risk_score)
+    .slice(0, 10);
+  if (skills.length === 0) {
+    return "- none (no project-skills own findings)";
+  }
+  return skills
     .map(
       (m) =>
         `- ${m.name}: score ${m.health_score}, findings ${m.findingCounts.total}, risk ${m.risk_score}`,

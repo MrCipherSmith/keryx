@@ -7,6 +7,7 @@ import { loadBaseline, writeBaseline } from "./baseline";
 import { getChurn } from "./metrics/churn";
 import { getCoverage } from "./metrics/coverage";
 import { renderReportMarkdown } from "./report";
+import { loadSkillOwnership } from "./skills";
 import { FINDING_ADAPTERS, NoImportError } from "./sources";
 import {
   commandExists,
@@ -104,6 +105,15 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     });
   }
 
+  // Tag findings with the owning project-skill (gdskills registry) so the
+  // report and gdskills `learn --from-health` can work per skill.
+  const ownership = await loadSkillOwnership(cwd);
+  for (const finding of findings) {
+    if (finding.file) {
+      finding.scope.skill = ownership.skillForFile(finding.file);
+    }
+  }
+
   const churn = await getChurn(cwd, config.metrics.churnWindowDays);
   const baseline = await loadBaseline(cwd);
   const metrics = await computeMetrics({
@@ -114,6 +124,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     coverage,
     churn,
     baseline,
+    ownership,
     scopeSelector: selector,
   });
   const projectMetrics = metrics.find((m) => m.key === "project");

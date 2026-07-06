@@ -370,6 +370,16 @@ Purpose:
 - write verification reports only during explicit \`gd-metapro skills verify\` runs or orchestrator-controlled checks;
 - keep the hook local, optional and non-blocking.
 
+## git post-commit health hook
+
+When enabled during \`gd-metapro init\`, the Git \`post-commit\` hook runs a lightweight changed-scope Code Health check after relevant source/config changes.
+
+Purpose:
+
+- detect obvious type/complexity regressions close to the commit that introduced them;
+- update the latest agent-readable health report for changed scope;
+- avoid heavy sources in hooks: tests, audit, coverage and external providers stay manual or orchestrator-controlled.
+
 ## post-update.d
 
 Executable files in \`post-update.d/\` run after \`gd-metapro update\`.
@@ -466,6 +476,49 @@ export function renderGdskillsPostCommitHook(): string {
 }
 
 gd_metapro_gdskills_post_commit
+`;
+}
+
+export function renderHealthPostCommitHook(): string {
+  return `gd_metapro_health_post_commit() {
+  # Run lightweight changed-scope Code Health checks only when relevant files changed.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|^\\.metaproject/health\\.config\\.json$)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v gd-metapro >/dev/null 2>&1; then
+    gd-metapro health run --changed --since HEAD~1 --source typescript,complexity >/dev/null 2>&1 || {
+      echo "gd-metapro post-commit: health check failed" >&2
+      return 0
+    }
+    echo "gd-metapro post-commit: health checked"
+    return 0
+  fi
+
+  if [ -x "$HOME/.local/bin/gd-metapro" ]; then
+    "$HOME/.local/bin/gd-metapro" health run --changed --since HEAD~1 --source typescript,complexity >/dev/null 2>&1 || {
+      echo "gd-metapro post-commit: health check failed" >&2
+      return 0
+    }
+    echo "gd-metapro post-commit: health checked"
+    return 0
+  fi
+
+  echo "gd-metapro post-commit: gd-metapro command not found, skipped health check" >&2
+  return 0
+}
+
+gd_metapro_health_post_commit
 `;
 }
 

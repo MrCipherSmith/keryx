@@ -79,7 +79,7 @@ function printHelp(): void {
   console.log(`gd-metapro ${VERSION}
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-gdgraph-hook] [--no-gdskills-hook]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook]
   gd-metapro status
   gd-metapro update
   gd-metapro gdgraph build

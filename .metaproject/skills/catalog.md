@@ -50,5 +50,6 @@ Resolution order:
 
 | Module | Skill | Target | Entry |
 |---|---|---|---|
+| gdgraph | module | `src/gdgraph` | .metaproject/project-skills/gdgraph/module/SKILL.md |
 | metaproject | init-command | `src/commands/init.ts` | .metaproject/project-skills/metaproject/init-command/SKILL.md |
 <!-- gdskills:project-skills:end -->

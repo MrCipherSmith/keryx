@@ -23,6 +23,16 @@ Purpose:
 - write verification reports only during explicit `gd-metapro skills verify` runs or orchestrator-controlled checks;
 - keep the hook local, optional and non-blocking.
 
+## git post-commit health hook
+
+When enabled during `gd-metapro init`, the Git `post-commit` hook runs a lightweight changed-scope Code Health check after relevant source/config changes.
+
+Purpose:
+
+- detect obvious type/complexity regressions close to the commit that introduced them;
+- update the latest agent-readable health report for changed scope;
+- avoid heavy sources in hooks: tests, audit, coverage and external providers stay manual or orchestrator-controlled.
+
 ## post-update.d
 
 Executable files in `post-update.d/` run after `gd-metapro update`.

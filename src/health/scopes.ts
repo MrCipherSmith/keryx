@@ -13,6 +13,7 @@ import {
 } from "./scoring";
 import type { CoverageData } from "./metrics/coverage";
 import type { BaselineEntry } from "./baseline";
+import type { SkillOwnership } from "./skills";
 import type {
   Finding,
   HealthConfig,
@@ -34,9 +35,10 @@ export async function computeMetrics(input: {
   coverage: CoverageData;
   churn: Map<string, number>;
   baseline: Map<string, BaselineEntry>;
+  ownership?: SkillOwnership;
   scopeSelector?: ScopeSelector;
 }): Promise<ScopeMetrics[]> {
-  const { cwd, config, findings, sourceFiles, coverage, churn, baseline, scopeSelector } = input;
+  const { cwd, config, findings, sourceFiles, coverage, churn, baseline, ownership, scopeSelector } = input;
 
   const locByFile = new Map<string, number>();
   const complexityByFile = new Map<string, number[]>();
@@ -152,6 +154,27 @@ export async function computeMetrics(input: {
         coverage.byFile.get(file) ?? null,
       ),
     );
+  }
+
+  if (ownership) {
+    for (const skill of ownership.skills) {
+      const ownedFiles = sourceFiles.filter(
+        (file) => ownership.skillForFile(file) === skill,
+      );
+      if (ownedFiles.length === 0) {
+        continue;
+      }
+      scopes.push(
+        build(
+          "skill",
+          `skill:${skill}`,
+          skill,
+          ownedFiles,
+          findings.filter((f) => f.scope.skill === skill),
+          averageCoverage(ownedFiles, coverage),
+        ),
+      );
+    }
   }
 
   return scopes;

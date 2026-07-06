@@ -70,9 +70,14 @@ export async function learnProjectSkill(
   }
 
   const source = await readFile(absoluteSourcePath, "utf8");
+  const effectiveSkill =
+    options.skill ??
+    (options.sourceType === "health"
+      ? dominantHealthSkill(source, registry)
+      : undefined);
   const skill = resolveSkillForLearning({
     registry,
-    explicitSkill: options.skill,
+    explicitSkill: effectiveSkill,
     source,
     sourcePath: options.sourcePath,
   });
@@ -80,7 +85,11 @@ export async function learnProjectSkill(
     throw new Error("Unable to map learning source to a project skill. Pass --skill <module>/<skill>.");
   }
 
-  const lessons = extractLessons(source, options.sourceType);
+  const skillKey = `${skill.module}/${skill.name}`;
+  const lessons =
+    options.sourceType === "health"
+      ? healthLessonsForSkill(source, skillKey)
+      : extractLessons(source, options.sourceType);
   const createdAt = new Date().toISOString();
   const proposalId = `${skill.module}-${skill.name}-${options.sourceType}-${createdAt.replace(/[^0-9a-z]/gi, "").slice(0, 18)}`;
   const proposalRoot = path.join(metaprojectRoot, "data", "gdskills", "proposals");
@@ -226,6 +235,64 @@ function resolveSkillForLearning({
   }
 
   return undefined;
+}
+
+type HealthFinding = {
+  message?: string;
+  suggestedAction?: string | null;
+  scope?: { skill?: string | null };
+};
+
+function parseHealthFindings(source: string): HealthFinding[] {
+  try {
+    const parsed = JSON.parse(source) as { findings?: HealthFinding[] };
+    return Array.isArray(parsed.findings) ? parsed.findings : [];
+  } catch {
+    return [];
+  }
+}
+
+// Pick the project-skill with the most Code Health findings, restricted to
+// skills that exist in the registry. Lets `learn --from-health` resolve the
+// target skill without an explicit `--skill`.
+function dominantHealthSkill(
+  source: string,
+  registry: ProjectSkillRegistryEntry[],
+): string | undefined {
+  const keys = new Set(registry.map((entry) => `${entry.module}/${entry.name}`));
+  const counts = new Map<string, number>();
+  for (const finding of parseHealthFindings(source)) {
+    const skill = finding.scope?.skill;
+    if (skill && keys.has(skill)) {
+      counts.set(skill, (counts.get(skill) ?? 0) + 1);
+    }
+  }
+  let best: { skill: string; count: number } | undefined;
+  for (const [skill, count] of counts) {
+    if (!best || count > best.count) {
+      best = { skill, count };
+    }
+  }
+  return best?.skill;
+}
+
+// Lessons from a Code Health report, scoped to one skill. When the report tags
+// findings with `scope.skill`, only that skill's findings are used; an untagged
+// report falls back to all findings, then to generic keyword extraction.
+function healthLessonsForSkill(source: string, skillKey: string): string[] {
+  const findings = parseHealthFindings(source);
+  const anyTagged = findings.some((finding) => Boolean(finding.scope?.skill));
+  const pool = anyTagged
+    ? findings.filter((finding) => finding.scope?.skill === skillKey)
+    : findings;
+  const lessons = pool
+    .flatMap((finding) => [finding.message, finding.suggestedAction ?? undefined])
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.length >= 12 && value.length <= 260,
+    );
+  const deduped = unique(lessons).slice(0, 10);
+  return deduped.length > 0 ? deduped : extractLessons(source, "health");
 }
 
 function extractLessons(source: string, sourceType: LearningSourceType): string[] {
