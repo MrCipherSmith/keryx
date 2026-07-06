@@ -299,10 +299,21 @@ async function createDefaultAgentEntrypoint(projectRoot: string): Promise<string
 async function ensureMetaprojectReference(filePath: string): Promise<void> {
   const content = await readFile(filePath, "utf8");
   const marker = "<!-- gd-metapro:index -->";
-  const graphPolicy =
+  const oldGraphPolicy =
     "For code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
+  const graphPolicy =
+    "For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
 
   if (content.includes(marker)) {
+    if (content.includes(oldGraphPolicy)) {
+      await writeFile(
+        filePath,
+        content.replaceAll(oldGraphPolicy, graphPolicy),
+        "utf8",
+      );
+      return;
+    }
+
     if (!content.includes(graphPolicy)) {
       const suffix = content.endsWith("\n") ? "" : "\n";
       await writeFile(filePath, `${content}${suffix}\n${graphPolicy}\n`, "utf8");
