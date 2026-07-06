@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.4.0
+Version: 0.5.0
 
 ## 1. Purpose
 
@@ -27,7 +27,7 @@ registry to human-readable status and points at each module's requirements.
 | gdwiki | `gd-metapro wiki` | `wiki` | implemented (MVP) | [wiki/](wiki/) |
 | Documentation Memory | `gd-metapro memory` | `memory` | spec ready | [documentation-memory/](documentation-memory/) |
 | Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
-| Code Health | `gd-metapro health` | `health` | in progress (Phase 1 + skill-loop) | [code-health/](code-health/) |
+| Code Health | `gd-metapro health` | `health` | in progress (Phase 1 + skill-loop + trends) | [code-health/](code-health/) |
 | Testing Tools | `gd-metapro test` | `testing` | planned | - |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (MVP) | [gdskills/](gdskills/) |
 

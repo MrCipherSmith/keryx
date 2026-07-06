@@ -773,7 +773,7 @@ function buildManifest({
             core: ".metaproject/core/health",
             data: ".metaproject/data/health",
             manifest: ".metaproject/modules/health.md",
-            commands: ["run", "status", "gate", "sources", "explain", "baseline"],
+            commands: ["run", "status", "gate", "sources", "explain", "baseline", "trend"],
             hooks: {
               ...(enableHealthHook
                 ? { gitPostCommit: ".git/hooks/post-commit" }

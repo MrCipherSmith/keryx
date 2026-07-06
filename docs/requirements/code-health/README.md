@@ -1,7 +1,7 @@
 # Code Health requirements
 
-Version: 0.4.0
-Status: Phase 1 + skill-owned scope loop implemented. CLI `gd-metapro health`, init scaffold, and the gdskills `learn --from-health` loop shipped.
+Version: 0.5.0
+Status: Phase 1 + skill-owned scope loop + history trends implemented. CLI `gd-metapro health` (incl. `trend`), init scaffold, and the gdskills `learn --from-health` loop shipped.
 
 `Code Health` - модуль Metaproject для агрегации качества кода. Он собирает технические источники качества, нормализует findings, считает health/risk metrics на разных уровнях гранулярности и превращает сырые логи в agent-readable Markdown/JSON reports.
 
@@ -11,7 +11,7 @@ Phase 1 реализована: модуль `src/health/` (адаптеры Cor
 
 Phase 2 (частично): skill-owned scope — Code Health читает реестр project-skills gdskills, проставляет `scope.skill` на findings и считает `skill:<module>/<name>` метрики; `skills learn --from-health` авто-резолвит владеющий skill и скоупит уроки по нему.
 
-Complexity — token-based приближение (не полный AST). Остаток Phase 2: Sonar/complexity-tools адаптеры, entity/component scopes, история трендов. См. [specification.md](specification.md) sections 2 и 21.
+Complexity — token-based приближение (не полный AST). `gd-metapro health trend` даёт multi-run тренды по `data/health/history`. Остаток Phase 2: Sonar/complexity-tools адаптеры, entity/component scopes. См. [specification.md](specification.md) sections 2 и 21.
 
 ## Документы
 

@@ -1,4 +1,5 @@
 import { createCodeHealthService } from "../health/service";
+import { computeTrend, loadHistory } from "../health/history";
 import type { ScopeSelector } from "../health/types";
 
 const service = createCodeHealthService();
@@ -33,6 +34,10 @@ export async function healthCommand(args: string[]): Promise<void> {
   }
   if (command === "baseline") {
     await runBaseline(args.slice(1));
+    return;
+  }
+  if (command === "trend") {
+    await runTrend(args.slice(1));
     return;
   }
 
@@ -77,6 +82,14 @@ async function runStatus(): Promise<void> {
   console.log(`gate: ${status.gate ?? "n/a"}`);
   console.log(`project score: ${status.projectScore ?? "n/a"}`);
   console.log(`regressed scopes: ${status.regressions}`);
+
+  const trend = computeTrend(await loadHistory(process.cwd()), "project");
+  if (trend.count >= 2) {
+    console.log(
+      `trend (last ${trend.count} runs): ${trend.direction} (${trend.first} -> ${trend.current}, Δ ${signed(trend.delta)})`,
+    );
+  }
+
   if (status.sources.length > 0) {
     console.log("");
     console.log("## Sources");
@@ -157,6 +170,33 @@ async function runBaseline(args: string[]): Promise<void> {
   console.log(`Updated baseline (${result.updated.length} scope(s)): ${result.path}`);
 }
 
+async function runTrend(args: string[]): Promise<void> {
+  const scopeKey = valueAfter(args, "--scope") ?? "project";
+  const limitArg = valueAfter(args, "--limit");
+  const limit = limitArg ? Math.max(2, Number(limitArg)) : 20;
+  const history = await loadHistory(process.cwd(), limit);
+  const trend = computeTrend(history, scopeKey);
+
+  console.log(`# health trend: ${scopeKey}`);
+  console.log("");
+  if (trend.count === 0) {
+    console.log("No history yet. Run `gd-metapro health run` a few times.");
+    return;
+  }
+  console.log(`runs: ${trend.count}`);
+  console.log(`direction: ${trend.direction}`);
+  console.log(`score: ${trend.first} -> ${trend.current} (Δ ${signed(trend.delta)})`);
+  console.log(`range: min ${trend.min}, max ${trend.max}`);
+  console.log(`series: ${trend.series.join(" ")}`);
+}
+
+function signed(value: number | null): string {
+  if (value === null) {
+    return "n/a";
+  }
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
 function parseScope(args: string[]): ScopeSelector | undefined {
   if (args.includes("--changed")) {
     const since = valueAfter(args, "--since");
@@ -193,5 +233,6 @@ Usage:
   gd-metapro health sources
   gd-metapro health explain <file-or-module>
   gd-metapro health baseline update [--scope ...]
+  gd-metapro health trend [--scope <scope-key>] [--limit <n>]
 `);
 }

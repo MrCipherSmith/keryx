@@ -1,7 +1,7 @@
 # Code Health: technical specification
 
-Version: 0.4.0
-Status: Phase 1 + skill-owned scope loop implemented (see section 21). Complexity is a token-based approximation; AST precision deferred.
+Version: 0.5.0
+Status: Phase 1 + skill-owned scope loop + history trends implemented (see section 21). Complexity is a token-based approximation; AST precision deferred.
 
 ## 1. Purpose
 
@@ -293,6 +293,7 @@ gd-metapro health gate [--strict-warn]     # CI: exit code from gate status
 gd-metapro health sources                  # list detected sources and statuses
 gd-metapro health explain <file-or-module>
 gd-metapro health baseline update [--scope ...]
+gd-metapro health trend [--scope <scope-key>] [--limit <n>]
 ```
 
 `run` pipeline:
@@ -437,7 +438,7 @@ when unsupported.
   the owning skill and scopes learned lessons to it;
 - [ ] entity/component/store scopes;
 - [ ] adapters: SonarQube, external complexity tools;
-- [ ] history-based trends beyond single baseline.
+- [x] history-based trends: `gd-metapro health trend` over `data/health/history` snapshots.
 
 ### Phase 3 - advanced
 
