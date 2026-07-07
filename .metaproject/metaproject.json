@@ -174,6 +174,30 @@
         "check-links",
         "validate"
       ]
+    },
+    "security": {
+      "enabled": true,
+      "version": "0.1.0",
+      "core": ".metaproject/core/security",
+      "data": ".metaproject/data/security",
+      "manifest": ".metaproject/modules/security.md",
+      "config": ".metaproject/security.config.json",
+      "commands": [
+        "status",
+        "scan",
+        "check-input",
+        "check-output",
+        "redact",
+        "report",
+        "policy",
+        "incidents"
+      ],
+      "capabilities": [
+        "security.secrets",
+        "security.pii",
+        "security.prompt-injection",
+        "security.egress-control"
+      ]
     }
   },
   "agentEntrypoints": {

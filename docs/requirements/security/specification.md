@@ -1,8 +1,8 @@
 # Metaproject Security: technical specification
 
-Version: 0.2.0
+Version: 0.2.1
 
-Status: draft. Runtime implementation is future work. Spec hardened after review: in-process service contract, gate/resolution, redaction & hashing safety, self-protection, and behavioral acceptance criteria.
+Status: Phase 1+2 implemented (v0.1). The deterministic engine (detectors, resolution/gate, HMAC-keyed hashing + masks, self-protection, config checksum) and the `gd-metapro security` CLI (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy validate`/`incidents`) are shipped, and the module is enabled by default at `init`. Phase 3 (write-seam `check()` integrations at memory/wiki/testing/gdctx/flow) and Phase 4 (model/API backends, profiles/hooks, gateway mode) remain future work - see §16.
 
 ## 1. Purpose
 

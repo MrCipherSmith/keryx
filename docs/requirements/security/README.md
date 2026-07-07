@@ -1,8 +1,8 @@
 # Metaproject Security
 
-Version: 0.2.0
+Version: 0.2.1
 
-Status: review-hardened spec (v0.2.0), ready for implementation. Runtime not started; see specification.md §16 for phased breakdown.
+Status: Phase 1+2 implemented (v0.1) - the deterministic engine (`src/security/`) and the `gd-metapro security` CLI are shipped and the module is enabled by default at `init`. Phase 3 (write-seam `check()` integrations at memory/wiki/testing/gdctx/flow) and Phase 4 (model/API backends, gateway mode) remain future work; see specification.md §16 for the phased breakdown.
 
 ## 1. Purpose
 

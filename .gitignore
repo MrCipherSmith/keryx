@@ -23,5 +23,12 @@ bun.lock
 .metaproject/data/testing/logs/
 .metaproject/data/testing/artifacts/latest.md
 .metaproject/data/testing/artifacts/latest.json
+.metaproject/data/tasks/runtime/
+.metaproject/data/tasks/logs/
+# Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
+.metaproject/data/security/raw/
+.metaproject/data/security/raw/**
+.metaproject/data/security/artifacts/latest.md
+.metaproject/data/security/artifacts/latest.json
 .metaproject/reports/
 # gd-metapro:end

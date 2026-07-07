@@ -22,7 +22,7 @@ dispatcher (`src/cli.ts`) and the cross-cutting lifecycle commands — `init`,
 `update`, `dashboard`/`dash`, `status`, `modules`, and `standard` — plus
 `MODULE_COMMANDS`, the single source
 of truth for each module's canonical subcommand list. Its job is to parse the
-top-level subcommand, scaffold the workspace and its eight optional modules, keep
+top-level subcommand, scaffold the workspace and its nine optional modules, keep
 managed "service" files in sync without ever touching user "data" artifacts, and
 emit both an agent-facing `index.md` and a human-facing HTML dashboard.
 
@@ -42,7 +42,7 @@ to a handler:
 | `gdgraph`, `ctx`, `wiki`, `skills`, `skill-verify-skill`, `health`, `test`, `memory`, `flow`, `rules` | routed to the feature module handler |
 | unknown | error + help + exit 1 |
 
-Key lifecycle flags: `init` accepts `--yes/-y`, `--no-<module>` for each of the 8
+Key lifecycle flags: `init` accepts `--yes/-y`, `--no-<module>` for each of the 9
 modules, `--gdskills-profile <v>`, and `--no-*-hook` variants; `update` accepts
 `--hooks`, `--skip-runtime`, `--no-tasks`.
 
@@ -61,8 +61,8 @@ modules, `--gdskills-profile <v>`, and `--no-*-hook` variants; `update` accepts
 rendered template), and `copyFileIfChanged`. The core invariant is **data vs
 service separation**: `init`/`update` regenerate templates, manifests, skills,
 hooks, and dashboards but never write under `.metaproject/data/`. `init` resolves
-enablement for 8 modules (`gdgraph, gdctx, gdwiki, gdskills, health, testing,
-memory, tasks`), scaffolds base + per-module dirs, installs managed git hooks
+enablement for 9 modules (`gdgraph, gdctx, gdwiki, gdskills, health, testing,
+memory, tasks, security`), scaffolds base + per-module dirs, installs managed git hooks
 (injecting `# gd-metapro:<id>:begin…:end` blocks), and writes a typed
 `MetaprojectManifest`. `update` optionally git-fetches the runtime repo it was
 launched from (`.metaproject/runtime/gd-metapro/.git` or `$HOME/.gd-metapro/...`),
@@ -568,6 +568,88 @@ optional `gh` CLI. Internal `lib/fs`, `lib/args`, `lib/ui`. **Cross-module:**
 (`createCodeHealthService().gate`) is wired as the completion health gate. The GitHub
 `TrackerAdapter` shells out to `gh` and degrades gracefully (gates become `skipped`)
 when it is absent.
+
+---
+
+## security
+
+**Purpose.** `security` is the newest module (bringing the total to **9**) — the
+**agent input/output and artifact security layer**. It scans content for secrets,
+PII, prompt-injection, and data-exfiltration (egress) signals, resolves those into
+a policy decision (allow → warn → redact → require-approval → block), and evaluates
+a pass/needs-approval/fail gate that can block a controlled write or CI run. It is
+deliberately separate from `health` (which imports dependency findings as quality
+signals) and from `security-audit` (dependency/committed-secret scanning): this
+module protects prompts, external content, generated outputs, and `.metaproject/`
+artifacts. It is **deterministic** (rule + entropy detectors, no model backend) and
+**leak-safe** — findings never carry raw sensitive values, only fixed-width masks
+and local-only HMAC hashes. The shipped scope is spec §16 **Phase 1+2** (engine +
+CLI); the write-seam integrations (Phase 3) and model/API backends (Phase 4) are
+**not** implemented.
+
+**CLI surface.** Dispatched by `securityCommand`:
+
+| Subcommand | Behavior | Exit |
+|---|---|---|
+| `security status` | print effective config: mode, raw retention, gate, config-checksum, per-policy action | 0 |
+| `security scan <path> [--json] [--source <kind>]` | scan a file, resolve a decision, write `artifacts/latest.{md,json}` | mode-gated (see below) |
+| `security check-input [--source <kind>] [--file <path>] [--json]` | evaluate incoming content (default source `untrusted-external`; stdin if no `--file`) | mode-gated |
+| `security check-output [--target <kind>] [--file <path>] [--json]` | evaluate generated content (default source `generated`, target `unknown`) | mode-gated |
+| `security redact <path> [--out <path>]` | mask detected spans; write `--out` or print to stdout | 0 |
+| `security report [--since <ref>] [--json]` | aggregate the last scan artifact (no re-scan) into a category summary | **1 in `ci` mode when gate = fail** |
+| `security policy validate` | schema-validate the config + verify config checksum | **1 on schema/checksum failure** |
+| `security incidents [--limit <n>]` | list the append-only incident trail (newest first) | 0 |
+
+The mode-gated commands honor `config.mode`: **advisory** (default) always exits
+`0`; **ci** exits `1` on a gate **fail**; **enforced** exits `1` on **fail** or
+**needs-approval**.
+
+**Key files.**
+- `src/commands/security.ts` — CLI dispatcher, arg/flag parsing, rendering, exit-code mapping, help.
+- `src/security/service.ts` — `analyze`/`runScan`/`runReport`/`runGate` + the `createSecurityService` in-process contract (advisory-safe `check`, `redact`, `report`, `gate`).
+- `src/security/detect/` — the deterministic detectors: `secrets.ts`, `entropy.ts`, `pii.ts`, `injection.ts`, `egress.ts`, plus `index.ts` (`runDetectors` + overlap dedup).
+- `src/security/resolve.ts` — finding construction, action precedence, injection→egress escalation, confidence gate, `computeGate`.
+- `src/security/redact.ts` — fixed-width masks, safe `redactedPreview`, local-only HMAC key management + `hmacHash`.
+- `src/security/self-protect.ts` — config-checksum / mode-downgrade / disabled-policy self-protection.
+- `src/security/report.ts` — report building + committable artifact writing.
+- `src/security/config.ts` — `DEFAULT_SECURITY_CONFIG`, load/merge, `computeConfigChecksum`/`verifyConfigChecksum`, `validateSecurityConfig`.
+- `src/security/incidents.ts` — append-only JSONL incident trail.
+- `src/security/{schemas,templates,types}.ts` — JSON-schema subset, scaffold renderers, and the type surface.
+
+**How it works.** The pipeline is **detectors → resolution/gate → report**.
+`runDetectors` runs each *enabled* detector category (entropy additionally gated by
+the entropy backend flag) and de-duplicates overlapping spans, keeping the strongest
+signal per region. `resolveDecision` turns each match into a `SecurityFinding`,
+applying a **confidence gate** (a match below the policy's `minConfidence` is
+downgraded to `warn`) and the **injection→egress escalation** (a lone prompt-injection
+signal stays `warn`; when an egress signal co-occurs it is escalated to the
+prompt-injection policy action). The decision's action is the **strongest** across
+findings by the precedence `block > require-approval > redact > warn > allow`;
+`computeGate` maps findings to `pass` / `needs-approval` / `fail` (any `block` action
+or any finding at/above `gate.failOn` severity fails). **Leak-safety** is structural:
+`buildFinding` never stores the raw value — only an HMAC-SHA256 hash (per-project key,
+local-only) and a fixed-width `[REDACTED:…]` mask, with the `redactedPreview` masking
+*every* sensitive span in the surrounding window so a preview can't reveal a
+neighbouring secret. **Self-protection** (`evaluateSelfProtection`) folds extra
+findings into the decision when the config checksum mismatches (policies edited
+outside the tool), the mode is downgraded, or a policy is disabled — each also
+appends an incident. Reports are written to `data/security/artifacts/latest.{md,json}`;
+`report`/`gate` read that artifact and never re-scan.
+
+**Data & artifacts.** Config `.metaproject/security.config.json` (seed-once). Data
+root `.metaproject/data/security/` with subtrees `artifacts/` (committable
+`latest.{md,json}`), `incidents/` (append-only JSONL trail), `redactions/`,
+`policies/`, and `raw/`. **`raw/` is gitignored and local-only** — it holds the
+per-project HMAC key (`hmac.key`, generated on first use) and a `report.local.json`,
+so hashes stay unlinkable across machines and no raw sensitive material is committed.
+Default `mode` is `advisory` and default `rawRetention` is `off`.
+
+**Dependencies / integrations.** Node builtins only (`node:crypto` for HMAC + config
+checksum, `fs/promises`, `path`) + internal `lib/fs`, `lib/args`, `lib/json`,
+`lib/ui`. `init`/`update` scaffold the config, `modules/security.md`, and
+`core/security/README.md` via `security/templates.ts`. There are **no cross-module
+code imports yet** — the Phase 3 write-seam gates at memory/wiki/testing/gdctx/flow
+are specified but not wired.
 
 ---
 

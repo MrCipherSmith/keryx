@@ -54,8 +54,9 @@ Two invariants define the system and recur across every module:
 | **testing** | `src/testing/` | `test` | Detect the test stack, run the project's existing runner (optionally changed-scoped), normalize results into a report. |
 | **memory** | `src/memory/` | `memory` | Long-term typed project memory (lessons/decisions/constraints); deterministic search, dedup, ingest, reflect. |
 | **flow** | `src/flow/` | `flow` (manifest id `tasks`) | Agent-first work lifecycle: scaffold a "flow" package, drive a status state machine, enforce completion gates. |
+| **security** | `src/security/` | `security` | Agent input/output + artifact security: deterministic secret/PII/injection/egress detectors, policy resolution, redaction, and a pass/needs-approval/fail gate. |
 
-_11 modules: `cli-core` and `shared-lib` are the two cross-cutting groups alongside the 9 feature modules._
+_12 modules: `cli-core` and `shared-lib` are the two cross-cutting groups alongside the 10 feature modules._
 
 ## The `.metaproject/` workspace contract
 
@@ -85,7 +86,7 @@ _11 modules: `cli-core` and `shared-lib` are the two cross-cutting groups alongs
 
 **Who writes what.** Each feature module owns its `data/<module>/` subtree and writes only there at runtime. Source-of-truth trees (`wiki/`, `memory/`, `project-skills/`, `rules/`) are seeded by `init`/module `new`/`create` commands but are then "owned" by the human — the tooling guards against clobbering them (gdwiki's draft-marker guard only overwrites unmodified generated drafts; gdskills `learn` never mutates `SKILL.md` without an explicit `apply`; flow's `flow.json` is the CLI's exclusive writer, protected by an AC-checksum tamper check).
 
-**`metaproject.json` manifest.** The single authoritative runtime config. It records `schemaVersion`, project name, `paths{}`, `agentEntrypoints{root[], metaproject}`, the Metaproject-Standard fields `standardVersion` / `profiles[]` / `updatedAt`, and a `modules{}` map where each entry carries `enabled`, per-module settings (e.g. gdskills `profile` + `projectSkillRegistry[]`), `hooks{}`, and a `commands[]` list. The lifecycle commands read it to know which of the 8 optional modules are enabled; `rules`, `health`, `flow`, and gdskills read it too.
+**`metaproject.json` manifest.** The single authoritative runtime config. It records `schemaVersion`, project name, `paths{}`, `agentEntrypoints{root[], metaproject}`, the Metaproject-Standard fields `standardVersion` / `profiles[]` / `updatedAt`, and a `modules{}` map where each entry carries `enabled`, per-module settings (e.g. gdskills `profile` + `projectSkillRegistry[]`), `hooks{}`, and a `commands[]` list. The lifecycle commands read it to know which of the 9 optional modules are enabled; `rules`, `health`, `flow`, and gdskills read it too.
 
 **`MODULE_COMMANDS` single source of truth.** `src/commands/module-commands.ts` holds one canonical subcommand list per module id. `moduleCommands(id)` returns a fresh mutable copy consumed by `init` (`buildManifest`) and `update` (`refreshServiceFiles`, recovery, tasks-backfill) — so the `commands[]` arrays in every generated `metaproject.json` come from exactly one place, enforced by `module-commands.test.ts`. Note the id/verb skew: manifest id `tasks` ↔ CLI verb `flow`; id `gdwiki` ↔ verb `wiki` (legacy `wiki` keys migrated forward).
 
@@ -154,7 +155,7 @@ The workspace is built and kept fresh by two idempotent lifecycle commands.
 
 **`init`** (`src/commands/init.ts`) bootstraps `.metaproject/`:
 
-1. Parse `--yes`/`--no-<module>`/`--gdskills-profile`/`--no-*-hook` flags into per-module enablement (8 modules default on; hooks default off). Interactive prompts when not `--yes`, with TTY-safe defaults when piped.
+1. Parse `--yes`/`--no-<module>`/`--gdskills-profile`/`--no-*-hook` flags into per-module enablement (9 modules default on; hooks default off). Interactive prompts when not `--yes`, with TTY-safe defaults when piped.
 2. Scaffold base dirs plus per-enabled-module dirs (`core/`, `data/`, `skills/`, and module-specific folders derived from `WIKI_PAGE_TYPES`/`MEMORY_TYPES`).
 3. Inject a managed `.gitignore` block; `syncAgentRules` seeds/updates `AGENTS.md`/`CLAUDE.md` and the routing block.
 4. gdgraph copies vendored core scripts and renders a local `cli.ts`; gdskills runs `installGdskills(profile)`; testing runs `analyzeTestingProject` once.
@@ -207,3 +208,4 @@ gdskills also ships **five JSON Schema contracts** (`subagent-dispatch`/`-result
 - **Testing gap in `rules`.** `src/rules/` has no co-located tests, unlike the rest of the codebase; its highest-risk untested logic is the heuristic `classifySection` and the policy migration/de-dup in `ensureMetaprojectReference`.
 - **Heuristic precision limits (deliberate trade-offs).** gdgraph import extraction is regex (can miss unusual syntax) and reports one representative per canonical cycle rotation; testing's failure/count parsers are bun-test-shaped (approximate for vitest/jest/playwright); health complexity is token-based, not AST.
 - **Naming skew.** module id `tasks` ↔ CLI verb `flow`; module id `gdwiki` ↔ CLI verb `wiki` (legacy `wiki` manifest key migrated forward); `gdctx` has no `src/ctx/` dir (logic lives entirely in `commands/ctx.ts`).
+- **Security write-seam integrations pending.** The `security` module ships Phase 1+2 (deterministic engine + CLI). Its in-process `check()` gate is defined but **not yet wired** into memory ingest, wiki collect, testing publish, gdctx large-output, or flow completion (spec §16 Phase 3); model/API backends (Phase 4) are also unimplemented. Today security is only reached through its own `gd-metapro security` command, not automatically at other modules' write seams.

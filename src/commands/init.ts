@@ -43,6 +43,12 @@ import {
   renderHealthManifest,
   renderHealthSkillReadme,
 } from "../health/templates";
+import { renderSecurityConfig } from "../security/config";
+import {
+  renderSecurityCoreReadme,
+  renderSecurityManifest,
+  securityCapabilities,
+} from "../security/templates";
 import { renderMemoryConfig } from "../memory/config";
 import { MEMORY_TYPES } from "../memory/types";
 import {
@@ -110,6 +116,7 @@ type InitOptions = {
   noTesting: boolean;
   noMemory: boolean;
   noTasks: boolean;
+  noSecurity: boolean;
   noGdgraphHook: boolean;
   noGdskillsHook: boolean;
   noHealthHook: boolean;
@@ -124,6 +131,9 @@ type ModuleConfig =
       data: string;
       manifest: string;
       commands: string[];
+      version?: string;
+      config?: string;
+      capabilities?: string[];
       profile?: GdskillsProfile;
       skills?: string;
       catalog?: string;
@@ -202,6 +212,7 @@ export async function initCommand(args: string[]): Promise<void> {
   let enableTesting = true;
   let enableMemory = true;
   let enableTasks = true;
+  let enableSecurity = true;
   let enableGdgraphHook = false;
   let enableGdskillsHook = false;
   let enableHealthHook = false;
@@ -279,6 +290,15 @@ export async function initCommand(args: string[]): Promise<void> {
   } else if (!options.yes) {
     enableTasks = await confirm(
       "Enable Task Manager (agent-first flow lifecycle with frozen acceptance criteria)? Recommended",
+      true,
+    );
+  }
+
+  if (options.noSecurity) {
+    enableSecurity = false;
+  } else if (!options.yes) {
+    enableSecurity = await confirm(
+      "Enable Metaproject Security (policy-based scanning, redaction, guardrails, audit reports)? Recommended",
       true,
     );
   }
@@ -413,6 +433,10 @@ export async function initCommand(args: string[]): Promise<void> {
     await createTasksStructure(metaprojectRoot);
   }
 
+  if (enableSecurity) {
+    await createSecurityStructure(metaprojectRoot);
+  }
+
   const manifest = buildManifest({
     projectName: path.basename(projectRoot),
     enableGdgraph,
@@ -424,6 +448,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableTesting,
     enableMemory,
     enableTasks,
+    enableSecurity,
     enableGdgraphHook,
     enableGdskillsHook,
     enableHealthHook,
@@ -449,6 +474,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
     }),
   );
   await writeTextIfMissing(
@@ -479,6 +505,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
       ruleSources: agentRuleSources,
       hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
     }),
@@ -494,6 +521,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
     }),
   );
 
@@ -656,6 +684,21 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (enableSecurity) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "security.config.json"),
+      renderSecurityConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "security.md"),
+      renderSecurityManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "security", "README.md"),
+      renderSecurityCoreReadme(),
+    );
+  }
+
   const enabledModuleCount = [
     enableGdgraph,
     enableGdctx,
@@ -665,6 +708,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableTesting,
     enableMemory,
     enableTasks,
+    enableSecurity,
   ].filter(Boolean).length;
 
   heading(
@@ -672,7 +716,7 @@ export async function initCommand(args: string[]): Promise<void> {
       ? `${style.green(symbols.ok)} Updated .metaproject`
       : `${style.green(symbols.ok)} Created .metaproject`,
   );
-  note(`${enabledModuleCount} of 8 modules enabled`);
+  note(`${enabledModuleCount} of 9 modules enabled`);
   statusLine("gdgraph", enableGdgraph, "code graph, symbols, affected context");
   statusLine("gdctx", enableGdctx, "token-aware command/read output");
   statusLine("gdwiki", enableGdwiki, "project knowledge base");
@@ -681,6 +725,7 @@ export async function initCommand(args: string[]): Promise<void> {
   statusLine("testing", enableTesting, "test context & intelligence");
   statusLine("memory", enableMemory, "lessons, decisions, constraints");
   statusLine("tasks", enableTasks, "agent-first flow lifecycle");
+  statusLine("security", enableSecurity, "scanning, redaction, guardrails, audit");
 
   const hookLines: Array<[string, boolean]> = [];
   if (enableGdgraph) {
@@ -730,6 +775,7 @@ function parseInitArgs(args: string[]): InitOptions {
     noTesting: args.includes("--no-testing"),
     noMemory: args.includes("--no-memory"),
     noTasks: args.includes("--no-tasks"),
+    noSecurity: args.includes("--no-security"),
     noGdgraphHook: args.includes("--no-gdgraph-hook"),
     noGdskillsHook: args.includes("--no-gdskills-hook"),
     noHealthHook: args.includes("--no-health-hook"),
@@ -752,6 +798,7 @@ function printInitHelp(): void {
     { flag: "--no-testing", desc: "Do not enable Testing Module." },
     { flag: "--no-memory", desc: "Do not enable Documentation Memory." },
     { flag: "--no-tasks", desc: "Do not enable Task Manager." },
+    { flag: "--no-security", desc: "Do not enable Metaproject Security." },
     { flag: "--no-gdgraph-hook", desc: "Do not install the gdgraph post-commit hook." },
     { flag: "--no-gdskills-hook", desc: "Do not install the gdskills post-commit hook." },
     { flag: "--no-health-hook", desc: "Do not install the health post-commit hook." },
@@ -850,6 +897,19 @@ async function createTasksStructure(root: string): Promise<void> {
     path.join(root, "flows"),
     path.join(root, "skills", "flow"),
     path.join(root, "data", "tasks", "artifacts"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createSecurityStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "security"),
+    path.join(root, "data", "security", "artifacts"),
+    path.join(root, "data", "security", "incidents"),
+    path.join(root, "data", "security", "redactions"),
+    path.join(root, "data", "security", "policies"),
+    path.join(root, "data", "security", "raw"),
   ];
 
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
@@ -1020,6 +1080,7 @@ function buildManifest({
   enableTesting,
   enableMemory,
   enableTasks,
+  enableSecurity,
   enableGdgraphHook,
   enableGdskillsHook,
   enableHealthHook,
@@ -1038,6 +1099,7 @@ function buildManifest({
   enableTesting: boolean;
   enableMemory: boolean;
   enableTasks: boolean;
+  enableSecurity: boolean;
   enableGdgraphHook: boolean;
   enableGdskillsHook: boolean;
   enableHealthHook: boolean;
@@ -1060,6 +1122,7 @@ function buildManifest({
     enableTasks && "tasks",
     enableHealth && "health",
     enableTesting && "testing",
+    enableSecurity && "security",
   ].filter((key): key is string => typeof key === "string");
 
   return {
@@ -1195,6 +1258,20 @@ function buildManifest({
                 : {}),
               postUpdate: ".metaproject/hooks/post-update.d",
             },
+          }
+        : {
+            enabled: false,
+          },
+      security: enableSecurity
+        ? {
+            enabled: true,
+            version: "0.1.0",
+            core: ".metaproject/core/security",
+            data: ".metaproject/data/security",
+            manifest: ".metaproject/modules/security.md",
+            config: ".metaproject/security.config.json",
+            commands: moduleCommands("security"),
+            capabilities: securityCapabilities(),
           }
         : {
             enabled: false,

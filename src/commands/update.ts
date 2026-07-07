@@ -18,6 +18,12 @@ import {
   renderHealthManifest,
   renderHealthSkillReadme,
 } from "../health/templates";
+import { renderSecurityConfig } from "../security/config";
+import {
+  renderSecurityCoreReadme,
+  renderSecurityManifest,
+  securityCapabilities,
+} from "../security/templates";
 import { renderMemoryConfig } from "../memory/config";
 import {
   renderMemoryCoreReadme,
@@ -174,6 +180,7 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   statusLine("testing", summary.modules.testing);
   statusLine("memory", summary.modules.memory);
   statusLine("tasks", summary.modules.tasks);
+  statusLine("security", summary.modules.security);
 
   const steps: string[] = [];
   if (options.hooks) {
@@ -195,6 +202,7 @@ type RefreshSummary = {
     testing: boolean;
     memory: boolean;
     tasks: boolean;
+    security: boolean;
   };
   gdskillsProfile: GdskillsProfile;
   backfilledTasks: boolean;
@@ -216,6 +224,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const enableHealth = moduleEnabled(manifest, "health");
   const enableTesting = moduleEnabled(manifest, "testing");
   const enableMemory = moduleEnabled(manifest, "memory");
+  const enableSecurity = moduleEnabled(manifest, "security");
 
   // Task Manager backfill: projects initialized before the tasks module have a
   // bare `tasks: { enabled: false }` stub. `update` enables and scaffolds it
@@ -244,6 +253,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     enableTesting,
     enableMemory,
     enableTasks,
+    enableSecurity,
   });
 
   await writeTextIfChanged(path.join(metaprojectRoot, "core", "README.md"), renderMetaprojectCoreReadme());
@@ -264,6 +274,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
       ruleSources,
       hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
     }),
@@ -279,6 +290,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
       data: dashboardData,
     }),
   );
@@ -293,6 +305,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
     }),
   );
 
@@ -388,6 +401,13 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "flow", "complete.md"), renderFlowCompleteSkill());
   }
 
+  if (enableSecurity) {
+    // Refresh service files only; never touch generated data under data/security.
+    await writeTextIfMissing(path.join(metaprojectRoot, "security.config.json"), renderSecurityConfig());
+    await writeTextIfChanged(path.join(metaprojectRoot, "modules", "security.md"), renderSecurityManifest());
+    await writeTextIfChanged(path.join(metaprojectRoot, "core", "security", "README.md"), renderSecurityCoreReadme());
+  }
+
   if (!manifestState.exists || !manifestState.valid) {
     await writeRecoveredManifest(metaprojectRoot, {
       enableGdgraph,
@@ -398,6 +418,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableTesting,
       enableMemory,
       enableTasks,
+      enableSecurity,
     });
   } else if (backfillTasks) {
     await enableTasksInManifest(metaprojectRoot);
@@ -415,6 +436,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       testing: enableTesting,
       memory: enableMemory,
       tasks: enableTasks,
+      security: enableSecurity,
     },
     gdskillsProfile,
     backfilledTasks: backfillTasks,
@@ -442,6 +464,7 @@ export async function buildDashboard(projectRoot: string = process.cwd()): Promi
       enableTesting: moduleEnabled(manifest, "testing"),
       enableMemory: moduleEnabled(manifest, "memory"),
       enableTasks: moduleEnabled(manifest, "tasks"),
+      enableSecurity: moduleEnabled(manifest, "security"),
       data,
     }),
   );
@@ -571,11 +594,13 @@ async function collectDashboardDocs(
     "modules/testing.md",
     "modules/memory.md",
     "modules/tasks.md",
+    "modules/security.md",
     "core/gdgraph/README.md",
     "core/gdctx/README.md",
     "core/health/README.md",
     "core/testing/README.md",
     "core/memory/README.md",
+    "core/security/README.md",
     "skills/catalog.md",
     "skills/project-rules/README.md",
     "skills/gdgraph/SKILL.md",
@@ -941,6 +966,7 @@ async function writeRecoveredManifest(
     enableTesting: boolean;
     enableMemory: boolean;
     enableTasks: boolean;
+    enableSecurity: boolean;
   },
 ): Promise<void> {
   const enabledModuleKeys = Object.entries(modules)
@@ -1030,6 +1056,18 @@ async function writeRecoveredManifest(
             data: ".metaproject/data/tasks",
             manifest: ".metaproject/modules/tasks.md",
             commands: moduleCommands("tasks"),
+          }
+        : { enabled: false },
+      security: modules.enableSecurity
+        ? {
+            enabled: true,
+            version: "0.1.0",
+            core: ".metaproject/core/security",
+            data: ".metaproject/data/security",
+            manifest: ".metaproject/modules/security.md",
+            config: ".metaproject/security.config.json",
+            commands: moduleCommands("security"),
+            capabilities: securityCapabilities(),
           }
         : { enabled: false },
     },
@@ -1142,6 +1180,7 @@ async function createServiceDirs(
     enableTesting: boolean;
     enableMemory: boolean;
     enableTasks: boolean;
+    enableSecurity: boolean;
   },
 ): Promise<void> {
   const dirs = [
@@ -1178,6 +1217,10 @@ async function createServiceDirs(
     ...(modules.enableTasks ? [
       path.join(metaprojectRoot, "flows"),
       path.join(metaprojectRoot, "skills", "flow"),
+    ] : []),
+    // Only the committable core dir; data/security is never created/touched here.
+    ...(modules.enableSecurity ? [
+      path.join(metaprojectRoot, "core", "security"),
     ] : []),
   ];
 
@@ -1283,6 +1326,7 @@ async function inferManifestFromExistingMetaproject(metaprojectRoot: string): Pr
     testing: ["core/testing", "data/testing", "testing.config.json", "modules/testing.md", "skills/testing"],
     memory: ["core/memory", "memory", "data/memory", "memory.config.json", "modules/memory.md", "skills/memory"],
     tasks: ["flows", "data/tasks", "modules/tasks.md", "skills/flow"],
+    security: ["core/security", "data/security", "security.config.json", "modules/security.md"],
   };
 
   for (const [moduleName, candidates] of Object.entries(checks)) {

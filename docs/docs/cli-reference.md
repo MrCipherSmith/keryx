@@ -4,7 +4,7 @@ Complete reference for the `gd-metapro` command-line interface. `gd-metapro`
 manages a per-project `.metaproject/` workspace: it scaffolds the workspace,
 keeps managed "service" files in sync (never touching your `data/` artifacts),
 and exposes feature commands for the dependency graph, wiki, skills, code health,
-testing, memory, and an agent-first work-flow lifecycle.
+testing, memory, an agent-first work-flow lifecycle, and agent-security scanning.
 
 ## Global usage
 
@@ -40,6 +40,7 @@ code `1`.
 | `flow` | Agent-first work lifecycle (Task Manager). |
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
+| `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
 
 ---
 
@@ -60,7 +61,7 @@ gd-metapro init [--yes] [module flags] [hook flags]
 | `--help`, `-h` | Print `init` usage and exit. |
 | `--gdskills-profile <profile>` | Set the gdskills install profile (`minimal`, `recommended`, `full`, `custom`); defaults to `recommended`. |
 
-**Module flags** — each of the 8 modules is enabled by default; pass its
+**Module flags** — each of the 9 modules is enabled by default; pass its
 `--no-<module>` flag to disable it:
 
 | Flag | Disables module |
@@ -73,6 +74,7 @@ gd-metapro init [--yes] [module flags] [hook flags]
 | `--no-testing` | Testing context / reports. |
 | `--no-memory` | Long-term project memory. |
 | `--no-tasks` | Flow / Task Manager lifecycle. |
+| `--no-security` | Metaproject Security (input/output + artifact scanning). |
 
 **Hook flags** — git hooks are installed only for enabled modules. Under `--yes`
 most default on; the testing **pre-push** hook stays off even under `--yes` (opt-in).
@@ -119,7 +121,7 @@ gd-metapro modules [status | enable <name> | disable <name>]
 | _(no argument)_ / `interactive` / `-i` | Interactively toggle modules on/off, then apply via `init`. |
 
 Module names are the manifest keys: `gdgraph`, `gdctx`, `gdwiki`, `gdskills`,
-`health`, `testing`, `memory`, `tasks`.
+`health`, `testing`, `memory`, `tasks`, `security`.
 
 ---
 
@@ -487,3 +489,49 @@ freshly generated workspace validates cleanly.
 
 The only recognized flag is `--help`/`-h`. An unknown subcommand prints an error
 and exits `1`.
+
+---
+
+## security
+
+Policy-based scanning, redaction, guardrails, and audit reports for agent
+input/output and `.metaproject/` artifacts. The engine is deterministic (rule +
+entropy detectors, no model backend) and local-first: config lives at
+`.metaproject/security.config.json`, data under `.metaproject/data/security/`,
+and the local-only HMAC key under `data/security/raw/` (gitignored). This is
+Phase 1+2 of the spec — the write-seam integrations (Phase 3) and model backends
+(Phase 4) are not implemented.
+
+```
+gd-metapro security status
+gd-metapro security scan <path> [--json] [--source <kind>]
+gd-metapro security check-input [--source <kind>] [--file <path>] [--json]
+gd-metapro security check-output [--target <kind>] [--file <path>] [--json]
+gd-metapro security redact <path> [--out <path>]
+gd-metapro security report [--since <ref>] [--json]
+gd-metapro security policy validate
+gd-metapro security incidents [--limit <n>]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `status` | — | Print the effective config: mode, raw-retention, gate (`failOn` + `minConfidence`), config-checksum state, and each policy with its action. |
+| `scan <path>` | `<path>`, `--json`, `--source <kind>` | Scan a file, resolve findings into a decision, and write committable artifacts (`data/security/artifacts/latest.{md,json}`). Prints the gate, action, and findings (or raw JSON with `--json`). |
+| `check-input` | `--source <kind>`, `--file <path>`, `--json` | Evaluate incoming content (defaults source `untrusted-external`). Reads from `--file` or stdin. Prints the decision. |
+| `check-output` | `--target <kind>`, `--file <path>`, `--json` | Evaluate outgoing/generated content (defaults source `generated`, target `unknown`). Reads from `--file` or stdin. Prints the decision and, when applicable, the redacted preview. |
+| `redact <path>` | `<path>`, `--out <path>` | Apply fixed-width masks to detected sensitive spans. Writes to `--out`, else prints the redacted content to stdout. Reads from the path or stdin. |
+| `report` | `--since <ref>`, `--json` | Aggregate the latest scan artifact (never re-scans) into a summary: gate, mode, and finding counts by category. |
+| `policy validate` | — | Validate the config against its schema and verify the config checksum. Exit `1` on schema errors or a checksum mismatch. |
+| `incidents` | `--limit <n>` | List the append-only incident trail (mode downgrades, disabled policies, checksum mismatches). Newest first; `--limit` caps the count. |
+
+Source kinds (`--source`): `trusted-project`, `trusted-user`,
+`untrusted-external`, `tool-output`, `generated`. Target kinds (`--target`):
+`model`, `memory`, `wiki`, `report`, `external`, `task`, `unknown`.
+
+**Exit behavior.** `scan`, `check-input`, and `check-output` honor the config
+`mode`: in **advisory** mode (the default) they always exit `0` after reporting;
+in **ci** mode they exit `1` on a gate **fail**; in **enforced** mode they exit
+`1` on a gate **fail** or **needs-approval**. `report` exits `1` only under `ci`
+mode when the aggregated gate is `fail`. `policy validate` exits `1` on schema or
+checksum failure. `status`, `redact`, and `incidents` do not gate. An unknown
+subcommand prints an error and exits `1`.

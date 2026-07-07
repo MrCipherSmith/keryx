@@ -333,6 +333,7 @@ following modules:
 - `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports.
 - `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection.
 - `tasks`: agent-first Task Manager, driven by `gd-metapro flow`, for issue/task lifecycle tracking.
+- `security`: agent input/output and artifact security, driven by `gd-metapro security` - deterministic secrets/PII/injection/egress scanning, redaction, and a policy gate (Phase 1+2).
 
 ## gdgraph MVP
 

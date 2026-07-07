@@ -11,6 +11,7 @@ import { memoryCommand } from "./commands/memory";
 import { flowCommand } from "./commands/flow";
 import { rulesCommand } from "./commands/rules";
 import { standardCommand } from "./commands/standard";
+import { securityCommand } from "./commands/security";
 import { statusCommand } from "./commands/status";
 import { modulesCommand } from "./commands/modules";
 import { updateCommand } from "./commands/update";
@@ -118,6 +119,11 @@ export async function main(): Promise<void> {
     return;
   }
 
+  if (command === "security") {
+    await securityCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -172,6 +178,14 @@ Usage:
   gd-metapro standard validate
   gd-metapro standard doctor
   gd-metapro standard capabilities
+  gd-metapro security status
+  gd-metapro security scan <path> [--json]
+  gd-metapro security check-input [--source <kind>] [--file <path>]
+  gd-metapro security check-output [--target <kind>] [--file <path>]
+  gd-metapro security redact <path> [--out <path>]
+  gd-metapro security report [--since <ref>]
+  gd-metapro security policy validate
+  gd-metapro security incidents [--limit <n>]
   gd-metapro --version
 
 Commands:
@@ -191,6 +205,7 @@ Commands:
   memory    Store and search long-term project memory
   flow      Agent-first flow lifecycle (Task Manager)
   standard  Validate the workspace against the Metaproject Standard
+  security  Policy-based scanning, redaction, guardrails and audit reports
 `);
 }
 

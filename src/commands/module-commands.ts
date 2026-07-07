@@ -44,6 +44,16 @@ export const MODULE_COMMANDS = {
   ],
   health: ["run", "status", "gate", "sources", "explain", "baseline", "trend"],
   testing: ["init", "analyze", "run", "status", "context", "explain", "related", "report"],
+  security: [
+    "status",
+    "scan",
+    "check-input",
+    "check-output",
+    "redact",
+    "report",
+    "policy",
+    "incidents",
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type ModuleId = keyof typeof MODULE_COMMANDS;

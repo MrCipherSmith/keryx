@@ -7,6 +7,7 @@ export function renderIndexMarkdown({
   enableTesting,
   enableMemory,
   enableTasks,
+  enableSecurity = false,
   ruleSources,
   hasDistilledEntrypoints = false,
 }: {
@@ -18,6 +19,7 @@ export function renderIndexMarkdown({
   enableTesting: boolean;
   enableMemory: boolean;
   enableTasks: boolean;
+  enableSecurity?: boolean;
   ruleSources: string[];
   hasDistilledEntrypoints?: boolean;
 }): string {
@@ -45,6 +47,9 @@ export function renderIndexMarkdown({
       : "",
     enableTasks
       ? "| tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |"
+      : "",
+    enableSecurity
+      ? "| security | Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts | modules/security.md |"
       : "",
   ]
     .filter(Boolean)
@@ -86,6 +91,7 @@ export function renderIndexMarkdown({
         ]
       : []),
     ...(enableTasks ? ["- `flows/` (flow packages)"] : []),
+    ...(enableSecurity ? ["- `data/security/artifacts/latest.md`"] : []),
   ];
   const dataRefs = dataRefItems.length > 0
     ? dataRefItems.join("\n")
@@ -169,6 +175,11 @@ export function renderIndexMarkdown({
           enableGdskills
             ? "When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand."
             : "When the user asks to start, create, track, or finish a piece of work (создай фло, create a flow from this issue, flow status, finish the story), use `skills/flow/SKILL.md` and the `gd-metapro flow` CLI; never edit flow.json or frozen acceptance criteria by hand.",
+        ]
+      : []),
+    ...(enableSecurity
+      ? [
+          "Before writing external/tool content into memory, wiki, reports, or task context, or when scanning artifacts for secrets/PII/prompt-injection/egress, use `modules/security.md` and `gd-metapro security check-output`/`security scan`; read `data/security/artifacts/latest.md` before claiming security status.",
         ]
       : []),
     "Use relevant skills from `skills/`.",
@@ -319,6 +330,7 @@ export function renderMetaprojectDashboardHtml({
   enableTesting,
   enableMemory,
   enableTasks,
+  enableSecurity = false,
   data,
 }: {
   enableGdgraph: boolean;
@@ -329,6 +341,7 @@ export function renderMetaprojectDashboardHtml({
   enableTesting: boolean;
   enableMemory: boolean;
   enableTasks: boolean;
+  enableSecurity?: boolean;
   data?: MetaprojectDashboardData;
 }): string {
   const modules = [
@@ -443,6 +456,19 @@ export function renderMetaprojectDashboardHtml({
         ["Init skill", "skills/flow/init.md"],
       ],
       commands: ["gd-metapro flow list", "gd-metapro flow init --title \"...\"", "gd-metapro flow complete <id>"],
+    },
+    {
+      enabled: enableSecurity,
+      name: "security",
+      role: "Guardrails & audit",
+      summary: "Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts.",
+      accent: "#b91c1c",
+      links: [
+        ["Manifest", "modules/security.md"],
+        ["Core README", "core/security/README.md"],
+        ["Config", "security.config.json"],
+      ],
+      commands: ["gd-metapro security status", "gd-metapro security scan <path>", "gd-metapro security report"],
     },
   ];
 
@@ -1529,6 +1555,11 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/testing/artifacts/latest.json
 .metaproject/data/tasks/runtime/
 .metaproject/data/tasks/logs/
+# Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
+.metaproject/data/security/raw/
+.metaproject/data/security/raw/**
+.metaproject/data/security/artifacts/latest.md
+.metaproject/data/security/artifacts/latest.json
 .metaproject/reports/
 `;
 }
@@ -1626,6 +1657,7 @@ export function renderMetaprojectReadme({
   enableTesting,
   enableMemory,
   enableTasks,
+  enableSecurity = false,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
@@ -1635,6 +1667,7 @@ export function renderMetaprojectReadme({
   enableTesting: boolean;
   enableMemory: boolean;
   enableTasks: boolean;
+  enableSecurity?: boolean;
 }): string {
   const moduleItems = [
     enableGdgraph ? "- `gdgraph`: code graph and affected context." : "",
@@ -1659,6 +1692,9 @@ export function renderMetaprojectReadme({
     enableTasks
       ? "- `tasks`: agent-first flow lifecycle with frozen acceptance criteria and PR gates."
       : "",
+    enableSecurity
+      ? "- `security`: policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts."
+      : "",
   ].filter(Boolean);
   const modules = moduleItems.length > 0
     ? moduleItems.join("\n")
@@ -1682,6 +1718,7 @@ export function renderMetaprojectReadme({
     ...(enableTesting ? ["gd-metapro test analyze", "gd-metapro test run --changed"] : []),
     ...(enableMemory ? ["gd-metapro memory index", 'gd-metapro memory search "project decisions"'] : []),
     ...(enableTasks ? ["gd-metapro flow list", 'gd-metapro flow init --title "..."'] : []),
+    ...(enableSecurity ? ["gd-metapro security status", "gd-metapro security scan <path>"] : []),
   ];
 
   return `# Project Metaproject
