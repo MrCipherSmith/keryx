@@ -1,6 +1,6 @@
 # spec-orchestrator: спецификация Metaproject CLI и инициализации
 
-Version: 0.8.2
+Version: 0.8.3
 
 ## 1. Назначение
 
@@ -833,6 +833,12 @@ gd-metapro dashboard open
 
 - `build` пересобирает `.metaproject/gd-metapro-dashboard.html` из существующих service/data files;
 - `open` пересобирает dashboard и открывает HTML-файл локальной системной командой;
+- Git `post-commit` hooks must be non-mutating. They may report stale graph,
+  health, testing context, dashboard or skill state, but they must not write
+  versioned `.metaproject` files after a commit. Mutating refreshes belong to
+  explicit CLI commands (`gd-metapro update`, `gd-metapro gdgraph build`,
+  `gd-metapro health run`, `gd-metapro test analyze`, `gd-metapro dashboard build`)
+  or orchestrator-controlled workflows.
 - обе команды не запускают analyzers/builders и не пишут `.metaproject/data/**`.
 
 ## 14. Generated vs user-authored files
