@@ -178,10 +178,10 @@ export function renderIndexMarkdown({
       ? ruleSources
           .map((source) => {
             const ruleFile = `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
-            return `| ${source} | Imported repository agent instructions | rules/${ruleFile} |`;
+            return `| ${source} | high | Imported root agent-entrypoint rules; apply before module-specific guidance | rules/${ruleFile} |`;
           })
           .join("\n")
-      : "| _none_ | No project rules imported yet | - |";
+      : "| _none_ | - | No project rules imported yet | - |";
 
   return `# Metaproject Index
 
@@ -198,8 +198,8 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 ${moduleRows || "| _none_ | No modules enabled yet | - |"}
 ## Rules
 
-| Source | Purpose | Entry |
-|--------|---------|-------|
+| Source | Priority | Purpose | Entry |
+|--------|----------|---------|-------|
 ${rulesRows}
 
 ## Skills
@@ -929,9 +929,9 @@ This directory stores repository-level instructions imported from root agent ent
 
 Rules:
 
-- treat files here as agent-readable mirrors of root instructions;
+- treat files here as high-priority agent-readable mirrors of root instructions;
 - update the root entrypoint first when changing project-wide instructions;
-- rerun \`gd-metapro init\` to resync imported rule files.
+- rerun \`gd-metapro rules sync\`, \`gd-metapro init\`, or \`gd-metapro update\` to resync imported rule files.
 `;
 }
 
@@ -942,16 +942,41 @@ export function renderImportedAgentRules({
   source: string;
   content: string;
 }): string {
-  return `# Imported Rules: ${source}
+  const body = extractAgentRuleBody(content);
+  const normalizedBody =
+    body.length > 0
+      ? body
+      : `This root entrypoint delegates agent routing to \`.metaproject/index.md\`.
+
+Read \`.metaproject/index.md\` first, then follow the high-priority rules, skills, and module references listed there.`;
+
+  return `---
+type: agent-entrypoint-rule
+priority: high
+source: ${JSON.stringify(source)}
+version: "1.0.0"
+generated_by: gd-metapro
+---
+
+# Imported Rules: ${source}
 
 Source: \`${source}\`
+Priority: \`high\`
+Version: \`1.0.0\`
 
-This file is generated from the repository root agent entrypoint. Edit \`${source}\`, then rerun \`gd-metapro init\`.
+This file is generated from the repository root agent entrypoint. Edit \`${source}\`, then rerun \`gd-metapro rules sync\`.
 
 ---
 
-${content.trim()}
+${normalizedBody}
 `;
+}
+
+function extractAgentRuleBody(content: string): string {
+  const marker = "<!-- gd-metapro:index -->";
+  const markerIndex = content.indexOf(marker);
+  const body = markerIndex >= 0 ? content.slice(0, markerIndex) : content;
+  return body.trim();
 }
 
 export function renderProjectRulesSkillReadme({
@@ -975,9 +1000,9 @@ ${sourceList}
 ## Workflow
 
 1. Start from \`.metaproject/index.md\`.
-2. Read the relevant imported files in \`.metaproject/rules/\`.
+2. Treat imported files in \`.metaproject/rules/\` as high-priority rules.
 3. Apply those rules before module-specific guidance.
-4. If root instructions changed, rerun \`gd-metapro init\` to refresh this mirror.
+4. If root instructions changed, rerun \`gd-metapro rules sync\` to refresh this mirror.
 `;
 }
 

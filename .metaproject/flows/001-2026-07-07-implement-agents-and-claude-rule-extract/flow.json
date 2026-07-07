@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "001",
+  "slug": "implement-agents-and-claude-rule-extract",
+  "title": "Implement AGENTS and CLAUDE rule extraction into Metaproject",
+  "status": "in-progress",
+  "createdAt": "2026-07-07T12:00:08.233Z",
+  "updatedAt": "2026-07-07T12:01:24.560Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:767336fe758a18889fe771b7512c31da0d00873a02a516bf475480c877d54948",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-07T12:00:08.233Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-07T12:01:13.681Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-07T12:01:19.304Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-07T12:01:24.560Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    }
+  ]
+}

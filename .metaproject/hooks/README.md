@@ -4,13 +4,13 @@ Hooks are local project scripts executed by selected `gd-metapro` lifecycle comm
 
 ## git post-commit gdgraph hook
 
-When enabled during `gd-metapro init`, the Git `post-commit` hook refreshes gdgraph only after commits that touched files relevant to the graph.
+When enabled during `gd-metapro init`, the Git `post-commit` hook detects commits that touched files relevant to the graph and prints the explicit refresh command.
 
 Purpose:
 
-- keep graph artifacts current without rebuilding on every agent question;
+- prevent stale graph usage by surfacing the refresh command close to the commit;
 - avoid broad raw file search when graph context is stale;
-- leave generated graph storage local while versioning curated artifacts.
+- avoid mutating versioned `.metaproject` artifacts after the commit is already written.
 
 ## git post-commit gdskills hook
 
@@ -25,33 +25,33 @@ Purpose:
 
 ## git post-commit health hook
 
-When enabled during `gd-metapro init`, the Git `post-commit` hook runs a lightweight changed-scope Code Health check after relevant source/config changes.
+When enabled during `gd-metapro init`, the Git `post-commit` hook detects relevant source/config changes and prints the explicit Code Health refresh command.
 
 Purpose:
 
-- detect obvious type/complexity regressions close to the commit that introduced them;
-- update the latest agent-readable health report for changed scope;
+- keep Code Health refresh visible close to the commit that may affect it;
+- avoid writing health reports after commit, which leaves the worktree dirty;
 - avoid heavy sources in hooks: tests, audit, coverage and external providers stay manual or orchestrator-controlled.
 
 ## git post-commit testing hook
 
-When enabled during `gd-metapro init`, the Git `post-commit` hook refreshes testing context after relevant source, test, config or documentation changes.
+When enabled during `gd-metapro init`, the Git `post-commit` hook detects relevant source, test, config or documentation changes and prints the explicit testing refresh command.
 
 Purpose:
 
-- keep `.metaproject/data/testing/context.md` aligned with test stack and conventions;
-- stay non-blocking and avoid running heavy suites on every commit;
+- keep test-context staleness visible without mutating versioned files after commit;
+- stay non-blocking and avoid running analyzers or heavy suites on every commit;
 - give agents fresh context before test generation or debugging.
 
 ## git post-commit dashboard hook
 
-When any Metaproject post-commit hook is enabled, a lightweight dashboard hook refreshes service files after the other hooks.
+When any Metaproject post-commit hook is enabled, a lightweight dashboard hook reminds the user to rebuild the dashboard after Metaproject-facing changes.
 
 Purpose:
 
-- keep `.metaproject/index.md` and `.metaproject/gd-metapro-dashboard.html` aligned with enabled modules and available service files;
+- keep `.metaproject/index.md` and `.metaproject/gd-metapro-dashboard.html` aligned through explicit `gd-metapro update` or `gd-metapro dashboard build`;
 - recover missing `.metaproject/metaproject.json` for older initialized projects;
-- avoid generated data work: the hook runs `gd-metapro update --skip-runtime --no-tasks`, not module builders.
+- avoid mutating service files after commit, especially from stale global CLI installations.
 
 ## git pre-push testing hook
 
