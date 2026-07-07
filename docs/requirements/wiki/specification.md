@@ -1,7 +1,7 @@
 # gdwiki: technical specification
 
-Version: 0.2.0
-Status: MVP implemented (Phase 1 and Phase 2 complete, Phase 3 in progress)
+Version: 0.3.0
+Status: Phases 1-2 complete. Collect enriched (real graph signals, prose-first + Reference), agent enrich skill on a cheap model, `--changed` incremental collect, and a non-mutating post-commit hook shipped.
 
 ## 1. Purpose
 
@@ -134,21 +134,46 @@ Behavior:
 - refuses overwrite unless `--force`;
 - prints created path.
 
-### 6.3 collect
+### 6.3 collect (deterministic, no model)
 
 ```bash
-gd-metapro wiki collect [--force] [--limit <n>]
+gd-metapro wiki collect [--force] [--changed [--since <ref>]] [--limit <n>]
 ```
 
 Behavior:
 
 - reads normalized project artifacts instead of scanning raw files blindly;
-- uses `data/gdgraph/storage/*.jsonl` to create a project map and top module draft pages;
-- uses `data/health/artifacts/latest.json` to create a quality map;
-- uses `data/testing/context.md` to create a testing map when available;
-- writes only draft pages;
-- refuses to overwrite existing pages unless `--force`;
+- uses `data/gdgraph/storage/*.jsonl` to derive, per top module: real inter-module
+  dependencies (depends on / depended on by, by name and count), key files ranked
+  by import connectivity, entry points, and exported symbols parsed from entry
+  files; plus a project map with the real module dependency graph;
+- uses `data/health/artifacts/latest.json` for a quality map and `data/testing/context.md`
+  for a testing map when available;
+- **module pages lead with prose placeholders** (`## Overview`, `## How it works`,
+  `## Key concepts`, `## Main flows`, marked `Draft -`) and put the graph-derived
+  facts under `## Reference (from code graph)`. The graph already provides lists;
+  the wiki is the understanding above them, filled by the enrich skill (§6.3a);
+- `--changed [--since <ref>]` regenerates only the module pages whose files changed
+  (via `git diff --name-only <since|HEAD>`) plus the project map, force-refreshing
+  those drafts. Deterministic and model-free — used by the post-commit hook (§9a);
+- writes only draft pages; refuses to overwrite unless `--force`. Even with
+  `--force`, pages a human accepted (`Status:` other than `draft`) or edited away
+  from the generated marker are left untouched;
 - refreshes `wiki/index.md` after collecting.
+
+### 6.3a enrich (agent skill, cheap model)
+
+Collect is deterministic and cannot write understanding. Enrichment — filling the
+prose sections — is a **skill workflow**, not a CLI command, run by an agent:
+
+- it is **bounded, mechanical synthesis** (read a module's key files, write
+  structured prose into fixed sections), so it runs on a **non-flagship / cheap
+  model** (e.g. Haiku, or Sonnet at most), dispatching **one subagent per page**;
+- procedure: list drafts (`grep -rl "Status: draft" .metaproject/wiki`), read the
+  page's `Reference -> Key files`, fill `## Overview` / `## How it works` /
+  `## Key concepts` / `## Main flows`, leave `## Reference` untouched, then set
+  `Status: accepted` and bump `Version` (which `--force` then preserves);
+- the protocol lives in the gdwiki skill under "Enriching Collected Drafts".
 
 ### 6.4 index
 
@@ -240,6 +265,23 @@ Ignored:
 - `.metaproject/data/gdwiki/link-check/`;
 - `.metaproject/data/gdwiki/artifacts/`;
 - transient generated reports.
+
+## 9a. Post-commit hook
+
+When gdwiki and the gdgraph post-commit hook are both enabled, a **non-mutating**
+`gdwiki-post-commit` block is installed. After a source-relevant commit
+(`src/`, `lib/`, `app/`, `packages/`, `services/`) it prints one reminder and
+writes nothing:
+
+```
+gd-metapro post-commit: wiki drafts may be stale; run 'gd-metapro wiki collect
+--changed --since HEAD~1', then enrich new drafts with the gdwiki skill on a
+non-flagship model
+```
+
+The hook never runs a model or mutates the tree: the deterministic refresh
+(`wiki collect --changed`) and the model-driven enrichment stay user-triggered,
+matching the repo-wide non-mutating hook policy.
 
 ## 10. Service Contract
 

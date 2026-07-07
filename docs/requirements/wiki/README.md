@@ -1,7 +1,7 @@
 # gdwiki requirements
 
-Version: 0.2.0
-Status: MVP implemented (Phase 1 and Phase 2 complete, Phase 3 in progress)
+Version: 0.3.0
+Status: Phases 1-2 complete; collect/enrich split shipped (see specification §6.3, §6.3a, §9a).
 
 `gdwiki` - модуль Metaproject для проектной базы знаний: от бизнес-логики и пользовательских сценариев до архитектуры, сервисов, компонентов, интеграций и known decisions.
 

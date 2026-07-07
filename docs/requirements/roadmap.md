@@ -26,7 +26,7 @@ registry to human-readable status and points at each module's requirements.
 | spec-orchestrator | `init`, `status`, `update`, `rules` (`sync`/`distill`), `dashboard`/`dash` | - | implemented | [spec-orchestrator/](spec-orchestrator/) |
 | gdgraph | `gd-metapro gdgraph` | `gdgraph` | implemented | [gdgraph/](gdgraph/) |
 | gdctx | `gd-metapro ctx` | `gdctx` | implemented | [gdctx/](gdctx/) |
-| gdwiki | `gd-metapro wiki` | `gdwiki` | implemented (MVP + collector) | [wiki/](wiki/) |
+| gdwiki | `gd-metapro wiki` | `gdwiki` | implemented (enriched collect + enrich skill) | [wiki/](wiki/) |
 | Documentation Memory | `gd-metapro memory` | `memory` | implemented (Phase 1 + 2) | [documentation-memory/](documentation-memory/) |
 | Task Manager | `gd-metapro flow` | `tasks` | implemented (Phase 1) | [task-manager/](task-manager/) |
 | Code Health | `gd-metapro health` | `health` | implemented (Phase 1 + 2) | [code-health/](code-health/) |
@@ -42,7 +42,9 @@ Shipped:
 
 - init scaffold: `wiki/<type>/`, `wiki/templates/`, `data/gdwiki/`, manifest, skill;
 - CLI: `gd-metapro wiki status | new | collect | index | check-links | validate`;
-- collector: `wiki collect` creates safe draft pages from gdgraph, health, and testing artifacts without overwriting human-authored pages unless `--force`;
+- collect (deterministic, no model): `wiki collect [--changed [--since <ref>]]` derives real per-module signals (dependencies, key files by connectivity, entry points, exported symbols) and writes prose-first drafts (`Overview`/`How it works`/`Key concepts`/`Main flows`) with graph facts under `## Reference`; safe-force protects accepted/edited pages; `--changed` refreshes only touched modules;
+- enrich (agent skill, cheap model): the gdwiki skill fills the prose sections on a non-flagship model (one subagent per page), then marks pages `accepted`;
+- non-mutating `gdwiki-post-commit` hook reminds to run `wiki collect --changed --since HEAD~1` and enrich on a cheap model;
 - versioned Markdown pages (8 page types) with required metadata;
 - managed `wiki/index.md` generation between markers;
 - internal link validation with report and non-zero exit on breakage;
