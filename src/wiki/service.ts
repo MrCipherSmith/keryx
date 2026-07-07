@@ -300,94 +300,246 @@ async function collectGraphWikiCandidates(
     return [];
   }
 
-  const moduleStats = new Map<string, { files: number; edges: number }>();
+  const fileToModule = new Map<string, string>();
+  const moduleFiles = new Map<string, string[]>();
   let nodes = 0;
   let files = 0;
   let assets = 0;
   for (const node of parseJsonl(await readFile(nodesPath, "utf8"))) {
     nodes += 1;
+    const nodePath = String(node.path ?? node.id ?? "unknown");
     if (node.kind === "asset") {
       assets += 1;
       continue;
     }
     files += 1;
-    const moduleName = moduleNameFromProjectPath(String(node.path ?? node.id ?? "unknown"));
-    const stats = moduleStats.get(moduleName) ?? { files: 0, edges: 0 };
-    stats.files += 1;
-    moduleStats.set(moduleName, stats);
+    const moduleName = moduleNameFromProjectPath(nodePath);
+    fileToModule.set(nodePath, moduleName);
+    const list = moduleFiles.get(moduleName) ?? [];
+    list.push(nodePath);
+    moduleFiles.set(moduleName, list);
   }
 
+  const fileIn = new Map<string, number>();
+  const fileOut = new Map<string, number>();
+  const moduleDeps = new Map<string, Map<string, number>>();
+  const moduleDependents = new Map<string, Map<string, number>>();
   let edges = 0;
   let imports = 0;
   let unresolved = 0;
   for (const edge of parseJsonl(await readFile(edgesPath, "utf8"))) {
     edges += 1;
-    if (edge.kind === "imports") {
-      imports += 1;
-    } else if (edge.kind === "unresolved") {
+    const kind = String(edge.kind ?? "");
+    if (kind === "unresolved") {
       unresolved += 1;
+      continue;
     }
-    const moduleName = moduleNameFromProjectPath(String(edge.from ?? "unknown"));
-    const stats = moduleStats.get(moduleName) ?? { files: 0, edges: 0 };
-    stats.edges += 1;
-    moduleStats.set(moduleName, stats);
+    if (kind === "imports") {
+      imports += 1;
+    }
+    const from = String(edge.from ?? "");
+    const to = String(edge.to ?? "");
+    fileOut.set(from, (fileOut.get(from) ?? 0) + 1);
+    fileIn.set(to, (fileIn.get(to) ?? 0) + 1);
+    const fromModule = fileToModule.get(from) ?? moduleNameFromProjectPath(from);
+    const toModule = fileToModule.get(to) ?? moduleNameFromProjectPath(to);
+    if (fromModule && toModule && fromModule !== toModule) {
+      bumpNestedCount(moduleDeps, fromModule, toModule);
+      bumpNestedCount(moduleDependents, toModule, fromModule);
+    }
   }
 
-  const topModules = [...moduleStats.entries()]
-    .map(([name, stats]) => ({ name, files: stats.files, edges: stats.edges }))
+  const topModules = [...moduleFiles.entries()]
+    .map(([name, list]) => ({ name, files: list.length, edges: sumCounts(moduleDeps.get(name)) }))
     .sort((a, b) => b.files - a.files || b.edges - a.edges)
     .slice(0, limit);
 
-  return [
-    {
-      type: "architecture",
-      slug: "project-map",
+  const architecture: WikiCollectCandidate = {
+    type: "architecture",
+    slug: "project-map",
+    title: "Project Map",
+    source: "gdgraph",
+    content: renderCollectedPage({
       title: "Project Map",
-      source: "gdgraph",
-      content: renderCollectedPage({
-        title: "Project Map",
-        type: "architecture",
-        generatedAt,
-        summary: `Generated from gdgraph: ${files} code files, ${assets} assets, ${edges} edges.`,
-        sections: [
-          ["Graph Snapshot", [
-            `- Nodes: ${nodes}`,
-            `- Code files: ${files}`,
-            `- Assets: ${assets}`,
-            `- Edges: ${edges}`,
-            `- Imports: ${imports}`,
-            `- Unresolved edges: ${unresolved}`,
-          ]],
-          ["Top Modules", topModules.length > 0
-            ? topModules.map((item) => `- \`${item.name}\` - ${item.files} files, ${item.edges} outgoing edges`)
-            : ["- No module stats available."]],
-          ["Related Code", topModules.map((item) => `- \`${item.name}/...\``)],
-        ],
-      }),
-    },
-    ...topModules.map((item): WikiCollectCandidate => ({
+      type: "architecture",
+      generatedAt,
+      summary: "Deterministic map of " + files + " code files, " + assets + " assets, and "
+        + edges + " import edges across " + moduleFiles.size + " top-level modules. "
+        + "Enrich each module page with the gdwiki skill.",
+      sections: [
+        ["Graph snapshot", [
+          "- Nodes: " + nodes,
+          "- Code files: " + files,
+          "- Assets: " + assets,
+          "- Edges: " + edges,
+          "- Imports: " + imports,
+          "- Unresolved edges: " + unresolved,
+        ]],
+        ["Largest modules", topModules.length > 0
+          ? topModules.map((item) => "- `" + item.name + "` - " + item.files + " files, " + item.edges + " cross-module imports")
+          : ["- No module stats available."]],
+        ["Module dependencies", topModules.length > 0
+          ? topModules.map((item) => {
+              const deps = topCounts(moduleDeps.get(item.name), 5);
+              return "- `" + item.name + "` -> " + (deps.length > 0
+                ? deps.map(([target]) => "`" + target + "`").join(", ")
+                : "(no cross-module imports)");
+            })
+          : ["- No dependency edges available."]],
+      ],
+    }),
+  };
+
+  const moduleCandidates: WikiCollectCandidate[] = [];
+  for (const item of topModules) {
+    const moduleName = item.name;
+    const moduleFileList = moduleFiles.get(moduleName) ?? [];
+    const keyFiles = moduleFileList
+      .map((file) => ({
+        file,
+        incoming: fileIn.get(file) ?? 0,
+        outgoing: fileOut.get(file) ?? 0,
+      }))
+      .sort((a, b) => (b.incoming + b.outgoing) - (a.incoming + a.outgoing))
+      .slice(0, 6);
+    const entryFiles = moduleFileList.filter((file) => /(^|\/)index\.[jt]sx?$/.test(file)).slice(0, 4);
+    const deps = topCounts(moduleDeps.get(moduleName), 6);
+    const dependents = topCounts(moduleDependents.get(moduleName), 6);
+    const readme = await readModuleReadme(cwd, moduleName);
+    const exportsFrom = entryFiles.length > 0 ? entryFiles : keyFiles.slice(0, 2).map((entry) => entry.file);
+    const exportNames = await extractModuleExports(cwd, exportsFrom);
+
+    const sections: Array<[string, string[]]> = [];
+    sections.push(["Responsibility", [
+      readme ?? "- TODO: describe what this module owns. Read the key files below and enrich with the gdwiki skill.",
+    ]]);
+    if (exportNames.length > 0) {
+      sections.push(["Public API", exportNames.map((name) => "- `" + name + "`")]);
+    }
+    if (keyFiles.length > 0) {
+      sections.push(["Key files", keyFiles.map((entry) =>
+        "- `" + entry.file + "` - imported by " + entry.incoming + ", imports " + entry.outgoing)]);
+    }
+    if (deps.length > 0) {
+      sections.push(["Depends on", deps.map(([target, count]) => "- `" + target + "` - " + count + " import(s)")]);
+    }
+    if (dependents.length > 0) {
+      sections.push(["Depended on by", dependents.map(([source, count]) => "- `" + source + "` - " + count + " import(s)")]);
+    }
+    if (entryFiles.length > 0) {
+      sections.push(["Entry points", entryFiles.map((file) => "- `" + file + "`")]);
+    }
+    sections.push(["Graph signals", [
+      "- Files: " + item.files,
+      "- Cross-module imports: " + item.edges,
+    ]]);
+
+    const summaryParts = ["`" + moduleName + "` groups " + item.files + " file(s)."];
+    if (deps.length > 0) {
+      summaryParts.push("Depends on " + deps.slice(0, 3).map(([target]) => "`" + target + "`").join(", ") + ".");
+    }
+    if (exportNames.length > 0) {
+      summaryParts.push("Exposes " + exportNames.length + " public symbol(s).");
+    }
+
+    moduleCandidates.push({
       type: "component",
-      slug: slugifyPath(item.name),
-      title: `Module ${item.name}`,
+      slug: slugifyPath(moduleName),
+      title: "Module " + moduleName,
       source: "gdgraph",
       content: renderCollectedPage({
-        title: `Module ${item.name}`,
+        title: "Module " + moduleName,
         type: "component",
         generatedAt,
-        summary: `Generated from gdgraph module statistics: ${item.files} files and ${item.edges} outgoing edges.`,
-        sections: [
-          ["Responsibility", [
-            "- Draft generated from graph shape. Replace this with human-owned module responsibility.",
-          ]],
-          ["Graph Signals", [
-            `- Files: ${item.files}`,
-            `- Outgoing edges: ${item.edges}`,
-          ]],
-          ["Related Code", [`- \`${item.name}/...\``]],
-        ],
+        summary: summaryParts.join(" "),
+        sections,
       }),
-    })),
-  ];
+    });
+  }
+
+  return [architecture, ...moduleCandidates];
+}
+
+function bumpNestedCount(map: Map<string, Map<string, number>>, key: string, inner: string): void {
+  const bucket = map.get(key) ?? new Map<string, number>();
+  bucket.set(inner, (bucket.get(inner) ?? 0) + 1);
+  map.set(key, bucket);
+}
+
+function sumCounts(bucket: Map<string, number> | undefined): number {
+  if (!bucket) {
+    return 0;
+  }
+  let total = 0;
+  for (const value of bucket.values()) {
+    total += value;
+  }
+  return total;
+}
+
+function topCounts(bucket: Map<string, number> | undefined, limit: number): Array<[string, number]> {
+  if (!bucket) {
+    return [];
+  }
+  return [...bucket.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+}
+
+async function readModuleReadme(cwd: string, moduleName: string): Promise<string | null> {
+  const readmePath = path.join(cwd, ...moduleName.split("/"), "README.md");
+  if (!(await pathExists(readmePath))) {
+    return null;
+  }
+  try {
+    const content = await readFile(readmePath, "utf8");
+    const paragraph = content
+      .split(/\n\s*\n/)
+      .map((block) => block.trim())
+      .find((block) => block.length > 0 && !block.startsWith("#"));
+    if (!paragraph) {
+      return null;
+    }
+    const normalized = paragraph.replace(/\s+/g, " ").slice(0, 400);
+    return "- " + normalized + " (from module README)";
+  } catch {
+    return null;
+  }
+}
+
+async function extractModuleExports(cwd: string, files: string[]): Promise<string[]> {
+  const names = new Set<string>();
+  const declRe = /export\s+(?:async\s+)?(?:default\s+)?(?:const|let|var|function|class|type|interface|enum)\s+([A-Za-z_$][\w$]*)/g;
+  const braceRe = /export\s*\{([^}]+)\}/g;
+  for (const file of files.slice(0, 4)) {
+    const filePath = path.join(cwd, ...file.split("/"));
+    if (!(await pathExists(filePath))) {
+      continue;
+    }
+    try {
+      const content = (await readFile(filePath, "utf8")).slice(0, 40_000);
+      let match: RegExpExecArray | null;
+      while ((match = declRe.exec(content)) !== null) {
+        if (match[1]) {
+          names.add(match[1]);
+        }
+      }
+      let brace: RegExpExecArray | null;
+      while ((brace = braceRe.exec(content)) !== null) {
+        for (const part of (brace[1] ?? "").split(",")) {
+          const raw = part.trim().split(/\s+as\s+/).pop();
+          const name = raw?.trim();
+          if (name && /^[A-Za-z_$][\w$]*$/.test(name) && name !== "default") {
+            names.add(name);
+          }
+        }
+      }
+    } catch {
+      // ignore unreadable entry files
+    }
+    if (names.size > 30) {
+      break;
+    }
+  }
+  return [...names].slice(0, 20);
 }
 
 async function collectHealthWikiCandidates(
@@ -491,6 +643,17 @@ async function writeCollectedPage(
   const exists = await pathExists(filePath);
   if (exists && !force) {
     return { path: relativePath, type: candidate.type, source: candidate.source, action: "skipped" };
+  }
+  // Even with --force, only regenerate pages that are still unmodified generated
+  // drafts. Once a human accepts (`Status:` other than draft) or edits away the
+  // generated marker, the page is theirs and is left untouched.
+  if (exists && force) {
+    const current = await readFile(filePath, "utf8");
+    const isUnmodifiedDraft =
+      /\nStatus:\s*draft\s*\n/.test(current) && current.includes("Generated by `gd-metapro wiki collect`");
+    if (!isUnmodifiedDraft) {
+      return { path: relativePath, type: candidate.type, source: candidate.source, action: "skipped" };
+    }
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });
