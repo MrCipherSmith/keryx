@@ -381,3 +381,51 @@ The module must not be silently disabled or weakened.
 - The local HMAC key and `data/security/raw/**` must never be committed; the
   module installs a gitignore block that enforces the artifact-lifecycle rules.
 
+
+## 15. Relationship to `security-audit`
+
+`security-audit` (a gdskills skill) and Metaproject Security are complementary
+and must not overlap:
+
+| Concern | Owner |
+|---|---|
+| Dependency vulnerabilities (npm/bun/yarn audit) | `security-audit` |
+| Secrets accidentally committed to git history | `security-audit` |
+| Container/image scanning | `security-audit` |
+| Agent input/output content (prompts, external text, tool output) | Metaproject Security |
+| Writes to memory / wiki / reports / task context | Metaproject Security |
+| Prompt injection, data exfiltration, egress control | Metaproject Security |
+| Policy model, redaction, incident trail | Metaproject Security |
+
+Hand-off: `security-audit` findings may be imported by Code Health as quality
+signals; they are **not** re-run by Metaproject Security. Metaproject Security
+never scans dependency trees or git history for committed secrets - that stays
+with `security-audit`. When both are enabled, the security skill points at
+`security-audit` for the dependency/commit surface and owns everything at the
+agent/artifact boundary.
+
+## 16. Implementation Phases
+
+### Phase 1 - deterministic core (service + scan)
+- `SecurityService` with rules + entropy detectors (provider keys, private-key
+  blocks, `.env` assignments, URL creds, JWT shape, high-entropy);
+- `security scan <path>` + finding/report schemas + `latest.md`/`latest.json`;
+- HMAC-keyed hashing, fixed-width masks, safe `redactedPreview` (§10a);
+- config load/validate + `configChecksum` (§14).
+
+### Phase 2 - checks, resolution, gate
+- `check-input` / `check-output` with source/target;
+- resolution precedence + confidence + gate (§7a);
+- PII detectors + `redact`;
+- prompt-injection + egress heuristics with low-confidence-`warn` escalation;
+- `report`, `policy validate`, `incidents`.
+
+### Phase 3 - write-seam integrations
+- in-process `check()` gates at memory ingest, wiki collect, testing publish,
+  gdctx large-output, and flow completion (§11);
+- advisory by default; `enforced`/`ci` opt-in.
+
+### Phase 4 - profiles, skill, hooks
+- Standard-profile wiring (§12); `skills/security/SKILL.md` (advisory vs enforced
+  per agent-protocol.md); optional CI gate;
+- optional model/API backends as plugins (non-standard).

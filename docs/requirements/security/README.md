@@ -2,7 +2,7 @@
 
 Version: 0.2.0
 
-Status: draft documentation package. Runtime implementation is not started.
+Status: review-hardened spec (v0.2.0), ready for implementation. Runtime not started; see specification.md §16 for phased breakdown.
 
 ## 1. Purpose
 

@@ -22,7 +22,7 @@
     },
     "gate": {
       "type": "string",
-      "enum": ["pass", "warn", "fail", "blocked"]
+      "enum": ["pass", "needs-approval", "fail"]
     },
     "rawRetention": {
       "type": "string",
