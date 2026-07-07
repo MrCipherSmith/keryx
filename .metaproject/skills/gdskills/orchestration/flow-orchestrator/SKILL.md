@@ -12,7 +12,7 @@ triggers:
   - "managed implementation"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "orchestration"
 license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
@@ -121,6 +121,7 @@ Required rules:
 - `.metaproject/rules/core/requirements-management.mdc`
 - `.metaproject/rules/core/implementation-plans.mdc`
 - `.metaproject/rules/core/subagent-context-construction.md`
+- `.metaproject/rules/core/subagent-status-protocol.md`
 - `.metaproject/rules/core/tdd-workflow.mdc`
 - `.metaproject/rules/core/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
@@ -155,22 +156,44 @@ Recommended worker routing:
 | `review` | `review-orchestrator` |
 | `docs` | `job-documenter`, `prd-creator`, or documentation-specific project skill |
 
-For every worker dispatch, pass only compact task context:
+### Worker communication is schema-governed
 
-```text
-FLOW_ID: <id>
-FLOW_DIR: .metaproject/flows/<dir>
-TASK_ID: <Tn>
-TASK_KIND: <context|test|implement|review|docs>
-CONTEXT_PATH: .metaproject/flows/<dir>/context.md
-PLAN_PATH: .metaproject/flows/<dir>/plan.md
-AC_PATH: .metaproject/flows/<dir>/acceptance-criteria.md
-RULES:
-- <only the relevant .metaproject/rules/core files>
-CONSTRAINTS:
-- Never edit flow.json.
-- Never edit frozen acceptance criteria directly.
-- Return a compact result with files changed, verification, and risks.
+Workers do not inherit session state; every dispatch is constructed explicitly
+(`.metaproject/rules/core/subagent-context-construction.md`). Each dispatch is a
+`subagent-dispatch` object
+(`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
+worker reply is a `subagent-result` object
+(`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
+line is `STATUS: <status>`
+(`.metaproject/rules/core/subagent-status-protocol.md`).
+
+Dispatch payload, bound to the flow (map `target_skill` from the routing table):
+
+```json
+{
+  "contract_version": "1.0.0",
+  "run_id": "<flow-id>",
+  "dispatch_id": "<flow-id>-<Tn>",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": { "title": "<Tn title>", "description": "<what to do>", "intent": "implement" },
+  "acceptance_criteria": ["<the frozen ACn lines this task must satisfy>"],
+  "context_refs": [
+    { "path": ".metaproject/flows/<dir>/context.md", "kind": "context", "exists": true },
+    { "path": ".metaproject/flows/<dir>/plan.md", "kind": "plan", "exists": true },
+    { "path": ".metaproject/flows/<dir>/acceptance-criteria.md", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": ["<only files gdgraph/gdctx narrowed to>"],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "Return a subagent-result; first line must be STATUS:."
+  ],
+  "allowed_actions": ["read", "write", "run-command", "git"],
+  "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/<dir>/journal.md" },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "<iso-utc>", "created_by": "flow-orchestrator" }
+}
 ```
 
 After a worker succeeds, the flow-orchestrator marks task progress:
@@ -184,6 +207,22 @@ If new work is discovered:
 ```bash
 gd-metapro flow task add <id> --title "<task>" --kind <kind>
 ```
+
+### Interpreting worker results (STATUS protocol)
+
+Read the worker's `STATUS:` line first; never infer the outcome from prose. A
+reply with no `STATUS:` line is treated as `NEEDS_CONTEXT` — re-request one
+properly formatted `subagent-result`.
+
+| Worker `status` | flow-orchestrator action |
+|---|---|
+| `DONE` | Accept. `gd-metapro flow task done <id> <Tn>`. Continue. |
+| `DONE_WITH_CONCERNS` | Accept, record every concern in `journal.md`, decide continue vs. add a fix task, then `flow task done`. Never silently drop concerns. |
+| `NEEDS_CONTEXT` | Do not fail. Enrich `context_refs`/`files_to_read` from gdgraph/gdctx/wiki/memory, then re-dispatch the same `dispatch_id`. |
+| `BLOCKED` | `gd-metapro flow block <id> --reason "<worker reason>"`; resolve or escalate one concise question, then `flow unblock` and re-dispatch. |
+| `FAILED` | Retry once with the same dispatch. If it fails again, block the flow and surface the error to the user. |
+
+Carry `run_id`/`dispatch_id` across retries so the flow journal stays traceable.
 
 ## Phase 3: Verification And Review
 
@@ -243,6 +282,25 @@ Finish with:
 - acceptance criteria evidence summary;
 - verification/review results;
 - unresolved risks or blocked gates.
+
+## Contracts
+
+flow-orchestrator communicates through explicit schemas, not free prose:
+
+| Direction | Schema |
+|---|---|
+| Skill input | `skills/gdskills/orchestration/flow-orchestrator/input-contract.schema.json` |
+| Skill output | `skills/gdskills/orchestration/flow-orchestrator/output-contract.schema.json` |
+| Worker dispatch | `core/gdskills/contracts/subagent-dispatch.schema.json` |
+| Worker result | `core/gdskills/contracts/subagent-result.schema.json` |
+| Durable flow state | `.metaproject/flows/<id>/flow.json` (CLI-owned; never agent-written) |
+
+Validate a concrete worker message before trusting it:
+
+```bash
+gd-metapro skills contracts validate <file> --schema subagent-dispatch
+gd-metapro skills contracts validate <file> --schema subagent-result
+```
 
 ## Boundaries
 

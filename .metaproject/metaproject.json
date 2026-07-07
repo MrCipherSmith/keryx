@@ -101,7 +101,24 @@
       ]
     },
     "tasks": {
-      "enabled": false
+      "enabled": true,
+      "core": ".metaproject/flows",
+      "data": ".metaproject/data/tasks",
+      "manifest": ".metaproject/modules/tasks.md",
+      "commands": [
+        "init",
+        "list",
+        "status",
+        "freeze",
+        "start",
+        "task",
+        "ac",
+        "implemented",
+        "complete",
+        "block",
+        "unblock",
+        "check"
+      ]
     },
     "health": {
       "enabled": true,

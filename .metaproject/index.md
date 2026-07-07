@@ -17,6 +17,7 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 | health | Code quality aggregation, scoring, and quality gate | modules/health.md |
 | testing | Test context, related tests, execution reports, and test intelligence | modules/testing.md |
 | memory | Long-lived project memory: lessons, decisions, constraints, known mistakes | modules/memory.md |
+| tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |
 ## Rules
 
 | Source | Purpose | Entry |
@@ -35,6 +36,8 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 | health | Read data/health/artifacts/latest.md before claiming quality status or gate results | skills/health/SKILL.md |
 | testing | Read testing context before creating/changing tests and normalized reports before raw test logs | skills/testing/SKILL.md |
 | memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |
+| flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |
+| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + PR/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |
 
 ## Agent Workflow
 
@@ -50,10 +53,11 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 10. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `gd-metapro health run`; do not claim quality status from raw logs.
 11. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
 12. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `gd-metapro memory search` before broad documentation reads.
-13. Use relevant skills from `skills/`.
-14. Use module manifests before reading raw generated data.
-15. Prefer curated artifacts in `data/*/artifacts`.
-16. Run module CLI commands when generated data is stale.
+13. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
+14. Use relevant skills from `skills/`.
+15. Use module manifests before reading raw generated data.
+16. Prefer curated artifacts in `data/*/artifacts`.
+17. Run module CLI commands when generated data is stale.
 
 ## Data
 
@@ -73,6 +77,7 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 - `memory/index.md`
 - `data/memory/index/index.json`
 - `data/memory/artifacts/latest.md`
+- `flows/` (flow packages)
 
 ## Refresh
 
