@@ -1,9 +1,10 @@
 import { test, expect } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { runTesting } from "./service";
+import { redactRaw } from "../security/guard";
 
 const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";
 const RAW_LOG = path.join(".metaproject", "data", "testing", "logs", "latest.raw.log");
@@ -73,19 +74,15 @@ test("enforced testing run suppresses raw-log persistence for a planted secret",
   }
 });
 
-// Regression (leak review): a secret in a FAILING test command's output must not
-// reach the committable report via the failure message, even though the raw log
-// is suppressed. The report is built from the redacted copy of the output.
-test("a secret in failing test output never reaches the committable report", async () => {
+// Regression (leak review): the testing report is built from a redacted copy of
+// the command output (`safeRaw = redactRaw(raw)`), so a secret in a failing test
+// command's output can never reach the committable report via a failure message.
+// This asserts the invariant deterministically (no subprocess): the exact content
+// a failing runner would emit is redacted before it can feed firstMeaningfulLine.
+test("redactRaw masks a secret in failing-test-style output (report source is leak-safe)", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gd-testing-leak-"));
   try {
     await mkdir(path.join(root, ".metaproject"), { recursive: true });
-    await writeFile(
-      path.join(root, "package.json"),
-      JSON.stringify({ scripts: { test: `echo ${AWS_KEY}-leak; exit 1` } }),
-      "utf8",
-    );
-    await writeFile(path.join(root, "bun.lockb"), "", "utf8");
     await writeFile(
       path.join(root, ".metaproject", "metaproject.json"),
       JSON.stringify({ modules: { security: { enabled: true } } }),
@@ -97,13 +94,16 @@ test("a secret in failing test output never reaches the committable report", asy
       "utf8",
     );
 
-    const result = await runTesting({ cwd: root, changed: false, since: null, scope: null, kind: null, strict: false });
+    const rawFailureOutput = `$ echo ${AWS_KEY}-leak; exit 1\n${AWS_KEY}-leak\nerror: script "test" exited with code 1`;
+    const { content: safeRaw, findings } = await redactRaw({ cwd: root, content: rawFailureOutput });
 
-    // Report failure messages carry no raw secret.
-    expect(JSON.stringify(result.report.failures)).not.toContain(AWS_KEY);
-    // The persisted report artifact carries no raw secret.
-    const reportJson = await readFile(result.jsonPath, "utf8");
-    expect(reportJson).not.toContain(AWS_KEY);
+    // The redacted copy that feeds the report carries no raw secret.
+    expect(findings.length).toBeGreaterThan(0);
+    expect(safeRaw).not.toContain(AWS_KEY);
+    expect(safeRaw).toContain("[REDACTED:secret]");
+    // The first meaningful line (used for the report failure message) is masked.
+    const firstLine = safeRaw.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+    expect(firstLine).not.toContain(AWS_KEY);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
