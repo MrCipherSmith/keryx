@@ -30,6 +30,7 @@ export const style = {
 
 export const symbols = {
   ok: "✓",
+  cross: "✗",
   off: "·",
   arrow: "→",
   bullet: "•",

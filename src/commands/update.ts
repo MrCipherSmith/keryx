@@ -37,6 +37,7 @@ import {
   renderWikiPageTemplate,
 } from "../wiki/templates";
 import { pathExists } from "../lib/fs";
+import { banner, heading, note, statusLine, style, symbols, nextSteps } from "../lib/ui";
 import {
   renderGdctxCoreReadme,
   renderGdctxConfig,
@@ -117,8 +118,13 @@ export async function updateCommand(args: string[] = []): Promise<void> {
 
   const projectRoot = process.cwd();
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  banner(
+    "gd-metapro update",
+    `Refreshing the .metaproject workspace in ${path.basename(projectRoot)}/`,
+  );
   if (!(await pathExists(metaprojectRoot))) {
-    console.error("Metaproject is not initialized. Run: gd-metapro init");
+    console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
+    console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("gd-metapro init")} first.`);
     process.exitCode = 1;
     return;
   }
@@ -127,20 +133,62 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     await updateRuntime(projectRoot);
   }
 
-  await refreshServiceFiles(projectRoot, options);
-  console.log("Updated .metaproject service files without touching data artifacts.");
+  const summary = await refreshServiceFiles(projectRoot, options);
 
+  heading("Refreshed service files");
+  note("Data artifacts were left untouched.");
+  if (summary.recoveredManifest) {
+    console.log(`  ${style.yellow(symbols.ok)} Recovered metaproject.json from existing service/data folders.`);
+  }
+  if (summary.backfilledTasks) {
+    console.log(
+      `  ${style.yellow(symbols.ok)} Backfilled Task Manager (flows/, skills/flow, modules/tasks.md, manifest entry).`,
+    );
+  }
+  statusLine("gdgraph", summary.modules.gdgraph);
+  statusLine("gdctx", summary.modules.gdctx);
+  statusLine("gdwiki", summary.modules.gdwiki);
+  statusLine(
+    "gdskills",
+    summary.modules.gdskills,
+    summary.modules.gdskills ? `profile: ${summary.gdskillsProfile}` : undefined,
+  );
+  statusLine("health", summary.modules.health);
+  statusLine("testing", summary.modules.testing);
+  statusLine("memory", summary.modules.memory);
+  statusLine("tasks", summary.modules.tasks);
+
+  const steps: string[] = [];
   if (options.hooks) {
     await runPostUpdateHooks(projectRoot);
   } else {
-    console.log("Post-update hooks skipped. Use `gd-metapro update --hooks` to run them explicitly.");
+    steps.push(`Run ${style.cyan("gd-metapro update --hooks")} to run post-update hooks.`);
   }
+  steps.push(`Read ${style.cyan(".metaproject/index.md")} for the current module map.`);
+  nextSteps(steps);
 }
 
-async function refreshServiceFiles(projectRoot: string, options: UpdateOptions): Promise<void> {
+type RefreshSummary = {
+  modules: {
+    gdgraph: boolean;
+    gdctx: boolean;
+    gdwiki: boolean;
+    gdskills: boolean;
+    health: boolean;
+    testing: boolean;
+    memory: boolean;
+    tasks: boolean;
+  };
+  gdskillsProfile: GdskillsProfile;
+  backfilledTasks: boolean;
+  recoveredManifest: boolean;
+};
+
+async function refreshServiceFiles(projectRoot: string, options: UpdateOptions): Promise<RefreshSummary> {
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
+  const recoveredManifest = !manifestState.exists || !manifestState.valid;
   if (manifestState.migrated) {
     await writeFile(path.join(metaprojectRoot, "metaproject.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   }
@@ -331,15 +379,27 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableMemory,
       enableTasks,
     });
-    console.log("Recovered .metaproject/metaproject.json from existing service/data folders.");
   } else if (backfillTasks) {
     await enableTasksInManifest(metaprojectRoot);
-    console.log(
-      "Task Manager (tasks) module was missing - backfilled: flows/, skills/flow, modules/tasks.md, manifest entry. Use `gd-metapro update --no-tasks` to skip.",
-    );
   }
 
   await updateManifestAgentEntrypoints(metaprojectRoot, ruleSources);
+
+  return {
+    modules: {
+      gdgraph: enableGdgraph,
+      gdctx: enableGdctx,
+      gdwiki: enableGdwiki,
+      gdskills: enableGdskills,
+      health: enableHealth,
+      testing: enableTesting,
+      memory: enableMemory,
+      tasks: enableTasks,
+    },
+    gdskillsProfile,
+    backfilledTasks: backfillTasks,
+    recoveredManifest,
+  };
 }
 
 export async function buildDashboard(projectRoot: string = process.cwd()): Promise<DashboardBuildResult> {
@@ -577,7 +637,7 @@ async function collectMarkdownPages(root: string, hrefPrefix: string): Promise<A
   const pages: Array<{ title: string; href: string; group: string }> = [];
   for (const filePath of files.slice(0, 40)) {
     const relativePath = path.relative(root, filePath).split(path.sep).join("/");
-    if (relativePath.startsWith("templates/")) {
+    if (relativePath === "index.md" || relativePath.startsWith("templates/")) {
       continue;
     }
     const content = await readFile(filePath, "utf8");
