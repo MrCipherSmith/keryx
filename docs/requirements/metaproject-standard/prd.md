@@ -76,7 +76,7 @@ versioned, local-only or CI-published.
 
 ### R6. Validation
 
-The reference implementation must eventually provide:
+The reference implementation provides:
 
 ```bash
 gd-metapro standard validate
@@ -84,8 +84,12 @@ gd-metapro standard doctor
 gd-metapro standard capabilities
 ```
 
-The first documentation phase only specifies these commands; implementation is
-future work.
+These commands are implemented in the reference CLI (`src/standard/` and
+`src/commands/standard.ts`): `validate` checks a workspace against the bundled
+`metaproject.schema.json`/`module.schema.json` plus profile rules and exits
+non-zero on failure, `doctor` reports the same findings as actionable fixes, and
+`capabilities` prints the standard version, active profiles, and enabled modules
+from `metaproject.json`.
 
 ## 5. Success Criteria
 

@@ -19,8 +19,9 @@ gd-metapro security report
 gd-metapro dashboard build
 ```
 
-`standard validate` is planned and not yet implemented in the reference CLI.
-Until then, CI can run module-specific commands directly.
+`standard validate` is implemented in the reference CLI: it exits non-zero when
+the workspace is non-compliant, so CI can fail fast before running the
+module-specific steps.
 
 ## 3. Artifact Locations
 

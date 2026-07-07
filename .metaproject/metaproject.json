@@ -184,5 +184,13 @@
       "CLAUDE.md"
     ],
     "metaproject": ".metaproject/index.md"
-  }
+  },
+  "standardVersion": "0.1.0",
+  "profiles": [
+    "minimal",
+    "agent",
+    "ci",
+    "full"
+  ],
+  "updatedAt": "2026-07-07T17:34:05.854Z"
 }

@@ -10,6 +10,7 @@ import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
 import { flowCommand } from "./commands/flow";
 import { rulesCommand } from "./commands/rules";
+import { standardCommand } from "./commands/standard";
 import { statusCommand } from "./commands/status";
 import { modulesCommand } from "./commands/modules";
 import { updateCommand } from "./commands/update";
@@ -112,6 +113,11 @@ export async function main(): Promise<void> {
     return;
   }
 
+  if (command === "standard") {
+    await standardCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -163,6 +169,9 @@ Usage:
   gd-metapro flow list
   gd-metapro flow status <id>
   gd-metapro flow complete <id> [--comment]
+  gd-metapro standard validate
+  gd-metapro standard doctor
+  gd-metapro standard capabilities
   gd-metapro --version
 
 Commands:
@@ -181,6 +190,7 @@ Commands:
   test      Analyze testing context and normalize test reports
   memory    Store and search long-term project memory
   flow      Agent-first flow lifecycle (Task Manager)
+  standard  Validate the workspace against the Metaproject Standard
 `);
 }
 

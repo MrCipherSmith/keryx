@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "id": "002",
+  "slug": "metaproject-standard-v01",
+  "title": "Implement Metaproject Standard v0.1: standard command + manifest fields",
+  "status": "in-progress",
+  "createdAt": "2026-07-07T17:16:50.696Z",
+  "updatedAt": "2026-07-07T17:36:34.255Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:61ab730961b7cab88db72a0ba8844c9a9e796be52f62c609e7a232f384c91cf0",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo"
+    },
+    {
+      "id": "T5",
+      "title": "src/standard/ module: bundled schemas + validator + profile eval + capabilities",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "src/commands/standard.ts (validate/doctor/capabilities) + cli.ts wiring + printHelp",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "Docs: cli-reference + README + standard spec status",
+      "kind": "docs",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-07T17:16:50.696Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-07T17:19:42.860Z",
+      "event": "task-added",
+      "detail": "T5: src/standard/ module: bundled schemas + validator + profile eval + capabilities"
+    },
+    {
+      "at": "2026-07-07T17:19:42.906Z",
+      "event": "task-added",
+      "detail": "T6: src/commands/standard.ts (validate/doctor/capabilities) + cli.ts wiring + printHelp"
+    },
+    {
+      "at": "2026-07-07T17:19:42.954Z",
+      "event": "task-added",
+      "detail": "T7: Docs: cli-reference + README + standard spec status"
+    },
+    {
+      "at": "2026-07-07T17:19:49.355Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-07T17:19:49.402Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-07T17:19:49.449Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-07T17:36:33.757Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-07T17:36:33.884Z",
+      "event": "task-done",
+      "detail": "T5: src/standard/ module: bundled schemas + validator + profile eval + capabilities"
+    },
+    {
+      "at": "2026-07-07T17:36:34.017Z",
+      "event": "task-done",
+      "detail": "T6: src/commands/standard.ts (validate/doctor/capabilities) + cli.ts wiring + printHelp"
+    },
+    {
+      "at": "2026-07-07T17:36:34.132Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-07T17:36:34.255Z",
+      "event": "task-done",
+      "detail": "T7: Docs: cli-reference + README + standard spec status"
+    }
+  ]
+}
