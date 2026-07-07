@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.8.8
+Version: 0.8.9
 
 ## 1. Purpose
 
@@ -105,8 +105,8 @@ Recent technical-feedback fixes shipped in the current implementation track:
   deterministic; complexity remains token-based but nested function bodies are
   counted separately from their parent function; default generated/static
   ignores are additive with local config, ignored findings are filtered after
-  source parsing, and the dashboard explains score/risk/gate plus report-quality
-  warnings;
+  source parsing, and the dashboard explains score/risk/gate, P-priority
+  meanings, score formula, recommended fix order and report-quality warnings;
 - Git hooks: `gd-metapro update --hooks` updates only marked managed blocks and
   preserves existing user hook content;
 - CLI parsing: first command slice migrated to the shared `parseArgs` helper.

@@ -1,7 +1,7 @@
 # Code Health: technical specification
 
-Version: 0.8.4
-Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation with nested function bodies counted separately; full AST precision deferred. Dashboard diagnostics, additive ignore defaults, and post-parse ignored finding filtering are shipped for large frontend projects.
+Version: 0.8.5
+Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation with nested function bodies counted separately; full AST precision deferred. Dashboard priority legend, score formula, recommendations, diagnostics, additive ignore defaults, and post-parse ignored finding filtering are shipped for large frontend projects.
 
 ## 1. Purpose
 
@@ -359,7 +359,10 @@ result, and `schemaVersion`.
 The HTML dashboard reads `latest.json` and must show:
 
 - score, gate, findings, risk, LOC, max complexity and unmapped finding count;
-- risk breakdown by priority (`count * weight`);
+- score formula and risk breakdown by priority (`count * weight`);
+- P0/P1/P2/P3 legend with meanings, typical signals and default action;
+- recommended “what to fix first” actions based on blockers, high-priority
+  findings, top risky scopes/files, missing tests and missing coverage;
 - finding breakdown by source;
 - data-quality warnings for generated/static scopes in findings, missing
   coverage, configured-but-failed sources and findings without file paths.

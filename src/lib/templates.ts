@@ -511,6 +511,24 @@ export function renderMetaprojectDashboardHtml({
             </tr>`).join("") ?? "";
   const healthWarnings = health?.dataQualityWarnings.map((warning) => `
             <div class="diag ${escapeHtml(warning.tone)}">${escapeHtml(warning.message)}</div>`).join("") ?? "";
+  const healthPriorityRows = [
+    ["P0", "Blocker", "Failing tests, TypeScript errors, critical/high dependency issues. Gate fails by default.", "Fix before merge/release."],
+    ["P1", "High", "Serious lint/security/coverage signals. Usually not gate-blocking by default, but should be handled quickly.", "Fix in the current workstream."],
+    ["P2", "Medium", "Maintainability and warning-level debt such as complexity over threshold.", "Prioritize by affected scope and churn."],
+    ["P3", "Info", "Advisory signals and low-risk observations.", "Track or batch later."],
+  ].map(([priority, meaning, examples, action]) => `
+            <tr>
+              <td>${priority}</td>
+              <td>${meaning}</td>
+              <td>${examples}</td>
+              <td>${action}</td>
+            </tr>`).join("");
+  const healthActionItems = health ? healthRecommendedActions(health).map((item) => `
+            <div class="fix ${escapeHtml(item.tone)}">
+              <b>${escapeHtml(item.title)}</b>
+              <p>${escapeHtml(item.detail)}</p>
+              <code>${escapeHtml(item.command)}</code>
+            </div>`).join("") : "";
   const healthScopes = health?.scopes.map((scope) => `
             <tr class="health-row" data-search="${escapeHtml(`${scope.name} ${scope.kind} ${scope.score} ${scope.findings} ${scope.risk} ${scope.complexity ?? ""}`)}">
               <td>${escapeHtml(scope.name)}</td>
@@ -743,6 +761,11 @@ export function renderMetaprojectDashboardHtml({
     .diag.good { color:var(--good); background:var(--good-bg); border-color:transparent; }
     .diag.warn { color:var(--warn); background:var(--warn-bg); border-color:transparent; }
     .diag.bad { color:var(--bad); background:var(--bad-bg); border-color:transparent; }
+    .fix { display:grid; gap:5px; border:1px solid var(--line); border-left:3px solid var(--faint); border-radius:9px; padding:10px 11px; margin:0 0 8px; background:var(--panel); }
+    .fix.good { border-left-color:var(--good); } .fix.warn { border-left-color:var(--warn); } .fix.bad { border-left-color:var(--bad); }
+    .fix b { font-size:12px; }
+    .fix p { margin:0; color:var(--muted); font-size:12px; }
+    .fix code { display:block; width:100%; overflow:auto; font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:5px 8px; }
     .empty { color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:16px; background:var(--panel2); font-size:13px; }
     .empty code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink); }
     .empty-state { display:grid; gap:10px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:16px; background:var(--panel2); }
@@ -852,10 +875,23 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
           <div class="health-explain">
             <div>
               <h3>Why this score?</h3>
-              <p>Risk is the weighted sum of findings. The numeric score is normalized by LOC; the gate is stricter and can fail on blocker priorities even when module scores look high.</p>
+              <p>Formula: risk = P0*100 + P1*20 + P2*5 + P3*1. Score = clamp(100 - ((risk + coverage penalty + complexity penalty) * 1000 / max(LOC, 1000)), 0, 100). Gate is stricter than score and can fail on blockers even when module scores look high.</p>
               <div class="table-wrap compact"><table data-gdm-table="health-risk">
                 <thead><tr><th><button type="button" data-sort-col="0">Priority</button></th><th><button type="button" data-sort-col="1">Findings</button></th><th><button type="button" data-sort-col="2">Weight</button></th><th><button type="button" data-sort-col="3">Risk</button></th></tr></thead>
                 <tbody>${healthRiskRows || `<tr><td colspan="4">No risk rows.</td></tr>`}</tbody>
+              </table></div>
+            </div>
+            <div>
+              <h3>What to fix first</h3>
+              ${healthActionItems || `<div class="fix good"><b>No immediate action</b><p>No blocking or warning-level action was inferred from the latest report.</p><code>gd-metapro health status</code></div>`}
+            </div>
+          </div>
+          <div class="health-explain">
+            <div>
+              <h3>Priority legend</h3>
+              <div class="table-wrap compact"><table>
+                <thead><tr><th>Priority</th><th>Meaning</th><th>Typical signals</th><th>Default action</th></tr></thead>
+                <tbody>${healthPriorityRows}</tbody>
               </table></div>
             </div>
             <div>
@@ -1257,6 +1293,70 @@ function buildDashboardAttention({
   }
 
   return items.slice(0, 8);
+}
+
+function healthRecommendedActions(
+  health: NonNullable<MetaprojectDashboardData["health"]>,
+): Array<{ tone: string; title: string; detail: string; command: string }> {
+  const actions: Array<{ tone: string; title: string; detail: string; command: string }> = [];
+  const topScope = health.scopes[0];
+  const topFile = health.files[0];
+  const tests = health.sources.find((source) => source.source === "tests");
+  const coverage = health.sources.find((source) => source.source === "coverage");
+
+  if (health.p0 > 0) {
+    actions.push({
+      tone: "bad",
+      title: "Fix P0 blockers first",
+      detail: `${health.p0} blocker finding(s) are present. Gate is expected to fail until these are resolved.`,
+      command: topFile ? `gd-metapro health explain ${topFile.name}` : "gd-metapro health run",
+    });
+  } else if (health.p1 > 0) {
+    actions.push({
+      tone: "warn",
+      title: "Clear high-priority P1 findings",
+      detail: `${health.p1} high-priority finding(s) remain. They may not fail the gate by default, but should be handled before expanding scope.`,
+      command: topFile ? `gd-metapro health explain ${topFile.name}` : "gd-metapro health status",
+    });
+  }
+
+  if (health.p2 > 0 && topScope) {
+    actions.push({
+      tone: "warn",
+      title: `Reduce complexity in ${topScope.name}`,
+      detail: `${topScope.findings} finding(s), risk ${topScope.risk}. Start with the top files table and split branch-heavy functions into smaller helpers.`,
+      command: `gd-metapro health explain ${topScope.name}`,
+    });
+  }
+
+  if (topFile) {
+    actions.push({
+      tone: topFile.risk >= 50 ? "bad" : "warn",
+      title: "Inspect the highest-risk file",
+      detail: `${topFile.name} has ${topFile.findings} finding(s), risk ${topFile.risk}, max complexity ${topFile.complexity ?? "-"}.`,
+      command: `gd-metapro health explain ${topFile.name}`,
+    });
+  }
+
+  if (tests && tests.status === "missing") {
+    actions.push({
+      tone: "warn",
+      title: "Connect testing evidence",
+      detail: "The health report did not import or run a compatible testing report, so the score does not prove tests are green.",
+      command: "gd-metapro test run && gd-metapro health run",
+    });
+  }
+
+  if (coverage && coverage.status === "missing") {
+    actions.push({
+      tone: "warn",
+      title: "Connect coverage evidence",
+      detail: "Coverage is missing, so the score does not reflect test coverage risk.",
+      command: "gd-metapro health sources",
+    });
+  }
+
+  return actions.slice(0, 5);
 }
 
 function metricBadge(value: number | string, tone: string): string {

@@ -78,6 +78,10 @@ test("build refreshes dashboard from existing data without touching data artifac
     expect(dashboard).toContain("<b>1</b><span>files</span>");
     expect(dashboard).toContain("What needs attention");
     expect(dashboard).toContain("Why this score?");
+    expect(dashboard).toContain("Formula: risk = P0*100 + P1*20 + P2*5 + P3*1");
+    expect(dashboard).toContain("Priority legend");
+    expect(dashboard).toContain("What to fix first");
+    expect(dashboard).toContain("Fix P0 blockers first");
     expect(dashboard).toContain("Report diagnostics");
     expect(dashboard).toContain("Generated/static scopes are present");
     expect(dashboard).toContain("unmapped findings");

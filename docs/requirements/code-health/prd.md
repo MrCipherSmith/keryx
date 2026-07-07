@@ -1,6 +1,6 @@
 # Code Health: PRD
 
-Version: 0.2.1
+Version: 0.2.2
 Status: production-ready scope frozen (see [specification.md](specification.md) section 2 and [brainstorm.md](brainstorm.md) section 5)
 
 ## 1. Purpose
@@ -111,5 +111,5 @@ Mitigations:
 - Optional lightweight hooks only.
 - Source status and command provenance in every report.
 - Critical findings always visible independent of aggregate score.
-- Dashboard explains score/risk/gate separately and warns when reports contain generated/static scopes, missing coverage, failed sources, or findings without file paths.
+- Dashboard explains score/risk/gate separately, documents P0/P1/P2/P3 meanings and score formula, recommends what to fix first, and warns when reports contain generated/static scopes, missing coverage, failed sources, or findings without file paths.
 - `gdskills` learning requires source/provenance/confidence and respects protected manual sections.
