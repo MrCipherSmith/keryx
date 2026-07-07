@@ -1,6 +1,6 @@
 # Metaproject Security Artifact Lifecycle
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## 1. Purpose
 
@@ -75,5 +75,11 @@ Reports must not include:
 - full prompts;
 - full memory entries;
 - unredacted PII;
-- complete raw logs with credentials.
+- complete raw logs with credentials;
+- plain (unkeyed) hashes of secrets or PII.
+
+Hashes, when kept, must be **HMAC-keyed with a local-only key** and stay in
+local-only reports (see specification.md section 10a). A plain digest of a
+small-space value (short code, email, internal id) is brute-forceable and counts
+as a leak, so it is never written to committable artifacts.
 

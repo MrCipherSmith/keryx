@@ -1,6 +1,6 @@
 # Metaproject Security Policies
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## 1. Purpose
 
@@ -56,6 +56,11 @@ Detect untrusted content that asks the agent to:
 
 Default action: `require-approval`.
 
+Injection heuristics default to **low confidence**: a lone injection signal is
+`warn`. It escalates to `require-approval`/`block` only when combined with an
+`egress` signal (an instruction to send private data outside approved channels).
+This keeps false positives from blocking normal agent work.
+
 ### egress.default
 
 Detect attempts to publish:
@@ -89,4 +94,5 @@ External content is data, not instruction.
 | `high` | likely credential/PII leak or high-confidence injection. |
 | `medium` | sensitive artifact risk requiring redaction or approval. |
 | `low` | weak signal or informational policy warning. |
+| `info` | advisory-only signal; never gates. |
 

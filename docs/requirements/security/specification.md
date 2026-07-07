@@ -99,7 +99,9 @@ persisting raw content.
     "entropy": { "enabled": true },
     "piiModel": { "enabled": false, "provider": "custom" },
     "externalApi": { "enabled": false }
-  }
+  },
+  "gate": { "failOn": "critical", "minConfidence": 0.5 },
+  "configChecksum": "<sha256 of the normalized policies block; see section 14>"
 }
 ```
 

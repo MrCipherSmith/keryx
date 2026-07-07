@@ -33,7 +33,7 @@ registry to human-readable status and points at each module's requirements.
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
 | Metaproject Standard | future `gd-metapro standard` | - | draft spec package | [metaproject-standard/](metaproject-standard/) |
-| Metaproject Security | future `gd-metapro security` | `security` | draft spec package | [security/](security/) |
+| Metaproject Security | future `gd-metapro security` | `security` | draft spec v0.2.0 (hardened: service contract, gate, redaction/hashing safety) | [security/](security/) |
 
 ## 4. gdwiki (implemented, MVP + collector)
 
