@@ -3,9 +3,9 @@
   "id": "002",
   "slug": "metaproject-standard-v01",
   "title": "Implement Metaproject Standard v0.1: standard command + manifest fields",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-07-07T17:16:50.696Z",
-  "updatedAt": "2026-07-07T18:14:54.713Z",
+  "updatedAt": "2026-07-07T18:15:40.476Z",
   "source": {
     "type": "description",
     "ref": null
@@ -87,7 +87,7 @@
       "id": "T8",
       "title": "Add minimal CI (.github/workflows/ci.yml) to satisfy PR-checks completion gate",
       "kind": "implement",
-      "status": "todo"
+      "status": "done"
     }
   ],
   "history": [
@@ -207,6 +207,20 @@
       "at": "2026-07-07T18:14:54.713Z",
       "event": "task-added",
       "detail": "T8: Add minimal CI (.github/workflows/ci.yml) to satisfy PR-checks completion gate"
+    },
+    {
+      "at": "2026-07-07T18:15:11.656Z",
+      "event": "task-done",
+      "detail": "T8: Add minimal CI (.github/workflows/ci.yml) to satisfy PR-checks completion gate"
+    },
+    {
+      "at": "2026-07-07T18:15:37.717Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-07T18:15:40.476Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

@@ -43,3 +43,6 @@
 - Adversarial review finding (fixed): `evaluateProfiles` reported `agent` satisfied on any workspace because it matched the always-created `skills/project-rules/` folder. Fixed in `src/standard/profiles.ts` (require an enabled AGENT_MODULE) + regression test.
 - COMPLETION GATE BLOCKER (open): `flow complete` fails only the `pull-request` gate — the repo has no `.github/workflows/`, so PR #4 has 0 checks and `github tracker` (`gh pr checks`, exitCode===0) reads "no checks" as not-green. Environmental, not a code defect. Awaiting user decision: (A) add minimal CI so the PR gets a green check [recommended; matches ci-protocol.md], (B) merge PR manually then close the flow, or (C) leave at implemented until CI exists.
 - 2026-07-07T18:14:54.713Z - task-added: T8: Add minimal CI (.github/workflows/ci.yml) to satisfy PR-checks completion gate
+- 2026-07-07T18:15:11.656Z - task-done: T8: Add minimal CI (.github/workflows/ci.yml) to satisfy PR-checks completion gate
+- 2026-07-07T18:15:37.717Z - completing
+- 2026-07-07T18:15:40.476Z - done: all gates passed
