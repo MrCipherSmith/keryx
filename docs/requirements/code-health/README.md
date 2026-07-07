@@ -7,7 +7,7 @@ Status: Phase 1 + Phase 2 complete (module implemented). Sonar adapter, complexi
 
 ## Статус
 
-Phase 1 реализована: модуль `src/health/` (адаптеры Core-5, scoring, gate, baseline, метрики churn/complexity), CLI `gd-metapro health run|status|gate|sources|explain|baseline update`, интеграция в `gd-metapro init` (`--no-health`, `health.config.json`, manifest, skill). Decoupled-контракт findings (`data/health/artifacts/latest.json`) для `gd-metapro skills learn --from-health`.
+Phase 1 реализована: модуль `src/health/` (адаптеры Core-5, scoring, gate, baseline, метрики churn/complexity), CLI `gd-metapro health run|status|gate|sources|explain|baseline update|trend`, интеграция в `gd-metapro init` (`--no-health`, `health.config.json`, manifest, skill). Decoupled-контракт findings (`data/health/artifacts/latest.json`) для `gd-metapro skills learn --from-health`.
 
 Phase 2 (завершена): skill-owned scope (`scope.skill` + `skills learn --from-health` loop), directory-level component scopes, SonarQube-адаптер (import), complexity → P2 findings, multi-run тренды (`gd-metapro health trend` по `data/health/history`), generated/static ignore paths, и безопасная интеграция с Testing Module без неявного полного test-suite запуска.
 

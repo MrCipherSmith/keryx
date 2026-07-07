@@ -85,7 +85,8 @@ Config lives in `.metaproject/memory.config.json`; the manifest stores only
   "confidence": { "default": "medium", "values": { "low": 0.34, "medium": 0.67, "high": 1.0 } },
   "statusBoost": { "accepted": 1.0, "draft": 0.4, "conflict": 0.2, "deprecated": 0.1, "superseded": 0.1 },
   "dedup": { "titleSimilarity": 0.8, "summaryJaccard": 0.6, "minSharedScopeOrTags": 1 },
-  "ingest": { "defaultStatus": "draft", "allowAutoAccept": false }
+  "ingest": { "defaultStatus": "draft", "allowAutoAccept": false },
+  "reflect": { "minClusterSize": 3 }
 }
 ```
 
@@ -272,13 +273,19 @@ chunks, metadata, and scores (versioned contract, D10).
 ## 15. CLI
 
 ```bash
-gd-metapro memory new <lesson|decision|constraint|known-mistake> [--title "<t>"]
+gd-metapro memory new <type> [--title "<t>"]
 gd-metapro memory index
 gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
 gd-metapro memory ingest --from-<source> <path>
 gd-metapro memory check
 gd-metapro memory reflect
 ```
+
+`memory new <type>` accepts any of the 11 registered types (section 6):
+`lesson`, `decision`, `constraint`, `known-mistake`, `historical-context`,
+`pattern`, `task-note`, `review-note`, `incident`, `migration-note`,
+`integration-note`. MVP templates exist for the first four; other types are
+created from the generic template.
 
 `check` runs: metadata validation, `Version` field check, link check, dedup
 check, conflict check, and index-freshness check; non-zero exit on failures.

@@ -16,7 +16,7 @@ Usage:
 
 Modes:
   --project     Install runtime into .metaproject/runtime/gd-metapro and run init.
-  --global      Install CLI into ~/.gd-metapro and symlink ~/.local/bin/gd-metapro.
+  --global      Install CLI into ~/.gd-metapro and write a wrapper script at ~/.local/bin/gd-metapro.
 
 Environment:
   GD_METAPRO_REPO_URL   Git repository URL. Defaults to https://github.com/MrCipherSmith/meta-project.git

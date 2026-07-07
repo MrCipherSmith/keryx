@@ -2,15 +2,15 @@
 
 ## Stats
 
-- Source files indexed: 105
+- Source files indexed: 115
 - Imported asset files indexed: 1
-- Total nodes: 106
-- Edges: 274
-- Import edges: 271
+- Total nodes: 116
+- Edges: 300
+- Import edges: 297
 - Asset edges: 1
 - Unresolved relative imports: 2
 - Import resolution: 99.3%
-- Skipped generated/static directories: 5
+- Skipped generated/static directories: 3
 
 ## Top Modules
 
@@ -18,13 +18,15 @@
 |---|---:|
 | health | 36 |
 | memory | 18 |
-| commands | 14 |
+| commands | 17 |
+| gdskills | 11 |
 | flow | 10 |
-| gdskills | 10 |
-| lib | 5 |
+| lib | 7 |
 | gdgraph | 4 |
 | testing | 4 |
-| wiki | 3 |
+| wiki | 4 |
+| rules | 2 |
+| cli.test.ts | 1 |
 | cli.ts | 1 |
 
 ## Unresolved By Type
@@ -38,8 +40,6 @@
 - `.git`
 - `.metaproject`
 - `.tmp-flow-test/.metaproject`
-- `dist`
-- `node_modules`
 
 ## Generated Files
 

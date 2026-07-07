@@ -142,10 +142,10 @@ pnpm link --global
 
 ```bash
 gd-metapro --version
-gd-metapro doctor
+gd-metapro doctor   # Planned / not yet implemented
 ```
 
-`gd-metapro doctor` должен проверять:
+`gd-metapro doctor` (**Planned / not yet implemented** — not routed in the current CLI) должен проверять:
 
 - доступность Bun;
 - версию CLI;
@@ -156,28 +156,35 @@ gd-metapro doctor
 
 ## 6. Команды CLI
 
-Минимальный набор команд:
+Минимальный набор команд (реализованные):
 
 ```bash
 gd-metapro --help
 gd-metapro --version
-gd-metapro doctor
 gd-metapro init
 gd-metapro status
 gd-metapro update
+gd-metapro rules sync
+gd-metapro dashboard build
+gd-metapro dashboard open
+```
+
+**Planned / not yet implemented** (не роутятся в текущем `src/cli.ts`):
+
+```bash
+gd-metapro doctor
 gd-metapro modules list
 gd-metapro modules enable <module>
 gd-metapro modules disable <module>
-gd-metapro index refresh
+gd-metapro index refresh   # используйте gd-metapro update / gd-metapro rules sync
 ```
 
 Команды модулей должны подключаться под namespace:
 
 ```bash
 gd-metapro gdgraph build
-gd-metapro gdgraph query "<query>"
+gd-metapro gdgraph query <cycles|orphans>
 gd-metapro gdgraph affected <target>
-gd-metapro gdgraph explain <target>
 ```
 
 ## 7. Init flow
@@ -435,9 +442,7 @@ N. No - run health manually with gd-metapro health run or through orchestrators
       README.md
   health/
     baselines/
-      project.json
-      modules/
-      entities/
+      scores.json
   data/
     health/
       artifacts/
@@ -545,7 +550,7 @@ N. No - run health manually with gd-metapro health run or through orchestrators
       "data": ".metaproject/data/health",
       "baseline": ".metaproject/health/baselines",
       "manifest": ".metaproject/modules/health.md",
-      "commands": ["run", "status", "baseline", "explain"],
+      "commands": ["run", "status", "gate", "sources", "explain", "baseline", "trend"],
       "hooks": {
         "changedScopeHealth": false
       },
@@ -565,7 +570,7 @@ N. No - run health manually with gd-metapro health run or through orchestrators
       "memory": ".metaproject/memory",
       "data": ".metaproject/data/memory",
       "manifest": ".metaproject/modules/memory.md",
-      "commands": ["new", "index", "search", "ingest", "check"],
+      "commands": ["new", "index", "search", "ingest", "check", "reflect"],
       "embeddings": {
         "enabled": false
       }
@@ -681,7 +686,7 @@ When `gdskills` is enabled, agents must resolve skills and rules in this order:
 Run:
 
 ```bash
-gd-metapro index refresh
+gd-metapro update
 gd-metapro gdgraph build
 gd-metapro skills status
 gd-metapro health status
@@ -718,7 +723,7 @@ This folder contains local Metaproject configuration, tools, generated data, and
 
 ```bash
 gd-metapro status
-gd-metapro index refresh
+gd-metapro update
 gd-metapro gdgraph build
 gd-metapro gdgraph query "module pipelines"
 gd-metapro ctx status
@@ -748,9 +753,8 @@ Builds code graph, symbol graph, dependency map, and affected context.
 ## Commands
 
 - `gd-metapro gdgraph build`
-- `gd-metapro gdgraph query "<query>"`
+- `gd-metapro gdgraph query <cycles|orphans>`
 - `gd-metapro gdgraph affected <target>`
-- `gd-metapro gdgraph explain <target>`
 
 ## Data
 
@@ -912,10 +916,15 @@ Version: 0.1.0
 
 ## 15. Refresh behavior
 
+> **Planned / not yet implemented.** `gd-metapro index refresh` пока не роутится в
+> `src/cli.ts`. Для обновления managed-слоя и ссылок используйте реализованные
+> `gd-metapro update` и `gd-metapro rules sync`. Раздел ниже описывает целевое
+> поведение будущей команды.
+
 Команда:
 
 ```bash
-gd-metapro index refresh
+gd-metapro index refresh   # Planned / not yet implemented
 ```
 
 Должна:
@@ -1005,11 +1014,11 @@ Then создается базовая `.metaproject/` структура
 And `metaproject.json` отмечает `gdgraph.enabled = false`
 And `index.md` не содержит активной ссылки на `gdgraph`.
 
-### Scenario: refresh index
+### Scenario: refresh index (Planned / not yet implemented)
 
 Given `.metaproject/` уже существует
 And пользователь включил новый модуль
-When он запускает `gd-metapro index refresh`
+When он запускает `gd-metapro index refresh` (planned; сейчас используйте `gd-metapro update`)
 Then generated block в `index.md` обновляется
 And пользовательские секции вне generated block сохраняются.
 

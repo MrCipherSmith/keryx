@@ -12,7 +12,6 @@ frontend/static outputs are skipped by default.
 - `gd-metapro gdgraph build`
 - `gd-metapro gdgraph query "<query>"`
 - `gd-metapro gdgraph affected <target>`
-- `gd-metapro gdgraph explain <target>`
 
 ## Data
 

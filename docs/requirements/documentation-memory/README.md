@@ -9,7 +9,7 @@ Markdown остается source of truth, а TS/Bun используется д
 
 ## Статус
 
-Пакет доведён до production-ready: решения зафиксированы через best-practices research (Generative Agents scoring, Mem0 extract→update, Zep, MemGuard) + два раунда интервью (D1-D12). Заданы: retrieval + ranking-формула (embedding-free, детерминированный), ingest propose-as-draft, детерминированный dedup/conflict, decay-in-ranking, `memory.config.json`, `MemoryService`-контракт, versioned search-JSON и фазовый план. Готов к имплементации Phase 1. См. [specification.md](specification.md) sections 2 и 21.
+Пакет доведён до production-ready: решения зафиксированы через best-practices research (Generative Agents scoring, Mem0 extract→update, Zep, MemGuard) + два раунда интервью (D1-D12). Заданы: retrieval + ranking-формула (embedding-free, детерминированный), ingest propose-as-draft, детерминированный dedup/conflict, decay-in-ranking, `memory.config.json`, `MemoryService`-контракт, versioned search-JSON и фазовый план. Phase 1 и Phase 2 реализованы (модуль shipped); embeddings/semantic overlay — Phase 3. См. [specification.md](specification.md) sections 2 и 21.
 
 ## Документы
 

@@ -19,9 +19,7 @@
       "commands": [
         "build",
         "query",
-        "affected",
-        "explain",
-        "path"
+        "affected"
       ],
       "hooks": {
         "gitPostCommit": ".git/hooks/post-commit",
@@ -49,13 +47,17 @@
       "manifest": ".metaproject/modules/gdskills.md",
       "commands": [
         "status",
+        "list",
+        "inspect",
+        "route",
         "catalog",
         "install",
-        "generate",
+        "create",
         "verify",
         "learn",
         "export",
-        "sync"
+        "sync",
+        "contracts"
       ],
       "profile": "recommended",
       "skills": ".metaproject/skills/gdskills",
@@ -167,6 +169,7 @@
       "commands": [
         "status",
         "new",
+        "collect",
         "index",
         "check-links",
         "validate"
