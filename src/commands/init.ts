@@ -79,6 +79,7 @@ import {
   renderGdgraphCoreCli,
   renderGdgraphManifest,
   renderGdgraphPostCommitHook,
+  renderGdwikiPostCommitHook,
   renderHealthPostCommitHook,
   renderGdskillsPostCommitHook,
   renderMetaprojectDashboardPostCommitHook,
@@ -367,6 +368,9 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableGdwiki) {
     await createGdwikiStructure(metaprojectRoot);
+    if (enableGdgraphHook) {
+      await installGdwikiPostCommitHook(projectRoot);
+    }
   }
 
   if (enableGdskills) {
@@ -884,6 +888,10 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
 
 async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> {
   await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+}
+
+async function installGdwikiPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
 }
 
 async function installGdskillsPostCommitHook(projectRoot: string): Promise<void> {

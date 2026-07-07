@@ -1639,6 +1639,33 @@ gd_metapro_gdgraph_post_commit
 `;
 }
 
+export function renderGdwikiPostCommitHook(): string {
+  return `gd_metapro_gdwiki_post_commit() {
+  # Non-mutating: remind to refresh only the touched wiki drafts after a
+  # source-relevant commit. The refresh is deterministic; enrichment needs a
+  # model, so both stay user-triggered.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "gd-metapro post-commit: wiki drafts may be stale; run 'gd-metapro wiki collect --changed --since HEAD~1', then enrich new drafts with the gdwiki skill on a non-flagship model"
+  return 0
+}
+
+gd_metapro_gdwiki_post_commit
+`;
+}
+
 export function renderMetaprojectDashboardPostCommitHook(): string {
   return `gd_metapro_dashboard_post_commit() {
   # Non-mutating: do not rewrite service files after commit.

@@ -59,6 +59,7 @@ import {
   renderGdgraphCoreReadme,
   renderGdgraphManifest,
   renderGdgraphPostCommitHook,
+  renderGdwikiPostCommitHook,
   renderGdgraphSkillReadme,
   renderGdskillsPostCommitHook,
   renderHealthPostCommitHook,
@@ -312,6 +313,9 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfMissing(path.join(metaprojectRoot, "wiki", "templates", "page.md"), renderWikiPageTemplate());
     await writeTextIfChanged(path.join(metaprojectRoot, "modules", "gdwiki.md"), renderGdwikiManifest());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"), renderGdwikiSkillReadme());
+    if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
+      await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+    }
   }
 
   if (enableGdskills) {
