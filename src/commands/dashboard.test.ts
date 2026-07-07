@@ -56,6 +56,9 @@ test("build refreshes dashboard from existing data without touching data artifac
     expect(dashboard).toContain("<b>98</b><span>score</span>");
     expect(dashboard).toContain("<h2>Graph</h2>");
     expect(dashboard).toContain("<b>1</b><span>files</span>");
+    expect(dashboard).toContain("What needs attention");
+    expect(dashboard).toContain("gdmHealthFilter");
+    expect(dashboard).toContain("data-gdm-table=\"health-files\"");
     expect(rebuiltDashboard).toBe(dashboard);
     expect(await readFile(testingContextPath, "utf8")).toBe(testingContext);
     await access(path.join(root, ".metaproject", "gd-metapro-dashboard.html"));

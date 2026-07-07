@@ -482,14 +482,14 @@ export function renderMetaprojectDashboardHtml({
   const wikiStatus = wikiPages.length > 0 ? `${wikiPages.length} pages` : (enableGdwiki ? "needs content" : "disabled");
   const memoryStatus = memoryEntries.length > 0 ? `${memoryEntries.length} entries` : (enableMemory ? "needs content" : "disabled");
   const healthSources = health?.sources.map((source) => `
-            <tr>
+            <tr class="health-row" data-search="${escapeHtml(`${source.source} ${source.status} ${source.findings}`)}">
               <td>${escapeHtml(source.source)}</td>
               <td><span class="pill ${sourceTone(source.status, source.required)}">${escapeHtml(source.status)}</span></td>
               <td>${metricBadge(source.findings, source.findings === 0 ? "good" : "warn")}</td>
               <td>${source.required ? "yes" : "no"}</td>
             </tr>`).join("") ?? "";
   const healthScopes = health?.scopes.map((scope) => `
-            <tr>
+            <tr class="health-row" data-search="${escapeHtml(`${scope.name} ${scope.kind} ${scope.score} ${scope.findings} ${scope.risk} ${scope.complexity ?? ""}`)}">
               <td>${escapeHtml(scope.name)}</td>
               <td>${escapeHtml(scope.kind)}</td>
               <td>${metricBadge(scope.score, scoreTone(scope.score))}</td>
@@ -498,7 +498,7 @@ export function renderMetaprojectDashboardHtml({
               <td>${metricBadge(scope.complexity ?? "-", complexityTone(scope.complexity))}</td>
             </tr>`).join("") ?? "";
   const healthFiles = health?.files.map((file) => `
-            <tr>
+            <tr class="health-row" data-search="${escapeHtml(`${file.name} ${file.score} ${file.findings} ${file.risk} ${file.complexity ?? ""}`)}">
               <td>${escapeHtml(file.name)}</td>
               <td>${metricBadge(file.score, scoreTone(file.score))}</td>
               <td>${metricBadge(file.findings, file.findings === 0 ? "good" : "warn")}</td>
@@ -542,12 +542,34 @@ export function renderMetaprojectDashboardHtml({
               <code>gd-metapro memory index</code>
             </div>
           </div>`;
+  const attentionItems = buildDashboardAttention({
+    enableGdgraph,
+    enableGdskills,
+    enableGdwiki,
+    enableHealth,
+    enableMemory,
+    enableTesting,
+    graph,
+    health,
+    memoryEntries,
+    testing,
+    wikiPages,
+  });
+  const attentionCards = attentionItems.map((item) => `
+          <article class="attention-card ${item.tone}">
+            <div>
+              <b>${escapeHtml(item.title)}</b>
+              <p>${escapeHtml(item.detail)}</p>
+            </div>
+            <code>${escapeHtml(item.command)}</code>
+          </article>`).join("");
 
   const scoreValue = typeof health?.score === "number" ? health.score : null;
   const ringCirc = 289;
   const ringOffset = scoreValue === null ? String(ringCirc) : (ringCirc * (1 - scoreValue / 100)).toFixed(1);
   const ringTone = health ? (healthScoreTone || "info") : "muted";
   const navItems: Array<[string, string]> = [["Overview", "#top"]];
+  navItems.push(["Attention", "#attention"]);
   if (enabledModules.length > 0) navItems.push(["Modules", "#modules"]);
   if (enableHealth) navItems.push(["Code Health", "#health"]);
   if (enableGdgraph) navItems.push(["Graph", "#graph"]);
@@ -632,6 +654,14 @@ export function renderMetaprojectDashboardHtml({
     .kpi span { font-size:11px; color:var(--muted); }
     .kpi.good b { color:var(--good); } .kpi.warn b { color:var(--warn); } .kpi.bad b { color:var(--bad); }
 
+    /* Attention */
+    .attention-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+    .attention-card { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--faint); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
+    .attention-card.good { border-left-color:var(--good); } .attention-card.warn { border-left-color:var(--warn); } .attention-card.bad { border-left-color:var(--bad); }
+    .attention-card b { display:block; margin-bottom:4px; font-size:13px; }
+    .attention-card p { margin:0; color:var(--muted); font-size:12px; }
+    .attention-card code { display:block; width:100%; overflow:auto; font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:6px 8px; }
+
     /* Sections */
     .sec { scroll-margin-top:20px; margin-top:26px; }
     .sec-h { display:flex; align-items:center; gap:10px; margin:0 2px 14px; }
@@ -660,9 +690,15 @@ export function renderMetaprojectDashboardHtml({
     .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); min-width:0; }
     .panel h3 { margin:16px 0 8px; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
     .panel h3:first-of-type { margin-top:4px; }
+    .table-tools { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:10px 0 12px; }
+    .table-tools input { width:min(360px,100%); color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; font:13px/1.4 inherit; outline:none; }
+    .table-tools input:focus { border-color:var(--accent); }
+    .table-tools span { color:var(--muted); font-size:12px; }
     .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
     table { width:100%; border-collapse:collapse; min-width:420px; font-size:13px; }
     th { text-align:left; padding:9px 12px; color:var(--muted); font-weight:600; font-size:11px; letter-spacing:.4px; text-transform:uppercase; background:var(--panel2); border-bottom:1px solid var(--line); white-space:nowrap; }
+    th button { all:unset; cursor:pointer; color:inherit; display:inline-flex; align-items:center; gap:5px; }
+    th button::after { content:"↕"; color:var(--faint); font-size:10px; }
     td { padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
     tbody tr:last-child td { border-bottom:0; }
     tbody tr:hover { background:var(--panel2); }
@@ -751,6 +787,13 @@ export function renderMetaprojectDashboardHtml({
         </div>
       </section>
 
+      <section class="sec" id="attention">
+        <div class="sec-h"><h2>What needs attention</h2><span class="count">${attentionItems.length} signal${attentionItems.length === 1 ? "" : "s"}</span><span class="rule"></span></div>
+        <div class="attention-grid">
+${attentionCards}
+        </div>
+      </section>
+
       <section class="sec" id="modules">
         <div class="sec-h"><h2>Modules</h2><span class="count">${enabledModules.length} enabled</span><span class="rule"></span></div>
         <div class="cards">
@@ -769,19 +812,23 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
             <div class="kpi ${health.findings === 0 ? "good" : "warn"}"><b>${health.findings}</b><span>findings</span></div>
             <div class="kpi ${health.p0 > 0 ? "bad" : (health.p1 > 0 || health.p2 > 0 ? "warn" : "good")}"><b>${health.p0}/${health.p1}/${health.p2}</b><span>P0 / P1 / P2</span></div>
           </div>
+          <div class="table-tools">
+            <input id="gdmHealthFilter" type="search" placeholder="Filter health tables by file, scope, source, score..." aria-label="Filter health tables">
+            <span>Click table headings to sort visible rows.</span>
+          </div>
           <h3>Top scopes</h3>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Scope</th><th>Kind</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
+          <div class="table-wrap"><table data-gdm-table="health-scopes">
+            <thead><tr><th><button type="button" data-sort-col="0">Scope</button></th><th><button type="button" data-sort-col="1">Kind</button></th><th><button type="button" data-sort-col="2">Score</button></th><th><button type="button" data-sort-col="3">Findings</button></th><th><button type="button" data-sort-col="4">Risk</button></th><th><button type="button" data-sort-col="5">Complexity</button></th></tr></thead>
             <tbody>${healthScopes || `<tr><td colspan="6">No scope metrics.</td></tr>`}</tbody>
           </table></div>
           <h3>Top files</h3>
-          <div class="table-wrap"><table>
-            <thead><tr><th>File</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
+          <div class="table-wrap"><table data-gdm-table="health-files">
+            <thead><tr><th><button type="button" data-sort-col="0">File</button></th><th><button type="button" data-sort-col="1">Score</button></th><th><button type="button" data-sort-col="2">Findings</button></th><th><button type="button" data-sort-col="3">Risk</button></th><th><button type="button" data-sort-col="4">Complexity</button></th></tr></thead>
             <tbody>${healthFiles || `<tr><td colspan="5">No file-level metrics in latest report.</td></tr>`}</tbody>
           </table></div>
           <h3>Sources</h3>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Source</th><th>Status</th><th>Findings</th><th>Required</th></tr></thead>
+          <div class="table-wrap"><table data-gdm-table="health-sources">
+            <thead><tr><th><button type="button" data-sort-col="0">Source</button></th><th><button type="button" data-sort-col="1">Status</button></th><th><button type="button" data-sort-col="2">Findings</button></th><th><button type="button" data-sort-col="3">Required</button></th></tr></thead>
             <tbody>${healthSources}</tbody>
           </table></div>` : `<div class="empty">No health report found. Run <code>gd-metapro health run</code>.</div>`}
         </div>
@@ -908,6 +955,52 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
       };
     })();
     (function () {
+      var healthFilter = document.getElementById("gdmHealthFilter");
+      function filterHealthRows() {
+        var q = (healthFilter && healthFilter.value ? healthFilter.value : "").toLowerCase().trim();
+        document.querySelectorAll("#health tr.health-row").forEach(function (row) {
+          var haystack = (row.getAttribute("data-search") || row.textContent || "").toLowerCase();
+          row.hidden = q.length > 0 && haystack.indexOf(q) === -1;
+        });
+      }
+      if (healthFilter) {
+        healthFilter.addEventListener("input", filterHealthRows);
+      }
+      function cellValue(row, col) {
+        var cell = row.children[col];
+        var text = cell ? (cell.textContent || "").trim() : "";
+        var num = Number(text.replace(/[^0-9.-]/g, ""));
+        return Number.isFinite(num) && /[0-9]/.test(text) ? num : text.toLowerCase();
+      }
+      document.addEventListener("click", function (e) {
+        var target = e.target;
+        var btn = target && target.closest ? target.closest("[data-sort-col]") : null;
+        if (!btn) return;
+        var table = btn.closest("table");
+        var tbody = table && table.querySelector("tbody");
+        if (!tbody) return;
+        var col = Number(btn.getAttribute("data-sort-col") || "0");
+        var dir = btn.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
+        table.querySelectorAll("[data-sort-dir]").forEach(function (item) {
+          item.removeAttribute("data-sort-dir");
+        });
+        btn.setAttribute("data-sort-dir", dir);
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+        rows.sort(function (a, b) {
+          var av = cellValue(a, col);
+          var bv = cellValue(b, col);
+          var cmp = typeof av === "number" && typeof bv === "number"
+            ? av - bv
+            : String(av).localeCompare(String(bv));
+          return dir === "asc" ? cmp : -cmp;
+        });
+        rows.forEach(function (row) {
+          tbody.appendChild(row);
+        });
+        filterHealthRows();
+      });
+    })();
+    (function () {
       var docs = {};
       try { docs = JSON.parse(document.getElementById("gdm-docs").textContent || "{}"); } catch (e) {}
       var BT = String.fromCharCode(96);
@@ -971,6 +1064,144 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
 </body>
 </html>
 `;
+}
+
+type DashboardAttentionItem = {
+  tone: "good" | "warn" | "bad";
+  title: string;
+  detail: string;
+  command: string;
+};
+
+function buildDashboardAttention({
+  enableGdgraph,
+  enableGdskills,
+  enableGdwiki,
+  enableHealth,
+  enableMemory,
+  enableTesting,
+  graph,
+  health,
+  memoryEntries,
+  testing,
+  wikiPages,
+}: {
+  enableGdgraph: boolean;
+  enableGdskills: boolean;
+  enableGdwiki: boolean;
+  enableHealth: boolean;
+  enableMemory: boolean;
+  enableTesting: boolean;
+  graph: MetaprojectDashboardData["graph"] | undefined;
+  health: MetaprojectDashboardData["health"] | undefined;
+  memoryEntries: Array<{ title: string; href: string; group: string; content?: string }>;
+  testing: MetaprojectDashboardData["testing"] | undefined;
+  wikiPages: Array<{ title: string; href: string; group: string; content?: string }>;
+}): DashboardAttentionItem[] {
+  const items: DashboardAttentionItem[] = [];
+
+  if (enableHealth && !health) {
+    items.push({
+      tone: "warn",
+      title: "Code Health report is missing",
+      detail: "Quality gates and file scores are unavailable until a health report is generated.",
+      command: "gd-metapro health run",
+    });
+  } else if (health && (health.status === "fail" || health.p0 > 0)) {
+    items.push({
+      tone: "bad",
+      title: "Code Health gate is failing",
+      detail: `${health.p0} P0 finding(s), ${health.findings} finding(s) total. Resolve blockers before trusting the project score.`,
+      command: "gd-metapro health explain <file>",
+    });
+  } else if (health && (health.status === "warn" || health.findings > 0)) {
+    items.push({
+      tone: "warn",
+      title: "Code Health has active findings",
+      detail: `Score ${health.score} still has ${health.findings} finding(s). Review top files and sources.`,
+      command: "gd-metapro health status",
+    });
+  }
+
+  const missingRequired = health?.sources.filter((source) => source.required && source.status === "missing") ?? [];
+  if (missingRequired.length > 0) {
+    items.push({
+      tone: "bad",
+      title: "Required health source is missing",
+      detail: `Missing: ${missingRequired.map((source) => source.source).join(", ")}.`,
+      command: "gd-metapro health sources",
+    });
+  }
+
+  if (enableGdgraph && !graph) {
+    items.push({
+      tone: "warn",
+      title: "Graph storage is missing",
+      detail: "Project navigation and affected-context queries need a built graph.",
+      command: "gd-metapro gdgraph build",
+    });
+  } else if (graph && graph.unresolved > 0) {
+    items.push({
+      tone: "warn",
+      title: "Graph has unresolved imports",
+      detail: `${graph.unresolved} unresolved edge(s) can reduce affected-context precision.`,
+      command: "gd-metapro gdgraph query orphans",
+    });
+  }
+
+  if (enableTesting && !testing) {
+    items.push({
+      tone: "warn",
+      title: "Testing context is missing",
+      detail: "Agents need the testing context before creating or changing tests.",
+      command: "gd-metapro test analyze",
+    });
+  } else if (testing && (testing.failures ?? 0) > 0) {
+    items.push({
+      tone: "bad",
+      title: "Latest test report has failures",
+      detail: `${testing.failures} failing test(s) in the normalized testing report.`,
+      command: "gd-metapro test report",
+    });
+  }
+
+  if (enableGdwiki && wikiPages.length === 0) {
+    items.push({
+      tone: "warn",
+      title: "Wiki has no curated pages",
+      detail: "Generate draft knowledge pages so agents can use architecture and domain context before broad code reads.",
+      command: "gd-metapro wiki collect",
+    });
+  }
+
+  if (enableMemory && memoryEntries.length === 0) {
+    items.push({
+      tone: "warn",
+      title: "Memory has no accepted lessons",
+      detail: "Long-lived project lessons and decisions are not yet available to agents.",
+      command: "gd-metapro memory ingest --from-health .metaproject/data/health/artifacts/latest.json",
+    });
+  }
+
+  if (!enableGdskills) {
+    items.push({
+      tone: "warn",
+      title: "gdskills is disabled",
+      detail: "Project-local working skills and orchestrators are not installed for agents.",
+      command: "gd-metapro modules enable gdskills",
+    });
+  }
+
+  if (items.length === 0) {
+    items.push({
+      tone: "good",
+      title: "Visible signals look current",
+      detail: "Enabled modules have dashboard data and no blocking attention signals were detected.",
+      command: "gd-metapro status",
+    });
+  }
+
+  return items.slice(0, 8);
 }
 
 function metricBadge(value: number | string, tone: string): string {
