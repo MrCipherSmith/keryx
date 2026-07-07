@@ -201,6 +201,25 @@ gd-metapro wiki validate
 - Run \`gd-metapro wiki collect\` to generate safe draft pages from gdgraph, health, and testing context.
 - Run \`gd-metapro wiki check-links\` before relying on cross-page links.
 
+## Enriching Collected Drafts
+
+\`gd-metapro wiki collect\` writes rich but generated drafts (\`Status: draft\`):
+each module page already lists Public API, Key files, Depends on / Depended on
+by, and entry points derived from the graph and source. Turn a draft into real
+knowledge:
+
+1. Read the draft's Key files and Public API to understand what the module does.
+2. Replace the \`Responsibility\` TODO with 2-4 sentences: what the module owns
+   and how it fits the system (use Depends on / Depended on by for context).
+3. Add domain and architecture prose the graph cannot infer - key concepts,
+   invariants, important flows, and decisions. Link related pages and code.
+4. Bump \`Version\` and set \`Status: accepted\` once the page is human-owned.
+5. \`gd-metapro wiki collect --force\` regenerates remaining drafts but never
+   overwrites accepted or edited pages, so it is safe to re-run later.
+
+Enrich the largest / most-depended-on modules first - they anchor the Project
+Map. Verify every claim against source before accepting.
+
 ## Skip When
 
 - The request is a pure code lookup with no architectural/domain/business context.
