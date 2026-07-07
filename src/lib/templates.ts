@@ -348,7 +348,7 @@ export function renderMetaprojectDashboardHtml({
         ["Template", "wiki/templates/page.md"],
         ["Skill", "skills/gdwiki/SKILL.md"],
       ],
-      commands: ["gd-metapro wiki new decision <slug>", "gd-metapro wiki index", "gd-metapro wiki check-links"],
+      commands: ["gd-metapro wiki collect", "gd-metapro wiki new decision <slug>", "gd-metapro wiki index"],
     },
     {
       enabled: enableGdskills,
@@ -454,30 +454,33 @@ export function renderMetaprojectDashboardHtml({
   const memoryEntries = data?.memory?.entries ?? [];
   const qualityStatus = health?.status ?? (enableHealth ? "missing" : "disabled");
   const graphStatus = graph ? `${graph.files} files` : (enableGdgraph ? "missing" : "disabled");
-  const healthClass = health?.status === "pass" ? "good" : health?.status === "warn" ? "warn" : health?.status === "fail" ? "bad" : "";
+  const healthClass = health ? healthTone(health) : "";
+  const healthScoreTone = health ? healthTone(health) : "";
+  const wikiStatus = wikiPages.length > 0 ? `${wikiPages.length} pages` : (enableGdwiki ? "needs content" : "disabled");
+  const memoryStatus = memoryEntries.length > 0 ? `${memoryEntries.length} entries` : (enableMemory ? "needs content" : "disabled");
   const healthSources = health?.sources.map((source) => `
             <tr>
               <td>${escapeHtml(source.source)}</td>
-              <td><span class="pill ${source.status === "available" ? "good" : source.status === "missing" ? "warn" : ""}">${escapeHtml(source.status)}</span></td>
-              <td>${source.findings}</td>
+              <td><span class="pill ${sourceTone(source.status, source.required)}">${escapeHtml(source.status)}</span></td>
+              <td>${metricBadge(source.findings, source.findings === 0 ? "good" : "warn")}</td>
               <td>${source.required ? "yes" : "no"}</td>
             </tr>`).join("") ?? "";
   const healthScopes = health?.scopes.map((scope) => `
             <tr>
               <td>${escapeHtml(scope.name)}</td>
               <td>${escapeHtml(scope.kind)}</td>
-              <td>${scope.score}</td>
-              <td>${scope.findings}</td>
-              <td>${scope.risk}</td>
-              <td>${scope.complexity ?? "-"}</td>
+              <td>${metricBadge(scope.score, scoreTone(scope.score))}</td>
+              <td>${metricBadge(scope.findings, scope.findings === 0 ? "good" : "warn")}</td>
+              <td>${metricBadge(scope.risk, riskTone(scope.risk))}</td>
+              <td>${metricBadge(scope.complexity ?? "-", complexityTone(scope.complexity))}</td>
             </tr>`).join("") ?? "";
   const healthFiles = health?.files.map((file) => `
             <tr>
               <td>${escapeHtml(file.name)}</td>
-              <td>${file.score}</td>
-              <td>${file.findings}</td>
-              <td>${file.risk}</td>
-              <td>${file.complexity ?? "-"}</td>
+              <td>${metricBadge(file.score, scoreTone(file.score))}</td>
+              <td>${metricBadge(file.findings, file.findings === 0 ? "good" : "warn")}</td>
+              <td>${metricBadge(file.risk, riskTone(file.risk))}</td>
+              <td>${metricBadge(file.complexity ?? "-", complexityTone(file.complexity))}</td>
             </tr>`).join("") ?? "";
   const graphRows = graph?.topModules.map((module) => `
             <tr>
@@ -497,6 +500,25 @@ export function renderMetaprojectDashboardHtml({
               <td>${escapeHtml(entry.group)}</td>
               <td>${escapeHtml(entry.href)}</td>
             </tr>`).join("");
+  const healthSummary = health ? healthQualitySummary(health) : "No normalized health report has been collected yet.";
+  const wikiEmpty = `<div class="empty-state">
+            <b>Wiki has no curated pages yet</b>
+            <p>Create architecture, domain, scenario, integration, or decision pages so agents can read product knowledge before scanning code.</p>
+            <div class="action-grid">
+              <code>gd-metapro wiki collect</code>
+              <code>gd-metapro wiki new decision &lt;slug&gt;</code>
+              <code>gd-metapro wiki index</code>
+            </div>
+          </div>`;
+  const memoryEmpty = `<div class="empty-state">
+            <b>Memory has no learned entries yet</b>
+            <p>Ingest lessons from reviews, health reports, and task outcomes to keep recurring mistakes and constraints available as short context.</p>
+            <div class="action-grid">
+              <code>gd-metapro memory new lesson &lt;slug&gt;</code>
+              <code>gd-metapro memory ingest --from-health .metaproject/data/health/artifacts/latest.json</code>
+              <code>gd-metapro memory index</code>
+            </div>
+          </div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -514,8 +536,13 @@ export function renderMetaprojectDashboardHtml({
       --line: #d9dee8;
       --soft: #eef2f7;
       --good: #15803d;
+      --good-bg: #ecfdf3;
       --warn: #b45309;
+      --warn-bg: #fff7ed;
       --bad: #b91c1c;
+      --bad-bg: #fef2f2;
+      --info: #2563eb;
+      --info-bg: #eff6ff;
     }
     * { box-sizing: border-box; }
     body {
@@ -581,6 +608,7 @@ export function renderMetaprojectDashboardHtml({
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 14px;
+      min-width: 0;
     }
     .stat strong {
       display: block;
@@ -588,6 +616,14 @@ export function renderMetaprojectDashboardHtml({
       line-height: 1;
       margin-bottom: 6px;
     }
+    .stat.good, .kpi.good { background: var(--good-bg); border-color: #86efac; }
+    .stat.warn, .kpi.warn { background: var(--warn-bg); border-color: #fdba74; }
+    .stat.bad, .kpi.bad { background: var(--bad-bg); border-color: #fca5a5; }
+    .stat.info, .kpi.info { background: var(--info-bg); border-color: #93c5fd; }
+    .stat.good strong, .kpi.good strong { color: var(--good); }
+    .stat.warn strong, .kpi.warn strong { color: var(--warn); }
+    .stat.bad strong, .kpi.bad strong { color: var(--bad); }
+    .stat.info strong, .kpi.info strong { color: var(--info); }
     .section {
       margin-top: 28px;
     }
@@ -597,6 +633,8 @@ export function renderMetaprojectDashboardHtml({
       gap: 16px;
       align-items: start;
     }
+    .admin-grid > *,
+    aside { min-width: 0; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -616,6 +654,7 @@ export function renderMetaprojectDashboardHtml({
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 12px;
+      min-width: 0;
     }
     .kpi strong {
       display: block;
@@ -623,10 +662,23 @@ export function renderMetaprojectDashboardHtml({
       line-height: 1;
       margin-bottom: 5px;
     }
+    .health-note {
+      display: grid;
+      gap: 6px;
+      margin: 0 0 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+    .health-note b {
+      font-size: 13px;
+    }
     .table-wrap {
       overflow: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
+      max-width: 100%;
     }
     table {
       width: 100%;
@@ -662,15 +714,46 @@ export function renderMetaprojectDashboardHtml({
       font-size: 12px;
       white-space: nowrap;
     }
-    .pill.good { color: var(--good); border-color: #86efac; background: #f0fdf4; }
-    .pill.warn { color: var(--warn); border-color: #facc15; background: #fefce8; }
-    .pill.bad { color: var(--bad); border-color: #fca5a5; background: #fef2f2; }
+    .pill.good { color: var(--good); border-color: #86efac; background: var(--good-bg); }
+    .pill.warn { color: var(--warn); border-color: #fdba74; background: var(--warn-bg); }
+    .pill.bad { color: var(--bad); border-color: #fca5a5; background: var(--bad-bg); }
+    .metric {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #f8fafc;
+    }
+    .metric.good { color: var(--good); border-color: #86efac; background: var(--good-bg); }
+    .metric.warn { color: var(--warn); border-color: #fdba74; background: var(--warn-bg); }
+    .metric.bad { color: var(--bad); border-color: #fca5a5; background: var(--bad-bg); }
     .empty {
       color: var(--muted);
       border: 1px dashed var(--line);
       border-radius: 8px;
       padding: 14px;
       background: #fbfcfe;
+    }
+    .empty-state {
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfe;
+      min-width: 0;
+    }
+    .empty-state b { color: var(--ink); }
+    .action-grid {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
     }
     .modules {
       display: grid;
@@ -719,6 +802,7 @@ export function renderMetaprojectDashboardHtml({
     code {
       display: block;
       width: 100%;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -762,6 +846,12 @@ export function renderMetaprojectDashboardHtml({
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workflow { grid-template-columns: 1fr; }
     }
+    @media (max-width: 520px) {
+      .stats,
+      .kpis,
+      .link-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
   </style>
 </head>
 <body>
@@ -776,10 +866,10 @@ export function renderMetaprojectDashboardHtml({
       </nav>
     </div>
     <section class="stats" aria-label="Metaproject stats">
-      <div class="stat"><strong>${health?.score ?? "-"}</strong><span>health score</span></div>
-      <div class="stat"><strong>${qualityStatus}</strong><span>quality gate</span></div>
+      <div class="stat ${healthScoreTone}"><strong>${health?.score ?? "-"}</strong><span>health score</span></div>
+      <div class="stat ${healthClass}"><strong>${qualityStatus}</strong><span>quality gate</span></div>
       <div class="stat"><strong>${graphStatus}</strong><span>graph index</span></div>
-      <div class="stat"><strong>${enabledModules.length}</strong><span>enabled modules</span></div>
+      <div class="stat info"><strong>${enabledModules.length}</strong><span>enabled modules</span></div>
     </section>
   </header>
   <main>
@@ -788,11 +878,15 @@ export function renderMetaprojectDashboardHtml({
         <section class="panel" id="health">
           <h2>Health</h2>
           ${health ? `
+          <div class="health-note">
+            <b>Score is contextual</b>
+            <p>${healthSummary}</p>
+          </div>
           <div class="kpis">
-            <div class="kpi"><strong>${health.score}</strong><span>score</span></div>
+            <div class="kpi ${healthScoreTone}"><strong>${health.score}</strong><span>score</span></div>
             <div class="kpi"><strong><span class="pill ${healthClass}">${escapeHtml(health.status)}</span></strong><span>gate</span></div>
-            <div class="kpi"><strong>${health.findings}</strong><span>findings</span></div>
-            <div class="kpi"><strong>${health.p0}/${health.p1}/${health.p2}</strong><span>P0/P1/P2</span></div>
+            <div class="kpi ${health.findings === 0 ? "good" : "warn"}"><strong>${health.findings}</strong><span>findings</span></div>
+            <div class="kpi ${health.p0 > 0 ? "bad" : health.p1 > 0 || health.p2 > 0 ? "warn" : "good"}"><strong>${health.p0}/${health.p1}/${health.p2}</strong><span>P0/P1/P2</span></div>
           </div>
           <h3>Top Scopes</h3>
           <div class="table-wrap">
@@ -850,11 +944,13 @@ export function renderMetaprojectDashboardHtml({
         </section>
         <section class="panel" id="wiki">
           <h2>Wiki</h2>
-          ${wikiRows ? `<div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>${wikiRows}</tbody></table></div>` : `<div class="empty">No wiki pages yet. Run <code>gd-metapro wiki new</code> or <code>gd-metapro wiki index</code>.</div>`}
+          <p style="margin-bottom:12px">${wikiStatus}</p>
+          ${wikiRows ? `<div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>${wikiRows}</tbody></table></div>` : wikiEmpty}
         </section>
         <section class="panel" id="memory">
           <h2>Memory</h2>
-          ${memoryRows ? `<div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>${memoryRows}</tbody></table></div>` : `<div class="empty">No memory entries yet. Run <code>gd-metapro memory new</code> or <code>gd-metapro memory index</code>.</div>`}
+          <p style="margin-bottom:12px">${memoryStatus}</p>
+          ${memoryRows ? `<div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>${memoryRows}</tbody></table></div>` : memoryEmpty}
         </section>
       </aside>
     </section>
@@ -882,6 +978,85 @@ ${cards || "        <p>No modules enabled.</p>"}
 </body>
 </html>
 `;
+}
+
+function metricBadge(value: number | string, tone: string): string {
+  return `<span class="metric ${tone}">${escapeHtml(String(value))}</span>`;
+}
+
+function healthTone(health: NonNullable<MetaprojectDashboardData["health"]>): string {
+  if (health.status === "fail" || health.p0 > 0) {
+    return "bad";
+  }
+  if (health.status === "warn" || health.p1 > 0 || health.findings > 0) {
+    return "warn";
+  }
+  return scoreTone(health.score);
+}
+
+function scoreTone(score: number | string | undefined): string {
+  if (typeof score !== "number") {
+    return "";
+  }
+  if (score < 60) {
+    return "bad";
+  }
+  if (score < 90) {
+    return "warn";
+  }
+  return "good";
+}
+
+function riskTone(risk: number | string | undefined): string {
+  if (typeof risk !== "number") {
+    return "";
+  }
+  if (risk >= 50) {
+    return "bad";
+  }
+  if (risk > 0) {
+    return "warn";
+  }
+  return "good";
+}
+
+function complexityTone(complexity: number | string | undefined): string {
+  if (typeof complexity !== "number") {
+    return "";
+  }
+  if (complexity > 20) {
+    return "bad";
+  }
+  if (complexity > 10) {
+    return "warn";
+  }
+  return "good";
+}
+
+function sourceTone(status: string, required: boolean): string {
+  if (status === "available" || status === "skipped") {
+    return status === "available" ? "good" : "";
+  }
+  if (status === "missing" && required) {
+    return "bad";
+  }
+  if (status === "missing") {
+    return "warn";
+  }
+  return "";
+}
+
+function healthQualitySummary(health: NonNullable<MetaprojectDashboardData["health"]>): string {
+  if (health.status === "fail" || health.p0 > 0) {
+    return `Gate is failing: ${health.p0} P0 finding(s), ${health.findings} finding(s) total. Treat the score as blocked until P0 items are resolved.`;
+  }
+  if (health.findings > 0) {
+    return `Score ${health.score} still has ${health.findings} finding(s). The dashboard colors this as warning so high scores do not hide active quality debt.`;
+  }
+  if (health.status === "warn") {
+    return `Gate is warning. Check missing optional sources, regressions, and source rows before trusting the score.`;
+  }
+  return `No active findings in the latest normalized report. Keep coverage and complexity sources connected to avoid a falsely optimistic score.`;
 }
 
 export function renderAgentEntrypoint({ source }: { source: string }): string {
@@ -1075,7 +1250,7 @@ export function renderMetaprojectReadme({
       ? ["gd-metapro gdgraph build", 'gd-metapro gdgraph query "module pipelines"']
       : []),
     ...(enableGdctx ? ["gd-metapro ctx status", "gd-metapro ctx diff"] : []),
-    ...(enableGdwiki ? ["gd-metapro wiki status", "gd-metapro wiki index"] : []),
+    ...(enableGdwiki ? ["gd-metapro wiki status", "gd-metapro wiki collect", "gd-metapro wiki index"] : []),
     ...(enableGdskills
       ? [
           "gd-metapro skills status",

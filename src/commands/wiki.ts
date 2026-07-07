@@ -1,5 +1,6 @@
 import {
   wikiCheckLinks,
+  wikiCollect,
   wikiCreatePage,
   wikiGenerateIndex,
   wikiStatus,
@@ -27,6 +28,11 @@ export async function wikiCommand(args: string[]): Promise<void> {
 
   if (command === "index") {
     await runIndex();
+    return;
+  }
+
+  if (command === "collect") {
+    await runCollect(args.slice(1));
     return;
   }
 
@@ -98,6 +104,33 @@ async function runIndex(): Promise<void> {
   console.log(`Generated ${result.path} (${result.pageCount} pages).`);
 }
 
+async function runCollect(args: string[]): Promise<void> {
+  const limitValue = optionValue(args, "--limit");
+  const limit = limitValue ? Number.parseInt(limitValue, 10) : undefined;
+  if (limitValue && (!Number.isFinite(limit) || (limit ?? 0) < 1)) {
+    console.error("Usage: gd-metapro wiki collect [--force] [--limit <n>]");
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = await wikiCollect({
+    cwd: process.cwd(),
+    force: args.includes("--force"),
+    ...(limit ? { limit } : {}),
+  });
+
+  console.log("# gdwiki collect");
+  console.log("");
+  console.log(`created: ${result.created}`);
+  console.log(`updated: ${result.updated}`);
+  console.log(`skipped: ${result.skipped}`);
+  console.log(`index: ${result.index.path}`);
+  console.log("");
+  for (const page of result.pages) {
+    console.log(`- ${page.action}: ${page.path} (${page.source})`);
+  }
+}
+
 async function runCheckLinks(): Promise<void> {
   const result = await wikiCheckLinks(process.cwd());
 
@@ -145,6 +178,7 @@ function printHelp(): void {
 Usage:
   gd-metapro wiki status
   gd-metapro wiki new <type> <slug> --title "<title>" [--force]
+  gd-metapro wiki collect [--force] [--limit <n>]
   gd-metapro wiki index
   gd-metapro wiki check-links
   gd-metapro wiki validate

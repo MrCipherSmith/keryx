@@ -24,21 +24,22 @@ registry to human-readable status and points at each module's requirements.
 | spec-orchestrator | `init`, `status`, `update` | - | implemented | [spec-orchestrator/](spec-orchestrator/) |
 | gdgraph | `gd-metapro gdgraph` | `gdgraph` | implemented | [gdgraph/](gdgraph/) |
 | gdctx | `gd-metapro ctx` | `gdctx` | implemented | [gdctx/](gdctx/) |
-| gdwiki | `gd-metapro wiki` | `gdwiki` | implemented (MVP) | [wiki/](wiki/) |
+| gdwiki | `gd-metapro wiki` | `gdwiki` | implemented (MVP + collector) | [wiki/](wiki/) |
 | Documentation Memory | `gd-metapro memory` | `memory` | implemented (Phase 1 + 2) | [documentation-memory/](documentation-memory/) |
 | Task Manager | `gd-metapro flow` | `tasks` | implemented (Phase 1) | [task-manager/](task-manager/) |
 | Code Health | `gd-metapro health` | `health` | implemented (Phase 1 + 2) | [code-health/](code-health/) |
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
 
-## 4. gdwiki (implemented, MVP)
+## 4. gdwiki (implemented, MVP + collector)
 
-Version: `0.2.0`. See [wiki/specification.md](wiki/specification.md) section 12.
+Version: `0.3.0`. See [wiki/specification.md](wiki/specification.md) section 12.
 
 Shipped:
 
 - init scaffold: `wiki/<type>/`, `wiki/templates/`, `data/gdwiki/`, manifest, skill;
-- CLI: `gd-metapro wiki status | new | index | check-links | validate`;
+- CLI: `gd-metapro wiki status | new | collect | index | check-links | validate`;
+- collector: `wiki collect` creates safe draft pages from gdgraph, health, and testing artifacts without overwriting human-authored pages unless `--force`;
 - versioned Markdown pages (8 page types) with required metadata;
 - managed `wiki/index.md` generation between markers;
 - internal link validation with report and non-zero exit on breakage;

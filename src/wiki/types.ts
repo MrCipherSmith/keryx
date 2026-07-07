@@ -135,10 +135,33 @@ export type WikiValidateResult = {
   issues: WikiValidateIssue[];
 };
 
+export type WikiCollectInput = {
+  cwd: string;
+  force?: boolean | undefined;
+  limit?: number | undefined;
+};
+
+export type WikiCollectedPage = {
+  path: string;
+  type: WikiPageType;
+  source: "gdgraph" | "health" | "testing";
+  action: "created" | "updated" | "skipped";
+};
+
+export type WikiCollectResult = {
+  generatedAt: string;
+  created: number;
+  updated: number;
+  skipped: number;
+  pages: WikiCollectedPage[];
+  index: WikiIndexResult;
+};
+
 export interface GdWikiService {
   status(input: WikiStatusInput): Promise<WikiStatusResult>;
   createPage(input: WikiCreatePageInput): Promise<WikiCreatePageResult>;
   generateIndex(input: WikiIndexInput): Promise<WikiIndexResult>;
   checkLinks(input: WikiCheckLinksInput): Promise<WikiCheckLinksResult>;
   validate(input: WikiValidateInput): Promise<WikiValidateResult>;
+  collect(input: WikiCollectInput): Promise<WikiCollectResult>;
 }

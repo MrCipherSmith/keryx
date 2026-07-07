@@ -134,7 +134,23 @@ Behavior:
 - refuses overwrite unless `--force`;
 - prints created path.
 
-### 6.3 index
+### 6.3 collect
+
+```bash
+gd-metapro wiki collect [--force] [--limit <n>]
+```
+
+Behavior:
+
+- reads normalized project artifacts instead of scanning raw files blindly;
+- uses `data/gdgraph/storage/*.jsonl` to create a project map and top module draft pages;
+- uses `data/health/artifacts/latest.json` to create a quality map;
+- uses `data/testing/context.md` to create a testing map when available;
+- writes only draft pages;
+- refuses to overwrite existing pages unless `--force`;
+- refreshes `wiki/index.md` after collecting.
+
+### 6.4 index
 
 ```bash
 gd-metapro wiki index
@@ -148,7 +164,7 @@ Behavior:
 - writes generated details between managed markers;
 - keeps manually editable intro outside managed markers.
 
-### 6.4 check-links
+### 6.5 check-links
 
 ```bash
 gd-metapro wiki check-links
@@ -162,7 +178,7 @@ Behavior:
 - writes report to `.metaproject/data/gdwiki/link-check/latest.md`;
 - exits non-zero if broken internal links exist.
 
-### 6.5 validate
+### 6.6 validate
 
 ```bash
 gd-metapro wiki validate
@@ -286,10 +302,11 @@ Legend: `[x]` done, `[~]` partial, `[ ]` not started.
 ### Phase 2: CLI MVP — done
 
 - [x] `wiki new`;
+- [x] `wiki collect`;
 - [x] `wiki index`;
 - [x] `wiki check-links`;
 - [x] `wiki status`;
-- [x] `wiki validate` (see 6.5).
+- [x] `wiki validate` (see 6.6).
 
 ### Phase 3: Integration — in progress
 
@@ -300,7 +317,7 @@ Legend: `[x]` done, `[~]` partial, `[ ]` not started.
 
 ## 13. Implementation Notes
 
-Version 0.2.0 ships the MVP. Source layout:
+Version 0.3.0 ships the collector. Source layout:
 
 - `src/wiki/types.ts` — page-type registry and `GdWikiService` contract (see 10);
 - `src/wiki/templates.ts` — page, index scaffold, manifest, and skill renderers;

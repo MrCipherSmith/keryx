@@ -92,6 +92,7 @@ ${typeList}
 
 \`\`\`bash
 gd-metapro wiki new <type> <slug> --title "<title>"
+gd-metapro wiki collect
 gd-metapro wiki index
 \`\`\`
 
@@ -118,6 +119,7 @@ Project knowledge base from business logic to implementation.
 
 - \`gd-metapro wiki status\`
 - \`gd-metapro wiki new <type> <slug> --title "<title>"\`
+- \`gd-metapro wiki collect [--force] [--limit <n>]\`
 - \`gd-metapro wiki index\`
 - \`gd-metapro wiki check-links\`
 - \`gd-metapro wiki validate\`
@@ -186,6 +188,7 @@ Pick the entry point by question type:
 \`\`\`bash
 gd-metapro wiki status
 gd-metapro wiki new <type> <slug> --title "<title>"
+gd-metapro wiki collect
 gd-metapro wiki index
 gd-metapro wiki check-links
 gd-metapro wiki validate
@@ -195,6 +198,7 @@ gd-metapro wiki validate
 
 - New pages start at \`Version: 0.1.0\`; bump \`Version\` on every edit.
 - Run \`gd-metapro wiki index\` after adding or renaming pages.
+- Run \`gd-metapro wiki collect\` to generate safe draft pages from gdgraph, health, and testing context.
 - Run \`gd-metapro wiki check-links\` before relying on cross-page links.
 
 ## Skip When

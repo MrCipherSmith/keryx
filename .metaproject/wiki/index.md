@@ -31,11 +31,13 @@ gd-metapro wiki index
 ## Pages
 
 <!-- gd-metapro:wiki-index:begin -->
-<!-- generated: 2026-07-07T09:30:58.284Z | pages: 0 -->
+<!-- generated: 2026-07-07T13:09:29.141Z | pages: 8 -->
 
 ### Architecture
 
-_No pages yet._
+- [Project Map](architecture/project-map.md) (draft) - Generated from gdgraph: 107 code files, 1 assets, 279 edges.
+- [Quality Map](architecture/quality-map.md) (draft) - Generated from Code Health: gate warn, score 89, 31 findings.
+- [Testing Map](architecture/testing-map.md) (draft) - generatedAt: 2026-07-07T09:16:39.033Z
 
 ### Domain Model
 
@@ -51,7 +53,11 @@ _No pages yet._
 
 ### Component
 
-_No pages yet._
+- [Module src/commands](components/src-commands.md) (draft) - Generated from gdgraph module statistics: 15 files and 68 outgoing edges.
+- [Module src/flow](components/src-flow.md) (draft) - Generated from gdgraph module statistics: 10 files and 19 outgoing edges.
+- [Module src/gdskills](components/src-gdskills.md) (draft) - Generated from gdgraph module statistics: 11 files and 25 outgoing edges.
+- [Module src/health](components/src-health.md) (draft) - Generated from gdgraph module statistics: 36 files and 97 outgoing edges.
+- [Module src/memory](components/src-memory.md) (draft) - Generated from gdgraph module statistics: 18 files and 44 outgoing edges.
 
 ### Service
 

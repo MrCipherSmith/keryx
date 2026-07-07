@@ -14,8 +14,13 @@
       --line: #d9dee8;
       --soft: #eef2f7;
       --good: #15803d;
+      --good-bg: #ecfdf3;
       --warn: #b45309;
+      --warn-bg: #fff7ed;
       --bad: #b91c1c;
+      --bad-bg: #fef2f2;
+      --info: #2563eb;
+      --info-bg: #eff6ff;
     }
     * { box-sizing: border-box; }
     body {
@@ -81,6 +86,7 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 14px;
+      min-width: 0;
     }
     .stat strong {
       display: block;
@@ -88,6 +94,14 @@
       line-height: 1;
       margin-bottom: 6px;
     }
+    .stat.good, .kpi.good { background: var(--good-bg); border-color: #86efac; }
+    .stat.warn, .kpi.warn { background: var(--warn-bg); border-color: #fdba74; }
+    .stat.bad, .kpi.bad { background: var(--bad-bg); border-color: #fca5a5; }
+    .stat.info, .kpi.info { background: var(--info-bg); border-color: #93c5fd; }
+    .stat.good strong, .kpi.good strong { color: var(--good); }
+    .stat.warn strong, .kpi.warn strong { color: var(--warn); }
+    .stat.bad strong, .kpi.bad strong { color: var(--bad); }
+    .stat.info strong, .kpi.info strong { color: var(--info); }
     .section {
       margin-top: 28px;
     }
@@ -97,6 +111,8 @@
       gap: 16px;
       align-items: start;
     }
+    .admin-grid > *,
+    aside { min-width: 0; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -116,6 +132,7 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 12px;
+      min-width: 0;
     }
     .kpi strong {
       display: block;
@@ -123,10 +140,23 @@
       line-height: 1;
       margin-bottom: 5px;
     }
+    .health-note {
+      display: grid;
+      gap: 6px;
+      margin: 0 0 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+    .health-note b {
+      font-size: 13px;
+    }
     .table-wrap {
       overflow: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
+      max-width: 100%;
     }
     table {
       width: 100%;
@@ -162,15 +192,46 @@
       font-size: 12px;
       white-space: nowrap;
     }
-    .pill.good { color: var(--good); border-color: #86efac; background: #f0fdf4; }
-    .pill.warn { color: var(--warn); border-color: #facc15; background: #fefce8; }
-    .pill.bad { color: var(--bad); border-color: #fca5a5; background: #fef2f2; }
+    .pill.good { color: var(--good); border-color: #86efac; background: var(--good-bg); }
+    .pill.warn { color: var(--warn); border-color: #fdba74; background: var(--warn-bg); }
+    .pill.bad { color: var(--bad); border-color: #fca5a5; background: var(--bad-bg); }
+    .metric {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #f8fafc;
+    }
+    .metric.good { color: var(--good); border-color: #86efac; background: var(--good-bg); }
+    .metric.warn { color: var(--warn); border-color: #fdba74; background: var(--warn-bg); }
+    .metric.bad { color: var(--bad); border-color: #fca5a5; background: var(--bad-bg); }
     .empty {
       color: var(--muted);
       border: 1px dashed var(--line);
       border-radius: 8px;
       padding: 14px;
       background: #fbfcfe;
+    }
+    .empty-state {
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfe;
+      min-width: 0;
+    }
+    .empty-state b { color: var(--ink); }
+    .action-grid {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
     }
     .modules {
       display: grid;
@@ -219,6 +280,7 @@
     code {
       display: block;
       width: 100%;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -262,6 +324,12 @@
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workflow { grid-template-columns: 1fr; }
     }
+    @media (max-width: 520px) {
+      .stats,
+      .kpis,
+      .link-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
   </style>
 </head>
 <body>
@@ -276,10 +344,10 @@
       </nav>
     </div>
     <section class="stats" aria-label="Metaproject stats">
-      <div class="stat"><strong>89</strong><span>health score</span></div>
-      <div class="stat"><strong>warn</strong><span>quality gate</span></div>
+      <div class="stat warn"><strong>89</strong><span>health score</span></div>
+      <div class="stat warn"><strong>warn</strong><span>quality gate</span></div>
       <div class="stat"><strong>107 files</strong><span>graph index</span></div>
-      <div class="stat"><strong>8</strong><span>enabled modules</span></div>
+      <div class="stat info"><strong>8</strong><span>enabled modules</span></div>
     </section>
   </header>
   <main>
@@ -288,11 +356,15 @@
         <section class="panel" id="health">
           <h2>Health</h2>
           
+          <div class="health-note">
+            <b>Score is contextual</b>
+            <p>Score 89 still has 31 finding(s). The dashboard colors this as warning so high scores do not hide active quality debt.</p>
+          </div>
           <div class="kpis">
-            <div class="kpi"><strong>89</strong><span>score</span></div>
+            <div class="kpi warn"><strong>89</strong><span>score</span></div>
             <div class="kpi"><strong><span class="pill warn">warn</span></strong><span>gate</span></div>
-            <div class="kpi"><strong>29</strong><span>findings</span></div>
-            <div class="kpi"><strong>0/0/29</strong><span>P0/P1/P2</span></div>
+            <div class="kpi warn"><strong>31</strong><span>findings</span></div>
+            <div class="kpi warn"><strong>0/0/31</strong><span>P0/P1/P2</span></div>
           </div>
           <h3>Top Scopes</h3>
           <div class="table-wrap">
@@ -302,98 +374,98 @@
             <tr>
               <td>src/commands</td>
               <td>module</td>
-              <td>88</td>
-              <td>8</td>
-              <td>40</td>
-              <td>64</td>
+              <td><span class="metric warn">87</span></td>
+              <td><span class="metric warn">9</span></td>
+              <td><span class="metric warn">45</span></td>
+              <td><span class="metric bad">64</span></td>
             </tr>
             <tr>
               <td>src/health</td>
               <td>module</td>
-              <td>83</td>
-              <td>8</td>
-              <td>40</td>
-              <td>26</td>
+              <td><span class="metric warn">83</span></td>
+              <td><span class="metric warn">8</span></td>
+              <td><span class="metric warn">40</span></td>
+              <td><span class="metric bad">26</span></td>
             </tr>
             <tr>
               <td>src/memory</td>
               <td>module</td>
-              <td>86</td>
-              <td>4</td>
-              <td>20</td>
-              <td>17</td>
+              <td><span class="metric warn">86</span></td>
+              <td><span class="metric warn">4</span></td>
+              <td><span class="metric warn">20</span></td>
+              <td><span class="metric warn">17</span></td>
             </tr>
             <tr>
               <td>src/gdskills</td>
               <td>module</td>
-              <td>93</td>
-              <td>3</td>
-              <td>15</td>
-              <td>26</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">3</span></td>
+              <td><span class="metric warn">15</span></td>
+              <td><span class="metric bad">26</span></td>
             </tr>
             <tr>
               <td>src/health/sources</td>
               <td>component</td>
-              <td>79</td>
-              <td>3</td>
-              <td>15</td>
-              <td>13</td>
-            </tr>
-            <tr>
-              <td>src</td>
-              <td>module</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>20</td>
-            </tr>
-            <tr>
-              <td>src/flow</td>
-              <td>module</td>
-              <td>95</td>
-              <td>1</td>
-              <td>5</td>
-              <td>72</td>
-            </tr>
-            <tr>
-              <td>src/gdgraph</td>
-              <td>module</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>13</td>
-            </tr>
-            <tr>
-              <td>src/lib</td>
-              <td>module</td>
-              <td>94</td>
-              <td>1</td>
-              <td>5</td>
-              <td>38</td>
+              <td><span class="metric warn">79</span></td>
+              <td><span class="metric warn">3</span></td>
+              <td><span class="metric warn">15</span></td>
+              <td><span class="metric warn">13</span></td>
             </tr>
             <tr>
               <td>src/rules</td>
               <td>module</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>19</td>
+              <td><span class="metric warn">86</span></td>
+              <td><span class="metric warn">2</span></td>
+              <td><span class="metric warn">10</span></td>
+              <td><span class="metric warn">19</span></td>
+            </tr>
+            <tr>
+              <td>src</td>
+              <td>module</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">20</span></td>
+            </tr>
+            <tr>
+              <td>src/flow</td>
+              <td>module</td>
+              <td><span class="metric good">95</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">72</span></td>
+            </tr>
+            <tr>
+              <td>src/gdgraph</td>
+              <td>module</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">13</span></td>
+            </tr>
+            <tr>
+              <td>src/lib</td>
+              <td>module</td>
+              <td><span class="metric good">94</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">40</span></td>
             </tr>
             <tr>
               <td>src/testing</td>
               <td>module</td>
-              <td>92</td>
-              <td>1</td>
-              <td>5</td>
-              <td>17</td>
+              <td><span class="metric good">92</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">17</span></td>
             </tr>
             <tr>
               <td>src/health/metrics</td>
               <td>component</td>
-              <td>91</td>
-              <td>1</td>
-              <td>5</td>
-              <td>17</td>
+              <td><span class="metric good">91</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">17</span></td>
             </tr></tbody>
             </table>
           </div>
@@ -404,108 +476,108 @@
               <tbody>
             <tr>
               <td>src/cli.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>20</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">20</span></td>
             </tr>
             <tr>
               <td>src/commands/ctx.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>12</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">12</span></td>
             </tr>
             <tr>
               <td>src/commands/flow.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>18</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">18</span></td>
             </tr>
             <tr>
               <td>src/commands/gdgraph.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>16</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">16</span></td>
             </tr>
             <tr>
               <td>src/commands/health.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>11</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">11</span></td>
             </tr>
             <tr>
               <td>src/commands/init.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>64</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">64</span></td>
+            </tr>
+            <tr>
+              <td>src/commands/rules.ts</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">12</span></td>
             </tr>
             <tr>
               <td>src/commands/skills.ts</td>
-              <td>85</td>
-              <td>1</td>
-              <td>5</td>
-              <td>18</td>
+              <td><span class="metric warn">85</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">18</span></td>
             </tr>
             <tr>
               <td>src/commands/test.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>12</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">12</span></td>
             </tr>
             <tr>
               <td>src/commands/update.ts</td>
-              <td>90</td>
-              <td>1</td>
-              <td>5</td>
-              <td>23</td>
+              <td><span class="metric good">90</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">23</span></td>
             </tr>
             <tr>
               <td>src/flow/service.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>72</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">72</span></td>
             </tr>
             <tr>
               <td>src/gdgraph/build.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>13</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">13</span></td>
             </tr>
             <tr>
               <td>src/gdskills/contracts.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>26</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">26</span></td>
             </tr>
             <tr>
               <td>src/gdskills/learn.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>11</td>
+              <td><span class="metric good">93</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric warn">11</span></td>
             </tr>
             <tr>
               <td>src/gdskills/verify.ts</td>
-              <td>91</td>
-              <td>1</td>
-              <td>5</td>
-              <td>25</td>
-            </tr>
-            <tr>
-              <td>src/health/gate.ts</td>
-              <td>93</td>
-              <td>1</td>
-              <td>5</td>
-              <td>16</td>
+              <td><span class="metric good">91</span></td>
+              <td><span class="metric warn">1</span></td>
+              <td><span class="metric warn">5</span></td>
+              <td><span class="metric bad">25</span></td>
             </tr></tbody>
             </table>
           </div>
@@ -517,43 +589,43 @@
             <tr>
               <td>eslint</td>
               <td><span class="pill ">skipped</span></td>
-              <td>0</td>
+              <td><span class="metric good">0</span></td>
               <td>yes</td>
             </tr>
             <tr>
               <td>typescript</td>
               <td><span class="pill good">available</span></td>
-              <td>0</td>
+              <td><span class="metric good">0</span></td>
               <td>yes</td>
             </tr>
             <tr>
               <td>tests</td>
               <td><span class="pill warn">missing</span></td>
-              <td>0</td>
+              <td><span class="metric good">0</span></td>
               <td>no</td>
             </tr>
             <tr>
               <td>dependencyAudit</td>
               <td><span class="pill warn">missing</span></td>
-              <td>0</td>
+              <td><span class="metric good">0</span></td>
               <td>no</td>
             </tr>
             <tr>
               <td>sonarqube</td>
               <td><span class="pill ">skipped</span></td>
-              <td>0</td>
+              <td><span class="metric good">0</span></td>
               <td>no</td>
             </tr>
             <tr>
               <td>coverage</td>
               <td><span class="pill warn">missing</span></td>
-              <td>0</td>
+              <td><span class="metric good">0</span></td>
               <td>no</td>
             </tr>
             <tr>
               <td>complexity</td>
               <td><span class="pill good">available</span></td>
-              <td>29</td>
+              <td><span class="metric warn">31</span></td>
               <td>no</td>
             </tr></tbody>
             </table>
@@ -643,11 +715,47 @@
         </section>
         <section class="panel" id="wiki">
           <h2>Wiki</h2>
+          <p style="margin-bottom:12px">10 pages</p>
           <div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>
             <tr>
-              <td><a href="wiki/index.md">Project Wiki</a></td>
-              <td>root</td>
-              <td>wiki/index.md</td>
+              <td><a href="wiki/architecture/project-map.md">Project Map</a></td>
+              <td>architecture</td>
+              <td>wiki/architecture/project-map.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/architecture/quality-map.md">Quality Map</a></td>
+              <td>architecture</td>
+              <td>wiki/architecture/quality-map.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/architecture/testing-map.md">Testing Map</a></td>
+              <td>architecture</td>
+              <td>wiki/architecture/testing-map.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/components/src-commands.md">Module src/commands</a></td>
+              <td>components</td>
+              <td>wiki/components/src-commands.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/components/src-flow.md">Module src/flow</a></td>
+              <td>components</td>
+              <td>wiki/components/src-flow.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/components/src-gdskills.md">Module src/gdskills</a></td>
+              <td>components</td>
+              <td>wiki/components/src-gdskills.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/components/src-health.md">Module src/health</a></td>
+              <td>components</td>
+              <td>wiki/components/src-health.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/components/src-memory.md">Module src/memory</a></td>
+              <td>components</td>
+              <td>wiki/components/src-memory.md</td>
             </tr>
             <tr>
               <td><a href="wiki/testing/README.md">Testing</a></td>
@@ -662,12 +770,16 @@
         </section>
         <section class="panel" id="memory">
           <h2>Memory</h2>
-          <div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>
-            <tr>
-              <td><a href="memory/index.md">Project Memory</a></td>
-              <td>root</td>
-              <td>memory/index.md</td>
-            </tr></tbody></table></div>
+          <p style="margin-bottom:12px">needs content</p>
+          <div class="empty-state">
+            <b>Memory has no learned entries yet</b>
+            <p>Ingest lessons from reviews, health reports, and task outcomes to keep recurring mistakes and constraints available as short context.</p>
+            <div class="action-grid">
+              <code>gd-metapro memory new lesson &lt;slug&gt;</code>
+              <code>gd-metapro memory ingest --from-health .metaproject/data/health/artifacts/latest.json</code>
+              <code>gd-metapro memory index</code>
+            </div>
+          </div>
         </section>
       </aside>
     </section>
@@ -713,7 +825,7 @@
             <a href="modules/gdwiki.md">Manifest</a><a href="wiki/">Wiki folder</a><a href="wiki/templates/page.md">Template</a><a href="skills/gdwiki/SKILL.md">Skill</a>
           </div>
           <div class="commands">
-            <code>gd-metapro wiki new decision &lt;slug&gt;</code><code>gd-metapro wiki index</code><code>gd-metapro wiki check-links</code>
+            <code>gd-metapro wiki collect</code><code>gd-metapro wiki new decision &lt;slug&gt;</code><code>gd-metapro wiki index</code>
           </div>
         </article>
 

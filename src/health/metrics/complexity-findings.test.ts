@@ -38,10 +38,15 @@ test("source file discovery ignores generated and static output paths", async ()
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "storybook-static", "assets"), { recursive: true });
-  await mkdir(path.join(root, "public"), { recursive: true });
+  await mkdir(path.join(root, "public", "assets"), { recursive: true });
+  await mkdir(path.join(root, "apps", "web", "public", "assets"), { recursive: true });
+  await mkdir(path.join(root, "assets"), { recursive: true });
   await writeFile(path.join(root, "src", "keep.ts"), "export const keep = 1;\n");
   await writeFile(path.join(root, "storybook-static", "assets", "bundle.js"), "function generated() {}\n");
   await writeFile(path.join(root, "public", "worker.js"), "function generated() {}\n");
+  await writeFile(path.join(root, "public", "assets", "generated.js"), "function generated() {}\n");
+  await writeFile(path.join(root, "apps", "web", "public", "assets", "chunk.js"), "function generated() {}\n");
+  await writeFile(path.join(root, "assets", "bundle.js"), "function generated() {}\n");
 
   try {
     await expect(listSourceFiles(root, DEFAULT_HEALTH_CONFIG.ignore.paths)).resolves.toEqual([

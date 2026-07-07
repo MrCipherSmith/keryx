@@ -10,6 +10,7 @@ Project knowledge base from business logic to implementation.
 
 - `gd-metapro wiki status`
 - `gd-metapro wiki new <type> <slug> --title "<title>"`
+- `gd-metapro wiki collect [--force] [--limit <n>]`
 - `gd-metapro wiki index`
 - `gd-metapro wiki check-links`
 - `gd-metapro wiki validate`

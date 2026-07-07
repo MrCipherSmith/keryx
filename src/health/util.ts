@@ -18,6 +18,10 @@ const IGNORED_DIRS = new Set([
   "coverage",
   ".next",
   "out",
+  "storybook-static",
+  "public",
+  "static",
+  "generated",
 ]);
 
 const SOURCE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
@@ -135,6 +139,10 @@ export function matchesAnyPattern(file: string, patterns: string[]): boolean {
 
 function matchesPattern(file: string, pattern: string): boolean {
   const normalized = pattern.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (normalized.startsWith("**/") && normalized.endsWith("/**")) {
+    const segment = normalized.slice(3, -3);
+    return file === segment || file.startsWith(`${segment}/`) || file.includes(`/${segment}/`);
+  }
   if (normalized.endsWith("/**")) {
     const prefix = normalized.slice(0, -3);
     return file === prefix || file.startsWith(`${prefix}/`);
