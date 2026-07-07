@@ -1,6 +1,6 @@
 # Code Health: technical specification
 
-Version: 0.7.0
+Version: 0.8.0
 Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation; AST precision deferred.
 
 ## 1. Purpose
@@ -21,12 +21,12 @@ Markdown/JSON reports with a quality gate suitable for orchestrators and CI.
 | D5 | Config location | Separate `.metaproject/health.config.json` (consistent with `gdctx.config.json`). |
 | D6 | gdskills coupling | Decoupled: Code Health is a producer; gdskills consumes `latest.json` via `skills learn --from-health`. |
 | D7 | Source extensibility | Typed `SourceAdapter` contract; Core-5 built in, others added through the same contract. |
-| D8 | Determinism | `auto` = import-if-present else safe local run; `--strict` forbids run fallback and fails on missing required source; provenance recorded. |
+| D8 | Determinism | `auto` = import compatible normalized artifacts when available; potentially expensive local execution requires explicit source mode/command. `--strict` fails on missing required source; provenance recorded. |
 | D9 | Scopes in v1 | project + module + file (mapped via gdgraph). entity/component/store and skill-owned scope in a later phase. |
 | D10 | Scope metrics in v1 | finding counts, coverage, churn (git), cyclomatic complexity (token-based). |
 | D11 | Source failure semantics | Sources are `required` or `optional`; missing/failed required -> fail in `--strict`, warn otherwise; optional -> skipped, no gate impact. |
 | D12 | Finding schema | Versioned (`schemaVersion`) stable public contract; changes follow semver; consumers validate. |
-| D13 | Test execution ownership | `gd-metapro test` is the canonical owner of test context and execution reports. Health `tests` source consumes `.metaproject/data/testing/artifacts/latest.json` before legacy runner fallback. |
+| D13 | Test execution ownership | `gd-metapro test` is the canonical owner of test context and execution reports. Health `tests` source consumes only compatible `.metaproject/data/testing/artifacts/latest.json` reports and does not run a full test suite implicitly in `auto` mode. |
 
 ## 3. Placement
 
@@ -81,6 +81,21 @@ Default config written on enable:
 ```json
 {
   "schemaVersion": 1,
+  "ignore": {
+    "paths": [
+      "node_modules/**",
+      ".git/**",
+      ".metaproject/**",
+      "dist/**",
+      "build/**",
+      "coverage/**",
+      ".next/**",
+      "out/**",
+      "storybook-static/**",
+      "public/**",
+      "generated/**"
+    ]
+  },
   "sources": {
     "eslint":          { "mode": "auto",     "required": true },
     "typescript":      { "mode": "auto",     "required": true },
@@ -118,8 +133,10 @@ external tool. External complexity tools are added as adapters (section 5).
 
 Core-5 first-class sources: `eslint`, `typescript`, `tests`, `coverage`,
 `dependencyAudit`, plus a `sonarqube` adapter (import-oriented, disabled by
-default). The `tests` source imports Testing Module reports first and only uses
-legacy direct runner fallback when no normalized test report exists. The built-in complexity metric is also emitted as P2 findings.
+default). The `tests` source imports Testing Module reports only when they match
+the current health scope and git ref. It does not run the full test suite in
+`auto` mode; explicit test execution belongs to `gd-metapro test run` or a
+`tests.mode: run` configuration. The built-in complexity metric is also emitted as P2 findings.
 Further external tools plug in through the same `SourceAdapter` contract.
 
 ```ts

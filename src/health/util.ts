@@ -73,10 +73,10 @@ export async function writeRaw(
   return path.relative(cwd, file);
 }
 
-export async function listSourceFiles(cwd: string): Promise<string[]> {
+export async function listSourceFiles(cwd: string, ignorePaths: string[] = []): Promise<string[]> {
   const results: string[] = [];
   await walk(cwd, cwd, results);
-  return results.sort();
+  return results.filter((file) => !matchesAnyPattern(file, ignorePaths)).sort();
 }
 
 async function walk(root: string, dir: string, out: string[]): Promise<void> {
@@ -126,4 +126,21 @@ export function moduleOfFile(file: string): string | null {
 
 export function isSourceFile(file: string): boolean {
   return SOURCE_EXT.has(path.extname(file));
+}
+
+export function matchesAnyPattern(file: string, patterns: string[]): boolean {
+  const normalized = file.replace(/\\/g, "/").replace(/^\.\//, "");
+  return patterns.some((pattern) => matchesPattern(normalized, pattern));
+}
+
+function matchesPattern(file: string, pattern: string): boolean {
+  const normalized = pattern.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (normalized.endsWith("/**")) {
+    const prefix = normalized.slice(0, -3);
+    return file === prefix || file.startsWith(`${prefix}/`);
+  }
+  if (normalized.endsWith("*")) {
+    return file.startsWith(normalized.slice(0, -1));
+  }
+  return file === normalized || file.startsWith(`${normalized}/`);
 }

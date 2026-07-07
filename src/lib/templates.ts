@@ -5,6 +5,7 @@ export function renderIndexMarkdown({
   enableGdskills,
   enableHealth,
   enableTesting,
+  enableMemory,
   ruleSources,
 }: {
   enableGdgraph: boolean;
@@ -13,6 +14,7 @@ export function renderIndexMarkdown({
   enableGdskills: boolean;
   enableHealth: boolean;
   enableTesting: boolean;
+  enableMemory: boolean;
   ruleSources: string[];
 }): string {
   const moduleRows = [
@@ -33,6 +35,9 @@ export function renderIndexMarkdown({
       : "",
     enableTesting
       ? "| testing | Test context, related tests, execution reports, and test intelligence | modules/testing.md |"
+      : "",
+    enableMemory
+      ? "| memory | Long-lived project memory: lessons, decisions, constraints, known mistakes | modules/memory.md |"
       : "",
   ]
     .filter(Boolean)
@@ -64,6 +69,13 @@ export function renderIndexMarkdown({
           "- `data/testing/artifacts/latest.md`",
         ]
       : []),
+    ...(enableMemory
+      ? [
+          "- `memory/index.md`",
+          "- `data/memory/index/index.json`",
+          "- `data/memory/artifacts/latest.md`",
+        ]
+      : []),
   ];
   const dataRefs = dataRefItems.length > 0
     ? dataRefItems.join("\n")
@@ -87,6 +99,9 @@ export function renderIndexMarkdown({
       : "",
     enableTesting
       ? "| testing | Read testing context before creating/changing tests and normalized reports before raw test logs | skills/testing/SKILL.md |"
+      : "",
+    enableMemory
+      ? "| memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |"
       : "",
   ]
     .filter(Boolean)
@@ -124,6 +139,11 @@ export function renderIndexMarkdown({
     ...(enableTesting
       ? [
           "For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.",
+        ]
+      : []),
+    ...(enableMemory
+      ? [
+          "For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `gd-metapro memory search` before broad documentation reads.",
         ]
       : []),
     "Use relevant skills from `skills/`.",
@@ -182,6 +202,7 @@ ${dataRefs}
 gd-metapro index refresh
 ${enableGdgraph ? "gd-metapro gdgraph build" : ""}
 ${enableTesting ? "gd-metapro test analyze" : ""}
+${enableMemory ? "gd-metapro memory index" : ""}
 \`\`\`
 `;
 }
@@ -203,6 +224,8 @@ For commands, search, diff, test logs, lint/build output, and large file reads t
 For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.
 
 For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.
+
+For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.
 `;
 }
 
@@ -294,6 +317,7 @@ export function renderMetaprojectReadme({
   enableGdskills,
   enableHealth,
   enableTesting,
+  enableMemory,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
@@ -301,6 +325,7 @@ export function renderMetaprojectReadme({
   enableGdskills: boolean;
   enableHealth: boolean;
   enableTesting: boolean;
+  enableMemory: boolean;
 }): string {
   const moduleItems = [
     enableGdgraph ? "- `gdgraph`: code graph and affected context." : "",
@@ -318,6 +343,9 @@ export function renderMetaprojectReadme({
       : "",
     enableTesting
       ? "- `testing`: test context, related tests, and normalized test reports."
+      : "",
+    enableMemory
+      ? "- `memory`: long-lived lessons, decisions, constraints, and known mistakes."
       : "",
   ].filter(Boolean);
   const modules = moduleItems.length > 0
@@ -340,6 +368,7 @@ export function renderMetaprojectReadme({
       : []),
     ...(enableHealth ? ["gd-metapro health run", "gd-metapro health gate"] : []),
     ...(enableTesting ? ["gd-metapro test analyze", "gd-metapro test run --changed"] : []),
+    ...(enableMemory ? ["gd-metapro memory index", 'gd-metapro memory search "project decisions"'] : []),
   ];
 
   return `# Project Metaproject

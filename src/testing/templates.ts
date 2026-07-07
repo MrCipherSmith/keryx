@@ -178,7 +178,7 @@ export function renderTestingPostCommitHook(): string {
   fi
 
   if command -v gd-metapro >/dev/null 2>&1; then
-    gd-metapro test analyze --changed >/dev/null 2>&1 || {
+    gd-metapro test analyze >/dev/null 2>&1 || {
       echo "gd-metapro post-commit: testing context refresh failed" >&2
       return 0
     }
@@ -187,7 +187,7 @@ export function renderTestingPostCommitHook(): string {
   fi
 
   if [ -x "$HOME/.local/bin/gd-metapro" ]; then
-    "$HOME/.local/bin/gd-metapro" test analyze --changed >/dev/null 2>&1 || {
+    "$HOME/.local/bin/gd-metapro" test analyze >/dev/null 2>&1 || {
       echo "gd-metapro post-commit: testing context refresh failed" >&2
       return 0
     }
@@ -212,12 +212,12 @@ export function renderTestingPrePushHook(): string {
   fi
 
   if command -v gd-metapro >/dev/null 2>&1; then
-    gd-metapro test run --changed
+    gd-metapro test run --changed --strict
     return $?
   fi
 
   if [ -x "$HOME/.local/bin/gd-metapro" ]; then
-    "$HOME/.local/bin/gd-metapro" test run --changed
+    "$HOME/.local/bin/gd-metapro" test run --changed --strict
     return $?
   fi
 
@@ -228,4 +228,3 @@ export function renderTestingPrePushHook(): string {
 gd_metapro_testing_pre_push
 `;
 }
-

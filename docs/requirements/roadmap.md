@@ -25,10 +25,10 @@ registry to human-readable status and points at each module's requirements.
 | gdgraph | `gd-metapro gdgraph` | `gdgraph` | implemented | [gdgraph/](gdgraph/) |
 | gdctx | `gd-metapro ctx` | `gdctx` | implemented | [gdctx/](gdctx/) |
 | gdwiki | `gd-metapro wiki` | `wiki` | implemented (MVP) | [wiki/](wiki/) |
-| Documentation Memory | `gd-metapro memory` | `memory` | spec ready | [documentation-memory/](documentation-memory/) |
+| Documentation Memory | `gd-metapro memory` | `memory` | implemented (Phase 1 + 2) | [documentation-memory/](documentation-memory/) |
 | Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
 | Code Health | `gd-metapro health` | `health` | implemented (Phase 1 + 2) | [code-health/](code-health/) |
-| Testing Module | `gd-metapro test` | `testing` | spec ready | [testing/](testing/) |
+| Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (MVP) | [gdskills/](gdskills/) |
 
 ## 4. gdwiki (implemented, MVP)

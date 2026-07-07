@@ -1,7 +1,7 @@
 # Testing Module technical specification
 
-Version: 0.1.0
-Status: spec ready
+Version: 0.2.0
+Status: implemented (MVP)
 
 ## 1. Purpose
 
@@ -84,8 +84,8 @@ Config lives in `.metaproject/testing.config.json`.
 
 ```bash
 gd-metapro test init
-gd-metapro test analyze [--changed]
-gd-metapro test run [--changed] [--scope <path>] [--kind unit|integration|e2e|smoke]
+gd-metapro test analyze
+gd-metapro test run [--changed] [--strict] [--scope <path>] [--kind unit|integration|e2e|smoke]
 gd-metapro test status
 gd-metapro test context
 gd-metapro test explain <file-or-scope>
@@ -142,6 +142,7 @@ graph query support is not sufficient yet.
 {
   "schemaVersion": 1,
   "generatedAt": "2026-07-07T00:00:00.000Z",
+  "gitRef": "abc1234",
   "status": "pass",
   "scope": "project",
   "runner": "bun",
@@ -157,7 +158,9 @@ graph query support is not sufficient yet.
   "selection": {
     "changed": false,
     "strategies": ["runner", "gdgraph", "naming"],
-    "selectedTests": []
+    "selectedTests": [],
+    "changedFiles": [],
+    "fallback": "none"
   },
   "failures": [],
   "relatedFiles": [],
@@ -167,6 +170,11 @@ graph query support is not sufficient yet.
 ```
 
 Status values: `pass`, `fail`, `error`, `skipped`.
+
+Changed-scope reports include `gitRef`; Code Health imports a report only when
+the report scope and git ref are compatible with the current health run.
+`--strict` turns empty changed-scope selection into a failing gate result, which
+is what the pre-push hook uses.
 
 ## 7. Markdown Report
 
@@ -246,4 +254,3 @@ Health `tests` source should:
 - `gd-metapro test status/context/report/explain/related` work without network.
 - `.metaproject/index.md` references Testing Module when enabled.
 - Code Health spec identifies Testing as execution/reporting owner.
-

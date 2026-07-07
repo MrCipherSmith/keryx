@@ -6,6 +6,13 @@ The public command is `gd-metapro`.
 
 ## Global Install
 
+From the GitHub package source after build hooks:
+
+```bash
+bun install -g github:MrCipherSmith/meta-project
+gd-metapro init
+```
+
 Private repository install through GitHub CLI:
 
 ```bash
@@ -165,6 +172,7 @@ gd-metapro init
 gd-metapro init --yes
 gd-metapro init --no-gdgraph
 gd-metapro init --no-gdctx
+gd-metapro init --no-memory
 gd-metapro init --no-gdgraph-hook
 gd-metapro status
 gd-metapro update
@@ -174,6 +182,12 @@ gd-metapro gdgraph query orphans
 gd-metapro gdgraph affected src/example.ts
 gd-metapro ctx status
 gd-metapro ctx diff
+gd-metapro wiki status
+gd-metapro skills status
+gd-metapro test analyze
+gd-metapro test run --changed
+gd-metapro health run --changed
+gd-metapro memory search "decision"
 ```
 
 ## Current Modules
@@ -181,6 +195,11 @@ gd-metapro ctx diff
 - `spec-orchestrator`: CLI, install, init, manifest, and `.metaproject` structure.
 - `gdgraph`: code graph module for dependencies and affected context.
 - `gdctx`: context module for compact command/search/read output.
+- `gdwiki`: Markdown project knowledge base with page templates, link checks, and index generation.
+- `gdskills`: bundled agent-facing skills plus generated project-skill creation, routing, verification, learning, export, and sync.
+- `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports.
+- `code-health`: normalized code health reports from TypeScript, tests, audit, complexity, coverage, lint, and optional SonarQube.
+- `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection.
 
 ## gdgraph MVP
 

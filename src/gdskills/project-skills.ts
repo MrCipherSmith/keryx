@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { pathExists, toPosix } from "../lib/fs";
+import { readJsonFileOr } from "../lib/json";
 
 export type ProjectSkillFormat = "auto" | "single" | "package";
 
@@ -514,7 +515,7 @@ async function updateManifest(
   entry: ProjectSkillRegistryEntry,
 ): Promise<void> {
   const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   manifest.modules ??= {};
   manifest.modules.gdskills ??= {};
 
@@ -531,7 +532,7 @@ async function updateManifest(
 async function updateSkillsCatalog(projectRoot: string): Promise<void> {
   const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
   const catalogPath = path.join(projectRoot, ".metaproject", "skills", "catalog.md");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   const registry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   const rows = registry.length > 0
     ? registry
@@ -601,8 +602,4 @@ function titleize(value: string): string {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join("/");
 }

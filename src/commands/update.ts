@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
 import { access, readdir } from "node:fs/promises";
-import { constants, existsSync } from "node:fs";
+import { constants } from "node:fs";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 
 export async function updateCommand(): Promise<void> {
-  const runtimeRoot = findRuntimeRoot(process.cwd());
+  const runtimeRoot = await findRuntimeRoot(process.cwd());
 
   if (runtimeRoot) {
     await run("git", ["fetch", "--depth", "1", "origin", "main"], runtimeRoot);
@@ -18,14 +18,19 @@ export async function updateCommand(): Promise<void> {
   await runPostUpdateHooks(process.cwd());
 }
 
-function findRuntimeRoot(projectRoot: string): string | null {
+async function findRuntimeRoot(projectRoot: string): Promise<string | null> {
   const projectRuntime = path.join(projectRoot, ".metaproject", "runtime", "gd-metapro");
-  if (existsSync(path.join(projectRuntime, ".git"))) {
+  if (await pathExists(path.join(projectRuntime, ".git"))) {
     return projectRuntime;
   }
 
-  const globalRuntime = path.join(process.env.HOME ?? "", ".gd-metapro", "gd-metapro");
-  if (existsSync(path.join(globalRuntime, ".git"))) {
+  const home = process.env.HOME;
+  if (!home) {
+    return null;
+  }
+
+  const globalRuntime = path.join(home, ".gd-metapro", "gd-metapro");
+  if (await pathExists(path.join(globalRuntime, ".git"))) {
     return globalRuntime;
   }
 

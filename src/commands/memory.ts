@@ -1,9 +1,15 @@
 import { createMemoryService } from "../memory/service";
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
+import { optionValue } from "../lib/args";
 import type { MemoryStatus, SearchFilters } from "../memory/types";
 
-const service = createMemoryService();
+let service: ReturnType<typeof createMemoryService> | null = null;
+
+function getService(): ReturnType<typeof createMemoryService> {
+  service ??= createMemoryService();
+  return service;
+}
 
 const INGEST_FLAGS: Record<string, string> = {
   "--from-review": "review",
@@ -58,11 +64,11 @@ async function runNew(args: string[]): Promise<void> {
     return;
   }
   const slug = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
-  const result = await service.create({
+  const result = await getService().create({
     cwd: process.cwd(),
     type,
     slug,
-    title: valueAfter(args, "--title"),
+    title: optionValue(args, "--title"),
     force: args.includes("--force"),
   });
 
@@ -77,7 +83,7 @@ async function runNew(args: string[]): Promise<void> {
 }
 
 async function runIndex(): Promise<void> {
-  const result = await service.index({ cwd: process.cwd() });
+  const result = await getService().index({ cwd: process.cwd() });
   console.log(`Indexed ${result.entryCount} entries -> ${result.path}`);
 }
 
@@ -89,15 +95,15 @@ async function runSearch(args: string[]): Promise<void> {
     return;
   }
 
-  const limitArg = valueAfter(args, "--limit");
+  const limitArg = optionValue(args, "--limit");
   const filters: SearchFilters = {
-    module: valueAfter(args, "--module"),
-    entity: valueAfter(args, "--entity"),
-    status: valueAfter(args, "--status") as MemoryStatus | undefined,
+    module: optionValue(args, "--module"),
+    entity: optionValue(args, "--entity"),
+    status: optionValue(args, "--status") as MemoryStatus | undefined,
     limit: limitArg ? Number(limitArg) : undefined,
   };
 
-  const result = await service.search({ cwd: process.cwd(), query, filters });
+  const result = await getService().search({ cwd: process.cwd(), query, filters });
   console.log(`# memory search: ${query}`);
   console.log("");
   console.log(`results: ${result.results.length}`);
@@ -120,14 +126,14 @@ async function runIngest(args: string[]): Promise<void> {
     return;
   }
   const source = INGEST_FLAGS[flag] ?? "job";
-  const path = valueAfter(args, flag);
+  const path = optionValue(args, flag);
   if (!path) {
     console.error(`Usage: gd-metapro memory ingest ${flag} <path>`);
     process.exitCode = 1;
     return;
   }
 
-  const result = await service.ingest({ cwd: process.cwd(), source, path });
+  const result = await getService().ingest({ cwd: process.cwd(), source, path });
   console.log(
     `Ingested ${result.created.length} draft(s) from ${source}; reconciled ${result.reconciled.length}; skipped ${result.skippedDuplicates} duplicate(s).`,
   );
@@ -147,7 +153,7 @@ async function runIngest(args: string[]): Promise<void> {
 }
 
 async function runCheck(): Promise<void> {
-  const result = await service.check({ cwd: process.cwd() });
+  const result = await getService().check({ cwd: process.cwd() });
   console.log("# memory check");
   console.log("");
   if (result.ok) {
@@ -176,11 +182,6 @@ async function runReflect(): Promise<void> {
   for (const created of result.created) {
     console.log(`  -> ${created}`);
   }
-}
-
-function valueAfter(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
 }
 
 function printHelp(): void {

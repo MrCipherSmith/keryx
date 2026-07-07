@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getComplexityFindings } from "./complexity-findings";
 import { DEFAULT_HEALTH_CONFIG } from "../config";
+import { listSourceFiles } from "../util";
 
 test("emits one P2 finding per file with functions over the threshold", async () => {
   const root = path.join(import.meta.dir, "..", "..", "..", ".tmp-cx-findings");
@@ -27,6 +28,25 @@ test("emits one P2 finding per file with functions over the threshold", async ()
     expect(findings[0]?.file).toBe("src/complex.ts");
     expect(findings[0]?.priority).toBe("P2");
     expect(findings[0]?.category).toBe("complexity");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("source file discovery ignores generated and static output paths", async () => {
+  const root = path.join(import.meta.dir, "..", "..", "..", ".tmp-health-ignore");
+  await rm(root, { recursive: true, force: true });
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "storybook-static", "assets"), { recursive: true });
+  await mkdir(path.join(root, "public"), { recursive: true });
+  await writeFile(path.join(root, "src", "keep.ts"), "export const keep = 1;\n");
+  await writeFile(path.join(root, "storybook-static", "assets", "bundle.js"), "function generated() {}\n");
+  await writeFile(path.join(root, "public", "worker.js"), "function generated() {}\n");
+
+  try {
+    await expect(listSourceFiles(root, DEFAULT_HEALTH_CONFIG.ignore.paths)).resolves.toEqual([
+      "src/keep.ts",
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

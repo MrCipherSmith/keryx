@@ -1,6 +1,6 @@
 import { runCommand, toolVersion } from "../util";
 import { NoImportError, makeFinding, resolveBin } from "./helpers";
-import { loadTestingReport } from "../../testing/service";
+import { loadCompatibleTestingReport, loadTestingReport } from "../../testing/service";
 import type { TestingReport } from "../../testing/types";
 import type {
   Finding,
@@ -18,7 +18,7 @@ export const testsAdapter: SourceAdapter = {
   id: "tests",
 
   async detect(ctx: HealthContext): Promise<SourceStatus> {
-    if (await loadTestingReport(ctx.cwd)) {
+    if (await compatibleReportForHealth(ctx)) {
       return "available";
     }
     if (!hasTestFiles(ctx)) {
@@ -43,9 +43,9 @@ export const testsAdapter: SourceAdapter = {
   },
 
   async import(ctx: HealthContext): Promise<RawSourceResult> {
-    const report = await loadTestingReport(ctx.cwd);
+    const report = await compatibleReportForHealth(ctx);
     if (!report) {
-      throw new NoImportError("testing report not found");
+      throw new NoImportError("compatible testing report not found");
     }
     return {
       source: "tests",
@@ -119,7 +119,7 @@ function parseTestingReport(raw: RawSourceResult): Finding[] {
     return [];
   }
 
-  return report.failures.map((failure) =>
+  const findings = report.failures.map((failure) =>
     makeFinding({
       source: "tests",
       severity: "error",
@@ -135,4 +135,35 @@ function parseTestingReport(raw: RawSourceResult): Finding[] {
       rawLog: report.rawLogPath,
     }),
   );
+  if (findings.length === 0 && report.status !== "pass" && report.status !== "skipped") {
+    findings.push(
+      makeFinding({
+        source: "tests",
+        severity: "error",
+        priority: "P0",
+        category: "test",
+        message: `Test run ${report.status} without parseable failures.`,
+        ruleKey: "tests-failed",
+        file: null,
+        line: null,
+        command: report.command,
+        toolVersion: report.runner,
+        rawLog: report.rawLogPath,
+      }),
+    );
+  }
+  return findings;
+}
+
+async function compatibleReportForHealth(ctx: HealthContext): Promise<TestingReport | null> {
+  if (ctx.scopeSelector.kind === "changed") {
+    return loadCompatibleTestingReport(ctx.cwd, {
+      scope: "changed",
+      since: ctx.scopeSelector.since,
+    });
+  }
+  if (ctx.scopeSelector.kind === "project") {
+    return loadCompatibleTestingReport(ctx.cwd, { scope: "project" });
+  }
+  return loadTestingReport(ctx.cwd);
 }

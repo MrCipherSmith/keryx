@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-07-07T00:34:35.520Z
+generatedAt: 2026-07-07T07:34:37.888Z
 
 ## Frameworks
 
@@ -62,17 +62,17 @@ generatedAt: 2026-07-07T00:34:35.520Z
 - docs/requirements/code-health/specification.md: Code Health: technical specification
 - docs/requirements/code-health/specification.md: | D6 | gdskills coupling | Decoupled: Code Health is a producer; gdskills consumes `latest.json` via `skills learn --from-health`. |
 - docs/requirements/code-health/specification.md: | D10 | Scope metrics in v1 | finding counts, coverage, churn (git), cyclomatic complexity (token-based). |
+- docs/requirements/code-health/specification.md: "coverage/**",
 - docs/requirements/code-health/specification.md: "tests":           { "mode": "auto",     "required": false },
 - docs/requirements/code-health/specification.md: "coverage":        { "mode": "import",   "required": false },
 - docs/requirements/code-health/specification.md: "coverageTarget": 80,
 - docs/requirements/code-health/specification.md: "coverageSoftFloor": 60,
 - docs/requirements/code-health/specification.md: "coverageWeight": 1,
 - docs/requirements/code-health/specification.md: Core-5 first-class sources: `eslint`, `typescript`, `tests`, `coverage`,
-- docs/requirements/code-health/specification.md: default). The `tests` source imports Testing Module reports first and only uses
-- docs/requirements/code-health/specification.md: legacy direct runner fallback when no normalized test report exists. The built-in complexity metric is also emitted as P2 findings.
-- docs/requirements/code-health/specification.md: "message": "Unexpected any. Specify a different type.",
-- docs/requirements/code-health/specification.md: | P0 | TypeScript errors; failing tests; dependency audit `critical`/`high`. |
-- docs/requirements/code-health/specification.md: | P1 | ESLint `error`; dependency audit `moderate`; coverage below `coverageSoftFloor`. |
+- docs/requirements/code-health/specification.md: default). The `tests` source imports Testing Module reports only when they match
+- docs/requirements/code-health/specification.md: the current health scope and git ref. It does not run the full test suite in
+- docs/requirements/code-health/specification.md: `auto` mode; explicit test execution belongs to `gd-metapro test run` or a
+- docs/requirements/code-health/specification.md: `tests.mode: run` configuration. The built-in complexity metric is also emitted as P2 findings.
 
 ## Recommendations
 
