@@ -279,10 +279,10 @@ export type MetaprojectDashboardData = {
     reportHref?: string;
   };
   wiki?: {
-    pages: Array<{ title: string; href: string; group: string }>;
+    pages: Array<{ title: string; href: string; group: string; content?: string }>;
   };
   memory?: {
-    entries: Array<{ title: string; href: string; group: string }>;
+    entries: Array<{ title: string; href: string; group: string; content?: string }>;
   };
 };
 
@@ -463,6 +463,15 @@ export function renderMetaprojectDashboardHtml({
   const testing = data?.testing;
   const wikiPages = data?.wiki?.pages ?? [];
   const memoryEntries = data?.memory?.entries ?? [];
+  // Embed page markdown so links open in an in-page modal instead of navigating
+  // to a raw .md file (fetch is blocked when the dashboard is opened via file://).
+  const docMap: Record<string, string> = {};
+  for (const page of [...wikiPages, ...memoryEntries]) {
+    if (page.content) {
+      docMap[page.href] = page.content;
+    }
+  }
+  const docsJson = JSON.stringify(docMap).replace(/</g, "\\u003c");
   const qualityStatus = health?.status ?? (enableHealth ? "missing" : "disabled");
   const graphStatus = graph ? `${graph.files} files` : (enableGdgraph ? "missing" : "disabled");
   const healthClass = health ? healthTone(health) : "";
@@ -837,6 +846,50 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
       </section>
     </main>
   </div>
+
+  <div class="modal" id="gdmModal" hidden>
+    <div class="modal-backdrop" onclick="__gdmCloseDoc()"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Document viewer">
+      <div class="modal-head">
+        <span class="modal-title" id="gdmModalTitle"></span>
+        <div class="modal-actions">
+          <a class="modal-raw" id="gdmModalRaw" href="#" title="Open the raw file">raw ↗</a>
+          <button class="modal-x" type="button" onclick="__gdmCloseDoc()" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="modal-body markdown" id="gdmModalBody"></div>
+    </div>
+  </div>
+  <style>
+    .modal[hidden] { display:none; }
+    .modal { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:24px; }
+    .modal-backdrop { position:absolute; inset:0; background:rgba(4,8,14,.62); }
+    .modal-card { position:relative; width:min(820px,100%); max-height:86vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); overflow:hidden; }
+    .modal-head { display:flex; align-items:center; gap:12px; padding:13px 18px; border-bottom:1px solid var(--line); background:var(--panel2); }
+    .modal-title { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
+    .modal-actions { display:flex; align-items:center; gap:9px; }
+    .modal-raw { font-size:12px; color:var(--muted); text-decoration:none; border:1px solid var(--line); padding:4px 9px; border-radius:8px; }
+    .modal-raw:hover { color:var(--ink); }
+    .modal-x { cursor:pointer; background:none; border:1px solid var(--line); color:var(--muted); width:28px; height:28px; border-radius:8px; font-size:12px; }
+    .modal-x:hover { color:var(--ink); }
+    .modal-body { padding:22px 26px; overflow:auto; }
+    .markdown { font-size:14px; line-height:1.65; color:var(--ink); }
+    .markdown > *:first-child { margin-top:0; }
+    .markdown h1 { font-size:20px; margin:.3em 0 .5em; }
+    .markdown h2 { font-size:16px; margin:1.3em 0 .5em; padding-bottom:.3em; border-bottom:1px solid var(--line); }
+    .markdown h3 { font-size:13px; margin:1.1em 0 .4em; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+    .markdown p { margin:.6em 0; color:var(--muted); }
+    .markdown ul, .markdown ol { margin:.5em 0; padding-left:1.4em; color:var(--muted); }
+    .markdown li { margin:.25em 0; }
+    .markdown a { color:var(--accent); text-decoration:none; }
+    .markdown a:hover { text-decoration:underline; }
+    .markdown code { font-family:ui-monospace,Menlo,monospace; font-size:.88em; background:var(--panel2); border:1px solid var(--line); border-radius:5px; padding:.1em .35em; color:var(--ink); }
+    .markdown pre { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; overflow:auto; margin:.8em 0; }
+    .markdown pre code { background:none; border:0; padding:0; font-size:12px; }
+    .markdown strong { color:var(--ink); }
+    .markdown blockquote { margin:.6em 0; padding:.3em 0 .3em 12px; border-left:3px solid var(--line); color:var(--faint); }
+  </style>
+  <script id="gdm-docs" type="application/json">${docsJson}</script>
   <script>
     (function () {
       var root = document.documentElement;
@@ -850,6 +903,66 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
         root.setAttribute("data-theme", next);
         try { localStorage.setItem(KEY, next); } catch (e) {}
       };
+    })();
+    (function () {
+      var docs = {};
+      try { docs = JSON.parse(document.getElementById("gdm-docs").textContent || "{}"); } catch (e) {}
+      var BT = String.fromCharCode(96);
+      var fence = BT + BT + BT;
+      var codeRe = new RegExp(BT + "([^" + BT + "]+)" + BT, "g");
+      function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+      function inline(s) {
+        return s
+          .replace(codeRe, function (_, c) { return "<code>" + esc(c) + "</code>"; })
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, t, u) { return "<a href='" + u + "'>" + t + "</a>"; });
+      }
+      function render(md) {
+        var lines = String(md).replace(/\r\n/g, "\n").split("\n");
+        var out = [], inCode = false, list = null;
+        function closeList() { if (list) { out.push("</" + list + ">"); list = null; } }
+        for (var i = 0; i < lines.length; i++) {
+          var ln = lines[i];
+          if (ln.slice(0, 3) === fence) {
+            if (inCode) { out.push("</code></pre>"); inCode = false; }
+            else { closeList(); out.push("<pre><code>"); inCode = true; }
+            continue;
+          }
+          if (inCode) { out.push(esc(ln) + "\n"); continue; }
+          var h = ln.match(/^(#{1,3})\s+(.*)$/);
+          if (h) { closeList(); var n = h[1].length; out.push("<h" + n + ">" + inline(esc(h[2])) + "</h" + n + ">"); continue; }
+          var ul = ln.match(/^\s*[-*]\s+(.*)$/);
+          if (ul) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push("<li>" + inline(esc(ul[1])) + "</li>"); continue; }
+          var ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+          if (ol) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push("<li>" + inline(esc(ol[1])) + "</li>"); continue; }
+          var bq = ln.match(/^>\s?(.*)$/);
+          if (bq) { closeList(); out.push("<blockquote>" + inline(esc(bq[1])) + "</blockquote>"); continue; }
+          if (ln.trim() === "") { closeList(); continue; }
+          closeList(); out.push("<p>" + inline(esc(ln)) + "</p>");
+        }
+        if (inCode) out.push("</code></pre>");
+        closeList();
+        return out.join("");
+      }
+      var modal = document.getElementById("gdmModal");
+      var body = document.getElementById("gdmModalBody");
+      var titleEl = document.getElementById("gdmModalTitle");
+      var rawEl = document.getElementById("gdmModalRaw");
+      window.__gdmCloseDoc = function () { modal.hidden = true; };
+      function openDoc(href) {
+        body.innerHTML = render(docs[href] || "");
+        titleEl.textContent = href;
+        rawEl.setAttribute("href", href);
+        modal.hidden = false;
+        body.scrollTop = 0;
+      }
+      document.addEventListener("click", function (e) {
+        var a = e.target.closest ? e.target.closest("a") : null;
+        if (!a) return;
+        var href = a.getAttribute("href");
+        if (href && Object.prototype.hasOwnProperty.call(docs, href)) { e.preventDefault(); openDoc(href); }
+      });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape") { modal.hidden = true; } });
     })();
   </script>
 </body>

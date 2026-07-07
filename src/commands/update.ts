@@ -640,22 +640,29 @@ async function collectTestingDashboardData(
   return undefined;
 }
 
-async function collectMarkdownPages(root: string, hrefPrefix: string): Promise<Array<{ title: string; href: string; group: string }>> {
+async function collectMarkdownPages(
+  root: string,
+  hrefPrefix: string,
+): Promise<Array<{ title: string; href: string; group: string; content?: string }>> {
   if (!(await pathExists(root))) {
     return [];
   }
   const files = await listMarkdownFiles(root);
-  const pages: Array<{ title: string; href: string; group: string }> = [];
+  const pages: Array<{ title: string; href: string; group: string; content?: string }> = [];
   for (const filePath of files.slice(0, 40)) {
     const relativePath = path.relative(root, filePath).split(path.sep).join("/");
     if (relativePath === "index.md" || relativePath.startsWith("templates/")) {
       continue;
     }
     const content = await readFile(filePath, "utf8");
+    // Embed the page so the dashboard can render it in a modal (file:// blocks
+    // fetch); cap to keep the generated HTML reasonable.
+    const embedded = content.length > 24_000 ? `${content.slice(0, 24_000)}\n\n…truncated…` : content;
     pages.push({
       title: firstMarkdownHeading(content) ?? relativePath,
       href: `${hrefPrefix}/${relativePath}`,
       group: relativePath.includes("/") ? relativePath.split("/")[0] ?? "root" : "root",
+      content: embedded,
     });
   }
   return pages;
