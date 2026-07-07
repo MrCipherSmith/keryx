@@ -6,6 +6,7 @@ import {
   runTesting,
   testingDataRoot,
 } from "../testing/service";
+import { optionValue } from "../lib/args";
 
 export async function testCommand(args: string[]): Promise<void> {
   const command = args[0];
@@ -66,9 +67,10 @@ async function runRun(args: string[]): Promise<void> {
   const result = await runTesting({
     cwd: process.cwd(),
     changed: args.includes("--changed"),
-    since: valueAfter(args, "--since") ?? null,
-    scope: valueAfter(args, "--scope") ?? null,
-    kind: valueAfter(args, "--kind") ?? null,
+    since: optionValue(args, "--since") ?? null,
+    scope: optionValue(args, "--scope") ?? null,
+    kind: optionValue(args, "--kind") ?? null,
+    strict: args.includes("--strict") || args.includes("--gate"),
   });
   console.log(`# Test Report: ${result.report.status.toUpperCase()}`);
   console.log("");
@@ -189,18 +191,13 @@ async function runExplain(args: string[]): Promise<void> {
   }
 }
 
-function valueAfter(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
-}
-
 function printHelp(): void {
   console.log(`gd-metapro test
 
 Usage:
   gd-metapro test init
-  gd-metapro test analyze [--changed]
-  gd-metapro test run [--changed] [--since <ref>] [--scope <path>] [--kind unit|integration|e2e|smoke]
+  gd-metapro test analyze
+  gd-metapro test run [--changed] [--strict] [--since <ref>] [--scope <path>] [--kind unit|integration|e2e|smoke]
   gd-metapro test status
   gd-metapro test context
   gd-metapro test explain <file-or-scope>
@@ -208,4 +205,3 @@ Usage:
   gd-metapro test report latest [--json]
 `);
 }
-

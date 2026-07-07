@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { readJsonFileOr } from "../lib/json";
 import type { MemoryConfig } from "./types";
 
 export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
@@ -32,7 +32,7 @@ export async function loadMemoryConfig(cwd: string): Promise<MemoryConfig> {
   if (!(await pathExists(file))) {
     return DEFAULT_MEMORY_CONFIG;
   }
-  const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<MemoryConfig>;
+  const parsed = await readJsonFileOr<Partial<MemoryConfig>>(file, {});
   const base = DEFAULT_MEMORY_CONFIG;
   return {
     schemaVersion: parsed.schemaVersion ?? base.schemaVersion,

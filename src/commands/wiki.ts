@@ -5,6 +5,7 @@ import {
   wikiStatus,
   wikiValidate,
 } from "../wiki/service";
+import { optionValue } from "../lib/args";
 
 export async function wikiCommand(args: string[]): Promise<void> {
   const command = args[0];
@@ -85,7 +86,7 @@ async function runNew(args: string[]): Promise<void> {
     cwd: process.cwd(),
     type,
     slug,
-    title: valueAfter(args, "--title"),
+    title: optionValue(args, "--title"),
     force: args.includes("--force"),
   });
 
@@ -136,11 +137,6 @@ async function runValidate(): Promise<void> {
     console.log(`- [${issue.kind}] ${issue.page}: ${issue.message}`);
   }
   process.exitCode = 1;
-}
-
-function valueAfter(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
 }
 
 function printHelp(): void {

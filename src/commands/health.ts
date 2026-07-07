@@ -1,8 +1,14 @@
 import { createCodeHealthService } from "../health/service";
 import { computeTrend, loadHistory } from "../health/history";
+import { optionValue } from "../lib/args";
 import type { ScopeSelector } from "../health/types";
 
-const service = createCodeHealthService();
+let service: ReturnType<typeof createCodeHealthService> | null = null;
+
+function getService(): ReturnType<typeof createCodeHealthService> {
+  service ??= createCodeHealthService();
+  return service;
+}
 
 export async function healthCommand(args: string[]): Promise<void> {
   const command = args[0];
@@ -48,8 +54,8 @@ export async function healthCommand(args: string[]): Promise<void> {
 
 async function runRun(args: string[]): Promise<void> {
   const scope = parseScope(args);
-  const sourcesArg = valueAfter(args, "--source");
-  const result = await service.run({
+  const sourcesArg = optionValue(args, "--source");
+  const result = await getService().run({
     cwd: process.cwd(),
     strict: args.includes("--strict"),
     ...(scope ? { scope } : {}),
@@ -74,7 +80,7 @@ async function runRun(args: string[]): Promise<void> {
 }
 
 async function runStatus(): Promise<void> {
-  const status = await service.status({ cwd: process.cwd() });
+  const status = await getService().status({ cwd: process.cwd() });
   console.log("# health status");
   console.log("");
   console.log(`enabled: ${status.enabled ? "yes" : "no"}`);
@@ -100,7 +106,7 @@ async function runStatus(): Promise<void> {
 }
 
 async function runGate(args: string[]): Promise<void> {
-  const result = await service.gate({
+  const result = await getService().gate({
     cwd: process.cwd(),
     strictWarn: args.includes("--strict-warn"),
   });
@@ -112,7 +118,7 @@ async function runGate(args: string[]): Promise<void> {
 }
 
 async function runSources(): Promise<void> {
-  const result = await service.sources({ cwd: process.cwd() });
+  const result = await getService().sources({ cwd: process.cwd() });
   console.log("# health sources");
   console.log("");
   for (const source of result.sources) {
@@ -129,7 +135,7 @@ async function runExplain(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const result = await service.explain({ cwd: process.cwd(), target });
+  const result = await getService().explain({ cwd: process.cwd(), target });
   if (!result.found) {
     console.log(`No health metrics for ${target}. Run \`gd-metapro health run\` first.`);
     return;
@@ -163,7 +169,7 @@ async function runBaseline(args: string[]): Promise<void> {
     return;
   }
   const scope = parseScope(args.slice(1));
-  const result = await service.updateBaseline({
+  const result = await getService().updateBaseline({
     cwd: process.cwd(),
     ...(scope ? { scope } : {}),
   });
@@ -171,8 +177,8 @@ async function runBaseline(args: string[]): Promise<void> {
 }
 
 async function runTrend(args: string[]): Promise<void> {
-  const scopeKey = valueAfter(args, "--scope") ?? "project";
-  const limitArg = valueAfter(args, "--limit");
+  const scopeKey = optionValue(args, "--scope") ?? "project";
+  const limitArg = optionValue(args, "--limit");
   const limit = limitArg ? Math.max(2, Number(limitArg)) : 20;
   const history = await loadHistory(process.cwd(), limit);
   const trend = computeTrend(history, scopeKey);
@@ -199,10 +205,10 @@ function signed(value: number | null): string {
 
 function parseScope(args: string[]): ScopeSelector | undefined {
   if (args.includes("--changed")) {
-    const since = valueAfter(args, "--since");
+    const since = optionValue(args, "--since");
     return { kind: "changed", since: since ?? null };
   }
-  const value = valueAfter(args, "--scope");
+  const value = optionValue(args, "--scope");
   if (!value) {
     return undefined;
   }
@@ -216,11 +222,6 @@ function parseScope(args: string[]): ScopeSelector | undefined {
     return { kind: "file", path: value.slice("file:".length) };
   }
   return undefined;
-}
-
-function valueAfter(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
 }
 
 function printHelp(): void {

@@ -26,6 +26,7 @@
     "src/gdskills/install.ts",
     "src/gdskills/learn.ts",
     "src/gdskills/project-skills.ts",
+    "src/gdskills/resolve.ts",
     "src/gdskills/sync.ts",
     "src/gdskills/verify.ts"
   ],
@@ -54,6 +55,7 @@
     "src/health/skill-loop.test.ts",
     "src/health/skills.test.ts",
     "src/health/skills.ts",
+    "src/health/source-analysis.ts",
     "src/health/sources/dependency-audit.ts",
     "src/health/sources/eslint.ts",
     "src/health/sources/helpers.ts",
@@ -67,7 +69,9 @@
     "src/health/util.ts"
   ],
   "lib": [
+    "src/lib/args.ts",
     "src/lib/fs.ts",
+    "src/lib/json.ts",
     "src/lib/prompt.ts",
     "src/lib/templates.ts"
   ],

@@ -4,17 +4,19 @@
   "private": false,
   "type": "module",
   "bin": {
-    "gd-metapro": "./src/cli.ts"
+    "gd-metapro": "./dist/cli.js"
   },
   "scripts": {
     "gd-metapro": "bun ./src/cli.ts",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun",
+    "prepack": "bun run build",
+    "prepare": "bun run build",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "tsc --noEmit && bun test"
   },
   "files": [
-    "src",
-    "scripts",
+    "dist",
     "README.md",
     "package.json"
   ],

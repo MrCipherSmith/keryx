@@ -14,11 +14,9 @@ export function searchEntries(
   now: Date,
 ): ScoredEntry[] {
   const queryTokens = [...new Set(tokenize(query))];
-  const statusFiltered = filters.status
-    ? entries.filter((entry) => entry.status === filters.status)
-    : entries;
+  const filtered = entries.filter((entry) => matchesFilters(entry, filters));
 
-  const scored = statusFiltered.map((entry) =>
+  const scored = filtered.map((entry) =>
     scoreEntry(entry, queryTokens, filters, config, now),
   );
 
@@ -31,6 +29,25 @@ export function searchEntries(
     )
     .sort((a, b) => b.score - a.score)
     .slice(0, filters.limit ?? config.ranking.maxResults);
+}
+
+function matchesFilters(entry: MemoryEntry, filters: SearchFilters): boolean {
+  if (filters.status && entry.status !== filters.status) {
+    return false;
+  }
+  if (filters.module) {
+    const module = filters.module.toLowerCase();
+    const moduleMatches =
+      entry.scopes.module?.toLowerCase() === module ||
+      entry.tags.map((tag) => tag.toLowerCase()).includes(module);
+    if (!moduleMatches) {
+      return false;
+    }
+  }
+  if (filters.entity && entry.scopes.entity !== filters.entity) {
+    return false;
+  }
+  return true;
 }
 
 function scoreEntry(

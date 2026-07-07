@@ -100,7 +100,18 @@
       }
     },
     "memory": {
-      "enabled": false
+      "enabled": true,
+      "core": ".metaproject/core/memory",
+      "data": ".metaproject/data/memory",
+      "manifest": ".metaproject/modules/memory.md",
+      "commands": [
+        "new",
+        "index",
+        "search",
+        "ingest",
+        "check",
+        "reflect"
+      ]
     },
     "tasks": {
       "enabled": false

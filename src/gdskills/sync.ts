@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { isPathInside, pathExists, toPosix } from "../lib/fs";
 import type { SkillRuntime } from "./export";
 
 export type SyncRuntimeSkillsOptions = {
@@ -33,7 +33,11 @@ export async function syncRuntimeSkills(
     throw new Error(`No exported runtime skills found for ${options.runtime}. Run: gd-metapro skills export <skill> --runtime ${options.runtime}`);
   }
 
+  if (!options.target || options.target.trim().length === 0) {
+    throw new Error("Sync target is required.");
+  }
   const targetRoot = path.resolve(projectRoot, options.target);
+  validateSyncTarget(projectRoot, targetRoot);
   const skillDirs = await listSkillArtifactDirs(sourceRoot);
   if (skillDirs.length === 0) {
     throw new Error(`No runtime skill artifacts found in ${toPosix(path.relative(projectRoot, sourceRoot))}`);
@@ -76,6 +80,22 @@ export async function syncRuntimeSkills(
     manifestPath: toPosix(path.relative(projectRoot, manifestPath)),
     dryRun: options.dryRun === true,
   };
+}
+
+function validateSyncTarget(projectRoot: string, targetRoot: string): void {
+  const home = process.env.HOME ? path.resolve(process.env.HOME) : null;
+  const allowed =
+    isPathInside(projectRoot, targetRoot) ||
+    (home !== null && isPathInside(home, targetRoot));
+
+  if (!allowed) {
+    throw new Error("Sync target must be inside the project or the current user's home directory.");
+  }
+
+  const normalized = path.resolve(targetRoot);
+  if (normalized === path.parse(normalized).root || normalized === home) {
+    throw new Error("Refusing to sync runtime skills into a filesystem root or home root.");
+  }
 }
 
 async function listSkillArtifactDirs(sourceRoot: string): Promise<string[]> {
@@ -132,8 +152,4 @@ async function listFiles(root: string): Promise<string[]> {
   }
 
   return files;
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join("/");
 }

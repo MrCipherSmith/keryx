@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
+import { readJsonFileOr } from "../lib/json";
 
 type CtxArtifact = {
   id: string;
@@ -106,9 +108,9 @@ async function printCtxStatus(): Promise<void> {
   console.log(`latest summary: ${(await pathExists(latestSummaryPath)) ? latestSummaryPath : "missing"}`);
 
   if (await pathExists(manifestPath)) {
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    const manifest = await readJsonFileOr<{
       modules?: Record<string, { enabled?: boolean }>;
-    };
+    }>(manifestPath, {});
     console.log(`gdctx enabled: ${manifest.modules?.gdctx?.enabled === true ? "yes" : "no"}`);
   }
 }
@@ -159,7 +161,7 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
     return;
   }
 
-  const mode = valueAfter(args, "--mode") ?? "compact";
+  const mode = optionValue(args, "--mode") ?? "compact";
   if (!["outline", "compact", "full"].includes(mode)) {
     console.error(`Unsupported read mode: ${mode}`);
     console.error("Supported modes: outline, compact, full");
@@ -545,7 +547,7 @@ async function loadConfig(): Promise<CtxConfig> {
     return DEFAULT_CONFIG;
   }
 
-  const parsed = JSON.parse(await readFile(configPath, "utf8")) as Partial<CtxConfig>;
+  const parsed = await readJsonFileOr<Partial<CtxConfig>>(configPath, {});
   return {
     maxOutputLines: parsed.maxOutputLines ?? DEFAULT_CONFIG.maxOutputLines,
     maxImportantLines: parsed.maxImportantLines ?? DEFAULT_CONFIG.maxImportantLines,
@@ -610,11 +612,6 @@ function printArtifactSummary(artifact: CtxArtifact, summary: string): void {
   console.log("");
   console.log(`raw: ${artifact.rawPath}`);
   console.log(`summary: ${artifact.summaryPath}`);
-}
-
-function valueAfter(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
 }
 
 function dedupe(items: string[]): string[] {

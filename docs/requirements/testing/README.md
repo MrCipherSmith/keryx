@@ -1,7 +1,7 @@
 # Testing Module requirements
 
-Version: 0.1.0
-Status: spec ready
+Version: 0.2.0
+Status: implemented (MVP)
 
 `Testing Module` is the Metaproject layer for project test context, normalized
 test execution reports, and agent-facing test intelligence.
@@ -12,7 +12,7 @@ as a quality source instead of duplicating runner logic.
 
 ## Status
 
-Specification is ready for MVP implementation.
+MVP implementation is available in `src/testing`.
 
 MVP focus:
 
@@ -41,4 +41,3 @@ MVP focus:
 ## CLI Namespace
 
 Namespace: `gd-metapro test`.
-

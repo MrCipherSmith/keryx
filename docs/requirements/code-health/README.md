@@ -1,6 +1,6 @@
 # Code Health requirements
 
-Version: 0.7.0
+Version: 0.8.0
 Status: Phase 1 + Phase 2 complete (module implemented). Sonar adapter, complexity findings, skill/component scopes, gdskills learn-loop, and history trends shipped. Testing Module is now the planned owner of test execution/reporting, with Code Health consuming normalized testing reports. Phase 3 (advanced) is future.
 
 `Code Health` - модуль Metaproject для агрегации качества кода. Он собирает технические источники качества, нормализует findings, считает health/risk metrics на разных уровнях гранулярности и превращает сырые логи в agent-readable Markdown/JSON reports.
@@ -9,7 +9,7 @@ Status: Phase 1 + Phase 2 complete (module implemented). Sonar adapter, complexi
 
 Phase 1 реализована: модуль `src/health/` (адаптеры Core-5, scoring, gate, baseline, метрики churn/complexity), CLI `gd-metapro health run|status|gate|sources|explain|baseline update`, интеграция в `gd-metapro init` (`--no-health`, `health.config.json`, manifest, skill). Decoupled-контракт findings (`data/health/artifacts/latest.json`) для `gd-metapro skills learn --from-health`.
 
-Phase 2 (завершена): skill-owned scope (`scope.skill` + `skills learn --from-health` loop), directory-level component scopes, SonarQube-адаптер (import), complexity → P2 findings, и multi-run тренды (`gd-metapro health trend` по `data/health/history`).
+Phase 2 (завершена): skill-owned scope (`scope.skill` + `skills learn --from-health` loop), directory-level component scopes, SonarQube-адаптер (import), complexity → P2 findings, multi-run тренды (`gd-metapro health trend` по `data/health/history`), generated/static ignore paths, и безопасная интеграция с Testing Module без неявного полного test-suite запуска.
 
 Complexity — token-based приближение (не полный AST). Phase 3 (future): семантический entity/store detection, мульти-язык, richer analytics/dashboards. См. [specification.md](specification.md) sections 2 и 21.
 

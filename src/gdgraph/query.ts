@@ -95,11 +95,15 @@ export function getCycles(graph: GraphData): string[][] {
 
 async function readJsonl<T>(filePath: string): Promise<T[]> {
   const content = await readFile(filePath, "utf8");
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as T);
+  const items: T[] = [];
+  for (const line of content.split("\n").map((entry) => entry.trim()).filter(Boolean)) {
+    try {
+      items.push(JSON.parse(line) as T);
+    } catch {
+      // Ignore malformed JSONL records so one bad line does not break graph navigation.
+    }
+  }
+  return items;
 }
 
 function canonicalCycle(cycle: string[]): string {

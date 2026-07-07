@@ -9,6 +9,7 @@ import { getComplexityFindings } from "./metrics/complexity-findings";
 import { getCoverage } from "./metrics/coverage";
 import { renderReportMarkdown } from "./report";
 import { loadSkillOwnership } from "./skills";
+import { analyzeSourceFiles } from "./source-analysis";
 import { FINDING_ADAPTERS, NoImportError } from "./sources";
 import {
   commandExists,
@@ -37,7 +38,8 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   const config = await loadHealthConfig(cwd);
   const selector: ScopeSelector = input.scope ?? { kind: "project" };
   const strict = input.strict ?? false;
-  const sourceFiles = await listSourceFiles(cwd);
+  const sourceFiles = await listSourceFiles(cwd, config.ignore.paths);
+  const sourceAnalysis = await analyzeSourceFiles(cwd, sourceFiles);
   const changedFiles = await resolveChanged(cwd, selector);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 
@@ -83,7 +85,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     const cfg = config.sources.complexity ?? { mode: "auto", required: false };
     const enabled = cfg.mode !== "disabled" && sourceFiles.length > 0;
     const complexityFindings = enabled
-      ? await getComplexityFindings(cwd, sourceFiles, config)
+      ? await getComplexityFindings(cwd, sourceFiles, config, sourceAnalysis)
       : [];
     findings.push(...complexityFindings);
     sourceInfos.push({
@@ -120,6 +122,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     baseline,
     ownership,
     scopeSelector: selector,
+    sourceAnalysis,
   });
   const projectMetrics = metrics.find((m) => m.key === "project");
   const gate = computeGate({
@@ -188,6 +191,9 @@ async function runAdapter(
         raw = await adapter.import(ctx);
       } catch (error) {
         if (error instanceof NoImportError) {
+          if (adapter.id === "tests") {
+            return { info: { ...base, status: "missing" }, findings: [] };
+          }
           if (ctx.strict) {
             return { info: { ...base, status: "missing" }, findings: [] };
           }

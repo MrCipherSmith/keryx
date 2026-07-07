@@ -1,10 +1,25 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { readJsonFileOr } from "../lib/json";
 import type { HealthConfig } from "./types";
 
 export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
   schemaVersion: 1,
+  ignore: {
+    paths: [
+      "node_modules/**",
+      ".git/**",
+      ".metaproject/**",
+      "dist/**",
+      "build/**",
+      "coverage/**",
+      ".next/**",
+      "out/**",
+      "storybook-static/**",
+      "public/**",
+      "generated/**",
+    ],
+  },
   sources: {
     eslint: { mode: "auto", required: true },
     typescript: { mode: "auto", required: true },
@@ -44,10 +59,13 @@ export async function loadHealthConfig(cwd: string): Promise<HealthConfig> {
     return DEFAULT_HEALTH_CONFIG;
   }
 
-  const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<HealthConfig>;
+  const parsed = await readJsonFileOr<Partial<HealthConfig>>(file, {});
   const base = DEFAULT_HEALTH_CONFIG;
   return {
     schemaVersion: parsed.schemaVersion ?? base.schemaVersion,
+    ignore: {
+      paths: parsed.ignore?.paths ?? base.ignore.paths,
+    },
     sources: { ...base.sources, ...(parsed.sources ?? {}) },
     metrics: { ...base.metrics, ...(parsed.metrics ?? {}) },
     scoring: {

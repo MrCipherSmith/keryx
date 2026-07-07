@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { readJsonFile } from "../lib/json";
 
 type ManifestModule = {
   enabled: boolean;
@@ -29,7 +29,15 @@ export async function statusCommand(): Promise<void> {
     return;
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
+  let manifest: Manifest;
+  try {
+    manifest = await readJsonFile<Manifest>(manifestPath);
+  } catch (error) {
+    console.log("Metaproject: incomplete");
+    console.log("Invalid: .metaproject/metaproject.json");
+    console.log(error instanceof Error ? error.message : String(error));
+    return;
+  }
   console.log("Metaproject: ready");
   console.log(`Root: ${manifest.paths?.root ?? ".metaproject"}`);
   console.log("Modules:");

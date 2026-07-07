@@ -39,6 +39,40 @@ test("status filter restricts results", () => {
   expect(results[0]?.entry.status).toBe("accepted");
 });
 
+test("module and entity filters restrict results", () => {
+  const pipelineStep = entry({
+    relativePath: "a.md",
+    title: "step",
+    summary: "step",
+    status: "accepted",
+    scopes: { module: "pipelines", entity: "step", files: [], skills: [] },
+  });
+  const pipelineStore = entry({
+    relativePath: "b.md",
+    title: "step",
+    summary: "step",
+    status: "accepted",
+    scopes: { module: "pipelines", entity: "store", files: [], skills: [] },
+  });
+  const analyticsStep = entry({
+    relativePath: "c.md",
+    title: "step",
+    summary: "step",
+    status: "accepted",
+    scopes: { module: "analytics", entity: "step", files: [], skills: [] },
+  });
+
+  const results = searchEntries(
+    [pipelineStore, analyticsStep, pipelineStep],
+    "step",
+    { module: "pipelines", entity: "step" },
+    C,
+    new Date(),
+  );
+
+  expect(results.map((result) => result.entry.relativePath)).toEqual(["a.md"]);
+});
+
 test("accepted/high-confidence outranks draft/low at equal relevance", () => {
   const accepted = entry({ relativePath: "a.md", status: "accepted", confidence: "high", title: "bun tip", summary: "bun tip" });
   const draft = entry({ relativePath: "b.md", status: "draft", confidence: "low", title: "bun tip", summary: "bun tip" });

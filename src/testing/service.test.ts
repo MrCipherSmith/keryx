@@ -54,6 +54,7 @@ test("runTesting writes normalized report", async () => {
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
   await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
   await writeFile(
     path.join(root, "src", "ok.test.ts"),
     "import { expect, test } from 'bun:test';\ntest('ok', () => expect(1).toBe(1));\n",
@@ -63,9 +64,30 @@ test("runTesting writes normalized report", async () => {
   const latest = await loadTestingReport(root);
 
   expect(result.report.status).toBe("pass");
-  expect(result.report.runner).toBe("bun");
+  expect(result.report.runner).toBe("bun-script");
   expect(result.jsonPath).toBe(".metaproject/data/testing/artifacts/latest.json");
   expect(latest?.status).toBe("pass");
+});
+
+test("strict changed run fails when no related tests are selected", async () => {
+  const root = path.join(tmpdir(), "gd-metapro-testing-strict-empty");
+  await reset(root);
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(path.join(root, "src", "unrelated.test.ts"), "test.todo('unrelated');\n");
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(
+    path.join(root, ".metaproject", "testing.config.json"),
+    JSON.stringify({
+      changedSelection: { fallbackWhenEmpty: "warn" },
+    }),
+  );
+  await analyzeTestingProject(root);
+
+  const result = await runTesting({ cwd: root, changed: true, strict: true });
+
+  expect(result.report.status).toBe("fail");
+  expect(result.report.failures[0]?.name).toBe("no-related-tests-selected");
 });
 
 async function reset(root: string): Promise<void> {

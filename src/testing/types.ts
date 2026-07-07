@@ -1,4 +1,5 @@
 export type TestingStatus = "pass" | "fail" | "error" | "skipped";
+export type TestingFallbackWhenEmpty = "warn" | "full" | "skipped" | "fail";
 
 export type TestingScript = {
   name: string;
@@ -28,6 +29,7 @@ export type TestingFailure = {
 export type TestingReport = {
   schemaVersion: 1;
   generatedAt: string;
+  gitRef: string | null;
   status: TestingStatus;
   scope: string;
   runner: string | null;
@@ -59,6 +61,25 @@ export type TestingRunInput = {
   since?: string | null;
   scope?: string | null;
   kind?: string | null;
+  strict?: boolean;
+};
+
+export type TestingConfig = {
+  schemaVersion: number;
+  enabled: boolean;
+  runner: "auto" | "script" | "direct";
+  changedSelection: {
+    strategies: string[];
+    fallbackWhenEmpty: TestingFallbackWhenEmpty;
+  };
+  hooks: {
+    postCommitRefresh: boolean;
+    prePushGate: boolean;
+  };
+  artifacts: {
+    keepRawLogs: boolean;
+    historyLimit: number;
+  };
 };
 
 export type TestingRunResult = {
@@ -66,4 +87,3 @@ export type TestingRunResult = {
   markdownPath: string;
   jsonPath: string;
 };
-

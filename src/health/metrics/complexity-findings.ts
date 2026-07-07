@@ -1,8 +1,5 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { pathExists } from "../../lib/fs";
-import { computeComplexity } from "./complexity";
 import { makeFinding } from "../sources/helpers";
+import { analyzeSourceFiles, type SourceFileAnalysis } from "../source-analysis";
 import type { Finding, HealthConfig } from "../types";
 
 // Turns the built-in cyclomatic complexity metric into actionable P2 findings:
@@ -12,16 +9,15 @@ export async function getComplexityFindings(
   cwd: string,
   sourceFiles: string[],
   config: HealthConfig,
+  sourceAnalysis?: Map<string, SourceFileAnalysis>,
 ): Promise<Finding[]> {
   const threshold = config.metrics.complexityThreshold;
   const findings: Finding[] = [];
+  const analysis = sourceAnalysis ?? await analyzeSourceFiles(cwd, sourceFiles);
 
-  for (const file of sourceFiles) {
-    const abs = path.join(cwd, file);
-    if (!(await pathExists(abs))) {
-      continue;
-    }
-    const { functions, max } = computeComplexity(await readFile(abs, "utf8"));
+  for (const [file, item] of analysis) {
+    const functions = item.complexity;
+    const max = Math.max(0, ...functions);
     const over = functions.filter((value) => value > threshold).length;
     if (over === 0) {
       continue;

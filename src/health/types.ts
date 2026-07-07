@@ -21,6 +21,9 @@ export type SourceConfig = { mode: SourceMode; required: boolean };
 
 export type HealthConfig = {
   schemaVersion: number;
+  ignore: {
+    paths: string[];
+  };
   sources: Record<string, SourceConfig>;
   metrics: {
     coverageTarget: number;

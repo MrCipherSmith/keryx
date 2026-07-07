@@ -1,8 +1,5 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
 import { moduleOfFile } from "./util";
-import { computeComplexity } from "./metrics/complexity";
 import {
   complexityPenalty,
   coveragePenalty,
@@ -14,6 +11,7 @@ import {
 import type { CoverageData } from "./metrics/coverage";
 import type { BaselineEntry } from "./baseline";
 import type { SkillOwnership } from "./skills";
+import { analyzeSourceFiles, type SourceFileAnalysis } from "./source-analysis";
 import type {
   Finding,
   HealthConfig,
@@ -37,20 +35,10 @@ export async function computeMetrics(input: {
   baseline: Map<string, BaselineEntry>;
   ownership?: SkillOwnership;
   scopeSelector?: ScopeSelector;
+  sourceAnalysis?: Map<string, SourceFileAnalysis>;
 }): Promise<ScopeMetrics[]> {
   const { cwd, config, findings, sourceFiles, coverage, churn, baseline, ownership, scopeSelector } = input;
-
-  const locByFile = new Map<string, number>();
-  const complexityByFile = new Map<string, number[]>();
-  for (const file of sourceFiles) {
-    const abs = path.join(cwd, file);
-    if (!(await pathExists(abs))) {
-      continue;
-    }
-    const content = await readFile(abs, "utf8");
-    locByFile.set(file, content.split("\n").length);
-    complexityByFile.set(file, computeComplexity(content).functions);
-  }
+  const sourceAnalysis = input.sourceAnalysis ?? await analyzeSourceFiles(cwd, sourceFiles);
 
   const build = (
     kind: ScopeKind,
@@ -60,13 +48,13 @@ export async function computeMetrics(input: {
     scopeFindings: Finding[],
     coverageValue: number | null,
   ): ScopeMetrics => {
-    const loc = files.reduce((sum, file) => sum + (locByFile.get(file) ?? 0), 0);
+    const loc = files.reduce((sum, file) => sum + (sourceAnalysis.get(file)?.loc ?? 0), 0);
     const churnValue = files.reduce(
       (sum, file) => sum + (churn.get(file) ?? 0),
       0,
     );
     const fnComplexities = files.flatMap(
-      (file) => complexityByFile.get(file) ?? [],
+      (file) => sourceAnalysis.get(file)?.complexity ?? [],
     );
     const above = fnComplexities.filter(
       (value) => value > config.metrics.complexityThreshold,

@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
+import { readJsonFile, readJsonFileOr } from "../lib/json";
 import {
   getBundledSkillsForProfile,
   normalizeGdskillsProfile,
@@ -78,13 +80,13 @@ export async function skillsCommand(args: string[]): Promise<void> {
   }
 
   if (command === "catalog") {
-    const profile = normalizeGdskillsProfile(getOption(args, "--profile"));
+    const profile = normalizeGdskillsProfile(optionValue(args, "--profile"));
     console.log(renderGdskillsCatalog(profile));
     return;
   }
 
   if (command === "install") {
-    const profile = normalizeGdskillsProfile(getOption(args, "--profile"));
+    const profile = normalizeGdskillsProfile(optionValue(args, "--profile"));
     const metaprojectRoot = path.join(process.cwd(), ".metaproject");
     if (!(await pathExists(metaprojectRoot))) {
       console.error("Metaproject is not initialized. Run: gd-metapro init");
@@ -248,7 +250,7 @@ async function readProjectSkillRegistryFromManifest(): Promise<ProjectSkillRegis
     return [];
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   return manifest.modules?.gdskills?.projectSkillRegistry ?? [];
 }
 
@@ -401,8 +403,8 @@ function normalizeRouteText(value: string): string {
 }
 
 async function syncSkillCommand(args: string[]): Promise<void> {
-  const runtime = normalizeSkillRuntime(getOption(args, "--runtime"));
-  const target = getOption(args, "--target");
+  const runtime = normalizeSkillRuntime(optionValue(args, "--runtime"));
+  const target = optionValue(args, "--target");
   if (args.includes("--help") || args.includes("-h")) {
     printSyncHelp();
     return;
@@ -443,7 +445,7 @@ async function syncSkillCommand(args: string[]): Promise<void> {
 
 async function exportSkillCommand(args: string[]): Promise<void> {
   const target = args[1];
-  const runtime = normalizeSkillRuntime(getOption(args, "--runtime"));
+  const runtime = normalizeSkillRuntime(optionValue(args, "--runtime"));
   if (target === "--help" || target === "-h" || args.includes("--help") || args.includes("-h")) {
     printExportHelp();
     return;
@@ -505,7 +507,7 @@ async function learnSkillCommand(args: string[]): Promise<void> {
     const proposal = await learnProjectSkill(process.cwd(), {
       sourceType: source.type,
       sourcePath: source.path,
-      skill: getOption(args, "--skill"),
+      skill: optionValue(args, "--skill"),
       dryRun: args.includes("--dry-run"),
     });
 
@@ -572,7 +574,7 @@ function getLearningSource(args: string[]): { type: LearningSourceType; path: st
   ];
 
   for (const source of sources) {
-    const value = getOption(args, source.flag);
+    const value = optionValue(args, source.flag);
     if (value) {
       return { type: source.type, path: value };
     }
@@ -635,7 +637,14 @@ async function verifyAllProjectSkills(args: string[]): Promise<void> {
     return;
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  let manifest: MetaprojectManifest;
+  try {
+    manifest = await readJsonFile<MetaprojectManifest>(manifestPath);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
   const registry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   if (registry.length === 0) {
     if (args.includes("--json")) {
@@ -683,9 +692,9 @@ async function createSkillCommand(args: string[]): Promise<void> {
   try {
     const result = await createProjectSkill(process.cwd(), {
       target,
-      module: getOption(args, "--module"),
-      name: getOption(args, "--name"),
-      format: normalizeProjectSkillFormat(getOption(args, "--format")),
+      module: optionValue(args, "--module"),
+      name: optionValue(args, "--name"),
+      format: normalizeProjectSkillFormat(optionValue(args, "--format")),
       dryRun: args.includes("--dry-run"),
     });
 
@@ -727,7 +736,7 @@ async function contractsCommand(args: string[]): Promise<void> {
 
   if (command === "validate") {
     const filePath = args[1];
-    const schemaName = normalizeContractName(getOption(args, "--schema"));
+    const schemaName = normalizeContractName(optionValue(args, "--schema"));
     if (!filePath || !schemaName) {
       console.error("Usage: gd-metapro skills contracts validate <file> --schema <name>");
       printContractsHelp();
@@ -832,7 +841,7 @@ async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
   let enabled = false;
   let projectSkillRegistry: ProjectSkillRegistryEntry[] = [];
   if (await pathExists(manifestPath)) {
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+    const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
     enabled = manifest.modules?.gdskills?.enabled === true;
     profile = normalizeGdskillsProfile(manifest.modules?.gdskills?.profile);
     projectSkillRegistry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
@@ -878,7 +887,7 @@ async function readVerificationReports(reportsRoot: string): Promise<Verificatio
   const reports: VerificationReportSummary[] = [];
   for (const filePath of files) {
     try {
-      const report = JSON.parse(await readFile(filePath, "utf8")) as Partial<VerificationReportSummary>;
+      const report = await readJsonFileOr<Partial<VerificationReportSummary>>(filePath, {});
       if (report.module && report.name && report.status && report.verifiedAt) {
         reports.push({
           module: report.module,
@@ -944,15 +953,6 @@ function countVerificationStatuses(
 function latest(values: string[]): string | "never" {
   const sorted = values.filter(Boolean).sort();
   return sorted.at(-1) ?? "never";
-}
-
-function getOption(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  if (index === -1) {
-    return undefined;
-  }
-
-  return args[index + 1];
 }
 
 function relativeToCwd(filePath: string): string {

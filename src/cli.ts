@@ -10,8 +10,9 @@ import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
 import { statusCommand } from "./commands/status";
 import { updateCommand } from "./commands/update";
+import packageJson from "../package.json" with { type: "json" };
 
-const VERSION = "0.1.0";
+const VERSION = packageJson.version;
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -91,7 +92,7 @@ function printHelp(): void {
   console.log(`gd-metapro ${VERSION}
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   gd-metapro status
   gd-metapro update
   gd-metapro gdgraph build

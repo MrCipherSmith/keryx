@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { isPathInside, pathExists, toPosix } from "../lib/fs";
+import { readJsonFile, readJsonFileOr } from "../lib/json";
 import type { ProjectSkillRegistryEntry } from "./project-skills";
 
 export type LearningSourceType = "review" | "test" | "failure" | "health" | "memory";
@@ -129,12 +130,19 @@ export async function applyLearningProposal(
   options: { dryRun?: boolean } = {},
 ): Promise<ApplyLearningProposalResult> {
   const absoluteProposalPath = path.resolve(projectRoot, proposalPath);
+  if (!isPathInside(projectRoot, absoluteProposalPath)) {
+    throw new Error(`Learning proposal must be inside the project: ${proposalPath}`);
+  }
   if (!(await pathExists(absoluteProposalPath))) {
     throw new Error(`Learning proposal not found: ${proposalPath}`);
   }
 
-  const proposal = JSON.parse(await readFile(absoluteProposalPath, "utf8")) as LearningProposal;
+  const proposal = await readJsonFile<LearningProposal>(absoluteProposalPath);
   const skillRoot = path.resolve(projectRoot, proposal.skill.path);
+  const projectSkillsRoot = path.resolve(projectRoot, ".metaproject", "project-skills");
+  if (!isPathInside(projectSkillsRoot, skillRoot)) {
+    throw new Error(`Learning proposal skill path must be under .metaproject/project-skills: ${proposal.skill.path}`);
+  }
   const skillMdPath = path.join(skillRoot, "SKILL.md");
   const changelogPath = path.join(skillRoot, "skill-changelog.md");
   if (!(await pathExists(skillMdPath))) {
@@ -189,7 +197,7 @@ async function readManifest(projectRoot: string): Promise<MetaprojectManifest> {
     return {};
   }
 
-  return JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  return readJsonFileOr<MetaprojectManifest>(manifestPath, {});
 }
 
 function resolveSkillForLearning({
@@ -556,8 +564,4 @@ function today(): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join("/");
 }

@@ -38,7 +38,7 @@ async function readLatest(cwd: string): Promise<HealthReport | null> {
 
 async function detectStatuses(cwd: string): Promise<HealthSourcesResult> {
   const config = await loadHealthConfig(cwd);
-  const sourceFiles = await listSourceFiles(cwd);
+  const sourceFiles = await listSourceFiles(cwd, config.ignore.paths);
   const ctx: HealthContext = {
     cwd,
     config,

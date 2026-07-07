@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { choice, confirm } from "../lib/prompt";
 import {
@@ -378,6 +379,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableGdskills,
       enableHealth,
       enableTesting,
+      enableMemory,
     }),
   );
   await writeTextIfMissing(
@@ -406,6 +408,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableGdskills,
       enableHealth,
       enableTesting,
+      enableMemory,
       ruleSources: agentRuleSources,
     }),
   );
@@ -577,7 +580,7 @@ function parseInitArgs(args: string[]): InitOptions {
     noGdctx: args.includes("--no-gdctx"),
     noGdwiki: args.includes("--no-gdwiki"),
     noGdskills: args.includes("--no-gdskills"),
-    gdskillsProfile: normalizeGdskillsProfile(getArgValue(args, "--gdskills-profile")),
+    gdskillsProfile: normalizeGdskillsProfile(optionValue(args, "--gdskills-profile")),
     noHealth: args.includes("--no-health"),
     noTesting: args.includes("--no-testing"),
     noMemory: args.includes("--no-memory"),
@@ -734,114 +737,31 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
 }
 
 async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> {
-  const gitRoot = path.join(projectRoot, ".git");
-  if (!(await pathExists(gitRoot))) {
-    return;
-  }
-
-  const hooksRoot = path.join(gitRoot, "hooks");
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, "post-commit");
-  const blockStart = "# gd-metapro:gdgraph-post-commit:begin";
-  const blockEnd = "# gd-metapro:gdgraph-post-commit:end";
-  const managedBlock = `${blockStart}\n${renderGdgraphPostCommitHook().trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
-  );
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
+  await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
 }
 
 async function installGdskillsPostCommitHook(projectRoot: string): Promise<void> {
-  const gitRoot = path.join(projectRoot, ".git");
-  if (!(await pathExists(gitRoot))) {
-    return;
-  }
-
-  const hooksRoot = path.join(gitRoot, "hooks");
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, "post-commit");
-  const blockStart = "# gd-metapro:gdskills-post-commit:begin";
-  const blockEnd = "# gd-metapro:gdskills-post-commit:end";
-  const managedBlock = `${blockStart}\n${renderGdskillsPostCommitHook().trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
-  );
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
+  await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
 }
 
 async function installHealthPostCommitHook(projectRoot: string): Promise<void> {
-  const gitRoot = path.join(projectRoot, ".git");
-  if (!(await pathExists(gitRoot))) {
-    return;
-  }
-
-  const hooksRoot = path.join(gitRoot, "hooks");
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, "post-commit");
-  const blockStart = "# gd-metapro:health-post-commit:begin";
-  const blockEnd = "# gd-metapro:health-post-commit:end";
-  const managedBlock = `${blockStart}\n${renderHealthPostCommitHook().trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
-  );
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
+  await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
 }
 
 async function installTestingPostCommitHook(projectRoot: string): Promise<void> {
-  const gitRoot = path.join(projectRoot, ".git");
-  if (!(await pathExists(gitRoot))) {
-    return;
-  }
-
-  const hooksRoot = path.join(gitRoot, "hooks");
-  await mkdir(hooksRoot, { recursive: true });
-
-  const hookPath = path.join(hooksRoot, "post-commit");
-  const blockStart = "# gd-metapro:testing-post-commit:begin";
-  const blockEnd = "# gd-metapro:testing-post-commit:end";
-  const managedBlock = `${blockStart}\n${renderTestingPostCommitHook().trim()}\n${blockEnd}`;
-  const existing = (await pathExists(hookPath))
-    ? await readFile(hookPath, "utf8")
-    : "#!/usr/bin/env sh\n";
-  const blockPattern = new RegExp(
-    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
-  );
-  const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
-    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
-
-  await writeFile(hookPath, next, "utf8");
-  await chmod(hookPath, 0o755);
+  await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
 }
 
 async function installTestingPrePushHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+}
+
+async function installManagedHook(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+  content: string,
+): Promise<void> {
   const gitRoot = path.join(projectRoot, ".git");
   if (!(await pathExists(gitRoot))) {
     return;
@@ -850,10 +770,10 @@ async function installTestingPrePushHook(projectRoot: string): Promise<void> {
   const hooksRoot = path.join(gitRoot, "hooks");
   await mkdir(hooksRoot, { recursive: true });
 
-  const hookPath = path.join(hooksRoot, "pre-push");
-  const blockStart = "# gd-metapro:testing-pre-push:begin";
-  const blockEnd = "# gd-metapro:testing-pre-push:end";
-  const managedBlock = `${blockStart}\n${renderTestingPrePushHook().trim()}\n${blockEnd}`;
+  const hookPath = path.join(hooksRoot, hookName);
+  const blockStart = `# gd-metapro:${blockId}:begin`;
+  const blockEnd = `# gd-metapro:${blockId}:end`;
+  const managedBlock = `${blockStart}\n${content.trim()}\n${blockEnd}`;
   const existing = (await pathExists(hookPath))
     ? await readFile(hookPath, "utf8")
     : "#!/usr/bin/env sh\n";
@@ -1084,15 +1004,6 @@ function buildManifest({
   };
 }
 
-function getArgValue(args: string[], name: string): string | undefined {
-  const index = args.indexOf(name);
-  if (index === -1) {
-    return undefined;
-  }
-
-  return args[index + 1];
-}
-
 async function syncAgentRules(
   projectRoot: string,
   metaprojectRoot: string,
@@ -1152,6 +1063,8 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     "For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.";
   const testingPolicy =
     "For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.";
+  const memoryPolicy =
+    "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.";
 
   if (content.includes(marker)) {
     let next = content;
@@ -1166,6 +1079,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     next = collapseDuplicatePolicy(next, ctxPolicy);
     next = collapseDuplicatePolicy(next, gdskillsPolicy);
     next = collapseDuplicatePolicy(next, testingPolicy);
+    next = collapseDuplicatePolicy(next, memoryPolicy);
 
     const missingPolicies = [
       ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
@@ -1173,6 +1087,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
       ...(next.includes(ctxPolicy) ? [] : [ctxPolicy]),
       ...(next.includes(gdskillsPolicy) ? [] : [gdskillsPolicy]),
       ...(next.includes(testingPolicy) ? [] : [testingPolicy]),
+      ...(next.includes(memoryPolicy) ? [] : [memoryPolicy]),
     ];
     if (missingPolicies.length > 0) {
       const suffix = next.endsWith("\n") ? "" : "\n";
@@ -1189,7 +1104,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
   const suffix = content.endsWith("\n") ? "" : "\n";
   await writeFile(
     filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n\n${gdskillsPolicy}\n\n${testingPolicy}\n`,
+    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n\n${gdskillsPolicy}\n\n${testingPolicy}\n\n${memoryPolicy}\n`,
     "utf8",
   );
 }

@@ -3,7 +3,9 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import type {
+  TestingConfig,
   TestingContext,
+  TestingFallbackWhenEmpty,
   TestingFailure,
   TestingReport,
   TestingRunInput,
@@ -27,6 +29,24 @@ const TEST_FILE_RE = /(^|\/)(__tests__\/.*|.*\.(test|spec)\.[cm]?[tj]sx?$|e2e\/.
 const CONFIG_FILE_RE = /(^|\/)(bunfig\.toml|vitest\.config\.[cm]?[tj]s|jest\.config\.[cm]?[tj]s|playwright\.config\.[cm]?[tj]s|cypress\.config\.[cm]?[tj]s|tsconfig.*\.json)$/;
 const CI_FILE_RE = /(^|\/)(\.github\/workflows\/.*\.ya?ml|\.gitlab-ci\.yml)$/;
 const INSTRUCTION_FILE_RE = /(^|\/)(AGENTS\.md|agents\.md|CLAUDE\.md|claude\.md|docs\/.*\.md|\.metaproject\/rules\/.*\.md|\.metaproject\/wiki\/.*\.md)$/;
+
+const DEFAULT_TESTING_CONFIG: TestingConfig = {
+  schemaVersion: 1,
+  enabled: true,
+  runner: "auto",
+  changedSelection: {
+    strategies: ["runner", "gdgraph", "naming"],
+    fallbackWhenEmpty: "warn",
+  },
+  hooks: {
+    postCommitRefresh: false,
+    prePushGate: false,
+  },
+  artifacts: {
+    keepRawLogs: true,
+    historyLimit: 50,
+  },
+};
 
 export function testingDataRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "data", "testing");
@@ -74,9 +94,10 @@ export async function analyzeTestingProject(cwd: string): Promise<TestingContext
 export async function runTesting(input: TestingRunInput): Promise<TestingRunResult> {
   const cwd = input.cwd;
   const started = Date.now();
+  const config = await loadTestingConfig(cwd);
   const context = await ensureContext(cwd);
   const selectedTests = input.changed
-    ? await selectChangedTests(cwd, context, input.since)
+    ? await selectChangedTests(cwd, context, input.since, config.changedSelection.fallbackWhenEmpty)
     : selectScopeTests(context, input.scope);
   const command = resolveTestCommand(cwd, context, {
     changed: Boolean(input.changed),
@@ -105,10 +126,33 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
   if (status === "pass" && failures.length > 0) {
     status = "fail";
   }
+  if (status !== "pass" && status !== "skipped" && failures.length === 0) {
+    failures.push({
+      file: null,
+      name: "test-command-failed",
+      message: raw.trim() ? firstMeaningfulLine(raw) : "Test command failed with a non-zero exit code.",
+      priority: "P0",
+    });
+    counts.failed = Math.max(counts.failed, 1);
+    counts.total = Math.max(counts.total, counts.passed + counts.failed);
+  }
+  if (input.strict && input.changed && !command && selectedTests.fallback !== "none") {
+    status = "fail";
+    exitCode = 1;
+    failures.push({
+      file: null,
+      name: "no-related-tests-selected",
+      message: `Changed-scope test selection found no related tests (fallback: ${selectedTests.fallback}).`,
+      priority: "P0",
+    });
+    counts.failed = Math.max(counts.failed, 1);
+    counts.total = Math.max(counts.total, counts.passed + counts.failed);
+  }
 
   const report: TestingReport = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
+    gitRef: await currentGitRef(cwd),
     status,
     scope: describeScope(input),
     runner: command?.runner ?? null,
@@ -155,6 +199,28 @@ export async function loadTestingReport(cwd: string): Promise<TestingReport | nu
   } catch {
     return null;
   }
+}
+
+export async function loadCompatibleTestingReport(
+  cwd: string,
+  input: { scope: "project" | "changed"; since?: string | null },
+): Promise<TestingReport | null> {
+  const report = await loadTestingReport(cwd);
+  if (!report) {
+    return null;
+  }
+  const gitRef = await currentGitRef(cwd);
+  if (!report.gitRef || !gitRef || report.gitRef !== gitRef) {
+    return null;
+  }
+  if (input.scope === "project") {
+    return !report.selection.changed && report.scope === "project" ? report : null;
+  }
+  if (!report.selection.changed) {
+    return null;
+  }
+  const expectedScope = input.since ? `changed since ${input.since}` : "changed";
+  return report.scope === expectedScope ? report : null;
 }
 
 export async function findRelatedTests(cwd: string, target: string): Promise<string[]> {
@@ -236,6 +302,35 @@ async function readPackageJson(cwd: string): Promise<Record<string, unknown> | n
     return JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
   } catch {
     return null;
+  }
+}
+
+async function loadTestingConfig(cwd: string): Promise<TestingConfig> {
+  const file = path.join(cwd, ".metaproject", "testing.config.json");
+  if (!(await pathExists(file))) {
+    return DEFAULT_TESTING_CONFIG;
+  }
+  try {
+    const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<TestingConfig>;
+    return {
+      schemaVersion: parsed.schemaVersion ?? DEFAULT_TESTING_CONFIG.schemaVersion,
+      enabled: parsed.enabled ?? DEFAULT_TESTING_CONFIG.enabled,
+      runner: parsed.runner ?? DEFAULT_TESTING_CONFIG.runner,
+      changedSelection: {
+        ...DEFAULT_TESTING_CONFIG.changedSelection,
+        ...(parsed.changedSelection ?? {}),
+      },
+      hooks: {
+        ...DEFAULT_TESTING_CONFIG.hooks,
+        ...(parsed.hooks ?? {}),
+      },
+      artifacts: {
+        ...DEFAULT_TESTING_CONFIG.artifacts,
+        ...(parsed.artifacts ?? {}),
+      },
+    };
+  } catch {
+    return DEFAULT_TESTING_CONFIG;
   }
 }
 
@@ -328,6 +423,7 @@ async function selectChangedTests(
   cwd: string,
   context: TestingContext,
   since?: string | null,
+  fallbackWhenEmpty: TestingFallbackWhenEmpty = "warn",
 ): Promise<{
   selectedTests: string[];
   changedFiles: string[];
@@ -343,10 +439,17 @@ async function selectChangedTests(
       selected.add(related);
     }
   }
+  if (selected.size === 0 && fallbackWhenEmpty === "full") {
+    return {
+      selectedTests: context.testFiles,
+      changedFiles,
+      fallback: "full",
+    };
+  }
   return {
     selectedTests: Array.from(selected).sort(),
     changedFiles,
-    fallback: selected.size > 0 ? "none" : "warn",
+    fallback: selected.size > 0 ? "none" : fallbackWhenEmpty === "skipped" ? "skipped" : "warn",
   };
 }
 
@@ -432,32 +535,37 @@ function resolveTestCommand(
   if (input.changed && tests.length === 0) {
     return null;
   }
+  const preferred = input.kind
+    ? context.scripts.find((script) => script.name.includes(input.kind ?? ""))
+    : context.scripts.find((script) => script.name === "test") ?? context.scripts[0];
+  if (preferred) {
+    const bunBin = resolveBunBin();
+    if (bunBin && /\bbun\b/i.test(preferred.command)) {
+      const argv = [bunBin, "run", preferred.name, ...tests];
+      return { runner: "bun-script", argv, display: argv.join(" ") };
+    }
+    const packageManager = detectPackageManager(cwd);
+    if (packageManager === "bun") {
+      const argv = ["bun", "run", preferred.name, ...tests];
+      return { runner: "bun-script", argv, display: argv.join(" ") };
+    }
+    if (packageManager === "pnpm") {
+      const argv = ["pnpm", "run", preferred.name, ...tests];
+      return { runner: "pnpm-script", argv, display: argv.join(" ") };
+    }
+    if (packageManager === "yarn") {
+      const argv = ["yarn", preferred.name, ...tests];
+      return { runner: "yarn-script", argv, display: argv.join(" ") };
+    }
+    const argv = ["npm", "run", preferred.name, "--", ...tests];
+    return { runner: "npm-script", argv, display: argv.join(" ") };
+  }
   const bunBin = resolveBunBin();
   if (context.frameworks.includes("bun") && bunBin) {
     const argv = [bunBin, "test", ...tests];
     return { runner: "bun", argv, display: argv.join(" ") };
   }
-  const preferred = input.kind
-    ? context.scripts.find((script) => script.name.includes(input.kind ?? ""))
-    : context.scripts.find((script) => script.name === "test") ?? context.scripts[0];
-  if (!preferred) {
-    return null;
-  }
-  const packageManager = detectPackageManager(cwd);
-  if (packageManager === "bun") {
-    const argv = ["bun", "run", preferred.name, ...tests];
-    return { runner: "bun-script", argv, display: argv.join(" ") };
-  }
-  if (packageManager === "pnpm") {
-    const argv = ["pnpm", "run", preferred.name, ...tests];
-    return { runner: "pnpm-script", argv, display: argv.join(" ") };
-  }
-  if (packageManager === "yarn") {
-    const argv = ["yarn", preferred.name, ...tests];
-    return { runner: "yarn-script", argv, display: argv.join(" ") };
-  }
-  const argv = ["npm", "run", preferred.name, "--", ...tests];
-  return { runner: "npm-script", argv, display: argv.join(" ") };
+  return null;
 }
 
 function detectPackageManager(cwd: string): "bun" | "pnpm" | "yarn" | "npm" {
@@ -528,6 +636,18 @@ function parseCounts(
     skipped: 0,
     total: passed + failed,
   };
+}
+
+async function currentGitRef(cwd: string): Promise<string | null> {
+  if (!Bun.which("git")) {
+    return null;
+  }
+  const result = await runCommand(["git", "rev-parse", "--short", "HEAD"], cwd);
+  return result.exitCode === 0 ? result.combined.trim() : null;
+}
+
+function firstMeaningfulLine(raw: string): string {
+  return raw.split("\n").map((line) => line.trim()).find(Boolean)?.slice(0, 240) ?? "Test command failed.";
 }
 
 function describeScope(input: TestingRunInput): string {
