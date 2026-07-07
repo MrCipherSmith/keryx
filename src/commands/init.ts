@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { choice, confirm } from "../lib/prompt";
+import { banner, heading, note, statusLine, style, symbols, nextSteps } from "../lib/ui";
 import {
   GDSKILLS_PROFILES,
   type GdskillsProfile,
@@ -164,6 +165,17 @@ export async function initCommand(args: string[]): Promise<void> {
   const alreadyExists = await pathExists(metaprojectRoot);
   const existingManifest = await readExistingManifest(metaprojectRoot);
 
+  banner(
+    "gd-metapro init",
+    alreadyExists
+      ? `Updating the .metaproject workspace in ${path.basename(projectRoot)}/`
+      : `Setting up a .metaproject workspace in ${path.basename(projectRoot)}/`,
+  );
+  if (!options.yes) {
+    note("Press Enter to accept the Recommended default for each question.");
+    heading("Modules");
+  }
+
   let enableGdgraph = true;
   let enableGdctx = true;
   let enableGdwiki = true;
@@ -252,6 +264,10 @@ export async function initCommand(args: string[]): Promise<void> {
       "Enable Task Manager (agent-first flow lifecycle with frozen acceptance criteria)? Recommended",
       true,
     );
+  }
+
+  if (!options.yes && (enableGdgraph || enableGdskills || enableHealth || enableTesting)) {
+    heading("Git hooks");
   }
 
   if (enableGdgraph) {
@@ -620,32 +636,65 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
-  console.log(
+  const enabledModuleCount = [
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+  ].filter(Boolean).length;
+
+  heading(
     alreadyExists
-      ? "Updated .metaproject structure."
-      : "Created .metaproject structure.",
+      ? `${style.green(symbols.ok)} Updated .metaproject`
+      : `${style.green(symbols.ok)} Created .metaproject`,
   );
-  console.log(`gdgraph: ${enableGdgraph ? "enabled" : "disabled"}`);
-  console.log(`gdctx: ${enableGdctx ? "enabled" : "disabled"}`);
-  console.log(`gdwiki: ${enableGdwiki ? "enabled" : "disabled"}`);
-  console.log(`gdskills: ${enableGdskills ? `enabled (${gdskillsProfile})` : "disabled"}`);
-  console.log(`health: ${enableHealth ? "enabled" : "disabled"}`);
-  console.log(`testing: ${enableTesting ? "enabled" : "disabled"}`);
-  console.log(`memory: ${enableMemory ? "enabled" : "disabled"}`);
-  console.log(`tasks: ${enableTasks ? "enabled" : "disabled"}`);
+  note(`${enabledModuleCount} of 8 modules enabled`);
+  statusLine("gdgraph", enableGdgraph, "code graph, symbols, affected context");
+  statusLine("gdctx", enableGdctx, "token-aware command/read output");
+  statusLine("gdwiki", enableGdwiki, "project knowledge base");
+  statusLine("gdskills", enableGdskills, enableGdskills ? `profile: ${gdskillsProfile}` : "bundled working skills");
+  statusLine("health", enableHealth, "quality scoring & gate");
+  statusLine("testing", enableTesting, "test context & intelligence");
+  statusLine("memory", enableMemory, "lessons, decisions, constraints");
+  statusLine("tasks", enableTasks, "agent-first flow lifecycle");
+
+  const hookLines: Array<[string, boolean]> = [];
   if (enableGdgraph) {
-    console.log(`gdgraph post-commit hook: ${enableGdgraphHook ? "enabled" : "disabled"}`);
+    hookLines.push(["gdgraph post-commit", enableGdgraphHook]);
   }
   if (enableGdskills) {
-    console.log(`gdskills post-commit hook: ${enableGdskillsHook ? "enabled" : "disabled"}`);
+    hookLines.push(["gdskills post-commit", enableGdskillsHook]);
   }
   if (enableHealth) {
-    console.log(`health post-commit hook: ${enableHealthHook ? "enabled" : "disabled"}`);
+    hookLines.push(["health post-commit", enableHealthHook]);
   }
   if (enableTesting) {
-    console.log(`testing post-commit hook: ${enableTestingPostCommitHook ? "enabled" : "disabled"}`);
-    console.log(`testing pre-push hook: ${enableTestingPrePushHook ? "enabled" : "disabled"}`);
+    hookLines.push(["testing post-commit", enableTestingPostCommitHook]);
+    hookLines.push(["testing pre-push", enableTestingPrePushHook]);
   }
+  if (hookLines.length > 0) {
+    heading("Git hooks");
+    for (const [label, on] of hookLines) {
+      statusLine(label, on);
+    }
+  }
+
+  const steps = [
+    `Read ${style.cyan(".metaproject/index.md")} - the agent entrypoint and module map.`,
+  ];
+  if (enableGdgraph) {
+    steps.push(`Generate the code graph: ${style.cyan("gd-metapro gdgraph build")}.`);
+  }
+  if (enableTasks) {
+    steps.push(`Start a managed flow: ${style.cyan('gd-metapro flow init --title "..."')}.`);
+  }
+  steps.push(`Open ${style.cyan(".metaproject/gd-metapro-dashboard.html")} for the human dashboard.`);
+  steps.push(`After pulling changes, run ${style.cyan("gd-metapro update")} to refresh service files.`);
+  nextSteps(steps);
 }
 
 function parseInitArgs(args: string[]): InitOptions {

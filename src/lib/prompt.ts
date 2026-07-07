@@ -1,5 +1,6 @@
 import { stdin as input, stdout as output } from "node:process";
 import readline from "node:readline/promises";
+import { style, symbols } from "./ui";
 
 export async function confirm(
   question: string,
@@ -13,7 +14,9 @@ export async function confirm(
   const rl = readline.createInterface({ input, output });
 
   try {
-    const answer = await rl.question(`${question} (${suffix}) `);
+    const answer = await rl.question(
+      `${style.cyan(symbols.arrow)} ${question} ${style.dim(`(${suffix})`)} `,
+    );
     const normalized = answer.trim().toLowerCase();
 
     if (!normalized) {
@@ -39,7 +42,7 @@ export async function choice<T extends string>(
 
   try {
     const answer = await rl.question(
-      `${question} (${choices.join("/")}; default: ${defaultValue}) `,
+      `${style.cyan(symbols.arrow)} ${question} ${style.dim(`(${choices.join("/")}; default: ${defaultValue})`)} `,
     );
     const normalized = answer.trim().toLowerCase();
     const match = choices.find((item) => item.toLowerCase() === normalized);
