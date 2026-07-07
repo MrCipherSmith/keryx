@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
+import { moduleCommands } from "./module-commands";
 import { pathExists } from "../lib/fs";
 import { choice, confirm } from "../lib/prompt";
 import {
@@ -1057,7 +1058,7 @@ function buildManifest({
             core: ".metaproject/core/gdgraph",
             data: ".metaproject/data/gdgraph",
             manifest: ".metaproject/modules/gdgraph.md",
-            commands: ["build", "query", "affected", "explain", "path"],
+            commands: moduleCommands("gdgraph"),
             hooks: {
               ...(enableGdgraphHook
                 ? { gitPostCommit: ".git/hooks/post-commit" }
@@ -1074,7 +1075,7 @@ function buildManifest({
             core: ".metaproject/core/gdctx",
             data: ".metaproject/data/gdctx",
             manifest: ".metaproject/modules/gdctx.md",
-            commands: ["status", "diff", "rg", "read", "run", "show"],
+            commands: moduleCommands("gdctx"),
           }
         : {
             enabled: false,
@@ -1085,7 +1086,7 @@ function buildManifest({
             core: ".metaproject/wiki",
             data: ".metaproject/data/gdwiki",
             manifest: ".metaproject/modules/gdwiki.md",
-            commands: ["status", "new", "index", "check-links", "validate"],
+            commands: moduleCommands("gdwiki"),
           }
         : {
             enabled: false,
@@ -1096,7 +1097,7 @@ function buildManifest({
             core: ".metaproject/core/gdskills",
             data: ".metaproject/data/gdskills",
             manifest: ".metaproject/modules/gdskills.md",
-            commands: ["status", "catalog", "install", "generate", "verify", "learn", "export", "sync"],
+            commands: moduleCommands("gdskills"),
             profile: gdskillsProfile,
             skills: ".metaproject/skills/gdskills",
             catalog: ".metaproject/skills/catalog.md",
@@ -1120,7 +1121,7 @@ function buildManifest({
             core: ".metaproject/core/memory",
             data: ".metaproject/data/memory",
             manifest: ".metaproject/modules/memory.md",
-            commands: ["new", "index", "search", "ingest", "check", "reflect"],
+            commands: moduleCommands("memory"),
           }
         : {
             enabled: false,
@@ -1131,7 +1132,7 @@ function buildManifest({
             core: ".metaproject/flows",
             data: ".metaproject/data/tasks",
             manifest: ".metaproject/modules/tasks.md",
-            commands: ["init", "list", "status", "freeze", "start", "task", "ac", "implemented", "complete", "block", "unblock", "check"],
+            commands: moduleCommands("tasks"),
           }
         : {
             enabled: false,
@@ -1142,7 +1143,7 @@ function buildManifest({
             core: ".metaproject/core/health",
             data: ".metaproject/data/health",
             manifest: ".metaproject/modules/health.md",
-            commands: ["run", "status", "gate", "sources", "explain", "baseline", "trend"],
+            commands: moduleCommands("health"),
             hooks: {
               ...(enableHealthHook
                 ? { gitPostCommit: ".git/hooks/post-commit" }
@@ -1159,7 +1160,7 @@ function buildManifest({
             core: ".metaproject/core/testing",
             data: ".metaproject/data/testing",
             manifest: ".metaproject/modules/testing.md",
-            commands: ["init", "analyze", "run", "status", "context", "explain", "related", "report"],
+            commands: moduleCommands("testing"),
             hooks: {
               ...(enableTestingPostCommitHook
                 ? { gitPostCommit: ".git/hooks/post-commit" }
