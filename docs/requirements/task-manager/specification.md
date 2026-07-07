@@ -25,6 +25,7 @@ flow-manager, flow-complete) - когнитивный слой поверх CLI.
 | D4 | Statuses | 7-status strict state machine (section 6) |
 | D5 | Tracker | `gh` CLI + typed TrackerAdapter; graceful degradation |
 | D6 | Completion gates | AC confirmed + PR checks green + health gate pass |
+| D6a | Completion is PR-gated | No bypass: work shipped straight to the default branch (no PR) cannot be completed; such a flow stays open by design and is recorded as a legacy exception in journal.md |
 | D7 | Init context | CLI collects deterministic context; skills do cognitive work |
 | D8 | Tasks | tasks.md = definitions; statuses in flow.json via CLI |
 

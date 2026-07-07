@@ -30,3 +30,4 @@
 - 2026-07-07T12:38:09.067Z - ac-confirmed: AC5
 - 2026-07-07T12:38:14.467Z - ac-confirmed: AC6
 - 2026-07-07T12:38:22.052Z - ac-confirmed: AC7
+- 2026-07-07 - grandfathered: implementation shipped to `main` via direct commits before the draft-PR completion discipline was adopted. This flow predates the PR-gated rule; it is a documented legacy exception and intentionally stays `in-progress` because no draft PR exists to advance it to `implemented`/`done`. New flows must go through a draft PR (see skills/flow/manage.md). Not a bug — the state machine correctly refused to complete without a PR.

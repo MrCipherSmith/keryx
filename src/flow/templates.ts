@@ -235,6 +235,14 @@ data and status.
    \`gd-metapro flow implemented <id> --pr <url>\`.
    Never accept work without a draft PR; never let the implementor self-accept.
 6. Hand off to flow-complete (complete.md).
+
+Completion is strictly PR-gated - there is **no bypass**. Work that shipped
+straight to the default branch (direct commits, no PR) **cannot** be completed
+through the flow: \`flow implemented\` requires a PR URL and \`flow complete\`
+gates on its checks. So if you start a managed flow, the work must go through a
+draft PR. A flow whose implementation already merged without a PR stays open by
+design; record it as a legacy exception in journal.md rather than forcing a
+status change.
 `;
 }
 
