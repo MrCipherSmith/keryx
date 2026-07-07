@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a module, command, dashboard view, or agent workflow.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What developer, agent, or CI pain should this solve?
+      placeholder: "Agents cannot discover project-specific observability dashboards..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the command, module, dashboard change, skill, or documentation improvement.
+      placeholder: |
+        Add a gdobservability module with:
+        - modules/gdobservability.md
+        - skills/gdobservability/SKILL.md
+        - data/gdobservability/artifacts/latest.md
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - onboarding/docs
+        - install/update
+        - dashboard
+        - gdgraph
+        - gdctx
+        - gdwiki
+        - gdskills
+        - health
+        - testing
+        - memory
+        - tasks/flow
+        - custom module
+        - CI/integration
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Example workflow
+      description: Show the CLI commands, agent prompt, or CI step you want to support.
+      placeholder: |
+        gd-metapro <module> collect
+        gd-metapro dashboard build
+        Agent reads .metaproject/index.md and routes to the new module.

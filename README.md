@@ -4,6 +4,58 @@
 
 The public command is `gd-metapro`. The product/CLI name is `gd-metapro`; `meta-project` is the GitHub repository slug (`MrCipherSmith/meta-project`).
 
+## Why This Exists
+
+Most AI-assisted projects accumulate context in temporary notes, agent scratchpads,
+CI logs, wiki pages, and IDE-specific rule files that do not agree with each
+other. `gd-metapro` gives those moving parts one project-local coordinate system:
+
+- developers get a CLI and dashboard;
+- agents get deterministic entrypoints, skills, rules, graph, health, testing,
+  memory, and wiki artifacts;
+- CI can publish normalized reports instead of raw logs;
+- teams can keep the useful context versioned while leaving runtime/generated
+  internals out of Git.
+
+Use it when a repository has several agents, documentation sources, test tools,
+quality reports, or task flows and you want them to operate from the same
+`.metaproject/` brain instead of ad-hoc hidden folders.
+
+## How It Feels In Practice
+
+```bash
+# 1. Install the CLI globally.
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh | bash -s -- --global
+
+# 2. Initialize a repository.
+cd path/to/your-project
+gd-metapro init
+
+# 3. Build the first project map and reports.
+gd-metapro gdgraph build
+gd-metapro test analyze
+gd-metapro health run --changed
+gd-metapro wiki collect --limit 12
+
+# 4. Open the human admin view.
+gd-metapro dash
+
+# 5. Start a managed agent-facing task flow.
+gd-metapro flow init --title "Refactor payment retry handling"
+gd-metapro flow list
+```
+
+After init, ask an agent something like:
+
+```text
+Find the files related to payment retry handling, explain the relationships,
+and use the metaproject tools for context discovery before broad raw search.
+```
+
+The agent entrypoint points it at `.metaproject/index.md`, which in turn routes
+it to `gdgraph`, `gdctx`, `gdwiki`, `health`, `testing`, `memory`, `gdskills`,
+and `flow` only when those modules are enabled.
+
 ## Global Install
 
 From the GitHub package source after build hooks:
@@ -34,6 +86,34 @@ Make sure `~/.local/bin` is in your `PATH`:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+## Install Script Behavior
+
+The shell installer is intentionally small and only does these side effects:
+
+- requires `git` and `bun`;
+- optionally runs `gh auth setup-git` when `gh` exists, so private GitHub SSH
+  URLs can work;
+- in `--global` mode, clones or refreshes the runtime under
+  `~/.gd-metapro/gd-metapro`;
+- in `--global` mode, writes a wrapper at `~/.local/bin/gd-metapro`;
+- in `--project` mode, clones or refreshes the runtime under
+  `.metaproject/runtime/gd-metapro` and then runs `gd-metapro init`;
+- respects `GD_METAPRO_REPO_URL`, `GD_METAPRO_REF`,
+  `GD_METAPRO_HOME`, and `GD_METAPRO_BIN_DIR`.
+
+It does not install shell profiles, global agent rules, IDE extensions, package
+manager hooks, or system services. To remove a global install:
+
+```bash
+rm -rf ~/.gd-metapro/gd-metapro ~/.local/bin/gd-metapro
+```
+
+To inspect before running:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh
 ```
 
 ## Project-Local Install And Init
@@ -340,6 +420,96 @@ gd-metapro dashboard open
 
 The dashboard is written to `.metaproject/gd-metapro-dashboard.html` from existing service files and data artifacts. It does not run analyzers or modify `.metaproject/data/**`.
 
+The dashboard is meant to be a project admin surface, not just a status page. It
+shows enabled modules, attention signals, health scores by scope/file/source,
+graph summary, testing context, wiki pages, memory entries, and common commands.
+
+## Agent And IDE Integration
+
+`gd-metapro init` connects existing `AGENTS.md` and `CLAUDE.md` style entrypoints
+to `.metaproject/index.md`. Keep those root files short: high-priority global
+rules plus a strict pointer to the Metaproject index. Put detailed project rules,
+skills, memory, and wiki content inside `.metaproject/`.
+
+Example agent instruction:
+
+```text
+Before planning, editing, or reviewing this repository, read
+.metaproject/index.md. For file discovery and project navigation, prefer the
+Metaproject gdgraph skill before broad raw search. For large command output,
+diffs, test logs, and long files, use gdctx. For architecture, business rules,
+known decisions, and historical context, use gdwiki and memory first.
+```
+
+Practical integration pattern:
+
+- Claude Code / Codex / Cursor / other coding agents: keep the root
+  `AGENTS.md` or `CLAUDE.md` small and let it point to `.metaproject/index.md`.
+- Project-specific skills: generate or store canonical skills under
+  `.metaproject/project-skills/` and export/sync only when a runtime needs it.
+- Review or implementation agents: read `health`, `testing`, `memory`, and
+  `gdgraph` artifacts before touching broad source files.
+
+## CI Integration
+
+`gd-metapro` is designed so CI can publish normalized artifacts that agents and
+humans can read later:
+
+```bash
+gd-metapro gdgraph build
+gd-metapro test analyze
+gd-metapro test run --changed
+gd-metapro health run --changed
+gd-metapro dashboard build
+```
+
+Recommended CI artifacts:
+
+```text
+.metaproject/gd-metapro-dashboard.html
+.metaproject/data/health/artifacts/latest.md
+.metaproject/data/health/artifacts/latest.json
+.metaproject/data/testing/artifacts/latest.md
+.metaproject/data/testing/artifacts/latest.json
+.metaproject/data/gdgraph/artifacts/summary.md
+.metaproject/data/gdgraph/artifacts/module-map.json
+```
+
+Use `gd-metapro health gate --strict-warn` when you want a CI job to fail on
+the normalized health gate instead of parsing raw linter/test logs.
+
+## Custom Module Convention
+
+The built-in module set is opinionated, but `.metaproject/` is intentionally
+structured so teams can add their own module domains. A custom module should
+follow the same shape:
+
+```text
+.metaproject/
+  modules/<module-name>.md
+  skills/<module-name>/SKILL.md
+  data/<module-name>/
+    artifacts/
+  core/<module-name>/
+```
+
+Minimum manifest pattern:
+
+```markdown
+# <module-name>
+
+Purpose: what this module owns.
+
+Agent entry: `skills/<module-name>/SKILL.md`
+Data: `data/<module-name>/artifacts/`
+Commands: project-local or external commands that refresh the data.
+```
+
+Then add the module to `.metaproject/index.md` so agents can discover it.
+First-class CLI support for third-party module registration is a future
+extension; today this is a stable project convention for teams that need
+`gdai`, `gdobservability`, or other local domains.
+
 ## Flow (Task Manager)
 
 The `tasks` module tracks agent-first managed work through `gd-metapro flow`:
@@ -373,3 +543,17 @@ bun ./src/cli.ts init
 bun ./src/cli.ts init --yes
 bun ./src/cli.ts status
 ```
+
+## Project Feedback And Roadmap
+
+Good early feedback is especially useful around:
+
+- first-run onboarding and dashboard clarity;
+- agent/IDE integration examples;
+- CI artifact publishing patterns;
+- custom module conventions;
+- health/testing defaults for large frontend repositories;
+- project-skill generation and verification loops.
+
+Open a GitHub issue with the bug report or feature request templates, and attach
+the relevant `.metaproject/data/*/artifacts/latest.md` files when possible.
