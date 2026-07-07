@@ -162,7 +162,7 @@ discovery lives in \`.metaproject/data/testing/context.md\`.
 
 export function renderTestingPostCommitHook(): string {
   return `gd_metapro_testing_post_commit() {
-  # Refresh testing context only when relevant files changed. Non-blocking.
+  # Non-mutating: report testing context staleness after relevant commits.
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
@@ -177,25 +177,7 @@ export function renderTestingPostCommitHook(): string {
     return 0
   fi
 
-  if command -v gd-metapro >/dev/null 2>&1; then
-    gd-metapro test analyze >/dev/null 2>&1 || {
-      echo "gd-metapro post-commit: testing context refresh failed" >&2
-      return 0
-    }
-    echo "gd-metapro post-commit: testing context refreshed"
-    return 0
-  fi
-
-  if [ -x "$HOME/.local/bin/gd-metapro" ]; then
-    "$HOME/.local/bin/gd-metapro" test analyze >/dev/null 2>&1 || {
-      echo "gd-metapro post-commit: testing context refresh failed" >&2
-      return 0
-    }
-    echo "gd-metapro post-commit: testing context refreshed"
-    return 0
-  fi
-
-  echo "gd-metapro post-commit: gd-metapro command not found, skipped testing refresh" >&2
+  echo "gd-metapro post-commit: testing context may be stale; run 'gd-metapro test analyze' explicitly"
   return 0
 }
 

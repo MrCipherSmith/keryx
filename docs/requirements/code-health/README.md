@@ -1,9 +1,9 @@
 # Code Health requirements
 
-Version: 0.8.0
+Version: 0.8.1
 Status: Phase 1 + Phase 2 complete (module implemented). Sonar adapter, complexity findings, skill/component scopes, gdskills learn-loop, and history trends shipped. Testing Module is now the planned owner of test execution/reporting, with Code Health consuming normalized testing reports. Phase 3 (advanced) is future.
 
-`Code Health` - модуль Metaproject для агрегации качества кода. Он собирает технические источники качества, нормализует findings, считает health/risk metrics на разных уровнях гранулярности и превращает сырые логи в agent-readable Markdown/JSON reports.
+`Code Health` - модуль Metaproject для агрегации качества кода. Он собирает технические источники качества, нормализует findings, считает health/risk metrics на разных уровнях гранулярности и превращает сырые логи в agent-readable Markdown/JSON reports. Post-commit hook is non-mutating: it reports possible staleness and points to explicit `gd-metapro health run ...` commands.
 
 ## Статус
 

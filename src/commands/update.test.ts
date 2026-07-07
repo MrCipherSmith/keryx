@@ -127,9 +127,14 @@ test("recovers manifest and dashboard for existing metaprojects without metaproj
     expect(dashboard).toContain("<strong>2</strong><span>files</span>");
     expect(dashboard).not.toContain("No modules enabled.");
     await expectDashboardLinksToExist(root, dashboard);
-    expect(await readFile(path.join(root, ".git", "hooks", "post-commit"), "utf8")).toContain(
-      "# gd-metapro:metaproject-dashboard-post-commit:begin",
-    );
+    const postCommitHook = await readFile(path.join(root, ".git", "hooks", "post-commit"), "utf8");
+    expect(postCommitHook).toContain("# gd-metapro:metaproject-dashboard-post-commit:begin");
+    expect(postCommitHook).toContain("dashboard/service files may be stale");
+    expect(postCommitHook).not.toContain("gd-metapro gdgraph build");
+    expect(postCommitHook).not.toContain("gd-metapro health run --changed");
+    expect(postCommitHook).not.toContain("gd-metapro test analyze");
+    expect(postCommitHook).not.toContain("gd-metapro update --skip-runtime >/dev/null");
+    expect(postCommitHook).not.toContain("gd-metapro update --skip-runtime --no-tasks");
     expect(index).toContain("| gdgraph |");
     expect(index).not.toContain("| _none_ | No modules enabled yet | - |");
     expect(await readFile(graphStoragePath, "utf8")).toBe(graphStorage);

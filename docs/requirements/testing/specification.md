@@ -1,6 +1,6 @@
 # Testing Module technical specification
 
-Version: 0.2.0
+Version: 0.2.1
 Status: implemented (MVP)
 
 ## 1. Purpose
@@ -17,7 +17,7 @@ and future memory workflows.
 | D1 | MVP focus | Testing Context first, with architecture for Test Intelligence. |
 | D2 | Storage | Hybrid: `skills/testing/SKILL.md`, `data/testing/*`, and optional `wiki/testing/*`. |
 | D3 | Missing tests | Do not change project code; write recommendations. |
-| D4 | Hooks | Ask separately for post-commit refresh and pre-push gate. |
+| D4 | Hooks | Ask separately for non-mutating post-commit stale-context reminder and pre-push gate. |
 | D5 | Changed selection | Runner related mode -> gdgraph -> naming convention fallback. |
 | D6 | Report contract | JSON source of truth + Markdown summary + optional raw log. |
 | D7 | Health integration | Testing owns execution/reporting; Code Health imports normalized result. |
@@ -217,15 +217,16 @@ is what the pre-push hook uses.
 
 ## 10. Hook Behavior
 
-Post-commit refresh:
+Post-commit reminder:
 
 ```bash
-gd-metapro test analyze --changed
+gd-metapro test analyze
 ```
 
 - non-blocking;
-- only runs when source/test/config/docs files changed;
-- writes context/report metadata, does not run heavy test suite.
+- only reports when source/test/config/docs files changed;
+- does not write context/report metadata after commit, because post-commit mutation leaves the worktree dirty;
+- user or orchestrator runs the explicit command when fresh testing context is needed.
 
 Pre-push gate:
 

@@ -1,6 +1,6 @@
 # Code Health: technical specification
 
-Version: 0.8.0
+Version: 0.8.1
 Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation; AST precision deferred.
 
 ## 1. Purpose
@@ -397,13 +397,15 @@ If enabled:
 - ask about an optional lightweight hook:
 
 ```text
-Install lightweight git hook for changed-scope health checks?
-Y. Yes - runs only lightweight checks for changed/affected scopes
+Install lightweight git hook for changed-scope health reminders?
+Y. Yes - reports stale health after changed/affected scopes
 N. No - run health manually or through orchestrators
 ```
 
-The hook is optional, runs only lightweight local sources, and never runs heavy
-remote/import sources unless explicitly configured.
+The hook is optional and non-mutating. It detects relevant changes and prints
+the explicit `gd-metapro health run --changed ...` command. It must not write
+health reports after commit, because post-commit mutation leaves the worktree
+dirty. Orchestrators and developers run the refresh command explicitly.
 
 Flags: `--no-health`, `--health-strict`.
 

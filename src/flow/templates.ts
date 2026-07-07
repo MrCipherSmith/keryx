@@ -167,30 +167,49 @@ the work.
 }
 
 export function renderFlowInitSkill(): string {
-  return `# flow-init Skill
+  return `# flow-init Skill (initialization orchestrator)
 
-Initialize a flow from a problem description or a GitHub issue URL.
+Initialize a flow from a problem description or a GitHub issue URL. Runs as
+Phase 1 of the gdskills \`flow-orchestrator\`, or standalone. Non-trivial
+initialization is decomposed by dispatching gdskills workers; trivial flows can
+be filled inline.
+
+## Worker communication (schema-governed)
+
+Workers inherit no session state - construct each dispatch explicitly
+(\`.metaproject/rules/core/subagent-context-construction.md\`). Every dispatch is
+a \`subagent-dispatch\` object
+(\`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json\`) and every
+worker reply is a \`subagent-result\`
+(\`.metaproject/core/gdskills/contracts/subagent-result.schema.json\`) whose first
+line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). Set
+\`run_id\` to the flow id and \`dispatch_id\` to \`<flow-id>-<step>\`.
 
 ## Workflow
 
-1. \`gd-metapro flow init --issue <url>\` or \`--title "<problem>"\`. The CLI
-   creates the package and collects deterministic context into context.md
-   (issue body, memory search, gdgraph artifacts, health status).
-2. Enrich context: use gdgraph (structure/affected), gdctx (compact reads),
-   memory search (accepted decisions/constraints), wiki (domain knowledge).
-   Append findings to context.md.
+1. Create the package: \`gd-metapro flow init --issue <url>\` or
+   \`--title "<problem>"\`. The CLI scaffolds the package and collects
+   deterministic context (issue body, memory search, gdgraph artifacts, health).
+2. Enrich context - dispatch \`context-collector\` with \`context_refs\` to the
+   flow package; it writes compact findings, not raw dumps. For an issue also
+   dispatch \`issue-analyzer\`; for a described feature, \`feature-analyzer\`.
+   Fold each \`subagent-result\` into context.md.
 3. Formalize description.md: problem, expected outcome, out of scope.
-4. Brainstorm approaches (2-3 options, trade-offs); pick one into plan.md.
-5. If requirements are ambiguous, interview the user: focused questions with
-   options and a recommendation. Do not guess hard requirements.
+4. Brainstorm approaches - dispatch \`brainstorm\` (2-3 options, trade-offs);
+   record the chosen approach and rejected alternatives in plan.md.
+5. If hard requirements are ambiguous, dispatch \`interviewer\`: focused
+   questions with options and a recommendation. Do not guess hard requirements.
 6. Break work into tasks: \`gd-metapro flow task add <id> --title ... --kind
    context|implement|test|review|docs\` (defaults T1-T4 already exist; adjust).
-7. Write acceptance-criteria.md: hard, verifiable \`- ACn:\` criteria.
+7. Write acceptance-criteria.md: hard, verifiable \`- ACn:\` criteria grounded in
+   the collected evidence.
 8. Re-verify the whole package, then freeze and hand off:
    \`gd-metapro flow freeze <id>\` -> \`gd-metapro flow start <id>\`.
 
-The implementor/orchestrator now works the plan. It must not modify acceptance
-criteria or flow state directly.
+Read each worker's \`STATUS:\` first: \`NEEDS_CONTEXT\`/\`BLOCKED\` -> enrich and
+re-dispatch (do not mark done); \`DONE\`/\`DONE_WITH_CONCERNS\` -> fold the result
+in and journal any concerns. After freeze, the implementor works the plan and
+must not modify acceptance criteria or flow state directly.
 `;
 }
 
@@ -203,7 +222,9 @@ data and status.
 ## Workflow
 
 1. Track progress: \`gd-metapro flow task done <id> <taskId>\` as tasks finish;
-   add discovered tasks with \`flow task add\`.
+   add discovered tasks with \`flow task add\`. Accept worker results by their
+   \`subagent-result\` \`STATUS:\` line (\`subagent-status-protocol.md\`), never by
+   prose - only \`DONE\`/\`DONE_WITH_CONCERNS\` may close a task.
 2. Keep description.md/journal current (append notes; never edit flow.json).
 3. If genuinely stuck: \`gd-metapro flow block <id> --reason\`; resume with
    \`flow unblock <id>\`.

@@ -1,6 +1,6 @@
 # gdskills: technical specification
 
-Version: 0.22.1
+Version: 0.22.2
 
 ## 1. Purpose
 
@@ -811,9 +811,9 @@ MVP hook should be lightweight:
 
 1. Detect changed files since previous commit or staged changes depending on hook type.
 2. Map changed files to candidate skills through ownership map and `gdgraph affected`.
-3. Run semantic verification only for candidates.
-4. Write report to `.metaproject/data/gdskills/reports/latest.md`.
-5. Apply updates only if autonomy policy allows it.
+3. Run semantic verification only for candidates in dry-run mode.
+4. Avoid writing reports or skill updates from post-commit.
+5. Write reports only during explicit `gd-metapro skills verify` runs or orchestrator-controlled checks.
 
 First implementation slice:
 
@@ -822,7 +822,7 @@ First implementation slice:
 - `--no-gdskills-hook` disables it;
 - writes a managed block into `.git/hooks/post-commit`;
 - preserves existing hook content and other `gd-metapro` managed blocks;
-- detects relevant changed paths and runs `gd-metapro skills verify --all`;
+- detects relevant changed paths and runs `gd-metapro skills verify --all --dry-run`;
 - never blocks the commit when verification fails.
 
 ## 13. Orchestrator integration
