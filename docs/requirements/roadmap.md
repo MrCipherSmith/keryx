@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.8.3
+Version: 0.8.7
 
 ## 1. Purpose
 
@@ -33,6 +33,7 @@ registry to human-readable status and points at each module's requirements.
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
 | Metaproject Standard | future `gd-metapro standard` | - | draft spec package | [metaproject-standard/](metaproject-standard/) |
+| Metaproject Security | future `gd-metapro security` | `security` | draft spec package | [security/](security/) |
 
 ## 4. gdwiki (implemented, MVP + collector)
 
@@ -56,7 +57,7 @@ Remaining (Phase 3):
 
 ## 5. gdskills (implemented, MVP)
 
-Version: `0.21.0`. See [gdskills/specification.md](gdskills/specification.md).
+Version: `0.22.5`. See [gdskills/specification.md](gdskills/specification.md).
 
 Shipped:
 
@@ -70,6 +71,9 @@ Shipped:
 - learning proposals and explicit apply flow under `.metaproject/data/gdskills/proposals/`;
 - runtime export/sync for Codex and Claude artifacts;
 - JSON Schema contracts for orchestrator and subagent communication;
+- bundled `requirements-package-orchestrator` and `requirements-package-reviewer`
+  for Metaproject `docs/requirements` package creation and verification;
+- bundled `metaproject-security` skill for security module policy workflows;
 - optional git post-commit hook for project-skill verification;
 - local-first agent routing through `.metaproject/index.md` and `.metaproject/skills/catalog.md`.
 
@@ -85,9 +89,10 @@ Order is indicative, not committed:
 
 1. Task Manager Phase 2 (`gd-metapro flow`) - Notion/Jira adapters, flow board artifact, memory/wiki links.
 2. Metaproject Standard validator (`gd-metapro standard validate|doctor|capabilities`) from the draft schemas.
-3. gdwiki release metrics and richer dashboard navigation.
-4. gdskills semantic verification against entity ownership maps.
-5. Code Health Phase 3 (`gd-metapro health`) - advanced trend analytics and larger-project tuning.
+3. Metaproject Security MVP (`gd-metapro security status|scan|check-input|check-output|redact|report`) with local rules/entropy backends.
+4. gdwiki release metrics and richer dashboard navigation.
+5. gdskills semantic verification against entity ownership maps.
+6. Code Health Phase 3 (`gd-metapro health`) - advanced trend analytics and larger-project tuning.
 
 ## 7. Technical Remediation Status
 

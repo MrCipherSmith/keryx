@@ -218,6 +218,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Scan for dependency advisories and accidentally committed secrets.",
     "Group findings by severity and remediation path.",
   ], ["security audit", "audit dependencies", "scan secrets"]),
+  skill("metaproject-security", "quality", ["recommended", "full"], "Check Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection, and data exfiltration.", [
+    "Discover the security module and classify source/target context.",
+    "Run or emulate check-input, check-output, scan, redact, and report workflows.",
+    "Preserve safe storage: hashes and redacted previews, not raw secrets or prompts.",
+  ], ["metaproject security", "prompt injection", "PII redaction", "data exfiltration"]),
   skill("perf-check", "quality", ["recommended", "full"], "Run or summarize performance, bundle, and complexity checks.", [
     "Detect available perf, build, bundle, and complexity tools.",
     "Run low-risk checks and summarize regressions.",
@@ -324,6 +329,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Flag contradictions, missing constraints, and unsupported claims.",
     "Suggest minimal updates with provenance.",
   ], ["check consistency", "validate spec", "doc contradictions"]),
+  skill("requirements-package-orchestrator", "planning", ["recommended", "full"], "Create or update Metaproject requirements packages under docs/requirements with PRD, specification, README, optional protocols/schemas, verification, review, and roadmap updates. Use autodoc-orchestrator instead for reverse-engineering current codebase documentation.", [
+    "Design the required file set from requirements-package-standard.",
+    "Write or update README, PRD, specification, optional policies/protocols/schemas.",
+    "Run structural verification and requirements-package-reviewer before final output.",
+  ], ["requirements package", "create requirements package", "module documentation", "оформи пакет документации"]),
+  skill("requirements-package-reviewer", "planning", ["recommended", "full"], "Review Metaproject requirements packages for completeness, versioning, consistency, schema references, roadmap updates, and unsupported implementation claims.", [
+    "Check every file in the package against requirements-package-standard.",
+    "Report blockers, warnings, and audit trail without rewriting docs.",
+    "Verify README/PRD/spec consistency and honest implementation status.",
+  ], ["requirements package review", "verify requirements package", "check PRD spec consistency"]),
   skill("planner", "planning", ["full"], "Produce roadmap, milestones, task breakdown, dependency graph, and sequencing.", [
     "Break goals into milestones and tasks.",
     "Identify dependencies, risks, and verification gates.",
@@ -533,6 +548,7 @@ Resolution order:
 - User says \`создай скил для <path>\`, \`создай скилл для <file>\`, or \`create a skill for <target>\`: load \`gdskills/core/entity-skill-creator/SKILL.md\` and run the create-route-inspect-verify-status CLI flow yourself.
 - User asks which project skill applies to a file/task: run \`gd-metapro skills route <query-or-target>\` before reading broad files.
 - User asks whether a project skill is still valid: run \`gd-metapro skills verify <skill-or-target>\`.
+- User asks to create/update a Metaproject requirements package, PRD/spec package, or \`docs/requirements/<name>\` documentation: load \`gdskills/planning/requirements-package-orchestrator/SKILL.md\`; use \`autodoc-orchestrator\` instead only for reverse-engineering documentation from the current codebase.
 
 | Skill | Category | Purpose | Entry |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # Metaproject Standard: technical specification
 
-Version: 0.1.0
+Version: 0.1.1
 
 Status: draft v0.1. This document defines the intended standard contract, not a
 fully implemented validator.
@@ -64,6 +64,7 @@ workspace.
   wiki/
   memory/
   health/
+  security/
 ```
 
 `core/` may contain project-local service scripts copied by a reference
@@ -208,6 +209,7 @@ The standard reserves these module keys for common capabilities:
 | `testing` | Test discovery, context and normalized reports |
 | `memory` | Long-term project memory |
 | `tasks` | Task and flow state |
+| `security` | Prompt, artifact, privacy, secret and exfiltration policy checks |
 
 Third-party modules should use lowercase kebab-case keys and must not reuse
 reserved keys with incompatible semantics.
@@ -256,4 +258,4 @@ This document defines the standard core. Module details stay in:
 - [../wiki/specification.md](../wiki/specification.md)
 - [../documentation-memory/specification.md](../documentation-memory/specification.md)
 - [../task-manager/specification.md](../task-manager/specification.md)
-
+- [../security/specification.md](../security/specification.md)

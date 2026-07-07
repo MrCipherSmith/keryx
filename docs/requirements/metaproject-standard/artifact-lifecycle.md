@@ -1,6 +1,6 @@
 # Metaproject Artifact Lifecycle
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## 1. Purpose
 
@@ -21,6 +21,7 @@ Canonical files should usually be committed:
 .metaproject/project-skills/**
 .metaproject/wiki/**
 .metaproject/memory/**
+.metaproject/security.config.json
 ```
 
 Project policy may exclude sensitive memory/wiki pages.
@@ -50,6 +51,9 @@ Transient artifacts should usually be ignored:
 .metaproject/data/**/summaries/
 .metaproject/data/**/history/
 .metaproject/data/**/logs/
+.metaproject/data/security/raw/
+.metaproject/data/security/incidents/
+.metaproject/data/security/redactions/
 ```
 
 Module specs may override this when a storage artifact is intentionally
@@ -91,4 +95,3 @@ Lefthook, lint-staged and custom commands.
 It must not refresh analyzer data by default and must not overwrite user-authored
 wiki, memory, rules or project-skills without an explicit command or managed
 marker.
-

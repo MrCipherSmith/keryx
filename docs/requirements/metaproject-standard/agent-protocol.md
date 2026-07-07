@@ -1,6 +1,6 @@
 # Metaproject Agent Protocol
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## 1. Purpose
 
@@ -30,6 +30,9 @@ review, debugging or refactoring:
 4. Use `health` and `testing` latest reports before rerunning expensive checks.
 5. Use `project-skills` for entity/component/domain-specific generation or
    refactoring patterns.
+6. Use `security` before writing memory/wiki/report artifacts or publishing
+   external-facing output that may contain secrets, PII or untrusted
+   instructions.
 
 ## 4. Root Entrypoints
 
@@ -65,4 +68,3 @@ Agents should prefer:
 - graph affected context before broad search;
 - latest reports before historical directories;
 - project-skills before copying patterns from many files.
-

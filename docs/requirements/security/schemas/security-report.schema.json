@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://metaproject.dev/schemas/security-report.schema.json",
+  "title": "Metaproject Security Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "createdAt",
+    "mode",
+    "gate",
+    "rawRetention",
+    "summary",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "mode": {
+      "type": "string",
+      "enum": ["advisory", "enforced", "ci", "gateway"]
+    },
+    "gate": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail", "blocked"]
+    },
+    "rawRetention": {
+      "type": "string",
+      "enum": ["off", "local", "ci-private", "explicit"]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "bySeverity", "byAction", "byCategory"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "bySeverity": { "$ref": "#/$defs/counts" },
+        "byAction": { "$ref": "#/$defs/counts" },
+        "byCategory": { "$ref": "#/$defs/counts" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "security-finding.schema.json" }
+    },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    }
+  }
+}
+

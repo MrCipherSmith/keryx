@@ -1,6 +1,6 @@
 # Metaproject Standard Profiles
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## 1. Purpose
 
@@ -46,6 +46,7 @@ Recommended modules:
 - `gdskills`;
 - `gdwiki`;
 - `memory`.
+- `security`.
 
 ## 4. CI Profile
 
@@ -64,6 +65,7 @@ Recommended modules:
 - `gdgraph`;
 - `gdctx`;
 - `tasks`.
+- `security`.
 
 ## 5. Full Profile
 
@@ -79,6 +81,7 @@ Recommended modules:
 - `testing`;
 - `memory`;
 - `tasks`.
+- `security`.
 
 Use when a project wants `.metaproject/` to be the shared operational brain for
 humans, agents and CI.
@@ -90,4 +93,3 @@ Future draft profiles may include:
 - `ide` - editor/plugin-oriented discovery and command metadata;
 - `enterprise` - stricter audit, policy and compliance requirements;
 - `multi-repo` - cross-repository manifests and shared memory/wiki routing.
-

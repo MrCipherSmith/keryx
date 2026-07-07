@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://metaproject.dev/schemas/security-finding.schema.json",
+  "title": "Metaproject Security Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "policyId",
+    "severity",
+    "category",
+    "source",
+    "action",
+    "confidence",
+    "createdAt"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "policyId": { "type": "string", "minLength": 1 },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "info"]
+    },
+    "category": {
+      "type": "string",
+      "enum": ["secret", "pii", "prompt-injection", "egress", "artifact-safety", "raw-retention"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["trusted-project", "trusted-user", "untrusted-external", "tool-output", "generated"]
+        },
+        "path": { "type": "string" },
+        "command": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "target": {
+      "type": "string",
+      "enum": ["model", "memory", "wiki", "report", "external", "task", "unknown"]
+    },
+    "action": {
+      "type": "string",
+      "enum": ["allow", "redact", "block", "require-approval", "warn"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "redactedPreview": { "type": "string" },
+    "hash": { "type": "string" },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "remediation": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}
+

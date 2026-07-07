@@ -1,6 +1,6 @@
 # gdskills: technical specification
 
-Version: 0.22.2
+Version: 0.22.5
 
 ## 1. Purpose
 
@@ -126,6 +126,8 @@ Orchestration:
 | `code-verifier` | Runs and summarizes verification gates: typecheck, lint, tests, build and import checks. |
 | `feature-analyzer` | Analyzes a feature/module/branch area and produces an implementation or migration map. |
 | `feature-dev` | Guided feature workflow from requirements to implementation, verification and PR-ready summary. |
+| `requirements-package-orchestrator` | Creates Metaproject requirements packages under `docs/requirements` with README, PRD, spec, optional protocols/schemas, verification and review. Use `autodoc-orchestrator` for reverse-engineering current-codebase documentation. |
+| `requirements-package-reviewer` | Reviews requirements packages for structure, versioning, links, consistency, schemas, roadmap updates and unsupported implementation claims. |
 
 Routing rule: when Task Manager is enabled and the user asks for a managed
 flow/story implementation, local-first routing should select `flow-orchestrator`
@@ -157,6 +159,7 @@ Quality, workflow and operations:
 | Skill | Purpose |
 |---|---|
 | `security-audit` | Runs dependency and secret/security checks and normalizes findings. |
+| `metaproject-security` | Checks Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection and data exfiltration. |
 | `perf-check` | Runs or summarizes performance and bundle/complexity checks. |
 | `test-gen` | Generates tests for a file/module using local patterns and existing test stack. |
 | `tests-creator` | Creates test scenarios before implementation from acceptance criteria. |

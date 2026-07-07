@@ -1,6 +1,6 @@
 # Metaproject CI Protocol
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## 1. Purpose
 
@@ -15,6 +15,7 @@ gd-metapro gdgraph build
 gd-metapro test analyze
 gd-metapro test run --changed
 gd-metapro health run --changed
+gd-metapro security report
 gd-metapro dashboard build
 ```
 
@@ -31,6 +32,8 @@ CI should publish:
 .metaproject/data/health/artifacts/latest.json
 .metaproject/data/testing/artifacts/latest.md
 .metaproject/data/testing/artifacts/latest.json
+.metaproject/data/security/artifacts/latest.md
+.metaproject/data/security/artifacts/latest.json
 .metaproject/data/gdgraph/artifacts/summary.md
 .metaproject/data/gdgraph/artifacts/module-map.json
 ```
@@ -48,6 +51,7 @@ CI may fail a merge when:
 
 - `health` quality gate is `fail`;
 - `testing` changed-scope run fails;
+- `security` gate blocks publishable artifacts;
 - `tasks` contains blocked/frozen tasks that are required for the branch;
 - standard validation fails for required profile fields.
 
@@ -61,9 +65,10 @@ Recommended order:
 
 1. `health` latest Markdown;
 2. `testing` latest Markdown;
-3. `gdctx` summaries for large raw logs;
-4. dashboard link;
-5. raw logs only as secondary artifacts.
+3. `security` latest Markdown when publishable artifacts were checked;
+4. `gdctx` summaries for large raw logs;
+5. dashboard link;
+6. raw logs only as secondary artifacts.
 
 ## 6. Security
 
@@ -72,4 +77,3 @@ CI must not publish:
 - raw logs that contain secrets;
 - local-only memory entries marked private;
 - transient data directories that the lifecycle policy marks as local-only.
-

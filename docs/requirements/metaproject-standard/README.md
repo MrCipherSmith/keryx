@@ -1,6 +1,6 @@
 # Metaproject Standard
 
-Version: 0.1.0
+Version: 0.1.1
 
 Status: draft documentation package. This standard is not yet a stable public
 v1.0 contract.
@@ -40,8 +40,8 @@ The v0.1 draft standardizes only the small core:
 - validation requirements.
 
 Module-specific contracts such as `gdgraph`, `health`, `testing`, `memory`,
-`gdwiki`, `gdctx`, `gdskills` and `tasks` remain separate specs referenced by
-this standard.
+`gdwiki`, `gdctx`, `gdskills`, `tasks` and `security` remain separate specs
+referenced by this standard.
 
 ## 4. Non-Goals
 
@@ -49,4 +49,3 @@ this standard.
 - Require every project to enable every module.
 - Treat `gd-metapro` implementation details as mandatory for other tools.
 - Replace existing agent or CI configuration systems.
-
