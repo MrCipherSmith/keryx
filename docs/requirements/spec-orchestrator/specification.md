@@ -1,6 +1,6 @@
 # spec-orchestrator: спецификация Metaproject CLI и инициализации
 
-Version: 0.8.1
+Version: 0.8.2
 
 ## 1. Назначение
 
@@ -823,6 +823,17 @@ Lifecycle:
 - не писать `.metaproject/data/**` artifacts по умолчанию;
 - выполнить executable hooks из `.metaproject/hooks/post-update.d/` только при явном флаге `--hooks`;
 - не перезаписывать user-authored файлы без явного подтверждения.
+
+Команды dashboard:
+
+```bash
+gd-metapro dashboard build
+gd-metapro dashboard open
+```
+
+- `build` пересобирает `.metaproject/gd-metapro-dashboard.html` из существующих service/data files;
+- `open` пересобирает dashboard и открывает HTML-файл локальной системной командой;
+- обе команды не запускают analyzers/builders и не пишут `.metaproject/data/**`.
 
 ## 14. Generated vs user-authored files
 

@@ -1,6 +1,6 @@
 # gdskills requirements
 
-Version: 0.19.0
+Version: 0.20.0
 
 `gdskills` - рабочий модуль Metaproject для управления lifecycle skills: создания, проверки, обучения, роутинга и синхронизации agent-facing skills.
 
@@ -10,6 +10,8 @@ Version: 0.19.0
 - `project-skills` - контентно/компонентно зависимые skills целевого проекта: модуль, компонент, store, feature component, domain concept или wiki-сущность.
 
 `gd-metapro` должен содержать собственный bundled catalog рабочих skills. `goodai-base` может быть только design reference при разработке, но установленный проект не должен зависеть от `goodai-base` или внешних глобальных skills.
+
+Phase 2 implementation: `gd-metapro` ships real bundled skill packages under `src/gdskills/bundled/skills/**` and core rules under `src/gdskills/bundled/rules/core/**`. `gd-metapro init`, `gd-metapro update` and `gd-metapro skills install` copy those bundles into `.metaproject/skills/gdskills/**` and `.metaproject/rules/core/**`; no `goodai-base` installation is required at runtime.
 
 Максимальный bundled package должен покрывать:
 

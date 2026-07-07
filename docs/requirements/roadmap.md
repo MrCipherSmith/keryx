@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.7.0
+Version: 0.8.0
 
 ## 1. Purpose
 
@@ -29,7 +29,7 @@ registry to human-readable status and points at each module's requirements.
 | Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
 | Code Health | `gd-metapro health` | `health` | implemented (Phase 1 + 2) | [code-health/](code-health/) |
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
-| gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (MVP) | [gdskills/](gdskills/) |
+| gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
 
 ## 4. gdwiki (implemented, MVP)
 
@@ -50,11 +50,13 @@ Remaining (Phase 3):
 
 ## 5. gdskills (implemented, MVP)
 
-Version: `0.19.0`. See [gdskills/specification.md](gdskills/specification.md).
+Version: `0.21.0`. See [gdskills/specification.md](gdskills/specification.md).
 
 Shipped:
 
 - init scaffold: bundled project-local gdskills, catalog, module manifest, data/core folders;
+- real bundled goodai-base-derived skills under `src/gdskills/bundled/skills/**`, copied into `.metaproject/skills/gdskills/**` with contracts/templates/runtime variants preserved;
+- bundled reusable core rules under `src/gdskills/bundled/rules/core/**`, copied into `.metaproject/rules/core/**`;
 - CLI: `status`, `list`, `inspect`, `route`, `catalog`, `install`, `create`, `verify`, `learn`, `export`, `sync`, `contracts`;
 - root alias: `gd-metapro skill-verify-skill`;
 - project-skill package creation under `.metaproject/project-skills/<module>/<entity>/`;

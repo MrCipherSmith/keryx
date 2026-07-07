@@ -179,6 +179,8 @@ gd-metapro init --no-gdgraph-hook
 gd-metapro status
 gd-metapro update
 gd-metapro update --hooks
+gd-metapro dashboard build
+gd-metapro dashboard open
 gd-metapro gdgraph build
 gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
@@ -283,6 +285,17 @@ Project hooks live in:
 ```text
 .metaproject/hooks/post-update.d/
 ```
+
+## Dashboard
+
+Rebuild or open the project admin dashboard:
+
+```bash
+gd-metapro dashboard build
+gd-metapro dashboard open
+```
+
+The dashboard is written to `.metaproject/gd-metapro-dashboard.html` from existing service files and data artifacts. It does not run analyzers or modify `.metaproject/data/**`.
 
 ## Requirements
 

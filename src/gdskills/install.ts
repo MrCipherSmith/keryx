@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,8 +50,16 @@ export async function installGdskills(
   for (const skillEntry of skills) {
     const skillDir = path.join(skillsRoot, skillEntry.category, skillEntry.name);
     await mkdir(skillDir, { recursive: true });
-    await writeFile(path.join(skillDir, "SKILL.md"), renderBundledSkill(skillEntry), "utf8");
+    const bundledSkillPath = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
+    if (existsSync(bundledSkillPath)) {
+      await cp(bundledSkillPath, skillDir, { recursive: true, force: true });
+    } else {
+      await writeFile(path.join(skillDir, "SKILL.md"), renderBundledSkill(skillEntry), "utf8");
+    }
   }
+
+  await installBundledSharedSkills(skillsRoot);
+  await installBundledRules(metaprojectRoot);
 
   const catalogPath = path.join(metaprojectRoot, "skills", "catalog.md");
   await writeFile(catalogPath, await preserveProjectSkillsSection(catalogPath, renderGdskillsCatalog(profile)), "utf8");
@@ -68,6 +76,22 @@ export async function installGdskills(
     catalogPath,
     manifestPath,
   };
+}
+
+async function installBundledSharedSkills(skillsRoot: string): Promise<void> {
+  const sharedSource = bundledSharedSourcePath();
+  if (!existsSync(sharedSource)) {
+    return;
+  }
+  await cp(sharedSource, path.join(skillsRoot, "shared"), { recursive: true, force: true });
+}
+
+async function installBundledRules(metaprojectRoot: string): Promise<void> {
+  const rulesSource = bundledRulesSourcePath();
+  if (!existsSync(rulesSource)) {
+    return;
+  }
+  await cp(rulesSource, path.join(metaprojectRoot, "rules", "core"), { recursive: true, force: true });
 }
 
 async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: string): Promise<string> {
@@ -120,6 +144,73 @@ function contractSourcePath(fileName: string): string {
     "gdskills",
     "contracts",
     fileName,
+  );
+  if (existsSync(packagedSourcePath)) {
+    return packagedSourcePath;
+  }
+
+  return directPath;
+}
+
+function bundledSkillSourcePath(category: string, skillName: string): string {
+  const directPath = fileURLToPath(new URL(`./bundled/skills/${category}/${skillName}`, import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  const packagedSourcePath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "src",
+    "gdskills",
+    "bundled",
+    "skills",
+    category,
+    skillName,
+  );
+  if (existsSync(packagedSourcePath)) {
+    return packagedSourcePath;
+  }
+
+  return directPath;
+}
+
+function bundledSharedSourcePath(): string {
+  const directPath = fileURLToPath(new URL("./bundled/skills/shared", import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  const packagedSourcePath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "src",
+    "gdskills",
+    "bundled",
+    "skills",
+    "shared",
+  );
+  if (existsSync(packagedSourcePath)) {
+    return packagedSourcePath;
+  }
+
+  return directPath;
+}
+
+function bundledRulesSourcePath(): string {
+  const directPath = fileURLToPath(new URL("./bundled/rules/core", import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  const packagedSourcePath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "src",
+    "gdskills",
+    "bundled",
+    "rules",
+    "core",
   );
   if (existsSync(packagedSourcePath)) {
     return packagedSourcePath;

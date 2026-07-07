@@ -11,6 +11,7 @@ import { memoryCommand } from "./commands/memory";
 import { flowCommand } from "./commands/flow";
 import { statusCommand } from "./commands/status";
 import { updateCommand } from "./commands/update";
+import { dashboardCommand } from "./commands/dashboard";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -41,6 +42,11 @@ async function main(): Promise<void> {
 
   if (command === "update") {
     await updateCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "dashboard") {
+    await dashboardCommand(args.slice(1));
     return;
   }
 
@@ -101,6 +107,8 @@ Usage:
   gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   gd-metapro status
   gd-metapro update [--skip-runtime] [--hooks]
+  gd-metapro dashboard build
+  gd-metapro dashboard open
   gd-metapro gdgraph build
   gd-metapro gdgraph query <cycles|orphans>
   gd-metapro gdgraph affected <file>
@@ -140,6 +148,7 @@ Commands:
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status
   update    Refresh managed service files without touching data artifacts
+  dashboard Build or open the project admin dashboard
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
   wiki      Manage the local project knowledge base

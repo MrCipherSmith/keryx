@@ -61,6 +61,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Break the work into phases with verification after each phase.",
     "Run review and skill-learning handoffs before final summary when relevant.",
   ], ["implement issue", "full workflow", "orchestrate task"]),
+  skill("job-documenter", "orchestration", ["recommended", "full"], "Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work.", [
+    "Initialize job folders and state documents.",
+    "Write analysis, context, implementation, verification, and review reports.",
+    "Keep job README and status metadata current.",
+    "Finalize traceable job documentation for the user and follow-up agents.",
+  ], ["job docs", "document job", "persistent job documentation"]),
   skill("context-collector", "orchestration", ["recommended", "full"], "Build compact task context from graph, ctx, wiki, memory, health, project-skills, and selected files.", [
     "Start from the target question and list the minimum context needed.",
     "Use gdgraph for relationships and gdctx for compact outputs.",
@@ -79,7 +85,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Summarize failures as actionable file/line findings where possible.",
     "Store raw output under Metaproject data when gdctx is available.",
   ], ["verify code", "run checks", "quality gate"]),
-  skill("issue-analyzer", "orchestration", ["full"], "Convert GitHub or local issues into atomic implementation tasks with acceptance criteria.", [
+  skill("issue-analyzer", "orchestration", ["recommended", "full"], "Convert GitHub or local issues into atomic implementation tasks with acceptance criteria.", [
     "Read the issue and linked context.",
     "Identify impacted modules, contracts, and tests.",
     "Split work into independent scenarios.",
@@ -91,6 +97,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Rank files by importance and risk.",
     "Produce a concise map of changes, dependencies, tests, and risks.",
   ], ["analyze feature", "study module", "investigate branch"]),
+  skill("feature-dev", "orchestration", ["full"], "Run a guided feature workflow from requirements to implementation, verification, and PR-ready summary.", [
+    "Clarify requirements and implementation scope.",
+    "Collect project context and relevant local patterns.",
+    "Implement in small verified slices.",
+    "Prepare review and PR-ready documentation.",
+  ], ["feature dev", "develop feature", "guided feature workflow"]),
 
   skill("review-orchestrator", "review", ["recommended", "full"], "Route review requests to specialized reviewers and consolidate findings.", [
     "Detect changed scope and relevant review domains.",
@@ -108,42 +120,42 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check dependency direction and leakage across layers.",
     "Flag coupling that increases blast radius or blocks future changes.",
   ], ["architecture review", "boundary review", "layering"]),
-  skill("review-security-code", "review", ["full"], "Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.", [
+  skill("review-security-code", "review", ["recommended", "full"], "Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.", [
     "Map inputs, trust boundaries, and sensitive outputs.",
     "Check injection, auth, crypto, secrets, and unsafe filesystem/network behavior.",
     "Prioritize exploitable findings with concrete remediation.",
   ], ["security review", "secure code", "vulnerability"]),
-  skill("review-performance", "review", ["full"], "Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.", [
+  skill("review-performance", "review", ["recommended", "full"], "Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.", [
     "Find changed hot paths and repeated operations.",
     "Check loops, rendering, async blocking, large imports, and caching behavior.",
     "Prioritize measurable or high-likelihood regressions.",
   ], ["performance review", "perf check", "slow"]),
-  skill("review-frontend", "review", ["full"], "Review frontend components, state boundaries, rendering behavior, and UI integration patterns.", [
+  skill("review-frontend", "review", ["recommended", "full"], "Review frontend components, state boundaries, rendering behavior, and UI integration patterns.", [
     "Identify component, store, hook, route, and UI boundary changes.",
     "Check data flow, state ownership, rendering cost, accessibility, and local conventions.",
     "Use project-skills for module-specific frontend patterns when available.",
   ], ["frontend review", "component review", "ui review"]),
-  skill("review-backend", "review", ["full"], "Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries.", [
+  skill("review-backend", "review", ["recommended", "full"], "Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries.", [
     "Identify endpoint, service, data-access, and integration changes.",
     "Check validation, error handling, transaction boundaries, and contract compatibility.",
     "Use gdgraph affected context for downstream consumers.",
   ], ["backend review", "api review", "service review"]),
-  skill("review-clean-code", "review", ["full"], "Review function and class maintainability, SOLID issues, cohesion, naming, and complexity.", [
+  skill("review-clean-code", "review", ["recommended", "full"], "Review function and class maintainability, SOLID issues, cohesion, naming, and complexity.", [
     "Focus on maintainability problems that affect future changes.",
     "Check function size, argument shape, abstraction level, cohesion, and duplication.",
     "Separate clean-code improvements from correctness defects.",
   ], ["clean code review", "solid review", "maintainability"]),
-  skill("review-highload", "review", ["full"], "Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks.", [
+  skill("review-highload", "review", ["recommended", "full"], "Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks.", [
     "Map concurrent paths and shared resources.",
     "Check retries, idempotency, backpressure, locks, queues, and connection pools.",
     "Prioritize issues that can fail under load.",
   ], ["highload review", "concurrency review", "race condition"]),
-  skill("review-core-boundaries", "review", ["full"], "Review shared/core module coupling, public API stability, and dependency minimization.", [
+  skill("review-core-boundaries", "review", ["recommended", "full"], "Review shared/core module coupling, public API stability, and dependency minimization.", [
     "Identify core/shared surfaces changed by the task.",
     "Check if feature-specific logic leaked into shared modules.",
     "Verify public API stability and downstream impact.",
   ], ["core review", "shared boundary", "public surface"]),
-  skill("review-flow-graph", "review", ["full"], "Review graph or flow UI abstractions, graph surfaces, layout lifecycle, and large-graph behavior.", [
+  skill("review-flow-graph", "review", ["recommended", "full"], "Review graph or flow UI abstractions, graph surfaces, layout lifecycle, and large-graph behavior.", [
     "Identify graph nodes, edges, stores, layout, and rendering changes.",
     "Check public graph surface and internal helper boundaries.",
     "Look for lifecycle, selection, and large-graph performance risks.",
@@ -153,7 +165,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Separate style findings from correctness findings.",
     "Avoid subjective churn unless it affects maintainability.",
   ], ["style review", "readability", "clean up"]),
-  skill("review-testing-practices", "review", ["full"], "Review test structure, coverage quality, determinism, and repository test conventions.", [
+  skill("review-testing-practices", "review", ["recommended", "full"], "Review test structure, coverage quality, determinism, and repository test conventions.", [
     "Identify required behavior coverage from the change.",
     "Check whether tests are meaningful, stable, and scoped.",
     "Flag brittle waits, over-mocking, missing negative cases, and weak assertions.",
@@ -163,13 +175,43 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Drop weak findings and elevate concrete risks.",
     "Ensure final output is actionable and severity-ranked.",
   ], ["strict review", "meta review", "boss review"]),
+  skill("review-frontend-conventions", "review", ["recommended", "full"], "Review frontend code against repository-local frontend conventions and agent entrypoints.", [
+    "Load local AGENTS.md/CLAUDE.md and matched frontend rules.",
+    "Check component, state, styling, i18n, error, and Storybook conventions.",
+    "Report concrete convention violations with source references.",
+  ], ["frontend conventions", "local frontend rules", "CLAUDE frontend"]),
+  skill("review-pr-feedback", "review", ["full"], "Analyze existing PR review comments and turn feedback into actions and reusable lessons.", [
+    "Collect review comments and group them by author/topic.",
+    "Explain each actionable comment and map it to files or skills.",
+    "Propose fixes and rule/skill learning updates when patterns repeat.",
+  ], ["review PR feedback", "analyze PR comments", "review comments"]),
+  skill("code-ai-review", "review", ["full"], "Run the legacy strict AI review profile from goodai-base.", [
+    "Load the AI review baseline rule.",
+    "Review branch changes from merge-base.",
+    "Report concrete findings first.",
+  ], ["code-ai-review", "AI review baseline", "strict AI review"]),
+  skill("code-b091-review", "review", ["full"], "Run the b091-style direct review profile from goodai-base.", [
+    "Load the b091 review profile.",
+    "Review changed code for correctness and weak assumptions.",
+    "Use direct concise findings.",
+  ], ["b091 review", "code-b091-review", "review as b091"]),
+  skill("code-style-review", "review", ["full"], "Run the legacy code style and architecture review profile from goodai-base.", [
+    "Load code-style rules and local conventions.",
+    "Review naming, structure, boundaries, and TypeScript usage.",
+    "Separate style issues from correctness defects.",
+  ], ["code-style-review", "style review", "architecture style"]),
+  skill("code-mobx-store-review", "review", ["full"], "Run focused MobX store and state logic review.", [
+    "Check actions, computed state, reactions, async boundaries, and view/store separation.",
+    "Load MobX store template and local conventions.",
+    "Report state bugs and maintainability risks.",
+  ], ["mobx review", "store review", "code-mobx-store-review"]),
 
-  skill("security-audit", "quality", ["full"], "Run dependency and secret/security checks and normalize findings.", [
+  skill("security-audit", "quality", ["recommended", "full"], "Run dependency and secret/security checks and normalize findings.", [
     "Detect package manager and available audit commands.",
     "Scan for dependency advisories and accidentally committed secrets.",
     "Group findings by severity and remediation path.",
   ], ["security audit", "audit dependencies", "scan secrets"]),
-  skill("perf-check", "quality", ["full"], "Run or summarize performance, bundle, and complexity checks.", [
+  skill("perf-check", "quality", ["recommended", "full"], "Run or summarize performance, bundle, and complexity checks.", [
     "Detect available perf, build, bundle, and complexity tools.",
     "Run low-risk checks and summarize regressions.",
     "Link issues to files, modules, and affected skills when possible.",
@@ -179,7 +221,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Generate tests that cover behavior, edge cases, and errors.",
     "Run focused tests when available.",
   ], ["generate tests", "write tests", "add coverage"]),
-  skill("tests-creator", "quality", ["full"], "Create test scenarios before implementation from acceptance criteria and project patterns.", [
+  skill("tests-creator", "quality", ["recommended", "full"], "Create test scenarios before implementation from acceptance criteria and project patterns.", [
     "Read requirements and convert them into behavior scenarios.",
     "Map scenarios to the existing test stack.",
     "Prefer tests that fail for the missing behavior before implementation.",
@@ -214,7 +256,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Draft concise PR title and description.",
     "Use project issue links when available.",
   ], ["open PR", "create pull request", "draft PR"]),
-  skill("pr-issue-documenter", "quality", ["full"], "Create PR descriptions and linked issue documentation from branch changes.", [
+  skill("pr-issue-documenter", "quality", ["recommended", "full"], "Create PR descriptions and linked issue documentation from branch changes.", [
     "Analyze commits and changed files.",
     "Group changes by area and user-visible behavior.",
     "Update or draft issue/PR documentation with technical context.",
@@ -235,6 +277,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Prefer short multiple-choice options with a recommended default.",
     "Stop once the task is specific enough to execute.",
   ], ["ask questions", "clarify requirements", "interview"]),
+  skill("interview", "planning", ["recommended", "full"], "Run implementation-specific structured interview used by job-orchestrator before planning.", [
+    "Clarify implementation ambiguities from the issue or task.",
+    "Trigger brainstorm for unresolved architecture decisions.",
+    "Return answers in a form the orchestrator can use for planning.",
+  ], ["implementation interview", "interview before implementation", "clarify implementation"]),
   skill("prd-creator", "planning", ["recommended", "full"], "Convert vague requests into structured PRD and acceptance criteria.", [
     "Extract users, goals, non-goals, constraints, and risks.",
     "Ask clarifying questions when needed.",
@@ -280,6 +327,31 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Analyze modules in small batches.",
     "Assemble architecture, component, service, and decision docs.",
   ], ["autodoc", "document codebase", "reverse engineer docs"]),
+  skill("autodoc-scanner", "planning", ["full"], "Scan an existing codebase to identify documentation targets and module boundaries.", [
+    "Inventory structure, stack, entrypoints, and candidate modules.",
+    "Produce a bounded scan report for autodoc orchestration.",
+    "Avoid broad raw dumps; summarize evidence and gaps.",
+  ], ["autodoc scan", "scan codebase", "documentation targets"]),
+  skill("autodoc-analyst", "planning", ["full"], "Analyze one module, component, or service area for reverse-engineering documentation.", [
+    "Read selected files and nearby context.",
+    "Extract responsibilities, flows, dependencies, and risks.",
+    "Return structured notes for documentation assembly.",
+  ], ["autodoc analyst", "analyze module docs", "reverse engineer module"]),
+  skill("autodoc-architect", "planning", ["full"], "Derive architecture-level documentation from scanned code and module analyses.", [
+    "Identify architectural layers and dependency direction.",
+    "Summarize system boundaries and major flows.",
+    "Record assumptions and unknowns for verification.",
+  ], ["autodoc architect", "architecture docs", "reverse engineer architecture"]),
+  skill("autodoc-writer", "planning", ["full"], "Write Markdown documentation pages from autodoc analysis artifacts.", [
+    "Convert structured analysis into readable docs.",
+    "Link pages to code, wiki, and decisions.",
+    "Keep unsupported claims explicit.",
+  ], ["autodoc writer", "write docs", "generate documentation pages"]),
+  skill("autodoc-assembler", "planning", ["full"], "Assemble reverse-engineered documentation into a coherent indexed documentation package.", [
+    "Combine scanner, analyst, architect, and writer outputs.",
+    "Generate indexes and cross-links.",
+    "Report gaps and recommended follow-up pages.",
+  ], ["autodoc assemble", "assemble docs", "documentation package"]),
 
   skill("agent-entrypoint-manager", "platform", ["minimal", "recommended", "full"], "Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references.", [
     "Find existing root agent entrypoints.",
@@ -291,6 +363,16 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Keep hooks lightweight and idempotent.",
     "Avoid network and destructive behavior inside hooks.",
   ], ["install hook", "git hook", "post-commit"]),
+  skill("hookify", "platform", ["full"], "Use goodai-base hook guidance for safe hook design and installation.", [
+    "Detect existing hooks and preserve user content.",
+    "Install idempotent managed blocks.",
+    "Keep hooks lightweight and observable.",
+  ], ["hookify", "hook guidance", "safe hooks"]),
+  skill("claude-md-management", "platform", ["full"], "Maintain CLAUDE.md and related agent entrypoint guidance from goodai-base.", [
+    "Read existing agent entrypoints.",
+    "Patch managed guidance without deleting user-authored content.",
+    "Keep rule and skill links discoverable.",
+  ], ["claude md", "CLAUDE.md management", "agent entrypoint"]),
   skill("skill-catalog-manager", "platform", ["minimal", "recommended", "full"], "Generate `.metaproject/skills/catalog.md` and machine-readable skill registry.", [
     "Read bundled and project-local skill metadata.",
     "Generate concise catalog entries grouped by category.",

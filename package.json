@@ -18,6 +18,7 @@
   "files": [
     "dist",
     "src/gdgraph",
+    "src/gdskills/bundled",
     "src/gdskills/contracts",
     "README.md",
     "package.json"

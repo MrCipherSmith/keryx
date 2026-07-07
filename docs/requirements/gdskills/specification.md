@@ -1,6 +1,6 @@
 # gdskills: technical specification
 
-Version: 0.20.0
+Version: 0.21.0
 
 ## 1. Purpose
 
@@ -90,6 +90,8 @@ The `gd-metapro` distribution should ship a native working skill catalog with th
 Bundling rules:
 
 - ship these skills inside the `gd-metapro` repository/package;
+- store real bundled source assets in `src/gdskills/bundled/skills/**` with schemas, templates, shared files and runtime-specific variants preserved;
+- store reusable core rules in `src/gdskills/bundled/rules/core/**` and install them into `.metaproject/rules/core/**`;
 - treat `goodai-base` only as historical/reference material during product design;
 - do not require `goodai-base`, `~/goodai-base`, global goodai skills or any external skill repository at runtime;
 - keep user/project-specific generated skills in `.metaproject/project-skills`;

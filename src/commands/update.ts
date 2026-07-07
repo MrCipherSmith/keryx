@@ -102,6 +102,11 @@ type UpdateOptions = {
   noTasks: boolean;
 };
 
+export type DashboardBuildResult = {
+  path: string;
+  data: MetaprojectDashboardData;
+};
+
 export async function updateCommand(args: string[] = []): Promise<void> {
   const options = parseUpdateArgs(args);
   if (options.help) {
@@ -323,6 +328,33 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       "Task Manager (tasks) module was missing - backfilled: flows/, skills/flow, modules/tasks.md, manifest entry. Use `gd-metapro update --no-tasks` to skip.",
     );
   }
+}
+
+export async function buildDashboard(projectRoot: string = process.cwd()): Promise<DashboardBuildResult> {
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  if (!(await pathExists(metaprojectRoot))) {
+    throw new Error("Metaproject is not initialized. Run: gd-metapro init");
+  }
+
+  const manifest = (await readManifest(metaprojectRoot)).manifest;
+  const data = await collectDashboardData(metaprojectRoot);
+  const dashboardPath = path.join(metaprojectRoot, "gd-metapro-dashboard.html");
+  await writeTextIfChanged(
+    dashboardPath,
+    renderMetaprojectDashboardHtml({
+      enableGdgraph: moduleEnabled(manifest, "gdgraph"),
+      enableGdctx: moduleEnabled(manifest, "gdctx"),
+      enableGdwiki: moduleEnabled(manifest, "gdwiki"),
+      enableGdskills: moduleEnabled(manifest, "gdskills"),
+      enableHealth: moduleEnabled(manifest, "health"),
+      enableTesting: moduleEnabled(manifest, "testing"),
+      enableMemory: moduleEnabled(manifest, "memory"),
+      enableTasks: moduleEnabled(manifest, "tasks"),
+      data,
+    }),
+  );
+
+  return { path: dashboardPath, data };
 }
 
 async function shouldInstallDashboardPostCommitHook(projectRoot: string, manifest: MetaprojectManifest): Promise<boolean> {
