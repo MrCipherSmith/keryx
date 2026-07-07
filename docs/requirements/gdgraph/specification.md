@@ -1,6 +1,6 @@
 # gdgraph: спецификация модуля анализа графа кода
 
-Version: 0.1.2
+Version: 0.1.3
 
 ## 1. Назначение
 
@@ -144,6 +144,10 @@ MVP считается успешным, если `gdgraph` умеет:
 - сканировать TS/JS проект;
 - строить dependency graph файлов;
 - исключать generated/static output по умолчанию для больших frontend-проектов;
+- извлекать imports через runtime-safe parser/scanner, а regex использовать
+  только как fallback;
+- резолвить базовые `tsconfig.json` aliases (`baseUrl`/`paths`) для локальных
+  source и asset imports;
 - резолвить локальные asset imports как asset nodes, а не как ошибки unresolved;
 - сохранять граф в `.metaproject/data/gdgraph`;
 - генерировать короткий summary проекта;

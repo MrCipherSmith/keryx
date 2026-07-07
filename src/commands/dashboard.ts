@@ -1,16 +1,18 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { buildDashboard } from "./update";
+import { parseBooleanFlags } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 type DashboardOptions = {
   help: boolean;
+  positionals: string[];
 };
 
 export async function dashboardCommand(args: string[] = []): Promise<void> {
-  const subcommand = args[0];
-  const options = parseOptions(args.slice(1));
-  if (!subcommand || options.help || subcommand === "--help" || subcommand === "-h") {
+  const options = parseOptions(args);
+  const subcommand = options.positionals[0];
+  if (!subcommand || options.help) {
     printHelp();
     return;
   }
@@ -37,8 +39,10 @@ export async function dashboardCommand(args: string[] = []): Promise<void> {
 }
 
 function parseOptions(args: string[]): DashboardOptions {
+  const parsed = parseBooleanFlags(args, ["help"] as const);
   return {
-    help: args.includes("--help") || args.includes("-h"),
+    help: parsed.values.help,
+    positionals: parsed.positionals,
   };
 }
 

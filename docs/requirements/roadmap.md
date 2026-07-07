@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.8.1
+Version: 0.8.2
 
 ## 1. Purpose
 
@@ -83,7 +83,21 @@ Order is indicative, not committed:
 3. gdskills semantic verification against entity ownership maps.
 4. Code Health Phase 3 (`gd-metapro health`) - advanced trend analytics and larger-project tuning.
 
-## 7. Maintenance
+## 7. Technical Remediation Status
+
+Recent technical-feedback fixes shipped in the current implementation track:
+
+- `gdgraph`: parser-backed import extraction, regex fallback, and root
+  `tsconfig.json` `baseUrl`/`paths` alias resolution for source and asset
+  imports;
+- `Code Health`: finding adapters run in parallel while report ordering stays
+  deterministic; complexity remains token-based but nested function bodies are
+  counted separately from their parent function;
+- Git hooks: `gd-metapro update --hooks` updates only marked managed blocks and
+  preserves existing user hook content;
+- CLI parsing: first command slice migrated to the shared `parseArgs` helper.
+
+## 8. Maintenance
 
 - Update the status table when a module's manifest entry flips to enabled.
 - Bump this document's `Version` on every change per

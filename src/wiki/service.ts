@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
@@ -249,14 +250,22 @@ export async function wikiCollect(input: WikiCollectInput): Promise<WikiCollectR
   const generatedAt = new Date().toISOString();
   const limit = input.limit && input.limit > 0 ? input.limit : DEFAULT_COLLECT_LIMIT;
   const pages: WikiCollectedPage[] = [];
-  const candidates = [
-    ...(await collectGraphWikiCandidates(input.cwd, generatedAt, limit)),
-    ...(await collectHealthWikiCandidates(input.cwd, generatedAt)),
-    ...(await collectTestingWikiCandidates(input.cwd, generatedAt)),
-  ];
+
+  // --changed: only regenerate pages for modules touched since <since> (default
+  // HEAD), and treat those pages as force-refreshable. Deterministic, no model -
+  // ideal for a post-commit hook. Prose stays owned by the enrich skill.
+  const onlyModules = input.changed === true ? await changedModules(input.cwd, input.since) : null;
+  const force = input.force === true || input.changed === true;
+  const candidates = input.changed === true
+    ? await collectGraphWikiCandidates(input.cwd, generatedAt, limit, onlyModules)
+    : [
+        ...(await collectGraphWikiCandidates(input.cwd, generatedAt, limit, null)),
+        ...(await collectHealthWikiCandidates(input.cwd, generatedAt)),
+        ...(await collectTestingWikiCandidates(input.cwd, generatedAt)),
+      ];
 
   for (const candidate of candidates) {
-    pages.push(await writeCollectedPage(input.cwd, candidate, input.force === true));
+    pages.push(await writeCollectedPage(input.cwd, candidate, force));
   }
 
   const index = await wikiGenerateIndex(input.cwd);
@@ -293,6 +302,7 @@ async function collectGraphWikiCandidates(
   cwd: string,
   generatedAt: string,
   limit: number,
+  onlyModules: Set<string> | null,
 ): Promise<WikiCollectCandidate[]> {
   const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
   const edgesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "edges.jsonl");
@@ -352,7 +362,8 @@ async function collectGraphWikiCandidates(
   const topModules = [...moduleFiles.entries()]
     .map(([name, list]) => ({ name, files: list.length, edges: sumCounts(moduleDeps.get(name)) }))
     .sort((a, b) => b.files - a.files || b.edges - a.edges)
-    .slice(0, limit);
+    .slice(0, limit)
+    .filter((module) => onlyModules === null || onlyModules.has(module.name));
 
   const architecture: WikiCollectCandidate = {
     type: "architecture",
@@ -409,30 +420,25 @@ async function collectGraphWikiCandidates(
     const exportsFrom = entryFiles.length > 0 ? entryFiles : keyFiles.slice(0, 2).map((entry) => entry.file);
     const exportNames = await extractModuleExports(cwd, exportsFrom);
 
-    const sections: Array<[string, string[]]> = [];
-    sections.push(["Responsibility", [
-      readme ?? "- TODO: describe what this module owns. Read the key files below and enrich with the gdwiki skill.",
-    ]]);
-    if (exportNames.length > 0) {
-      sections.push(["Public API", exportNames.map((name) => "- `" + name + "`")]);
+    const reference: string[] = [];
+    const pushRef = (heading: string, lines: string[]): void => {
+      if (lines.length === 0) {
+        return;
+      }
+      reference.push("### " + heading, "", ...lines, "");
+    };
+    pushRef("Public API", exportNames.map((name) => "- `" + name + "`"));
+    pushRef(
+      "Key files",
+      keyFiles.map((entry) => "- `" + entry.file + "` - imported by " + entry.incoming + ", imports " + entry.outgoing),
+    );
+    pushRef("Depends on", deps.map(([target, count]) => "- `" + target + "` - " + count + " import(s)"));
+    pushRef("Depended on by", dependents.map(([source, count]) => "- `" + source + "` - " + count + " import(s)"));
+    pushRef("Entry points", entryFiles.map((file) => "- `" + file + "`"));
+    if (readme) {
+      pushRef("Module README", [readme]);
     }
-    if (keyFiles.length > 0) {
-      sections.push(["Key files", keyFiles.map((entry) =>
-        "- `" + entry.file + "` - imported by " + entry.incoming + ", imports " + entry.outgoing)]);
-    }
-    if (deps.length > 0) {
-      sections.push(["Depends on", deps.map(([target, count]) => "- `" + target + "` - " + count + " import(s)")]);
-    }
-    if (dependents.length > 0) {
-      sections.push(["Depended on by", dependents.map(([source, count]) => "- `" + source + "` - " + count + " import(s)")]);
-    }
-    if (entryFiles.length > 0) {
-      sections.push(["Entry points", entryFiles.map((file) => "- `" + file + "`")]);
-    }
-    sections.push(["Graph signals", [
-      "- Files: " + item.files,
-      "- Cross-module imports: " + item.edges,
-    ]]);
+    pushRef("Graph signals", ["- Files: " + item.files, "- Cross-module imports: " + item.edges]);
 
     const summaryParts = ["`" + moduleName + "` groups " + item.files + " file(s)."];
     if (deps.length > 0) {
@@ -447,12 +453,11 @@ async function collectGraphWikiCandidates(
       slug: slugifyPath(moduleName),
       title: "Module " + moduleName,
       source: "gdgraph",
-      content: renderCollectedPage({
-        title: "Module " + moduleName,
-        type: "component",
+      content: renderModuleWikiPage({
+        moduleName,
         generatedAt,
         summary: summaryParts.join(" "),
-        sections,
+        reference,
       }),
     });
   }
@@ -931,6 +936,65 @@ function titleCase(type: string): string {
     .join(" ");
 }
 
+function renderModuleWikiPage({
+  moduleName,
+  generatedAt,
+  summary,
+  reference,
+}: {
+  moduleName: string;
+  generatedAt: string;
+  summary: string;
+  reference: string[];
+}): string {
+  // Prose sections lead (agent/human-owned, filled by the gdwiki enrich
+  // workflow); graph-derived facts live under Reference and are regenerated by
+  // `wiki collect --force`. A wiki explains what is inside a module - the graph
+  // already provides the raw lists.
+  return `# Module ${moduleName}
+
+Version: 0.1.0
+Type: component
+Status: draft
+
+## Summary
+
+${summary}
+
+## Overview
+
+_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+
+## How it works
+
+_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+
+## Key concepts
+
+_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+
+## Main flows
+
+_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+
+---
+
+## Reference (from code graph)
+
+Extracted deterministically by \`gd-metapro wiki collect\`; regenerated by
+\`--force\`. The prose sections above are the agent/human-owned part.
+
+${reference.join("\n")}
+## Related Wiki
+
+- [Wiki Index](../index.md)
+
+## Changelog
+
+- 0.1.0 - Generated by \`gd-metapro wiki collect\` at ${generatedAt}. Prose sections are drafts for the gdwiki enrich workflow.
+`;
+}
+
 function renderCollectedPage({
   title,
   type,
@@ -984,6 +1048,39 @@ function parseJsonl(content: string): Array<Record<string, unknown>> {
         return [];
       }
     });
+}
+
+async function changedModules(cwd: string, since: string | undefined): Promise<Set<string> | null> {
+  const base = since && since.length > 0 ? since : "HEAD";
+  const files = await gitDiffNames(cwd, base);
+  if (files === null) {
+    return null;
+  }
+  const modules = new Set<string>();
+  for (const file of files) {
+    if (file.length > 0) {
+      modules.add(moduleNameFromProjectPath(file));
+    }
+  }
+  return modules;
+}
+
+function gitDiffNames(cwd: string, base: string): Promise<string[] | null> {
+  return new Promise((resolve) => {
+    const child = spawn("git", ["diff", "--name-only", base], { cwd });
+    let out = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk);
+    });
+    child.on("error", () => resolve(null));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve(null);
+        return;
+      }
+      resolve(out.split("\n").map((line) => line.trim()).filter((line) => line.length > 0));
+    });
+  });
 }
 
 function moduleNameFromProjectPath(filePath: string): string {

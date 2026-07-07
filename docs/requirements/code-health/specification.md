@@ -1,7 +1,7 @@
 # Code Health: technical specification
 
-Version: 0.8.1
-Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation; AST precision deferred.
+Version: 0.8.3
+Status: Phase 1 + Phase 2 complete (module implemented; see section 21). Phase 3 (advanced) is future. Complexity is a token-based approximation with nested function bodies counted separately; full AST precision deferred.
 
 ## 1. Purpose
 
@@ -21,7 +21,7 @@ Markdown/JSON reports with a quality gate suitable for orchestrators and CI.
 | D5 | Config location | Separate `.metaproject/health.config.json` (consistent with `gdctx.config.json`). |
 | D6 | gdskills coupling | Decoupled: Code Health is a producer; gdskills consumes `latest.json` via `skills learn --from-health`. |
 | D7 | Source extensibility | Typed `SourceAdapter` contract; Core-5 built in, others added through the same contract. |
-| D8 | Determinism | `auto` = import compatible normalized artifacts when available; potentially expensive local execution requires explicit source mode/command. `--strict` fails on missing required source; provenance recorded. |
+| D8 | Determinism | `auto` = import compatible normalized artifacts when available; potentially expensive local execution requires explicit source mode/command. Finding adapters may run in parallel, but report source order stays deterministic. `--strict` fails on missing required source; provenance recorded. |
 | D9 | Scopes in v1 | project + module + file (mapped via gdgraph). entity/component/store and skill-owned scope in a later phase. |
 | D10 | Scope metrics in v1 | finding counts, coverage, churn (git), cyclomatic complexity (token-based). |
 | D11 | Source failure semantics | Sources are `required` or `optional`; missing/failed required -> fail in `--strict`, warn otherwise; optional -> skipped, no gate impact. |
@@ -249,7 +249,7 @@ Each scope carries:
 - finding counts by severity/source/category/priority;
 - `coverage` (from the coverage source, when available);
 - `churn` - changed-line count over `churnWindowDays` from `git log`;
-- `complexity` - cyclomatic complexity per function via a token-based scan (comment/string-stripped, function bodies located by brace matching), with
+- `complexity` - cyclomatic complexity per function via a token-based scan (comment/string-stripped, function bodies located by brace matching, nested function bodies masked from parent functions and counted separately), with
   per-scope max and count above `complexityThreshold`, and emitted as P2
   findings for files over the threshold;
 - `health_score`, `risk_score`, `trend`, `regression_score` (section 10).
@@ -323,7 +323,8 @@ gd-metapro health trend [--scope <scope-key>] [--limit <n>]
 
 1. Load manifest + `health.config.json`.
 2. Detect sources; resolve scope; honor `--strict`.
-3. Run/import each enabled source per mode.
+3. Run/import enabled finding adapters in parallel while preserving deterministic
+   report ordering by adapter registry order.
 4. Normalize findings; map to scopes via file paths and gdgraph when available.
 5. Compute metrics, scores, trend, regression vs baseline.
 6. Evaluate gate.

@@ -46,3 +46,30 @@ test("counts logical operators, nullish, and ternary", () => {
   // && , || , ?? , ? -> 4 decisions + 1 base
   expect(c.max).toBe(5);
 });
+
+test("counts nested functions separately instead of adding them to the parent", () => {
+  const c = computeComplexity(`
+    function outer(items: number[]) {
+      if (items.length === 0) return [];
+      return items.map((item) => {
+        if (item > 0) return item;
+        return 0;
+      });
+    }
+  `);
+  expect(c.functions).toEqual([2, 2]);
+  expect(c.max).toBe(2);
+});
+
+test("counts nested function declarations separately", () => {
+  const c = computeComplexity(`
+    function outer(flag: boolean) {
+      if (flag) return inner(flag);
+      function inner(value: boolean) {
+        return value ? 1 : 0;
+      }
+      return 0;
+    }
+  `);
+  expect(c.functions).toEqual([2, 2]);
+});

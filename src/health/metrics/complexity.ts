@@ -3,8 +3,9 @@
 // This is token-based, not full-AST: source is stripped of comments and string
 // literals, then function bodies are located by brace matching (handling TS
 // return-type annotations, generics, arrows, and methods) and decision points
-// are counted per function. Nested content counts toward the enclosing
-// function. AST-precise complexity is a later refinement (see spec section 20).
+// are counted per function. Nested function bodies are counted separately and
+// masked from the enclosing function. Full AST precision is a later refinement
+// (see spec section 20).
 
 const CONTROL_KEYWORDS = new Set([
   "if",
@@ -25,13 +26,18 @@ const CONTROL_KEYWORDS = new Set([
 
 export type FileComplexity = { functions: number[]; max: number };
 
+type FunctionBodyRange = {
+  start: number;
+  end: number;
+};
+
 export function computeComplexity(source: string): FileComplexity {
   const code = stripStringsAndComments(source);
-  const bodies = extractFunctionBodies(code);
-  if (bodies.length === 0) {
+  const ranges = extractFunctionBodyRanges(code);
+  if (ranges.length === 0) {
     return { functions: [], max: 0 };
   }
-  const functions = bodies.map((body) => 1 + countDecisions(body));
+  const functions = ranges.map((range) => 1 + countDecisions(maskNestedFunctionBodies(code, range, ranges)));
   return { functions, max: Math.max(...functions) };
 }
 
@@ -63,20 +69,30 @@ function isIdChar(char: string | undefined): boolean {
   return char !== undefined && /[A-Za-z0-9_$]/.test(char);
 }
 
-function extractFunctionBodies(code: string): string[] {
-  const bodies: string[] = [];
-  const n = code.length;
-  let i = 0;
+function extractFunctionBodyRanges(code: string): FunctionBodyRange[] {
+  const ranges: FunctionBodyRange[] = [];
+  collectFunctionBodyRanges(code, 0, code.length, ranges);
+  return ranges.sort((a, b) => a.start - b.start);
+}
 
-  while (i < n) {
+function collectFunctionBodyRanges(
+  code: string,
+  start: number,
+  end: number,
+  ranges: FunctionBodyRange[],
+): void {
+  let i = start;
+
+  while (i < end) {
     // Arrow with a block body: `=> {`
     if (code[i] === "=" && code[i + 1] === ">") {
       let j = i + 2;
-      while (j < n && isWs(code[j])) j += 1;
+      while (j < end && isWs(code[j])) j += 1;
       if (code[j] === "{") {
-        const end = matchBrace(code, j);
-        bodies.push(code.slice(j + 1, end));
-        i = end + 1;
+        const bodyEnd = matchBrace(code, j);
+        ranges.push({ start: j + 1, end: bodyEnd });
+        collectFunctionBodyRanges(code, j + 1, bodyEnd, ranges);
+        i = bodyEnd + 1;
         continue;
       }
       i += 2;
@@ -88,9 +104,10 @@ function extractFunctionBodies(code: string): string[] {
       if (close > i && isDefinitionName(code, i)) {
         const bodyStart = findBodyBrace(code, close + 1);
         if (bodyStart >= 0) {
-          const end = matchBrace(code, bodyStart);
-          bodies.push(code.slice(bodyStart + 1, end));
-          i = end + 1;
+          const bodyEnd = matchBrace(code, bodyStart);
+          ranges.push({ start: bodyStart + 1, end: bodyEnd });
+          collectFunctionBodyRanges(code, bodyStart + 1, bodyEnd, ranges);
+          i = bodyEnd + 1;
           continue;
         }
       }
@@ -98,8 +115,23 @@ function extractFunctionBodies(code: string): string[] {
 
     i += 1;
   }
+}
 
-  return bodies;
+function maskNestedFunctionBodies(
+  code: string,
+  range: FunctionBodyRange,
+  ranges: FunctionBodyRange[],
+): string {
+  const chars = code.slice(range.start, range.end).split("");
+  for (const nested of ranges) {
+    if (nested.start <= range.start || nested.end > range.end) {
+      continue;
+    }
+    for (let i = nested.start - range.start; i < nested.end - range.start; i += 1) {
+      chars[i] = " ";
+    }
+  }
+  return chars.join("");
 }
 
 // True when the `(` at `openIndex` is a function/method parameter list (its name

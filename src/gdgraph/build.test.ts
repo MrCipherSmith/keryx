@@ -50,6 +50,65 @@ test("buildGraph ignores generated frontend outputs and resolves imported assets
   expect(summary).toContain("| feature | 2 |");
 });
 
+test("buildGraph resolves tsconfig path aliases and parser-scanned imports", async () => {
+  const root = path.join(tmpdir(), "gd-metapro-gdgraph-aliases");
+  await reset(root);
+  await mkdir(path.join(root, "src", "components"), { recursive: true });
+  await mkdir(path.join(root, "src", "utils"), { recursive: true });
+  await mkdir(path.join(root, "src", "assets"), { recursive: true });
+
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: {
+          "@/*": ["src/*"],
+          "~assets/*": ["src/assets/*"],
+          "#config": ["src/config.ts"],
+        },
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src", "index.ts"),
+    [
+      "import { Button } from '@/components/Button';",
+      "export { value } from '@/utils';",
+      "import logo from '~assets/logo.svg?raw';",
+      "import config from '#config';",
+      "const lazy = () => import('@/lazy');",
+      "const cjs = require('@/cjs');",
+      "const ignored = (name: string) => import(`@/dynamic/${name}`);",
+      "export const result = { Button, logo, config, lazy, cjs, ignored };",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "src", "components", "Button.tsx"), "import React from 'react';\nexport const Button = () => null;\n");
+  await writeFile(path.join(root, "src", "utils", "index.ts"), "export const value = 1;\n");
+  await writeFile(path.join(root, "src", "config.ts"), "export default { ok: true };\n");
+  await writeFile(path.join(root, "src", "lazy.ts"), "export const lazy = true;\n");
+  await writeFile(path.join(root, "src", "cjs.ts"), "export const cjs = true;\n");
+  await writeFile(path.join(root, "src", "assets", "logo.svg"), "<svg />\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+  const edgesFromIndex = graph.edges.filter((edge) => edge.from === "src/index.ts");
+
+  expect(edgesFromIndex.filter((edge) => edge.kind === "imports").map((edge) => edge.to).sort()).toEqual([
+    "src/cjs.ts",
+    "src/components/Button.tsx",
+    "src/config.ts",
+    "src/lazy.ts",
+    "src/utils/index.ts",
+  ]);
+  expect(edgesFromIndex.filter((edge) => edge.kind === "asset").map((edge) => edge.to)).toEqual([
+    "src/assets/logo.svg",
+  ]);
+  expect(graph.edges.filter((edge) => edge.kind === "unresolved")).toEqual([]);
+  expect(graph.edges.some((edge) => edge.specifier.includes("dynamic"))).toBe(false);
+});
+
 async function reset(root: string): Promise<void> {
   await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });

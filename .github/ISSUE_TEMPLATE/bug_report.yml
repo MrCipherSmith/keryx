@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible gd-metapro problem.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Include the smallest reproduction and any relevant `.metaproject/data/*/artifacts/latest.*` files when possible.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what did you expect instead?
+      placeholder: "gd-metapro health run marks public assets as source files..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Commands and repository state needed to reproduce.
+      placeholder: |
+        1. gd-metapro init
+        2. gd-metapro gdgraph build
+        3. gd-metapro health run --changed
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: gd-metapro version or commit
+      placeholder: "gd-metapro --version, or git commit SHA"
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Bun version, package manager, project framework, and relevant CI/runtime details.
+      placeholder: |
+        macOS 15
+        Bun 1.3.x
+        React/Vite frontend
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Relevant artifacts
+      description: Paste short excerpts or attach files if GitHub allows it.
+      placeholder: |
+        .metaproject/data/health/artifacts/latest.md
+        .metaproject/data/testing/artifacts/latest.md
+        .metaproject/data/gdgraph/artifacts/summary.md

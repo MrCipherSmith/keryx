@@ -1528,6 +1528,18 @@ export function renderHooksReadme(): string {
 
 Hooks are local project scripts executed by selected \`gd-metapro\` lifecycle commands.
 
+Git hooks are installed as marked managed blocks:
+
+\`\`\`sh
+# gd-metapro:<hook-id>:begin
+...
+# gd-metapro:<hook-id>:end
+\`\`\`
+
+\`gd-metapro update --hooks\` replaces only those managed blocks. Existing user
+content, Husky wrappers, Lefthook dispatchers, lint-staged calls, and other
+project-owned hook lines are preserved.
+
 ## git post-commit gdgraph hook
 
 When enabled during \`gd-metapro init\`, the Git \`post-commit\` hook detects commits that touched files relevant to the graph and prints the explicit refresh command.

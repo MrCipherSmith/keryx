@@ -1,8 +1,25 @@
 {
   "name": "gd-metapro",
   "version": "0.1.0",
+  "description": "CLI-first metaproject workspace for AI agents, code graph, project memory, health reports, testing context, wiki, skills, and task flows.",
   "private": false,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/MrCipherSmith/meta-project.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "agent-tooling",
+    "code-graph",
+    "project-memory",
+    "developer-tools",
+    "bun",
+    "typescript",
+    "cli",
+    "knowledge-base",
+    "multi-agent"
+  ],
   "bin": {
     "gd-metapro": "./dist/cli.js"
   },

@@ -223,7 +223,7 @@ more), including auto-collected drafts from other modules' data.
 ```
 gd-metapro wiki status
 gd-metapro wiki new <type> <slug> --title "<title>" [--force]
-gd-metapro wiki collect [--force] [--limit <n>]
+gd-metapro wiki collect [--force] [--limit <n>] [--changed]
 gd-metapro wiki index
 gd-metapro wiki check-links
 gd-metapro wiki validate
@@ -233,7 +233,7 @@ gd-metapro wiki validate
 |---|---|---|
 | `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
 | `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
-| `collect` | `--force`, `--limit <n>` | Auto-generate draft pages from gdgraph/health/testing data, then rebuild the index. `--limit` defaults to 12. |
+| `collect` | `--force`, `--limit <n>`, `--changed` | Auto-generate draft pages from gdgraph/health/testing data, then rebuild the index. `--limit` defaults to 12; `--changed` restricts collection to recently changed inputs for incremental, hook-friendly runs. |
 | `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |

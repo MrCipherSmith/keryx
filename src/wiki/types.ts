@@ -139,6 +139,8 @@ export type WikiCollectInput = {
   cwd: string;
   force?: boolean | undefined;
   limit?: number | undefined;
+  changed?: boolean | undefined;
+  since?: string | undefined;
 };
 
 export type WikiCollectedPage = {

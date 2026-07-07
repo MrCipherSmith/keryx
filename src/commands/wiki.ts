@@ -108,14 +108,17 @@ async function runCollect(args: string[]): Promise<void> {
   const limitValue = optionValue(args, "--limit");
   const limit = limitValue ? Number.parseInt(limitValue, 10) : undefined;
   if (limitValue && (!Number.isFinite(limit) || (limit ?? 0) < 1)) {
-    console.error("Usage: gd-metapro wiki collect [--force] [--limit <n>]");
+    console.error("Usage: gd-metapro wiki collect [--force] [--changed [--since <ref>]] [--limit <n>]");
     process.exitCode = 1;
     return;
   }
 
+  const since = optionValue(args, "--since");
   const result = await wikiCollect({
     cwd: process.cwd(),
     force: args.includes("--force"),
+    changed: args.includes("--changed"),
+    ...(since ? { since } : {}),
     ...(limit ? { limit } : {}),
   });
 
@@ -178,7 +181,7 @@ function printHelp(): void {
 Usage:
   gd-metapro wiki status
   gd-metapro wiki new <type> <slug> --title "<title>" [--force]
-  gd-metapro wiki collect [--force] [--limit <n>]
+  gd-metapro wiki collect [--force] [--changed [--since <ref>]] [--limit <n>]
   gd-metapro wiki index
   gd-metapro wiki check-links
   gd-metapro wiki validate

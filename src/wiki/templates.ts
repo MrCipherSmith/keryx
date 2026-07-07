@@ -201,6 +201,50 @@ gd-metapro wiki validate
 - Run \`gd-metapro wiki collect\` to generate safe draft pages from gdgraph, health, and testing context.
 - Run \`gd-metapro wiki check-links\` before relying on cross-page links.
 
+## Enriching Collected Drafts (the wiki part)
+
+\`gd-metapro wiki collect\` is deterministic and needs no model: it fills the
+\`## Reference\` section of each page (Public API, Key files, real dependencies)
+from the graph and source. The \`## Overview\`, \`## How it works\`,
+\`## Key concepts\`, and \`## Main flows\` sections are left as \`Draft -\`
+placeholders. Those are the actual wiki - the understanding the graph cannot
+express - and they are filled by **this skill**, not by the CLI.
+
+### Model policy - use a cheap model
+
+This is **bounded, mechanical synthesis**: read a module's key files and write
+structured prose into fixed sections. It is NOT deep reasoning. Run it on a
+**non-flagship / cheap model** (e.g. Haiku, or Sonnet at most) - do not spend a
+flagship model on it. If you orchestrate, dispatch **one subagent per page on
+the cheap model**; the flagship's job is only to review a sample at the end.
+
+### Procedure
+
+1. List the drafts to enrich:
+   \`\`\`bash
+   grep -rl "Status: draft" .metaproject/wiki/components .metaproject/wiki/architecture
+   \`\`\`
+   Order by importance - largest / most-depended-on modules first (they anchor
+   the Project Map). Use the page's \`Reference\` -> \`Depended on by\`.
+2. For each draft page, read the files listed under \`Reference\` -> \`Key files\`
+   (they are the highest-connectivity files, i.e. the module's core). Read a few
+   more if needed. Do NOT read the whole module.
+3. Fill the prose sections from what you read:
+   - \`## Overview\` - 2-4 sentences: what the module owns and its purpose.
+   - \`## How it works\` - the internal architecture: layers, key abstractions,
+     how they relate. Explain the design, do not re-list files.
+   - \`## Key concepts\` - the domain vocabulary and core objects.
+   - \`## Main flows\` - trace 1-3 concrete flows through the key files.
+4. Leave the \`## Reference\` section untouched (it is graph-owned and
+   regenerated). Update \`## Summary\` if the overview sharpened it.
+5. Set \`Status: accepted\` and bump \`Version\` (e.g. to \`1.0.0\`). This marks the
+   page human-owned; \`gd-metapro wiki collect --force\` will never overwrite it.
+6. Ground every claim in code you read - write "appears to" rather than
+   inventing. Then run \`gd-metapro wiki index\`.
+
+\`--force\` regenerates only unmodified drafts, so collect and enrich compose:
+re-run collect after code changes, then enrich the newly created drafts.
+
 ## Skip When
 
 - The request is a pure code lookup with no architectural/domain/business context.

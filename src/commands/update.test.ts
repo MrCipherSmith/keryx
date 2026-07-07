@@ -184,6 +184,59 @@ test("migrates legacy wiki manifest key to gdwiki", async () => {
   }
 });
 
+test("preserves existing git hooks and updates gd-metapro managed blocks idempotently", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-metapro-update-hooks-"));
+  const previousCwd = process.cwd();
+  const hookPath = path.join(root, ".git", "hooks", "post-commit");
+  const userHook = [
+    "#!/usr/bin/env sh",
+    "echo user-defined-hook",
+    "",
+    "# gd-metapro:gdgraph-post-commit:begin",
+    "echo stale-managed-block",
+    "# gd-metapro:gdgraph-post-commit:end",
+    "",
+  ].join("\n");
+
+  try {
+    await mkdir(path.dirname(hookPath), { recursive: true });
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(hookPath, userHook, "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          gdgraph: { enabled: true, hooks: { gitPostCommit: true } },
+          gdskills: { enabled: true, hooks: { gitPostCommit: true } },
+          health: { enabled: true, hooks: { gitPostCommit: true } },
+          testing: { enabled: true, hooks: { gitPostCommit: true } },
+          tasks: { enabled: false },
+        },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    process.chdir(root);
+    await updateCommand(["--skip-runtime", "--no-tasks", "--hooks"]);
+    await updateCommand(["--skip-runtime", "--no-tasks", "--hooks"]);
+
+    const hook = await readFile(hookPath, "utf8");
+    expect(hook).toContain("#!/usr/bin/env sh");
+    expect(hook).toContain("echo user-defined-hook");
+    expect(hook).not.toContain("stale-managed-block");
+    expect(countOccurrences(hook, "# gd-metapro:gdgraph-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# gd-metapro:gdskills-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# gd-metapro:health-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# gd-metapro:testing-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# gd-metapro:metaproject-dashboard-post-commit:begin")).toBe(1);
+  } finally {
+    process.chdir(previousCwd);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("backfills the Task Manager for projects initialized before it existed", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gd-metapro-update-backfill-"));
   const previousCwd = process.cwd();
@@ -258,6 +311,10 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function countOccurrences(value: string, needle: string): number {
+  return value.split(needle).length - 1;
 }
 
 async function expectDashboardLinksToExist(projectRoot: string, dashboard: string): Promise<void> {

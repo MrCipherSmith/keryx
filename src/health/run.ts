@@ -57,12 +57,15 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   const sourceInfos: SourceRunInfo[] = [];
   const findings: Finding[] = [];
 
-  for (const adapter of FINDING_ADAPTERS) {
-    if (filter && !filter.has(adapter.id)) {
-      continue;
-    }
-    const cfg = config.sources[adapter.id] ?? { mode: "auto", required: false };
-    const outcome = await runAdapter(adapter, ctx, cfg, stamp);
+  const adapterOutcomes = await Promise.all(
+    FINDING_ADAPTERS
+      .filter((adapter) => !filter || filter.has(adapter.id))
+      .map((adapter) => {
+        const cfg = config.sources[adapter.id] ?? { mode: "auto", required: false };
+        return runAdapter(adapter, ctx, cfg, stamp);
+      }),
+  );
+  for (const outcome of adapterOutcomes) {
     sourceInfos.push(outcome.info);
     findings.push(...outcome.findings);
   }

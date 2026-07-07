@@ -57,10 +57,21 @@ type SourceCollection = {
   skippedDirectories: string[];
 };
 
+type PathMapping = {
+  pattern: string;
+  targets: string[];
+};
+
+type TsconfigResolver = {
+  matchesAlias(specifier: string): boolean;
+  candidateBases(specifier: string): string[];
+};
+
 export async function buildGraph(projectRoot: string): Promise<BuildResult> {
   const collection = await collectSourceFiles(projectRoot);
   const files = collection.files;
   const fileSet = new Set(files);
+  const resolver = await loadTsconfigResolver(projectRoot);
   const nodes: GraphNode[] = files.map((file) => ({
     id: file,
     kind: "file",
@@ -76,9 +87,10 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
     const specifiers = extractImportSpecifiers(content);
 
     for (const specifier of specifiers) {
-      const resolved = resolveImport(file, specifier, fileSet);
-      const asset = resolved ? null : resolveAssetImport(projectRoot, file, specifier);
-      if (!resolved && !asset && !specifier.startsWith(".")) {
+      const resolved = resolveImport(projectRoot, file, specifier, fileSet, resolver);
+      const asset = resolved ? null : resolveAssetImport(projectRoot, file, specifier, resolver);
+      const shouldTrackUnresolved = specifier.startsWith(".") || resolver.matchesAlias(specifier);
+      if (!resolved && !asset && !shouldTrackUnresolved) {
         continue;
       }
       if (asset && !assetNodes.has(asset)) {
@@ -148,6 +160,19 @@ async function collectSourceFiles(projectRoot: string): Promise<SourceCollection
 }
 
 function extractImportSpecifiers(content: string): string[] {
+  try {
+    const scanner = new Bun.Transpiler({ loader: "tsx" });
+    return [...new Set(scanner
+      .scanImports(content)
+      .map((entry) => entry.path)
+      .filter((specifier): specifier is string => typeof specifier === "string" && specifier.length > 0))]
+      .sort();
+  } catch {
+    return extractImportSpecifiersFallback(content);
+  }
+}
+
+function extractImportSpecifiersFallback(content: string): string[] {
   const withoutComments = content
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
@@ -173,16 +198,52 @@ function extractImportSpecifiers(content: string): string[] {
 }
 
 function resolveImport(
+  projectRoot: string,
   fromFile: string,
   specifier: string,
   fileSet: Set<string>,
+  resolver: TsconfigResolver,
 ): string | null {
-  if (!specifier.startsWith(".")) {
-    return null;
+  for (const base of importCandidateBases(projectRoot, fromFile, specifier, resolver)) {
+    const resolved = resolveSourceCandidate(base, fileSet);
+    if (resolved) {
+      return resolved;
+    }
   }
+  return null;
+}
 
-  const fromDir = path.posix.dirname(fromFile);
-  const base = normalizePath(path.posix.normalize(path.posix.join(fromDir, specifier)));
+function resolveAssetImport(
+  projectRoot: string,
+  fromFile: string,
+  specifier: string,
+  resolver: TsconfigResolver,
+): string | null {
+  for (const candidate of importCandidateBases(projectRoot, fromFile, specifier, resolver)) {
+    const extension = path.posix.extname(candidate);
+    if (ASSET_EXTENSIONS.includes(extension) && existsSync(path.join(projectRoot, candidate))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function importCandidateBases(
+  projectRoot: string,
+  fromFile: string,
+  specifier: string,
+  resolver: TsconfigResolver,
+): string[] {
+  const normalizedSpecifier = stripImportSuffix(specifier);
+  if (normalizedSpecifier.startsWith(".")) {
+    const fromDir = path.posix.dirname(fromFile);
+    return [normalizePath(path.posix.normalize(path.posix.join(fromDir, normalizedSpecifier)))];
+  }
+  return resolver.candidateBases(normalizedSpecifier)
+    .map((candidate) => normalizePath(path.relative(projectRoot, path.join(projectRoot, candidate))));
+}
+
+function resolveSourceCandidate(base: string, fileSet: Set<string>): string | null {
   const candidates = [
     base,
     ...SOURCE_RESOLUTION_EXTENSIONS.map((extension) => `${base}${extension}`),
@@ -192,28 +253,142 @@ function resolveImport(
   return candidates.find((candidate) => fileSet.has(candidate)) ?? null;
 }
 
-function resolveAssetImport(
-  projectRoot: string,
-  fromFile: string,
-  specifier: string,
-): string | null {
-  if (!specifier.startsWith(".")) {
-    return null;
-  }
-
-  const normalizedSpecifier = stripImportSuffix(specifier);
-  const extension = path.posix.extname(normalizedSpecifier);
-  if (!ASSET_EXTENSIONS.includes(extension)) {
-    return null;
-  }
-
-  const fromDir = path.posix.dirname(fromFile);
-  const candidate = normalizePath(path.posix.normalize(path.posix.join(fromDir, normalizedSpecifier)));
-  return existsSync(path.join(projectRoot, candidate)) ? candidate : null;
+function stripImportSuffix(specifier: string): string {
+  const queryIndex = specifier.indexOf("?");
+  const hashIndex = specifier.indexOf("#", 1);
+  const cutIndex = [queryIndex, hashIndex].filter((index) => index >= 0).sort((a, b) => a - b)[0];
+  return cutIndex === undefined ? specifier : specifier.slice(0, cutIndex);
 }
 
-function stripImportSuffix(specifier: string): string {
-  return specifier.replace(/[?#].*$/, "");
+async function loadTsconfigResolver(projectRoot: string): Promise<TsconfigResolver> {
+  const empty = createTsconfigResolver(null, []);
+  const tsconfigPath = path.join(projectRoot, "tsconfig.json");
+  if (!existsSync(tsconfigPath)) {
+    return empty;
+  }
+
+  try {
+    const raw = await readFile(tsconfigPath, "utf8");
+    const parsed = JSON.parse(stripJsonComments(raw)) as {
+      compilerOptions?: {
+        baseUrl?: unknown;
+        paths?: unknown;
+      };
+    };
+    const options = parsed.compilerOptions ?? {};
+    const baseUrl = typeof options.baseUrl === "string"
+      ? normalizePath(path.posix.normalize(options.baseUrl)).replace(/^\.\//, "")
+      : null;
+    const paths = isRecord(options.paths)
+      ? Object.entries(options.paths)
+          .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
+          .map(([pattern, targets]) => ({
+            pattern,
+            targets: targets.filter((target): target is string => typeof target === "string"),
+          }))
+      : [];
+    return createTsconfigResolver(baseUrl, paths);
+  } catch {
+    return empty;
+  }
+}
+
+function createTsconfigResolver(baseUrl: string | null, mappings: PathMapping[]): TsconfigResolver {
+  return {
+    matchesAlias(specifier) {
+      const normalizedSpecifier = stripImportSuffix(specifier);
+      return mappings.some((mapping) => matchPathPattern(mapping.pattern, normalizedSpecifier) !== null);
+    },
+    candidateBases(specifier) {
+      const normalizedSpecifier = stripImportSuffix(specifier);
+      const candidates: string[] = [];
+      for (const mapping of mappings) {
+        const match = matchPathPattern(mapping.pattern, normalizedSpecifier);
+        if (match === null) {
+          continue;
+        }
+        for (const target of mapping.targets) {
+          candidates.push(applyPathTarget(baseUrl, target, match));
+        }
+      }
+      if (baseUrl !== null) {
+        candidates.push(normalizePath(path.posix.join(baseUrl, normalizedSpecifier)));
+      }
+      return [...new Set(candidates.map((candidate) => candidate.replace(/^\.\//, "")))];
+    },
+  };
+}
+
+function matchPathPattern(pattern: string, specifier: string): string | null {
+  const starIndex = pattern.indexOf("*");
+  if (starIndex < 0) {
+    return pattern === specifier ? "" : null;
+  }
+
+  const prefix = pattern.slice(0, starIndex);
+  const suffix = pattern.slice(starIndex + 1);
+  if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) {
+    return null;
+  }
+  return specifier.slice(prefix.length, specifier.length - suffix.length);
+}
+
+function applyPathTarget(baseUrl: string | null, target: string, wildcard: string): string {
+  const replaced = target.includes("*") ? target.replace("*", wildcard) : target;
+  return normalizePath(path.posix.normalize(path.posix.join(baseUrl ?? "", replaced)));
+}
+
+function stripJsonComments(source: string): string {
+  let out = "";
+  let i = 0;
+  let quote: '"' | "'" | null = null;
+
+  while (i < source.length) {
+    const char = source[i];
+    const next = source[i + 1];
+
+    if (quote) {
+      out += char;
+      if (char === "\\") {
+        out += next ?? "";
+        i += 2;
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      out += char;
+      i += 1;
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      while (i < source.length && source[i] !== "\n") i += 1;
+      out += "\n";
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      i += 2;
+      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) i += 1;
+      i += 2;
+      out += " ";
+      continue;
+    }
+
+    out += char;
+    i += 1;
+  }
+
+  return out;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function writeGraph(projectRoot: string, graph: GraphData): Promise<void> {
