@@ -1,6 +1,6 @@
 # gdskills: technical specification
 
-Version: 0.22.0
+Version: 0.22.1
 
 ## 1. Purpose
 
@@ -126,6 +126,11 @@ Orchestration:
 | `code-verifier` | Runs and summarizes verification gates: typecheck, lint, tests, build and import checks. |
 | `feature-analyzer` | Analyzes a feature/module/branch area and produces an implementation or migration map. |
 | `feature-dev` | Guided feature workflow from requirements to implementation, verification and PR-ready summary. |
+
+Routing rule: when Task Manager is enabled and the user asks for a managed
+flow/story implementation, local-first routing should select `flow-orchestrator`
+before `job-orchestrator`. Ordinary `job-orchestrator` remains the default for
+non-flow orchestration.
 
 Review:
 

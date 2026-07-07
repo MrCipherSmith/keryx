@@ -1188,8 +1188,10 @@ export async function ensureMetaprojectReference(
     "For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.";
   const memoryPolicy =
     "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.";
-  const flowPolicy =
+  const oldFlowPolicy =
     "For starting, tracking, or finishing a managed piece of work (a flow) - e.g. when the user asks to create a flow from a problem description or an issue link, asks for flow status, or asks to finish a story - use the Metaproject flow skill; all flow state changes go through the gd-metapro flow CLI.";
+  const flowPolicy =
+    "For starting, tracking, or finishing a managed piece of work (a flow), use the Metaproject flow skill for state/status commands. For non-trivial implementation through Task Manager, use the local gdskills flow-orchestrator first: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md. All flow state changes go through the gd-metapro flow CLI.";
 
   if (content.includes(marker)) {
     let next = content;
@@ -1198,6 +1200,9 @@ export async function ensureMetaprojectReference(
     }
     if (next.includes(oldCtxPolicy)) {
       next = next.replaceAll(oldCtxPolicy, ctxPolicy);
+    }
+    if (next.includes(oldFlowPolicy)) {
+      next = next.replaceAll(oldFlowPolicy, flowPolicy);
     }
     next = collapseDuplicatePolicy(next, graphPolicy);
     next = collapseDuplicatePolicy(next, wikiPolicy);

@@ -1,6 +1,6 @@
 # Task Manager requirements
 
-Version: 0.3.1
+Version: 0.3.2
 Status: Phase 1 implemented. CLI `gd-metapro flow`, init scaffold, flow skills and gdskills `flow-orchestrator` shipped; Notion/Jira adapters are Phase 2.
 
 `Task Manager` - модуль Metaproject для agent-first управления работой. Единица работы - **flow**: прохождение стори от инициализации до завершения. CLI (`gd-metapro flow`) - детерминированная state machine, хранилище и гейты; скилы (flow-init, flow-manager, flow-complete) - когнитивный слой, встраиваемый в оркестраторы.
@@ -24,6 +24,10 @@ Status: Phase 1 implemented. CLI `gd-metapro flow`, init scaffold, flow skills a
 - `gdgraph`, `gdctx`, `memory`, `health`, `testing` - источники контекста при init и гейты при completion.
 - `gdskills` - `flow-orchestrator` исполняет Task Manager lifecycle через `gd-metapro flow`; обычные `job-orchestrator`/`task-implementer` остаются доступными без task flow.
 - `spec-orchestrator` - включает Task Manager при `gd-metapro init`.
+
+Routing: если пользователь просит managed implementation через flow, агент
+должен выбирать `flow-orchestrator` перед обычным `job-orchestrator`; `flow`
+skill остаётся роутером для команд состояния и lifecycle.
 
 ## Рабочее имя CLI
 

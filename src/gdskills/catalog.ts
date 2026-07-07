@@ -20,6 +20,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
   skill("metaproject-router", "core", ["minimal", "recommended", "full"], "Choose which Metaproject module, working skill, or project-skill should be used for a user request.", [
     "Read `.metaproject/index.md` first.",
     "Classify the user request as navigation, implementation, review, planning, documentation, quality, memory, or workflow.",
+    "If the request asks to create, run, resume, track, or finish a managed flow and Task Manager is enabled, route implementation work to `gdskills/orchestration/flow-orchestrator/SKILL.md` before `job-orchestrator`.",
     "Prefer project-local skills and module manifests before broad raw file search.",
     "Route to the narrowest applicable skill and record unavailable modules explicitly.",
   ], ["any repository task", "route context", "which skill should be used"]),

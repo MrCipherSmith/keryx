@@ -42,6 +42,8 @@ test("refreshes service files without touching data artifacts", async () => {
     expect(await readFile(path.join(root, ".metaproject", "gd-metapro-dashboard.html"), "utf8")).toContain("Metaproject");
     expect(await readFile(path.join(root, ".metaproject", "core", "gdgraph", "build.ts"), "utf8")).toContain("buildGraph");
     expect(await readFile(path.join(root, ".metaproject", "flows", "README.md"), "utf8")).toContain("Flow");
+    expect(await readFile(path.join(root, ".metaproject", "skills", "catalog.md"), "utf8")).toContain("flow-orchestrator");
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("flow-orchestrator");
     expect(await fileExists(path.join(root, ".metaproject", "data", "gdskills"))).toBe(false);
     expect(await fileExists(path.join(root, ".metaproject", "data", "tasks"))).toBe(false);
     expect(await readFile(graphSummaryPath, "utf8")).toBe(graphSummary);
@@ -205,6 +207,7 @@ test("backfills the Task Manager for projects initialized before it existed", as
     expect(await readFile(path.join(root, ".metaproject", "flows", "README.md"), "utf8")).toContain("Flow");
     // The flow discovery policy is migrated into the entrypoint.
     expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("Metaproject flow skill");
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("flow-orchestrator");
     // Backfill does not create runtime data dirs.
     expect(await fileExists(path.join(root, ".metaproject", "data", "tasks"))).toBe(false);
   } finally {

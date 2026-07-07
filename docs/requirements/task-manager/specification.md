@@ -1,6 +1,6 @@
 # Task Manager: technical specification
 
-Version: 0.3.1
+Version: 0.3.2
 Status: Phase 1 + natural-language discovery + gdskills `flow-orchestrator` implemented (see sections 11 and 16). Notion/Jira adapters and flow board are Phase 2.
 
 ## 1. Purpose
@@ -228,6 +228,10 @@ v1: `github` через `gh` CLI. Notion/Jira - будущие адаптеры 
   (RU/EN), включая «создай фло <описание>» → `flow init --title`, вставленная
   issue-ссылка → `flow init --issue`, «заверши фло» → complete-роль; правило
   для неоднозначных запросов (нетривиальная многошаговая работа → предложить flow).
+- **`skills/gdskills/orchestration/flow-orchestrator/SKILL.md`**: при
+  нетривиальной реализации через Task Manager агент выбирает этот orchestrator
+  перед обычным `job-orchestrator`; `skills/flow/SKILL.md` остаётся точкой
+  входа для lifecycle/status CLI-команд.
 
 ## 12. Init flow
 

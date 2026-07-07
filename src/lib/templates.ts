@@ -112,6 +112,9 @@ export function renderIndexMarkdown({
     enableTasks
       ? "| flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |"
       : "",
+    enableTasks && enableGdskills
+      ? "| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + PR/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |"
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -157,7 +160,9 @@ export function renderIndexMarkdown({
       : []),
     ...(enableTasks
       ? [
-          "When the user asks to start, create, track, or finish a piece of work (создай фло, create a flow from this issue, flow status, finish the story), use `skills/flow/SKILL.md` and the `gd-metapro flow` CLI; never edit flow.json or frozen acceptance criteria by hand.",
+          enableGdskills
+            ? "When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand."
+            : "When the user asks to start, create, track, or finish a piece of work (создай фло, create a flow from this issue, flow status, finish the story), use `skills/flow/SKILL.md` and the `gd-metapro flow` CLI; never edit flow.json or frozen acceptance criteria by hand.",
         ]
       : []),
     "Use relevant skills from `skills/`.",
@@ -883,7 +888,7 @@ For creating, changing, debugging, reviewing, or running tests, use the Metaproj
 
 For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.
 
-For starting, tracking, or finishing a managed piece of work (a flow) - e.g. when the user asks to create a flow from a problem description or an issue link, asks for flow status, or asks to finish a story - use the Metaproject flow skill; all flow state changes go through the gd-metapro flow CLI.
+For starting, tracking, or finishing a managed piece of work (a flow), use the Metaproject flow skill for state/status commands. For non-trivial implementation through Task Manager, use the local gdskills flow-orchestrator first: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md. All flow state changes go through the gd-metapro flow CLI.
 `;
 }
 
