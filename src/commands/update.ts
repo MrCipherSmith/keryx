@@ -4,6 +4,7 @@ import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installGdskills } from "../gdskills/install";
+import { moduleCommands } from "./module-commands";
 import {
   normalizeGdskillsProfile,
   type GdskillsProfile,
@@ -804,7 +805,7 @@ async function writeRecoveredManifest(
             core: ".metaproject/core/gdgraph",
             data: ".metaproject/data/gdgraph",
             manifest: ".metaproject/modules/gdgraph.md",
-            commands: ["build", "affected", "query"],
+            commands: moduleCommands("gdgraph"),
           }
         : { enabled: false },
       gdctx: modules.enableGdctx
@@ -813,7 +814,7 @@ async function writeRecoveredManifest(
             core: ".metaproject/core/gdctx",
             data: ".metaproject/data/gdctx",
             manifest: ".metaproject/modules/gdctx.md",
-            commands: ["status", "diff", "rg", "read", "run"],
+            commands: moduleCommands("gdctx"),
           }
         : { enabled: false },
       gdwiki: modules.enableGdwiki
@@ -821,7 +822,7 @@ async function writeRecoveredManifest(
             enabled: true,
             data: ".metaproject/wiki",
             manifest: ".metaproject/modules/gdwiki.md",
-            commands: ["status", "new", "index", "check-links"],
+            commands: moduleCommands("gdwiki"),
           }
         : { enabled: false },
       gdskills: modules.enableGdskills
@@ -829,7 +830,7 @@ async function writeRecoveredManifest(
             enabled: true,
             data: ".metaproject/project-skills",
             manifest: ".metaproject/modules/gdskills.md",
-            commands: ["status", "route", "inspect", "verify", "learn"],
+            commands: moduleCommands("gdskills"),
           }
         : { enabled: false },
       health: modules.enableHealth
@@ -838,7 +839,7 @@ async function writeRecoveredManifest(
             core: ".metaproject/core/health",
             data: ".metaproject/data/health",
             manifest: ".metaproject/modules/health.md",
-            commands: ["run", "status"],
+            commands: moduleCommands("health"),
           }
         : { enabled: false },
       testing: modules.enableTesting
@@ -847,7 +848,7 @@ async function writeRecoveredManifest(
             core: ".metaproject/core/testing",
             data: ".metaproject/data/testing",
             manifest: ".metaproject/modules/testing.md",
-            commands: ["analyze", "run", "status"],
+            commands: moduleCommands("testing"),
           }
         : { enabled: false },
       memory: modules.enableMemory
@@ -856,7 +857,7 @@ async function writeRecoveredManifest(
             core: ".metaproject/core/memory",
             data: ".metaproject/memory",
             manifest: ".metaproject/modules/memory.md",
-            commands: ["new", "search", "index", "ingest"],
+            commands: moduleCommands("memory"),
           }
         : { enabled: false },
       tasks: modules.enableTasks
@@ -865,7 +866,7 @@ async function writeRecoveredManifest(
             core: ".metaproject/flows",
             data: ".metaproject/data/tasks",
             manifest: ".metaproject/modules/tasks.md",
-            commands: ["init", "list", "status", "freeze", "start", "task", "ac", "implemented", "complete", "block", "unblock", "check"],
+            commands: moduleCommands("tasks"),
           }
         : { enabled: false },
     },
@@ -896,7 +897,7 @@ async function enableTasksInManifest(metaprojectRoot: string): Promise<void> {
     core: ".metaproject/flows",
     data: ".metaproject/data/tasks",
     manifest: ".metaproject/modules/tasks.md",
-    commands: ["init", "list", "status", "freeze", "start", "task", "ac", "implemented", "complete", "block", "unblock", "check"],
+    commands: moduleCommands("tasks"),
   };
   raw.modules = modules;
   await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
