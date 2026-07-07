@@ -1,7 +1,7 @@
 # Task Manager requirements
 
-Version: 0.1.0
-Status: production-ready specification (v1 scope frozen via user vision + research + interview; not yet implemented)
+Version: 0.2.0
+Status: Phase 1 implemented. CLI `gd-metapro flow`, init scaffold, and the flow skills shipped; Notion/Jira adapters are Phase 2.
 
 `Task Manager` - модуль Metaproject для agent-first управления работой. Единица работы - **flow**: прохождение стори от инициализации до завершения. CLI (`gd-metapro flow`) - детерминированная state machine, хранилище и гейты; скилы (flow-init, flow-manager, flow-complete) - когнитивный слой, встраиваемый в оркестраторы.
 

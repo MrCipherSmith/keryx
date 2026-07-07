@@ -1,7 +1,7 @@
 # Task Manager: technical specification
 
-Version: 0.1.0
-Status: production-ready specification (v1 scope frozen via user vision V1-V10 + interview D1-D8)
+Version: 0.2.0
+Status: Phase 1 implemented (v1 scope; see section 16). Notion/Jira adapters and flow board are Phase 2.
 
 ## 1. Purpose
 
@@ -263,13 +263,14 @@ export interface FlowService {
 
 ## 16. Implementation phases
 
-### Phase 1 - v1 production (frozen)
+### Phase 1 - v1 production (implemented)
 
-- `src/flow/`: types, store (flow.json + пакет), state machine, scaffold+templates,
-  context collection, gates, github TrackerAdapter, service;
-- CLI `gd-metapro flow` (все команды section 8);
-- init-интеграция (`--no-tasks`, структура, manifest, скилы);
-- тесты: state machine, freeze/tamper, AC confirm, гейты (fake deps), adapter parsing.
+- [x] `src/flow/`: types, store, state machine, scaffold+templates, context
+  collection, gates, github TrackerAdapter, service (инжектируемые deps);
+- [x] CLI `gd-metapro flow` (все команды section 8);
+- [x] init-интеграция (`--no-tasks`, структура, manifest, скилы flow/init/manage/complete);
+- [x] тесты: state machine, freeze/tamper+check, полный happy-path c issue-комментарием,
+  fail-path (возврат в in-progress), block/unblock, adapter parsing.
 
 ### Phase 2 - integrations
 
