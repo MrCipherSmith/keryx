@@ -668,6 +668,32 @@ reason**; **disabled is a zero-cost no-op**. The guard degrades to allow on any
 engine error, imports only from the engine + shared libs (so the seam stays
 acyclic), and never leaks raw content into reasons or logs.
 
+**Hooks (Phase 4).** Two optional hooks extend enforcement to surfaces outside
+`gd-metapro`'s own workflows. Both are offered by `init` **only when `security` is
+enabled**, default on (confirm prompt; accepted under `--yes`), and no-op when the
+module is disabled. Both honor `config.mode` — **advisory (the default) warns but
+never blocks; enforced/ci block**.
+
+- **git pre-push gate** — `installSecurityPrePushHook` (`src/commands/init.ts` →
+  `renderSecurityPrePushHook` in `src/lib/templates.ts`) writes a managed
+  `# gd-metapro:security-pre-push:begin…:end` block into `.git/hooks/pre-push`. It
+  runs `gd-metapro security scan <file> --source trusted-project` over each changed
+  file in the push range and delegates blocking to the CLI exit code (advisory
+  exits 0/warns; enforced/ci exit non-zero and block the push). It coexists with
+  the testing pre-push block and user content, degrades to a skip if `gd-metapro`
+  is not on `PATH`, and is recorded in the manifest at `security.hooks.prePush`.
+  Opt out with `--no-security-hook`.
+- **agent `.claude/settings.json` hook** — `installSecurityAgentHooks`
+  (`src/security/agent-hooks.ts`) merges, merge-safely (a `_gdMetaproManaged:
+  "security-agent-hooks"` sentinel keeps re-install idempotent and preserves all
+  existing settings/hooks), two Claude Code hooks: `UserPromptSubmit` →
+  `gd-metapro security check-input --source untrusted-external` and
+  `PreToolUse(Write|Edit)` → `gd-metapro security check-output`. Claude
+  Code-specific, project-local, advisory by default; recorded at
+  `security.hooks.agent`. Opt out with `--no-security-agent-hook`.
+
+`update` refreshes each hook only when the manifest already records it.
+
 ---
 
 ## rules

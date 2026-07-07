@@ -1,8 +1,8 @@
 # Metaproject Security: technical specification
 
-Version: 0.2.2
+Version: 0.2.3
 
-Status: Phase 1+2+3 implemented (v0.1). The deterministic engine (detectors, resolution/gate, HMAC-keyed hashing + masks, self-protection, config checksum) and the `gd-metapro security` CLI (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy validate`/`incidents`) are shipped, and the module is enabled by default at `init`. Phase 3 write-seam integrations are now wired: an in-process guard (`src/security/guard.ts`) runs at `memory ingest` (target memory), `wiki collect` (target wiki), `test run` raw-log publish, `gdctx` raw-output redaction, and a `security` gate in `flow complete`. Semantics: **advisory (default) reports and continues - it never blocks**; **enforced/ci blocks or suppresses the write with a masked reason**; **disabled is a no-op**. The gdctx seam redacts detected secrets from raw output even in advisory mode (a pure safety improvement). Phase 4 (model/API backends, profiles/hooks, gateway mode) remains future work - see §16.
+Status: Phase 1+2+3 implemented (v0.1), plus the Phase 4 hooks. The deterministic engine (detectors, resolution/gate, HMAC-keyed hashing + masks, self-protection, config checksum) and the `gd-metapro security` CLI (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy validate`/`incidents`) are shipped, and the module is enabled by default at `init`. Phase 3 write-seam integrations are now wired: an in-process guard (`src/security/guard.ts`) runs at `memory ingest` (target memory), `wiki collect` (target wiki), `test run` raw-log publish, `gdctx` raw-output redaction, and a `security` gate in `flow complete`. Semantics: **advisory (default) reports and continues - it never blocks**; **enforced/ci blocks or suppresses the write with a masked reason**; **disabled is a no-op**. The gdctx seam redacts detected secrets from raw output even in advisory mode (a pure safety improvement). The Phase 4 **hooks** are now shipped: an opt-in git pre-push gate and an opt-in, merge-safe Claude Code `.claude/settings.json` agent guard, both offered at `init` only when `security` is enabled (§11a). The rest of Phase 4 (model/API backends, standard-profile wiring, gateway mode) remains future work - see §16.
 
 ## 1. Purpose
 
@@ -325,6 +325,53 @@ module is disabled the gate is omitted entirely; in advisory it is informational
 (`pass`, does not block); in enforced/ci it maps the engine gate to pass/fail over
 the flow's latest security scan.
 
+## 11a. Hooks (implemented)
+
+Two optional hooks extend the write-seam enforcement (§11) to surfaces
+`gd-metapro` does not directly control: the git push boundary and the Claude Code
+agent loop. Both are offered by `init` **only when the `security` module is
+enabled**, default to on (confirm prompt; `--yes` accepts), and are no-ops when
+the module is disabled. Both honor the same `security.config.json` `mode`, so
+**advisory (default) reports but never blocks**; **enforced/ci block**.
+
+### git pre-push gate
+
+- Installed by `init` (confirm prompt, default yes; opt-out `--no-security-hook`).
+- A managed block `# gd-metapro:security-pre-push:begin … :end` in
+  `.git/hooks/pre-push`. It **coexists** with the testing pre-push managed block
+  and any user-authored hook content — install/refresh only rewrites its own
+  fenced block and never touches the rest of the file.
+- For each changed file in the push range (`@{push}`/`@{upstream}`..HEAD, falling
+  back to the last commit on a fresh branch) it runs
+  `gd-metapro security scan <file> --source trusted-project`.
+- **Blocking is delegated entirely to the CLI exit code** — the hook never
+  re-implements the mode→action mapping. `advisory` always exits 0 (findings are
+  printed as warnings, the push proceeds); `enforced`/`ci` exit non-zero on a
+  blocking (secret/critical) finding, which blocks the push.
+- Degrades safely: if `gd-metapro` is not on `PATH` (and not at
+  `~/.local/bin/gd-metapro`) it prints a notice and skips the gate.
+- Recorded in the manifest under `security.hooks.prePush`
+  (`.git/hooks/pre-push`). `update` refreshes the managed block only when the
+  manifest already records it.
+
+### agent guard (`.claude/settings.json`)
+
+- Installed by `init` (confirm prompt, default yes; opt-out
+  `--no-security-agent-hook`). **Claude Code-specific and project-local.**
+- **Merge-safe** into `.claude/settings.json`: it creates the file if absent and
+  preserves every pre-existing key and user hook entry. Each managed group carries
+  a `_gdMetaproManaged: "security-agent-hooks"` sentinel so re-install is
+  idempotent (managed groups are stripped and re-appended, never duplicated) and
+  an uninstall targets only the entries this installer wrote.
+- Two hook events route agent input/output through the security CLI:
+  - `UserPromptSubmit` → `gd-metapro security check-input --source untrusted-external`
+  - `PreToolUse` (matcher `Write|Edit`) → `gd-metapro security check-output`
+- Advisory by default: findings are surfaced but the prompt/tool call proceeds;
+  `enforced`/`ci` return the CLI's non-zero exit at these seams.
+- Recorded in the manifest under `security.hooks.agent`
+  (`.claude/settings.json`). `update` re-runs the merge-safe installer only when
+  the manifest already records it.
+
 ## 12. Standard Profile
 
 Metaproject Standard profiles should treat `security` as:
@@ -442,6 +489,9 @@ agent/artifact boundary.
 - the gdctx seam redacts detected secrets from raw output even in advisory mode.
 
 ### Phase 4 - profiles, skill, hooks
+- **Hooks (IMPLEMENTED):** opt-in git pre-push gate + merge-safe Claude Code
+  `.claude/settings.json` agent guard, both offered at `init` when `security` is
+  enabled and refreshed by `update` (§11a);
 - Standard-profile wiring (§12); `skills/security/SKILL.md` (advisory vs enforced
   per agent-protocol.md); optional CI gate;
 - optional model/API backends as plugins (non-standard).

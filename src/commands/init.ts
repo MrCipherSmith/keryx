@@ -49,6 +49,13 @@ import {
   renderSecurityManifest,
   securityCapabilities,
 } from "../security/templates";
+import {
+  installSecurityAgentHooks,
+  uninstallSecurityAgentHooks,
+  agentSettingsPath,
+  AGENT_HOOKS_SENTINEL,
+  AGENT_SETTINGS_RELATIVE_PATH,
+} from "../security/agent-hooks";
 import { renderMemoryConfig } from "../memory/config";
 import { MEMORY_TYPES } from "../memory/types";
 import {
@@ -89,6 +96,7 @@ import {
   renderHealthPostCommitHook,
   renderGdskillsPostCommitHook,
   renderMetaprojectDashboardPostCommitHook,
+  renderSecurityPrePushHook,
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
   renderHooksReadme,
@@ -122,6 +130,8 @@ type InitOptions = {
   noHealthHook: boolean;
   noTestingPostCommitHook: boolean;
   noTestingPrePushHook: boolean;
+  noSecurityHook: boolean;
+  noSecurityAgentHook: boolean;
 };
 
 type ModuleConfig =
@@ -150,6 +160,7 @@ type ModuleConfig =
       hooks?: {
         gitPostCommit?: string;
         prePush?: string;
+        agent?: string;
         postUpdate?: string;
       };
     }
@@ -218,6 +229,8 @@ export async function initCommand(args: string[]): Promise<void> {
   let enableHealthHook = false;
   let enableTestingPostCommitHook = false;
   let enableTestingPrePushHook = false;
+  let enableSecurityPrePushHook = false;
+  let enableSecurityAgentHook = false;
   if (options.noGdgraph) {
     enableGdgraph = false;
   } else if (!options.yes) {
@@ -303,7 +316,10 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
-  if (!options.yes && (enableGdgraph || enableGdskills || enableHealth || enableTesting)) {
+  if (
+    !options.yes &&
+    (enableGdgraph || enableGdskills || enableHealth || enableTesting || enableSecurity)
+  ) {
     heading("Git hooks");
   }
 
@@ -366,6 +382,30 @@ export async function initCommand(args: string[]): Promise<void> {
       enableTestingPrePushHook = await confirm(
         "Install git pre-push hook to run changed-scope tests and block failing pushes?",
         false,
+      );
+    }
+  }
+
+  if (enableSecurity) {
+    if (options.noSecurityHook) {
+      enableSecurityPrePushHook = false;
+    } else if (options.yes) {
+      enableSecurityPrePushHook = true;
+    } else {
+      enableSecurityPrePushHook = await confirm(
+        "Install git pre-push hook to run the security guard and block pushes on secret/critical findings (enforced/ci mode only)? Recommended",
+        true,
+      );
+    }
+
+    if (options.noSecurityAgentHook) {
+      enableSecurityAgentHook = false;
+    } else if (options.yes) {
+      enableSecurityAgentHook = true;
+    } else {
+      enableSecurityAgentHook = await confirm(
+        "Install project-local .claude/settings.json security hooks (guard agent input/output)? Recommended",
+        true,
       );
     }
   }
@@ -435,6 +475,33 @@ export async function initCommand(args: string[]): Promise<void> {
 
   if (enableSecurity) {
     await createSecurityStructure(metaprojectRoot);
+    if (enableSecurityPrePushHook) {
+      await installSecurityPrePushHook(projectRoot);
+    }
+    if (enableSecurityAgentHook) {
+      await installSecurityAgentHooks(projectRoot);
+    }
+  }
+
+  // Reconcile disabled security hooks with on-disk reality. When a hook is now
+  // off (module disabled via --no-security, or --no-security-agent-hook /
+  // --no-security-hook) but was previously installed, remove the managed
+  // artifact so the manifest and the filesystem stay in sync. Only
+  // security-owned content is touched; other modules and user entries are kept.
+  const existingSecurityModule = existingManifest?.modules?.security;
+  const existingSecurityHooks =
+    existingSecurityModule?.enabled === true ? existingSecurityModule.hooks : undefined;
+  const securityAgentHookPreviouslyInstalled =
+    Boolean(existingSecurityHooks?.agent) ||
+    (await agentSettingsHasSecuritySentinel(projectRoot));
+  if (!enableSecurityAgentHook && securityAgentHookPreviouslyInstalled) {
+    await uninstallSecurityAgentHooks(projectRoot);
+  }
+  const securityPrePushPreviouslyInstalled =
+    Boolean(existingSecurityHooks?.prePush) ||
+    (await prePushHasSecurityBlock(projectRoot));
+  if (!enableSecurityPrePushHook && securityPrePushPreviouslyInstalled) {
+    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
   }
 
   const manifest = buildManifest({
@@ -454,6 +521,8 @@ export async function initCommand(args: string[]): Promise<void> {
     enableHealthHook,
     enableTestingPostCommitHook,
     enableTestingPrePushHook,
+    enableSecurityPrePushHook,
+    enableSecurityAgentHook,
     agentRuleSources,
     existingManifest,
   });
@@ -741,6 +810,10 @@ export async function initCommand(args: string[]): Promise<void> {
     hookLines.push(["testing post-commit", enableTestingPostCommitHook]);
     hookLines.push(["testing pre-push", enableTestingPrePushHook]);
   }
+  if (enableSecurity) {
+    hookLines.push(["security pre-push", enableSecurityPrePushHook]);
+    hookLines.push(["security agent (.claude)", enableSecurityAgentHook]);
+  }
   if (hookLines.length > 0) {
     heading("Git hooks");
     for (const [label, on] of hookLines) {
@@ -781,6 +854,8 @@ function parseInitArgs(args: string[]): InitOptions {
     noHealthHook: args.includes("--no-health-hook"),
     noTestingPostCommitHook: args.includes("--no-testing-post-commit-hook"),
     noTestingPrePushHook: args.includes("--no-testing-pre-push-hook"),
+    noSecurityHook: args.includes("--no-security-hook"),
+    noSecurityAgentHook: args.includes("--no-security-agent-hook"),
   };
 }
 
@@ -804,6 +879,8 @@ function printInitHelp(): void {
     { flag: "--no-health-hook", desc: "Do not install the health post-commit hook." },
     { flag: "--no-testing-post-commit-hook", desc: "Do not install the testing post-commit refresh hook." },
     { flag: "--no-testing-pre-push-hook", desc: "Do not install the testing pre-push gate hook." },
+    { flag: "--no-security-hook", desc: "Do not install the security pre-push gate hook." },
+    { flag: "--no-security-agent-hook", desc: "Do not install the .claude/settings.json security agent hooks." },
   ]);
 }
 
@@ -978,6 +1055,10 @@ async function installTestingPrePushHook(projectRoot: string): Promise<void> {
   await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
 }
 
+async function installSecurityPrePushHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+}
+
 async function installManagedHook(
   projectRoot: string,
   hookName: "post-commit" | "pre-push",
@@ -1008,6 +1089,55 @@ async function installManagedHook(
 
   await writeFile(hookPath, next, "utf8");
   await chmod(hookPath, 0o755);
+}
+
+// Strip a single gd-metapro managed block from a git hook, leaving all other
+// managed blocks and user-authored content intact. No-op when the hook or block
+// is absent.
+async function removeManagedHook(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+): Promise<void> {
+  const hookPath = path.join(projectRoot, ".git", "hooks", hookName);
+  if (!(await pathExists(hookPath))) {
+    return;
+  }
+  const existing = await readFile(hookPath, "utf8");
+  const blockStart = `# gd-metapro:${blockId}:begin`;
+  const blockEnd = `# gd-metapro:${blockId}:end`;
+  const blockPattern = new RegExp(
+    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
+  );
+  if (!blockPattern.test(existing)) {
+    return;
+  }
+  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
+// True when the git pre-push hook still carries the managed security block.
+async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
+  const hookPath = path.join(projectRoot, ".git", "hooks", "pre-push");
+  if (!(await pathExists(hookPath))) {
+    return false;
+  }
+  return (await readFile(hookPath, "utf8")).includes(
+    "# gd-metapro:security-pre-push:begin",
+  );
+}
+
+// True when .claude/settings.json still carries the managed security agent-hook
+// sentinel (i.e. the agent hooks were previously installed there).
+async function agentSettingsHasSecuritySentinel(
+  projectRoot: string,
+): Promise<boolean> {
+  const file = agentSettingsPath(projectRoot);
+  if (!(await pathExists(file))) {
+    return false;
+  }
+  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
 }
 
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
@@ -1086,6 +1216,8 @@ function buildManifest({
   enableHealthHook,
   enableTestingPostCommitHook,
   enableTestingPrePushHook,
+  enableSecurityPrePushHook,
+  enableSecurityAgentHook,
   agentRuleSources,
   existingManifest,
 }: {
@@ -1105,6 +1237,8 @@ function buildManifest({
   enableHealthHook: boolean;
   enableTestingPostCommitHook: boolean;
   enableTestingPrePushHook: boolean;
+  enableSecurityPrePushHook: boolean;
+  enableSecurityAgentHook: boolean;
   agentRuleSources: string[];
   existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
@@ -1272,6 +1406,18 @@ function buildManifest({
             config: ".metaproject/security.config.json",
             commands: moduleCommands("security"),
             capabilities: securityCapabilities(),
+            ...(enableSecurityPrePushHook || enableSecurityAgentHook
+              ? {
+                  hooks: {
+                    ...(enableSecurityPrePushHook
+                      ? { prePush: ".git/hooks/pre-push" }
+                      : {}),
+                    ...(enableSecurityAgentHook
+                      ? { agent: AGENT_SETTINGS_RELATIVE_PATH }
+                      : {}),
+                  },
+                }
+              : {}),
           }
         : {
             enabled: false,

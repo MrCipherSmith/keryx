@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "id": "005",
+  "slug": "security-hooks",
+  "title": "Security hooks: git pre-push gate + agent (.claude) input/output guard",
+  "status": "in-progress",
+  "createdAt": "2026-07-07T20:43:58.958Z",
+  "updatedAt": "2026-07-07T21:16:37.350Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:35bdc8d8e7f5ab673bc8f7e0b71f2454190e24d7be95440035fe30d164aa6903",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo"
+    },
+    {
+      "id": "T5",
+      "title": "Hook 3 — agent .claude/settings.json guard hooks (merge-safe)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "Registration polish: prompts/help/module doc/standard validate",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "Docs: security spec/README/agent-protocol, roadmap, docs/docs hooks+flags",
+      "kind": "docs",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-07T20:43:58.958Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-07T20:46:17.685Z",
+      "event": "task-added",
+      "detail": "T5: Hook 3 — agent .claude/settings.json guard hooks (merge-safe)"
+    },
+    {
+      "at": "2026-07-07T20:46:17.729Z",
+      "event": "task-added",
+      "detail": "T6: Registration polish: prompts/help/module doc/standard validate"
+    },
+    {
+      "at": "2026-07-07T20:46:17.773Z",
+      "event": "task-added",
+      "detail": "T7: Docs: security spec/README/agent-protocol, roadmap, docs/docs hooks+flags"
+    },
+    {
+      "at": "2026-07-07T20:46:17.821Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-07T20:46:17.880Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-07T20:46:17.947Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-07T20:57:53.243Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-07T20:57:53.292Z",
+      "event": "task-done",
+      "detail": "T5: Hook 3 — agent .claude/settings.json guard hooks (merge-safe)"
+    },
+    {
+      "at": "2026-07-07T20:57:53.348Z",
+      "event": "task-done",
+      "detail": "T6: Registration polish: prompts/help/module doc/standard validate"
+    },
+    {
+      "at": "2026-07-07T20:57:53.398Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-07T21:16:37.350Z",
+      "event": "task-done",
+      "detail": "T7: Docs: security spec/README/agent-protocol, roadmap, docs/docs hooks+flags"
+    }
+  ]
+}

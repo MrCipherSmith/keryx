@@ -197,7 +197,11 @@
         "security.pii",
         "security.prompt-injection",
         "security.egress-control"
-      ]
+      ],
+      "hooks": {
+        "prePush": ".git/hooks/pre-push",
+        "agent": ".claude/settings.json"
+      }
     }
   },
   "agentEntrypoints": {

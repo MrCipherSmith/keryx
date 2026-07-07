@@ -1,6 +1,6 @@
 # Metaproject Security Agent Protocol
 
-Version: 0.2.0
+Version: 0.2.1
 
 ## 1. Purpose
 
@@ -49,6 +49,25 @@ Run `security check-output` when:
 - preparing PR/issue comments;
 - sending data to external integrations;
 - completing sensitive task flows.
+
+## 4a. Runtime Enforcement Seam (agent hook)
+
+Section 3-4 describe the behavior agents *should* perform voluntarily. When the
+optional Claude Code agent hook is installed (opt-in at `init`, merge-safe into
+`.claude/settings.json`; see specification §11a), these checks become **runtime
+enforcement points** that fire without the agent choosing to run them:
+
+- `UserPromptSubmit` → `gd-metapro security check-input --source untrusted-external`
+  runs the input check on every submitted prompt.
+- `PreToolUse` (matcher `Write|Edit`) → `gd-metapro security check-output`
+  runs the output check before each `Write`/`Edit` tool call.
+
+These are **project-local and Claude Code-specific**, and honor
+`security.config.json` `mode`: advisory (default) surfaces findings but lets the
+prompt/tool call proceed; enforced/ci return the CLI's non-zero exit at the seam.
+The hook does not replace the enforcement boundary of §2 — it is an additional
+seam, not full control over model calls, so the §2 rule still holds: do not claim
+a prompt was enforced unless the workflow is controlled by `gd-metapro`.
 
 ## 5. Fallback
 

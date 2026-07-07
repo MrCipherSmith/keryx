@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.9.1
+Version: 0.9.2
 
 ## 1. Purpose
 
@@ -33,7 +33,7 @@ registry to human-readable status and points at each module's requirements.
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
 | Metaproject Standard | `gd-metapro standard` | - | implemented (v0.1 validator) | [metaproject-standard/](metaproject-standard/) |
-| Metaproject Security | `gd-metapro security` | `security` | implemented (v0.1, Phase 1+2+3 write-seam integrations) | [security/](security/) |
+| Metaproject Security | `gd-metapro security` | `security` | implemented (v0.1, Phase 1+2+3 write-seam integrations + Phase 4 hooks) | [security/](security/) |
 
 ## 4. gdwiki (implemented, MVP + collector)
 
@@ -88,7 +88,7 @@ Remaining:
 Order is indicative, not committed:
 
 1. Task Manager Phase 2 (`gd-metapro flow`) - Notion/Jira adapters, flow board artifact, memory/wiki links.
-2. Metaproject Security Phase 4 (`gd-metapro security`) - optional model/API detection backends, profiles/hooks, and gateway mode (Phase 1+2 deterministic engine + CLI and the Phase 3 write-seam integrations at memory/wiki/testing/gdctx/flow are already shipped).
+2. Metaproject Security Phase 4 (`gd-metapro security`) - optional model/API detection backends, standard-profile wiring, and gateway mode (the Phase 1+2 deterministic engine + CLI, the Phase 3 write-seam integrations at memory/wiki/testing/gdctx/flow, and the Phase 4 hooks - a git pre-push gate and a merge-safe Claude Code `.claude/settings.json` agent guard, both opt-in at `init` - are already shipped).
 3. gdwiki release metrics and richer dashboard navigation.
 4. gdskills semantic verification against entity ownership maps.
 5. Code Health Phase 3 (`gd-metapro health`) - advanced trend analytics and larger-project tuning.

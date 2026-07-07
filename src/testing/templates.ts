@@ -207,6 +207,6 @@ export function renderTestingPrePushHook(): string {
   return 0
 }
 
-gd_metapro_testing_pre_push
+gd_metapro_testing_pre_push || exit $?
 `;
 }

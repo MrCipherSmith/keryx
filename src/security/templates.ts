@@ -51,6 +51,24 @@ and committed-secret history stay with the \`security-audit\` skill.
 - \`security.config.json\` (mode, raw retention, policies, backends, gate,
   \`configChecksum\`).
 
+## Hooks
+
+Both hooks are optional, offered at \`init\` only when security is enabled,
+merge-safe (managed blocks that never clobber user content), idempotent, and
+refreshed by \`update\` without touching \`data/security\`.
+
+- Git pre-push gate (\`.git/hooks/pre-push\`, opt out with \`--no-security-hook\`):
+  runs \`gd-metapro security scan\` over the changed/committable content. Blocking
+  follows \`security.config.json\` \`mode\`: \`advisory\` (default) warns and allows
+  the push; \`enforced\`/\`ci\` block the push (non-zero exit) on a secret/critical
+  finding. Installed as a \`# gd-metapro:security-pre-push\` managed block that
+  coexists with the testing pre-push block and any user-authored hook content.
+- Agent guard (\`.claude/settings.json\`, opt out with \`--no-security-agent-hook\`):
+  adds \`UserPromptSubmit\` → \`gd-metapro security check-input\` and
+  \`PreToolUse\`(Write|Edit) → \`gd-metapro security check-output\`. Merged under a
+  \`_gdMetaproManaged: ["security-agent-hooks"]\` sentinel so all pre-existing keys
+  and user hook entries are preserved and uninstall removes only managed entries.
+
 ## Data
 
 - \`data/security/artifacts/\` - committable \`latest.md\` / \`latest.json\`

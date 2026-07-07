@@ -1872,6 +1872,130 @@ gd_metapro_gdgraph_post_commit
 `;
 }
 
+export function renderSecurityPrePushHook(): string {
+  return `gd_metapro_security_pre_push() {
+  # Run the Metaproject Security guard over the changed/committable content before
+  # a push. Blocking is delegated to the CLI, which honors security.config.json
+  # mode: 'advisory' (default) always exits 0 (warn, never block); 'enforced'/'ci'
+  # exit non-zero on a blocking (secret/critical) finding. This hook never
+  # duplicates the mode->action mapping; it only propagates the CLI exit code.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  gdm=""
+  if command -v gd-metapro >/dev/null 2>&1; then
+    gdm="gd-metapro"
+  elif [ -x "$HOME/.local/bin/gd-metapro" ]; then
+    gdm="$HOME/.local/bin/gd-metapro"
+  else
+    echo "gd-metapro pre-push: gd-metapro command not found, skipped security gate" >&2
+    return 0
+  fi
+
+  # Determine the changed files being pushed. git passes one line per pushed ref
+  # on stdin: "<local ref> <local sha> <remote ref> <remote sha>". Scanning that
+  # range covers EVERY new commit in the push, so a secret introduced in an
+  # earlier commit of a multi-commit first push cannot slip through (the old
+  # HEAD-only heuristic under-scanned a first push). Fall back to the tracked
+  # push/upstream range only when stdin yields nothing usable.
+  changed_files=""
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$local_ref" ] && continue
+    # Skip deleted refs (local sha all-zero): there is nothing to scan.
+    case "$local_sha" in
+      *[!0]*) : ;;
+      *) continue ;;
+    esac
+    case "$remote_sha" in
+      *[!0]*)
+        # Updating an existing remote ref: scan remote..local.
+        range_files="$(git diff --name-only --diff-filter=ACMR "$remote_sha".."$local_sha" 2>/dev/null || true)"
+        ;;
+      *)
+        # New ref: scan all commits unique to this push. Use the merge-base with
+        # any existing remote as the base, falling back to the empty tree when
+        # the branch shares no history with a remote (truly first push).
+        remotes="$(git for-each-ref --format='%(objectname)' refs/remotes 2>/dev/null | tr '\\n' ' ')"
+        base=""
+        if [ -n "$remotes" ]; then
+          base="$(git merge-base "$local_sha" $remotes 2>/dev/null || true)"
+        fi
+        if [ -z "$base" ]; then
+          base="$(git hash-object -t tree /dev/null 2>/dev/null)"
+        fi
+        range_files="$(git diff --name-only --diff-filter=ACMR "$base".."$local_sha" 2>/dev/null || true)"
+        ;;
+    esac
+    if [ -n "$range_files" ]; then
+      changed_files="$changed_files
+$range_files"
+    fi
+  done
+
+  # Fall back to the tracked push/upstream range (then HEAD) when stdin was empty
+  # (e.g. the hook was invoked manually without ref lines).
+  if [ -z "$(printf '%s' "$changed_files" | tr -d '[:space:]')" ]; then
+    range="HEAD"
+    push_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{push}' 2>/dev/null || true)"
+    if [ -n "$push_ref" ]; then
+      range="\${push_ref}..HEAD"
+    else
+      up_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+      if [ -n "$up_ref" ]; then
+        range="\${up_ref}..HEAD"
+      fi
+    fi
+    changed_files="$(git diff --name-only --diff-filter=ACMR "$range" 2>/dev/null || true)"
+    if [ -z "$changed_files" ]; then
+      changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+    fi
+  fi
+
+  # Deduplicate the changed-file list before scanning.
+  changed_files="$(printf '%s\\n' "$changed_files" | sed '/^[[:space:]]*$/d' | sort -u)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  blocked=0
+  old_ifs="$IFS"
+  IFS='
+'
+  for file in $changed_files; do
+    IFS="$old_ifs"
+    if [ -f "$file" ]; then
+      scan_out="$("$gdm" security scan "$file" --source trusted-project 2>&1)"
+      scan_code=$?
+      if [ "$scan_code" -ne 0 ]; then
+        # enforced/ci mode blocked on this file.
+        echo "gd-metapro pre-push: security gate blocked on $file" >&2
+        printf '%s\\n' "$scan_out" >&2
+        blocked=1
+      elif printf '%s\\n' "$scan_out" | grep -Eq 'findings: [1-9]'; then
+        # advisory mode: surface findings but allow the push.
+        echo "gd-metapro pre-push (advisory): security findings in $file; push allowed" >&2
+        printf '%s\\n' "$scan_out" >&2
+      fi
+    fi
+    IFS='
+'
+  done
+  IFS="$old_ifs"
+
+  if [ "$blocked" -ne 0 ]; then
+    echo "gd-metapro pre-push: security gate failed; push blocked. Resolve the findings, or set security mode to 'advisory' to override." >&2
+    return 1
+  fi
+
+  return 0
+}
+
+gd_metapro_security_pre_push || exit $?
+`;
+}
+
 export function renderGdwikiPostCommitHook(): string {
   return `gd_metapro_gdwiki_post_commit() {
   # Non-mutating: remind to refresh only the touched wiki drafts after a

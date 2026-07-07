@@ -1,8 +1,8 @@
 # Metaproject Security
 
-Version: 0.2.2
+Version: 0.2.3
 
-Status: Phase 1+2 AND Phase 3 implemented (v0.1) - the deterministic engine (`src/security/`) and the `gd-metapro security` CLI are shipped, the module is enabled by default at `init`, and the Phase 3 write-seam integrations are wired: an in-process guard (`src/security/guard.ts`) runs at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion. Advisory (default) reports and continues without blocking; enforced/ci blocks or suppresses the write with a masked reason; disabled is a no-op. Phase 4 (model/API backends, gateway mode) remains future work; see specification.md §16 for the phased breakdown.
+Status: Phase 1+2 AND Phase 3 implemented (v0.1), plus the Phase 4 hooks - the deterministic engine (`src/security/`) and the `gd-metapro security` CLI are shipped, the module is enabled by default at `init`, and the Phase 3 write-seam integrations are wired: an in-process guard (`src/security/guard.ts`) runs at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion. Two optional hooks now extend enforcement beyond `gd-metapro`-controlled workflows: a git **pre-push gate** and a merge-safe Claude Code **`.claude/settings.json` agent guard**, both offered at `init` only when `security` is enabled (opt-out via `--no-security-hook` / `--no-security-agent-hook`; see specification.md §11a). Advisory (default) reports and continues without blocking; enforced/ci blocks or suppresses the write with a masked reason; disabled is a no-op. The rest of Phase 4 (model/API backends, gateway mode) remains future work; see specification.md §16 for the phased breakdown.
 
 ## 1. Purpose
 

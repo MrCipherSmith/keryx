@@ -24,6 +24,12 @@ import {
   renderSecurityManifest,
   securityCapabilities,
 } from "../security/templates";
+import {
+  installSecurityAgentHooks,
+  uninstallSecurityAgentHooks,
+  agentSettingsPath,
+  AGENT_HOOKS_SENTINEL,
+} from "../security/agent-hooks";
 import { renderMemoryConfig } from "../memory/config";
 import {
   renderMemoryCoreReadme,
@@ -78,6 +84,7 @@ import {
   renderMetaprojectReadme,
   renderProjectRulesReadme,
   renderProjectRulesSkillReadme,
+  renderSecurityPrePushHook,
   type MetaprojectDashboardData,
 } from "../lib/templates";
 import {
@@ -99,6 +106,7 @@ type ManifestModule = {
   hooks?: {
     gitPostCommit?: string;
     prePush?: string;
+    agent?: string;
     postUpdate?: string;
   };
 };
@@ -406,6 +414,31 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfMissing(path.join(metaprojectRoot, "security.config.json"), renderSecurityConfig());
     await writeTextIfChanged(path.join(metaprojectRoot, "modules", "security.md"), renderSecurityManifest());
     await writeTextIfChanged(path.join(metaprojectRoot, "core", "security", "README.md"), renderSecurityCoreReadme());
+    // Refresh the security hooks only when the manifest already records them;
+    // both installers are merge-safe and never touch data/security or user content.
+    if (manifest.modules?.security?.hooks?.prePush) {
+      await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+    }
+    if (manifest.modules?.security?.hooks?.agent) {
+      await installSecurityAgentHooks(projectRoot);
+    }
+  }
+
+  // Reconcile drift: if the manifest no longer records a security hook but the
+  // artifact is still live on disk (module disabled, or hooks.agent/prePush
+  // dropped), remove it so reality matches the manifest. Only security-owned
+  // content is touched; other modules and user entries are preserved.
+  if (
+    !manifest.modules?.security?.hooks?.agent &&
+    (await agentSettingsHasSecuritySentinel(projectRoot))
+  ) {
+    await uninstallSecurityAgentHooks(projectRoot);
+  }
+  if (
+    !manifest.modules?.security?.hooks?.prePush &&
+    (await prePushHasSecurityBlock(projectRoot))
+  ) {
+    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
   }
 
   if (!manifestState.exists || !manifestState.valid) {
@@ -1264,6 +1297,55 @@ async function installManagedHook(
 
   await writeFile(hookPath, next, "utf8");
   await chmod(hookPath, 0o755);
+}
+
+// Strip a single gd-metapro managed block from a git hook, preserving all other
+// managed blocks and user-authored content. No-op when the hook or block is
+// absent.
+async function removeManagedHook(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+): Promise<void> {
+  const hookPath = path.join(projectRoot, ".git", "hooks", hookName);
+  if (!(await pathExists(hookPath))) {
+    return;
+  }
+  const existing = await readFile(hookPath, "utf8");
+  const blockStart = `# gd-metapro:${blockId}:begin`;
+  const blockEnd = `# gd-metapro:${blockId}:end`;
+  const blockPattern = new RegExp(
+    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
+  );
+  if (!blockPattern.test(existing)) {
+    return;
+  }
+  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
+// True when the git pre-push hook still carries the managed security block.
+async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
+  const hookPath = path.join(projectRoot, ".git", "hooks", "pre-push");
+  if (!(await pathExists(hookPath))) {
+    return false;
+  }
+  return (await readFile(hookPath, "utf8")).includes(
+    "# gd-metapro:security-pre-push:begin",
+  );
+}
+
+// True when .claude/settings.json still carries the managed security agent-hook
+// sentinel (i.e. the agent hooks were previously installed there).
+async function agentSettingsHasSecuritySentinel(
+  projectRoot: string,
+): Promise<boolean> {
+  const file = agentSettingsPath(projectRoot);
+  if (!(await pathExists(file))) {
+    return false;
+  }
+  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
 }
 
 async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult> {

@@ -304,6 +304,98 @@ test("respects --no-tasks and does not backfill", async () => {
   }
 });
 
+test("update removes security hooks that drifted out of the manifest, keeping user + testing content", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-metapro-update-sec-"));
+  const previousCwd = process.cwd();
+  const prePushPath = path.join(root, ".git", "hooks", "pre-push");
+  const settingsPath = path.join(root, ".claude", "settings.json");
+  try {
+    await mkdir(path.join(root, ".git", "hooks"), { recursive: true });
+    await mkdir(path.join(root, ".claude"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+
+    // Live on-disk security artifacts...
+    await writeFile(
+      prePushPath,
+      [
+        "#!/usr/bin/env sh",
+        "echo 'user pre-push guard'",
+        "",
+        "# gd-metapro:testing-pre-push:begin",
+        "gd_metapro_testing_pre_push || exit $?",
+        "# gd-metapro:testing-pre-push:end",
+        "",
+        "# gd-metapro:security-pre-push:begin",
+        "gd_metapro_security_pre_push || exit $?",
+        "# gd-metapro:security-pre-push:end",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      settingsPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            UserPromptSubmit: [
+              { hooks: [{ type: "command", command: "user-logger" }] },
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command: "gd-metapro security check-input --source untrusted-external",
+                  },
+                ],
+                _gdMetaproManaged: "security-agent-hooks",
+              },
+            ],
+            PreToolUse: [
+              {
+                matcher: "Write|Edit",
+                hooks: [{ type: "command", command: "gd-metapro security check-output" }],
+                _gdMetaproManaged: "security-agent-hooks",
+              },
+            ],
+          },
+          _gdMetaproManaged: ["security-agent-hooks"],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    // ...but the manifest no longer records security hooks (drift).
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          security: { enabled: true },
+          testing: { enabled: true },
+        },
+        agentEntrypoints: { root: [] },
+      }),
+      "utf8",
+    );
+
+    process.chdir(root);
+    await updateCommand(["--skip-runtime"]);
+
+    const hook = await readFile(prePushPath, "utf8");
+    // Security block stripped; testing block + user content preserved.
+    expect(hook).not.toContain("security-pre-push");
+    expect(hook).toContain("# gd-metapro:testing-pre-push:begin");
+    expect(hook).toContain("echo 'user pre-push guard'");
+
+    const settings = await readFile(settingsPath, "utf8");
+    expect(settings).not.toContain("security-agent-hooks");
+    expect(settings).not.toContain("gd-metapro security check-input");
+    expect(settings).toContain("user-logger");
+  } finally {
+    process.chdir(previousCwd);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);

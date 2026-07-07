@@ -139,8 +139,8 @@ manifest records:
     optional and default on).
   - per-module settings — e.g. gdskills stores `profile`, `skills`, `catalog`,
     `projectSkills`, and a `projectSkillRegistry[]`.
-  - `hooks{ gitPostCommit?, prePush?, postUpdate }` — which git hooks this module
-    installs.
+  - `hooks{ gitPostCommit?, prePush?, agent?, postUpdate }` — which hooks this
+    module installs (`security` also records `agent` → `.claude/settings.json`).
   - `commands[]` — the module's canonical CLI subcommand list.
 
 ### `commands[]` comes from `MODULE_COMMANDS` (single source of truth)
@@ -309,8 +309,9 @@ self-contained HTML — again without touching `data/`.
 is absent and otherwise idempotently injects a `# gd-metapro:<blockId>:begin … :end`
 block into `.git/hooks/<post-commit|pre-push>` (creating a `#!/usr/bin/env sh`
 shebang if the file is new, `chmod 0o755`). The rendered hooks are deliberately
-non-mutating staleness reminders that `return 0` on every branch — the one
-exception being the opt-in testing pre-push gate, which blocks on failure.
+non-mutating staleness reminders that `return 0` on every branch — the
+exceptions being the opt-in testing pre-push gate (blocks on test failure) and the
+opt-in security pre-push gate (blocks in `enforced`/`ci` mode).
 
 | Hook | Trigger | Behavior | Default under `--yes` |
 |---|---|---|---|
@@ -320,7 +321,21 @@ exception being the opt-in testing pre-push gate, which blocks on failure.
 | dashboard post-commit | post-commit | rebuild the dashboard (installed if any post-commit hook is enabled) | on (derived) |
 | testing post-commit | post-commit | reminder to re-run tests | on |
 | **testing pre-push** | pre-push | **blocking** test gate — fails the push on test failure | **off** (opt-in even under `--yes`) |
+| **security pre-push** | pre-push | scans changed files with `security scan`; **advisory (default) warns, enforced/ci block** the push | on (offered when `security` enabled; opt out `--no-security-hook`) |
 
-`--no-*-hook` flags force any hook off. On `update`, a hook is reinstalled only if
-the manifest already records it, so the workspace never silently re-adds hooks the
-user removed.
+The security pre-push block coexists with the testing pre-push block and any
+user-authored content in `.git/hooks/pre-push`. `--no-*-hook` flags force any hook
+off. On `update`, a hook is reinstalled only if the manifest already records it, so
+the workspace never silently re-adds hooks the user removed.
+
+### Agent hook (`.claude/settings.json`)
+
+The `security` module also offers a non-git, project-local **Claude Code agent
+hook** at `init` (opt out with `--no-security-agent-hook`). Rather than a
+`.git/hooks/*` block, `installSecurityAgentHooks` **merges** two hooks into
+`.claude/settings.json` — `UserPromptSubmit` → `security check-input --source
+untrusted-external` and `PreToolUse(Write|Edit)` → `security check-output`. The
+merge is **merge-safe**: a `_gdMetaproManaged: "security-agent-hooks"` sentinel
+keeps re-install idempotent and preserves every pre-existing key and user hook.
+Advisory by default. It is recorded in the manifest at `security.hooks.agent` and,
+like the git hooks, refreshed by `update` only when already recorded.

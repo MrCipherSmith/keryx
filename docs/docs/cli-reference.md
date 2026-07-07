@@ -87,6 +87,18 @@ Pass the matching `--no-*-hook` flag to force a hook off:
 | `--no-health-hook` | health post-commit hook. |
 | `--no-testing-post-commit-hook` | testing post-commit (refresh) hook. |
 | `--no-testing-pre-push-hook` | testing pre-push (gate) hook. |
+| `--no-security-hook` | security **pre-push** gate hook. |
+| `--no-security-agent-hook` | security **`.claude/settings.json`** agent hook. |
+
+The two security hooks are offered only when the `security` module is enabled and
+default on (confirm prompt; accepted under `--yes`). The **pre-push** hook adds a
+managed block to `.git/hooks/pre-push` that scans changed files with
+`gd-metapro security scan` before a push — it warns in `advisory` (the default)
+and blocks the push only in `enforced`/`ci` mode; it coexists with the testing
+pre-push hook and any user content. The **agent** hook merges (merge-safe, never
+clobbering existing settings) two Claude Code hooks into `.claude/settings.json`:
+`UserPromptSubmit` → `security check-input` and `PreToolUse(Write|Edit)` →
+`security check-output`, advisory by default.
 
 ---
 
