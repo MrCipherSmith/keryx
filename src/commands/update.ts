@@ -474,7 +474,65 @@ async function collectDashboardData(metaprojectRoot: string): Promise<Metaprojec
   if (memory.length > 0) {
     data.memory = { entries: memory };
   }
+  const docs = await collectDashboardDocs(metaprojectRoot, wiki, memory);
+  if (Object.keys(docs).length > 0) {
+    data.docs = docs;
+  }
   return data;
+}
+
+// Embed the markdown behind every dashboard .md link so clicks open the in-page
+// modal instead of the raw file. Covers module manifests, core READMEs, skills,
+// the agent index, and the collected wiki/memory pages.
+async function collectDashboardDocs(
+  metaprojectRoot: string,
+  wiki: Array<{ href: string; content?: string }>,
+  memory: Array<{ href: string; content?: string }>,
+): Promise<Record<string, string>> {
+  const docs: Record<string, string> = {};
+  const staticHrefs = [
+    "index.md",
+    "README.md",
+    "modules/gdgraph.md",
+    "modules/gdctx.md",
+    "modules/gdwiki.md",
+    "modules/gdskills.md",
+    "modules/health.md",
+    "modules/testing.md",
+    "modules/memory.md",
+    "modules/tasks.md",
+    "core/gdgraph/README.md",
+    "core/gdctx/README.md",
+    "core/health/README.md",
+    "core/testing/README.md",
+    "core/memory/README.md",
+    "skills/catalog.md",
+    "skills/project-rules/README.md",
+    "skills/gdgraph/SKILL.md",
+    "skills/gdctx/SKILL.md",
+    "skills/gdwiki/SKILL.md",
+    "skills/health/SKILL.md",
+    "skills/testing/SKILL.md",
+    "skills/memory/SKILL.md",
+    "skills/flow/SKILL.md",
+    "skills/flow/init.md",
+    "flows/README.md",
+    "data/testing/context.md",
+  ];
+  for (const href of staticHrefs) {
+    const filePath = path.join(metaprojectRoot, ...href.split("/"));
+    if (!(await pathExists(filePath))) {
+      continue;
+    }
+    const content = await readFile(filePath, "utf8");
+    docs[href] = content.length > 40_000 ? `${content.slice(0, 40_000)}\n\n…truncated…` : content;
+  }
+  for (const page of [...wiki, ...memory]) {
+    if (page.content && docs[page.href] === undefined) {
+      docs[page.href] = page.content;
+    }
+  }
+  return docs;
 }
 
 async function collectHealthDashboardData(

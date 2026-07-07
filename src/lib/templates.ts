@@ -284,6 +284,9 @@ export type MetaprojectDashboardData = {
   memory?: {
     entries: Array<{ title: string; href: string; group: string; content?: string }>;
   };
+  // Markdown content keyed by dashboard href, embedded so links render in the
+  // in-page modal instead of opening the raw file (fetch is blocked on file://).
+  docs?: Record<string, string>;
 };
 
 export function renderMetaprojectDashboardHtml({
@@ -465,9 +468,9 @@ export function renderMetaprojectDashboardHtml({
   const memoryEntries = data?.memory?.entries ?? [];
   // Embed page markdown so links open in an in-page modal instead of navigating
   // to a raw .md file (fetch is blocked when the dashboard is opened via file://).
-  const docMap: Record<string, string> = {};
+  const docMap: Record<string, string> = { ...(data?.docs ?? {}) };
   for (const page of [...wikiPages, ...memoryEntries]) {
-    if (page.content) {
+    if (page.content && docMap[page.href] === undefined) {
       docMap[page.href] = page.content;
     }
   }
