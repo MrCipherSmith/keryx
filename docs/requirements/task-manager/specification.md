@@ -1,7 +1,7 @@
 # Task Manager: technical specification
 
-Version: 0.2.0
-Status: Phase 1 implemented (v1 scope; see section 16). Notion/Jira adapters and flow board are Phase 2.
+Version: 0.3.0
+Status: Phase 1 + natural-language discovery implemented (see sections 11 and 16). Notion/Jira adapters and flow board are Phase 2.
 
 ## 1. Purpose
 
@@ -205,6 +205,19 @@ v1: `github` через `gh` CLI. Notion/Jira - будущие адаптеры 
   каждому критерию с проверкой; `flow complete`; при fail - решить
   мелкое/крупное (V9), запустить исправление; при pass с issue -
   `flow complete --comment`; без issue - спросить пользователя о тикете (V10).
+
+## 11a. Natural-language discovery
+
+Агент должен распознавать намерение пользователя без знания CLI:
+
+- **always-on политика** в `AGENTS.md`/`CLAUDE.md` (пишется и мигрируется init):
+  «запросы создать/отследить/завершить работу → Metaproject flow skill»;
+- **`index.md`**: строка модуля, строка скила и workflow-шаг с триггерами
+  («создай фло», «create a flow from this issue», «flow status», «finish the story»);
+- **`skills/flow/SKILL.md`**: таблица Trigger Examples → Intent → команда
+  (RU/EN), включая «создай фло <описание>» → `flow init --title`, вставленная
+  issue-ссылка → `flow init --issue`, «заверши фло» → complete-роль; правило
+  для неоднозначных запросов (нетривиальная многошаговая работа → предложить flow).
 
 ## 12. Init flow
 
