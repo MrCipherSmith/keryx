@@ -6,6 +6,7 @@ export function renderIndexMarkdown({
   enableHealth,
   enableTesting,
   enableMemory,
+  enableTasks,
   ruleSources,
 }: {
   enableGdgraph: boolean;
@@ -15,6 +16,7 @@ export function renderIndexMarkdown({
   enableHealth: boolean;
   enableTesting: boolean;
   enableMemory: boolean;
+  enableTasks: boolean;
   ruleSources: string[];
 }): string {
   const moduleRows = [
@@ -38,6 +40,9 @@ export function renderIndexMarkdown({
       : "",
     enableMemory
       ? "| memory | Long-lived project memory: lessons, decisions, constraints, known mistakes | modules/memory.md |"
+      : "",
+    enableTasks
+      ? "| tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |"
       : "",
   ]
     .filter(Boolean)
@@ -76,6 +81,7 @@ export function renderIndexMarkdown({
           "- `data/memory/artifacts/latest.md`",
         ]
       : []),
+    ...(enableTasks ? ["- `flows/` (flow packages)"] : []),
   ];
   const dataRefs = dataRefItems.length > 0
     ? dataRefItems.join("\n")
@@ -102,6 +108,9 @@ export function renderIndexMarkdown({
       : "",
     enableMemory
       ? "| memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |"
+      : "",
+    enableTasks
+      ? "| flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |"
       : "",
   ]
     .filter(Boolean)
@@ -146,6 +155,11 @@ export function renderIndexMarkdown({
           "For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `gd-metapro memory search` before broad documentation reads.",
         ]
       : []),
+    ...(enableTasks
+      ? [
+          "When the user asks to start, create, track, or finish a piece of work (создай фло, create a flow from this issue, flow status, finish the story), use `skills/flow/SKILL.md` and the `gd-metapro flow` CLI; never edit flow.json or frozen acceptance criteria by hand.",
+        ]
+      : []),
     "Use relevant skills from `skills/`.",
     "Use module manifests before reading raw generated data.",
     "Prefer curated artifacts in `data/*/artifacts`.",
@@ -169,6 +183,8 @@ export function renderIndexMarkdown({
 ## Purpose
 
 This \`.metaproject\` folder contains agent-readable context, tools, generated data, and module manifests for this codebase.
+
+Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 
 ## Enabled Modules
 
@@ -207,6 +223,383 @@ ${enableMemory ? "gd-metapro memory index" : ""}
 `;
 }
 
+export function renderMetaprojectDashboardHtml({
+  enableGdgraph,
+  enableGdctx,
+  enableGdwiki,
+  enableGdskills,
+  enableHealth,
+  enableTesting,
+  enableMemory,
+  enableTasks,
+}: {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+}): string {
+  const modules = [
+    {
+      enabled: enableGdgraph,
+      name: "gdgraph",
+      role: "Project structure",
+      summary: "File dependency graph, affected context, cycles, orphans, and module map.",
+      accent: "#2563eb",
+      links: [
+        ["Manifest", "modules/gdgraph.md"],
+        ["Summary", "data/gdgraph/artifacts/summary.md"],
+        ["Module map", "data/gdgraph/artifacts/module-map.json"],
+        ["Skill", "skills/gdgraph/SKILL.md"],
+      ],
+      commands: ["gd-metapro gdgraph build", "gd-metapro gdgraph affected <file>", "gd-metapro gdgraph query cycles"],
+    },
+    {
+      enabled: enableGdctx,
+      name: "gdctx",
+      role: "Compact context",
+      summary: "Token-aware wrappers for search, reads, diffs, and command output.",
+      accent: "#0891b2",
+      links: [
+        ["Manifest", "modules/gdctx.md"],
+        ["Latest artifact", "data/gdctx/artifacts/latest.md"],
+        ["Config", "gdctx.config.json"],
+        ["Skill", "skills/gdctx/SKILL.md"],
+      ],
+      commands: ["gd-metapro ctx diff", "gd-metapro ctx rg \"pattern\"", "gd-metapro ctx read <file>"],
+    },
+    {
+      enabled: enableGdwiki,
+      name: "gdwiki",
+      role: "Knowledge base",
+      summary: "Markdown wiki for architecture, business rules, scenarios, integrations, and decisions.",
+      accent: "#7c3aed",
+      links: [
+        ["Manifest", "modules/gdwiki.md"],
+        ["Wiki index", "wiki/index.md"],
+        ["Template", "wiki/templates/page.md"],
+        ["Skill", "skills/gdwiki/SKILL.md"],
+      ],
+      commands: ["gd-metapro wiki new decision <slug>", "gd-metapro wiki index", "gd-metapro wiki check-links"],
+    },
+    {
+      enabled: enableGdskills,
+      name: "gdskills",
+      role: "Agent skills",
+      summary: "Bundled working skills plus project-skill creation, routing, verification, learning, export, and sync.",
+      accent: "#db2777",
+      links: [
+        ["Manifest", "modules/gdskills.md"],
+        ["Catalog", "skills/catalog.md"],
+        ["Bundled skills", "skills/gdskills/"],
+        ["Reports", "data/gdskills/reports/"],
+      ],
+      commands: ["gd-metapro skills status", "gd-metapro skills route <target>", "gd-metapro skills verify --all"],
+    },
+    {
+      enabled: enableHealth,
+      name: "health",
+      role: "Quality signal",
+      summary: "Aggregated code health from TypeScript, tests, audit, coverage, complexity, and optional external tools.",
+      accent: "#16a34a",
+      links: [
+        ["Manifest", "modules/health.md"],
+        ["Latest report", "data/health/artifacts/latest.md"],
+        ["Config", "health.config.json"],
+        ["Skill", "skills/health/SKILL.md"],
+      ],
+      commands: ["gd-metapro health run --changed", "gd-metapro health status", "gd-metapro health explain <file>"],
+    },
+    {
+      enabled: enableTesting,
+      name: "testing",
+      role: "Test intelligence",
+      summary: "Detected test stack, conventions, related-test selection, normalized reports, and strict gates.",
+      accent: "#ea580c",
+      links: [
+        ["Manifest", "modules/testing.md"],
+        ["Context", "data/testing/context.md"],
+        ["Recommendations", "data/testing/recommendations.md"],
+        ["Latest report", "data/testing/artifacts/latest.md"],
+      ],
+      commands: ["gd-metapro test analyze", "gd-metapro test run --changed", "gd-metapro test related <file>"],
+    },
+    {
+      enabled: enableMemory,
+      name: "memory",
+      role: "Long-term memory",
+      summary: "Lessons learned, decisions, constraints, known mistakes, historical context, and reusable patterns.",
+      accent: "#475569",
+      links: [
+        ["Manifest", "modules/memory.md"],
+        ["Memory index", "memory/index.md"],
+        ["Config", "memory.config.json"],
+        ["Skill", "skills/memory/SKILL.md"],
+      ],
+      commands: ["gd-metapro memory search \"topic\"", "gd-metapro memory new decision", "gd-metapro memory check"],
+    },
+    {
+      enabled: enableTasks,
+      name: "tasks",
+      role: "Flow lifecycle",
+      summary: "Agent-first flow packages with frozen acceptance criteria, status gates, and PR completion checks.",
+      accent: "#0f766e",
+      links: [
+        ["Manifest", "modules/tasks.md"],
+        ["Flows", "flows/"],
+        ["Skill", "skills/flow/SKILL.md"],
+        ["Flow README", "flows/README.md"],
+      ],
+      commands: ["gd-metapro flow list", "gd-metapro flow init --title \"...\"", "gd-metapro flow complete <id>"],
+    },
+  ];
+
+  const enabledModules = modules.filter((module) => module.enabled);
+  const cards = enabledModules.map((module) => `
+        <article class="module-card" style="--accent: ${module.accent}">
+          <div class="module-head">
+            <span class="module-name">${module.name}</span>
+            <span class="module-role">${module.role}</span>
+          </div>
+          <p>${module.summary}</p>
+          <div class="link-grid">
+            ${module.links.map(([label, href]) => `<a href="${href}">${label}</a>`).join("")}
+          </div>
+          <div class="commands">
+            ${module.commands.map((command) => `<code>${escapeHtml(command)}</code>`).join("")}
+          </div>
+        </article>`).join("\n");
+  const disabled = modules
+    .filter((module) => !module.enabled)
+    .map((module) => `<span>${module.name}</span>`)
+    .join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metaproject Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #d9dee8;
+      --soft: #eef2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    header {
+      padding: 32px 40px 22px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+    main { padding: 28px 40px 44px; }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0; color: var(--muted); }
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    .meta-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .meta-actions a,
+    .link-grid a {
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 7px 10px;
+      border-radius: 6px;
+    }
+    .meta-actions a:hover,
+    .link-grid a:hover { border-color: #94a3b8; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .stat {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .section {
+      margin-top: 28px;
+    }
+    .modules {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+    }
+    .module-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 250px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .module-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .module-name {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .module-role {
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .commands {
+      display: grid;
+      gap: 6px;
+      margin-top: auto;
+    }
+    code {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 6px;
+      padding: 7px 8px;
+    }
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .step {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 110px;
+    }
+    .step b { display: block; margin-bottom: 6px; }
+    .disabled {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .disabled span {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+    }
+    @media (max-width: 900px) {
+      header, main { padding-left: 18px; padding-right: 18px; }
+      .topline { display: block; }
+      .meta-actions { justify-content: flex-start; margin-top: 16px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workflow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topline">
+      <div>
+        <h1>Metaproject Dashboard</h1>
+        <p>Human-readable overview of agent context, project modules, generated artifacts, and CLI entrypoints.</p>
+      </div>
+      <nav class="meta-actions" aria-label="Primary links">
+        <a href="index.md">Agent index</a>
+        <a href="README.md">README</a>
+        <a href="metaproject.json">Manifest</a>
+        <a href="skills/catalog.md">Skills catalog</a>
+      </nav>
+    </div>
+    <section class="stats" aria-label="Metaproject stats">
+      <div class="stat"><strong>${enabledModules.length}</strong><span>enabled modules</span></div>
+      <div class="stat"><strong>${enableGdskills ? "yes" : "no"}</strong><span>local skills catalog</span></div>
+      <div class="stat"><strong>${enableGdgraph ? "yes" : "no"}</strong><span>graph navigation</span></div>
+      <div class="stat"><strong>${enableHealth || enableTesting ? "yes" : "no"}</strong><span>quality signals</span></div>
+    </section>
+  </header>
+  <main>
+    <section class="section">
+      <h2>Enabled Modules</h2>
+      <div class="modules">
+${cards || "        <p>No modules enabled.</p>"}
+      </div>
+    </section>
+    <section class="section">
+      <h2>Agent Workflow</h2>
+      <div class="workflow">
+        <div class="step"><b>1. Route</b><p>Start from index.md and select the module or skill that owns the question.</p></div>
+        <div class="step"><b>2. Navigate</b><p>Use gdgraph for related files, affected context, cycles, and module boundaries.</p></div>
+        <div class="step"><b>3. Compress</b><p>Use gdctx before loading large search output, diffs, command logs, or long files.</p></div>
+        <div class="step"><b>4. Verify</b><p>Read testing and health reports before claiming quality or gate status.</p></div>
+        <div class="step"><b>5. Learn</b><p>Write decisions and lessons to wiki, memory, and project skills when patterns change.</p></div>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Disabled Modules</h2>
+      <div class="disabled">${disabled || "<span>none</span>"}</div>
+    </section>
+  </main>
+</body>
+</html>
+`;
+}
+
 export function renderAgentEntrypoint({ source }: { source: string }): string {
   return `# ${source.replace(/\.md$/i, "")} Instructions
 
@@ -226,7 +619,17 @@ For implementation, review, refactoring, planning, documentation, or quality tas
 For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.
 
 For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.
+
+For starting, tracking, or finishing a managed piece of work (a flow) - e.g. when the user asks to create a flow from a problem description or an issue link, asks for flow status, or asks to finish a story - use the Metaproject flow skill; all flow state changes go through the gd-metapro flow CLI.
 `;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 export function renderMetaprojectGitignoreBlock(): string {
@@ -318,6 +721,7 @@ export function renderMetaprojectReadme({
   enableHealth,
   enableTesting,
   enableMemory,
+  enableTasks,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
@@ -326,6 +730,7 @@ export function renderMetaprojectReadme({
   enableHealth: boolean;
   enableTesting: boolean;
   enableMemory: boolean;
+  enableTasks: boolean;
 }): string {
   const moduleItems = [
     enableGdgraph ? "- `gdgraph`: code graph and affected context." : "",
@@ -346,6 +751,9 @@ export function renderMetaprojectReadme({
       : "",
     enableMemory
       ? "- `memory`: long-lived lessons, decisions, constraints, and known mistakes."
+      : "",
+    enableTasks
+      ? "- `tasks`: agent-first flow lifecycle with frozen acceptance criteria and PR gates."
       : "",
   ].filter(Boolean);
   const modules = moduleItems.length > 0
@@ -369,6 +777,7 @@ export function renderMetaprojectReadme({
     ...(enableHealth ? ["gd-metapro health run", "gd-metapro health gate"] : []),
     ...(enableTesting ? ["gd-metapro test analyze", "gd-metapro test run --changed"] : []),
     ...(enableMemory ? ["gd-metapro memory index", 'gd-metapro memory search "project decisions"'] : []),
+    ...(enableTasks ? ["gd-metapro flow list", 'gd-metapro flow init --title "..."'] : []),
   ];
 
   return `# Project Metaproject
@@ -464,7 +873,7 @@ Purpose:
 
 ## post-update.d
 
-Executable files in \`post-update.d/\` run after \`gd-metapro update\`.
+Executable files in \`post-update.d/\` run only when \`gd-metapro update --hooks\` is requested.
 
 Rules:
 
@@ -713,6 +1122,9 @@ export function renderGdgraphManifest(): string {
 
 Builds code graph, symbol graph, dependency map, and affected context.
 
+Current MVP builds a file dependency graph plus imported asset nodes. Generated
+frontend/static outputs are skipped by default.
+
 ## Commands
 
 - \`gd-metapro gdgraph build\`
@@ -731,6 +1143,12 @@ Builds code graph, symbol graph, dependency map, and affected context.
 ## Skills
 
 - \`skills/gdgraph/\`
+
+## Frontend Defaults
+
+- skips \`storybook-static\`, \`public\`, \`.docusaurus\`, \`.next\`, \`out\`, \`dist\`, \`build\`, \`coverage\`, and \`generated\`;
+- resolves imported CSS, JSON, SVG, handlebars/raw templates, images and fonts as asset nodes;
+- reports source files, asset nodes, import resolution, skipped directories, top modules, and unresolved imports by type.
 `;
 }
 
@@ -749,7 +1167,8 @@ Files:
 Responsibilities:
 
 - build file dependency graph;
-- build TypeScript/JavaScript symbol graph;
+- resolve local imported assets as graph asset nodes;
+- skip generated/static frontend output by default;
 - write graph storage to \`.metaproject/data/gdgraph/storage\`;
 - write curated artifacts to \`.metaproject/data/gdgraph/artifacts\`;
 - expose service functions for future CLI and MCP commands.

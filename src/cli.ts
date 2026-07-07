@@ -8,6 +8,7 @@ import { skillVerifySkillCommand, skillsCommand } from "./commands/skills";
 import { healthCommand } from "./commands/health";
 import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
+import { flowCommand } from "./commands/flow";
 import { statusCommand } from "./commands/status";
 import { updateCommand } from "./commands/update";
 import packageJson from "../package.json" with { type: "json" };
@@ -39,7 +40,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "update") {
-    await updateCommand();
+    await updateCommand(args.slice(1));
     return;
   }
 
@@ -83,6 +84,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "flow") {
+    await flowCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -94,7 +100,7 @@ function printHelp(): void {
 Usage:
   gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   gd-metapro status
-  gd-metapro update
+  gd-metapro update [--skip-runtime] [--hooks]
   gd-metapro gdgraph build
   gd-metapro gdgraph query <cycles|orphans>
   gd-metapro gdgraph affected <file>
@@ -124,12 +130,16 @@ Usage:
   gd-metapro memory search "<query>" [--status accepted]
   gd-metapro memory index
   gd-metapro memory ingest --from-review <path>
+  gd-metapro flow init (--issue <url> | --title "<t>")
+  gd-metapro flow list
+  gd-metapro flow status <id>
+  gd-metapro flow complete <id> [--comment]
   gd-metapro --version
 
 Commands:
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status
-  update    Update installed runtime and run project hooks
+  update    Refresh managed service files without touching data artifacts
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
   wiki      Manage the local project knowledge base
@@ -137,6 +147,7 @@ Commands:
   health    Aggregate code quality signals and run the quality gate
   test      Analyze testing context and normalize test reports
   memory    Store and search long-term project memory
+  flow      Agent-first flow lifecycle (Task Manager)
 `);
 }
 

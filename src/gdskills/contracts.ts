@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -104,7 +105,24 @@ export async function loadSchema(name: ContractName): Promise<JsonSchema> {
 }
 
 function contractPath(fileName: string): string {
-  return fileURLToPath(new URL(`./contracts/${fileName}`, import.meta.url));
+  const directPath = fileURLToPath(new URL(`./contracts/${fileName}`, import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  const packagedSourcePath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "src",
+    "gdskills",
+    "contracts",
+    fileName,
+  );
+  if (existsSync(packagedSourcePath)) {
+    return packagedSourcePath;
+  }
+
+  return directPath;
 }
 
 async function validateValue(

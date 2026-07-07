@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-07-07T07:34:37.888Z
+generatedAt: 2026-07-07T08:06:21.377Z
 
 ## Frameworks
 
@@ -17,6 +17,11 @@ generatedAt: 2026-07-07T07:34:37.888Z
 
 ## Test Files
 
+- src/commands/update.test.ts
+- src/flow/machine.test.ts
+- src/flow/service.test.ts
+- src/flow/tracker/github.test.ts
+- src/gdgraph/build.test.ts
 - src/health/gate.test.ts
 - src/health/history.test.ts
 - src/health/metrics/complexity-findings.test.ts

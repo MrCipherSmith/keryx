@@ -16,6 +16,7 @@ deterministic quality gate report.
 - `gd-metapro health sources`
 - `gd-metapro health explain <file-or-module>`
 - `gd-metapro health baseline update [--scope ...]`
+- `gd-metapro health trend [--scope <scope-key>] [--limit <n>]`
 
 ## Config
 

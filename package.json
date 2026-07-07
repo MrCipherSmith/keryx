@@ -17,6 +17,8 @@
   },
   "files": [
     "dist",
+    "src/gdgraph",
+    "src/gdskills/contracts",
     "README.md",
     "package.json"
   ],

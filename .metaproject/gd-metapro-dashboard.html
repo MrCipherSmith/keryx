@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metaproject Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #d9dee8;
+      --soft: #eef2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    header {
+      padding: 32px 40px 22px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+    main { padding: 28px 40px 44px; }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0; color: var(--muted); }
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    .meta-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .meta-actions a,
+    .link-grid a {
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 7px 10px;
+      border-radius: 6px;
+    }
+    .meta-actions a:hover,
+    .link-grid a:hover { border-color: #94a3b8; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .stat {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .section {
+      margin-top: 28px;
+    }
+    .modules {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+    }
+    .module-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 250px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .module-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .module-name {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .module-role {
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .commands {
+      display: grid;
+      gap: 6px;
+      margin-top: auto;
+    }
+    code {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 6px;
+      padding: 7px 8px;
+    }
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .step {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 110px;
+    }
+    .step b { display: block; margin-bottom: 6px; }
+    .disabled {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .disabled span {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+    }
+    @media (max-width: 900px) {
+      header, main { padding-left: 18px; padding-right: 18px; }
+      .topline { display: block; }
+      .meta-actions { justify-content: flex-start; margin-top: 16px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .workflow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topline">
+      <div>
+        <h1>Metaproject Dashboard</h1>
+        <p>Human-readable overview of agent context, project modules, generated artifacts, and CLI entrypoints.</p>
+      </div>
+      <nav class="meta-actions" aria-label="Primary links">
+        <a href="index.md">Agent index</a>
+        <a href="README.md">README</a>
+        <a href="metaproject.json">Manifest</a>
+        <a href="skills/catalog.md">Skills catalog</a>
+      </nav>
+    </div>
+    <section class="stats" aria-label="Metaproject stats">
+      <div class="stat"><strong>6</strong><span>enabled modules</span></div>
+      <div class="stat"><strong>yes</strong><span>local skills catalog</span></div>
+      <div class="stat"><strong>yes</strong><span>graph navigation</span></div>
+      <div class="stat"><strong>yes</strong><span>quality signals</span></div>
+    </section>
+  </header>
+  <main>
+    <section class="section">
+      <h2>Enabled Modules</h2>
+      <div class="modules">
+
+        <article class="module-card" style="--accent: #2563eb">
+          <div class="module-head">
+            <span class="module-name">gdgraph</span>
+            <span class="module-role">Project structure</span>
+          </div>
+          <p>File dependency graph, affected context, cycles, orphans, and module map.</p>
+          <div class="link-grid">
+            <a href="modules/gdgraph.md">Manifest</a><a href="data/gdgraph/artifacts/summary.md">Summary</a><a href="data/gdgraph/artifacts/module-map.json">Module map</a><a href="skills/gdgraph/SKILL.md">Skill</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro gdgraph build</code><code>gd-metapro gdgraph affected &lt;file&gt;</code><code>gd-metapro gdgraph query cycles</code>
+          </div>
+        </article>
+
+        <article class="module-card" style="--accent: #0891b2">
+          <div class="module-head">
+            <span class="module-name">gdctx</span>
+            <span class="module-role">Compact context</span>
+          </div>
+          <p>Token-aware wrappers for search, reads, diffs, and command output.</p>
+          <div class="link-grid">
+            <a href="modules/gdctx.md">Manifest</a><a href="data/gdctx/artifacts/latest.md">Latest artifact</a><a href="gdctx.config.json">Config</a><a href="skills/gdctx/SKILL.md">Skill</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro ctx diff</code><code>gd-metapro ctx rg &quot;pattern&quot;</code><code>gd-metapro ctx read &lt;file&gt;</code>
+          </div>
+        </article>
+
+        <article class="module-card" style="--accent: #db2777">
+          <div class="module-head">
+            <span class="module-name">gdskills</span>
+            <span class="module-role">Agent skills</span>
+          </div>
+          <p>Bundled working skills plus project-skill creation, routing, verification, learning, export, and sync.</p>
+          <div class="link-grid">
+            <a href="modules/gdskills.md">Manifest</a><a href="skills/catalog.md">Catalog</a><a href="skills/gdskills/">Bundled skills</a><a href="data/gdskills/reports/">Reports</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro skills status</code><code>gd-metapro skills route &lt;target&gt;</code><code>gd-metapro skills verify --all</code>
+          </div>
+        </article>
+
+        <article class="module-card" style="--accent: #16a34a">
+          <div class="module-head">
+            <span class="module-name">health</span>
+            <span class="module-role">Quality signal</span>
+          </div>
+          <p>Aggregated code health from TypeScript, tests, audit, coverage, complexity, and optional external tools.</p>
+          <div class="link-grid">
+            <a href="modules/health.md">Manifest</a><a href="data/health/artifacts/latest.md">Latest report</a><a href="health.config.json">Config</a><a href="skills/health/SKILL.md">Skill</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro health run --changed</code><code>gd-metapro health status</code><code>gd-metapro health explain &lt;file&gt;</code>
+          </div>
+        </article>
+
+        <article class="module-card" style="--accent: #ea580c">
+          <div class="module-head">
+            <span class="module-name">testing</span>
+            <span class="module-role">Test intelligence</span>
+          </div>
+          <p>Detected test stack, conventions, related-test selection, normalized reports, and strict gates.</p>
+          <div class="link-grid">
+            <a href="modules/testing.md">Manifest</a><a href="data/testing/context.md">Context</a><a href="data/testing/recommendations.md">Recommendations</a><a href="data/testing/artifacts/latest.md">Latest report</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro test analyze</code><code>gd-metapro test run --changed</code><code>gd-metapro test related &lt;file&gt;</code>
+          </div>
+        </article>
+
+        <article class="module-card" style="--accent: #475569">
+          <div class="module-head">
+            <span class="module-name">memory</span>
+            <span class="module-role">Long-term memory</span>
+          </div>
+          <p>Lessons learned, decisions, constraints, known mistakes, historical context, and reusable patterns.</p>
+          <div class="link-grid">
+            <a href="modules/memory.md">Manifest</a><a href="memory/index.md">Memory index</a><a href="memory.config.json">Config</a><a href="skills/memory/SKILL.md">Skill</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro memory search &quot;topic&quot;</code><code>gd-metapro memory new decision</code><code>gd-metapro memory check</code>
+          </div>
+        </article>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Agent Workflow</h2>
+      <div class="workflow">
+        <div class="step"><b>1. Route</b><p>Start from index.md and select the module or skill that owns the question.</p></div>
+        <div class="step"><b>2. Navigate</b><p>Use gdgraph for related files, affected context, cycles, and module boundaries.</p></div>
+        <div class="step"><b>3. Compress</b><p>Use gdctx before loading large search output, diffs, command logs, or long files.</p></div>
+        <div class="step"><b>4. Verify</b><p>Read testing and health reports before claiming quality or gate status.</p></div>
+        <div class="step"><b>5. Learn</b><p>Write decisions and lessons to wiki, memory, and project skills when patterns change.</p></div>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Disabled Modules</h2>
+      <div class="disabled"><span>gdwiki</span></div>
+    </section>
+  </main>
+</body>
+</html>

@@ -72,6 +72,7 @@ Project-local install stores the CLI runtime under:
 ```text
 .metaproject/
   index.md
+  gd-metapro-dashboard.html
   README.md
   metaproject.json
   core/
@@ -90,6 +91,7 @@ It also connects repository-level agent entrypoints:
 - appends a reference from each root entrypoint to `.metaproject/index.md`;
 - creates `.metaproject/skills/project-rules/`;
 - lists imported rules and skills in `.metaproject/index.md`.
+- creates `.metaproject/gd-metapro-dashboard.html`, a static human-readable overview of enabled modules, artifact links, and common commands.
 
 If `gdgraph` is enabled, it also creates:
 
@@ -176,6 +178,7 @@ gd-metapro init --no-memory
 gd-metapro init --no-gdgraph-hook
 gd-metapro status
 gd-metapro update
+gd-metapro update --hooks
 gd-metapro gdgraph build
 gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
@@ -230,6 +233,12 @@ Generated output:
 .metaproject/data/gdgraph/artifacts/module-map.json
 ```
 
+Frontend defaults:
+
+- skips generated/static output such as `storybook-static/**`, `public/**`, `.docusaurus/**`, `dist/**`, `build/**`, `coverage/**`, `.next/**`, and `out/**`;
+- resolves imported assets such as CSS, SVG, JSON, handlebars/raw templates and image/font files as `asset` graph nodes instead of counting them as unresolved imports;
+- summary reports source files, asset nodes, import resolution percent, skipped directories, top modules, and unresolved imports by type.
+
 Run built-in queries:
 
 ```bash
@@ -255,10 +264,18 @@ The hook checks files changed in the last commit and runs `gd-metapro gdgraph bu
 
 ## Update
 
-Update the managed runtime and run executable project hooks:
+Refresh the managed runtime and local service layer:
 
 ```bash
 gd-metapro update
+```
+
+`update` refreshes managed scripts, skills, module manifests, dashboard and hook definitions. It does not run module analyzers and does not write `.metaproject/data/**` artifacts by default.
+
+Run executable project hooks explicitly when a module needs a post-update refresh:
+
+```bash
+gd-metapro update --hooks
 ```
 
 Project hooks live in:

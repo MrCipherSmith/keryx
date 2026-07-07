@@ -1,6 +1,6 @@
 # gdgraph: спецификация модуля анализа графа кода
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## 1. Назначение
 
@@ -140,6 +140,8 @@ MVP считается успешным, если `gdgraph` умеет:
 - инициализироваться в проекте через глобальный CLI;
 - сканировать TS/JS проект;
 - строить dependency graph файлов;
+- исключать generated/static output по умолчанию для больших frontend-проектов;
+- резолвить локальные asset imports как asset nodes, а не как ошибки unresolved;
 - извлекать основные символы;
 - сохранять граф в `.metaproject/data/gdgraph`;
 - генерировать короткий summary проекта;
@@ -415,9 +417,19 @@ export interface GdGraphService {
     "dist/**",
     "build/**",
     "coverage/**",
+    ".next/**",
+    "out/**",
+    "storybook-static/**",
+    "public/**",
+    "**/.docusaurus/**",
+    "generated/**",
     "**/*.test.ts",
     "**/*.spec.ts"
   ],
+  "assets": {
+    "resolveImportedAssets": true,
+    "extensions": [".css", ".scss", ".json", ".svg", ".hbs", ".html", ".glsl", ".png", ".jpg", ".webp", ".woff2"]
+  },
   "modules": [
     {
       "name": "pipelines",
@@ -434,6 +446,15 @@ export interface GdGraphService {
   }
 }
 ```
+
+MVP runtime already applies frontend-safe defaults even when `gdgraph.config.json`
+is absent:
+
+- skip generated/static directories: `storybook-static`, `public`, `.docusaurus`,
+  `.next`, `out`, `dist`, `build`, `coverage`, `generated`;
+- treat local relative asset imports with known extensions and Vite-style suffixes
+  such as `?raw` and `?react` as `asset` edges;
+- keep unresolved counts focused on actual missing relative code imports.
 
 ## 12. Brainstorm: варианты реализации
 

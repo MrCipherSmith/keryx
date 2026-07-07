@@ -55,7 +55,7 @@ Purpose:
 
 ## post-update.d
 
-Executable files in `post-update.d/` run after `gd-metapro update`.
+Executable files in `post-update.d/` run only when `gd-metapro update --hooks` is requested.
 
 Rules:
 

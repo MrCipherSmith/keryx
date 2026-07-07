@@ -5,6 +5,7 @@ Use this skill before planning, implementing, or reviewing work in this reposito
 ## Sources
 
 - `AGENTS.md`
+- `agents.md`
 
 ## Workflow
 

@@ -1,6 +1,6 @@
 # spec-orchestrator: спецификация Metaproject CLI и инициализации
 
-Version: 0.8.0
+Version: 0.8.1
 
 ## 1. Назначение
 
@@ -310,6 +310,7 @@ N. No - run health manually with gd-metapro health run or through orchestrators
 ```text
 .metaproject/
   index.md
+  gd-metapro-dashboard.html
   README.md
   metaproject.json
   core/
@@ -606,6 +607,8 @@ N. No - run health manually with gd-metapro health run or through orchestrators
 
 This `.metaproject` folder contains agent-readable context, tools, generated data, and module manifests for this codebase.
 
+Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
+
 ## Enabled Modules
 
 | Module | Purpose | Entry |
@@ -815,7 +818,10 @@ Lifecycle:
 Команда `gd-metapro update` должна:
 
 - обновить managed runtime, если он установлен глобально или project-local;
-- выполнить executable hooks из `.metaproject/hooks/post-update.d/`;
+- обновить managed service layer без повторного `init`: core scripts, skills, module manifests, dashboard, README/index references и managed hook blocks;
+- не выполнять module analyzers/builders по умолчанию;
+- не писать `.metaproject/data/**` artifacts по умолчанию;
+- выполнить executable hooks из `.metaproject/hooks/post-update.d/` только при явном флаге `--hooks`;
 - не перезаписывать user-authored файлы без явного подтверждения.
 
 ## 14. Generated vs user-authored files

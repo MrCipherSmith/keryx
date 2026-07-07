@@ -1,4 +1,5 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
@@ -18,9 +19,14 @@ export type InstallGdskillsResult = {
   manifestPath: string;
 };
 
+export type InstallGdskillsOptions = {
+  createDataDirs?: boolean;
+};
+
 export async function installGdskills(
   metaprojectRoot: string,
   profile: GdskillsProfile,
+  options: InstallGdskillsOptions = {},
 ): Promise<InstallGdskillsResult> {
   const skills = getBundledSkillsForProfile(profile);
   const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
@@ -31,12 +37,14 @@ export async function installGdskills(
 
   await Promise.all([
     mkdir(skillsRoot, { recursive: true }),
-    mkdir(path.join(dataRoot, "artifacts"), { recursive: true }),
-    mkdir(path.join(dataRoot, "reports"), { recursive: true }),
-    mkdir(path.join(dataRoot, "proposals"), { recursive: true }),
     mkdir(contractsRoot, { recursive: true }),
     mkdir(projectSkillsRoot, { recursive: true }),
     mkdir(path.join(metaprojectRoot, "modules"), { recursive: true }),
+    ...(options.createDataDirs === false ? [] : [
+      mkdir(path.join(dataRoot, "artifacts"), { recursive: true }),
+      mkdir(path.join(dataRoot, "reports"), { recursive: true }),
+      mkdir(path.join(dataRoot, "proposals"), { recursive: true }),
+    ]),
   ]);
 
   for (const skillEntry of skills) {
@@ -92,9 +100,30 @@ async function installContracts(contractsRoot: string): Promise<void> {
   await Promise.all(
     contractFiles.map((fileName) =>
       copyFile(
-        fileURLToPath(new URL(`./contracts/${fileName}`, import.meta.url)),
+        contractSourcePath(fileName),
         path.join(contractsRoot, fileName),
       ),
     ),
   );
+}
+
+function contractSourcePath(fileName: string): string {
+  const directPath = fileURLToPath(new URL(`./contracts/${fileName}`, import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  const packagedSourcePath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "src",
+    "gdskills",
+    "contracts",
+    fileName,
+  );
+  if (existsSync(packagedSourcePath)) {
+    return packagedSourcePath;
+  }
+
+  return directPath;
 }

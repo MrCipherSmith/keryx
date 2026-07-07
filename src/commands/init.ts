@@ -1,5 +1,4 @@
 import {
-  copyFile,
   chmod,
   mkdir,
   readdir,
@@ -7,6 +6,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
@@ -40,6 +40,14 @@ import {
   renderMemoryManifest,
   renderMemorySkillReadme,
 } from "../memory/templates";
+import {
+  renderFlowCompleteSkill,
+  renderFlowInitSkill,
+  renderFlowManageSkill,
+  renderFlowSkillRouter,
+  renderFlowsReadme,
+  renderTasksManifest,
+} from "../flow/templates";
 import { analyzeTestingProject } from "../testing/service";
 import {
   renderTestingConfig,
@@ -68,6 +76,7 @@ import {
   renderImportedAgentRules,
   renderMetaprojectCoreReadme,
   renderMetaprojectGitignoreBlock,
+  renderMetaprojectDashboardHtml,
   renderIndexMarkdown,
   renderMetaprojectReadme,
   renderProjectRulesReadme,
@@ -85,6 +94,7 @@ type InitOptions = {
   noHealth: boolean;
   noTesting: boolean;
   noMemory: boolean;
+  noTasks: boolean;
   noGdgraphHook: boolean;
   noGdskillsHook: boolean;
   noHealthHook: boolean;
@@ -162,6 +172,7 @@ export async function initCommand(args: string[]): Promise<void> {
   let enableHealth = true;
   let enableTesting = true;
   let enableMemory = true;
+  let enableTasks = true;
   let enableGdgraphHook = false;
   let enableGdskillsHook = false;
   let enableHealthHook = false;
@@ -230,6 +241,15 @@ export async function initCommand(args: string[]): Promise<void> {
   } else if (!options.yes) {
     enableMemory = await confirm(
       "Enable Documentation Memory (lessons, decisions, constraints, known mistakes)? Recommended",
+      true,
+    );
+  }
+
+  if (options.noTasks) {
+    enableTasks = false;
+  } else if (!options.yes) {
+    enableTasks = await confirm(
+      "Enable Task Manager (agent-first flow lifecycle with frozen acceptance criteria)? Recommended",
       true,
     );
   }
@@ -346,6 +366,10 @@ export async function initCommand(args: string[]): Promise<void> {
     await createMemoryStructure(metaprojectRoot);
   }
 
+  if (enableTasks) {
+    await createTasksStructure(metaprojectRoot);
+  }
+
   const manifest = buildManifest({
     projectName: path.basename(projectRoot),
     enableGdgraph,
@@ -356,6 +380,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableHealth,
     enableTesting,
     enableMemory,
+    enableTasks,
     enableGdgraphHook,
     enableGdskillsHook,
     enableHealthHook,
@@ -380,6 +405,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableHealth,
       enableTesting,
       enableMemory,
+      enableTasks,
     }),
   );
   await writeTextIfMissing(
@@ -409,7 +435,21 @@ export async function initCommand(args: string[]): Promise<void> {
       enableHealth,
       enableTesting,
       enableMemory,
+      enableTasks,
       ruleSources: agentRuleSources,
+    }),
+  );
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, "gd-metapro-dashboard.html"),
+    renderMetaprojectDashboardHtml({
+      enableGdgraph,
+      enableGdctx,
+      enableGdwiki,
+      enableGdskills,
+      enableHealth,
+      enableTesting,
+      enableMemory,
+      enableTasks,
     }),
   );
 
@@ -545,6 +585,33 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (enableTasks) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "flows", "README.md"),
+      renderFlowsReadme(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "tasks.md"),
+      renderTasksManifest(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "SKILL.md"),
+      renderFlowSkillRouter(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "init.md"),
+      renderFlowInitSkill(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "manage.md"),
+      renderFlowManageSkill(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "complete.md"),
+      renderFlowCompleteSkill(),
+    );
+  }
+
   console.log(
     alreadyExists
       ? "Updated .metaproject structure."
@@ -557,6 +624,7 @@ export async function initCommand(args: string[]): Promise<void> {
   console.log(`health: ${enableHealth ? "enabled" : "disabled"}`);
   console.log(`testing: ${enableTesting ? "enabled" : "disabled"}`);
   console.log(`memory: ${enableMemory ? "enabled" : "disabled"}`);
+  console.log(`tasks: ${enableTasks ? "enabled" : "disabled"}`);
   if (enableGdgraph) {
     console.log(`gdgraph post-commit hook: ${enableGdgraphHook ? "enabled" : "disabled"}`);
   }
@@ -584,6 +652,7 @@ function parseInitArgs(args: string[]): InitOptions {
     noHealth: args.includes("--no-health"),
     noTesting: args.includes("--no-testing"),
     noMemory: args.includes("--no-memory"),
+    noTasks: args.includes("--no-tasks"),
     noGdgraphHook: args.includes("--no-gdgraph-hook"),
     noGdskillsHook: args.includes("--no-gdskills-hook"),
     noHealthHook: args.includes("--no-health-hook"),
@@ -596,7 +665,7 @@ function printInitHelp(): void {
   console.log(`gd-metapro init
 
 Usage:
-  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
+  gd-metapro init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-tasks] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
 
 Options:
   --yes, -y             Use recommended defaults.
@@ -608,6 +677,7 @@ Options:
   --no-health           Do not enable Code Health.
   --no-testing          Do not enable Testing Module.
   --no-memory           Do not enable Documentation Memory.
+  --no-tasks            Do not enable Task Manager.
   --no-gdgraph-hook     Do not install the gdgraph post-commit hook.
   --no-gdskills-hook    Do not install the gdskills post-commit hook.
   --no-health-hook      Do not install the health post-commit hook.
@@ -701,6 +771,16 @@ async function createMemoryStructure(root: string): Promise<void> {
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
 }
 
+async function createTasksStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "flows"),
+    path.join(root, "skills", "flow"),
+    path.join(root, "data", "tasks", "artifacts"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
 async function createTestingStructure(root: string, enableGdwiki: boolean): Promise<void> {
   const dirs = [
     path.join(root, "core", "testing"),
@@ -718,19 +798,19 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
   const gdgraphCoreRoot = path.join(root, "core", "gdgraph");
   await mkdir(gdgraphCoreRoot, { recursive: true });
 
-  await copyFileIfMissing(
+  await copyFileIfChanged(
     runtimeSourcePath("../gdgraph/build.ts"),
     path.join(gdgraphCoreRoot, "build.ts"),
   );
-  await copyFileIfMissing(
+  await copyFileIfChanged(
     runtimeSourcePath("../gdgraph/query.ts"),
     path.join(gdgraphCoreRoot, "query.ts"),
   );
-  await copyFileIfMissing(
+  await copyFileIfChanged(
     runtimeSourcePath("../gdgraph/types.ts"),
     path.join(gdgraphCoreRoot, "types.ts"),
   );
-  await writeTextIfMissing(
+  await writeTextIfChanged(
     path.join(gdgraphCoreRoot, "cli.ts"),
     renderGdgraphCoreCli(),
   );
@@ -812,7 +892,24 @@ Use this skill when a task requires code graph context, dependency impact analys
 }
 
 function runtimeSourcePath(relativePath: string): string {
-  return fileURLToPath(new URL(relativePath, import.meta.url));
+  const directPath = fileURLToPath(new URL(relativePath, import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  if (relativePath.startsWith("../")) {
+    const packagedSourcePath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "src",
+      relativePath.slice(3),
+    );
+    if (existsSync(packagedSourcePath)) {
+      return packagedSourcePath;
+    }
+  }
+
+  return directPath;
 }
 
 async function readExistingManifest(
@@ -840,6 +937,7 @@ function buildManifest({
   enableHealth,
   enableTesting,
   enableMemory,
+  enableTasks,
   enableGdgraphHook,
   enableGdskillsHook,
   enableHealthHook,
@@ -857,6 +955,7 @@ function buildManifest({
   enableHealth: boolean;
   enableTesting: boolean;
   enableMemory: boolean;
+  enableTasks: boolean;
   enableGdgraphHook: boolean;
   enableGdskillsHook: boolean;
   enableHealthHook: boolean;
@@ -957,7 +1056,17 @@ function buildManifest({
         : {
             enabled: false,
           },
-      tasks: { enabled: false },
+      tasks: enableTasks
+        ? {
+            enabled: true,
+            core: ".metaproject/flows",
+            data: ".metaproject/data/tasks",
+            manifest: ".metaproject/modules/tasks.md",
+            commands: ["init", "list", "status", "freeze", "start", "task", "ac", "implemented", "complete", "block", "unblock", "check"],
+          }
+        : {
+            enabled: false,
+          },
       health: enableHealth
         ? {
             enabled: true,
@@ -1065,6 +1174,8 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     "For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.";
   const memoryPolicy =
     "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.";
+  const flowPolicy =
+    "For starting, tracking, or finishing a managed piece of work (a flow) - e.g. when the user asks to create a flow from a problem description or an issue link, asks for flow status, or asks to finish a story - use the Metaproject flow skill; all flow state changes go through the gd-metapro flow CLI.";
 
   if (content.includes(marker)) {
     let next = content;
@@ -1080,6 +1191,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
     next = collapseDuplicatePolicy(next, gdskillsPolicy);
     next = collapseDuplicatePolicy(next, testingPolicy);
     next = collapseDuplicatePolicy(next, memoryPolicy);
+    next = collapseDuplicatePolicy(next, flowPolicy);
 
     const missingPolicies = [
       ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
@@ -1088,6 +1200,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
       ...(next.includes(gdskillsPolicy) ? [] : [gdskillsPolicy]),
       ...(next.includes(testingPolicy) ? [] : [testingPolicy]),
       ...(next.includes(memoryPolicy) ? [] : [memoryPolicy]),
+      ...(next.includes(flowPolicy) ? [] : [flowPolicy]),
     ];
     if (missingPolicies.length > 0) {
       const suffix = next.endsWith("\n") ? "" : "\n";
@@ -1104,7 +1217,7 @@ async function ensureMetaprojectReference(filePath: string): Promise<void> {
   const suffix = content.endsWith("\n") ? "" : "\n";
   await writeFile(
     filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n\n${gdskillsPolicy}\n\n${testingPolicy}\n\n${memoryPolicy}\n`,
+    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n\n${gdskillsPolicy}\n\n${testingPolicy}\n\n${memoryPolicy}\n\n${flowPolicy}\n`,
     "utf8",
   );
 }
@@ -1192,9 +1305,10 @@ async function writeTextIfMissing(
   await writeFile(filePath, content, "utf8");
 }
 
-async function copyFileIfMissing(from: string, to: string): Promise<void> {
-  if (await pathExists(to)) {
+async function copyFileIfChanged(from: string, to: string): Promise<void> {
+  const next = await readFile(from, "utf8");
+  if ((await pathExists(to)) && (await readFile(to, "utf8")) === next) {
     return;
   }
-  await copyFile(from, to);
+  await writeFile(to, next, "utf8");
 }

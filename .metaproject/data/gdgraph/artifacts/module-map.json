@@ -4,6 +4,7 @@
   ],
   "commands": [
     "src/commands/ctx.ts",
+    "src/commands/flow.ts",
     "src/commands/gdgraph.ts",
     "src/commands/health.ts",
     "src/commands/init.ts",
@@ -11,10 +12,24 @@
     "src/commands/skills.ts",
     "src/commands/status.ts",
     "src/commands/test.ts",
+    "src/commands/update.test.ts",
     "src/commands/update.ts",
     "src/commands/wiki.ts"
   ],
+  "flow": [
+    "src/flow/context.ts",
+    "src/flow/machine.test.ts",
+    "src/flow/machine.ts",
+    "src/flow/service.test.ts",
+    "src/flow/service.ts",
+    "src/flow/store.ts",
+    "src/flow/templates.ts",
+    "src/flow/tracker/github.test.ts",
+    "src/flow/tracker/github.ts",
+    "src/flow/types.ts"
+  ],
   "gdgraph": [
+    "src/gdgraph/build.test.ts",
     "src/gdgraph/build.ts",
     "src/gdgraph/query.ts",
     "src/gdgraph/types.ts"

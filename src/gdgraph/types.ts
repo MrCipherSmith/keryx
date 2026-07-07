@@ -1,15 +1,15 @@
 export type GraphNode = {
   id: string;
-  kind: "file";
+  kind: "file" | "asset";
   path: string;
-  language: "typescript" | "javascript";
+  language: "typescript" | "javascript" | "asset";
 };
 
 export type GraphEdge = {
   id: string;
   from: string;
   to: string;
-  kind: "imports" | "unresolved";
+  kind: "imports" | "asset" | "unresolved";
   specifier: string;
 };
 

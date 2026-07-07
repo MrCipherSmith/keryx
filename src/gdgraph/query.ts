@@ -11,10 +11,10 @@ export async function loadGraph(projectRoot: string): Promise<GraphData> {
 
 export function getOrphans(graph: GraphData): string[] {
   const inbound = new Set(
-    graph.edges.filter((edge) => edge.kind === "imports").map((edge) => edge.to),
+    graph.edges.filter((edge) => edge.kind !== "unresolved").map((edge) => edge.to),
   );
   const outbound = new Set(
-    graph.edges.filter((edge) => edge.kind === "imports").map((edge) => edge.from),
+    graph.edges.filter((edge) => edge.kind !== "unresolved").map((edge) => edge.from),
   );
   return graph.nodes
     .map((node) => node.path)
@@ -35,11 +35,11 @@ export function getAffected(
   return {
     target: resolvedTarget,
     dependencies: graph.edges
-      .filter((edge) => edge.kind === "imports" && edge.from === resolvedTarget)
+      .filter((edge) => edge.kind !== "unresolved" && edge.from === resolvedTarget)
       .map((edge) => edge.to)
       .sort(),
     dependents: graph.edges
-      .filter((edge) => edge.kind === "imports" && edge.to === resolvedTarget)
+      .filter((edge) => edge.kind !== "unresolved" && edge.to === resolvedTarget)
       .map((edge) => edge.from)
       .sort(),
   };
