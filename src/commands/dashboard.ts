@@ -65,6 +65,7 @@ function printHelp(): void {
 Usage:
   gd-metapro dashboard build
   gd-metapro dashboard open
+  gd-metapro dash
 
 Commands:
   build   Rebuild .metaproject/gd-metapro-dashboard.html from existing service/data files

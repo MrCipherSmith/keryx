@@ -17,7 +17,7 @@ import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
 
@@ -48,6 +48,11 @@ async function main(): Promise<void> {
 
   if (command === "dashboard") {
     await dashboardCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "dash") {
+    await dashboardCommand(args.length > 1 ? args.slice(1) : ["open"]);
     return;
   }
 
@@ -115,6 +120,7 @@ Usage:
   gd-metapro update [--skip-runtime] [--hooks]
   gd-metapro dashboard build
   gd-metapro dashboard open
+  gd-metapro dash
   gd-metapro rules sync
   gd-metapro gdgraph build
   gd-metapro gdgraph query <cycles|orphans>
@@ -156,6 +162,7 @@ Commands:
   status    Show local Metaproject status
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
+  dash      Rebuild and open .metaproject/gd-metapro-dashboard.html
   rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
@@ -168,7 +175,9 @@ Commands:
 `);
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
