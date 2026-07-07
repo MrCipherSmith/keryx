@@ -1,7 +1,7 @@
 # Documentation Memory: technical specification
 
-Version: 0.4.0
-Status: Phase 1 + reflect/learn-loop (Phase 2, partial) implemented; see section 21. Retrieval is keyword+metadata (embedding-free); embeddings are Phase 3.
+Version: 0.5.0
+Status: Phase 1 + Phase 2 (reflect, ingest reconcile, learn-loop) implemented; see section 21. Only skill-verify-skill memory usage remains. Embeddings are Phase 3.
 
 ## 1. Purpose
 
@@ -224,8 +224,9 @@ Behavior (propose-as-draft, D5):
 4. write entries as `draft` (never `accepted` unless `ingest.allowAutoAccept`);
 5. print created paths and dedup/conflict warnings.
 
-A human reviews drafts and promotes them to `accepted`. Mem0-style automatic
-ADD/UPDATE/DELETE reconciliation is Phase 2.
+A human reviews drafts and promotes them to `accepted`. Near-duplicates of
+existing entries are reconciled (Phase 2): ingest appends a provenance note and
+bumps `Updated` instead of creating a twin.
 
 ## 12. Dedup and conflict
 
@@ -360,7 +361,7 @@ Ignored: `.metaproject/data/memory/index/**`, `.metaproject/data/memory/artifact
 
 - [x] `memory reflect` - deterministic tag-cluster consolidation into `pattern` drafts;
 - [x] `skills learn --from-memory` loop wired (gdskills consumes the versioned search JSON);
-- [ ] Mem0-style ingest reconciliation (ADD/UPDATE/supersede);
+- [x] Mem0-style ingest reconciliation (UPDATE: reconcile near-duplicates with a provenance note; supersede is future);
 - [ ] `skill-verify-skill` end-to-end memory usage.
 
 ### Phase 3 - semantic

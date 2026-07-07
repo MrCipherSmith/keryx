@@ -152,6 +152,7 @@ export type MemoryIngestInput = {
 };
 export type MemoryIngestResult = {
   created: string[];
+  reconciled: string[];
   skippedDuplicates: number;
   conflicts: ConflictHint[];
 };

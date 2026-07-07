@@ -128,9 +128,14 @@ async function runIngest(args: string[]): Promise<void> {
   }
 
   const result = await service.ingest({ cwd: process.cwd(), source, path });
-  console.log(`Ingested ${result.created.length} draft(s) from ${source}; skipped ${result.skippedDuplicates} duplicate(s).`);
+  console.log(
+    `Ingested ${result.created.length} draft(s) from ${source}; reconciled ${result.reconciled.length}; skipped ${result.skippedDuplicates} duplicate(s).`,
+  );
   for (const created of result.created) {
-    console.log(`- ${created}`);
+    console.log(`- created: ${created}`);
+  }
+  for (const updated of result.reconciled) {
+    console.log(`- reconciled: ${updated}`);
   }
   if (result.conflicts.length > 0) {
     console.log("");

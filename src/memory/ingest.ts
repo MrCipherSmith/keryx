@@ -45,11 +45,14 @@ export async function ingestMemory(
 
   const existing = await collectEntries(cwd);
   const created: string[] = [];
+  const reconciled: string[] = [];
   const conflicts: MemoryIngestResult["conflicts"] = [];
-  const createdCandidates: Candidate[] = [];
+  const createdTitles = new Set<string>();
   let skippedDuplicates = 0;
 
   const dir = path.join(memoryRoot(cwd), folder);
+  const link = path.relative(cwd, absolute);
+  const date = dateString(now);
 
   for (const text of candidates) {
     const title = toTitle(text);
@@ -61,16 +64,26 @@ export async function ingestMemory(
       scopes: { module: null, entity: null, files: [] },
     };
 
-    const dupes = [
-      ...findDuplicates(candidate, existing, config),
-      ...(createdCandidates.some(
-        (c) => c.title.toLowerCase() === title.toLowerCase(),
-      )
-        ? [{ path: "(this run)", title, titleSimilarity: 1, summaryJaccard: 1 }]
-        : []),
-    ];
-    if (dupes.length > 0) {
+    // Same title already created in this run -> skip (avoid twin drafts).
+    if (createdTitles.has(title.toLowerCase())) {
       skippedDuplicates += 1;
+      continue;
+    }
+
+    // Near-duplicate of an existing entry -> reconcile (Mem0-style UPDATE).
+    const dupes = findDuplicates(candidate, existing, config);
+    if (dupes.length > 0) {
+      const match = existing.find((e) => e.relativePath === dupes[0]?.path);
+      if (match) {
+        const changed = await reconcileEntry(match.absolutePath, source, link, date);
+        if (changed) {
+          reconciled.push(match.relativePath);
+        } else {
+          skippedDuplicates += 1;
+        }
+      } else {
+        skippedDuplicates += 1;
+      }
       continue;
     }
 
@@ -88,16 +101,41 @@ export async function ingestMemory(
         confidence,
         summary: text,
         source,
-        link: path.relative(cwd, absolute),
-        date: dateString(now),
+        link,
+        date,
       }),
       "utf8",
     );
     created.push(`${folder}/${filename}`);
-    createdCandidates.push(candidate);
+    createdTitles.add(title.toLowerCase());
   }
 
-  return { created, skippedDuplicates, conflicts };
+  return { created, reconciled, skippedDuplicates, conflicts };
+}
+
+// Mem0-style UPDATE: append a provenance reconciliation note to an existing
+// entry and bump its Updated date. Idempotent per (source, link, date).
+async function reconcileEntry(
+  absolutePath: string,
+  source: string,
+  link: string,
+  date: string,
+): Promise<boolean> {
+  const content = await readFile(absolutePath, "utf8");
+  const note = `- Reconciled: ${source} ${date}${link ? ` (${link})` : ""}`;
+  if (content.includes(note)) {
+    return false;
+  }
+
+  let next = content.replace(/^[-*]\s*Updated:.*$/m, `- Updated: ${date}\n${note}`);
+  if (next === content) {
+    next = content.replace(/(##\s+Provenance\s*\n)/, `$1\n${note}\n`);
+  }
+  if (next === content) {
+    next = `${content.trimEnd()}\n\n## Provenance\n\n${note}\n`;
+  }
+  await writeFile(absolutePath, next, "utf8");
+  return true;
 }
 
 function extractCandidates(content: string): string[] {
