@@ -31,8 +31,8 @@ fit together — something no single module analyst can see alone.
 ## Input Contract
 
 ```yaml
-project_map: "jobs/<job>/artifacts/project-map.md"
-module_analyses: "jobs/<job>/artifacts/analysis/*.md"  # read all
+project_map: ".metaproject/jobs/<job>/artifacts/project-map.md"
+module_analyses: ".metaproject/jobs/<job>/artifacts/analysis/*.md"  # read all
 JOB_DIR: "<job directory>"
 ```
 
@@ -42,7 +42,7 @@ JOB_DIR: "<job directory>"
 status: "DONE" | "DONE_WITH_CONCERNS"
 summary: "<3-5 sentences: architectural style, key patterns, integration topology>"
 concerns: ["<concern if any>"]
-artifact_path: "jobs/<job>/artifacts/architecture.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/architecture.md"
 ```
 
 ---

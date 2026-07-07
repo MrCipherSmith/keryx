@@ -55,7 +55,7 @@ next_phase_hints:
   has_api: true | false
   has_schemas: true | false
   has_tests: true | false
-artifact_path: "jobs/<job>/artifacts/project-map.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/project-map.md"
 ```
 
 ---

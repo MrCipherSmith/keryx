@@ -1,15 +1,16 @@
 # Task Manager: technical specification
 
-Version: 0.3.0
-Status: Phase 1 + natural-language discovery implemented (see sections 11 and 16). Notion/Jira adapters and flow board are Phase 2.
+Version: 0.3.1
+Status: Phase 1 + natural-language discovery + gdskills `flow-orchestrator` implemented (see sections 11 and 16). Notion/Jira adapters and flow board are Phase 2.
 
 ## 1. Purpose
 
 Task Manager - agent-first система управления работой. Единица работы - flow:
 стори от инициализации до завершения. CLI `gd-metapro flow` - детерминированная
 state machine, хранилище flow-пакетов и механические гейты. Скилы (flow-init,
-flow-manager, flow-complete) - когнитивный слой поверх CLI, встраиваемый в
-оркестраторы.
+flow-manager, flow-complete) - когнитивный слой поверх CLI. `flow-orchestrator`
+в `gdskills` связывает этот слой с существующими рабочими скилами без изменения
+обычных `job-orchestrator`/`task-implementer`.
 
 ## 2. Design decisions (frozen for v1)
 
@@ -193,6 +194,10 @@ v1: `github` через `gh` CLI. Notion/Jira - будущие адаптеры 
 
 - `skills/flow/SKILL.md` - router: когда какая роль; политика «имплементатор не
   трогает AC/статусы; все операции состояния - через CLI».
+- `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` - Task
+  Manager-aware оркестратор: создаёт/возобновляет flow, загружает flow-init,
+  делегирует context/test/implement/review/docs задачи существующим gdskills,
+  но оставляет все изменения состояния только в `gd-metapro flow`.
 - `init.md` (flow-init): запустить `flow init`; дособрать контекст (gdgraph/
   gdctx/memory/wiki); формализовать description.md; брейншторм подходов; при
   неясности - интервью пользователя (вопросы с вариантами); написать plan.md,
@@ -205,6 +210,11 @@ v1: `github` через `gh` CLI. Notion/Jira - будущие адаптеры 
   каждому критерию с проверкой; `flow complete`; при fail - решить
   мелкое/крупное (V9), запустить исправление; при pass с issue -
   `flow complete --comment`; без issue - спросить пользователя о тикете (V10).
+
+`flow-orchestrator` не заменяет обычные orchestration skills. Он выбирается
+только когда Task Manager включён и задача должна идти через flow lifecycle.
+Обычные `job-orchestrator` и `task-implementer` остаются независимыми, чтобы их
+можно было запускать в проектах без модуля `tasks`.
 
 ## 11a. Natural-language discovery
 

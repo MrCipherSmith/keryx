@@ -16,7 +16,7 @@ When you need to launch a sub-agent/skill and want to use a different model than
 Run to detect available models:
 
 ```bash
-~/goodai-base/scripts/detect-models.sh
+.metaproject/scripts/detect-models.sh
 ```
 
 ## Current Environment Models

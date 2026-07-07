@@ -13,6 +13,9 @@
       --muted: #64748b;
       --line: #d9dee8;
       --soft: #eef2f7;
+      --good: #15803d;
+      --warn: #b45309;
+      --bad: #b91c1c;
     }
     * { box-sizing: border-box; }
     body {
@@ -36,6 +39,11 @@
     h2 {
       margin: 0 0 14px;
       font-size: 16px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
       letter-spacing: 0;
     }
     p { margin: 0; color: var(--muted); }
@@ -82,6 +90,87 @@
     }
     .section {
       margin-top: 28px;
+    }
+    .admin-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-width: 0;
+    }
+    .panel + .panel { margin-top: 14px; }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .kpi {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .kpi strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 560px;
+      background: var(--panel);
+    }
+    th, td {
+      text-align: left;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 13px;
+    }
+    th {
+      color: var(--muted);
+      background: var(--soft);
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: 0; }
+    td a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 7px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .pill.good { color: var(--good); border-color: #86efac; background: #f0fdf4; }
+    .pill.warn { color: var(--warn); border-color: #facc15; background: #fefce8; }
+    .pill.bad { color: var(--bad); border-color: #fca5a5; background: #fef2f2; }
+    .empty {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfe;
     }
     .modules {
       display: grid;
@@ -169,6 +258,8 @@
       .topline { display: block; }
       .meta-actions { justify-content: flex-start; margin-top: 16px; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .admin-grid { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workflow { grid-template-columns: 1fr; }
     }
   </style>
@@ -177,24 +268,379 @@
   <header>
     <div class="topline">
       <div>
-        <h1>Metaproject Dashboard</h1>
-        <p>Human-readable overview of agent context, project modules, generated artifacts, and CLI entrypoints.</p>
+        <h1>Metaproject Admin</h1>
+        <p>Read-only project control surface for agent context, health, graph, testing, wiki, memory, and service files.</p>
       </div>
       <nav class="meta-actions" aria-label="Primary links">
-        <a href="index.md">Agent index</a>
-        <a href="README.md">README</a>
-        <a href="metaproject.json">Manifest</a>
-        <a href="skills/catalog.md">Skills catalog</a>
+        <a href="index.md">Agent index</a><a href="README.md">README</a><a href="metaproject.json">Manifest</a><a href="skills/catalog.md">Skills catalog</a>
       </nav>
     </div>
     <section class="stats" aria-label="Metaproject stats">
-      <div class="stat"><strong>6</strong><span>enabled modules</span></div>
-      <div class="stat"><strong>yes</strong><span>local skills catalog</span></div>
-      <div class="stat"><strong>yes</strong><span>graph navigation</span></div>
-      <div class="stat"><strong>yes</strong><span>quality signals</span></div>
+      <div class="stat"><strong>89</strong><span>health score</span></div>
+      <div class="stat"><strong>warn</strong><span>quality gate</span></div>
+      <div class="stat"><strong>105 files</strong><span>graph index</span></div>
+      <div class="stat"><strong>7</strong><span>enabled modules</span></div>
     </section>
   </header>
   <main>
+    <section class="section admin-grid">
+      <div>
+        <section class="panel" id="health">
+          <h2>Health</h2>
+          
+          <div class="kpis">
+            <div class="kpi"><strong>89</strong><span>score</span></div>
+            <div class="kpi"><strong><span class="pill warn">warn</span></strong><span>gate</span></div>
+            <div class="kpi"><strong>28</strong><span>findings</span></div>
+            <div class="kpi"><strong>0/0/28</strong><span>P0/P1/P2</span></div>
+          </div>
+          <h3>Top Scopes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Scope</th><th>Kind</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
+              <tbody>
+            <tr>
+              <td>src/commands</td>
+              <td>module</td>
+              <td>87</td>
+              <td>8</td>
+              <td>40</td>
+              <td>64</td>
+            </tr>
+            <tr>
+              <td>src/health</td>
+              <td>module</td>
+              <td>83</td>
+              <td>8</td>
+              <td>40</td>
+              <td>26</td>
+            </tr>
+            <tr>
+              <td>src/memory</td>
+              <td>module</td>
+              <td>86</td>
+              <td>4</td>
+              <td>20</td>
+              <td>17</td>
+            </tr>
+            <tr>
+              <td>src/gdskills</td>
+              <td>module</td>
+              <td>93</td>
+              <td>3</td>
+              <td>15</td>
+              <td>26</td>
+            </tr>
+            <tr>
+              <td>src/health/sources</td>
+              <td>component</td>
+              <td>79</td>
+              <td>3</td>
+              <td>15</td>
+              <td>13</td>
+            </tr>
+            <tr>
+              <td>src</td>
+              <td>module</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>19</td>
+            </tr>
+            <tr>
+              <td>src/flow</td>
+              <td>module</td>
+              <td>95</td>
+              <td>1</td>
+              <td>5</td>
+              <td>72</td>
+            </tr>
+            <tr>
+              <td>src/gdgraph</td>
+              <td>module</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>13</td>
+            </tr>
+            <tr>
+              <td>src/lib</td>
+              <td>module</td>
+              <td>94</td>
+              <td>1</td>
+              <td>5</td>
+              <td>35</td>
+            </tr>
+            <tr>
+              <td>src/testing</td>
+              <td>module</td>
+              <td>92</td>
+              <td>1</td>
+              <td>5</td>
+              <td>17</td>
+            </tr>
+            <tr>
+              <td>src/health/metrics</td>
+              <td>component</td>
+              <td>91</td>
+              <td>1</td>
+              <td>5</td>
+              <td>17</td>
+            </tr>
+            <tr>
+              <td>gdgraph/module</td>
+              <td>skill</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>13</td>
+            </tr></tbody>
+            </table>
+          </div>
+          <h3 style="margin-top:14px">Top Files</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>File</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
+              <tbody>
+            <tr>
+              <td>src/cli.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>19</td>
+            </tr>
+            <tr>
+              <td>src/commands/ctx.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>12</td>
+            </tr>
+            <tr>
+              <td>src/commands/flow.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>18</td>
+            </tr>
+            <tr>
+              <td>src/commands/gdgraph.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>16</td>
+            </tr>
+            <tr>
+              <td>src/commands/health.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>11</td>
+            </tr>
+            <tr>
+              <td>src/commands/init.ts</td>
+              <td>92</td>
+              <td>1</td>
+              <td>5</td>
+              <td>64</td>
+            </tr>
+            <tr>
+              <td>src/commands/skills.ts</td>
+              <td>85</td>
+              <td>1</td>
+              <td>5</td>
+              <td>18</td>
+            </tr>
+            <tr>
+              <td>src/commands/test.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>12</td>
+            </tr>
+            <tr>
+              <td>src/commands/update.ts</td>
+              <td>90</td>
+              <td>1</td>
+              <td>5</td>
+              <td>22</td>
+            </tr>
+            <tr>
+              <td>src/flow/service.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>72</td>
+            </tr>
+            <tr>
+              <td>src/gdgraph/build.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>13</td>
+            </tr>
+            <tr>
+              <td>src/gdskills/contracts.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>26</td>
+            </tr>
+            <tr>
+              <td>src/gdskills/learn.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>11</td>
+            </tr>
+            <tr>
+              <td>src/gdskills/verify.ts</td>
+              <td>91</td>
+              <td>1</td>
+              <td>5</td>
+              <td>25</td>
+            </tr>
+            <tr>
+              <td>src/health/gate.ts</td>
+              <td>93</td>
+              <td>1</td>
+              <td>5</td>
+              <td>16</td>
+            </tr></tbody>
+            </table>
+          </div>
+          <h3 style="margin-top:14px">Sources</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Source</th><th>Status</th><th>Findings</th><th>Required</th></tr></thead>
+              <tbody>
+            <tr>
+              <td>typescript</td>
+              <td><span class="pill good">available</span></td>
+              <td>0</td>
+              <td>yes</td>
+            </tr>
+            <tr>
+              <td>complexity</td>
+              <td><span class="pill good">available</span></td>
+              <td>28</td>
+              <td>no</td>
+            </tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel" id="graph">
+          <h2>Graph</h2>
+          
+          <div class="kpis">
+            <div class="kpi"><strong>105</strong><span>files</span></div>
+            <div class="kpi"><strong>1</strong><span>assets</span></div>
+            <div class="kpi"><strong>274</strong><span>edges</span></div>
+            <div class="kpi"><strong>2</strong><span>unresolved</span></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Module</th><th>Files</th><th>Outgoing edges</th></tr></thead>
+              <tbody>
+            <tr>
+              <td>src/health</td>
+              <td>36</td>
+              <td>97</td>
+            </tr>
+            <tr>
+              <td>src/memory</td>
+              <td>18</td>
+              <td>44</td>
+            </tr>
+            <tr>
+              <td>src/commands</td>
+              <td>14</td>
+              <td>67</td>
+            </tr>
+            <tr>
+              <td>src/gdskills</td>
+              <td>10</td>
+              <td>21</td>
+            </tr>
+            <tr>
+              <td>src/flow</td>
+              <td>10</td>
+              <td>19</td>
+            </tr>
+            <tr>
+              <td>src/lib</td>
+              <td>5</td>
+              <td>2</td>
+            </tr>
+            <tr>
+              <td>src/gdgraph</td>
+              <td>4</td>
+              <td>4</td>
+            </tr>
+            <tr>
+              <td>src/testing</td>
+              <td>4</td>
+              <td>3</td>
+            </tr>
+            <tr>
+              <td>src/wiki</td>
+              <td>3</td>
+              <td>4</td>
+            </tr>
+            <tr>
+              <td>src/cli.ts</td>
+              <td>1</td>
+              <td>13</td>
+            </tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <aside>
+        <section class="panel" id="testing">
+          <h2>Testing</h2>
+          
+          <div class="kpis">
+            <div class="kpi"><strong>pass</strong><span>status</span></div>
+            <div class="kpi"><strong>bun-script</strong><span>runner</span></div>
+            <div class="kpi"><strong>-</strong><span>tests</span></div>
+            <div class="kpi"><strong>0</strong><span>failures</span></div>
+          </div>
+          <div class="link-grid">
+            <a href="data/testing/context.md">Testing context</a>
+            <a href="data/testing/artifacts/latest.md">Latest report</a>
+          </div>
+        </section>
+        <section class="panel" id="wiki">
+          <h2>Wiki</h2>
+          <div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>
+            <tr>
+              <td><a href="wiki/index.md">Project Wiki</a></td>
+              <td>root</td>
+              <td>wiki/index.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/testing/README.md">Testing</a></td>
+              <td>testing</td>
+              <td>wiki/testing/README.md</td>
+            </tr>
+            <tr>
+              <td><a href="wiki/testing/conventions.md">Testing Conventions</a></td>
+              <td>testing</td>
+              <td>wiki/testing/conventions.md</td>
+            </tr></tbody></table></div>
+        </section>
+        <section class="panel" id="memory">
+          <h2>Memory</h2>
+          <div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>
+            <tr>
+              <td><a href="memory/index.md">Project Memory</a></td>
+              <td>root</td>
+              <td>memory/index.md</td>
+            </tr></tbody></table></div>
+        </section>
+      </aside>
+    </section>
     <section class="section">
       <h2>Enabled Modules</h2>
       <div class="modules">
@@ -206,7 +652,7 @@
           </div>
           <p>File dependency graph, affected context, cycles, orphans, and module map.</p>
           <div class="link-grid">
-            <a href="modules/gdgraph.md">Manifest</a><a href="data/gdgraph/artifacts/summary.md">Summary</a><a href="data/gdgraph/artifacts/module-map.json">Module map</a><a href="skills/gdgraph/SKILL.md">Skill</a>
+            <a href="modules/gdgraph.md">Manifest</a><a href="core/gdgraph/README.md">Core README</a><a href="core/gdgraph/cli.ts">Runner</a><a href="skills/gdgraph/SKILL.md">Skill</a>
           </div>
           <div class="commands">
             <code>gd-metapro gdgraph build</code><code>gd-metapro gdgraph affected &lt;file&gt;</code><code>gd-metapro gdgraph query cycles</code>
@@ -220,10 +666,24 @@
           </div>
           <p>Token-aware wrappers for search, reads, diffs, and command output.</p>
           <div class="link-grid">
-            <a href="modules/gdctx.md">Manifest</a><a href="data/gdctx/artifacts/latest.md">Latest artifact</a><a href="gdctx.config.json">Config</a><a href="skills/gdctx/SKILL.md">Skill</a>
+            <a href="modules/gdctx.md">Manifest</a><a href="core/gdctx/README.md">Core README</a><a href="gdctx.config.json">Config</a><a href="skills/gdctx/SKILL.md">Skill</a>
           </div>
           <div class="commands">
             <code>gd-metapro ctx diff</code><code>gd-metapro ctx rg &quot;pattern&quot;</code><code>gd-metapro ctx read &lt;file&gt;</code>
+          </div>
+        </article>
+
+        <article class="module-card" style="--accent: #7c3aed">
+          <div class="module-head">
+            <span class="module-name">gdwiki</span>
+            <span class="module-role">Knowledge base</span>
+          </div>
+          <p>Markdown wiki for architecture, business rules, scenarios, integrations, and decisions.</p>
+          <div class="link-grid">
+            <a href="modules/gdwiki.md">Manifest</a><a href="wiki/">Wiki folder</a><a href="wiki/templates/page.md">Template</a><a href="skills/gdwiki/SKILL.md">Skill</a>
+          </div>
+          <div class="commands">
+            <code>gd-metapro wiki new decision &lt;slug&gt;</code><code>gd-metapro wiki index</code><code>gd-metapro wiki check-links</code>
           </div>
         </article>
 
@@ -234,7 +694,7 @@
           </div>
           <p>Bundled working skills plus project-skill creation, routing, verification, learning, export, and sync.</p>
           <div class="link-grid">
-            <a href="modules/gdskills.md">Manifest</a><a href="skills/catalog.md">Catalog</a><a href="skills/gdskills/">Bundled skills</a><a href="data/gdskills/reports/">Reports</a>
+            <a href="modules/gdskills.md">Manifest</a><a href="skills/catalog.md">Catalog</a><a href="skills/gdskills/">Bundled skills</a><a href="project-skills/">Project skills</a>
           </div>
           <div class="commands">
             <code>gd-metapro skills status</code><code>gd-metapro skills route &lt;target&gt;</code><code>gd-metapro skills verify --all</code>
@@ -248,7 +708,7 @@
           </div>
           <p>Aggregated code health from TypeScript, tests, audit, coverage, complexity, and optional external tools.</p>
           <div class="link-grid">
-            <a href="modules/health.md">Manifest</a><a href="data/health/artifacts/latest.md">Latest report</a><a href="health.config.json">Config</a><a href="skills/health/SKILL.md">Skill</a>
+            <a href="modules/health.md">Manifest</a><a href="core/health/README.md">Core README</a><a href="health.config.json">Config</a><a href="skills/health/SKILL.md">Skill</a>
           </div>
           <div class="commands">
             <code>gd-metapro health run --changed</code><code>gd-metapro health status</code><code>gd-metapro health explain &lt;file&gt;</code>
@@ -262,7 +722,7 @@
           </div>
           <p>Detected test stack, conventions, related-test selection, normalized reports, and strict gates.</p>
           <div class="link-grid">
-            <a href="modules/testing.md">Manifest</a><a href="data/testing/context.md">Context</a><a href="data/testing/recommendations.md">Recommendations</a><a href="data/testing/artifacts/latest.md">Latest report</a>
+            <a href="modules/testing.md">Manifest</a><a href="core/testing/README.md">Core README</a><a href="testing.config.json">Config</a><a href="skills/testing/SKILL.md">Skill</a>
           </div>
           <div class="commands">
             <code>gd-metapro test analyze</code><code>gd-metapro test run --changed</code><code>gd-metapro test related &lt;file&gt;</code>
@@ -276,7 +736,7 @@
           </div>
           <p>Lessons learned, decisions, constraints, known mistakes, historical context, and reusable patterns.</p>
           <div class="link-grid">
-            <a href="modules/memory.md">Manifest</a><a href="memory/index.md">Memory index</a><a href="memory.config.json">Config</a><a href="skills/memory/SKILL.md">Skill</a>
+            <a href="modules/memory.md">Manifest</a><a href="core/memory/README.md">Core README</a><a href="memory.config.json">Config</a><a href="skills/memory/SKILL.md">Skill</a>
           </div>
           <div class="commands">
             <code>gd-metapro memory search &quot;topic&quot;</code><code>gd-metapro memory new decision</code><code>gd-metapro memory check</code>
@@ -296,7 +756,7 @@
     </section>
     <section class="section">
       <h2>Disabled Modules</h2>
-      <div class="disabled"><span>gdwiki</span></div>
+      <div class="disabled"><span>tasks</span></div>
     </section>
   </main>
 </body>

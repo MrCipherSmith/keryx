@@ -85,8 +85,8 @@ Performs deep cross-repository analysis to understand business logic, architectu
 - Analysis mode (A: changes from base-branch, or B: current state)
 - Optional: GitHub Issue/PR URL, analysis focus keyword
 
-**Prepared input:** Use `skills/feature-analyzer/analysis-request.template.md` to prepare structured input.
-**Example:** See `skills/feature-analyzer/analysis-request.md` for a filled example.
+**Prepared input:** Use `.metaproject/skills/gdskills/orchestration/feature-analyzer/analysis-request.template.md` to prepare structured input.
+**Example:** See `.metaproject/skills/gdskills/orchestration/feature-analyzer/analysis-request.md` for a filled example.
 
 ---
 

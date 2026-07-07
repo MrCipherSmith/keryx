@@ -48,7 +48,7 @@ new_decisions:
   D_domain: "<business domain>"
   D_audience: "<target users>"
   D_scale_estimate: "<rough scale: personal/team/startup/enterprise>"
-artifact_path: "jobs/<job>/artifacts/discovery-brief.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/discovery-brief.md"
 ```
 
 If NEEDS_CONTEXT:

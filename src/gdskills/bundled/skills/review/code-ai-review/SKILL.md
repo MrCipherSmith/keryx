@@ -95,7 +95,7 @@ git diff <FROM_SHA>..<TO_SHA>
 
 ## Правила ревью (обязательно)
 
-Ты обязан следовать стандарту ревью из `~/goodai-base/rules/core/code-review-ai-assistant.mdc`:
+Ты обязан следовать стандарту ревью из `.metaproject/rules/core/code-review-ai-assistant.mdc`:
 
 - Structure output as: short summary -> structured findings by category -> concrete suggestions / optional patches.
 - Prioritize correctness and safety over style.
@@ -191,7 +191,7 @@ When dispatched by `job-orchestrator` as part of a job pipeline, the prompt MAY 
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: ~/goodai-base/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 ```
 
 If provided and the file exists, read the context document before starting the review. Use it to:

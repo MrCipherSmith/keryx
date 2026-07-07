@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Local Path * | `/Users/tsaitler.aleksandr/Presight/Vantage/back4/<PROJECT>` |
+| Local Path * | `<SOURCE_PROJECT_DIR>` |
 | GitHub Repo | |
 | Branch * | `develop-2` |
 
@@ -12,7 +12,7 @@
 
 | Field | Value |
 |-------|-------|
-| Local Path * | `/Users/tsaitler.aleksandr/Presight/Vantage/<PROJECT>` |
+| Local Path * | `<TARGET_PROJECT_DIR>` |
 | GitHub Repo | |
 | Branch | `develop-2` |
 
@@ -56,7 +56,7 @@
 
 | Field | Value |
 |-------|-------|
-| Base Dir | `/Users/tsaitler.aleksandr/.<PROJECT>/docs/analysis` |
+| Base Dir | `.metaproject/jobs/<job-name>/ai/analysis` |
 | Folder Name | `async-search-current-state` |
 | Languages | `en, ru, ai` |
 | Include Metrics | `true` |

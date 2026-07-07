@@ -93,6 +93,7 @@ type ManifestReadResult = {
   exists: boolean;
   valid: boolean;
   manifest: MetaprojectManifest;
+  migrated: boolean;
 };
 
 type UpdateOptions = {
@@ -140,6 +141,9 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
+  if (manifestState.migrated) {
+    await writeFile(path.join(metaprojectRoot, "metaproject.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  }
   const enableGdgraph = moduleEnabled(manifest, "gdgraph");
   const enableGdctx = moduleEnabled(manifest, "gdctx");
   const enableGdwiki = moduleEnabled(manifest, "gdwiki");
@@ -158,7 +162,9 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   }
 
   const gdskillsProfile = normalizeGdskillsProfile(manifest.modules?.gdskills?.profile);
-  const ruleSources = await syncAgentRules(projectRoot, metaprojectRoot, manifest.agentEntrypoints?.root ?? []);
+  const ruleSources = await syncAgentRules(projectRoot, metaprojectRoot, manifest.agentEntrypoints?.root ?? [], {
+    enableTasks,
+  });
   const dashboardData = await collectDashboardData(metaprojectRoot);
 
   await createServiceDirs(metaprojectRoot, {
@@ -370,9 +376,7 @@ async function shouldInstallDashboardPostCommitHook(projectRoot: string, manifes
 }
 
 async function collectDashboardData(metaprojectRoot: string): Promise<MetaprojectDashboardData> {
-  const data: MetaprojectDashboardData = {
-    generatedAt: new Date().toISOString(),
-  };
+  const data: MetaprojectDashboardData = {};
   const health = await collectHealthDashboardData(metaprojectRoot);
   if (health) {
     data.health = health;
@@ -883,6 +887,7 @@ async function syncAgentRules(
   projectRoot: string,
   metaprojectRoot: string,
   manifestSources: string[],
+  options: { enableTasks: boolean },
 ): Promise<string[]> {
   const sources = await findAgentEntrypoints(projectRoot, manifestSources);
   for (const source of sources) {
@@ -892,7 +897,7 @@ async function syncAgentRules(
     }
     // Migrate always-on Metaproject policies (gdgraph/wiki/ctx/skills/testing/
     // memory/flow) into existing entrypoints - keeps old projects discoverable.
-    await ensureMetaprojectReference(sourcePath);
+    await ensureMetaprojectReference(sourcePath, options);
     const ruleFile = `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
     await writeTextIfChanged(
       path.join(metaprojectRoot, "rules", ruleFile),
@@ -930,21 +935,46 @@ async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult
       exists: false,
       valid: false,
       manifest: await inferManifestFromExistingMetaproject(metaprojectRoot),
+      migrated: false,
     };
   }
   try {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+    const normalized = normalizeManifest(manifest);
     return {
       exists: true,
       valid: true,
-      manifest: JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest,
+      manifest: normalized.manifest,
+      migrated: normalized.migrated,
     };
   } catch {
     return {
       exists: true,
       valid: false,
       manifest: await inferManifestFromExistingMetaproject(metaprojectRoot),
+      migrated: false,
     };
   }
+}
+
+function normalizeManifest(manifest: MetaprojectManifest): { manifest: MetaprojectManifest; migrated: boolean } {
+  const modules = manifest.modules ?? {};
+  const legacyWiki = modules.wiki;
+  if (!legacyWiki || modules.gdwiki) {
+    return { manifest, migrated: false };
+  }
+  const restModules = { ...modules };
+  delete restModules.wiki;
+  return {
+    manifest: {
+      ...manifest,
+      modules: {
+        ...restModules,
+        gdwiki: legacyWiki,
+      },
+    },
+    migrated: true,
+  };
 }
 
 async function inferManifestFromExistingMetaproject(metaprojectRoot: string): Promise<MetaprojectManifest> {
@@ -979,6 +1009,9 @@ async function anyPathExists(root: string, candidates: string[]): Promise<boolea
 }
 
 function moduleEnabled(manifest: MetaprojectManifest, name: string): boolean {
+  if (name === "gdwiki") {
+    return manifest.modules?.gdwiki?.enabled === true || manifest.modules?.wiki?.enabled === true;
+  }
   return manifest.modules?.[name]?.enabled === true;
 }
 

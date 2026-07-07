@@ -18,7 +18,7 @@ compatibility: "cursor,codex,zed,opencode"
 
 ## Purpose
 
-Sub-agent responsible for creating and maintaining structured job documentation in `~/goodai-base/jobs/`. Called exclusively by `job-orchestrator` to persist the lifecycle of orchestrated tasks — from initial plan through analysis, implementation, review, and final report.
+Sub-agent responsible for creating and maintaining structured job documentation in `.metaproject/jobs/`. Called exclusively by `job-orchestrator` to persist the lifecycle of orchestrated tasks — from initial plan through analysis, implementation, review, and final report.
 
 **This skill is NOT invoked directly by users.** It is a service skill dispatched by the orchestrator.
 
@@ -43,7 +43,7 @@ The orchestrator provides a structured prompt with the following fields:
 ```
 ACTION:    init | add-document | update-readme | finalize
 JOB_NAME:  <kebab-case folder name>
-JOBS_ROOT: ~/goodai-base/jobs
+JOBS_ROOT: .metaproject/jobs
 DATA:      <action-specific payload — see below>
 ```
 
@@ -71,7 +71,7 @@ PLAN:        <ordered list of planned steps>
 
 1. **Create directory structure:**
    ```
-   jobs/<JOB_NAME>/
+   .metaproject/jobs/<JOB_NAME>/
      README.md
      man/
      ai/
@@ -141,7 +141,7 @@ PLAN:        <ordered list of planned steps>
 5. **Update README.md** — add plan.md entries to Documents tables.
 
 6. **Verify:**
-   - Read directory listing of `jobs/<JOB_NAME>/`
+   - Read directory listing of `.metaproject/jobs/<JOB_NAME>/`
    - Confirm: `README.md`, `man/`, `ai/`, `man/plan.md`, `ai/plan.md` all exist
    - If any missing → report error
 
@@ -150,7 +150,7 @@ PLAN:        <ordered list of planned steps>
    DOCUMENTER_RESULT:
      action: init
      status: success | error
-     job_path: ~/goodai-base/jobs/<JOB_NAME>
+     job_path: .metaproject/jobs/<JOB_NAME>
      files_created: [README.md, man/plan.md, ai/plan.md]
      error_details: <if status is error>
    ```
@@ -239,7 +239,7 @@ BRANCH_UPDATE: <optional — branch name if it was TBD during init>
 
 **Procedure:**
 
-1. **Read current README.md** from `jobs/<JOB_NAME>/README.md`
+1. **Read current README.md** from `.metaproject/jobs/<JOB_NAME>/README.md`
 
 2. **Apply updates:**
    - Update plan checkboxes based on PLAN_UPDATES (`[ ]` → `[x]` for completed steps)
@@ -290,7 +290,7 @@ SUMMARY:       <1-3 sentence summary of what was accomplished>
    - Add SUMMARY to Description section (or as a "## Outcome" section at the end)
 
 3. **Full verification:**
-   - Read directory listing of `jobs/<JOB_NAME>/`, `man/`, `ai/`
+   - Read directory listing of `.metaproject/jobs/<JOB_NAME>/`, `man/`, `ai/`
    - Cross-check every entry in README Documents tables against actual files
    - Report any discrepancies
 
@@ -299,7 +299,7 @@ SUMMARY:       <1-3 sentence summary of what was accomplished>
    DOCUMENTER_RESULT:
      action: finalize
      status: success | error
-     job_path: ~/goodai-base/jobs/<JOB_NAME>
+     job_path: .metaproject/jobs/<JOB_NAME>
      final_status: <FINAL_STATUS>
      total_documents: <count of all files in man/ + ai/>
      verification: passed | <list of discrepancies>
@@ -341,7 +341,7 @@ Follow the rules from: rules/core/jobs-documentation.mdc
 
 ACTION: <action>
 JOB_NAME: <job-name>
-JOBS_ROOT: ~/goodai-base/jobs
+JOBS_ROOT: .metaproject/jobs
 
 DATA:
 <action-specific data>
@@ -359,7 +359,7 @@ Execute the action and return a DOCUMENTER_RESULT block.
 4. **DO** keep README.md in sync with actual directory contents.
 5. **DO** use ISO 8601 UTC timestamps everywhere.
 6. **DO** return structured DOCUMENTER_RESULT for every action.
-7. **DO NOT** create files outside of `jobs/<JOB_NAME>/`.
+7. **DO NOT** create files outside of `.metaproject/jobs/<JOB_NAME>/`.
 8. **DO NOT** delete or overwrite existing documents without explicit instruction.
 9. **DO NOT** modify files in other job folders.
 10. **DO NOT** interact with the user directly — all communication goes through the orchestrator.

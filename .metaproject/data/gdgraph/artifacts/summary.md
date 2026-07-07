@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 102
+- Source files indexed: 105
 - Imported asset files indexed: 1
-- Total nodes: 103
-- Edges: 269
-- Import edges: 266
+- Total nodes: 106
+- Edges: 274
+- Import edges: 271
 - Asset edges: 1
 - Unresolved relative imports: 2
 - Import resolution: 99.3%
@@ -18,9 +18,9 @@
 |---|---:|
 | health | 36 |
 | memory | 18 |
-| commands | 12 |
+| commands | 14 |
 | flow | 10 |
-| gdskills | 9 |
+| gdskills | 10 |
 | lib | 5 |
 | gdgraph | 4 |
 | testing | 4 |

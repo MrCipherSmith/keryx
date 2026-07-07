@@ -44,4 +44,4 @@ VERIFICATION_RESULT:
 STATUS: DONE
 ```
 
-Full spec: `~/goodai-base/skills/code-verifier/SKILL.md`
+Full spec: `.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md`

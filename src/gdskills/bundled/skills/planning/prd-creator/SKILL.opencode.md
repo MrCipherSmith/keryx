@@ -155,7 +155,7 @@ Then
 - You MUST NOT create a single file in the generic `docs/` root.
 
 **Orchestrated Mode:**
-- The PRD MUST be saved within the active job's directory for traceability: `~/goodai-base/jobs/<current_job>/`
+- The PRD MUST be saved within the active job's directory for traceability: `.metaproject/jobs/<current_job>/`
 - Follow the orchestrator's constraints for exact file naming in the job context.
 
 ---

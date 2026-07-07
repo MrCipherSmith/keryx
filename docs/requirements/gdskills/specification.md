@@ -1,6 +1,6 @@
 # gdskills: technical specification
 
-Version: 0.21.0
+Version: 0.22.0
 
 ## 1. Purpose
 
@@ -118,6 +118,7 @@ Orchestration:
 | Skill | Purpose |
 |---|---|
 | `job-orchestrator` | Runs full task pipelines: clarify, collect context, plan, implement, verify, review and summarize. |
+| `flow-orchestrator` | Runs Task Manager-backed implementation flows through `gd-metapro flow` state, frozen acceptance criteria, PR gates, review and Code Health while leaving ordinary job orchestration usable without task flow. |
 | `job-documenter` | Creates and updates persistent job documentation when an orchestrated job needs traceability. |
 | `context-collector` | Builds compact task context from graph, ctx, wiki, memory, health and selected files. |
 | `issue-analyzer` | Converts GitHub/local issues into atomic implementation tasks. |

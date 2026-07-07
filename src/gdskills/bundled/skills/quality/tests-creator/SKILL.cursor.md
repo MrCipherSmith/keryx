@@ -71,4 +71,4 @@ STATUS: BLOCKED         — cannot determine test framework or API shape
 STATUS: NEEDS_CONTEXT   — acceptance criteria missing, need task description
 ```
 
-See full workflow in `~/goodai-base/skills/tests-creator/SKILL.md`
+See full workflow in `.metaproject/skills/gdskills/quality/tests-creator/SKILL.md`

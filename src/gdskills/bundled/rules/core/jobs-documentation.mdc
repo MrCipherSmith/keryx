@@ -1,5 +1,5 @@
 ---
-description: "Job documentation structure and conventions for <PROJECT_DIR>/jobs (default) or $GOODAI_JOBS_ROOT. Used by job-documenter skill and job-orchestrator."
+description: "Job documentation structure and conventions for .metaproject/jobs (default) or $GDMETAPRO_JOBS_ROOT. Used by job-documenter skill and job-orchestrator."
 alwaysApply: false
 ---
 
@@ -7,7 +7,7 @@ alwaysApply: false
 
 ## Purpose
 
-Define how the agent creates and maintains persistent job documentation under `<PROJECT_DIR>/jobs/` (default) or `$GOODAI_JOBS_ROOT` (if set).
+Define how the agent creates and maintains persistent job documentation under `.metaproject/jobs/` (default) or `$GDMETAPRO_JOBS_ROOT` (if set).
 Jobs are the documentation artifacts produced by the `job-orchestrator` pipeline — they capture the full lifecycle of an orchestrated task (analysis, implementation, review, etc.).
 
 ## When To Apply
@@ -29,8 +29,8 @@ Only orchestrator-driven work produces output in `jobs/`.
 ## Root Location
 
 ```
-<PROJECT_DIR>/jobs/          # default — project-local jobs directory
-$GOODAI_JOBS_ROOT            # override — if environment variable is set
+.metaproject/jobs/          # default — project-local jobs directory
+$GDMETAPRO_JOBS_ROOT            # override — if environment variable is set
 ```
 
 ## JOBS_ROOT Resolution
@@ -38,11 +38,11 @@ $GOODAI_JOBS_ROOT            # override — if environment variable is set
 The jobs root is resolved in this priority order:
 
 1. **`JOBS_ROOT` passed explicitly** by the orchestrator in the sub-agent dispatch prompt
-2. **`GOODAI_JOBS_ROOT` environment variable** (if set in the shell)
-3. **`<PROJECT_DIR>/jobs/`** — default, relative to the project being worked on
+2. **`GDMETAPRO_JOBS_ROOT` environment variable** (if set in the shell)
+3. **`.metaproject/jobs/`** — default, relative to the project being worked on
 
 ```bash
-JOBS_ROOT="${GOODAI_JOBS_ROOT:-$PROJECT_DIR/jobs}"
+JOBS_ROOT="${GDMETAPRO_JOBS_ROOT:-.metaproject/jobs}"
 ```
 
 `PROJECT_DIR` is always known by Phase 0.2 of the orchestrator. Sub-agents (job-documenter, context-collector, task-implementer, etc.) **never resolve JOBS_ROOT themselves** — they receive it explicitly from the orchestrator in the dispatch prompt.
@@ -70,7 +70,7 @@ JOBS_ROOT="${GOODAI_JOBS_ROOT:-$PROJECT_DIR/jobs}"
 Every job folder MUST contain at minimum:
 
 ```
-jobs/<job-name>/
+.metaproject/jobs/<job-name>/
   README.md          # Job index — always present, always up-to-date
   man/               # Human-readable documents
   ai/                # AI-optimized documents (structured markdown, Gherkin, etc.)
@@ -206,7 +206,7 @@ Every document (in both `man/` and `ai/`) MUST end with a metadata block:
 ## Prohibited
 
 - Creating a job folder without `README.md`
-- Writing documents outside `jobs/<job-name>/` during a job
+- Writing documents outside `.metaproject/jobs/<job-name>/` during a job
 - Mixing `man/` and `ai/` content in the same file
 - Using non-kebab-case file names
 - Leaving README.md out of sync with actual documents in the folder

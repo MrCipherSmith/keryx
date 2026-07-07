@@ -14,7 +14,7 @@ Apply before any git operation: commit, branch creation, or PR creation. Always 
 ## Protected Paths
 - `.cursor/`: never commit.
 - `<DOCS_ROOT>/`: do not commit by default unless explicitly approved by the user.
-- `<PROJECT_DIR>/jobs/` (or `$GOODAI_JOBS_ROOT`): do not commit by default unless explicitly approved by the user. Job documentation — never force-delete; contains orchestrator run artifacts.
+- `.metaproject/jobs/` (or `$GDMETAPRO_JOBS_ROOT`): do not commit by default unless explicitly approved by the user. Job documentation — never force-delete; contains orchestrator run artifacts.
 
 ## Mandatory Behavior
 1. Ensure protected paths are covered in `.gitignore`.

@@ -33,10 +33,10 @@ for one specific section. Each instance handles exactly one output file.
 section: "onboarding | architecture | modules | api-reference | data-models"
 language: "en | ru"
 input_artifacts:
-  - "jobs/<job>/artifacts/project-map.md"
-  - "jobs/<job>/artifacts/architecture.md"
-  - "jobs/<job>/artifacts/analysis/*.md"
-output_path: "jobs/<job>/docs/<section>.md"
+  - ".metaproject/jobs/<job>/artifacts/project-map.md"
+  - ".metaproject/jobs/<job>/artifacts/architecture.md"
+  - ".metaproject/jobs/<job>/artifacts/analysis/*.md"
+output_path: ".metaproject/jobs/<job>/docs/<section>.md"
 JOB_DIR: "<job directory>"
 PROJECT_DIR: "<project path>"
 ```
@@ -47,7 +47,7 @@ PROJECT_DIR: "<project path>"
 status: "DONE" | "DONE_WITH_CONCERNS"
 summary: "<2-3 sentences: what was written, any gaps found>"
 concerns: ["<info that was missing from artifacts>"]
-artifact_path: "jobs/<job>/docs/<section>.md"
+artifact_path: ".metaproject/jobs/<job>/docs/<section>.md"
 ```
 
 ---

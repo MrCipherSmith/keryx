@@ -138,6 +138,45 @@ test("recovers manifest and dashboard for existing metaprojects without metaproj
   }
 });
 
+test("migrates legacy wiki manifest key to gdwiki", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-metapro-update-wiki-migrate-"));
+  const previousCwd = process.cwd();
+
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          wiki: { enabled: true },
+          gdgraph: { enabled: false },
+          tasks: { enabled: false },
+        },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    process.chdir(root);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      modules: Record<string, { enabled: boolean } | undefined>;
+    };
+    const dashboard = await readFile(path.join(root, ".metaproject", "gd-metapro-dashboard.html"), "utf8");
+
+    expect(manifest.modules.gdwiki?.enabled).toBe(true);
+    expect(manifest.modules.wiki).toBeUndefined();
+    expect(dashboard).toContain("<span class=\"module-name\">gdwiki</span>");
+    expect(dashboard).not.toContain("<div class=\"disabled\"><span>gdwiki</span>");
+    expect(await fileExists(path.join(root, ".metaproject", "skills", "gdwiki", "SKILL.md"))).toBe(true);
+  } finally {
+    process.chdir(previousCwd);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("backfills the Task Manager for projects initialized before it existed", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gd-metapro-update-backfill-"));
   const previousCwd = process.cwd();
@@ -197,6 +236,7 @@ test("respects --no-tasks and does not backfill", async () => {
     };
     expect(manifest.modules.tasks?.enabled).toBe(false);
     expect(await fileExists(path.join(root, ".metaproject", "skills", "flow", "SKILL.md"))).toBe(false);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).not.toContain("Metaproject flow skill");
   } finally {
     process.chdir(previousCwd);
     await rm(root, { recursive: true, force: true });

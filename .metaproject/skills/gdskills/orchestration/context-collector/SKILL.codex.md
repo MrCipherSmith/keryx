@@ -32,7 +32,7 @@ Collects and maintains a **unified context document** for a job. The context doc
 6. Keep the context document up-to-date as the job evolves (version-tracked updates)
 
 **Input:** Task description + job name + project path (from orchestrator or user)
-**Output:** `context.md` document in `jobs/<job-name>/ai/` and `jobs/<job-name>/man/`, documented via `job-documenter`
+**Output:** `context.md` document in `.metaproject/jobs/<job-name>/ai/` and `.metaproject/jobs/<job-name>/man/`, documented via `job-documenter`
 
 ## When to Use
 
@@ -117,7 +117,7 @@ RESEARCH_PLAN:
 ### 1.3 For ACTION=update
 
 If this is an update:
-1. Read the existing `context.md` from `jobs/<JOB_NAME>/ai/context.md`
+1. Read the existing `context.md` from `.metaproject/jobs/<JOB_NAME>/ai/context.md`
 2. Identify what sections need refreshing based on UPDATE_REASON
 3. Preserve unchanged sections, only update/add relevant ones
 4. Increment version in metadata

@@ -34,8 +34,8 @@ and architectural decisions for each technology. The output becomes a set of
 ```yaml
 task: "Research per-technology patterns and define application architecture"
 input_artifacts:
-  - jobs/<job>/artifacts/stack-decision.md
-  - jobs/<job>/artifacts/problem-statement.md
+  - .metaproject/jobs/<job>/artifacts/stack-decision.md
+  - .metaproject/jobs/<job>/artifacts/problem-statement.md
 decisions_so_far:
   D_level: "..."
   D_frontend: "..."
@@ -58,9 +58,9 @@ new_decisions:
   D_testing_strategy: "<unit + integration + e2e split>"
   D_error_handling: "<pattern>"
   D_logging_observability: "<approach>"
-artifact_path: "jobs/<job>/artifacts/architecture.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/architecture.md"
 additional_artifacts:
-  - "jobs/<job>/artifacts/tech-bestpractices.md"
+  - ".metaproject/jobs/<job>/artifacts/tech-bestpractices.md"
 ```
 
 ---

@@ -28,7 +28,7 @@
 
 Прочитай файл analysis-request с параметрами анализа. Файл может находиться:
 - По пути указанному пользователем
-- В `skills/feature-analyzer/analysis-request.md` (если пользователь заполнил шаблон)
+- В `.metaproject/skills/gdskills/orchestration/feature-analyzer/analysis-request.md` (если пользователь заполнил шаблон)
 
 Извлеки из таблиц следующие значения (парсинг Markdown-таблиц):
 
@@ -96,7 +96,7 @@ You are running the feature-analyzer skill in AUTONOMOUS MODE.
 All interactive checkpoints are pre-resolved. DO NOT ask the user any questions.
 DO NOT stop for confirmation. Execute the full workflow end-to-end.
 
-Load the skill: feature-analyzer (from skills/feature-analyzer/SKILL.md)
+Load the skill: feature-analyzer (from .metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.md)
 
 ═══════════════════════════════════════════════
   PRE-RESOLVED CONTEXT (Guard Clause SATISFIED)

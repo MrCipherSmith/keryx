@@ -14,7 +14,7 @@
      ↓
 Phase 0: Context collection, intent determination, plan building
      ↓
-Phase 1: [job-documenter sub-agent] → initialize jobs/<job-name>/ + README + plan
+Phase 1: [job-documenter sub-agent] → initialize .metaproject/jobs/<job-name>/ + README + plan
      ↓
 Phase 2: Execute plan dynamically:
      ↓
@@ -65,7 +65,7 @@ Before starting, determine intent and collect context:
 
 Dispatch `job-documenter` sub-agent with `ACTION: init`.
 
-Write initial `state.json` to `jobs/<job-name>/state.json` after job docs are initialized.
+Write initial `state.json` to `.metaproject/jobs/<job-name>/state.json` after job docs are initialized.
 
 Verify `DOCUMENTER_RESULT.status == "success"`.
 

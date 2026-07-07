@@ -51,7 +51,7 @@ Better to be overly explicit than implicit. If you think the subagent "obviously
 The subagent must not assume anything about the state of the world that you have not explicitly told it. It cannot see what previous agents did, what decisions were made in earlier phases, or what files were modified — unless you include that information in the prompt.
 
 ### 4. Concreteness
-Use absolute file paths, not vague pointers. Write `~/goodai-base/skills/task-implementer/SKILL.md`, not "look in the skills directory". Write `src/store/PipelineStore.ts`, not "the store file".
+Use absolute file paths, not vague pointers. Write `.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md`, not "look in the skills directory". Write `src/store/PipelineStore.ts`, not "the store file".
 
 ---
 

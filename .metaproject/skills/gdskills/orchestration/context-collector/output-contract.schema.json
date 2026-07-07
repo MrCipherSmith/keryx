@@ -24,8 +24,8 @@
       "type": "string",
       "description": "Absolute or ~ -rooted path to the written context.md file.",
       "examples": [
-        "<PROJECT_DIR>/jobs/implement-savemode-component/ai/context.md",
-        "~/goodai-base/docs/context/savemode-research.md"
+        ".metaproject/jobs/implement-savemode-component/ai/context.md",
+        ".metaproject/jobs/<job-name>/ai/context.md"
       ]
     },
     "version": {
@@ -140,7 +140,7 @@
       "action": "collect",
       "status": "success",
       "job_name": "implement-savemode-component",
-      "context_path": "<PROJECT_DIR>/jobs/implement-savemode-component/ai/context.md",
+      "context_path": ".metaproject/jobs/implement-savemode-component/ai/context.md",
       "version": "1.0",
       "summary": "Collected context for the SaveMode component implementation. Sourced 3 local docs, 2 relevant rules (code-style-patterns, mobx-store-template), and documented MobX 6 and mobx-react-lite APIs from official docs. No previous related jobs found.",
       "sections_collected": [
@@ -165,7 +165,7 @@
       "action": "update",
       "status": "success",
       "job_name": "implement-savemode-component",
-      "context_path": "<PROJECT_DIR>/jobs/implement-savemode-component/ai/context.md",
+      "context_path": ".metaproject/jobs/implement-savemode-component/ai/context.md",
       "version": "1.1",
       "summary": "Updated context with tanstack/query optimistic update patterns. Added new 'Libraries & APIs' subsection for @tanstack/react-query v5. Existing sections preserved unchanged.",
       "sections_collected": [
@@ -202,7 +202,7 @@
         "libraries_documented": 0
       },
       "errors": [],
-      "error_details": "Job folder '<PROJECT_DIR>/jobs/nonexistent-job' does not exist. Orchestrator must initialize the job before calling context-collector."
+      "error_details": "Job folder '.metaproject/jobs/nonexistent-job' does not exist. Orchestrator must initialize the job before calling context-collector."
     }
   ]
 }

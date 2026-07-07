@@ -42,19 +42,6 @@
         "show"
       ]
     },
-    "wiki": {
-      "enabled": true,
-      "core": ".metaproject/wiki",
-      "data": ".metaproject/data/gdwiki",
-      "manifest": ".metaproject/modules/gdwiki.md",
-      "commands": [
-        "status",
-        "new",
-        "index",
-        "check-links",
-        "validate"
-      ]
-    },
     "gdskills": {
       "enabled": true,
       "core": ".metaproject/core/gdskills",
@@ -154,6 +141,19 @@
         "gitPostCommit": ".git/hooks/post-commit",
         "postUpdate": ".metaproject/hooks/post-update.d"
       }
+    },
+    "gdwiki": {
+      "enabled": true,
+      "core": ".metaproject/wiki",
+      "data": ".metaproject/data/gdwiki",
+      "manifest": ".metaproject/modules/gdwiki.md",
+      "commands": [
+        "status",
+        "new",
+        "index",
+        "check-links",
+        "validate"
+      ]
     }
   },
   "agentEntrypoints": {

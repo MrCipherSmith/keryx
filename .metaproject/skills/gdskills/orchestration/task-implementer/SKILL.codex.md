@@ -112,7 +112,7 @@ Deep-read the target files and surrounding module to understand patterns.
 **2.0 Read job context (if available):**
 
 If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
-- Read `CONTEXT_PATH` (e.g., `~/goodai-base/jobs/<job-name>/ai/context.md`)
+- Read `CONTEXT_PATH` (e.g., `.metaproject/jobs/<job-name>/ai/context.md`)
 - Extract relevant sections: library docs, codebase patterns, conventions, best practices
 - Use this context throughout Phase 2-4 to guide implementation decisions
 - If the file does not exist, proceed without it — context is optional
@@ -150,9 +150,9 @@ Based on what you're implementing, load and follow the relevant project rules:
 | `mixed` | Load all applicable rules |
 
 Rules are located at:
-- OpenCode: `~/goodai-base/rules/core/<rule>.mdc`
+- OpenCode: `.metaproject/rules/core/<rule>.mdc`
 - Cursor: `.cursor/rules/core/<rule>.mdc`
-- Codex: `~/goodai-base/rules/core/<rule>.mdc`
+- Codex: `.metaproject/rules/core/<rule>.mdc`
 
 **Output of Phase 2:** Mental model of the implementation:
 ```
@@ -380,7 +380,7 @@ When dispatched by `job-orchestrator`, the prompt MAY include:
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: ~/goodai-base/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 ```
 
 If provided, read the context document at the start of Phase 2 (RESEARCH) before reading target files. The context document contains:

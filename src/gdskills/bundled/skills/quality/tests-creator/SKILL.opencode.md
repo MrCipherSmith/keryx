@@ -45,4 +45,4 @@ tests_written: <N>
 all_criteria_covered: true
 ```
 
-Full workflow: `~/goodai-base/skills/tests-creator/SKILL.md`
+Full workflow: `.metaproject/skills/gdskills/quality/tests-creator/SKILL.md`

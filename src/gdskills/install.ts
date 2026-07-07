@@ -39,6 +39,7 @@ export async function installGdskills(
     mkdir(skillsRoot, { recursive: true }),
     mkdir(contractsRoot, { recursive: true }),
     mkdir(projectSkillsRoot, { recursive: true }),
+    mkdir(path.join(metaprojectRoot, "jobs"), { recursive: true }),
     mkdir(path.join(metaprojectRoot, "modules"), { recursive: true }),
     ...(options.createDataDirs === false ? [] : [
       mkdir(path.join(dataRoot, "artifacts"), { recursive: true }),

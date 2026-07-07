@@ -16,7 +16,7 @@ compatibility: "cursor,codex,zed,opencode"
 
 # Code Style Review
 
-Проводи ревью только изменений текущей ветки от момента отбранчевания от родительской ветки, строго по правилам из `~/goodai-base/rules/core/code-style-patterns.mdc`.
+Проводи ревью только изменений текущей ветки от момента отбранчевания от родительской ветки, строго по правилам из `.metaproject/rules/core/code-style-patterns.mdc`.
 
 ## Scope
 
@@ -65,7 +65,7 @@ git diff --find-renames <FROM_SHA>..<TO_SHA>
 
 Используй только эти изменения как вход для ревью.
 
-## Review checklist (по `~/goodai-base/rules/core/code-style-patterns.mdc`)
+## Review checklist (по `.metaproject/rules/core/code-style-patterns.mdc`)
 
 ### TypeScript Strictness
 - Запрещён `any` (предлагай `unknown` + type guards / корректные типы).
@@ -157,7 +157,7 @@ When dispatched by `job-orchestrator` as part of a job pipeline, the prompt MAY 
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: ~/goodai-base/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 ```
 
 If provided and the file exists, read the context document before starting the review. Use it to:

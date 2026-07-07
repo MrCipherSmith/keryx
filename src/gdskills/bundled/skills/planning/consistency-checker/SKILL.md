@@ -34,12 +34,12 @@ This agent is adversarial — its job is to find problems, not to approve.
 ```yaml
 task: "Validate PRD consistency against all project decisions and constraints"
 input_artifacts:
-  - jobs/<job>/artifacts/prd.md
-  - jobs/<job>/artifacts/problem-statement.md
-  - jobs/<job>/artifacts/stack-decision.md
-  - jobs/<job>/artifacts/architecture.md
-  - jobs/<job>/artifacts/tech-bestpractices.md
-  - jobs/<job>/decisions.md
+  - .metaproject/jobs/<job>/artifacts/prd.md
+  - .metaproject/jobs/<job>/artifacts/problem-statement.md
+  - .metaproject/jobs/<job>/artifacts/stack-decision.md
+  - .metaproject/jobs/<job>/artifacts/architecture.md
+  - .metaproject/jobs/<job>/artifacts/tech-bestpractices.md
+  - .metaproject/jobs/<job>/decisions.md
 ```
 
 ## Output Contract
@@ -48,7 +48,7 @@ input_artifacts:
 status: "DONE" | "DONE_WITH_CONCERNS"
 summary: "<3-5 sentences: checks run, violations found, overall verdict>"
 concerns: ["<CRITICAL violations if any>"]
-artifact_path: "jobs/<job>/artifacts/consistency-report.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/consistency-report.md"
 # Note: no new_decisions — this agent doesn't make decisions
 ```
 

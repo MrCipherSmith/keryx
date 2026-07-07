@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.8.0
+Version: 0.8.1
 
 ## 1. Purpose
 
@@ -24,9 +24,9 @@ registry to human-readable status and points at each module's requirements.
 | spec-orchestrator | `init`, `status`, `update` | - | implemented | [spec-orchestrator/](spec-orchestrator/) |
 | gdgraph | `gd-metapro gdgraph` | `gdgraph` | implemented | [gdgraph/](gdgraph/) |
 | gdctx | `gd-metapro ctx` | `gdctx` | implemented | [gdctx/](gdctx/) |
-| gdwiki | `gd-metapro wiki` | `wiki` | implemented (MVP) | [wiki/](wiki/) |
+| gdwiki | `gd-metapro wiki` | `gdwiki` | implemented (MVP) | [wiki/](wiki/) |
 | Documentation Memory | `gd-metapro memory` | `memory` | implemented (Phase 1 + 2) | [documentation-memory/](documentation-memory/) |
-| Task Manager | `gd-metapro tasks` | `tasks` | planned | - |
+| Task Manager | `gd-metapro flow` | `tasks` | implemented (Phase 1) | [task-manager/](task-manager/) |
 | Code Health | `gd-metapro health` | `health` | implemented (Phase 1 + 2) | [code-health/](code-health/) |
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
@@ -55,7 +55,7 @@ Version: `0.21.0`. See [gdskills/specification.md](gdskills/specification.md).
 Shipped:
 
 - init scaffold: bundled project-local gdskills, catalog, module manifest, data/core folders;
-- real bundled goodai-base-derived skills under `src/gdskills/bundled/skills/**`, copied into `.metaproject/skills/gdskills/**` with contracts/templates/runtime variants preserved;
+- real self-contained bundled skills under `src/gdskills/bundled/skills/**`, copied into `.metaproject/skills/gdskills/**` with contracts/templates/runtime variants preserved;
 - bundled reusable core rules under `src/gdskills/bundled/rules/core/**`, copied into `.metaproject/rules/core/**`;
 - CLI: `status`, `list`, `inspect`, `route`, `catalog`, `install`, `create`, `verify`, `learn`, `export`, `sync`, `contracts`;
 - root alias: `gd-metapro skill-verify-skill`;
@@ -77,10 +77,10 @@ Remaining:
 
 Order is indicative, not committed:
 
-1. Documentation Memory (`gd-metapro memory`) - typed memory registry with search.
-2. Code Health Phase 2 (`gd-metapro health`) - Sonar/complexity adapters, entity/skill scopes, gdskills learning, trend history.
-3. Task Manager (`gd-metapro tasks`).
-4. Testing Module (`gd-metapro test`) - context-first testing intelligence.
+1. Task Manager Phase 2 (`gd-metapro flow`) - Notion/Jira adapters, flow board artifact, memory/wiki links.
+2. gdwiki release metrics and richer dashboard navigation.
+3. gdskills semantic verification against entity ownership maps.
+4. Code Health Phase 3 (`gd-metapro health`) - advanced trend analytics and larger-project tuning.
 
 ## 7. Maintenance
 

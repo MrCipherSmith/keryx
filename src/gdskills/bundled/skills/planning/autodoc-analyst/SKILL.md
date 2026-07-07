@@ -37,7 +37,7 @@ module:
   language: "<lang>"
   framework: "<framework>"
   entry_points: ["<file>"]
-project_map: "jobs/<job>/artifacts/project-map.md"
+project_map: ".metaproject/jobs/<job>/artifacts/project-map.md"
 JOB_DIR: "<job directory>"
 CONFIG: "<from state.json.config>"
 ```
@@ -48,7 +48,7 @@ CONFIG: "<from state.json.config>"
 status: "DONE" | "DONE_WITH_CONCERNS" | "NEEDS_CONTEXT"
 summary: "<3-5 sentences: what the module does, its main components, key patterns>"
 concerns: ["<concern>"]
-artifact_path: "jobs/<job>/artifacts/analysis/<slug>.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/analysis/<slug>.md"
 ```
 
 ---

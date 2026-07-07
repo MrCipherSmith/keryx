@@ -89,7 +89,7 @@ summary: |
   <Max 150 tokens.>
 new_decisions:
   D_<name>: "<value>"
-artifact_path: "jobs/<job>/artifacts/<name>.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/<name>.md"
 next_phase_needs:
   - "<hint for orchestrator about what next phase will need>"
 ```
@@ -106,7 +106,7 @@ concerns:
   - severity: "high | medium"
     description: "<what's wrong>"
     suggestion: "<how to address>"
-artifact_path: "jobs/<job>/artifacts/<name>.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/<name>.md"
 ```
 
 ### STATUS: NEEDS_CONTEXT
@@ -125,7 +125,7 @@ questions:
     can_be_resolved_by_agent: false | "<agent name if yes>"
   - id: "Q2"
     ...
-partial_artifact_path: "jobs/<job>/artifacts/<name>.partial.md"
+partial_artifact_path: ".metaproject/jobs/<job>/artifacts/<name>.partial.md"
 # Subagent MAY save partial work for resume
 ```
 

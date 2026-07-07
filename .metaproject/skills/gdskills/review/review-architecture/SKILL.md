@@ -308,7 +308,7 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY i
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: ~/goodai-base/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 ```
 
 If provided and the file exists, read the context document **before** reviewing the diff.

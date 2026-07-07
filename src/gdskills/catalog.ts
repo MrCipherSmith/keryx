@@ -61,6 +61,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Break the work into phases with verification after each phase.",
     "Run review and skill-learning handoffs before final summary when relevant.",
   ], ["implement issue", "full workflow", "orchestrate task"]),
+  skill("flow-orchestrator", "orchestration", ["recommended", "full"], "Run Task Manager-backed implementation flows through gd-metapro flow state, frozen acceptance criteria, PR gates, review, and Code Health.", [
+    "Require the Task Manager module and existing `.metaproject/skills/flow` router before starting.",
+    "Create or resume a flow with `gd-metapro flow init|list|status` and treat the flow package as the source of truth.",
+    "Delegate context, test, implementation, review, and docs work to existing gdskills while keeping flow state changes in the CLI.",
+    "Move to implemented only after verification and a draft PR, then complete through acceptance-criteria and health gates.",
+  ], ["создай фло", "create flow", "issue to flow", "managed implementation", "task manager orchestration"]),
   skill("job-documenter", "orchestration", ["recommended", "full"], "Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work.", [
     "Initialize job folders and state documents.",
     "Write analysis, context, implementation, verification, and review reports.",

@@ -31,7 +31,7 @@ This phase answers: "Why are we doing this?" and "How will we know we succeeded?
 ```yaml
 task: "Define core problems and goals"
 input_artifacts:
-  - jobs/<job>/artifacts/discovery-brief.md
+  - .metaproject/jobs/<job>/artifacts/discovery-brief.md
 decisions_so_far:
   D_mode: "..."
   D_domain: "..."
@@ -50,7 +50,7 @@ new_decisions:
   D_non_goals: ["<non-goal 1>", "<non-goal 2>", "<non-goal 3>"]
   D_success_metrics: ["<metric 1>", "<metric 2>"]
   D_target_users: "<primary persona>"
-artifact_path: "jobs/<job>/artifacts/problem-statement.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/problem-statement.md"
 ```
 
 ---

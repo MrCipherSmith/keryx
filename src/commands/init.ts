@@ -320,7 +320,9 @@ export async function initCommand(args: string[]): Promise<void> {
 
   await createBaseStructure(metaprojectRoot);
   await syncGitignore(projectRoot);
-  const agentRuleSources = await syncAgentRules(projectRoot, metaprojectRoot);
+  const agentRuleSources = await syncAgentRules(projectRoot, metaprojectRoot, {
+    enableTasks,
+  });
 
   if (enableGdgraph) {
     await createGdgraphStructure(metaprojectRoot);
@@ -1018,7 +1020,7 @@ function buildManifest({
         : {
             enabled: false,
           },
-      wiki: enableGdwiki
+      gdwiki: enableGdwiki
         ? {
             enabled: true,
             core: ".metaproject/wiki",
@@ -1124,6 +1126,7 @@ function buildManifest({
 async function syncAgentRules(
   projectRoot: string,
   metaprojectRoot: string,
+  options: { enableTasks: boolean },
 ): Promise<string[]> {
   const entrypoints = await findAgentEntrypoints(projectRoot);
   const sources =
@@ -1137,7 +1140,7 @@ async function syncAgentRules(
   });
 
   for (const source of sources) {
-    await ensureMetaprojectReference(path.join(projectRoot, source));
+    await ensureMetaprojectReference(path.join(projectRoot, source), options);
     const sourceContent = await readFile(path.join(projectRoot, source), "utf8");
     await writeTextIfChanged(
       path.join(metaprojectRoot, "rules", ruleFileNameFor(source)),
@@ -1163,7 +1166,10 @@ async function createDefaultAgentEntrypoint(projectRoot: string): Promise<string
   return source;
 }
 
-export async function ensureMetaprojectReference(filePath: string): Promise<void> {
+export async function ensureMetaprojectReference(
+  filePath: string,
+  options: { enableTasks?: boolean } = {},
+): Promise<void> {
   const content = await readFile(filePath, "utf8");
   const marker = "<!-- gd-metapro:index -->";
   const oldGraphPolicy =
@@ -1200,6 +1206,9 @@ export async function ensureMetaprojectReference(filePath: string): Promise<void
     next = collapseDuplicatePolicy(next, testingPolicy);
     next = collapseDuplicatePolicy(next, memoryPolicy);
     next = collapseDuplicatePolicy(next, flowPolicy);
+    if (options.enableTasks === false) {
+      next = removePolicy(next, flowPolicy);
+    }
 
     const missingPolicies = [
       ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
@@ -1208,7 +1217,7 @@ export async function ensureMetaprojectReference(filePath: string): Promise<void
       ...(next.includes(gdskillsPolicy) ? [] : [gdskillsPolicy]),
       ...(next.includes(testingPolicy) ? [] : [testingPolicy]),
       ...(next.includes(memoryPolicy) ? [] : [memoryPolicy]),
-      ...(next.includes(flowPolicy) ? [] : [flowPolicy]),
+      ...(options.enableTasks === false || next.includes(flowPolicy) ? [] : [flowPolicy]),
     ];
     if (missingPolicies.length > 0) {
       const suffix = next.endsWith("\n") ? "" : "\n";
@@ -1223,11 +1232,27 @@ export async function ensureMetaprojectReference(filePath: string): Promise<void
   }
 
   const suffix = content.endsWith("\n") ? "" : "\n";
+  const initialPolicies = [
+    graphPolicy,
+    wikiPolicy,
+    ctxPolicy,
+    gdskillsPolicy,
+    testingPolicy,
+    memoryPolicy,
+    ...(options.enableTasks === false ? [] : [flowPolicy]),
+  ];
   await writeFile(
     filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${graphPolicy}\n\n${wikiPolicy}\n\n${ctxPolicy}\n\n${gdskillsPolicy}\n\n${testingPolicy}\n\n${memoryPolicy}\n\n${flowPolicy}\n`,
+    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${initialPolicies.join("\n\n")}\n`,
     "utf8",
   );
+}
+
+function removePolicy(content: string, policy: string): string {
+  const escaped = escapeRegExp(policy);
+  return content
+    .replace(new RegExp(`\\n{0,2}${escaped}\\n?`, "g"), "\n")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 function ruleFileNameFor(source: string): string {

@@ -61,7 +61,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
    - Dependencies or packages needed
    - Data model changes if any
    - Estimated complexity: S / M / L
-3. Load relevant rules from `~/goodai-base/rules/core/` based on what will be built:
+3. Load relevant rules from `.metaproject/rules/core/` based on what will be built:
    - Always: `tdd-workflow.mdc`, `error-handling.mdc`, `solid-principles.mdc`
    - API/service code: `api-contracts.mdc`, `clean-architecture.mdc`
    - Database: `database-patterns.mdc`

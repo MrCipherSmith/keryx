@@ -368,7 +368,7 @@ Always present contradictions to user before making changes.
 If called within an orchestrator job context, check for job context before starting:
 
 ```
-IF JOB_NAME is provided AND jobs/<JOB_NAME>/ai/context.md exists:
+IF JOB_NAME is provided AND .metaproject/jobs/<JOB_NAME>/ai/context.md exists:
   Read context.md — use it to understand the codebase, affected areas, and conventions
   This enriches PR description generation with project-specific knowledge
 ELSE:

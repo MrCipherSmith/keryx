@@ -1,8 +1,8 @@
-# Imported Rules: agents.md
+# Imported Rules: AGENTS.md
 
-Source: `agents.md`
+Source: `AGENTS.md`
 
-This file is generated from the repository root agent entrypoint. Edit `agents.md`, then rerun `gd-metapro init`.
+This file is generated from the repository root agent entrypoint. Edit `AGENTS.md`, then rerun `gd-metapro init`.
 
 ---
 

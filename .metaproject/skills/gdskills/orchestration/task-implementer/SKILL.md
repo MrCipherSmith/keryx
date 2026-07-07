@@ -177,9 +177,9 @@ Based on what you're implementing, load and follow the relevant project rules.
 - New architectural layers or modules → `clean-architecture.mdc`
 
 Rules are located at:
-- OpenCode: `~/goodai-base/rules/core/<rule>.mdc`
+- OpenCode: `.metaproject/rules/core/<rule>.mdc`
 - Cursor: `.cursor/rules/core/<rule>.mdc`
-- Codex: `~/goodai-base/rules/core/<rule>.mdc`
+- Codex: `.metaproject/rules/core/<rule>.mdc`
 
 **Output of Phase 2:** Mental model of the implementation:
 ```

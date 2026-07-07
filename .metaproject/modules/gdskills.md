@@ -24,6 +24,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `code-verifier`: Run and summarize verification gates: typecheck, lint, tests, build, imports, and changed-scope checks.
 - `context-collector`: Build compact task context from graph, ctx, wiki, memory, health, project-skills, and selected files.
 - `feature-analyzer`: Analyze a feature, module, branch, or migration area and produce an implementation map.
+- `flow-orchestrator`: Run Task Manager-backed implementation flows through gd-metapro flow state, frozen acceptance criteria, PR gates, review, and Code Health.
 - `issue-analyzer`: Convert GitHub or local issues into atomic implementation tasks with acceptance criteria.
 - `job-documenter`: Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work.
 - `job-orchestrator`: Run full task pipelines: clarify, collect context, plan, implement, verify, review, and summarize.

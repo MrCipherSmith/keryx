@@ -41,4 +41,4 @@ tests_written: N
 all_criteria_covered: true
 ```
 
-Full spec: `~/goodai-base/skills/tests-creator/SKILL.md`
+Full spec: `.metaproject/skills/gdskills/quality/tests-creator/SKILL.md`

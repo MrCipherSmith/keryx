@@ -44,7 +44,7 @@ with trade-offs — not "use React because it's popular" but "use React because
 ```yaml
 task: "Select project level and technology stack"
 input_artifacts:
-  - jobs/<job>/artifacts/problem-statement.md
+  - .metaproject/jobs/<job>/artifacts/problem-statement.md
 decisions_so_far:
   D_core_problems: [...]
   D_goals: [...]
@@ -70,7 +70,7 @@ new_decisions:
   D_auth: "<approach>"
   D_deploy: "<strategy>"
   D_infra: "<approach>"
-artifact_path: "jobs/<job>/artifacts/stack-decision.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/stack-decision.md"
 next_phase_needs:
   - "Per-technology best practices research"
   - "Architecture pattern selection"

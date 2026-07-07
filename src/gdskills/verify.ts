@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathExists, toPosix } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { relevantAcceptedMemory } from "../memory/relevant";
+import { wikiValidate } from "../wiki/service";
 import type { ProjectSkillRegistryEntry } from "./project-skills";
 import { resolveProjectSkill } from "./resolve";
 
@@ -203,9 +204,7 @@ async function collectVerificationSignals({
   await pushArtifactSignal(projectRoot, signals, "gdctx", [
     ".metaproject/data/gdctx/artifacts/latest.md",
   ]);
-  await pushArtifactSignal(projectRoot, signals, "gdwiki", [
-    ".metaproject/wiki/index.md",
-  ]);
+  await pushGdwikiSignal(projectRoot, signals);
   await pushArtifactSignal(projectRoot, signals, "code-health", [
     ".metaproject/data/health/artifacts/latest.json",
     ".metaproject/data/health/artifacts/latest.md",
@@ -257,6 +256,44 @@ async function pushArtifactSignal(
   });
 }
 
+async function pushGdwikiSignal(
+  projectRoot: string,
+  signals: VerificationSignal[],
+): Promise<void> {
+  const indexPath = ".metaproject/wiki/index.md";
+  if (!(await pathExists(path.join(projectRoot, indexPath)))) {
+    signals.push({
+      name: "evidence:gdwiki",
+      status: "warn",
+      message: "No gdwiki index found.",
+      path: indexPath,
+    });
+    return;
+  }
+
+  const validation = await wikiValidate(projectRoot);
+  if (validation.ok) {
+    signals.push({
+      name: "evidence:gdwiki",
+      status: "pass",
+      message: "gdwiki evidence is valid.",
+      path: indexPath,
+    });
+    return;
+  }
+
+  const issues = validation.issues
+    .slice(0, 3)
+    .map((issue) => `${issue.page}: ${issue.message}`)
+    .join("; ");
+  signals.push({
+    name: "evidence:gdwiki",
+    status: "fail",
+    message: `gdwiki evidence is invalid: ${issues}`,
+    path: indexPath,
+  });
+}
+
 function classifyStatus(
   signals: VerificationSignal[],
   metadata: SkillMetadata,
@@ -297,8 +334,8 @@ function recommendationsFor(
   if (signals.some((signal) => signal.name === "evidence:gdctx" && signal.status === "warn")) {
     recommendations.push("Use gd-metapro ctx commands when compact file or command context is needed.");
   }
-  if (signals.some((signal) => signal.name === "evidence:gdwiki" && signal.status === "warn")) {
-    recommendations.push("Add or refresh gdwiki pages for domain and architecture evidence.");
+  if (signals.some((signal) => signal.name === "evidence:gdwiki" && signal.status !== "pass")) {
+    recommendations.push("Add or refresh gdwiki pages, then run gd-metapro wiki index and gd-metapro wiki validate.");
   }
   if (signals.some((signal) => signal.name === "evidence:code-health" && signal.status === "warn")) {
     recommendations.push("Run Code Health when quality metrics should influence skill freshness.");

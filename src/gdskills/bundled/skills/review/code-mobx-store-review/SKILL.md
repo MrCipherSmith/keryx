@@ -247,7 +247,7 @@ When dispatched by `job-orchestrator` as part of a job pipeline, the prompt MAY 
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: ~/goodai-base/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 ```
 
 If provided and the file exists, read the context document before starting the review. Use it to:

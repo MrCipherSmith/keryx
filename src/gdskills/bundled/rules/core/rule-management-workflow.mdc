@@ -12,10 +12,10 @@ Define a deterministic workflow for adding, editing, and syncing rules.
 Apply when user asks to create, update, move, reorganize, or sync rules.
 
 ## Source of Truth
-- Repository source: `~/goodai-base/rules`
-- Root always-on file (plain): `~/goodai-base/AGENTS.md`
-- Root always-on file (Cursor): `~/goodai-base/AGENTS.mdc` (frontmatter wrapper around AGENTS.md)
-- Thematic files: `~/goodai-base/rules/core/*.mdc`
+- Repository source: `.metaproject/rules`
+- Root always-on file (plain): `AGENTS.md`
+- Root always-on file (Cursor): `AGENTS.mdc` (frontmatter wrapper around AGENTS.md)
+- Thematic files: `.metaproject/rules/core/*.mdc`
 
 ## Mandatory Clarification Step
 Before creating or editing any rule, the agent MUST ask and confirm:
@@ -28,14 +28,14 @@ Before creating or editing any rule, the agent MUST ask and confirm:
 1. Update or create thematic rule files only under `rules/core`.
 2. Keep all rule files in English.
 3. Keep frontmatter valid YAML.
-4. If core files changed, update `~/goodai-base/AGENTS.md` catalog (and keep AGENTS.mdc in sync).
+4. If core files changed, update `AGENTS.md` catalog (and keep AGENTS.mdc in sync).
 5. Run synchronization only after source files are updated.
 
 ## How to Run Synchronization
-After editing rules under `~/goodai-base/rules/` or `AGENTS.md`, sync to all targets:
+After editing rules under `.metaproject/rules/` or `AGENTS.md`, sync to all targets:
 
 ```bash
-~/goodai-base/scripts/sync-skills.sh
+gd-metapro update
 ```
 
 ### Sync Targets

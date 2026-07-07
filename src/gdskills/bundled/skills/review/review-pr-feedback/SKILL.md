@@ -187,7 +187,7 @@ review authority markers such as "REQUEST_CHANGES from `boss`"), trigger this fl
 3. Ask: "Should I analyze `<login>`'s comments for patterns and suggest updates to review rules?"
 4. If the user agrees:
    - Identify recurring patterns in that reviewer's feedback (not one-off edge cases)
-   - Propose specific additions to `~/goodai-base/rules/core/code-review-boss-profile.mdc` or the relevant rule file
+   - Propose specific additions to `.metaproject/rules/core/code-review-boss-profile.mdc` or the relevant rule file
    - Present the proposed changes to the user for approval before writing anything
    - After approval, update the rule file and note it in the output
 5. Extract generalizable patterns only — not personal phrasing or one-off opinions
@@ -301,8 +301,8 @@ CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
 
 Context path resolution order:
 1. Value passed explicitly in the dispatch prompt
-2. `GOODAI_JOBS_ROOT` environment variable + `/<JOB_NAME>/ai/context.md`
-3. `<PROJECT_DIR>/jobs/<JOB_NAME>/ai/context.md`
+2. `GDMETAPRO_JOBS_ROOT` environment variable + `/<JOB_NAME>/ai/context.md`
+3. `<PROJECT_DIR>/.metaproject/jobs/<JOB_NAME>/ai/context.md`
 
 If provided and the file exists, read it before fetching PR comments. If absent, proceed normally.
 

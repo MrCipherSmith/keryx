@@ -11,7 +11,7 @@
                                     ↓
 [wave-executor]    → extracts tasks → fills template → Task(task-implementer) × N (parallel)
                                                                   ↓
-[task-implementer] → executes SKILL.md → writes JSON to jobs/<job-name>/results/<task_id>.json
+[task-implementer] → executes SKILL.md → writes JSON to .metaproject/jobs/<job-name>/results/<task_id>.json
                                                                   ↓
 [Result]           → compact STATUS: DONE response (no inline JSON)
                                     ↓

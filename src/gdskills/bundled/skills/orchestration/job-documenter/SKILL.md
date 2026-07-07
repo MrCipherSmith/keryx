@@ -79,7 +79,7 @@ PLAN:        <ordered list of planned steps>
 
 1. **Create directory structure:**
    ```
-   jobs/<JOB_NAME>/
+   .metaproject/jobs/<JOB_NAME>/
      README.md
      man/
      ai/
@@ -149,7 +149,7 @@ PLAN:        <ordered list of planned steps>
 5. **Update README.md** — add plan.md entries to Documents tables.
 
 6. **Verify:**
-   - Read directory listing of `jobs/<JOB_NAME>/`
+   - Read directory listing of `.metaproject/jobs/<JOB_NAME>/`
    - Confirm: `README.md`, `man/`, `ai/`, `man/plan.md`, `ai/plan.md` all exist
    - If any missing → report error
 
@@ -247,7 +247,7 @@ BRANCH_UPDATE: <optional — branch name if it was TBD during init>
 
 **Procedure:**
 
-1. **Read current README.md** from `jobs/<JOB_NAME>/README.md`
+1. **Read current README.md** from `.metaproject/jobs/<JOB_NAME>/README.md`
 
 2. **Apply updates:**
    - Update plan checkboxes based on PLAN_UPDATES (`[ ]` → `[x]` for completed steps)
@@ -298,7 +298,7 @@ SUMMARY:       <1-3 sentence summary of what was accomplished>
    - Add SUMMARY to Description section (or as a "## Outcome" section at the end)
 
 3. **Full verification:**
-   - Read directory listing of `jobs/<JOB_NAME>/`, `man/`, `ai/`
+   - Read directory listing of `.metaproject/jobs/<JOB_NAME>/`, `man/`, `ai/`
    - Cross-check every entry in README Documents tables against actual files
    - Report any discrepancies
 
@@ -367,7 +367,7 @@ Execute the action and return a DOCUMENTER_RESULT block.
 4. **DO** keep README.md in sync with actual directory contents.
 5. **DO** use ISO 8601 UTC timestamps everywhere.
 6. **DO** return structured DOCUMENTER_RESULT for every action.
-7. **DO NOT** create files outside of `jobs/<JOB_NAME>/`.
+7. **DO NOT** create files outside of `.metaproject/jobs/<JOB_NAME>/`.
 8. **DO NOT** delete or overwrite existing documents without explicit instruction.
 9. **DO NOT** modify files in other job folders.
 10. **DO NOT** interact with the user directly — all communication goes through the orchestrator.

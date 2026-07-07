@@ -18,7 +18,7 @@
     },
     "JOBS_ROOT": {
       "type": "string",
-      "description": "Absolute path to the jobs root directory. Default: <PROJECT_DIR>/jobs. Override: $GOODAI_JOBS_ROOT.",
+      "description": "Absolute path to the jobs root directory. Default: .metaproject/jobs. Override: $GDMETAPRO_JOBS_ROOT.",
       "examples": ["/path/to/project/jobs", "/custom/jobs/root"]
     },
     "PROJECT_DIR": {
@@ -50,7 +50,7 @@
           "type": ["string", "null"],
           "description": "Optional. Output from issue-analyzer, if available. May be a file path or inline content.",
           "examples": [
-            "<PROJECT_DIR>/jobs/my-job/ai/analysis.md",
+            ".metaproject/jobs/my-job/ai/analysis.md",
             "Inline Gherkin or analysis summary text"
           ]
         },
@@ -107,12 +107,12 @@
     {
       "ACTION": "collect",
       "JOB_NAME": "implement-savemode-component",
-      "JOBS_ROOT": "<PROJECT_DIR>/jobs",
+      "JOBS_ROOT": ".metaproject/jobs",
       "PROJECT_DIR": "/Users/dev/<PROJECT>",
       "DATA": {
         "TASK_DESCRIPTION": "Implement a SaveMode toggle component that switches between draft and published states in the pipeline editor.",
         "FOCUS_AREAS": ["MobX stores", "pipeline validation", "React observer pattern"],
-        "ANALYSIS_RESULT": "<PROJECT_DIR>/jobs/implement-savemode-component/ai/analysis.md",
+        "ANALYSIS_RESULT": ".metaproject/jobs/implement-savemode-component/ai/analysis.md",
         "KNOWN_LIBRARIES": ["mobx", "mobx-react-lite", "zod"],
         "UPDATE_REASON": null
       }
@@ -120,7 +120,7 @@
     {
       "ACTION": "update",
       "JOB_NAME": "implement-savemode-component",
-      "JOBS_ROOT": "<PROJECT_DIR>/jobs",
+      "JOBS_ROOT": ".metaproject/jobs",
       "PROJECT_DIR": "/Users/dev/<PROJECT>",
       "DATA": {
         "TASK_DESCRIPTION": "Implement a SaveMode toggle component that switches between draft and published states in the pipeline editor.",

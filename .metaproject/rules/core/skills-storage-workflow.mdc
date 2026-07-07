@@ -18,7 +18,7 @@ Before creating or editing a skill, ask and confirm:
 3. Agent profile scope (`Cursor`, `Codex`, `Zed`, `OpenCode`, or all)
 
 ## Source of Truth
-`~/goodai-base/skills/<skill-name>/`
+`.metaproject/skills/gdskills/<skill-name>/`
 
 ## Required Source Layout
 - `SKILL.md` — canonical source of truth
@@ -27,7 +27,7 @@ Before creating or editing a skill, ask and confirm:
 - `SKILL.zed.md` — Zed-specific variant (optional; falls back to SKILL.md)
 - `SKILL.opencode.md` — OpenCode-specific variant (optional; falls back to SKILL.md)
 
-`SKILL.md` is always required. Platform variants are optional — if absent, `sync-skills.sh` will use `SKILL.md` as fallback.
+`SKILL.md` is always required. Platform variants are optional — if absent, `gd-metapro update` installs `SKILL.md` as fallback.
 
 ## Global Sync Mapping
 - `SKILL.cursor.md` (or `SKILL.md`) → `~/.cursor/skills/<skill-name>/SKILL.md`
@@ -47,7 +47,7 @@ Before creating or editing a skill, ask and confirm:
 
 ## Machine-Readable Contract
 Use canonical schema:
-- `~/goodai-base/rules/schemas/skill-workflow-result.schema.json`
+- `.metaproject/rules/schemas/skill-workflow-result.schema.json`
 
 Contract requirements:
 - One top-level JSON object only.
@@ -66,13 +66,13 @@ Contract requirements:
 Run before syncing skills:
 
 ```bash
-~/goodai-base/scripts/validate-skills-before-sync.sh
+gd-metapro skills verify --all
 ```
 
 Then run sync:
 
 ```bash
-~/goodai-base/scripts/sync-skills.sh
+gd-metapro update
 ```
 
 If validation fails, do not sync.
@@ -85,4 +85,4 @@ If validation fails, do not sync.
 - Do not create skills in `~/.cursor/skills-cursor/`.
 
 ## Apply Changes Workflow
-Changes under `~/goodai-base/skills/*` should be synced to tool directories using `sync-skills.sh`.
+Changes under `.metaproject/skills/gdskills/*` should be synced to tool directories using `gd-metapro update`.

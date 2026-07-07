@@ -54,7 +54,7 @@ Agent: <skill name + version>
 ```
 
 **Storage:**
-- In `job-orchestrator` jobs: saved via `job-documenter` to `jobs/<job-name>/man/spec.md`
+- In `job-orchestrator` jobs: saved via `job-documenter` to `.metaproject/jobs/<job-name>/man/spec.md`
 - In `feature-dev`: saved to `<project_root>/.feature-spec.md` (gitignored) or printed and confirmed by user
 - In any agent: at minimum, the spec is presented to the user and confirmed before code is written
 
@@ -108,7 +108,7 @@ PR: <PR URL or "not created">
 ```
 
 **Storage:**
-- In `job-orchestrator` jobs: saved via `job-documenter` to `jobs/<job-name>/man/change-report.md`
+- In `job-orchestrator` jobs: saved via `job-documenter` to `.metaproject/jobs/<job-name>/man/change-report.md`
 - In `feature-dev`: appended to PR description + printed to user
 - In any agent: at minimum, printed as the final message
 

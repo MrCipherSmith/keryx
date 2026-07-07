@@ -36,4 +36,4 @@ VERIFICATION_RESULT:
 STATUS: DONE | DONE_WITH_CONCERNS | BLOCKED
 ```
 
-Full spec: `~/goodai-base/skills/code-verifier/SKILL.md`
+Full spec: `.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md`

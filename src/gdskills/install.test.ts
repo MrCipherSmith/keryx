@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { installGdskills } from "./install";
 
-test("installs real bundled goodai-base skills, contracts, shared assets, and rules", async () => {
+test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gd-metapro-gdskills-"));
   try {
     const metaprojectRoot = path.join(root, ".metaproject");
@@ -28,6 +29,16 @@ test("installs real bundled goodai-base skills, contracts, shared assets, and ru
     );
     expect(reviewOrchestrator).toContain("\"$schema\"");
 
+    const flowOrchestrator = await readFile(
+      path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md"),
+      "utf8",
+    );
+    expect(flowOrchestrator).toContain("Task Manager-aware implementation orchestrator");
+    expect(await readFile(
+      path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "flow-orchestrator", "input-contract.schema.json"),
+      "utf8",
+    )).toContain("FlowOrchestratorInput");
+
     const generatedMetaprojectSkill = await readFile(
       path.join(metaprojectRoot, "skills", "gdskills", "core", "entity-skill-creator", "SKILL.md"),
       "utf8",
@@ -42,7 +53,46 @@ test("installs real bundled goodai-base skills, contracts, shared assets, and ru
       path.join(metaprojectRoot, "rules", "core", "git-rules.mdc"),
       "utf8",
     )).toContain("Git");
+    await access(path.join(metaprojectRoot, "jobs"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("bundled gdskills do not depend on external goodai-base paths", async () => {
+  const bundledRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "bundled");
+  const forbidden = [
+    /goodai-base/i,
+    /GOODAI_/,
+    /\/Users\/tsaitler/,
+    /Presight\/Vantage/,
+    /\.vantage-frontend/,
+    /~\/goodai-base/,
+  ];
+  const violations: string[] = [];
+
+  for (const filePath of await listFiles(bundledRoot)) {
+    const content = await readFile(filePath, "utf8");
+    for (const pattern of forbidden) {
+      if (pattern.test(content)) {
+        violations.push(`${path.relative(bundledRoot, filePath)}: ${pattern.source}`);
+      }
+    }
+  }
+
+  expect(violations).toEqual([]);
+});
+
+async function listFiles(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFiles(entryPath));
+    } else if (entry.isFile()) {
+      files.push(entryPath);
+    }
+  }
+  return files;
+}

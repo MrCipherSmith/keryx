@@ -33,8 +33,8 @@ to feed into job-orchestrator or task-implementer.
 ```yaml
 task: "Generate roadmap and task breakdown"
 input_artifacts:
-  - jobs/<job>/artifacts/prd.md
-  - jobs/<job>/artifacts/architecture.md
+  - .metaproject/jobs/<job>/artifacts/prd.md
+  - .metaproject/jobs/<job>/artifacts/architecture.md
 decisions_so_far:
   D_level: "..."
   D_frontend: "..."
@@ -51,7 +51,7 @@ new_decisions:
   D_milestones: ["<M1 name>", "<M2 name>", ...]
   D_estimated_duration: "<range>"
   D_critical_path: "<list of blocking tasks>"
-artifact_path: "jobs/<job>/artifacts/roadmap.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/roadmap.md"
 ```
 
 ---

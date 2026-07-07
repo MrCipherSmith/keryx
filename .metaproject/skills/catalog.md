@@ -30,6 +30,7 @@ Resolution order:
 | code-verifier | orchestration | Run and summarize verification gates: typecheck, lint, tests, build, imports, and changed-scope checks. | gdskills/orchestration/code-verifier/SKILL.md |
 | context-collector | orchestration | Build compact task context from graph, ctx, wiki, memory, health, project-skills, and selected files. | gdskills/orchestration/context-collector/SKILL.md |
 | feature-analyzer | orchestration | Analyze a feature, module, branch, or migration area and produce an implementation map. | gdskills/orchestration/feature-analyzer/SKILL.md |
+| flow-orchestrator | orchestration | Run Task Manager-backed implementation flows through gd-metapro flow state, frozen acceptance criteria, PR gates, review, and Code Health. | gdskills/orchestration/flow-orchestrator/SKILL.md |
 | issue-analyzer | orchestration | Convert GitHub or local issues into atomic implementation tasks with acceptance criteria. | gdskills/orchestration/issue-analyzer/SKILL.md |
 | job-documenter | orchestration | Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work. | gdskills/orchestration/job-documenter/SKILL.md |
 | job-orchestrator | orchestration | Run full task pipelines: clarify, collect context, plan, implement, verify, review, and summarize. | gdskills/orchestration/job-orchestrator/SKILL.md |

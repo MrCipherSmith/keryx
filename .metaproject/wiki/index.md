@@ -31,7 +31,37 @@ gd-metapro wiki index
 ## Pages
 
 <!-- gd-metapro:wiki-index:begin -->
-<!-- generated: never | pages: 0 -->
+<!-- generated: 2026-07-07T09:30:58.284Z | pages: 0 -->
 
-_No pages yet. Run `gd-metapro wiki index` after creating pages._
+### Architecture
+
+_No pages yet._
+
+### Domain Model
+
+_No pages yet._
+
+### Business Rule
+
+_No pages yet._
+
+### User Scenario
+
+_No pages yet._
+
+### Component
+
+_No pages yet._
+
+### Service
+
+_No pages yet._
+
+### Integration
+
+_No pages yet._
+
+### Decision
+
+_No pages yet._
 <!-- gd-metapro:wiki-index:end -->

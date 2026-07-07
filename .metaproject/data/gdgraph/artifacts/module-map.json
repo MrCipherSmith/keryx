@@ -4,6 +4,8 @@
   ],
   "commands": [
     "src/commands/ctx.ts",
+    "src/commands/dashboard.test.ts",
+    "src/commands/dashboard.ts",
     "src/commands/flow.ts",
     "src/commands/gdgraph.ts",
     "src/commands/health.ts",
@@ -38,6 +40,7 @@
     "src/gdskills/catalog.ts",
     "src/gdskills/contracts.ts",
     "src/gdskills/export.ts",
+    "src/gdskills/install.test.ts",
     "src/gdskills/install.ts",
     "src/gdskills/learn.ts",
     "src/gdskills/project-skills.ts",

@@ -43,6 +43,16 @@ Purpose:
 - stay non-blocking and avoid running heavy suites on every commit;
 - give agents fresh context before test generation or debugging.
 
+## git post-commit dashboard hook
+
+When any Metaproject post-commit hook is enabled, a lightweight dashboard hook refreshes service files after the other hooks.
+
+Purpose:
+
+- keep `.metaproject/index.md` and `.metaproject/gd-metapro-dashboard.html` aligned with enabled modules and available service files;
+- recover missing `.metaproject/metaproject.json` for older initialized projects;
+- avoid generated data work: the hook runs `gd-metapro update --skip-runtime --no-tasks`, not module builders.
+
 ## git pre-push testing hook
 
 When enabled during `gd-metapro init`, the Git `pre-push` hook runs changed-scope tests and blocks the push on failure.

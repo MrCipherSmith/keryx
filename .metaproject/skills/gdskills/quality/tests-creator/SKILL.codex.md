@@ -61,4 +61,4 @@ all_criteria_covered: true | false
 - Tests MUST FAIL before reporting DONE
 - Every acceptance criterion needs ≥1 test
 
-See full workflow: `~/goodai-base/skills/tests-creator/SKILL.md`
+See full workflow: `.metaproject/skills/gdskills/quality/tests-creator/SKILL.md`

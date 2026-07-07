@@ -52,4 +52,4 @@ STATUS: DONE | DONE_WITH_CONCERNS | BLOCKED
 
 **Key rule:** Always run ALL checks even if one fails — orchestrator needs complete picture.
 
-Full spec: `~/goodai-base/skills/code-verifier/SKILL.md`
+Full spec: `.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md`

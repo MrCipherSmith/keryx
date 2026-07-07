@@ -37,7 +37,7 @@ b091 Review Progress:
    - закоммиченные (`BASE_SHA..HEAD`)
    - локальные незакоммиченные (staged/unstaged/untracked)
 2) **Скоуп при явном commit hash/range**: если пользователь явно передал hash или диапазон, ревьюй только запрошенный диапазон; локальные незакоммиченные изменения не добавляй, если это отдельно не попросили.
-3) **Стиль/принципы b091**: ревью строго по `~/goodai-base/rules/core/code-review-b091-profile.mdc` (разделы правил и промпт).
+3) **Стиль/принципы b091**: ревью строго по `.metaproject/rules/core/code-review-b091-profile.mdc` (разделы правил и промпт).
 4) **Результат**: подробный отчёт по проблемам с объяснением и предложением исправлений (минимальные патчи там, где это просто).
 
 ## Определение parent ref (детерминированно, именно родитель ветки)
@@ -110,7 +110,7 @@ git diff <FROM_SHA>..<TO_SHA>
 
 ## Как ревьюить (по b091)
 
-Применяй чек-лист и промпт из `~/goodai-base/rules/core/code-review-b091-profile.mdc`. Ключевые акценты b091:
+Применяй чек-лист и промпт из `.metaproject/rules/core/code-review-b091-profile.mdc`. Ключевые акценты b091:
 
 - Логика должна жить в правильном слое (часто — в store), чтобы её можно было нормально тестировать.
 - Против “patch/glue/ducttape”: требуй чинить причину, а не маскировать симптомы.
@@ -198,7 +198,7 @@ When dispatched by `job-orchestrator` as part of a job pipeline, the prompt MAY 
 
 ```
 JOB_NAME:     <job-name>
-CONTEXT_PATH: ~/goodai-base/jobs/<job-name>/ai/context.md
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
 ```
 
 If provided and the file exists, read the context document before starting the review. Use it to:

@@ -46,10 +46,10 @@ into actionable requirements and user stories.
 task: "Generate PRD / Implementation Plan"
 mode: "new_project" | "task_in_project"
 input_artifacts:
-  - jobs/<job>/artifacts/problem-statement.md
-  - jobs/<job>/artifacts/architecture.md
-  - jobs/<job>/artifacts/tech-bestpractices.md
-  - jobs/<job>/decisions.md
+  - .metaproject/jobs/<job>/artifacts/problem-statement.md
+  - .metaproject/jobs/<job>/artifacts/architecture.md
+  - .metaproject/jobs/<job>/artifacts/tech-bestpractices.md
+  - .metaproject/jobs/<job>/decisions.md
 decisions_so_far: <all decisions from D1 through D_arch_pattern>
 ```
 
@@ -60,7 +60,7 @@ status: "DONE" | "DONE_WITH_CONCERNS" | "BLOCKED"
 summary: "<3-5 sentences: document type, user story count, key scope decisions>"
 new_decisions: {}  # PRD does NOT add architectural decisions
 concerns: ["<if DONE_WITH_CONCERNS — gaps or ambiguities found>"]
-artifact_path: "jobs/<job>/artifacts/prd.md"
+artifact_path: ".metaproject/jobs/<job>/artifacts/prd.md"
 ```
 
 ---

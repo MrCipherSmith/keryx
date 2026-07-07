@@ -43,7 +43,7 @@ Dynamic orchestrator that builds execution plans based on user intent. Unlike a 
 > "The key difference from parallelization is its flexibility — subtasks aren't pre-defined, but determined by the orchestrator based on the specific input."
 
 **Input:** User request (issue URL, analysis request, implementation request, etc.)
-**Output:** Executed plan + persistent job documentation in `jobs/<job-name>/` + optional PR
+**Output:** Executed plan + persistent job documentation in `.metaproject/jobs/<job-name>/` + optional PR
 
 ## When to Use
 
@@ -931,7 +931,7 @@ Publish the review report to the PR?
 - Default is C. Never publish to a PR without explicit user confirmation or `publish_pr_review_report: comment`, `publish_pr_review_report: comment-and-ai-artifact`, or legacy `publish_pr_review_report: true`.
 - If the job has review findings but no PR number yet, store `pending_pr_review_report_comment` and `pending_review_ai_artifact` in job state. If the later PR step creates a PR, ask the same question after PR creation.
 - If the user chooses A, delegate concise comment formatting to `review-orchestrator`'s PR Review Report Publication contract when available.
-- If the user chooses B, delegate concise comment formatting and generate `jobs/<job-name>/ai/review-ai-report.md` using `review-orchestrator`'s Detailed AI Markdown Artifact contract.
+- If the user chooses B, delegate concise comment formatting and generate `.metaproject/jobs/<job-name>/ai/review-ai-report.md` using `review-orchestrator`'s Detailed AI Markdown Artifact contract.
 - If the user chooses B, the PR comment `Meta` section must include both an `AI artifact` link/path and an `AI artifact description` row explaining in human-readable language that the markdown file contains detailed findings, fix guidance, patch guidance, regression coverage, validation plan, and follow-up agent context.
 - If using legacy reviewers, normalize findings into the same concise PR comment and AI artifact structures before posting.
 - Record the final decision in job state as `publication_plan.mode`: `comment`, `comment-and-ai-artifact`, or `none`.
@@ -1194,7 +1194,7 @@ DATA:
 
 Tell user:
 1. What was accomplished (summary)
-2. Where documentation is stored: `jobs/<job-name>/`
+2. Where documentation is stored: `.metaproject/jobs/<job-name>/`
 3. PR URL (if created)
 4. Metrics summary (time, tokens)
 5. Any unresolved issues
@@ -1207,7 +1207,7 @@ Tell user:
   PR:            <URL or "not created">
   Metrics:       <total time>, <total tokens>
   
-  See jobs/<job-name>/README.md for the full job index.
+  See .metaproject/jobs/<job-name>/README.md for the full job index.
 ```
 
 ### 3.3 Post-Completion Options
@@ -1303,9 +1303,9 @@ JOB_STATE:
 
 ## state.json Specification
 
-The orchestrator persists JOB_STATE to `jobs/<job-name>/state.json` for job resumption.
+The orchestrator persists JOB_STATE to `.metaproject/jobs/<job-name>/state.json` for job resumption.
 
-**Location:** `jobs/<JOB_NAME>/state.json`
+**Location:** `.metaproject/jobs/<JOB_NAME>/state.json`
 
 **Schema reference:** `skills/job-orchestrator/state.schema.json`
 
@@ -1316,7 +1316,7 @@ The orchestrator persists JOB_STATE to `jobs/<job-name>/state.json` for job resu
 **How to write state.json:**
 ```bash
 # Write state (orchestrator handles this directly, not via job-documenter)
-cat > jobs/<JOB_NAME>/state.json << 'EOF'
+cat > .metaproject/jobs/<JOB_NAME>/state.json << 'EOF'
 {
   "phase": "EXECUTION",
   "intent": "<intent>",
@@ -1623,11 +1623,11 @@ The jobs documentation root is configurable, not hardcoded:
 
 **Resolution order:**
 1. `JOBS_ROOT` passed explicitly by the orchestrator in the sub-agent dispatch prompt
-2. `GOODAI_JOBS_ROOT` environment variable (if set)
-3. Default: `<PROJECT_DIR>/jobs/`  ← project-local (PROJECT_DIR is known by Phase 0.2)
+2. `GDMETAPRO_JOBS_ROOT` environment variable (if set)
+3. Default: `.metaproject/jobs/`  ← project-local (PROJECT_DIR is known by Phase 0.2)
 
 ```bash
-JOBS_ROOT="${GOODAI_JOBS_ROOT:-$PROJECT_DIR/jobs}"
+JOBS_ROOT="${GDMETAPRO_JOBS_ROOT:-.metaproject/jobs}"
 ```
 
 All references to job paths in sub-agent prompts must use the resolved `JOBS_ROOT`.
@@ -1662,8 +1662,8 @@ When a job ends with status `aborted`, `timeout`, or has unresolved critical iss
 - Increase step_timeout_ms if timeout was the issue
 ```
 
-2. Save to `jobs/<job-name>/post-mortem.md`
-3. Include in final user message: "Post-mortem saved to `jobs/<job-name>/post-mortem.md`"
+2. Save to `.metaproject/jobs/<job-name>/post-mortem.md`
+3. Include in final user message: "Post-mortem saved to `.metaproject/jobs/<job-name>/post-mortem.md`"
 
 ---
 
@@ -1684,7 +1684,7 @@ The orchestrator tracks timing and token usage for each step to enable optimizat
 }
 ```
 
-**Saved to:** `jobs/<job-name>/metrics.json`
+**Saved to:** `.metaproject/jobs/<job-name>/metrics.json`
 
 **Aggregated in report:**
 ```markdown

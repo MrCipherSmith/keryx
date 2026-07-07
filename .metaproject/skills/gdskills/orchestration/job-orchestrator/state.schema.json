@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://goodai-base.local/schemas/job-orchestrator/state.schema.json",
+  "$id": "https://gd-metapro.local/schemas/job-orchestrator/state.schema.json",
   "title": "Job Orchestrator State",
-  "description": "Schema for jobs/<job-name>/state.json — persisted orchestrator state for job resumption.",
+  "description": "Schema for .metaproject/jobs/<job-name>/state.json — persisted orchestrator state for job resumption.",
   "type": "object",
   "additionalProperties": false,
   "required": ["phase", "intent", "job_name", "context", "plan"],

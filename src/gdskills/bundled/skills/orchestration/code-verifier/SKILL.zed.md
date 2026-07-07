@@ -26,4 +26,4 @@ lint → type-check → tests → circular-import gate.
 3. Classify: CRITICAL/HIGH = FAIL, LOW = PASS_WITH_WARNINGS
 4. Emit VERIFICATION_RESULT
 
-Full spec: `~/goodai-base/skills/code-verifier/SKILL.md`
+Full spec: `.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md`
