@@ -74,6 +74,7 @@ export type MemoryConfig = {
     minSharedScopeOrTags: number;
   };
   ingest: { defaultStatus: MemoryStatus; allowAutoAccept: boolean };
+  reflect: { minClusterSize: number };
 };
 
 export type SearchFilters = {

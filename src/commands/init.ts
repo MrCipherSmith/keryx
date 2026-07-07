@@ -1032,7 +1032,7 @@ function buildManifest({
             core: ".metaproject/core/memory",
             data: ".metaproject/data/memory",
             manifest: ".metaproject/modules/memory.md",
-            commands: ["new", "index", "search", "ingest", "check"],
+            commands: ["new", "index", "search", "ingest", "check", "reflect"],
           }
         : {
             enabled: false,

@@ -1,7 +1,7 @@
 # Documentation Memory: technical specification
 
-Version: 0.3.0
-Status: Phase 1 implemented (v1 scope; see section 21). Retrieval is keyword+metadata (embedding-free); embeddings are Phase 3.
+Version: 0.4.0
+Status: Phase 1 + reflect/learn-loop (Phase 2, partial) implemented; see section 21. Retrieval is keyword+metadata (embedding-free); embeddings are Phase 3.
 
 ## 1. Purpose
 
@@ -276,6 +276,7 @@ gd-metapro memory index
 gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
 gd-metapro memory ingest --from-<source> <path>
 gd-metapro memory check
+gd-metapro memory reflect
 ```
 
 `check` runs: metadata validation, `Version` field check, link check, dedup
@@ -355,11 +356,12 @@ Ignored: `.metaproject/data/memory/index/**`, `.metaproject/data/memory/artifact
 - [x] deterministic dedup/conflict + `memory check`;
 - [x] versioned layered search output; manifest, module doc, skill.
 
-### Phase 2 - reconcile and consolidation
+### Phase 2 - reconcile and consolidation (in progress)
 
-- Mem0-style ingest reconciliation (ADD/UPDATE/supersede);
-- `memory reflect` (consolidate related entries into higher-level lessons/patterns);
-- end-to-end `skills learn --from-memory` loop and `skill-verify-skill` usage.
+- [x] `memory reflect` - deterministic tag-cluster consolidation into `pattern` drafts;
+- [x] `skills learn --from-memory` loop wired (gdskills consumes the versioned search JSON);
+- [ ] Mem0-style ingest reconciliation (ADD/UPDATE/supersede);
+- [ ] `skill-verify-skill` end-to-end memory usage.
 
 ### Phase 3 - semantic
 

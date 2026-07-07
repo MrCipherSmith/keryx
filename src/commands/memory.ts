@@ -1,4 +1,6 @@
 import { createMemoryService } from "../memory/service";
+import { loadMemoryConfig } from "../memory/config";
+import { reflectMemory } from "../memory/reflect";
 import type { MemoryStatus, SearchFilters } from "../memory/types";
 
 const service = createMemoryService();
@@ -36,6 +38,10 @@ export async function memoryCommand(args: string[]): Promise<void> {
   }
   if (command === "check") {
     await runCheck();
+    return;
+  }
+  if (command === "reflect") {
+    await runReflect();
     return;
   }
 
@@ -151,6 +157,22 @@ async function runCheck(): Promise<void> {
   process.exitCode = 1;
 }
 
+async function runReflect(): Promise<void> {
+  const config = await loadMemoryConfig(process.cwd());
+  const result = await reflectMemory(process.cwd(), config, new Date());
+  console.log("# memory reflect");
+  console.log("");
+  console.log(`clusters (>= ${config.reflect.minClusterSize}): ${result.clusters.length}`);
+  console.log(`created pattern drafts: ${result.created.length} (skipped ${result.skippedExisting} existing)`);
+  console.log("");
+  for (const cluster of result.clusters) {
+    console.log(`- ${cluster.tag}: ${cluster.members.length} entries`);
+  }
+  for (const created of result.created) {
+    console.log(`  -> ${created}`);
+  }
+}
+
 function valueAfter(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
@@ -165,6 +187,7 @@ Usage:
   gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
   gd-metapro memory ingest --from-<review|health|job|skill-verifier> <path>
   gd-metapro memory check
+  gd-metapro memory reflect
 
 Types:
   lesson, decision, constraint, known-mistake, historical-context, pattern,

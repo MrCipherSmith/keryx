@@ -20,6 +20,7 @@ export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   },
   dedup: { titleSimilarity: 0.8, summaryJaccard: 0.6, minSharedScopeOrTags: 1 },
   ingest: { defaultStatus: "draft", allowAutoAccept: false },
+  reflect: { minClusterSize: 3 },
 };
 
 export function memoryConfigPath(cwd: string): string {
@@ -48,6 +49,7 @@ export async function loadMemoryConfig(cwd: string): Promise<MemoryConfig> {
     statusBoost: { ...base.statusBoost, ...(parsed.statusBoost ?? {}) },
     dedup: { ...base.dedup, ...(parsed.dedup ?? {}) },
     ingest: { ...base.ingest, ...(parsed.ingest ?? {}) },
+    reflect: { ...base.reflect, ...(parsed.reflect ?? {}) },
   };
 }
 
