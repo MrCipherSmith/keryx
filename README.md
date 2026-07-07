@@ -1,375 +1,124 @@
-# meta-project
+# gd-metapro
 
-`meta-project` is a CLI-first Metaproject toolkit. It installs a local `.metaproject/` workspace into any codebase so AI agents and developers can share the same structured context, generated data, module manifests, and project-specific skills.
+**gd-metapro** is a single-binary Bun/TypeScript CLI whose one job is to scaffold and maintain a per-project **`.metaproject/`** workspace — a file-based "agent operating system" that materializes a repository's structure, quality, tests, conventions, and history as durable Markdown plus machine-readable JSON.
 
-The public command is `gd-metapro`. The product/CLI name is `gd-metapro`; `meta-project` is the GitHub repository slug (`MrCipherSmith/meta-project`).
+Instead of an AI coding agent re-deriving a project's context from raw files on every task, gd-metapro captures that knowledge under `.metaproject/` and installs routing rules so any agent that reads the repo's `AGENTS.md`/`CLAUDE.md` is directed to consult the workspace first.
 
-## Global Install
+> The product/CLI name is `gd-metapro`; `meta-project` is the GitHub repository slug (`MrCipherSmith/meta-project`).
 
-From the GitHub package source after build hooks:
+## Highlights
 
-```bash
-bun install -g github:MrCipherSmith/meta-project
-gd-metapro init
-```
-
-Private repository install through GitHub CLI:
-
-```bash
-/opt/homebrew/bin/gh auth setup-git
-/opt/homebrew/bin/gh api repos/MrCipherSmith/meta-project/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --global
-gd-metapro init
-```
-
-Public/raw install:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh | bash -s -- --global
-gd-metapro init
-```
-
-The installer clones the runtime into `~/.gd-metapro/gd-metapro` and writes a wrapper shell script at `~/.local/bin/gd-metapro` that execs the runtime via `bun`.
-
-Make sure `~/.local/bin` is in your `PATH`:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-## Project-Local Install And Init
-
-Use this when you do not want to install a global command. It installs the runtime into the current project and immediately runs init.
-
-Private repository:
-
-```bash
-/opt/homebrew/bin/gh auth setup-git
-/opt/homebrew/bin/gh api repos/MrCipherSmith/meta-project/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --project
-```
-
-Public/raw:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh | bash -s -- --project
-```
-
-Non-interactive mode:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh | bash -s -- --project --yes
-```
-
-Project-local install stores the CLI runtime under:
-
-```text
-.metaproject/runtime/gd-metapro
-```
-
-## What Init Creates
-
-`gd-metapro init` creates:
-
-```text
-.metaproject/
-  index.md
-  gd-metapro-dashboard.html
-  README.md
-  metaproject.json
-  core/
-  data/
-  rules/
-  skills/
-  modules/
-  reports/
-  templates/
-  hooks/
-    post-update.d/
-```
-
-The tree above shows the base structure and the example modules below (`gdgraph`, `gdctx`); enabled modules add their own `core/`, `data/`, `modules/`, and `skills/` scaffolds.
-
-It also connects repository-level agent entrypoints:
-
-- imports existing `AGENTS.md`, `agents.md`, `CLAUDE.md`, or `claude.md` into `.metaproject/rules/`;
-- creates `AGENTS.md` when none of those files exist;
-- appends a reference from each root entrypoint to `.metaproject/index.md`;
-- creates `.metaproject/skills/project-rules/`;
-- lists imported rules and skills in `.metaproject/index.md`.
-- creates `.metaproject/gd-metapro-dashboard.html`, a static human-readable overview of enabled modules, artifact links, and common commands.
-
-If `gdgraph` is enabled, it also creates:
-
-```text
-.metaproject/
-  core/gdgraph/
-    cli.ts
-    build.ts
-    query.ts
-    types.ts
-    README.md
-  data/gdgraph/
-  modules/gdgraph.md
-  skills/gdgraph/SKILL.md
-```
-
-Agent rule files are mirrored into:
-
-```text
-.metaproject/rules/
-.metaproject/skills/project-rules/
-```
-
-Graph navigation skill:
-
-```text
-.metaproject/skills/gdgraph/SKILL.md
-```
-
-This skill tells agents to use `gd-metapro gdgraph ...` by default for project navigation, file discovery, and code-related work before broad raw file search. The user does not need to ask for graph usage explicitly.
-
-If `gdctx` is enabled, init also creates:
-
-```text
-.metaproject/
-  core/gdctx/
-    README.md
-  data/gdctx/
-    raw/
-    artifacts/
-    queries/
-  gdctx.config.json
-  modules/gdctx.md
-  skills/gdctx/SKILL.md
-```
-
-The `gdctx` skill tells agents to use compact command/search/read output before loading large raw command output into context.
-
-## Versioning Policy
-
-`gd-metapro init` keeps agent-facing Metaproject files versioned and ignores executable/generated internals.
-
-Versioned by default:
-
-- `.metaproject/index.md`
-- `.metaproject/README.md`
-- `.metaproject/metaproject.json`
-- `.metaproject/rules/`
-- `.metaproject/skills/`
-- `.metaproject/modules/`
-- `.metaproject/data/*/artifacts/`
-- except `.metaproject/data/gdctx/artifacts/` and `.metaproject/data/gdwiki/artifacts/`, which are transient command output
-
-Ignored by default:
-
-- `.metaproject/runtime/`
-- `.metaproject/core/**/*.ts`
-- `.metaproject/data/**/storage/`
-- `.metaproject/data/**/raw/`
-- `.metaproject/data/**/queries/`
-- `.metaproject/data/**/summaries/`
-- `.metaproject/data/gdctx/artifacts/`
-- `.metaproject/data/gdwiki/artifacts/`
-- `.metaproject/data/gdwiki/link-check/`
-- `.metaproject/data/health/history/`
-- `.metaproject/data/health/artifacts/latest.md`
-- `.metaproject/data/health/artifacts/latest.json`
-- `.metaproject/data/testing/history/`
-- `.metaproject/data/testing/logs/`
-- `.metaproject/data/testing/artifacts/latest.md`
-- `.metaproject/data/testing/artifacts/latest.json`
-- `.metaproject/reports/`
-
-## Commands
-
-```bash
-gd-metapro --version
-gd-metapro init
-gd-metapro init --yes
-gd-metapro init --no-gdgraph
-gd-metapro init --no-gdctx
-gd-metapro init --no-memory
-gd-metapro init --no-gdgraph-hook
-gd-metapro status
-gd-metapro update
-gd-metapro update --skip-runtime
-gd-metapro update --hooks
-gd-metapro dashboard build
-gd-metapro dashboard open
-gd-metapro dash
-gd-metapro rules sync
-gd-metapro gdgraph build
-gd-metapro gdgraph query cycles
-gd-metapro gdgraph query orphans
-gd-metapro gdgraph affected src/example.ts
-gd-metapro ctx status
-gd-metapro ctx diff
-gd-metapro wiki status
-gd-metapro skills status
-gd-metapro test analyze
-gd-metapro test run --changed
-gd-metapro health run --changed
-gd-metapro memory search "decision"
-gd-metapro flow init --title "Task title"
-gd-metapro flow list
-gd-metapro flow status <id>
-gd-metapro flow complete <id>
-```
-
-This lists the most common entry points only. Each command has additional
-subcommands and flags; run `gd-metapro <command> --help` (or `gd-metapro`
-with no arguments) for the full subcommand and flag surface.
-
-## Current Modules
-
-The `gd-metapro` CLI itself is the toolkit core: it provides install, `init`,
-`status`, `update`, `dashboard`, and `rules` and manages the `.metaproject`
-structure and module manifest. It ships the following modules:
-
-- `gdgraph`: code graph module for dependencies and affected context.
-- `gdctx`: context module for compact command/search/read output.
-- `gdwiki`: Markdown project knowledge base with page templates, link checks, and index generation.
-- `gdskills`: bundled agent-facing skills plus generated project-skill creation, routing, verification, learning, export, and sync.
-- `health`: normalized code health reports from TypeScript, tests, audit, complexity, coverage, lint, and optional SonarQube.
-- `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports.
-- `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection.
-- `tasks`: agent-first Task Manager, driven by `gd-metapro flow`, for issue/task lifecycle tracking.
-
-## gdgraph MVP
-
-`gdgraph` installs local project scripts into:
-
-```text
-.metaproject/core/gdgraph/
-```
-
-The global command delegates to the local runner first:
-
-```text
-.metaproject/core/gdgraph/cli.ts
-```
-
-Build graph data:
-
-```bash
-gd-metapro gdgraph build
-```
-
-Generated output:
-
-```text
-.metaproject/data/gdgraph/storage/nodes.jsonl
-.metaproject/data/gdgraph/storage/edges.jsonl
-.metaproject/data/gdgraph/artifacts/summary.md
-.metaproject/data/gdgraph/artifacts/module-map.json
-```
-
-Frontend defaults:
-
-- skips generated/static output such as `storybook-static/**`, `public/**`, `.docusaurus/**`, `dist/**`, `build/**`, `coverage/**`, `.next/**`, and `out/**`;
-- resolves imported assets such as CSS, SVG, JSON, handlebars/raw templates and image/font files as `asset` graph nodes instead of counting them as unresolved imports;
-- summary reports source files, asset nodes, import resolution percent, skipped directories, top modules, and unresolved imports by type.
-
-Run built-in queries:
-
-```bash
-gd-metapro gdgraph query cycles
-gd-metapro gdgraph query orphans
-gd-metapro gdgraph affected <file>
-```
-
-## gdgraph Refresh Policy
-
-Agents should not rebuild the graph on every question. The graph is refreshed:
-
-- when the user explicitly runs `gd-metapro gdgraph build`;
-- by the optional Git `post-commit` hook installed during `gd-metapro init`.
-
-When `gdgraph` is enabled, interactive init asks whether to install the hook. In `--yes` mode the hook is installed by default; disable it with:
-
-```bash
-gd-metapro init --yes --no-gdgraph-hook
-```
-
-The hook checks files changed in the last commit and runs `gd-metapro gdgraph build` only when graph-relevant files changed.
-
-## Update
-
-Refresh the managed runtime and local service layer:
-
-```bash
-gd-metapro update
-```
-
-`update` refreshes managed scripts, skills, module manifests, dashboard and hook definitions. It does not run module analyzers and does not write `.metaproject/data/**` artifacts by default.
-
-By default `update` also refreshes the managed runtime from origin/main before
-updating service files. Skip that network step with `--skip-runtime`:
-
-```bash
-gd-metapro update --skip-runtime
-```
-
-Projects initialized before the `tasks` module was added are backfilled: `update`
-enables and scaffolds the Task Manager automatically. Skip the backfill with
-`--no-tasks`:
-
-```bash
-gd-metapro update --no-tasks
-```
-
-Run executable project hooks explicitly when a module needs a post-update refresh:
-
-```bash
-gd-metapro update --hooks
-```
-
-Project hooks live in:
-
-```text
-.metaproject/hooks/post-update.d/
-```
-
-## Dashboard
-
-Rebuild or open the project admin dashboard:
-
-```bash
-gd-metapro dashboard build
-gd-metapro dashboard open
-```
-
-The dashboard is written to `.metaproject/gd-metapro-dashboard.html` from existing service files and data artifacts. It does not run analyzers or modify `.metaproject/data/**`.
-
-## Flow (Task Manager)
-
-The `tasks` module tracks agent-first managed work through `gd-metapro flow`:
-
-```bash
-gd-metapro flow init (--issue <url> | --title "<title>")
-gd-metapro flow list
-gd-metapro flow status <id>
-gd-metapro flow start <id>
-gd-metapro flow task <id> ...
-gd-metapro flow ac <id> ...
-gd-metapro flow implemented <id>
-gd-metapro flow complete <id> [--comment]
-gd-metapro flow block <id>
-gd-metapro flow unblock <id>
-gd-metapro flow freeze <id>
-gd-metapro flow check
-```
-
-Run `gd-metapro flow --help` for the full argument list of each subcommand.
+- **Local-first, offline.** No database, no HTTP server. State lives on disk under `.metaproject/`; external tools (`git`, `gh`, `eslint`, `tsc`) are optional and degrade gracefully.
+- **Deterministic mechanics, delegated cognition.** The CLI only scans, graphs, scores, checksums, and renders templates — the "thinking" is delegated to the agent skills the workspace ships.
+- **Idempotent by design.** `init` and `update` are safe to re-run: managed files use seed-once / reconcile-on-change writes and sentinel-delimited managed blocks, so your hand edits are preserved.
+- **Eight optional modules**, loosely coupled through files under `.metaproject/data/` rather than direct calls.
 
 ## Requirements
 
 - `git`
 - `bun` (>= 1.1.0)
 
-## Local development
+## Install
+
+### Global
 
 ```bash
-bun ./src/cli.ts init
-bun ./src/cli.ts init --yes
-bun ./src/cli.ts status
+bun install -g github:MrCipherSmith/meta-project
+gd-metapro init
 ```
+
+Or via the installer script (clones the runtime into `~/.gd-metapro/gd-metapro` and writes a wrapper script at `~/.local/bin/gd-metapro`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh | bash -s -- --global
+gd-metapro init
+```
+
+Make sure `~/.local/bin` is on your `PATH`:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Project-local
+
+Installs the runtime under `.metaproject/runtime/gd-metapro` and runs `init` immediately — no global command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scripts/install.sh | bash -s -- --project
+```
+
+See [docs/docs/onboarding.md](docs/docs/onboarding.md) for the private-repo (`gh`) install variants and non-interactive (`--yes`) mode.
+
+## Quick start
+
+```bash
+gd-metapro init                 # scaffold .metaproject/, enable modules, wire AGENTS.md/CLAUDE.md
+gd-metapro gdgraph build        # build the dependency graph
+gd-metapro wiki collect         # draft wiki pages from module artifacts
+gd-metapro health run           # score code quality against the gate
+gd-metapro test analyze         # detect the test stack and context
+gd-metapro dashboard build      # regenerate the HTML dashboard
+gd-metapro status               # show enabled modules
+```
+
+`init` is interactive by default (pass `--yes` to accept defaults). After pulling changes, run `gd-metapro update` to refresh managed service files without touching `.metaproject/data/**`.
+
+## Modules
+
+The eight optional product modules (all enabled by default at `init`; disable any with `--no-<module>`):
+
+| Module | Command | Role |
+|---|---|---|
+| gdgraph | `gd-metapro gdgraph` | Build and query a regex-based intra-project import/dependency graph (cycles, orphans, affected). |
+| gdctx | `gd-metapro ctx` | Token-aware wrapper: run git/rg/shell/read, persist raw output, print a compacted Markdown summary. |
+| gdwiki | `gd-metapro wiki` | File-based project knowledge base; hand-authored pages plus auto-collected drafts from sibling modules' data. |
+| gdskills | `gd-metapro skills` | Manage bundled and project agent skills — install, route, verify, learn, export/sync; owns the JSON interop contracts. |
+| health | `gd-metapro health` | Aggregate code-quality signals into per-scope scores, compare to baseline, evaluate a pass/warn/fail gate. |
+| testing | `gd-metapro test` | Detect the test stack, run the project's existing runner (optionally changed-scoped), normalize results into a report. |
+| memory | `gd-metapro memory` | Long-term typed project memory (lessons/decisions/constraints) with deterministic search, dedup, ingest, reflect. |
+| tasks (flow) | `gd-metapro flow` | Agent-first work lifecycle: scaffold a "flow" package, drive a status state machine, enforce completion gates. |
+
+Modules can be toggled after `init` with `gd-metapro modules [status | enable <name> | disable <name>]`. The `rules` command (`gd-metapro rules`) and the CLI core (`init`/`status`/`update`/`dashboard`/`modules`) are cross-cutting rather than optional modules.
+
+## The `.metaproject/` workspace
+
+`init` scaffolds a workspace that separates **source-of-truth** files (human-editable, seed-once or hand-authored) from **generated `data/` artifacts** (disposable module outputs the lifecycle commands never overwrite):
+
+```text
+.metaproject/
+  metaproject.json          # manifest — authoritative runtime config
+  index.md                  # agent entrypoint: module/rules/skills/data map
+  gd-metapro-dashboard.html # self-contained human dashboard
+  rules/  skills/  modules/ # agent-facing rules, skills, module manifests (versioned)
+  wiki/   flows/            # knowledge base + task flows (source of truth)
+  data/                     # generated module artifacts (mostly gitignored)
+  hooks/                    # post-update hooks
+```
+
+Full details — the manifest, agent entrypoints and the `<!-- gd-metapro:index -->` routing block, versioned-vs-ignored paths, and `init`/`update` semantics — are in [docs/docs/workspace-and-lifecycle.md](docs/docs/workspace-and-lifecycle.md).
+
+## Documentation
+
+Full developer documentation lives in **[docs/docs/](docs/docs/)** (reverse-engineered from the source):
+
+- **[Onboarding](docs/docs/onboarding.md)** — install paths, first-run walkthrough, the build loop, TTY/CI behavior.
+- **[Architecture](docs/docs/architecture.md)** — the four-layer pattern, the two invariants, cross-module data flows, integrations.
+- **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, key files, mechanics, data paths.
+- **[CLI reference](docs/docs/cli-reference.md)** — every command, subcommand, and flag.
+- **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
+
+Product specifications (intended design) live separately under [docs/requirements/](docs/requirements/). Where the two disagree, `docs/docs/` describes current behavior.
+
+## Development
+
+```bash
+bun ./src/cli.ts init --yes     # run the CLI from source
+bun test                        # run the test suite
+bun run build                   # bundle to dist/cli.js
+bun run check                   # typecheck + tests
+```
+
+## License
+
+See the repository for license details.
