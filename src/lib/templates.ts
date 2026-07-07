@@ -423,17 +423,28 @@ export function renderMetaprojectDashboardHtml({
   ];
 
   const enabledModules = modules.filter((module) => module.enabled);
+  const moduleIcons: Record<string, string> = {
+    gdgraph: "🕸️",
+    gdctx: "📦",
+    gdwiki: "📚",
+    gdskills: "🛠️",
+    health: "💚",
+    testing: "🧪",
+    memory: "🧠",
+    tasks: "🔀",
+  };
   const cards = enabledModules.map((module) => `
-        <article class="module-card" style="--accent: ${module.accent}">
-          <div class="module-head">
-            <span class="module-name">${module.name}</span>
-            <span class="module-role">${module.role}</span>
+        <article class="card" style="--c: ${module.accent}" tabindex="0">
+          <div class="card-head">
+            <span class="card-ic">${moduleIcons[module.name] ?? "▪"}</span>
+            <span class="card-name">${module.name}</span>
+            <span class="card-role">${module.role}</span>
           </div>
           <p>${module.summary}</p>
-          <div class="link-grid">
+          <div class="card-links">
             ${module.links.map(([label, href]) => `<a href="${href}">${label}</a>`).join("")}
           </div>
-          <div class="commands">
+          <div class="card-cmds">
             ${module.commands.map((command) => `<code>${escapeHtml(command)}</code>`).join("")}
           </div>
         </article>`).join("\n");
@@ -520,461 +531,327 @@ export function renderMetaprojectDashboardHtml({
             </div>
           </div>`;
 
+  const scoreValue = typeof health?.score === "number" ? health.score : null;
+  const ringCirc = 289;
+  const ringOffset = scoreValue === null ? String(ringCirc) : (ringCirc * (1 - scoreValue / 100)).toFixed(1);
+  const ringTone = health ? (healthScoreTone || "info") : "muted";
+  const navItems: Array<[string, string]> = [["Overview", "#top"]];
+  if (enabledModules.length > 0) navItems.push(["Modules", "#modules"]);
+  if (enableHealth) navItems.push(["Code Health", "#health"]);
+  if (enableGdgraph) navItems.push(["Graph", "#graph"]);
+  if (enableTesting) navItems.push(["Testing", "#testing"]);
+  if (enableGdwiki) navItems.push(["Knowledge", "#wiki"]);
+  if (enableMemory) navItems.push(["Memory", "#memory"]);
+
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Metaproject Dashboard</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --ink: #172033;
-      --muted: #64748b;
-      --line: #d9dee8;
-      --soft: #eef2f7;
-      --good: #15803d;
-      --good-bg: #ecfdf3;
-      --warn: #b45309;
-      --warn-bg: #fff7ed;
-      --bad: #b91c1c;
-      --bad-bg: #fef2f2;
-      --info: #2563eb;
-      --info-bg: #eff6ff;
+      --bg:#0e131b; --panel:#161d29; --panel2:#1b2330; --line:#26303f;
+      --ink:#e7edf5; --muted:#8b98ab; --faint:#5d6b7e;
+      --accent:#6366f1; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+      --good-bg:rgba(52,211,153,.12); --warn-bg:rgba(251,191,36,.12); --bad-bg:rgba(248,113,113,.12); --info-bg:rgba(99,102,241,.12);
+      --radius:14px; --shadow:0 1px 0 rgba(255,255,255,.03), 0 10px 28px -14px rgba(0,0,0,.55);
+    }
+    html[data-theme="light"] {
+      --bg:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f9; --line:#e2e8f2;
+      --ink:#1a2333; --muted:#5c6b82; --faint:#94a3b8;
+      --good:#0f9d63; --warn:#b45309; --bad:#dc2626;
+      --good-bg:#ecfdf5; --warn-bg:#fffbeb; --bad-bg:#fef2f2; --info-bg:#eef2ff;
+      --shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 28px -18px rgba(16,24,40,.28);
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0;
-      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--ink);
-      background: var(--bg);
+      margin:0; background:var(--bg); color:var(--ink);
+      font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif;
+      -webkit-font-smoothing:antialiased;
     }
-    header {
-      padding: 32px 40px 22px;
-      background: #ffffff;
-      border-bottom: 1px solid var(--line);
-    }
-    main { padding: 28px 40px 44px; }
-    h1 {
-      margin: 0;
-      font-size: 28px;
-      line-height: 1.1;
-      letter-spacing: 0;
-    }
-    h2 {
-      margin: 0 0 14px;
-      font-size: 16px;
-      letter-spacing: 0;
-    }
-    h3 {
-      margin: 0 0 10px;
-      font-size: 14px;
-      letter-spacing: 0;
-    }
-    p { margin: 0; color: var(--muted); }
-    .topline {
-      display: flex;
-      justify-content: space-between;
-      gap: 24px;
-      align-items: flex-start;
-    }
-    .meta-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .meta-actions a,
-    .link-grid a {
-      color: var(--ink);
-      text-decoration: none;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      padding: 7px 10px;
-      border-radius: 6px;
-    }
-    .meta-actions a:hover,
-    .link-grid a:hover { border-color: #94a3b8; }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 24px;
-    }
-    .stat {
-      background: var(--soft);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      min-width: 0;
-    }
-    .stat strong {
-      display: block;
-      font-size: 22px;
-      line-height: 1;
-      margin-bottom: 6px;
-    }
-    .stat.good, .kpi.good { background: var(--good-bg); border-color: #86efac; }
-    .stat.warn, .kpi.warn { background: var(--warn-bg); border-color: #fdba74; }
-    .stat.bad, .kpi.bad { background: var(--bad-bg); border-color: #fca5a5; }
-    .stat.info, .kpi.info { background: var(--info-bg); border-color: #93c5fd; }
-    .stat.good strong, .kpi.good strong { color: var(--good); }
-    .stat.warn strong, .kpi.warn strong { color: var(--warn); }
-    .stat.bad strong, .kpi.bad strong { color: var(--bad); }
-    .stat.info strong, .kpi.info strong { color: var(--info); }
-    .section {
-      margin-top: 28px;
-    }
-    .admin-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
-      gap: 16px;
-      align-items: start;
-    }
-    .admin-grid > *,
-    aside { min-width: 0; }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 16px;
-      min-width: 0;
-    }
-    .panel + .panel { margin-top: 14px; }
-    .kpis {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .kpi {
-      background: var(--soft);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      min-width: 0;
-    }
-    .kpi strong {
-      display: block;
-      font-size: 20px;
-      line-height: 1;
-      margin-bottom: 5px;
-    }
-    .health-note {
-      display: grid;
-      gap: 6px;
-      margin: 0 0 14px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfcfe;
-    }
-    .health-note b {
-      font-size: 13px;
-    }
-    .table-wrap {
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      max-width: 100%;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 560px;
-      background: var(--panel);
-    }
-    th, td {
-      text-align: left;
-      padding: 9px 10px;
-      border-bottom: 1px solid var(--line);
-      vertical-align: top;
-      font-size: 13px;
-    }
-    th {
-      color: var(--muted);
-      background: var(--soft);
-      font-weight: 600;
-    }
-    tr:last-child td { border-bottom: 0; }
-    td a {
-      color: var(--ink);
-      text-decoration: none;
-      border-bottom: 1px solid #cbd5e1;
-    }
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 2px 7px;
-      color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .pill.good { color: var(--good); border-color: #86efac; background: var(--good-bg); }
-    .pill.warn { color: var(--warn); border-color: #fdba74; background: var(--warn-bg); }
-    .pill.bad { color: var(--bad); border-color: #fca5a5; background: var(--bad-bg); }
-    .metric {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 38px;
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-weight: 700;
-      border: 1px solid var(--line);
-      color: var(--ink);
-      background: #f8fafc;
-    }
-    .metric.good { color: var(--good); border-color: #86efac; background: var(--good-bg); }
-    .metric.warn { color: var(--warn); border-color: #fdba74; background: var(--warn-bg); }
-    .metric.bad { color: var(--bad); border-color: #fca5a5; background: var(--bad-bg); }
-    .empty {
-      color: var(--muted);
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      background: #fbfcfe;
-    }
-    .empty-state {
-      display: grid;
-      gap: 10px;
-      color: var(--muted);
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      background: #fbfcfe;
-      min-width: 0;
-    }
-    .empty-state b { color: var(--ink); }
-    .action-grid {
-      display: grid;
-      gap: 6px;
-      min-width: 0;
-    }
-    .modules {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 14px;
-    }
-    .module-card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-left: 4px solid var(--accent);
-      border-radius: 8px;
-      padding: 16px;
-      min-height: 250px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .module-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-    }
-    .module-name {
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .module-role {
-      color: var(--muted);
-      font-size: 12px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 3px 8px;
-      white-space: nowrap;
-    }
-    .link-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .commands {
-      display: grid;
-      gap: 6px;
-      margin-top: auto;
-    }
-    code {
-      display: block;
-      width: 100%;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      background: #111827;
-      color: #e5e7eb;
-      border-radius: 6px;
-      padding: 7px 8px;
-    }
-    .workflow {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .step {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      min-height: 110px;
-    }
-    .step b { display: block; margin-bottom: 6px; }
-    .disabled {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-    .disabled span {
-      color: var(--muted);
-      border: 1px dashed var(--line);
-      border-radius: 999px;
-      padding: 5px 9px;
-    }
-    @media (max-width: 900px) {
-      header, main { padding-left: 18px; padding-right: 18px; }
-      .topline { display: block; }
-      .meta-actions { justify-content: flex-start; margin-top: 16px; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .admin-grid { grid-template-columns: 1fr; }
-      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .workflow { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 520px) {
-      .stats,
-      .kpis,
-      .link-grid { grid-template-columns: 1fr; }
-      h1 { font-size: 24px; }
+    a { color:inherit; }
+    .sr-only { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0); }
+    .layout { display:grid; grid-template-columns:224px 1fr; min-height:100vh; }
+
+    /* Sidebar */
+    .side { position:sticky; top:0; align-self:start; height:100vh; overflow:auto;
+      background:var(--panel); border-right:1px solid var(--line); padding:20px 14px; display:flex; flex-direction:column; gap:6px; }
+    .brand { display:flex; align-items:center; gap:10px; padding:2px 6px 16px; }
+    .brand .logo { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#8b5cf6); display:grid; place-items:center; color:#fff; font-weight:800; font-size:13px; }
+    .brand b { font-size:14px; letter-spacing:.2px; }
+    .brand span { display:block; font-size:11px; color:var(--faint); font-weight:500; }
+    .nav { display:flex; flex-direction:column; gap:2px; }
+    .nav a { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; color:var(--muted); text-decoration:none; font-weight:500; font-size:13px; }
+    .nav a .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; }
+    .nav a:hover { color:var(--ink); background:var(--panel2); }
+    .nav a:hover .dot { background:var(--accent); }
+    .side-foot { margin-top:auto; padding-top:14px; border-top:1px solid var(--line); font-size:11px; color:var(--faint); }
+    .side-foot code { display:block; color:var(--muted); background:var(--panel2); border:1px solid var(--line); padding:5px 8px; border-radius:7px; margin-top:6px; font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+    /* Main */
+    .main { padding:24px 30px 44px; min-width:0; max-width:1240px; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:20px; }
+    .topbar h1 { margin:0; font-size:22px; letter-spacing:-.2px; }
+    .topbar .sub { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .linkbtn { text-decoration:none; color:var(--muted); border:1px solid var(--line); background:var(--panel); padding:7px 11px; border-radius:9px; font-size:12px; font-weight:600; }
+    .linkbtn:hover { color:var(--ink); border-color:var(--faint); }
+    .toggle { cursor:pointer; }
+
+    /* Hero */
+    .hero { display:grid; grid-template-columns:auto 1fr; gap:20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow); margin-bottom:6px; }
+    .ring { position:relative; width:112px; height:112px; flex:none; }
+    .ring svg { transform:rotate(-90deg); }
+    .ring .rc { stroke:var(--rc); }
+    .ring.ring-good { --rc:var(--good); } .ring.ring-warn { --rc:var(--warn); } .ring.ring-bad { --rc:var(--bad); } .ring.ring-info { --rc:var(--accent); } .ring.ring-muted { --rc:var(--line); }
+    .ring .val { position:absolute; inset:0; display:grid; place-items:center; text-align:center; }
+    .ring .val b { font-size:28px; line-height:1; font-weight:800; }
+    .ring .val span { font-size:10px; color:var(--muted); letter-spacing:.6px; }
+    .heroinfo { display:flex; flex-direction:column; justify-content:center; gap:12px; min-width:0; }
+    .gate { display:inline-flex; align-items:center; gap:8px; align-self:flex-start; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid var(--line); color:var(--muted); background:var(--panel2); }
+    .gate .g { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+    .gate.good { color:var(--good); background:var(--good-bg); border-color:transparent; } .gate.good .g { background:var(--good); }
+    .gate.warn { color:var(--warn); background:var(--warn-bg); border-color:transparent; } .gate.warn .g { background:var(--warn); }
+    .gate.bad { color:var(--bad); background:var(--bad-bg); border-color:transparent; } .gate.bad .g { background:var(--bad); }
+    .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .kpi { background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px 13px; min-width:0; }
+    .kpi b { display:block; font-size:19px; line-height:1; margin-bottom:4px; font-variant-numeric:tabular-nums; }
+    .kpi span { font-size:11px; color:var(--muted); }
+    .kpi.good b { color:var(--good); } .kpi.warn b { color:var(--warn); } .kpi.bad b { color:var(--bad); }
+
+    /* Sections */
+    .sec { scroll-margin-top:20px; margin-top:26px; }
+    .sec-h { display:flex; align-items:center; gap:10px; margin:0 2px 14px; }
+    .sec-h h2 { margin:0; font-size:15px; font-weight:700; }
+    .sec-h .count { font-size:11px; color:var(--muted); background:var(--panel2); border:1px solid var(--line); padding:1px 8px; border-radius:999px; }
+    .sec-h .rule { flex:1; height:1px; background:var(--line); }
+
+    /* Cards */
+    .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; position:relative; overflow:hidden; transition:transform .12s ease,border-color .12s ease; outline:none; }
+    .card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--c); }
+    .card:hover, .card:focus-visible { transform:translateY(-2px); border-color:var(--c); }
+    .card-head { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+    .card-ic { width:27px; height:27px; border-radius:8px; display:grid; place-items:center; font-size:15px; background:color-mix(in srgb, var(--c) 18%, transparent); }
+    .card-name { font-size:14px; font-weight:700; }
+    .card-role { margin-left:auto; font-size:10px; color:var(--muted); border:1px solid var(--line); padding:2px 8px; border-radius:999px; }
+    .card p { margin:0 0 12px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .card-links { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+    .card-links a { font-size:11px; color:var(--ink); text-decoration:none; background:var(--panel2); border:1px solid var(--line); padding:4px 8px; border-radius:7px; }
+    .card-links a:hover { border-color:var(--c); }
+    .card-cmds { display:grid; gap:5px; }
+    .card-cmds code { font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:5px 8px; overflow-x:auto; }
+
+    /* Panels + tables */
+    .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; align-items:start; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); min-width:0; }
+    .panel h3 { margin:16px 0 8px; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+    .panel h3:first-of-type { margin-top:4px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
+    table { width:100%; border-collapse:collapse; min-width:420px; font-size:13px; }
+    th { text-align:left; padding:9px 12px; color:var(--muted); font-weight:600; font-size:11px; letter-spacing:.4px; text-transform:uppercase; background:var(--panel2); border-bottom:1px solid var(--line); white-space:nowrap; }
+    td { padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover { background:var(--panel2); }
+    td a { color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line); }
+    td a:hover { border-color:var(--accent); }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; color:var(--muted); background:var(--panel2); white-space:nowrap; }
+    .pill.good { color:var(--good); background:var(--good-bg); } .pill.warn { color:var(--warn); background:var(--warn-bg); } .pill.bad { color:var(--bad); background:var(--bad-bg); }
+    .metric { display:inline-flex; align-items:center; justify-content:center; min-width:34px; padding:2px 8px; border-radius:8px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); background:var(--panel2); border:1px solid var(--line); }
+    .metric.good { color:var(--good); background:var(--good-bg); border-color:transparent; } .metric.warn { color:var(--warn); background:var(--warn-bg); border-color:transparent; } .metric.bad { color:var(--bad); background:var(--bad-bg); border-color:transparent; }
+    .note { display:grid; gap:5px; margin:0 0 14px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); }
+    .note b { font-size:12px; } .note p { margin:0; color:var(--muted); font-size:12px; }
+    .empty { color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:16px; background:var(--panel2); font-size:13px; }
+    .empty code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink); }
+    .empty-state { display:grid; gap:10px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:16px; background:var(--panel2); }
+    .empty-state b { color:var(--ink); } .empty-state p { margin:0; font-size:12px; }
+    .action-grid { display:grid; gap:6px; }
+    .action-grid code, .empty-state code { font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:5px 8px; overflow-x:auto; }
+
+    /* Workflow */
+    .workflow { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+    .step { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }
+    .step .n { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:7px; background:var(--info-bg); color:var(--accent); font-weight:800; font-size:12px; margin-bottom:8px; }
+    .step b { display:block; margin-bottom:5px; font-size:13px; }
+    .step p { margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+
+    .disabled { display:flex; gap:8px; flex-wrap:wrap; }
+    .disabled span { color:var(--faint); border:1px dashed var(--line); border-radius:999px; padding:5px 11px; font-size:12px; }
+
+    @media (max-width: 820px) {
+      .layout { grid-template-columns:1fr; }
+      .side { position:static; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; }
+      .brand { padding-bottom:0; }
+      .nav { flex-direction:row; flex-wrap:wrap; }
+      .side-foot { display:none; }
+      .main { padding:20px 18px 40px; }
+      .hero { grid-template-columns:1fr; justify-items:start; }
+      .kpis { grid-template-columns:repeat(2,1fr); }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="topline">
-      <div>
-        <h1>Metaproject Admin</h1>
-        <p>Read-only project control surface for agent context, health, graph, testing, wiki, memory, and service files.</p>
+  <div class="layout">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo">gd</div>
+        <div><b>Metaproject</b><span>${enabledModules.length} modules</span></div>
       </div>
-      <nav class="meta-actions" aria-label="Primary links">
-        ${primaryLinks.map(([label, href]) => `<a href="${href}">${label}</a>`).join("")}
+      <nav class="nav" aria-label="Sections">
+        ${navItems.map(([label, href]) => `<a href="${href}"><span class="dot"></span>${label}</a>`).join("")}
       </nav>
-    </div>
-    <section class="stats" aria-label="Metaproject stats">
-      <div class="stat ${healthScoreTone}"><strong>${health?.score ?? "-"}</strong><span>health score</span></div>
-      <div class="stat ${healthClass}"><strong>${qualityStatus}</strong><span>quality gate</span></div>
-      <div class="stat"><strong>${graphStatus}</strong><span>graph index</span></div>
-      <div class="stat info"><strong>${enabledModules.length}</strong><span>enabled modules</span></div>
-    </section>
-  </header>
-  <main>
-    <section class="section admin-grid">
-      <div>
-        <section class="panel" id="health">
-          <h2>Health</h2>
+      <div class="side-foot">
+        Stale data? Refresh:
+        <code>gd-metapro update</code>
+        <code>gd-metapro health run</code>
+      </div>
+    </aside>
+
+    <main class="main" id="top">
+      <div class="topbar">
+        <div>
+          <h1>Metaproject Dashboard</h1>
+          <p class="sub">Read-only control surface for agent context, health, graph, testing, and knowledge.</p>
+        </div>
+        <div class="toolbar" aria-label="Primary links">
+          ${primaryLinks.map(([label, href]) => `<a class="linkbtn" href="${href}">${label}</a>`).join("")}
+          <button class="linkbtn toggle" type="button" onclick="__gdmToggle()" aria-label="Toggle theme">◐ Theme</button>
+        </div>
+      </div>
+
+      <section class="hero" aria-label="Overview">
+        <div class="ring ring-${ringTone}">
+          <svg width="112" height="112" viewBox="0 0 112 112" role="img" aria-label="Health score ${scoreValue ?? "unavailable"}">
+            <circle cx="56" cy="56" r="46" fill="none" stroke="var(--line)" stroke-width="9"></circle>
+            <circle class="rc" cx="56" cy="56" r="46" fill="none" stroke-width="9" stroke-linecap="round" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle>
+          </svg>
+          <div class="val"><div><b>${health?.score ?? "—"}</b><span>HEALTH</span></div></div>
+        </div>
+        <div class="heroinfo">
+          <span class="gate ${healthClass}"><span class="g"></span>${health ? escapeHtml(health.status) : (enableHealth ? "no report yet" : "health disabled")}${health ? ` gate · ${health.findings} finding(s)` : ""}</span>
+          <div class="kpis">
+            <div class="kpi ${health ? (health.findings === 0 ? "good" : "warn") : ""}"><b>${health?.findings ?? "—"}</b><span>findings</span></div>
+            <div class="kpi"><b>${graph ? graph.files : "—"}</b><span>graph files</span></div>
+            <div class="kpi"><b>${wikiPages.length || "—"}</b><span>wiki pages</span></div>
+            <div class="kpi"><b>${memoryEntries.length || "—"}</b><span>memory entries</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" id="modules">
+        <div class="sec-h"><h2>Modules</h2><span class="count">${enabledModules.length} enabled</span><span class="rule"></span></div>
+        <div class="cards">
+${cards || "          <p class=\"empty\">No modules enabled.</p>"}
+        </div>
+      </section>
+
+      <section class="sec" id="health">
+        <div class="sec-h"><h2>Code Health</h2><span class="count">${qualityStatus}</span><span class="rule"></span></div>
+        <div class="panel">
           ${health ? `
-          <div class="health-note">
-            <b>Score is contextual</b>
-            <p>${healthSummary}</p>
+          <div class="note"><b>Score is contextual</b><p>${healthSummary}</p></div>
+          <div class="kpis" style="margin-bottom:14px">
+            <div class="kpi ${healthScoreTone}"><b>${health.score}</b><span>score</span></div>
+            <div class="kpi"><b><span class="pill ${healthClass}">${escapeHtml(health.status)}</span></b><span>gate</span></div>
+            <div class="kpi ${health.findings === 0 ? "good" : "warn"}"><b>${health.findings}</b><span>findings</span></div>
+            <div class="kpi ${health.p0 > 0 ? "bad" : (health.p1 > 0 || health.p2 > 0 ? "warn" : "good")}"><b>${health.p0}/${health.p1}/${health.p2}</b><span>P0 / P1 / P2</span></div>
           </div>
-          <div class="kpis">
-            <div class="kpi ${healthScoreTone}"><strong>${health.score}</strong><span>score</span></div>
-            <div class="kpi"><strong><span class="pill ${healthClass}">${escapeHtml(health.status)}</span></strong><span>gate</span></div>
-            <div class="kpi ${health.findings === 0 ? "good" : "warn"}"><strong>${health.findings}</strong><span>findings</span></div>
-            <div class="kpi ${health.p0 > 0 ? "bad" : health.p1 > 0 || health.p2 > 0 ? "warn" : "good"}"><strong>${health.p0}/${health.p1}/${health.p2}</strong><span>P0/P1/P2</span></div>
-          </div>
-          <h3>Top Scopes</h3>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Scope</th><th>Kind</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
-              <tbody>${healthScopes || `<tr><td colspan="6">No scope metrics.</td></tr>`}</tbody>
-            </table>
-          </div>
-          <h3 style="margin-top:14px">Top Files</h3>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>File</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
-              <tbody>${healthFiles || `<tr><td colspan="5">No file-level metrics in latest report.</td></tr>`}</tbody>
-            </table>
-          </div>
-          <h3 style="margin-top:14px">Sources</h3>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Source</th><th>Status</th><th>Findings</th><th>Required</th></tr></thead>
-              <tbody>${healthSources}</tbody>
-            </table>
-          </div>` : `<div class="empty">No health report found. Run <code>gd-metapro health run</code>.</div>`}
-        </section>
-        <section class="panel" id="graph">
-          <h2>Graph</h2>
+          <h3>Top scopes</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Scope</th><th>Kind</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
+            <tbody>${healthScopes || `<tr><td colspan="6">No scope metrics.</td></tr>`}</tbody>
+          </table></div>
+          <h3>Top files</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>File</th><th>Score</th><th>Findings</th><th>Risk</th><th>Complexity</th></tr></thead>
+            <tbody>${healthFiles || `<tr><td colspan="5">No file-level metrics in latest report.</td></tr>`}</tbody>
+          </table></div>
+          <h3>Sources</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Source</th><th>Status</th><th>Findings</th><th>Required</th></tr></thead>
+            <tbody>${healthSources}</tbody>
+          </table></div>` : `<div class="empty">No health report found. Run <code>gd-metapro health run</code>.</div>`}
+        </div>
+      </section>
+
+      <section class="sec" id="graph">
+        <div class="sec-h"><h2>Graph</h2><span class="count">${graphStatus}</span><span class="rule"></span></div>
+        <div class="panel">
           ${graph ? `
-          <div class="kpis">
-            <div class="kpi"><strong>${graph.files}</strong><span>files</span></div>
-            <div class="kpi"><strong>${graph.assets}</strong><span>assets</span></div>
-            <div class="kpi"><strong>${graph.edges}</strong><span>edges</span></div>
-            <div class="kpi"><strong>${graph.unresolved}</strong><span>unresolved</span></div>
+          <div class="kpis" style="margin-bottom:14px">
+            <div class="kpi"><b>${graph.files}</b><span>files</span></div>
+            <div class="kpi"><b>${graph.assets}</b><span>assets</span></div>
+            <div class="kpi"><b>${graph.edges}</b><span>edges</span></div>
+            <div class="kpi ${graph.unresolved > 0 ? "warn" : "good"}"><b>${graph.unresolved}</b><span>unresolved</span></div>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Module</th><th>Files</th><th>Outgoing edges</th></tr></thead>
-              <tbody>${graphRows || `<tr><td colspan="3">No module graph rows.</td></tr>`}</tbody>
-            </table>
-          </div>` : `<div class="empty">No graph storage found. Run <code>gd-metapro gdgraph build</code>.</div>`}
-        </section>
-      </div>
-      <aside>
-        <section class="panel" id="testing">
-          <h2>Testing</h2>
-          ${testing ? `
-          <div class="kpis">
-            <div class="kpi"><strong>${escapeHtml(testing.status)}</strong><span>status</span></div>
-            <div class="kpi"><strong>${testing.runner ? escapeHtml(testing.runner) : "-"}</strong><span>runner</span></div>
-            <div class="kpi"><strong>${testing.tests ?? "-"}</strong><span>tests</span></div>
-            <div class="kpi"><strong>${testing.failures ?? "-"}</strong><span>failures</span></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Module</th><th>Files</th><th>Outgoing edges</th></tr></thead>
+            <tbody>${graphRows || `<tr><td colspan="3">No module graph rows.</td></tr>`}</tbody>
+          </table></div>` : `<div class="empty">No graph storage found. Run <code>gd-metapro gdgraph build</code>.</div>`}
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h2>Testing &amp; Knowledge</h2><span class="rule"></span></div>
+        <div class="grid2">
+          <div class="panel" id="testing">
+            <h3 style="margin-top:0">Testing</h3>
+            ${testing ? `
+            <div class="kpis">
+              <div class="kpi"><b style="font-size:14px">${escapeHtml(testing.status)}</b><span>status</span></div>
+              <div class="kpi"><b style="font-size:14px">${testing.runner ? escapeHtml(testing.runner) : "—"}</b><span>runner</span></div>
+              <div class="kpi"><b>${testing.tests ?? "—"}</b><span>tests</span></div>
+              <div class="kpi ${testing.failures ? "bad" : "good"}"><b>${testing.failures ?? "—"}</b><span>failures</span></div>
+            </div>
+            <div class="card-links" style="margin-top:12px">
+              ${testing.contextHref ? `<a href="${testing.contextHref}">Testing context</a>` : ""}
+              ${testing.reportHref ? `<a href="${testing.reportHref}">Latest report</a>` : ""}
+            </div>` : `<div class="empty">No testing context/report found. Run <code>gd-metapro test analyze</code>.</div>`}
           </div>
-          <div class="link-grid">
-            ${testing.contextHref ? `<a href="${testing.contextHref}">Testing context</a>` : ""}
-            ${testing.reportHref ? `<a href="${testing.reportHref}">Latest report</a>` : ""}
-          </div>` : `<div class="empty">No testing context/report found. Run <code>gd-metapro test analyze</code>.</div>`}
-        </section>
-        <section class="panel" id="wiki">
-          <h2>Wiki</h2>
-          <p style="margin-bottom:12px">${wikiStatus}</p>
-          ${wikiRows ? `<div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>${wikiRows}</tbody></table></div>` : wikiEmpty}
-        </section>
-        <section class="panel" id="memory">
-          <h2>Memory</h2>
-          <p style="margin-bottom:12px">${memoryStatus}</p>
-          ${memoryRows ? `<div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>${memoryRows}</tbody></table></div>` : memoryEmpty}
-        </section>
-      </aside>
-    </section>
-    <section class="section">
-      <h2>Enabled Modules</h2>
-      <div class="modules">
-${cards || "        <p>No modules enabled.</p>"}
-      </div>
-    </section>
-    <section class="section">
-      <h2>Agent Workflow</h2>
-      <div class="workflow">
-        <div class="step"><b>1. Route</b><p>Start from index.md and select the module or skill that owns the question.</p></div>
-        <div class="step"><b>2. Navigate</b><p>Use gdgraph for related files, affected context, cycles, and module boundaries.</p></div>
-        <div class="step"><b>3. Compress</b><p>Use gdctx before loading large search output, diffs, command logs, or long files.</p></div>
-        <div class="step"><b>4. Verify</b><p>Read testing and health reports before claiming quality or gate status.</p></div>
-        <div class="step"><b>5. Learn</b><p>Write decisions and lessons to wiki, memory, and project skills when patterns change.</p></div>
-      </div>
-    </section>
-    <section class="section">
-      <h2>Disabled Modules</h2>
-      <div class="disabled">${disabled || "<span>none</span>"}</div>
-    </section>
-  </main>
+          <div class="panel" id="wiki">
+            <h3 style="margin-top:0">Wiki <span style="color:var(--faint);font-weight:500;text-transform:none;letter-spacing:0">· ${wikiStatus}</span></h3>
+            ${wikiRows ? `<div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>${wikiRows}</tbody></table></div>` : wikiEmpty}
+          </div>
+          <div class="panel" id="memory">
+            <h3 style="margin-top:0">Memory <span style="color:var(--faint);font-weight:500;text-transform:none;letter-spacing:0">· ${memoryStatus}</span></h3>
+            ${memoryRows ? `<div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>${memoryRows}</tbody></table></div>` : memoryEmpty}
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h2>Agent Workflow</h2><span class="rule"></span></div>
+        <div class="workflow">
+          <div class="step"><span class="n">1</span><b>Route</b><p>Start from index.md and select the module or skill that owns the question.</p></div>
+          <div class="step"><span class="n">2</span><b>Navigate</b><p>Use gdgraph for related files, affected context, cycles, and boundaries.</p></div>
+          <div class="step"><span class="n">3</span><b>Compress</b><p>Use gdctx before loading large search output, diffs, logs, or long files.</p></div>
+          <div class="step"><span class="n">4</span><b>Verify</b><p>Read testing and health reports before claiming quality or gate status.</p></div>
+          <div class="step"><span class="n">5</span><b>Learn</b><p>Write decisions and lessons to wiki, memory, and project skills.</p></div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h2>Disabled modules</h2><span class="rule"></span></div>
+        <div class="disabled">${disabled || "<span>none</span>"}</div>
+      </section>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var KEY = "gdm-theme";
+      try {
+        var saved = localStorage.getItem(KEY);
+        if (saved) { root.setAttribute("data-theme", saved); }
+      } catch (e) {}
+      window.__gdmToggle = function () {
+        var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch (e) {}
+      };
+    })();
+  </script>
 </body>
 </html>
 `;

@@ -119,12 +119,12 @@ test("recovers manifest and dashboard for existing metaprojects without metaproj
     expect(manifest.modules.health?.enabled).toBe(true);
     expect(manifest.modules.testing?.enabled).toBe(true);
     expect(manifest.modules.tasks?.enabled).toBe(false);
-    expect(dashboard).toContain("<span class=\"module-name\">gdgraph</span>");
-    expect(dashboard).toContain("<span class=\"module-name\">health</span>");
-    expect(dashboard).toContain("<h2>Health</h2>");
-    expect(dashboard).toContain("<strong>97</strong><span>health score</span>");
+    expect(dashboard).toContain("<span class=\"card-name\">gdgraph</span>");
+    expect(dashboard).toContain("<span class=\"card-name\">health</span>");
+    expect(dashboard).toContain("<h2>Code Health</h2>");
+    expect(dashboard).toContain("<b>97</b><span>score</span>");
     expect(dashboard).toContain("<h2>Graph</h2>");
-    expect(dashboard).toContain("<strong>2</strong><span>files</span>");
+    expect(dashboard).toContain("<b>2</b><span>files</span>");
     expect(dashboard).not.toContain("No modules enabled.");
     await expectDashboardLinksToExist(root, dashboard);
     const postCommitHook = await readFile(path.join(root, ".git", "hooks", "post-commit"), "utf8");
@@ -175,7 +175,7 @@ test("migrates legacy wiki manifest key to gdwiki", async () => {
 
     expect(manifest.modules.gdwiki?.enabled).toBe(true);
     expect(manifest.modules.wiki).toBeUndefined();
-    expect(dashboard).toContain("<span class=\"module-name\">gdwiki</span>");
+    expect(dashboard).toContain("<span class=\"card-name\">gdwiki</span>");
     expect(dashboard).not.toContain("<div class=\"disabled\"><span>gdwiki</span>");
     expect(await fileExists(path.join(root, ".metaproject", "skills", "gdwiki", "SKILL.md"))).toBe(true);
   } finally {
@@ -265,7 +265,7 @@ async function expectDashboardLinksToExist(projectRoot: string, dashboard: strin
   const hrefs = [...dashboard.matchAll(/href="([^"]+)"/g)].flatMap((match) => match[1] ? [match[1]] : []);
   const missing: string[] = [];
   for (const href of hrefs) {
-    if (href.startsWith("http://") || href.startsWith("https://")) {
+    if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("#")) {
       continue;
     }
     if (!(await fileExists(path.join(metaprojectRoot, href)))) {

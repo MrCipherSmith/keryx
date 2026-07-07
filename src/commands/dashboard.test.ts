@@ -52,10 +52,10 @@ test("build refreshes dashboard from existing data without touching data artifac
     const dashboard = await readFile(path.join(root, ".metaproject", "gd-metapro-dashboard.html"), "utf8");
     await dashboardCommand(["build"]);
     const rebuiltDashboard = await readFile(path.join(root, ".metaproject", "gd-metapro-dashboard.html"), "utf8");
-    expect(dashboard).toContain("<h2>Health</h2>");
-    expect(dashboard).toContain("<strong>98</strong><span>health score</span>");
+    expect(dashboard).toContain("<h2>Code Health</h2>");
+    expect(dashboard).toContain("<b>98</b><span>score</span>");
     expect(dashboard).toContain("<h2>Graph</h2>");
-    expect(dashboard).toContain("<strong>1</strong><span>files</span>");
+    expect(dashboard).toContain("<b>1</b><span>files</span>");
     expect(rebuiltDashboard).toBe(dashboard);
     expect(await readFile(testingContextPath, "utf8")).toBe(testingContext);
     await access(path.join(root, ".metaproject", "gd-metapro-dashboard.html"));
