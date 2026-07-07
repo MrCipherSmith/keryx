@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
@@ -249,14 +250,22 @@ export async function wikiCollect(input: WikiCollectInput): Promise<WikiCollectR
   const generatedAt = new Date().toISOString();
   const limit = input.limit && input.limit > 0 ? input.limit : DEFAULT_COLLECT_LIMIT;
   const pages: WikiCollectedPage[] = [];
-  const candidates = [
-    ...(await collectGraphWikiCandidates(input.cwd, generatedAt, limit)),
-    ...(await collectHealthWikiCandidates(input.cwd, generatedAt)),
-    ...(await collectTestingWikiCandidates(input.cwd, generatedAt)),
-  ];
+
+  // --changed: only regenerate pages for modules touched since <since> (default
+  // HEAD), and treat those pages as force-refreshable. Deterministic, no model -
+  // ideal for a post-commit hook. Prose stays owned by the enrich skill.
+  const onlyModules = input.changed === true ? await changedModules(input.cwd, input.since) : null;
+  const force = input.force === true || input.changed === true;
+  const candidates = input.changed === true
+    ? await collectGraphWikiCandidates(input.cwd, generatedAt, limit, onlyModules)
+    : [
+        ...(await collectGraphWikiCandidates(input.cwd, generatedAt, limit, null)),
+        ...(await collectHealthWikiCandidates(input.cwd, generatedAt)),
+        ...(await collectTestingWikiCandidates(input.cwd, generatedAt)),
+      ];
 
   for (const candidate of candidates) {
-    pages.push(await writeCollectedPage(input.cwd, candidate, input.force === true));
+    pages.push(await writeCollectedPage(input.cwd, candidate, force));
   }
 
   const index = await wikiGenerateIndex(input.cwd);
@@ -293,6 +302,7 @@ async function collectGraphWikiCandidates(
   cwd: string,
   generatedAt: string,
   limit: number,
+  onlyModules: Set<string> | null,
 ): Promise<WikiCollectCandidate[]> {
   const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
   const edgesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "edges.jsonl");
@@ -352,7 +362,8 @@ async function collectGraphWikiCandidates(
   const topModules = [...moduleFiles.entries()]
     .map(([name, list]) => ({ name, files: list.length, edges: sumCounts(moduleDeps.get(name)) }))
     .sort((a, b) => b.files - a.files || b.edges - a.edges)
-    .slice(0, limit);
+    .slice(0, limit)
+    .filter((module) => onlyModules === null || onlyModules.has(module.name));
 
   const architecture: WikiCollectCandidate = {
     type: "architecture",
@@ -1037,6 +1048,39 @@ function parseJsonl(content: string): Array<Record<string, unknown>> {
         return [];
       }
     });
+}
+
+async function changedModules(cwd: string, since: string | undefined): Promise<Set<string> | null> {
+  const base = since && since.length > 0 ? since : "HEAD";
+  const files = await gitDiffNames(cwd, base);
+  if (files === null) {
+    return null;
+  }
+  const modules = new Set<string>();
+  for (const file of files) {
+    if (file.length > 0) {
+      modules.add(moduleNameFromProjectPath(file));
+    }
+  }
+  return modules;
+}
+
+function gitDiffNames(cwd: string, base: string): Promise<string[] | null> {
+  return new Promise((resolve) => {
+    const child = spawn("git", ["diff", "--name-only", base], { cwd });
+    let out = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk);
+    });
+    child.on("error", () => resolve(null));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve(null);
+        return;
+      }
+      resolve(out.split("\n").map((line) => line.trim()).filter((line) => line.length > 0));
+    });
+  });
 }
 
 function moduleNameFromProjectPath(filePath: string): string {
