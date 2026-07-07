@@ -148,6 +148,8 @@ export type WikiCollectedPage = {
   type: WikiPageType;
   source: "gdgraph" | "health" | "testing";
   action: "created" | "updated" | "skipped";
+  // Set when the security gate (enforced/ci) suppressed this page's write.
+  securityReason?: string;
 };
 
 export type WikiCollectResult = {

@@ -244,6 +244,10 @@ gd-metapro wiki validate
 Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
 `component`, `service`, `integration`, `decision`.
 
+When the `security` module is enabled, `collect` runs an advisory security check
+before writing each draft. Advisory (the default) reports and writes anyway;
+`enforced`/`ci` mode can suppress a draft's write with a masked reason.
+
 ---
 
 ## skills
@@ -362,6 +366,11 @@ gd-metapro test explain <file-or-scope>
 `--changed` selects tests for changed files (via `git`); with `--strict` and no
 matched tests, the run fails — this drives the pre-push gate.
 
+When the `security` module is enabled, `run` runs an advisory security check on the
+captured raw log before persisting it. Advisory (the default) reports and still
+writes the log; `enforced`/`ci` mode can suppress raw-log persistence with a masked
+reason (the run itself is never broken).
+
 ---
 
 ## memory
@@ -391,6 +400,10 @@ gd-metapro memory reflect
 Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
 `historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
 `migration-note`, `integration-note`.
+
+When the `security` module is enabled, `ingest` runs an advisory security check
+before writing each accepted entry. Advisory (the default) reports and writes;
+`enforced`/`ci` mode can skip an entry's write with a masked reason.
 
 ---
 
@@ -438,6 +451,11 @@ gd-metapro flow check
 Statuses: `initializing`, `ready`, `in-progress`, `implemented`, `completing`,
 `done`, `blocked`. `task` and `ac` are command groups — the atomic verbs are
 `task add`, `task done`, `ac confirm`, `ac update`.
+
+When the `security` module is enabled, `complete` adds a `security` completion
+gate. Advisory (the default) makes it informational (`pass`, never blocks);
+`enforced`/`ci` mode can fail the gate and hold the flow in `in-progress`. The gate
+is omitted entirely when the module is disabled.
 
 ---
 
@@ -499,8 +517,10 @@ input/output and `.metaproject/` artifacts. The engine is deterministic (rule +
 entropy detectors, no model backend) and local-first: config lives at
 `.metaproject/security.config.json`, data under `.metaproject/data/security/`,
 and the local-only HMAC key under `data/security/raw/` (gitignored). This is
-Phase 1+2 of the spec — the write-seam integrations (Phase 3) and model backends
-(Phase 4) are not implemented.
+Phase 1+2+3 of the spec — the engine, the CLI below, and the write-seam
+integrations (an advisory-by-default guard at `memory ingest`, `wiki collect`,
+`test run`, `gdctx`, and `flow complete`) are shipped. Model/API backends and
+gateway mode (Phase 4) are not implemented.
 
 ```
 gd-metapro security status

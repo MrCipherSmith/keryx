@@ -155,6 +155,11 @@ export type MemoryIngestResult = {
   reconciled: string[];
   skippedDuplicates: number;
   conflicts: ConflictHint[];
+  // Advisory-mode security findings surfaced for accepted entries (leak-safe,
+  // category+count only). Present only when the security seam produced warnings.
+  securityWarnings?: string[];
+  // Entries whose write was suppressed by the security gate in enforced/ci mode.
+  securitySkipped?: Array<{ title: string; reason: string }>;
 };
 
 export type MemoryCheckInput = { cwd: string };

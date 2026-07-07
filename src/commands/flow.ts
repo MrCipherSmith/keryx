@@ -2,6 +2,7 @@ import { optionValue } from "../lib/args";
 import { createFlowService } from "../flow/service";
 import { githubAdapter } from "../flow/tracker/github";
 import { createCodeHealthService } from "../health/service";
+import { securityFlowGate } from "../security/guard";
 import {
   banner,
   heading,
@@ -39,6 +40,7 @@ function getService(): FlowService {
       const result = await createCodeHealthService().gate({ cwd });
       return { status: result.status, reasons: result.reasons };
     },
+    securityGate: (cwd) => securityFlowGate(cwd),
     now: () => new Date(),
   });
   return service;

@@ -86,4 +86,7 @@ export type TestingRunResult = {
   report: TestingReport;
   markdownPath: string;
   jsonPath: string;
+  // Leak-safe security notes from the write seam. In advisory mode these are
+  // informational; in enforced/ci mode they include suppressed raw-log persistence.
+  securityWarnings?: string[];
 };

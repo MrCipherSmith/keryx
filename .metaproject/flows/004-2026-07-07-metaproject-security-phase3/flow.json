@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "id": "004",
+  "slug": "metaproject-security-phase3",
+  "title": "Metaproject Security Phase 3: write-seam integrations (advisory-by-default gates)",
+  "status": "done",
+  "createdAt": "2026-07-07T19:48:01.595Z",
+  "updatedAt": "2026-07-07T20:18:38.146Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:66ca94afe0ce61d6975e1f31852e2eee562349de6f446e7ee4378a1b1121e53e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-07T20:12:48.586Z",
+      "note": "src/security/guard.ts shared seam (guardOutput/redactRaw/securityFlowGate); disabled → no-op allow; formatGuardWarning emits category:count only (leak-safe, tested)."
+    },
+    "AC2": {
+      "at": "2026-07-07T20:12:48.670Z",
+      "note": "advisory → allowed:true always; enforced/ci → allowed:false on gate fail/needs-approval with masked reason. guard.test.ts covers all modes."
+    },
+    "AC3": {
+      "at": "2026-07-07T20:12:48.744Z",
+      "note": "memory ingest calls guard target memory before write; enforced skips entry w/ reason, advisory writes + warns. security-seam test."
+    },
+    "AC4": {
+      "at": "2026-07-07T20:12:48.817Z",
+      "note": "wiki collect guards draft write target wiki; advisory writes, enforced skips w/ securityReason. security-seam test."
+    },
+    "AC5": {
+      "at": "2026-07-07T20:12:48.887Z",
+      "note": "test run gates raw-log persistence; gdctx redactRaw on raw output before persist (byte-identical unless secret detected). Verified secret not in ctx artifact."
+    },
+    "AC6": {
+      "at": "2026-07-07T20:12:48.961Z",
+      "note": "advisory/disabled behavior-preserving: 118 pre-existing tests unchanged & green (git diff --stat HEAD -- *.test.ts empty); on-disk writes byte-identical; blocking only enforced/ci."
+    },
+    "AC7": {
+      "at": "2026-07-07T20:12:49.046Z",
+      "note": "flow complete has a security GateOutcome mirroring health; omitted when disabled (existing 3-gate tests pass), advisory→pass, enforced/ci may fail. security-gate.test.ts."
+    },
+    "AC8": {
+      "at": "2026-07-07T20:12:49.123Z",
+      "note": "24 new integration tests (guard/memory/wiki/testing/flow) + testing-report leak regression; full suite 142 pass / 0 fail; tsc clean; pre-existing suite unchanged."
+    },
+    "AC9": {
+      "at": "2026-07-07T20:12:49.196Z",
+      "note": "docs: security spec/README (Phase 3 implemented), roadmap, docs/docs modules/architecture/cli-reference seam notes; Phase 4 kept future; no drift."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/meta-project/pull/7"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "memory ingest + wiki collect security seams",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "testing publish + gdctx raw security seams",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "flow completion security gate",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "Docs: security spec/README Phase 3, roadmap, docs/docs seam notes",
+      "kind": "docs",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-07T19:48:01.595Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-07T19:50:18.413Z",
+      "event": "task-added",
+      "detail": "T5: memory ingest + wiki collect security seams"
+    },
+    {
+      "at": "2026-07-07T19:50:18.458Z",
+      "event": "task-added",
+      "detail": "T6: testing publish + gdctx raw security seams"
+    },
+    {
+      "at": "2026-07-07T19:50:18.504Z",
+      "event": "task-added",
+      "detail": "T7: flow completion security gate"
+    },
+    {
+      "at": "2026-07-07T19:50:18.551Z",
+      "event": "task-added",
+      "detail": "T8: Docs: security spec/README Phase 3, roadmap, docs/docs seam notes"
+    },
+    {
+      "at": "2026-07-07T19:50:18.598Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-07T19:50:18.645Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-07T19:50:18.691Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-07T20:04:07.602Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-07T20:04:07.647Z",
+      "event": "task-done",
+      "detail": "T5: memory ingest + wiki collect security seams"
+    },
+    {
+      "at": "2026-07-07T20:04:07.693Z",
+      "event": "task-done",
+      "detail": "T6: testing publish + gdctx raw security seams"
+    },
+    {
+      "at": "2026-07-07T20:04:07.738Z",
+      "event": "task-done",
+      "detail": "T7: flow completion security gate"
+    },
+    {
+      "at": "2026-07-07T20:04:07.783Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-07T20:11:32.222Z",
+      "event": "task-done",
+      "detail": "T8: Docs: security spec/README Phase 3, roadmap, docs/docs seam notes"
+    },
+    {
+      "at": "2026-07-07T20:12:31.373Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-07T20:12:33.407Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/meta-project/pull/7"
+    },
+    {
+      "at": "2026-07-07T20:12:48.586Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/security/guard.ts shared seam (guardOutput/redactRaw/securityFlowGate); disabled → no-op allow; formatGuardWarning emits category:count only (leak-safe, tested)."
+    },
+    {
+      "at": "2026-07-07T20:12:48.670Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: advisory → allowed:true always; enforced/ci → allowed:false on gate fail/needs-approval with masked reason. guard.test.ts covers all modes."
+    },
+    {
+      "at": "2026-07-07T20:12:48.744Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: memory ingest calls guard target memory before write; enforced skips entry w/ reason, advisory writes + warns. security-seam test."
+    },
+    {
+      "at": "2026-07-07T20:12:48.817Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: wiki collect guards draft write target wiki; advisory writes, enforced skips w/ securityReason. security-seam test."
+    },
+    {
+      "at": "2026-07-07T20:12:48.887Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: test run gates raw-log persistence; gdctx redactRaw on raw output before persist (byte-identical unless secret detected). Verified secret not in ctx artifact."
+    },
+    {
+      "at": "2026-07-07T20:12:48.961Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: advisory/disabled behavior-preserving: 118 pre-existing tests unchanged & green (git diff --stat HEAD -- *.test.ts empty); on-disk writes byte-identical; blocking only enforced/ci."
+    },
+    {
+      "at": "2026-07-07T20:12:49.046Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: flow complete has a security GateOutcome mirroring health; omitted when disabled (existing 3-gate tests pass), advisory→pass, enforced/ci may fail. security-gate.test.ts."
+    },
+    {
+      "at": "2026-07-07T20:12:49.123Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: 24 new integration tests (guard/memory/wiki/testing/flow) + testing-report leak regression; full suite 142 pass / 0 fail; tsc clean; pre-existing suite unchanged."
+    },
+    {
+      "at": "2026-07-07T20:12:49.196Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: docs: security spec/README (Phase 3 implemented), roadmap, docs/docs modules/architecture/cli-reference seam notes; Phase 4 kept future; no drift."
+    },
+    {
+      "at": "2026-07-07T20:12:57.249Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-07T20:12:59.557Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-07-07T20:18:36.109Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/meta-project/pull/7"
+    },
+    {
+      "at": "2026-07-07T20:18:36.157Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-07T20:18:38.146Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

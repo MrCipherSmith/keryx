@@ -3,6 +3,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { redactRaw } from "../security/guard";
 
 type CtxArtifact = {
   id: string;
@@ -170,7 +171,13 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
   }
 
   const absolutePath = path.resolve(process.cwd(), file);
-  const content = await readFile(absolutePath, "utf8");
+  const rawContent = await readFile(absolutePath, "utf8");
+  // Redact any detected secret before it is summarized/persisted into a gdctx
+  // artifact. No-op (byte-identical) when security is disabled or nothing is
+  // detected.
+  const content = (
+    await redactRaw({ cwd: process.cwd(), content: rawContent, source: "trusted-project" })
+  ).content;
   const lines = content.split("\n");
   const summary =
     mode === "full"
@@ -240,7 +247,27 @@ async function runCommand(command: string[]): Promise<CommandResult> {
   ]);
   const raw = [stdout, stderr].filter(Boolean).join(stderr && stdout ? "\n" : "");
 
-  return { stdout, stderr, raw, exitCode };
+  return redactCommandResult({ stdout, stderr, raw, exitCode });
+}
+
+// Security seam (§11): redact detected secrets from raw command output before it
+// is summarized or persisted, so a secret in raw output never lands in a gdctx
+// artifact. `redactRaw` is a zero-cost no-op (byte-identical) whenever security
+// is disabled or nothing sensitive is detected, so existing behavior is
+// preserved on the common path.
+async function redactCommandResult(result: CommandResult): Promise<CommandResult> {
+  const cwd = process.cwd();
+  const [raw, stdout, stderr] = await Promise.all([
+    redactRaw({ cwd, content: result.raw, source: "tool-output" }),
+    redactRaw({ cwd, content: result.stdout, source: "tool-output" }),
+    redactRaw({ cwd, content: result.stderr, source: "tool-output" }),
+  ]);
+  return {
+    raw: raw.content,
+    stdout: stdout.content,
+    stderr: stderr.content,
+    exitCode: result.exitCode,
+  };
 }
 
 async function writeArtifact({

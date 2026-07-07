@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { guardOutput } from "../security/guard";
 import {
   WIKI_INDEX_BEGIN,
   WIKI_INDEX_END,
@@ -659,6 +660,25 @@ async function writeCollectedPage(
     if (!isUnmodifiedDraft) {
       return { path: relativePath, type: candidate.type, source: candidate.source, action: "skipped" };
     }
+  }
+
+  // Security write seam (§11): gate the draft page before publishing it.
+  // Advisory reports only and the write proceeds unchanged; enforced/ci may
+  // suppress the write and record the reason.
+  const guard = await guardOutput({
+    cwd,
+    content: candidate.content,
+    target: "wiki",
+    source: "generated",
+  });
+  if (!guard.allowed) {
+    return {
+      path: relativePath,
+      type: candidate.type,
+      source: candidate.source,
+      action: "skipped",
+      securityReason: guard.reason ?? "security gate blocked",
+    };
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });

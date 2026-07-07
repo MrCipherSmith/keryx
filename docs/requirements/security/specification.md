@@ -1,8 +1,8 @@
 # Metaproject Security: technical specification
 
-Version: 0.2.1
+Version: 0.2.2
 
-Status: Phase 1+2 implemented (v0.1). The deterministic engine (detectors, resolution/gate, HMAC-keyed hashing + masks, self-protection, config checksum) and the `gd-metapro security` CLI (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy validate`/`incidents`) are shipped, and the module is enabled by default at `init`. Phase 3 (write-seam `check()` integrations at memory/wiki/testing/gdctx/flow) and Phase 4 (model/API backends, profiles/hooks, gateway mode) remain future work - see §16.
+Status: Phase 1+2+3 implemented (v0.1). The deterministic engine (detectors, resolution/gate, HMAC-keyed hashing + masks, self-protection, config checksum) and the `gd-metapro security` CLI (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy validate`/`incidents`) are shipped, and the module is enabled by default at `init`. Phase 3 write-seam integrations are now wired: an in-process guard (`src/security/guard.ts`) runs at `memory ingest` (target memory), `wiki collect` (target wiki), `test run` raw-log publish, `gdctx` raw-output redaction, and a `security` gate in `flow complete`. Semantics: **advisory (default) reports and continues - it never blocks**; **enforced/ci blocks or suppresses the write with a masked reason**; **disabled is a no-op**. The gdctx seam redacts detected secrets from raw output even in advisory mode (a pure safety improvement). Phase 4 (model/API backends, profiles/hooks, gateway mode) remains future work - see §16.
 
 ## 1. Purpose
 
@@ -277,25 +277,36 @@ not advisory suggestions. In `advisory` mode they report and continue; in
 `enforced`/`ci` mode a `fail`/`needs-approval` decision stops the write. Each
 consuming module owns the call site.
 
-### gdctx
+The five write-seam integrations below are **implemented** (Phase 3). They call a
+shared in-process guard (`src/security/guard.ts`) — `guardOutput` /
+`redactRaw` / `securityFlowGate` — which wraps the frozen Phase 1+2 engine. The
+guard is leak-safe (reasons carry only masked category+count summaries), degrades
+to allow on any engine error, and is a zero-cost no-op when the module is
+disabled. The `health` and `gdskills` items below remain future work.
 
-`gdctx` should be able to run security redaction before summarizing raw logs or
-large command output.
+### gdctx (implemented)
 
-### memory
+`gdctx` runs `redactRaw` on captured raw logs and command output before
+persisting/summarizing them (`ctx run`, `ctx read`). Detected secrets are
+redacted from the raw output **even in advisory mode** — a pure safety
+improvement that leaves output with nothing sensitive byte-identical.
 
-`memory ingest` should call `security check-output --target memory` before
-writing accepted entries.
+### memory (implemented)
 
-### gdwiki
+`memory ingest` calls the guard (`target: memory`) before writing each accepted
+entry. Advisory reports a masked warning and writes anyway; enforced/ci skips the
+entry's write and records the reason.
 
-`wiki collect` should call `security check-output --target wiki` before writing
-drafts.
+### gdwiki (implemented)
 
-### testing
+`wiki collect` calls the guard (`target: wiki`) before writing a collected draft.
+Advisory reports and writes; enforced/ci suppresses the write with a reason.
 
-Testing reports should run security checks before publishing raw or normalized
-logs.
+### testing (implemented)
+
+`test run` calls the guard (`target: report`) on the captured raw log before
+persisting it. Advisory reports and writes the log; enforced/ci suppresses raw-log
+persistence with a reason and never breaks the run.
 
 ### health
 
@@ -307,10 +318,12 @@ artifact and exfiltration policies.
 `skill-verify-skill` should treat repeated security findings as skill-learning
 signals when the skill owns the affected workflow.
 
-### flow
+### flow (implemented)
 
-Sensitive flows may require a clean security gate before `implemented` or
-`complete`.
+`flow complete` runs a `security` completion gate via `securityFlowGate`. When the
+module is disabled the gate is omitted entirely; in advisory it is informational
+(`pass`, does not block); in enforced/ci it maps the engine gate to pass/fail over
+the flow's latest security scan.
 
 ## 12. Standard Profile
 
@@ -420,10 +433,13 @@ agent/artifact boundary.
 - prompt-injection + egress heuristics with low-confidence-`warn` escalation;
 - `report`, `policy validate`, `incidents`.
 
-### Phase 3 - write-seam integrations
-- in-process `check()` gates at memory ingest, wiki collect, testing publish,
-  gdctx large-output, and flow completion (§11);
-- advisory by default; `enforced`/`ci` opt-in.
+### Phase 3 - write-seam integrations (IMPLEMENTED)
+- shared in-process guard (`src/security/guard.ts`) wired at the five write seams:
+  memory ingest, wiki collect, testing raw-log publish, gdctx raw-output
+  redaction, and flow completion (§11);
+- advisory by default (report and continue, never block); `enforced`/`ci` block or
+  suppress the write with a masked reason; disabled is a no-op;
+- the gdctx seam redacts detected secrets from raw output even in advisory mode.
 
 ### Phase 4 - profiles, skill, hooks
 - Standard-profile wiring (§12); `skills/security/SKILL.md` (advisory vs enforced

@@ -92,7 +92,7 @@ _12 modules: `cli-core` and `shared-lib` are the two cross-cutting groups alongs
 
 ## Cross-module data flow
 
-gd-metapro modules are **loosely coupled through the `.metaproject/data/` filesystem**, not through direct calls. A module writes artifacts; another module reads them later. Only three edges are true in-process code imports; the rest are file-mediated. The diagram below distinguishes the two — dashed arrows are file-mediated, solid bold arrows are in-process code imports.
+gd-metapro modules are **loosely coupled through the `.metaproject/data/` filesystem**, not through direct calls. A module writes artifacts; another module reads them later. Historically only three edges were true in-process code imports; the rest are file-mediated. As of Phase 3 the `security` module adds **five more inbound in-process edges** — memory, wiki, testing, gdctx, and flow now call a shared security guard at their write seams (see "Security write-seam gates" below). The diagram below distinguishes the two — dashed arrows are file-mediated, solid bold arrows are in-process code imports.
 
 ```mermaid
 flowchart TB
@@ -125,20 +125,41 @@ flowchart TB
     gdwiki   -. snapshot .-> dashboard
     memory   -. snapshot .-> dashboard
 
-    %% in-process code imports (solid bold) — 3 edges
+    %% in-process code imports (solid bold) — 3 legacy edges
     testing == loadCompatibleTestingReport ==> health
     memory  == relevantAcceptedMemory ==> gdskills
     health  == service.gate ==> flow[flow complete]
 
+    %% security write-seam gates (Phase 3) — 5 inbound edges
+    security[[security guard]]
+    memory  == guardOutput ==> security
+    gdwiki  == guardOutput ==> security
+    testing == guardOutput ==> security
+    gdctx[gdctx run/read] == redactRaw ==> security
+    flow    == securityFlowGate ==> security
+
     classDef code stroke-width:3px;
     linkStyle 12,13,14 stroke-width:3px;
 ```
+
+> The five `security` edges are advisory by default (report and continue, never
+> block); enforced/ci blocks or suppresses the guarded write.
 
 The three **in-process code imports** (solid) are:
 
 1. **testing → health** — the health `tests` source adapter reuses testing's `loadCompatibleTestingReport` and `TestingReport` type instead of re-running tests.
 2. **memory → gdskills `verify`** — `verify` calls `relevantAcceptedMemory()` to surface accepted decisions/constraints/known-mistakes so a skill can be flagged when it contradicts accepted memory. (`verify` also calls gdwiki's `wikiValidate()` as an evidence signal.)
 3. **health → flow** — flow's completion gate 3 calls `createCodeHealthService().gate`. (flow's context collector also runs a deterministic `memory` search to enrich `context.md`.)
+
+**Security write-seam gates (Phase 3).** Five modules now call a shared in-process guard (`src/security/guard.ts`) at their write seams — the first real inbound security calls in the system:
+
+- **memory ingest → security** (`guardOutput`, target memory) before writing each accepted entry;
+- **wiki collect → security** (`guardOutput`, target wiki) before writing a collected draft;
+- **testing run → security** (`guardOutput`, target report) before persisting the raw log;
+- **gdctx run/read → security** (`redactRaw`) to redact secrets from raw output before persist/summarize;
+- **flow complete → security** (`securityFlowGate`) as completion gate 4.
+
+The guard wraps the frozen Phase 1+2 engine and enforces one rule: **advisory (the default) reports and continues — it never blocks or mutates** (the gdctx seam still redacts detected secrets as a pure safety step); **enforced/ci blocks or suppresses the write with a masked category+count reason**; **disabled is a zero-cost no-op**. It imports only from the security engine + shared libs (so the seam stays acyclic) and degrades to allow on any engine error, so a seam is never broken.
 
 The **file-mediated flows** (dashed) are the backbone of the system:
 
@@ -208,4 +229,4 @@ gdskills also ships **five JSON Schema contracts** (`subagent-dispatch`/`-result
 - **Testing gap in `rules`.** `src/rules/` has no co-located tests, unlike the rest of the codebase; its highest-risk untested logic is the heuristic `classifySection` and the policy migration/de-dup in `ensureMetaprojectReference`.
 - **Heuristic precision limits (deliberate trade-offs).** gdgraph import extraction is regex (can miss unusual syntax) and reports one representative per canonical cycle rotation; testing's failure/count parsers are bun-test-shaped (approximate for vitest/jest/playwright); health complexity is token-based, not AST.
 - **Naming skew.** module id `tasks` ↔ CLI verb `flow`; module id `gdwiki` ↔ CLI verb `wiki` (legacy `wiki` manifest key migrated forward); `gdctx` has no `src/ctx/` dir (logic lives entirely in `commands/ctx.ts`).
-- **Security write-seam integrations pending.** The `security` module ships Phase 1+2 (deterministic engine + CLI). Its in-process `check()` gate is defined but **not yet wired** into memory ingest, wiki collect, testing publish, gdctx large-output, or flow completion (spec §16 Phase 3); model/API backends (Phase 4) are also unimplemented. Today security is only reached through its own `gd-metapro security` command, not automatically at other modules' write seams.
+- **Security Phase 4 pending.** The `security` module ships Phase 1+2+3 (deterministic engine + CLI + the write-seam integrations wired at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion — see the cross-module data-flow section). Only Phase 4 remains unimplemented: optional model/API detection backends, profiles/hooks, and gateway mode (spec §16 Phase 4).

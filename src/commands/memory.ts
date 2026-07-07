@@ -150,6 +150,20 @@ async function runIngest(args: string[]): Promise<void> {
       console.log(`- ${conflict.path}: ${conflict.reason}`);
     }
   }
+  if (result.securityWarnings && result.securityWarnings.length > 0) {
+    console.log("");
+    console.log("Security warnings:");
+    for (const warning of result.securityWarnings) {
+      console.log(`- ${warning}`);
+    }
+  }
+  if (result.securitySkipped && result.securitySkipped.length > 0) {
+    console.log("");
+    console.log("Security-blocked entries (not written):");
+    for (const skipped of result.securitySkipped) {
+      console.log(`- ${skipped.title}: ${skipped.reason}`);
+    }
+  }
 }
 
 async function runCheck(): Promise<void> {

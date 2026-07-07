@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { guardOutput, formatGuardWarning } from "../security/guard";
 import { MEMORY_TYPES } from "./types";
 import { collectEntries, memoryRoot } from "./store";
 import { findConflicts, findDuplicates, type Candidate } from "./dedup";
@@ -48,6 +49,8 @@ export async function ingestMemory(
   const reconciled: string[] = [];
   const conflicts: MemoryIngestResult["conflicts"] = [];
   const createdTitles = new Set<string>();
+  const securityWarnings: string[] = [];
+  const securitySkipped: Array<{ title: string; reason: string }> = [];
   let skippedDuplicates = 0;
 
   const dir = path.join(memoryRoot(cwd), folder);
@@ -89,28 +92,51 @@ export async function ingestMemory(
 
     conflicts.push(...findConflicts(candidate, existing));
 
+    const markdown = buildEntryMarkdown({
+      title,
+      type,
+      status: config.ingest.defaultStatus,
+      confidence,
+      summary: text,
+      source,
+      link,
+      date,
+    });
+
+    // Security write seam (§11): gate the accepted entry before it lands on
+    // disk. Advisory reports only (write proceeds unchanged); enforced/ci may
+    // suppress this entry's write and record why.
+    const guard = await guardOutput({
+      cwd,
+      content: markdown,
+      target: "memory",
+      source: "tool-output",
+    });
+    if (!guard.allowed) {
+      securitySkipped.push({ title, reason: guard.reason ?? "security gate blocked" });
+      continue;
+    }
+    const warning = formatGuardWarning(guard.decision, "memory");
+    if (warning) {
+      securityWarnings.push(warning);
+    }
+
     const slug = uniqueSlug(dir, title);
     const filename = `${slug}.md`;
     await mkdir(dir, { recursive: true });
-    await writeFile(
-      path.join(dir, filename),
-      buildEntryMarkdown({
-        title,
-        type,
-        status: config.ingest.defaultStatus,
-        confidence,
-        summary: text,
-        source,
-        link,
-        date,
-      }),
-      "utf8",
-    );
+    await writeFile(path.join(dir, filename), markdown, "utf8");
     created.push(`${folder}/${filename}`);
     createdTitles.add(title.toLowerCase());
   }
 
-  return { created, reconciled, skippedDuplicates, conflicts };
+  const result: MemoryIngestResult = { created, reconciled, skippedDuplicates, conflicts };
+  if (securityWarnings.length > 0) {
+    result.securityWarnings = securityWarnings;
+  }
+  if (securitySkipped.length > 0) {
+    result.securitySkipped = securitySkipped;
+  }
+  return result;
 }
 
 // Mem0-style UPDATE: append a provenance reconciliation note to an existing

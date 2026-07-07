@@ -583,9 +583,9 @@ signals) and from `security-audit` (dependency/committed-secret scanning): this
 module protects prompts, external content, generated outputs, and `.metaproject/`
 artifacts. It is **deterministic** (rule + entropy detectors, no model backend) and
 **leak-safe** — findings never carry raw sensitive values, only fixed-width masks
-and local-only HMAC hashes. The shipped scope is spec §16 **Phase 1+2** (engine +
-CLI); the write-seam integrations (Phase 3) and model/API backends (Phase 4) are
-**not** implemented.
+and local-only HMAC hashes. The shipped scope is spec §16 **Phase 1+2+3** (engine +
+CLI + write-seam integrations); the model/API backends and gateway mode (Phase 4)
+are **not** implemented.
 
 **CLI surface.** Dispatched by `securityCommand`:
 
@@ -647,9 +647,26 @@ Default `mode` is `advisory` and default `rawRetention` is `off`.
 **Dependencies / integrations.** Node builtins only (`node:crypto` for HMAC + config
 checksum, `fs/promises`, `path`) + internal `lib/fs`, `lib/args`, `lib/json`,
 `lib/ui`. `init`/`update` scaffold the config, `modules/security.md`, and
-`core/security/README.md` via `security/templates.ts`. There are **no cross-module
-code imports yet** — the Phase 3 write-seam gates at memory/wiki/testing/gdctx/flow
-are specified but not wired.
+`core/security/README.md` via `security/templates.ts`.
+
+**Write-seam integrations (Phase 3).** A shared in-process guard
+(`src/security/guard.ts`, exporting `guardOutput` / `redactRaw` /
+`securityFlowGate` / `formatGuardWarning`) wraps the frozen Phase 1+2 engine and is
+now called at **five write seams** — the first real inbound calls into this module
+from other modules:
+
+- **memory ingest** (`src/memory/ingest.ts`, `target: memory`) — before writing each accepted entry;
+- **wiki collect** (`src/wiki/service.ts`, `target: wiki`) — before writing a collected draft;
+- **testing** (`src/testing/service.ts`, `target: report`) — before persisting the captured raw log;
+- **gdctx** (`src/commands/ctx.ts`, `redactRaw`) — redacts secrets from raw output before persist/summarize;
+- **flow complete** (`src/commands/flow.ts` → `flow/service.ts` gate 4, `securityFlowGate`) — a `security` completion gate.
+
+Semantics are uniform: **advisory (default) reports and continues — it never
+blocks or mutates** (the gdctx seam still redacts detected secrets, a pure safety
+step); **enforced/ci blocks or suppresses the write with a masked category+count
+reason**; **disabled is a zero-cost no-op**. The guard degrades to allow on any
+engine error, imports only from the engine + shared libs (so the seam stays
+acyclic), and never leaks raw content into reasons or logs.
 
 ---
 

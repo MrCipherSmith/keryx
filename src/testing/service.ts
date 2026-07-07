@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { guardOutput, redactRaw, formatGuardWarning } from "../security/guard";
 import type {
   TestingConfig,
   TestingContext,
@@ -108,18 +109,48 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
   let status: TestingStatus = "skipped";
   let exitCode: number | null = null;
   let raw = "";
+  // Security-safe copy of the raw output used for everything that flows into the
+  // committable report (failures/counts/messages). Redaction is byte-identical
+  // when security is disabled or nothing is detected, so normal output is
+  // unaffected; when a secret IS present it is masked here so it never reaches
+  // artifacts/latest.{md,json} — the raw-log write is gated separately below.
+  let safeRaw = "";
   let rawLogPath: string | null = null;
+  const securityWarnings: string[] = [];
 
   if (command) {
     const result = await runCommand(command.argv, cwd);
     exitCode = result.exitCode;
     raw = result.combined;
-    rawLogPath = await writeRawLog(cwd, raw);
+    // Security write seam (§11): gate the raw log before persisting it.
+    // Advisory reports only and still writes; enforced/ci suppresses raw-log
+    // persistence with a reason and never breaks the run.
+    const guard = await guardOutput({
+      cwd,
+      content: raw,
+      target: "report",
+      source: "tool-output",
+    });
+    if (guard.allowed) {
+      rawLogPath = await writeRawLog(cwd, raw);
+      const warning = formatGuardWarning(guard.decision, "testing");
+      if (warning) {
+        securityWarnings.push(warning);
+      }
+    } else {
+      securityWarnings.push(
+        `raw log not persisted: ${guard.reason ?? "security gate blocked"}`,
+      );
+    }
+    // Everything derived from output and put into the committable report must
+    // use the redacted copy, so a secret in the test output cannot reach the
+    // report via failure messages even though the raw-log write was suppressed.
+    safeRaw = (await redactRaw({ cwd, content: raw, source: "tool-output" })).content;
     status = result.exitCode === 0 ? "pass" : "fail";
   }
 
-  const failures = parseFailures(raw);
-  const counts = parseCounts(raw, failures);
+  const failures = parseFailures(safeRaw);
+  const counts = parseCounts(safeRaw, failures);
   if (!command) {
     counts.total = context.testFiles.length;
   }
@@ -130,7 +161,7 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
     failures.push({
       file: null,
       name: "test-command-failed",
-      message: raw.trim() ? firstMeaningfulLine(raw) : "Test command failed with a non-zero exit code.",
+      message: safeRaw.trim() ? firstMeaningfulLine(safeRaw) : "Test command failed with a non-zero exit code.",
       priority: "P0",
     });
     counts.failed = Math.max(counts.failed, 1);
@@ -174,7 +205,15 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
   };
 
   const paths = await writeReport(cwd, report);
-  return { report, markdownPath: paths.markdownPath, jsonPath: paths.jsonPath };
+  const runResult: TestingRunResult = {
+    report,
+    markdownPath: paths.markdownPath,
+    jsonPath: paths.jsonPath,
+  };
+  if (securityWarnings.length > 0) {
+    runResult.securityWarnings = securityWarnings;
+  }
+  return runResult;
 }
 
 export async function loadTestingContext(cwd: string): Promise<TestingContext | null> {

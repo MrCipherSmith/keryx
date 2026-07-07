@@ -83,6 +83,13 @@ async function runRun(args: string[]): Promise<void> {
   console.log("");
   console.log(`report: ${result.markdownPath}`);
   console.log(`json: ${result.jsonPath}`);
+  if (result.securityWarnings && result.securityWarnings.length > 0) {
+    console.log("");
+    console.log("Security:");
+    for (const warning of result.securityWarnings) {
+      console.log(`- ${warning}`);
+    }
+  }
   process.exitCode = result.report.status === "fail" || result.report.status === "error" ? 1 : 0;
 }
 

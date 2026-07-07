@@ -76,7 +76,7 @@ export interface TrackerAdapter {
 // --- Gates (D6) ---
 
 export type GateOutcome = {
-  name: "acceptance-criteria" | "pull-request" | "health";
+  name: "acceptance-criteria" | "pull-request" | "health" | "security";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -84,6 +84,13 @@ export type GateOutcome = {
 export type FlowServiceDeps = {
   tracker: TrackerAdapter | null;
   healthGate: (cwd: string) => Promise<{ status: string; reasons: string[] }>;
+  // Optional security gate over the flow's touched artifacts. Return `null` to
+  // omit the gate entirely (e.g. when the security module is disabled) so a
+  // normal advisory `flow complete` is never blocked. When present, advisory
+  // resolves to `pass` (informational) and enforced/ci may `fail`.
+  securityGate?: (
+    cwd: string,
+  ) => Promise<{ status: "pass" | "fail" | "skipped"; detail: string } | null>;
   now: () => Date;
 };
 

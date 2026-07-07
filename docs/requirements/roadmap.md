@@ -1,6 +1,6 @@
 # Metaproject Roadmap
 
-Version: 0.9.0
+Version: 0.9.1
 
 ## 1. Purpose
 
@@ -33,7 +33,7 @@ registry to human-readable status and points at each module's requirements.
 | Testing Module | `gd-metapro test` | `testing` | implemented (MVP) | [testing/](testing/) |
 | gdskills / Project Skills | `gd-metapro skills` | `gdskills` | implemented (Phase 1 + bundled orchestrators) | [gdskills/](gdskills/) |
 | Metaproject Standard | `gd-metapro standard` | - | implemented (v0.1 validator) | [metaproject-standard/](metaproject-standard/) |
-| Metaproject Security | `gd-metapro security` | `security` | implemented (v0.1, Phase 1+2) | [security/](security/) |
+| Metaproject Security | `gd-metapro security` | `security` | implemented (v0.1, Phase 1+2+3 write-seam integrations) | [security/](security/) |
 
 ## 4. gdwiki (implemented, MVP + collector)
 
@@ -88,7 +88,7 @@ Remaining:
 Order is indicative, not committed:
 
 1. Task Manager Phase 2 (`gd-metapro flow`) - Notion/Jira adapters, flow board artifact, memory/wiki links.
-2. Metaproject Security Phase 3+4 (`gd-metapro security`) - write-seam `check()` integrations at memory/wiki/testing/gdctx/flow, plus optional model/API detection backends and gateway mode (Phase 1+2 deterministic engine + CLI already shipped).
+2. Metaproject Security Phase 4 (`gd-metapro security`) - optional model/API detection backends, profiles/hooks, and gateway mode (Phase 1+2 deterministic engine + CLI and the Phase 3 write-seam integrations at memory/wiki/testing/gdctx/flow are already shipped).
 3. gdwiki release metrics and richer dashboard navigation.
 4. gdskills semantic verification against entity ownership maps.
 5. Code Health Phase 3 (`gd-metapro health`) - advanced trend analytics and larger-project tuning.

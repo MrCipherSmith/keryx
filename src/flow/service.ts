@@ -334,6 +334,24 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         });
       }
 
+      // Gate 4: security (§11). Omitted entirely when the module is disabled
+      // (dep returns null), so advisory `flow complete` is never regressed.
+      // Advisory -> pass (informational); enforced/ci -> may fail.
+      if (deps.securityGate) {
+        try {
+          const security = await deps.securityGate(cwd);
+          if (security) {
+            gates.push({ name: "security", status: security.status, detail: security.detail });
+          }
+        } catch (error) {
+          gates.push({
+            name: "security",
+            status: "skipped",
+            detail: `security unavailable: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      }
+
       const passed = gates.every((gate) => gate.status !== "fail");
       let issueComment: string | null = null;
       let commented = false;

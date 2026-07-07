@@ -1,8 +1,8 @@
 # Metaproject Security
 
-Version: 0.2.1
+Version: 0.2.2
 
-Status: Phase 1+2 implemented (v0.1) - the deterministic engine (`src/security/`) and the `gd-metapro security` CLI are shipped and the module is enabled by default at `init`. Phase 3 (write-seam `check()` integrations at memory/wiki/testing/gdctx/flow) and Phase 4 (model/API backends, gateway mode) remain future work; see specification.md §16 for the phased breakdown.
+Status: Phase 1+2 AND Phase 3 implemented (v0.1) - the deterministic engine (`src/security/`) and the `gd-metapro security` CLI are shipped, the module is enabled by default at `init`, and the Phase 3 write-seam integrations are wired: an in-process guard (`src/security/guard.ts`) runs at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion. Advisory (default) reports and continues without blocking; enforced/ci blocks or suppresses the write with a masked reason; disabled is a no-op. Phase 4 (model/API backends, gateway mode) remains future work; see specification.md §16 for the phased breakdown.
 
 ## 1. Purpose
 
