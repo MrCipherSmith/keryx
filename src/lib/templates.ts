@@ -296,6 +296,18 @@ export type MetaprojectDashboardData = {
   // Markdown content keyed by dashboard href, embedded so links render in the
   // in-page modal instead of opening the raw file (fetch is blocked on file://).
   docs?: Record<string, string>;
+  tasks?: {
+    flows: Array<{
+      id: string;
+      title: string;
+      status: string;
+      tasksDone: number;
+      tasksTotal: number;
+      acConfirmed: number;
+      acTotal: number;
+      pr: string | null;
+    }>;
+  };
 };
 
 export function renderMetaprojectDashboardHtml({
@@ -475,6 +487,24 @@ export function renderMetaprojectDashboardHtml({
   const testing = data?.testing;
   const wikiPages = data?.wiki?.pages ?? [];
   const memoryEntries = data?.memory?.entries ?? [];
+  const flows = data?.tasks?.flows ?? [];
+  const flowRows = flows.map((flow) => {
+    const tone = flow.status === "done"
+      ? "good"
+      : flow.status === "blocked"
+        ? "bad"
+        : (flow.status === "in-progress" || flow.status === "implemented" || flow.status === "completing")
+          ? "warn"
+          : "";
+    return `
+            <tr>
+              <td><b>${escapeHtml(flow.id)}</b> ${escapeHtml(flow.title)}</td>
+              <td><span class="pill ${tone}">${escapeHtml(flow.status)}</span></td>
+              <td>${flow.tasksDone}/${flow.tasksTotal}</td>
+              <td>${flow.acConfirmed}/${flow.acTotal}</td>
+              <td>${flow.pr ? `<a href="${escapeHtml(flow.pr)}">PR</a>` : "-"}</td>
+            </tr>`;
+  }).join("");
   // Embed page markdown so links open in an in-page modal instead of navigating
   // to a raw .md file (fetch is blocked when the dashboard is opened via file://).
   const docMap: Record<string, string> = { ...(data?.docs ?? {}) };
@@ -617,6 +647,7 @@ export function renderMetaprojectDashboardHtml({
   if (enableTesting) navItems.push(["Testing", "#testing"]);
   if (enableGdwiki) navItems.push(["Knowledge", "#wiki"]);
   if (enableMemory) navItems.push(["Memory", "#memory"]);
+  if (enableTasks) navItems.push(["Tasks", "#tasks"]);
 
   return `<!doctype html>
 <html lang="en" data-theme="dark">
@@ -856,6 +887,14 @@ ${attentionCards}
 ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
         </div>
       </section>
+
+      ${enableTasks ? `<section class="sec" id="tasks">
+        <div class="sec-h"><h2>Tasks</h2><span class="count">${flows.length} flow(s)</span><span class="rule"></span></div>
+        ${flows.length > 0 ? `<div class="panel"><div class="table-wrap"><table>
+          <thead><tr><th>Flow</th><th>Status</th><th>Tasks</th><th>AC</th><th>PR</th></tr></thead>
+          <tbody>${flowRows}</tbody>
+        </table></div></div>` : `<div class="empty">No flows yet. Start one: <code>gd-metapro flow init --title "..."</code>.</div>`}
+      </section>` : ""}
 
       <section class="sec" id="health">
         <div class="sec-h"><h2>Code Health</h2><span class="count">${qualityStatus}</span><span class="rule"></span></div>
@@ -1488,6 +1527,8 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/testing/logs/
 .metaproject/data/testing/artifacts/latest.md
 .metaproject/data/testing/artifacts/latest.json
+.metaproject/data/tasks/runtime/
+.metaproject/data/tasks/logs/
 .metaproject/reports/
 `;
 }

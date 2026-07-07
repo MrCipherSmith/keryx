@@ -487,7 +487,68 @@ async function collectDashboardData(metaprojectRoot: string): Promise<Metaprojec
   if (Object.keys(docs).length > 0) {
     data.docs = docs;
   }
+  const tasks = await collectTasksDashboardData(metaprojectRoot);
+  if (tasks) {
+    data.tasks = tasks;
+  }
   return data;
+}
+
+// Compact flow summaries for the dashboard Tasks section: id, title, status,
+// task progress, AC confirmed/total, and PR. Read-only over flow packages.
+async function collectTasksDashboardData(
+  metaprojectRoot: string,
+): Promise<MetaprojectDashboardData["tasks"] | null> {
+  const flowsRoot = path.join(metaprojectRoot, "flows");
+  if (!(await pathExists(flowsRoot))) {
+    return null;
+  }
+  let dirEntries: string[];
+  try {
+    dirEntries = (await readdir(flowsRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && /^\d{3}-/.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return null;
+  }
+  const flows: NonNullable<MetaprojectDashboardData["tasks"]>["flows"] = [];
+  for (const dir of dirEntries) {
+    const flowPath = path.join(flowsRoot, dir, "flow.json");
+    if (!(await pathExists(flowPath))) {
+      continue;
+    }
+    try {
+      const flow = JSON.parse(await readFile(flowPath, "utf8")) as {
+        id?: unknown;
+        title?: unknown;
+        status?: unknown;
+        tasks?: Array<{ status?: unknown }>;
+        acConfirmed?: Record<string, unknown>;
+        pr?: { url?: unknown };
+      };
+      const tasks = Array.isArray(flow.tasks) ? flow.tasks : [];
+      let acTotal = 0;
+      const acPath = path.join(flowsRoot, dir, "acceptance-criteria.md");
+      if (await pathExists(acPath)) {
+        const acContent = await readFile(acPath, "utf8");
+        acTotal = (acContent.match(/^- AC\d+:/gm) ?? []).length;
+      }
+      flows.push({
+        id: String(flow.id ?? dir.slice(0, 3)),
+        title: String(flow.title ?? dir),
+        status: String(flow.status ?? "unknown"),
+        tasksDone: tasks.filter((task) => task.status === "done").length,
+        tasksTotal: tasks.length,
+        acConfirmed: flow.acConfirmed ? Object.keys(flow.acConfirmed).length : 0,
+        acTotal,
+        pr: typeof flow.pr?.url === "string" ? flow.pr.url : null,
+      });
+    } catch {
+      // skip unreadable/corrupt flow.json
+    }
+  }
+  return flows.length > 0 ? { flows } : null;
 }
 
 // Embed the markdown behind every dashboard .md link so clicks open the in-page
