@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-07-06T21:02:02.998Z
+generatedAt: 2026-07-07T00:34:35.520Z
 
 ## Frameworks
 
@@ -28,6 +28,12 @@ generatedAt: 2026-07-06T21:02:02.998Z
 - src/health/skill-loop.test.ts
 - src/health/skills.test.ts
 - src/health/sources/sonarqube.test.ts
+- src/memory/dedup.test.ts
+- src/memory/ingest.test.ts
+- src/memory/reflect.test.ts
+- src/memory/relevant.test.ts
+- src/memory/search.test.ts
+- src/memory/store.test.ts
 - src/testing/service.test.ts
 
 
