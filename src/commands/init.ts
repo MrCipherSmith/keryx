@@ -96,6 +96,7 @@ import {
 } from "../lib/templates";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import { hasDistilledEntrypoints } from "../rules/distill";
+import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 
 type InitOptions = {
   help: boolean;
@@ -148,8 +149,10 @@ type ModuleConfig =
 
 type MetaprojectManifest = {
   schemaVersion: 1;
+  standardVersion: string;
   name: string;
   createdBy: "gd-metapro";
+  profiles: string[];
   paths: {
     root: string;
     core: string;
@@ -159,6 +162,7 @@ type MetaprojectManifest = {
     modules: string;
   };
   modules: Record<string, ModuleConfig>;
+  updatedAt: string;
   agentEntrypoints: {
     index: string;
     readme: string;
@@ -1047,10 +1051,23 @@ function buildManifest({
       ? existingManifest.modules.gdskills.projectSkillRegistry
       : undefined;
 
+  const enabledModuleKeys = [
+    enableGdgraph && "gdgraph",
+    enableGdctx && "gdctx",
+    enableGdwiki && "gdwiki",
+    enableGdskills && "gdskills",
+    enableMemory && "memory",
+    enableTasks && "tasks",
+    enableHealth && "health",
+    enableTesting && "testing",
+  ].filter((key): key is string => typeof key === "string");
+
   return {
     schemaVersion: 1,
+    standardVersion: STANDARD_VERSION,
     name: `${projectName}-metaproject`,
     createdBy: "gd-metapro",
+    profiles: computeProfiles(enabledModuleKeys),
     paths: {
       root: ".metaproject",
       core: ".metaproject/core",
@@ -1183,6 +1200,7 @@ function buildManifest({
             enabled: false,
           },
     },
+    updatedAt: new Date().toISOString(),
     agentEntrypoints: {
       index: ".metaproject/index.md",
       readme: ".metaproject/README.md",

@@ -11,6 +11,7 @@ import {
 } from "../gdskills/catalog";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import { hasDistilledEntrypoints } from "../rules/distill";
+import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { renderHealthConfig } from "../health/config";
 import {
   renderHealthCoreReadme,
@@ -97,6 +98,9 @@ type ManifestModule = {
 };
 
 type MetaprojectManifest = {
+  standardVersion?: string;
+  profiles?: string[];
+  updatedAt?: string;
   modules?: Record<string, ManifestModule>;
   agentEntrypoints?: {
     root?: string[];
@@ -878,9 +882,24 @@ async function writeRecoveredManifest(
     enableTasks: boolean;
   },
 ): Promise<void> {
+  const enabledModuleKeys = Object.entries(modules)
+    .filter(([, enabled]) => enabled === true)
+    .map(([key]) => key.replace(/^enable/, "").toLowerCase());
   const manifest = {
-    version: 1,
-    generatedBy: "gd-metapro update",
+    schemaVersion: 1,
+    standardVersion: STANDARD_VERSION,
+    name: `${path.basename(path.dirname(metaprojectRoot))}-metaproject`,
+    createdBy: "gd-metapro",
+    profiles: computeProfiles(enabledModuleKeys),
+    paths: {
+      root: ".metaproject",
+      core: ".metaproject/core",
+      data: ".metaproject/data",
+      rules: ".metaproject/rules",
+      skills: ".metaproject/skills",
+      modules: ".metaproject/modules",
+    },
+    updatedAt: new Date().toISOString(),
     modules: {
       gdgraph: modules.enableGdgraph
         ? {
@@ -1001,7 +1020,23 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
   agentEntrypoints.root = ruleSources;
   agentEntrypoints.metaproject = ".metaproject/index.md";
   raw.agentEntrypoints = agentEntrypoints;
+  applyStandardManifestFields(raw);
   await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+}
+
+// Ensure the manifest carries the schema-required `standardVersion` and the
+// recommended `profiles` + `updatedAt` fields. Runs on every `update` so a
+// manifest created before the standard fields existed is backfilled in place,
+// and `profiles` stays in sync with the currently enabled module set. Mirrors
+// the fields written by `init` (see src/commands/init.ts buildManifest).
+function applyStandardManifestFields(raw: Record<string, unknown>): void {
+  raw.standardVersion = STANDARD_VERSION;
+  const modules = (raw.modules ?? {}) as Record<string, { enabled?: boolean }>;
+  const enabledModuleKeys = Object.entries(modules)
+    .filter(([, entry]) => entry?.enabled === true)
+    .map(([key]) => key);
+  raw.profiles = computeProfiles(enabledModuleKeys);
+  raw.updatedAt = new Date().toISOString();
 }
 
 async function updateRuntime(projectRoot: string): Promise<void> {

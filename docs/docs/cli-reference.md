@@ -39,6 +39,7 @@ code `1`.
 | `memory` | Store and search long-term project memory. |
 | `flow` | Agent-first work lifecycle (Task Manager). |
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
+| `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
 
 ---
 
@@ -456,3 +457,33 @@ gd-metapro rules distill
 
 Only `sync` and `distill` are accepted; the only recognized flag is `--help`/`-h`.
 An unknown subcommand prints an error and exits `1`.
+
+---
+
+## standard
+
+Validate the workspace against the [Metaproject Standard](../requirements/metaproject-standard/specification.md)
+v0.1 and report its declared capabilities. The checks and schemas are bundled
+into the CLI (`src/standard/`), so no network or `docs/` access is needed at
+runtime.
+
+```
+gd-metapro standard validate
+gd-metapro standard doctor
+gd-metapro standard capabilities
+```
+
+| Subcommand | Description |
+|---|---|
+| `validate` | Check required files/dirs, the `metaproject.json` schema (`metaproject.schema.json` + per-module `module.schema.json`), declared `paths.*`, enabled-module manifests, and that root `AGENTS.md`/`CLAUDE.md` link `.metaproject/index.md`. Prints a `PASS`/`FAIL` report and exits `1` on failure. |
+| `doctor` | Same findings as `validate`, rendered as actionable diagnostics with a concrete fix hint per issue. Exits `1` when unresolved issues remain. |
+| `capabilities` | Print the standard version, declared and satisfied profiles, and each enabled module with its commands/capabilities, sourced from `metaproject.json`. Exits `0`. |
+
+`validate` and `doctor` also emit profile warnings when the manifest's declared
+`profiles` array drifts from the profiles the workspace actually satisfies
+(`minimal`, `agent`, `ci`, `full`). `gd-metapro init` and `gd-metapro update`
+keep `standardVersion`, `profiles`, and `updatedAt` current in the manifest, so a
+freshly generated workspace validates cleanly.
+
+The only recognized flag is `--help`/`-h`. An unknown subcommand prints an error
+and exits `1`.

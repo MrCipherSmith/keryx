@@ -237,13 +237,18 @@ A validator should check:
 - generated/transient data follows lifecycle policy;
 - profile requirements are satisfied.
 
-Planned reference commands:
+Reference commands (implemented in the `gd-metapro` CLI):
 
 ```bash
 gd-metapro standard validate
 gd-metapro standard doctor
 gd-metapro standard capabilities
 ```
+
+`validate` runs the checks above and exits non-zero when the workspace is
+non-compliant, `doctor` prints the same findings as actionable fixes, and
+`capabilities` reports the standard version, active profiles, and enabled
+modules from `metaproject.json`.
 
 ## 12. Relationship To Existing Specs
 

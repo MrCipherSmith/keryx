@@ -293,6 +293,9 @@ gd-metapro flow init --title "Task title"
 gd-metapro flow list
 gd-metapro flow status <id>
 gd-metapro flow complete <id>
+gd-metapro standard validate
+gd-metapro standard doctor
+gd-metapro standard capabilities
 ```
 
 This lists the most common entry points only. Each command has additional
@@ -317,8 +320,10 @@ describes current behavior.
 ## Current Modules
 
 The `gd-metapro` CLI itself is the toolkit core: it provides install, `init`,
-`status`, `update`, `dashboard`, and `rules` and manages the `.metaproject`
-structure and module manifest. It ships the following modules:
+`status`, `update`, `dashboard`, `rules`, and `standard` (validate the workspace
+against the [Metaproject Standard](docs/requirements/metaproject-standard/specification.md))
+and manages the `.metaproject` structure and module manifest. It ships the
+following modules:
 
 - `gdgraph`: code graph module for dependencies and affected context.
 - `gdctx`: context module for compact command/search/read output.
