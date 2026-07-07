@@ -21,7 +21,7 @@ registry to human-readable status and points at each module's requirements.
 
 | Module | CLI namespace | Manifest key | Status | Requirements |
 |---|---|---|---|---|
-| spec-orchestrator | `init`, `status`, `update` | - | implemented | [spec-orchestrator/](spec-orchestrator/) |
+| spec-orchestrator | `init`, `status`, `update`, `rules` (`sync`/`distill`), `dashboard`/`dash` | - | implemented | [spec-orchestrator/](spec-orchestrator/) |
 | gdgraph | `gd-metapro gdgraph` | `gdgraph` | implemented | [gdgraph/](gdgraph/) |
 | gdctx | `gd-metapro ctx` | `gdctx` | implemented | [gdctx/](gdctx/) |
 | gdwiki | `gd-metapro wiki` | `gdwiki` | implemented (MVP + collector) | [wiki/](wiki/) |

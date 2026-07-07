@@ -2,6 +2,8 @@
 
 Version: 0.1.0
 
+> The `tasks` (Task Manager) module is driven by the `gd-metapro flow` command and the `flow` skill; every command below is invoked as `gd-metapro flow ...`.
+
 ## Purpose
 
 Agent-first flow lifecycle: initialization with frozen acceptance criteria,

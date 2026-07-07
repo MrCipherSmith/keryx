@@ -349,6 +349,12 @@ skills/<module-name>/
 
 ## 6. Предлагаемая структура репозитория
 
+> Note: разделы 6-7 - исходное предложение из ранней проработки и не отражают
+> фактический shipped layout. Реальная структура `.metaproject/` и манифест
+> описаны в `.metaproject/metaproject.json` и в
+> [spec-orchestrator/specification.md](spec-orchestrator/specification.md)
+> (sections 8-9); при расхождении источником истины является актуальный layout.
+
 ```text
 metaproject/
   metaproject.json

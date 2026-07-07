@@ -14,6 +14,7 @@ gdskills learning signal.
 - `gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>]`
 - `gd-metapro memory ingest --from-<source> <path>`
 - `gd-metapro memory check`
+- `gd-metapro memory reflect`
 
 ## Config
 

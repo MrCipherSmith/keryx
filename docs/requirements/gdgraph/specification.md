@@ -135,6 +135,9 @@ MCP не обязателен для MVP, но API нельзя проектир
 
 ## 4. Цели MVP
 
+> Статус реализации: текущая версия строит **file/asset dependency graph** (без symbol-графа).
+> Узлы имеют `kind` `file` или `asset`; извлечение символов отнесено в раздел «Планируется».
+
 MVP считается успешным, если `gdgraph` умеет:
 
 - инициализироваться в проекте через глобальный CLI;
@@ -142,14 +145,19 @@ MVP считается успешным, если `gdgraph` умеет:
 - строить dependency graph файлов;
 - исключать generated/static output по умолчанию для больших frontend-проектов;
 - резолвить локальные asset imports как asset nodes, а не как ошибки unresolved;
-- извлекать основные символы;
 - сохранять граф в `.metaproject/data/gdgraph`;
 - генерировать короткий summary проекта;
-- отвечать на базовые запросы через CLI;
-- показывать affected context для файла или символа;
+- отвечать на базовые запросы через CLI (`query cycles`, `query orphans`);
+- показывать affected context для файла (прямые зависимости и прямые зависимые файлы);
 - обнаруживать circular dependencies;
 - находить orphan modules;
 - выдавать агенту scoped context для дальнейшей работы.
+
+Планируется (пока не реализовано):
+
+- извлечение символов (exported symbols, symbol nodes/`symbols.jsonl`);
+- affected context на уровне символов;
+- транзитивный affected с лимитом глубины, связанные тесты и module skills.
 
 ## 5. Не цели первой версии
 
@@ -182,9 +190,11 @@ gd-metapro init
 gd-metapro gdgraph build
 ```
 
-Сканирует текущий проект и обновляет graph storage + агентские артефакты.
+Сканирует текущий проект (полный скан `cwd`) и обновляет graph storage + агентские артефакты.
 
-Опции:
+> Статус: команда не принимает опций. Всегда выполняется полный скан текущего каталога.
+
+Планируемые опции (пока не парсятся):
 
 ```bash
 gd-metapro gdgraph build --project .
@@ -196,19 +206,25 @@ gd-metapro gdgraph build --full
 ### 6.3 query
 
 ```bash
-gd-metapro gdgraph query "<query>"
+gd-metapro gdgraph query cycles
+gd-metapro gdgraph query orphans
 ```
 
-Возвращает короткий результат в stdout и сохраняет подробный результат в `.metaproject/data/gdgraph/queries/`.
+Возвращает короткий результат в stdout. Поддерживаются только запросы `cycles` и `orphans`;
+любой другой запрос завершается с ошибкой `Unsupported gdgraph query`.
 
-Примеры:
+> Статус: результаты выводятся только в stdout; каталог `.metaproject/data/gdgraph/queries/`
+> не создается.
+
+Планируется (пока не реализовано):
 
 ```bash
 gd-metapro gdgraph query "module pipelines"
 gd-metapro gdgraph query "symbol PipelineStore"
-gd-metapro gdgraph query "cycles"
-gd-metapro gdgraph query "orphans"
 ```
+
+Free-form `module ...`/`symbol ...` запросы и запись подробного результата в
+`.metaproject/data/gdgraph/queries/` относятся к будущей версии.
 
 ### 6.4 affected
 
@@ -216,23 +232,33 @@ gd-metapro gdgraph query "orphans"
 gd-metapro gdgraph affected src/pipelines/PipelineStore.ts
 ```
 
-Показывает прямые и транзитивные зависимости, потенциально затронутые тесты, модули и доменные скилы.
+Показывает прямые зависимости (файлы, которые импортирует цель) и прямые зависимые файлы
+(файлы, которые импортируют цель) — one-hop в обе стороны.
 
-### 6.5 explain
+Планируется (пока не реализовано): транзитивные зависимости с лимитом глубины,
+потенциально затронутые тесты, модули и доменные скилы.
+
+### 6.5 explain (планируется, пока не реализовано)
+
+> Статус: команда не реализована. `gd-metapro gdgraph` поддерживает только
+> `build`, `query cycles|orphans` и `affected`. Вызов `explain` завершится ошибкой
+> `Unknown gdgraph command`.
 
 ```bash
 gd-metapro gdgraph explain pipelines
 ```
 
-Возвращает объяснение области: файлы, символы, зависимости, известные архитектурные границы и ссылки на wiki/skills.
+Должна возвращать объяснение области: файлы, символы, зависимости, известные архитектурные границы и ссылки на wiki/skills.
 
-### 6.6 path
+### 6.6 path (планируется, пока не реализовано)
+
+> Статус: команда не реализована (см. примечание к §6.5).
 
 ```bash
 gd-metapro gdgraph path src/a.ts src/b.ts
 ```
 
-Показывает путь зависимостей между двумя файлами или символами.
+Должна показывать путь зависимостей между двумя файлами или символами.
 
 ### 6.7 gdgraph skill
 
@@ -272,23 +298,29 @@ gd-metapro gdgraph query orphans
 
 ## 7. Структура данных
 
+> Ниже описана **реализованная** схема (`src/gdgraph/types.ts`). `id` узла — это
+> относительный путь файла (без префикса `file:`), `id` ребра — `edge:<N>`.
+> Поля `module`/`metadata` у узлов и `metadata`/`imported` у ребер пока не заполняются;
+> символьный граф (§7.2) не строится. Целевая (расширенная) схема с модулями,
+> метаданными и символами относится к разделу «Планируется».
+
 ### 7.1 Graph node
 
 ```json
 {
-  "id": "file:src/pipelines/PipelineStore.ts",
+  "id": "src/pipelines/PipelineStore.ts",
   "kind": "file",
-  "language": "typescript",
   "path": "src/pipelines/PipelineStore.ts",
-  "module": "pipelines",
-  "metadata": {
-    "loc": 240,
-    "exports": ["PipelineStore"]
-  }
+  "language": "typescript"
 }
 ```
 
-### 7.2 Symbol node
+`kind` принимает значения `file` или `asset`; `language` — `typescript`, `javascript`
+или `asset` (для asset-узлов).
+
+### 7.2 Symbol node (планируется, пока не реализовано)
+
+Symbol nodes не создаются текущей сборкой. Целевая форма:
 
 ```json
 {
@@ -296,7 +328,7 @@ gd-metapro gdgraph query orphans
   "kind": "class",
   "language": "typescript",
   "name": "PipelineStore",
-  "fileId": "file:src/pipelines/PipelineStore.ts",
+  "fileId": "src/pipelines/PipelineStore.ts",
   "module": "pipelines",
   "metadata": {
     "exported": true,
@@ -311,58 +343,46 @@ gd-metapro gdgraph query orphans
 ```json
 {
   "id": "edge:1",
-  "from": "file:src/pipelines/PipelineStore.ts",
-  "to": "file:src/core/api/client.ts",
+  "from": "src/pipelines/PipelineStore.ts",
+  "to": "src/core/api/client.ts",
   "kind": "imports",
-  "metadata": {
-    "imported": ["apiClient"],
-    "isTypeOnly": false
-  }
+  "specifier": "../core/api/client"
 }
 ```
 
+`specifier` — исходная строка импорта. Поле `metadata` (`imported`, `isTypeOnly`)
+относится к целевой схеме и пока не заполняется.
+
 ### 7.4 Edge kinds
 
-Минимальный набор:
+Реализованный набор:
 
-- `imports`;
-- `exports`;
-- `reexports`;
-- `declares`;
-- `uses`;
-- `extends`;
-- `implements`;
-- `calls` later;
-- `reads` later;
-- `writes` later;
-- `configured_by`;
-- `tested_by`;
-- `documented_by`;
-- `skill_for`.
+- `imports` — разрешенный локальный import между исходными файлами;
+- `asset` — import локального asset (css/json/svg/png и т.п.), разрешенный в asset-узел;
+- `unresolved` — относительный import, который не удалось разрешить.
+
+Планируется (пока не реализовано): `exports`, `reexports`, `declares`, `uses`,
+`extends`, `implements`, `calls`, `reads`, `writes`, `configured_by`, `tested_by`,
+`documented_by`, `skill_for`.
 
 ## 8. Output-артефакты
 
-Рекомендуемая структура:
+Реализованная структура (файлы, которые пишет `gd-metapro gdgraph build`):
 
 ```text
 .metaproject/data/gdgraph/
   storage/
     nodes.jsonl
     edges.jsonl
-    symbols.jsonl
   artifacts/
     summary.md
     module-map.json
-    dependency-cycles.json
-    orphan-modules.json
-    public-api-map.json
-  queries/
-    latest.json
-    latest.md
-  summaries/
-    pipelines.md
-    analytics.md
 ```
+
+Планируется (пока не производится): `storage/symbols.jsonl`,
+`artifacts/dependency-cycles.json`, `artifacts/orphan-modules.json`,
+`artifacts/public-api-map.json`, `queries/latest.json`, `queries/latest.md`,
+`summaries/<module>.md`.
 
 Правило: storage может быть большим; artifacts должны быть маленькими и пригодными для чтения агентом.
 
@@ -398,6 +418,13 @@ export interface GdGraphService {
 Это позволит позже подключить MCP tools без переписывания логики.
 
 ## 11. Конфигурация
+
+> Статус: файл `gdgraph.config.json` пока не читается. Исключения каталогов
+> (`node_modules`, `dist`, `build`, `coverage`, `generated`, `out`, `public`,
+> `storybook-static`, `.next`, `.docusaurus`, `.turbo`, `.cache`, `.git`,
+> `.metaproject`) и список asset-расширений заданы в коде (`src/gdgraph/build.ts`,
+> `IGNORE_DIRS` / `ASSET_EXTENSIONS`). Схема ниже описывает целевую конфигурацию
+> будущей версии.
 
 Файл:
 
@@ -532,20 +559,24 @@ And создается базовый `gdgraph.config.json`
 Given проект содержит TypeScript файлы
 When пользователь запускает `gd-metapro gdgraph build`
 Then `gdgraph` строит file dependency graph
-And извлекает exported symbols
-And сохраняет storage и artifacts
+And сохраняет storage (`nodes.jsonl`, `edges.jsonl`) и artifacts (`summary.md`, `module-map.json`)
 And генерирует `summary.md`
+
+Планируется: извлечение exported symbols в рамках этого сценария.
 
 ### Scenario: find affected context
 
 Given граф уже построен
 When пользователь запускает `gd-metapro gdgraph affected <file>`
 Then CLI возвращает прямые зависимости
-And транзитивные зависимости с лимитом глубины
-And связанные тесты, если они найдены
-And связанные module skills, если они настроены
+And прямые зависимые файлы (dependents)
 
-### Scenario: explain module
+Планируется (пока не реализовано): транзитивные зависимости с лимитом глубины,
+связанные тесты и связанные module skills.
+
+### Scenario: explain module (планируется, пока не реализовано)
+
+Команда `explain` не реализована (см. §6.5). Целевое поведение:
 
 Given настроен module mapping для `pipelines`
 When пользователь запускает `gd-metapro gdgraph explain pipelines`

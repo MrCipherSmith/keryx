@@ -85,7 +85,7 @@ Config lives in `.metaproject/testing.config.json`.
 ```bash
 gd-metapro test init
 gd-metapro test analyze
-gd-metapro test run [--changed] [--strict] [--scope <path>] [--kind unit|integration|e2e|smoke]
+gd-metapro test run [--changed] [--strict] [--since <ref>] [--scope <path>] [--kind unit|integration|e2e|smoke]
 gd-metapro test status
 gd-metapro test context
 gd-metapro test explain <file-or-scope>
@@ -114,7 +114,8 @@ Detection inputs:
 
 ### 5.3 `test run`
 
-Runs detected test command and writes normalized artifacts.
+Runs detected test command and writes normalized artifacts. `--since <ref>`
+selects changed files against a git ref; `--gate` is an alias of `--strict`.
 
 Runner priority:
 

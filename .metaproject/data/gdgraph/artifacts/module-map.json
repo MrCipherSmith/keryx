@@ -1,4 +1,7 @@
 {
+  "cli.test.ts": [
+    "src/cli.test.ts"
+  ],
   "cli.ts": [
     "src/cli.ts"
   ],
@@ -9,8 +12,11 @@
     "src/commands/flow.ts",
     "src/commands/gdgraph.ts",
     "src/commands/health.ts",
+    "src/commands/init.test.ts",
     "src/commands/init.ts",
     "src/commands/memory.ts",
+    "src/commands/rules.test.ts",
+    "src/commands/rules.ts",
     "src/commands/skills.ts",
     "src/commands/status.ts",
     "src/commands/test.ts",
@@ -46,6 +52,7 @@
     "src/gdskills/project-skills.ts",
     "src/gdskills/resolve.ts",
     "src/gdskills/sync.ts",
+    "src/gdskills/verify.test.ts",
     "src/gdskills/verify.ts"
   ],
   "health": [
@@ -91,7 +98,9 @@
     "src/lib/fs.ts",
     "src/lib/json.ts",
     "src/lib/prompt.ts",
-    "src/lib/templates.ts"
+    "src/lib/templates.ts",
+    "src/lib/ui.test.ts",
+    "src/lib/ui.ts"
   ],
   "memory": [
     "src/memory/check.ts",
@@ -113,6 +122,10 @@
     "src/memory/text.ts",
     "src/memory/types.ts"
   ],
+  "rules": [
+    "src/rules/agent-entrypoints.ts",
+    "src/rules/distill.ts"
+  ],
   "testing": [
     "src/testing/service.test.ts",
     "src/testing/service.ts",
@@ -120,6 +133,7 @@
     "src/testing/types.ts"
   ],
   "wiki": [
+    "src/wiki/service.test.ts",
     "src/wiki/service.ts",
     "src/wiki/templates.ts",
     "src/wiki/types.ts"

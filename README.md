@@ -2,7 +2,7 @@
 
 `meta-project` is a CLI-first Metaproject toolkit. It installs a local `.metaproject/` workspace into any codebase so AI agents and developers can share the same structured context, generated data, module manifests, and project-specific skills.
 
-The public command is `gd-metapro`.
+The public command is `gd-metapro`. The product/CLI name is `gd-metapro`; `meta-project` is the GitHub repository slug (`MrCipherSmith/meta-project`).
 
 ## Global Install
 
@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scr
 gd-metapro init
 ```
 
-The installer clones the runtime into `~/.gd-metapro/gd-metapro` and creates a symlink at `~/.local/bin/gd-metapro`.
+The installer clones the runtime into `~/.gd-metapro/gd-metapro` and writes a wrapper shell script at `~/.local/bin/gd-metapro` that execs the runtime via `bun`.
 
 Make sure `~/.local/bin` is in your `PATH`:
 
@@ -82,7 +82,11 @@ Project-local install stores the CLI runtime under:
   modules/
   reports/
   templates/
+  hooks/
+    post-update.d/
 ```
+
+The tree above shows the base structure and the example modules below (`gdgraph`, `gdctx`); enabled modules add their own `core/`, `data/`, `modules/`, and `skills/` scaffolds.
 
 It also connects repository-level agent entrypoints:
 
@@ -153,7 +157,7 @@ Versioned by default:
 - `.metaproject/skills/`
 - `.metaproject/modules/`
 - `.metaproject/data/*/artifacts/`
-- except `.metaproject/data/gdctx/artifacts/`, which is transient command output
+- except `.metaproject/data/gdctx/artifacts/` and `.metaproject/data/gdwiki/artifacts/`, which are transient command output
 
 Ignored by default:
 
@@ -164,6 +168,15 @@ Ignored by default:
 - `.metaproject/data/**/queries/`
 - `.metaproject/data/**/summaries/`
 - `.metaproject/data/gdctx/artifacts/`
+- `.metaproject/data/gdwiki/artifacts/`
+- `.metaproject/data/gdwiki/link-check/`
+- `.metaproject/data/health/history/`
+- `.metaproject/data/health/artifacts/latest.md`
+- `.metaproject/data/health/artifacts/latest.json`
+- `.metaproject/data/testing/history/`
+- `.metaproject/data/testing/logs/`
+- `.metaproject/data/testing/artifacts/latest.md`
+- `.metaproject/data/testing/artifacts/latest.json`
 - `.metaproject/reports/`
 
 ## Commands
@@ -178,9 +191,12 @@ gd-metapro init --no-memory
 gd-metapro init --no-gdgraph-hook
 gd-metapro status
 gd-metapro update
+gd-metapro update --skip-runtime
 gd-metapro update --hooks
 gd-metapro dashboard build
 gd-metapro dashboard open
+gd-metapro dash
+gd-metapro rules sync
 gd-metapro gdgraph build
 gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
@@ -193,18 +209,30 @@ gd-metapro test analyze
 gd-metapro test run --changed
 gd-metapro health run --changed
 gd-metapro memory search "decision"
+gd-metapro flow init --title "Task title"
+gd-metapro flow list
+gd-metapro flow status <id>
+gd-metapro flow complete <id>
 ```
+
+This lists the most common entry points only. Each command has additional
+subcommands and flags; run `gd-metapro <command> --help` (or `gd-metapro`
+with no arguments) for the full subcommand and flag surface.
 
 ## Current Modules
 
-- `spec-orchestrator`: CLI, install, init, manifest, and `.metaproject` structure.
+The `gd-metapro` CLI itself is the toolkit core: it provides install, `init`,
+`status`, `update`, `dashboard`, and `rules` and manages the `.metaproject`
+structure and module manifest. It ships the following modules:
+
 - `gdgraph`: code graph module for dependencies and affected context.
 - `gdctx`: context module for compact command/search/read output.
 - `gdwiki`: Markdown project knowledge base with page templates, link checks, and index generation.
 - `gdskills`: bundled agent-facing skills plus generated project-skill creation, routing, verification, learning, export, and sync.
+- `health`: normalized code health reports from TypeScript, tests, audit, complexity, coverage, lint, and optional SonarQube.
 - `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports.
-- `code-health`: normalized code health reports from TypeScript, tests, audit, complexity, coverage, lint, and optional SonarQube.
 - `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection.
+- `tasks`: agent-first Task Manager, driven by `gd-metapro flow`, for issue/task lifecycle tracking.
 
 ## gdgraph MVP
 
@@ -274,6 +302,21 @@ gd-metapro update
 
 `update` refreshes managed scripts, skills, module manifests, dashboard and hook definitions. It does not run module analyzers and does not write `.metaproject/data/**` artifacts by default.
 
+By default `update` also refreshes the managed runtime from origin/main before
+updating service files. Skip that network step with `--skip-runtime`:
+
+```bash
+gd-metapro update --skip-runtime
+```
+
+Projects initialized before the `tasks` module was added are backfilled: `update`
+enables and scaffolds the Task Manager automatically. Skip the backfill with
+`--no-tasks`:
+
+```bash
+gd-metapro update --no-tasks
+```
+
 Run executable project hooks explicitly when a module needs a post-update refresh:
 
 ```bash
@@ -297,10 +340,31 @@ gd-metapro dashboard open
 
 The dashboard is written to `.metaproject/gd-metapro-dashboard.html` from existing service files and data artifacts. It does not run analyzers or modify `.metaproject/data/**`.
 
+## Flow (Task Manager)
+
+The `tasks` module tracks agent-first managed work through `gd-metapro flow`:
+
+```bash
+gd-metapro flow init (--issue <url> | --title "<title>")
+gd-metapro flow list
+gd-metapro flow status <id>
+gd-metapro flow start <id>
+gd-metapro flow task <id> ...
+gd-metapro flow ac <id> ...
+gd-metapro flow implemented <id>
+gd-metapro flow complete <id> [--comment]
+gd-metapro flow block <id>
+gd-metapro flow unblock <id>
+gd-metapro flow freeze <id>
+gd-metapro flow check
+```
+
+Run `gd-metapro flow --help` for the full argument list of each subcommand.
+
 ## Requirements
 
 - `git`
-- `bun`
+- `bun` (>= 1.1.0)
 
 ## Local development
 

@@ -11,7 +11,7 @@ This report tracks fixes applied after the `REQUEST_CHANGES` review of `gd-metap
 ## Fixed
 
 - Package entrypoint: `package.json` now exposes `gd-metapro` from `dist/cli.js`, with `build`, `prepare`, and `prepack` scripts for GitHub/npm installation.
-- Package contents: publishable files are limited to `dist`, `README.md`, and `package.json`; raw `src/scripts` artifacts are no longer part of the runtime package surface.
+- Package contents: publishable `files` are `dist`, `src/gdgraph`, `src/gdskills/bundled`, `src/gdskills/contracts`, `README.md`, and `package.json` (the graph/skills source assets the runtime loads are shipped); raw `src/scripts` artifacts are not part of the runtime package surface.
 - Version source: CLI version is read from `package.json` instead of a hardcoded constant.
 - Health defaults: generated/static outputs are ignored by default, including `dist`, `build`, `coverage`, `.next`, `out`, `storybook-static`, `public`, and `generated`.
 - Health/testing link: Code Health imports compatible Testing reports by scope/git ref instead of launching broad tests implicitly.
@@ -28,7 +28,7 @@ This report tracks fixes applied after the `REQUEST_CHANGES` review of `gd-metap
 ## Verification Plan
 
 - `bun run typecheck` - pass.
-- `bun test` - pass, 59 tests.
+- `bun test` - pass, 59 tests (point-in-time snapshot as of the review commit; the suite has since grown).
 - `bun run build` - pass, generated `dist/cli.js`.
 - `bun dist/cli.js --version` - pass, prints `0.1.0`.
 - `bun src/cli.ts test run --changed --since HEAD` - pass, selected 3 related test files.

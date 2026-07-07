@@ -6,6 +6,14 @@ This folder contains local Metaproject configuration, tools, generated data, and
 
 - `gdgraph`: code graph and affected context.
 - `gdctx`: compact command/search/read output and raw output archive.
+- `gdwiki`: project wiki authoring, indexing, and link validation.
+- `gdskills`: bundled and project skills catalog, routing, and verification.
+- `memory`: long-term typed project memory with ranked search.
+- `tasks`: agent-first flow lifecycle (driven by the `gd-metapro flow` command).
+- `health`: code-health scoring, gates, and trend tracking.
+- `testing`: test analysis, selection, and context.
+
+See `.metaproject/index.md` for the authoritative module list and per-module manifests under `.metaproject/modules/`.
 
 ## Common Commands
 

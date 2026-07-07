@@ -305,15 +305,24 @@ Supported target types:
 - symbol: `PipelineStepStore`;
 - wiki reference: `wiki://pipelines/steps`.
 
+> Статус: в текущей реализации надежно распознается только path-цель
+> (существующий файл или каталог). Symbol и wiki-цели, а также несуществующие пути
+> трактуются как непрозрачный `symbol-or-concept` (см. `classifyTarget` в
+> `src/gdskills/project-skills.ts`) и попадают в сгенерированный skill как есть,
+> с предупреждением. Разрешение symbol/wiki-целей через `gdgraph`/`gdwiki` —
+> планируемое улучшение.
+
 Primary command:
 
 ```bash
 gd-metapro skills create <target> --name <skill-name>
 gd-metapro skills create <target> --module <module-name>
 gd-metapro skills create <target> --format auto|single|package
-gd-metapro skills create <target> --autonomy suggest-only|auto-high-confidence|fully-autonomous
 gd-metapro skills create <target> --dry-run
 ```
+
+Флаг `--autonomy` пока не парсится командой `create` (см. §10 «Autonomy policy» —
+планируемая конфигурация).
 
 Alias:
 
@@ -525,6 +534,27 @@ First implementation slice:
 - does not auto-detect or write to global runtime folders;
 - does not delete stale files in target directories.
 
+### 4.7 catalog
+
+```bash
+gd-metapro skills catalog
+gd-metapro skills catalog --profile minimal|recommended|full
+```
+
+Prints the bundled working-skill catalog for the given profile (default profile when
+`--profile` is omitted). Read-only; does not install anything.
+
+### 4.8 install
+
+```bash
+gd-metapro skills install
+gd-metapro skills install --profile minimal|recommended|full
+```
+
+Installs bundled working skills for the selected profile into
+`.metaproject/skills/gdskills/`, updates the catalog and manifest, and reports the
+installed skill count and locations. Requires an initialized `.metaproject`.
+
 ## 5. Skill package format
 
 ### 5.1 Canonical project skill: single-file format
@@ -539,21 +569,29 @@ Used for simple entities:
 
 ### 5.2 Canonical project skill: package format
 
-Used for complex entities:
+Used for complex entities. `gd-metapro skills create` (package format) emits:
 
 ```text
 .metaproject/project-skills/<module>/<entity>/
   SKILL.md
+  skill-changelog.md
+  verification.md
   references/
     context.md
+  templates/
+    README.md
+```
+
+Additional reference/template files are added on demand as the skill matures, for example:
+
+```text
+  references/
     patterns.md
     business-rules.md
   templates/
     component.template.md
     store.template.md
     test.template.md
-  verification.md
-  skill-changelog.md
 ```
 
 ### 5.3 Runtime/exported skill format
