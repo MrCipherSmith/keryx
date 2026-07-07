@@ -9,6 +9,7 @@ import { healthCommand } from "./commands/health";
 import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
 import { flowCommand } from "./commands/flow";
+import { rulesCommand } from "./commands/rules";
 import { statusCommand } from "./commands/status";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
@@ -95,6 +96,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "rules") {
+    await rulesCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -109,6 +115,7 @@ Usage:
   gd-metapro update [--skip-runtime] [--hooks]
   gd-metapro dashboard build
   gd-metapro dashboard open
+  gd-metapro rules sync
   gd-metapro gdgraph build
   gd-metapro gdgraph query <cycles|orphans>
   gd-metapro gdgraph affected <file>
@@ -149,6 +156,7 @@ Commands:
   status    Show local Metaproject status
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
+  rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
   gdgraph   Build and query code dependency graph
   ctx       Run compact context commands and save raw output
   wiki      Manage the local project knowledge base

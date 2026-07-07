@@ -5,13 +5,35 @@
   "title": "Implement AGENTS and CLAUDE rule extraction into Metaproject",
   "status": "in-progress",
   "createdAt": "2026-07-07T12:00:08.233Z",
-  "updatedAt": "2026-07-07T12:01:24.560Z",
+  "updatedAt": "2026-07-07T12:38:22.052Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:767336fe758a18889fe771b7512c31da0d00873a02a516bf475480c877d54948",
-  "acConfirmed": {},
+  "acChecksum": "sha256:738d1ee99cbad9ea0e3ea87bb6b371cf931cb8a73cb18450cf968f0833784f09",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-07T12:37:45.501Z"
+    },
+    "AC2": {
+      "at": "2026-07-07T12:37:54.598Z"
+    },
+    "AC3": {
+      "at": "2026-07-07T12:38:00.407Z"
+    },
+    "AC4": {
+      "at": "2026-07-07T12:38:04.589Z"
+    },
+    "AC5": {
+      "at": "2026-07-07T12:38:09.066Z"
+    },
+    "AC6": {
+      "at": "2026-07-07T12:38:14.466Z"
+    },
+    "AC7": {
+      "at": "2026-07-07T12:38:22.052Z"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -26,19 +48,19 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo"
+      "status": "done"
     }
   ],
   "history": [
@@ -59,6 +81,121 @@
       "at": "2026-07-07T12:01:24.560Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-07T12:06:06.087Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-07T12:06:06.103Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-07T12:06:45.628Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-07T12:06:49.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-07T12:06:53.744Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-07T12:07:02.475Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-07T12:07:12.258Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-07T12:07:16.089Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-07T12:27:55.451Z",
+      "event": "ac-updated",
+      "detail": "Add CLAUDE.md default-entrypoint acceptance criterion after user clarification"
+    },
+    {
+      "at": "2026-07-07T12:28:04.742Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-07T12:28:08.287Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-07T12:28:11.790Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-07T12:28:15.429Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-07T12:28:19.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-07T12:28:23.105Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-07-07T12:37:39.022Z",
+      "event": "ac-updated",
+      "detail": "Add entrypoint distillation acceptance criterion after user clarification"
+    },
+    {
+      "at": "2026-07-07T12:37:45.501Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-07T12:37:54.598Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-07T12:38:00.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-07T12:38:04.589Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-07T12:38:09.067Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-07T12:38:14.467Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-07-07T12:38:22.052Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
     }
   ]
 }

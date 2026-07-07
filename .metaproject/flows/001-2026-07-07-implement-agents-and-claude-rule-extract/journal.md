@@ -4,3 +4,29 @@
 - 2026-07-07T12:01:13.681Z - frozen: 5 criteria; checksum recorded
 - 2026-07-07T12:01:19.304Z - started
 - 2026-07-07T12:01:24.560Z - task-done: T1: Collect remaining context
+- 2026-07-07T12:06:06.087Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-07T12:06:06.103Z - task-done: T2: Implement per plan
+- 2026-07-07T12:06:45.625Z - ac-confirmed: AC1
+- 2026-07-07T12:06:45.625Z - ac-confirmed: AC3
+- 2026-07-07T12:06:45.624Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-07T12:06:45.628Z - ac-confirmed: AC2
+- 2026-07-07T12:06:49.582Z - ac-confirmed: AC4
+- 2026-07-07T12:06:53.744Z - ac-confirmed: AC5
+- 2026-07-07T12:07:02.475Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-07T12:07:12.258Z - ac-confirmed: AC1
+- 2026-07-07T12:07:16.089Z - ac-confirmed: AC3
+- 2026-07-07T12:27:55.451Z - ac-updated: Add CLAUDE.md default-entrypoint acceptance criterion after user clarification
+- 2026-07-07T12:28:04.742Z - ac-confirmed: AC1
+- 2026-07-07T12:28:08.287Z - ac-confirmed: AC2
+- 2026-07-07T12:28:11.790Z - ac-confirmed: AC3
+- 2026-07-07T12:28:15.429Z - ac-confirmed: AC4
+- 2026-07-07T12:28:19.239Z - ac-confirmed: AC5
+- 2026-07-07T12:28:23.105Z - ac-confirmed: AC6
+- 2026-07-07T12:37:39.022Z - ac-updated: Add entrypoint distillation acceptance criterion after user clarification
+- 2026-07-07T12:37:45.501Z - ac-confirmed: AC1
+- 2026-07-07T12:37:54.598Z - ac-confirmed: AC2
+- 2026-07-07T12:38:00.407Z - ac-confirmed: AC3
+- 2026-07-07T12:38:04.589Z - ac-confirmed: AC4
+- 2026-07-07T12:38:09.067Z - ac-confirmed: AC5
+- 2026-07-07T12:38:14.467Z - ac-confirmed: AC6
+- 2026-07-07T12:38:22.052Z - ac-confirmed: AC7

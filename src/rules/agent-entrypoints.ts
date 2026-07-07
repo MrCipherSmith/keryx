@@ -27,11 +27,9 @@ export async function syncAgentRules(
 ): Promise<SyncedAgentRule[]> {
   const entrypoints = await findAgentEntrypoints(projectRoot, options.manifestSources ?? []);
   const sources =
-    entrypoints.length > 0
+    options.createDefault === false
       ? entrypoints
-      : options.createDefault === false
-        ? []
-        : [await createDefaultAgentEntrypoint(projectRoot)];
+      : await ensureDefaultAgentEntrypoints(projectRoot, entrypoints);
 
   await mkdir(path.join(metaprojectRoot, "rules"), { recursive: true });
   await mkdir(path.join(metaprojectRoot, "skills", "project-rules"), { recursive: true });
@@ -43,7 +41,10 @@ export async function syncAgentRules(
       continue;
     }
 
-    await ensureMetaprojectReference(sourcePath, { enableTasks: options.enableTasks });
+    await ensureMetaprojectReference(
+      sourcePath,
+      options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks },
+    );
     const ruleFile = ruleFileNameFor(source);
     const sourceContent = await readFile(sourcePath, "utf8");
     await writeTextIfChanged(
@@ -178,10 +179,15 @@ async function findAgentEntrypoints(projectRoot: string, manifestSources: string
   return existing;
 }
 
-async function createDefaultAgentEntrypoint(projectRoot: string): Promise<string> {
-  const source = "AGENTS.md";
-  await writeTextIfMissing(path.join(projectRoot, source), renderAgentEntrypoint({ source }));
-  return source;
+async function ensureDefaultAgentEntrypoints(projectRoot: string, entrypoints: string[]): Promise<string[]> {
+  const sources = [...entrypoints];
+  for (const source of ["AGENTS.md", "CLAUDE.md"]) {
+    if (!sources.includes(source)) {
+      await writeTextIfMissing(path.join(projectRoot, source), renderAgentEntrypoint({ source }));
+      sources.push(source);
+    }
+  }
+  return sources;
 }
 
 function removePolicy(content: string, policy: string): string {

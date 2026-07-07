@@ -1,14 +1,15 @@
 import { spawn } from "node:child_process";
-import { chmod, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installGdskills } from "../gdskills/install";
-import { ensureMetaprojectReference } from "./init";
 import {
   normalizeGdskillsProfile,
   type GdskillsProfile,
 } from "../gdskills/catalog";
+import { syncAgentRules } from "../rules/agent-entrypoints";
+import { hasDistilledEntrypoints } from "../rules/distill";
 import { renderHealthConfig } from "../health/config";
 import {
   renderHealthCoreReadme,
@@ -49,7 +50,6 @@ import {
   renderGdskillsPostCommitHook,
   renderHealthPostCommitHook,
   renderHooksReadme,
-  renderImportedAgentRules,
   renderIndexMarkdown,
   renderMetaprojectCoreReadme,
   renderMetaprojectDashboardHtml,
@@ -162,9 +162,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   }
 
   const gdskillsProfile = normalizeGdskillsProfile(manifest.modules?.gdskills?.profile);
-  const ruleSources = await syncAgentRules(projectRoot, metaprojectRoot, manifest.agentEntrypoints?.root ?? [], {
+  const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
+    manifestSources: manifest.agentEntrypoints?.root ?? [],
+    createDefault: true,
   });
+  const ruleSources = syncedRules.map((rule) => rule.source);
   const dashboardData = await collectDashboardData(metaprojectRoot);
 
   await createServiceDirs(metaprojectRoot, {
@@ -197,6 +200,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableMemory,
       enableTasks,
       ruleSources,
+      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
     }),
   );
   await writeTextIfChanged(
@@ -334,6 +338,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       "Task Manager (tasks) module was missing - backfilled: flows/, skills/flow, modules/tasks.md, manifest entry. Use `gd-metapro update --no-tasks` to skip.",
     );
   }
+
+  await updateManifestAgentEntrypoints(metaprojectRoot, ruleSources);
 }
 
 export async function buildDashboard(projectRoot: string = process.cwd()): Promise<DashboardBuildResult> {
@@ -760,6 +766,24 @@ async function enableTasksInManifest(metaprojectRoot: string): Promise<void> {
   await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 }
 
+async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSources: string[]): Promise<void> {
+  const manifestPath = path.join(metaprojectRoot, "metaproject.json");
+  if (!(await pathExists(manifestPath))) {
+    return;
+  }
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  const agentEntrypoints = (raw.agentEntrypoints ?? {}) as Record<string, unknown>;
+  agentEntrypoints.root = ruleSources;
+  agentEntrypoints.metaproject = ".metaproject/index.md";
+  raw.agentEntrypoints = agentEntrypoints;
+  await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+}
+
 async function updateRuntime(projectRoot: string): Promise<void> {
   const runtimeRoot = await findRuntimeRoot(projectRoot);
 
@@ -881,51 +905,6 @@ async function installManagedHook(
 
   await writeFile(hookPath, next, "utf8");
   await chmod(hookPath, 0o755);
-}
-
-async function syncAgentRules(
-  projectRoot: string,
-  metaprojectRoot: string,
-  manifestSources: string[],
-  options: { enableTasks: boolean },
-): Promise<string[]> {
-  const sources = await findAgentEntrypoints(projectRoot, manifestSources);
-  for (const source of sources) {
-    const sourcePath = path.join(projectRoot, source);
-    if (!(await pathExists(sourcePath))) {
-      continue;
-    }
-    // Migrate always-on Metaproject policies (gdgraph/wiki/ctx/skills/testing/
-    // memory/flow) into existing entrypoints - keeps old projects discoverable.
-    await ensureMetaprojectReference(sourcePath, options);
-    const ruleFile = `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
-    await writeTextIfChanged(
-      path.join(metaprojectRoot, "rules", ruleFile),
-      renderImportedAgentRules({
-        source,
-        content: await readFile(sourcePath, "utf8"),
-      }),
-    );
-  }
-  return sources;
-}
-
-async function findAgentEntrypoints(projectRoot: string, manifestSources: string[]): Promise<string[]> {
-  const candidates = [...new Set([...manifestSources, "AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"])];
-  const existing: string[] = [];
-  const seenRealPaths = new Set<string>();
-  for (const candidate of candidates) {
-    const candidatePath = path.join(projectRoot, candidate);
-    if (await pathExists(candidatePath)) {
-      const resolved = await realpath(candidatePath);
-      if (seenRealPaths.has(resolved)) {
-        continue;
-      }
-      seenRealPaths.add(resolved);
-      existing.push(candidate);
-    }
-  }
-  return existing;
 }
 
 async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult> {

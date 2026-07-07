@@ -39,6 +39,7 @@ Native bundled Metaproject working skills and orchestrators.
 
 ### platform
 
+- `agent-entrypoint-distiller`: Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills.
 - `agent-entrypoint-manager`: Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references.
 - `hook-manager`: Create and verify lightweight git hooks for graph, health, and skill verification.
 - `skill-catalog-manager`: Generate `.metaproject/skills/catalog.md` and machine-readable skill registry.

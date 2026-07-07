@@ -8,6 +8,7 @@ export function renderIndexMarkdown({
   enableMemory,
   enableTasks,
   ruleSources,
+  hasDistilledEntrypoints = false,
 }: {
   enableGdgraph: boolean;
   enableGdctx: boolean;
@@ -18,6 +19,7 @@ export function renderIndexMarkdown({
   enableMemory: boolean;
   enableTasks: boolean;
   ruleSources: string[];
+  hasDistilledEntrypoints?: boolean;
 }): string {
   const moduleRows = [
     enableGdgraph
@@ -63,6 +65,8 @@ export function renderIndexMarkdown({
           "- `skills/catalog.md`",
           "- `skills/gdskills/`",
           "- `project-skills/`",
+          "- `core/gdskills/contracts/` (skill/worker communication schemas: subagent-dispatch, subagent-result, agent-event, orchestrator-state, review-finding)",
+          "- `rules/core/` (shared engineering rules library)",
           "- `data/gdskills/artifacts/latest.md`",
         ]
       : []),
@@ -141,6 +145,7 @@ export function renderIndexMarkdown({
       ? [
           "For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.",
           "For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.",
+          "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `gd-metapro skills contracts validate <file> --schema <name>`.",
         ]
       : []),
     ...(enableHealth
@@ -166,6 +171,7 @@ export function renderIndexMarkdown({
         ]
       : []),
     "Use relevant skills from `skills/`.",
+    "Discover tools: each `modules/*.md` manifest lists that module's `gd-metapro` commands; run `gd-metapro --help` for the full CLI surface.",
     "Use module manifests before reading raw generated data.",
     "Prefer curated artifacts in `data/*/artifacts`.",
     "Run module CLI commands when generated data is stale.",
@@ -182,12 +188,21 @@ export function renderIndexMarkdown({
           })
           .join("\n")
       : "| _none_ | - | No project rules imported yet | - |";
+  const allRulesRows = [
+    rulesRows,
+    enableGdskills
+      ? "| rules/core | reference | Shared engineering rules library (error-handling, tdd-workflow, subagent-status-protocol, subagent-context-construction, security-baseline, api-contracts, clean-architecture, solid-principles, …) | rules/core/ |"
+      : "",
+    hasDistilledEntrypoints
+      ? "| distilled-entrypoints | high | Decomposed project rules extracted from root entrypoints | rules/entrypoints/index.md |"
+      : "",
+  ].filter(Boolean).join("\n");
 
   return `# Metaproject Index
 
 ## Purpose
 
-This \`.metaproject\` folder contains agent-readable context, tools, generated data, and module manifests for this codebase.
+This \`.metaproject\` folder contains agent-readable context, tools (module CLIs), rules (\`rules/\`), skill/worker schemas (\`core/gdskills/contracts/\`), generated data, and module manifests for this codebase.
 
 Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 
@@ -200,13 +215,14 @@ ${moduleRows || "| _none_ | No modules enabled yet | - |"}
 
 | Source | Priority | Purpose | Entry |
 |--------|----------|---------|-------|
-${rulesRows}
+${allRulesRows}
 
 ## Skills
 
 | Skill | Purpose | Entry |
 |-------|---------|-------|
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
+${hasDistilledEntrypoints ? "| entrypoint-distilled-skills | Project-specific skills extracted from root entrypoints | project-skills/entrypoints/ |" : ""}
 ${skillsRefs}
 
 ## Agent Workflow

@@ -15,3 +15,5 @@ Rules:
 - AC3: Imported root-entrypoint rule files include explicit high-priority metadata, source provenance, and version.
 - AC4: `.metaproject/index.md` lists imported root rules as high priority and keeps `.metaproject/index.md` as the strict routing entrypoint for agents.
 - AC5: Automated tests cover the command and template behavior, and project verification passes.
+- AC6: When no root agent entrypoint exists, rule sync creates both `AGENTS.md` and `CLAUDE.md`.
+- AC7: A manual `gd-metapro rules distill` command and bundled agent-facing skill decompose large root entrypoints into high-priority rules, project skills, and compact root entrypoints.

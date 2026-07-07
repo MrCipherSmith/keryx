@@ -365,6 +365,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Keep managed Metaproject blocks idempotent.",
     "Ensure local `.metaproject/index.md` and skill catalog are first-class references.",
   ], ["agents.md", "claude.md", "entrypoint"]),
+  skill("agent-entrypoint-distiller", "platform", ["minimal", "recommended", "full"], "Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills.", [
+    "Run `gd-metapro rules distill` when the user asks to decompose a large CLAUDE.md/AGENTS.md.",
+    "Keep root entrypoints compact: non-project/highest-priority instructions plus `.metaproject/index.md` routing.",
+    "Verify `.metaproject/rules/entrypoints/index.md`, `.metaproject/rules/entrypoints/`, and `.metaproject/project-skills/entrypoints/` were updated.",
+  ], ["distill claude", "split CLAUDE.md", "разбери CLAUDE.md", "создай правила из CLAUDE.md", "entrypoint rules"]),
   skill("hook-manager", "platform", ["recommended", "full"], "Create and verify lightweight git hooks for graph, health, and skill verification.", [
     "Install hooks only when explicitly enabled.",
     "Keep hooks lightweight and idempotent.",

@@ -39,6 +39,7 @@ Resolution order:
 | interview | planning | Run implementation-specific structured interview used by job-orchestrator before planning. | gdskills/planning/interview/SKILL.md |
 | interviewer | planning | Ask focused clarification questions before expensive or ambiguous work. | gdskills/planning/interviewer/SKILL.md |
 | prd-creator | planning | Convert vague requests into structured PRD and acceptance criteria. | gdskills/planning/prd-creator/SKILL.md |
+| agent-entrypoint-distiller | platform | Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills. | gdskills/platform/agent-entrypoint-distiller/SKILL.md |
 | agent-entrypoint-manager | platform | Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references. | gdskills/platform/agent-entrypoint-manager/SKILL.md |
 | hook-manager | platform | Create and verify lightweight git hooks for graph, health, and skill verification. | gdskills/platform/hook-manager/SKILL.md |
 | skill-catalog-manager | platform | Generate `.metaproject/skills/catalog.md` and machine-readable skill registry. | gdskills/platform/skill-catalog-manager/SKILL.md |

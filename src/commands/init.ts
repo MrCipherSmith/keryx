@@ -1,7 +1,6 @@
 import {
   chmod,
   mkdir,
-  readdir,
   readFile,
   unlink,
   writeFile,
@@ -60,7 +59,6 @@ import {
   renderTestingWikiReadme,
 } from "../testing/templates";
 import {
-  renderAgentEntrypoint,
   renderGdctxCoreReadme,
   renderGdctxConfig,
   renderGdctxManifest,
@@ -74,7 +72,6 @@ import {
   renderGdgraphCoreReadme,
   renderGdgraphSkillReadme,
   renderHooksReadme,
-  renderImportedAgentRules,
   renderMetaprojectCoreReadme,
   renderMetaprojectGitignoreBlock,
   renderMetaprojectDashboardHtml,
@@ -83,6 +80,8 @@ import {
   renderProjectRulesReadme,
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
+import { syncAgentRules } from "../rules/agent-entrypoints";
+import { hasDistilledEntrypoints } from "../rules/distill";
 
 type InitOptions = {
   help: boolean;
@@ -320,9 +319,11 @@ export async function initCommand(args: string[]): Promise<void> {
 
   await createBaseStructure(metaprojectRoot);
   await syncGitignore(projectRoot);
-  const agentRuleSources = await syncAgentRules(projectRoot, metaprojectRoot, {
+  const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
+    createDefault: true,
   });
+  const agentRuleSources = syncedAgentRules.map((rule) => rule.source);
 
   if (enableGdgraph) {
     await createGdgraphStructure(metaprojectRoot);
@@ -443,6 +444,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableMemory,
       enableTasks,
       ruleSources: agentRuleSources,
+      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
     }),
   );
   await writeTextIfChanged(
@@ -1121,156 +1123,6 @@ function buildManifest({
       root: agentRuleSources,
     },
   };
-}
-
-async function syncAgentRules(
-  projectRoot: string,
-  metaprojectRoot: string,
-  options: { enableTasks: boolean },
-): Promise<string[]> {
-  const entrypoints = await findAgentEntrypoints(projectRoot);
-  const sources =
-    entrypoints.length > 0
-      ? entrypoints
-      : [await createDefaultAgentEntrypoint(projectRoot)];
-
-  await mkdir(path.join(metaprojectRoot, "rules"), { recursive: true });
-  await mkdir(path.join(metaprojectRoot, "skills", "project-rules"), {
-    recursive: true,
-  });
-
-  for (const source of sources) {
-    await ensureMetaprojectReference(path.join(projectRoot, source), options);
-    const sourceContent = await readFile(path.join(projectRoot, source), "utf8");
-    await writeTextIfChanged(
-      path.join(metaprojectRoot, "rules", ruleFileNameFor(source)),
-      renderImportedAgentRules({ source, content: sourceContent }),
-    );
-  }
-
-  return sources;
-}
-
-async function findAgentEntrypoints(projectRoot: string): Promise<string[]> {
-  const candidates = ["AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"];
-  const files = new Set(await readdir(projectRoot));
-  return candidates.filter((candidate) => files.has(candidate));
-}
-
-async function createDefaultAgentEntrypoint(projectRoot: string): Promise<string> {
-  const source = "AGENTS.md";
-  await writeTextIfMissing(
-    path.join(projectRoot, source),
-    renderAgentEntrypoint({ source }),
-  );
-  return source;
-}
-
-export async function ensureMetaprojectReference(
-  filePath: string,
-  options: { enableTasks?: boolean } = {},
-): Promise<void> {
-  const content = await readFile(filePath, "utf8");
-  const marker = "<!-- gd-metapro:index -->";
-  const oldGraphPolicy =
-    "For code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
-  const graphPolicy =
-    "For project navigation, file discovery, and code-related tasks, use the Metaproject gdgraph skill by default before broad raw file search.";
-  const wikiPolicy =
-    "For architecture, domain models, business rules, user scenarios, auth and other flows, integrations, and known decisions, consult the Metaproject gdwiki skill and read the wiki index before deep code reads; use gdgraph to move from a wiki concept to code.";
-  const oldCtxPolicy =
-    "When gdctx is enabled, use the Metaproject gdctx skill for commands, search, diff, test logs, and large file reads that can produce long output.";
-  const ctxPolicy =
-    "For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.";
-  const gdskillsPolicy =
-    "For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.";
-  const testingPolicy =
-    "For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.";
-  const memoryPolicy =
-    "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.";
-  const oldFlowPolicy =
-    "For starting, tracking, or finishing a managed piece of work (a flow) - e.g. when the user asks to create a flow from a problem description or an issue link, asks for flow status, or asks to finish a story - use the Metaproject flow skill; all flow state changes go through the gd-metapro flow CLI.";
-  const flowPolicy =
-    "For starting, tracking, or finishing a managed piece of work (a flow), use the Metaproject flow skill for state/status commands. For non-trivial implementation through Task Manager, use the local gdskills flow-orchestrator first: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md. All flow state changes go through the gd-metapro flow CLI.";
-
-  if (content.includes(marker)) {
-    let next = content;
-    if (content.includes(oldGraphPolicy)) {
-      next = next.replaceAll(oldGraphPolicy, graphPolicy);
-    }
-    if (next.includes(oldCtxPolicy)) {
-      next = next.replaceAll(oldCtxPolicy, ctxPolicy);
-    }
-    if (next.includes(oldFlowPolicy)) {
-      next = next.replaceAll(oldFlowPolicy, flowPolicy);
-    }
-    next = collapseDuplicatePolicy(next, graphPolicy);
-    next = collapseDuplicatePolicy(next, wikiPolicy);
-    next = collapseDuplicatePolicy(next, ctxPolicy);
-    next = collapseDuplicatePolicy(next, gdskillsPolicy);
-    next = collapseDuplicatePolicy(next, testingPolicy);
-    next = collapseDuplicatePolicy(next, memoryPolicy);
-    next = collapseDuplicatePolicy(next, flowPolicy);
-    if (options.enableTasks === false) {
-      next = removePolicy(next, flowPolicy);
-    }
-
-    const missingPolicies = [
-      ...(next.includes(graphPolicy) ? [] : [graphPolicy]),
-      ...(next.includes(wikiPolicy) ? [] : [wikiPolicy]),
-      ...(next.includes(ctxPolicy) ? [] : [ctxPolicy]),
-      ...(next.includes(gdskillsPolicy) ? [] : [gdskillsPolicy]),
-      ...(next.includes(testingPolicy) ? [] : [testingPolicy]),
-      ...(next.includes(memoryPolicy) ? [] : [memoryPolicy]),
-      ...(options.enableTasks === false || next.includes(flowPolicy) ? [] : [flowPolicy]),
-    ];
-    if (missingPolicies.length > 0) {
-      const suffix = next.endsWith("\n") ? "" : "\n";
-      next = `${next}${suffix}\n${missingPolicies.join("\n\n")}\n`;
-    }
-
-    if (next !== content) {
-      await writeFile(filePath, next, "utf8");
-    }
-
-    return;
-  }
-
-  const suffix = content.endsWith("\n") ? "" : "\n";
-  const initialPolicies = [
-    graphPolicy,
-    wikiPolicy,
-    ctxPolicy,
-    gdskillsPolicy,
-    testingPolicy,
-    memoryPolicy,
-    ...(options.enableTasks === false ? [] : [flowPolicy]),
-  ];
-  await writeFile(
-    filePath,
-    `${content}${suffix}\n${marker}\n## Metaproject\n\nRead [.metaproject/index.md](.metaproject/index.md) before planning, implementing, or reviewing this repository.\n\n${initialPolicies.join("\n\n")}\n`,
-    "utf8",
-  );
-}
-
-function removePolicy(content: string, policy: string): string {
-  const escaped = escapeRegExp(policy);
-  return content
-    .replace(new RegExp(`\\n{0,2}${escaped}\\n?`, "g"), "\n")
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-function ruleFileNameFor(source: string): string {
-  return `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
-}
-
-function collapseDuplicatePolicy(content: string, policy: string): string {
-  const parts = content.split(policy);
-  if (parts.length <= 2) {
-    return content;
-  }
-
-  return `${parts[0]}${policy}${parts.slice(1).join("").replace(/^\s+/, "\n")}`;
 }
 
 async function syncGitignore(projectRoot: string): Promise<void> {

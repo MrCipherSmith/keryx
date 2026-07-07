@@ -38,7 +38,8 @@ Version: 0.8.3
 - Генерировать `README.md` как описание Metaproject для человека.
 - Создавать machine-readable manifest `metaproject.json`.
 - Импортировать существующие `AGENTS.md`/`CLAUDE.md` в `.metaproject/rules/`.
-- Если root agent entrypoint отсутствует, создавать `AGENTS.md`.
+- Создавать недостающие стандартные root entrypoints `AGENTS.md` и `CLAUDE.md`.
+- Поддерживать ручную команду `gd-metapro rules distill`, которая декомпозирует большой `AGENTS.md`/`CLAUDE.md` на `.metaproject/rules/entrypoints/` и `.metaproject/project-skills/entrypoints/`, обновляет `.metaproject/index.md`, а root entrypoints сжимает до global/highest-priority инструкций и ссылки на `.metaproject/index.md`.
 - Добавлять в root agent entrypoint ссылку на `.metaproject/index.md`.
 - Настраивать `.gitignore` так, чтобы agent-facing Metaproject файлы версионировались, а технические runtime/storage файлы игнорировались.
 - Разделять служебную логику и output: `core/` отдельно от `data/`.
@@ -128,7 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/meta-project/main/scr
 - скачать туда runtime CLI;
 - выполнить `gd-metapro init` через локальный runtime;
 - создать `.metaproject/index.md`, `.metaproject/README.md`, `.metaproject/metaproject.json`;
-- синхронизировать root agent entrypoints с `.metaproject/rules/`;
+- синхронизировать root agent entrypoints с `.metaproject/rules/` как high-priority rules;
 - создать выбранные module structures.
 
 ### 5.3 Локальная разработческая установка
@@ -204,19 +205,21 @@ CLI должен:
 7. Создать `.metaproject/index.md`.
 8. Создать `.metaproject/README.md`.
 9. Найти `AGENTS.md`, `agents.md`, `CLAUDE.md`, `claude.md`.
-10. Если agent entrypoint не найден, создать `AGENTS.md`.
-11. Добавить в найденные или созданный entrypoint ссылку на `.metaproject/index.md`.
-12. Импортировать их содержимое в `.metaproject/rules/`.
-13. Создать `.metaproject/skills/project-rules/`.
-14. Синхронизировать `.gitignore` через managed-блок `gd-metapro`.
-15. Если пользователь включил `gdgraph`, предложить установить Git `post-commit` hook для обновления графа после релевантных изменений.
-16. Если пользователь включил `gdskills`, установить bundled working skills из текущего `gd-metapro` package в `.metaproject/skills/gdskills/`.
-17. Если пользователь включил `gdskills`, сгенерировать `.metaproject/skills/catalog.md` и local-first routing block для `AGENTS.md`/`CLAUDE.md`.
-18. Если пользователь включил `gdskills`, предложить установить Git hook для проверки актуальности entity skills после релевантных изменений.
-19. Если пользователь включил `health`, предложить установить Git hook для lightweight health checks по changed/affected scopes.
-20. Если пользователь включил `memory`, создать memory folders, templates, module manifest и `skills/memory/SKILL.md`.
-21. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
-22. Запустить post-init hooks включенных модулей.
+10. Создать недостающие стандартные root entrypoints `AGENTS.md` и `CLAUDE.md`.
+11. Добавить в найденные или созданный entrypoint строгую ссылку на `.metaproject/index.md`.
+12. Импортировать их содержимое в `.metaproject/rules/` через тот же механизм, что использует `gd-metapro rules sync`.
+13. Сгенерировать imported rule files с metadata: `type: agent-entrypoint-rule`, `priority: high`, `source`, `version`.
+14. Создать `.metaproject/skills/project-rules/`.
+15. Если пользователь или агент вручную запускает `gd-metapro rules distill`, перенести project-specific секции из root entrypoints в `.metaproject/rules/entrypoints/`, procedural workflow секции в `.metaproject/project-skills/entrypoints/`, создать `.metaproject/rules/entrypoints/index.md` и обновить `.metaproject/index.md`.
+16. Синхронизировать `.gitignore` через managed-блок `gd-metapro`.
+17. Если пользователь включил `gdgraph`, предложить установить Git `post-commit` hook для обновления графа после релевантных изменений.
+18. Если пользователь включил `gdskills`, установить bundled working skills из текущего `gd-metapro` package в `.metaproject/skills/gdskills/`.
+19. Если пользователь включил `gdskills`, сгенерировать `.metaproject/skills/catalog.md` и local-first routing block для `AGENTS.md`/`CLAUDE.md`.
+20. Если пользователь включил `gdskills`, предложить установить Git hook для проверки актуальности entity skills после релевантных изменений.
+21. Если пользователь включил `health`, предложить установить Git hook для lightweight health checks по changed/affected scopes.
+22. Если пользователь включил `memory`, создать memory folders, templates, module manifest и `skills/memory/SKILL.md`.
+23. Создать структуру `core/`, `data/`, `rules/`, `skills/`, `modules/`.
+24. Запустить post-init hooks включенных модулей.
 
 ### 7.2 Интерактивные вопросы
 

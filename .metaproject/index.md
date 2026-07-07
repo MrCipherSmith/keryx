@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This `.metaproject` folder contains agent-readable context, tools, generated data, and module manifests for this codebase.
+This `.metaproject` folder contains agent-readable context, tools (module CLIs), rules (`rules/`), skill/worker schemas (`core/gdskills/contracts/`), generated data, and module manifests for this codebase.
 
 Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 
@@ -20,15 +20,18 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 | tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |
 ## Rules
 
-| Source | Purpose | Entry |
-|--------|---------|-------|
-| AGENTS.md | Imported repository agent instructions | rules/agents-md.md |
+| Source | Priority | Purpose | Entry |
+|--------|----------|---------|-------|
+| AGENTS.md | high | Imported root agent-entrypoint rules; apply before module-specific guidance | rules/agents-md.md |
+| CLAUDE.md | high | Imported root agent-entrypoint rules; apply before module-specific guidance | rules/claude-md.md |
+| rules/core | reference | Shared engineering rules library (error-handling, tdd-workflow, subagent-status-protocol, subagent-context-construction, security-baseline, api-contracts, clean-architecture, solid-principles, …) | rules/core/ |
 
 ## Skills
 
 | Skill | Purpose | Entry |
 |-------|---------|-------|
 | project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
+
 | gdgraph | Default navigation layer for finding relevant project files before broad raw search | skills/gdgraph/SKILL.md |
 | gdctx | Use compact command/search/read outputs before loading large raw output | skills/gdctx/SKILL.md |
 | gdwiki | Read wiki/index.md first for architecture, domain, business rules, and decisions | skills/gdwiki/SKILL.md |
@@ -50,14 +53,16 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 7. In parallel, use `skills/gdctx/SKILL.md` for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.
 8. For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.
 9. For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.
-10. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `gd-metapro health run`; do not claim quality status from raw logs.
-11. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
-12. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `gd-metapro memory search` before broad documentation reads.
-13. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
-14. Use relevant skills from `skills/`.
-15. Use module manifests before reading raw generated data.
-16. Prefer curated artifacts in `data/*/artifacts`.
-17. Run module CLI commands when generated data is stale.
+10. When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `gd-metapro skills contracts validate <file> --schema <name>`.
+11. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `gd-metapro health run`; do not claim quality status from raw logs.
+12. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
+13. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `gd-metapro memory search` before broad documentation reads.
+14. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
+15. Use relevant skills from `skills/`.
+16. Discover tools: each `modules/*.md` manifest lists that module's `gd-metapro` commands; run `gd-metapro --help` for the full CLI surface.
+17. Use module manifests before reading raw generated data.
+18. Prefer curated artifacts in `data/*/artifacts`.
+19. Run module CLI commands when generated data is stale.
 
 ## Data
 
@@ -69,6 +74,8 @@ Human dashboard: [gd-metapro-dashboard.html](gd-metapro-dashboard.html)
 - `skills/catalog.md`
 - `skills/gdskills/`
 - `project-skills/`
+- `core/gdskills/contracts/` (skill/worker communication schemas: subagent-dispatch, subagent-result, agent-event, orchestrator-state, review-finding)
+- `rules/core/` (shared engineering rules library)
 - `data/gdskills/artifacts/latest.md`
 - `data/health/artifacts/latest.md`
 - `data/testing/context.md`
