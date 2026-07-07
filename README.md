@@ -296,6 +296,10 @@ gd-metapro flow complete <id>
 gd-metapro standard validate
 gd-metapro standard doctor
 gd-metapro standard capabilities
+gd-metapro security status
+gd-metapro security scan src/example.ts
+gd-metapro security check-output --file draft.md
+gd-metapro security report
 ```
 
 This lists the most common entry points only. Each command has additional
@@ -333,7 +337,52 @@ following modules:
 - `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports.
 - `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection.
 - `tasks`: agent-first Task Manager, driven by `gd-metapro flow`, for issue/task lifecycle tracking.
-- `security`: agent input/output and artifact security, driven by `gd-metapro security` - deterministic secrets/PII/injection/egress scanning, redaction, and a policy gate (Phase 1+2).
+- `security`: agent input/output and artifact security, driven by `gd-metapro security` - deterministic secrets/PII/prompt-injection/egress scanning, redaction, and a policy gate, with in-process guards at the memory/wiki/testing/gdctx/flow write seams and optional git + agent hooks. See [Security](#security).
+
+## Security
+
+Metaproject Security is the local security/privacy/exfiltration-control layer for
+agent inputs, outputs, and `.metaproject/` artifacts. It is deterministic
+(regex + entropy, no network, no model backends) and is intentionally separate
+from `security-audit` (dependencies / secrets in git history).
+
+**Detects** secrets (provider keys, private keys, `.env`, URL creds, JWT),
+PII (email/phone/…), prompt-injection, and egress attempts, then applies a policy
+action with the precedence `block > require-approval > redact > warn > allow`.
+Redaction is leak-safe: fixed-width masks, HMAC-keyed hashing with a local-only,
+never-committed key, and committable reports that carry no raw secrets.
+
+**CLI:**
+
+```bash
+gd-metapro security status
+gd-metapro security scan <path> [--json]
+gd-metapro security check-input [--source <kind>] [--file <path>]
+gd-metapro security check-output [--target <kind>] [--file <path>]
+gd-metapro security redact <path> [--out <path>]
+gd-metapro security report [--since <ref>]
+gd-metapro security policy validate
+gd-metapro security incidents [--limit <n>]
+```
+
+**Modes** (`.metaproject/security.config.json`): `advisory` (default - report and
+continue, never block), `enforced` (block the controlled write), `ci` (exit
+non-zero on a blocker).
+
+**Write-seam guards.** When the module is enabled, the guard runs in-process
+before writes at `memory ingest`, `wiki collect`, `test` publish, `gdctx` raw
+output, and `flow complete`. Advisory only warns; enforced/ci can stop the write.
+
+**Hooks** (opt-in at `init`, offered only when security is enabled):
+
+- **git pre-push** (`--no-security-hook`) - scans the commits being pushed and
+  blocks the push in `enforced`/`ci` (warns in `advisory`).
+- **agent hook** (`--no-security-agent-hook`) - a merge-safe block in
+  `.claude/settings.json` that runs `security check-input` on `UserPromptSubmit`
+  and `security check-output` on `PreToolUse(Write|Edit)`.
+
+See [docs/requirements/security/specification.md](docs/requirements/security/specification.md)
+for the full contract.
 
 ## gdgraph MVP
 
