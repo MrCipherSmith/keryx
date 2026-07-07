@@ -89,6 +89,10 @@ test("rendered security hook reads stdin and handles the new-ref (zero-sha) case
   expect(hook).toContain("sort -u");
   // Preserves the tracked-range heuristic as a fallback when stdin is empty.
   expect(hook).toContain("@{push}");
+  // Degrades gracefully on version skew: probes `security status` and skips the
+  // gate (rather than blocking every push) when the installed gd-metapro predates
+  // the `security` command.
+  expect(hook).toContain("security status >/dev/null 2>&1");
 });
 
 test("security hook scans every commit of a first push, not just HEAD", async () => {

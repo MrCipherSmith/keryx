@@ -1894,6 +1894,15 @@ export function renderSecurityPrePushHook(): string {
     return 0
   fi
 
+  # Degrade gracefully on version skew: a gd-metapro on PATH that predates the
+  # 'security' command would return "Unknown command" (non-zero) for every file
+  # and block every push. Probe once; if security is unsupported, skip the gate
+  # with a warning instead of blocking.
+  if ! "$gdm" security status >/dev/null 2>&1; then
+    echo "gd-metapro pre-push: installed gd-metapro does not support 'security' (update it); skipped security gate" >&2
+    return 0
+  fi
+
   # Determine the changed files being pushed. git passes one line per pushed ref
   # on stdin: "<local ref> <local sha> <remote ref> <remote sha>". Scanning that
   # range covers EVERY new commit in the push, so a secret introduced in an
