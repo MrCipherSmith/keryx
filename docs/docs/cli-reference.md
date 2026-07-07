@@ -1,0 +1,458 @@
+# CLI Reference
+
+Complete reference for the `gd-metapro` command-line interface. `gd-metapro`
+manages a per-project `.metaproject/` workspace: it scaffolds the workspace,
+keeps managed "service" files in sync (never touching your `data/` artifacts),
+and exposes feature commands for the dependency graph, wiki, skills, code health,
+testing, memory, and an agent-first work-flow lifecycle.
+
+## Global usage
+
+```
+gd-metapro <command> [args] [flags]
+```
+
+| Global flag | Alias | Effect |
+|---|---|---|
+| `--help` | `-h` | Print the top-level usage block. Also works (per subcommand) as `gd-metapro <command> --help`. |
+| `--version` | `-v` | Print the installed version and exit. |
+
+Running `gd-metapro` with no command, or with `--help`/`-h`, prints the usage
+block. An unknown command prints an error plus the usage block and exits with
+code `1`.
+
+### Top-level commands
+
+| Command | Purpose |
+|---|---|
+| `init` | Initialize `.metaproject/` in the current project. |
+| `status` | Show local Metaproject status. |
+| `update` | Refresh managed service files without touching data artifacts. |
+| `dashboard` / `dash` | Build or open the project admin dashboard. |
+| `gdgraph` | Build and query the code dependency graph. |
+| `ctx` | Run compact, token-aware context commands and save raw output. |
+| `wiki` | Manage the local project knowledge base. |
+| `skills` | Manage bundled and project working skills. |
+| `skill-verify-skill` | Alias for `skills verify`. |
+| `health` | Aggregate code-quality signals and run the quality gate. |
+| `test` | Analyze testing context and normalize test reports. |
+| `memory` | Store and search long-term project memory. |
+| `flow` | Agent-first work lifecycle (Task Manager). |
+| `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
+
+---
+
+## init
+
+Initialize the `.metaproject/` workspace in the current directory: scaffold
+directories, enable the optional modules, optionally install git hooks, and write
+the `metaproject.json` manifest. Re-running `init` over an existing workspace
+updates managed files but never clobbers seeded user files or `data/`.
+
+```
+gd-metapro init [--yes] [module flags] [hook flags]
+```
+
+| Flag | Description |
+|---|---|
+| `--yes`, `-y` | Non-interactive: accept every module default (enabled) instead of prompting. |
+| `--help`, `-h` | Print `init` usage and exit. |
+| `--gdskills-profile <profile>` | Set the gdskills install profile (`minimal`, `recommended`, `full`, `custom`); defaults to `recommended`. |
+
+**Module flags** — each of the 8 modules is enabled by default; pass its
+`--no-<module>` flag to disable it:
+
+| Flag | Disables module |
+|---|---|
+| `--no-gdgraph` | Dependency graph. |
+| `--no-gdctx` | Compact context commands. |
+| `--no-gdwiki` | Project knowledge base. |
+| `--no-gdskills` | Working-skills subsystem. |
+| `--no-health` | Code-health quality gate. |
+| `--no-testing` | Testing context / reports. |
+| `--no-memory` | Long-term project memory. |
+| `--no-tasks` | Flow / Task Manager lifecycle. |
+
+**Hook flags** — git hooks are installed only for enabled modules. Under `--yes`
+most default on; the testing **pre-push** hook stays off even under `--yes` (opt-in).
+Pass the matching `--no-*-hook` flag to force a hook off:
+
+| Flag | Skips hook |
+|---|---|
+| `--no-gdgraph-hook` | gdgraph post-commit hook. |
+| `--no-gdskills-hook` | gdskills post-commit hook. |
+| `--no-health-hook` | health post-commit hook. |
+| `--no-testing-post-commit-hook` | testing post-commit (refresh) hook. |
+| `--no-testing-pre-push-hook` | testing pre-push (gate) hook. |
+
+---
+
+## status
+
+Print the local Metaproject status. Takes no arguments. Read-only — never writes.
+
+```
+gd-metapro status
+```
+
+Reports one of: `not initialized` (no `.metaproject/`), `incomplete` (missing or
+invalid `metaproject.json`), or `ready` — in which case it prints the workspace
+root and each module as `enabled` or `disabled`.
+
+---
+
+## modules
+
+View and toggle Metaproject modules. Enabling or disabling a module re-runs
+`init` with the appropriate `--no-<module>` flags to add or remove its scaffold.
+
+```
+gd-metapro modules [status | enable <name> | disable <name>]
+```
+
+| Subcommand | Description |
+|---|---|
+| `status` (alias `list`) | Print each module and whether it is enabled. Also the default in a non-interactive (non-TTY) context. |
+| `enable <name>` (alias `on`) | Enable a module by its `metaproject.json` key and re-scaffold it. |
+| `disable <name>` (alias `off`) | Disable a module and drop it from the workspace. |
+| _(no argument)_ / `interactive` / `-i` | Interactively toggle modules on/off, then apply via `init`. |
+
+Module names are the manifest keys: `gdgraph`, `gdctx`, `gdwiki`, `gdskills`,
+`health`, `testing`, `memory`, `tasks`.
+
+---
+
+## update
+
+Refresh managed "service" files (templates, manifests, skills, hooks, dashboard)
+to match the current runtime, without ever writing under `.metaproject/data/`.
+Also self-updates the runtime it was launched from and backfills newly added
+modules. Errors with exit code `1` if `.metaproject/` does not exist.
+
+```
+gd-metapro update [--skip-runtime] [--hooks] [--no-tasks]
+```
+
+| Flag | Description |
+|---|---|
+| `--skip-runtime` | Skip the git fetch/checkout that self-updates the vendored runtime. |
+| `--hooks` | After refreshing, run every executable in `.metaproject/hooks/post-update.d`. Without it, a hint is printed instead. |
+| `--no-tasks` | Do not auto-enable (backfill) the tasks/flow module on pre-tasks workspaces. |
+| `--help`, `-h` | Print `update` usage and exit. |
+
+---
+
+## dashboard (and `dash`)
+
+Build or open the self-contained project admin dashboard, a single HTML file at
+`.metaproject/gd-metapro-dashboard.html` embedding health, graph, testing, wiki,
+and memory snapshots.
+
+```
+gd-metapro dashboard build      # rebuild the HTML, print its path
+gd-metapro dashboard open       # rebuild, then open in the default browser
+gd-metapro dash [build|open]    # bare `dash` defaults to `open`
+```
+
+| Subcommand | Description |
+|---|---|
+| `build` | Rebuild `gd-metapro-dashboard.html` and print its relative path. |
+| `open` | Rebuild then open the file (platform-aware: `open` / `start` / `xdg-open`). |
+
+`dash` is a shortcut for `dashboard`; with no subcommand it defaults to `open`.
+Requires an initialized workspace; an unknown subcommand exits `1`.
+
+---
+
+## gdgraph
+
+Build a lightweight intra-project import/dependency graph (regex-based) and query
+it. Delegates to a project-local `.metaproject/core/gdgraph/cli.ts` if present
+(unless `GD_METAPRO_GDGRAPH_LOCAL=1`). No flags are parsed by any subcommand.
+
+```
+gd-metapro gdgraph build
+gd-metapro gdgraph query <cycles|orphans>
+gd-metapro gdgraph affected <file>
+```
+
+| Subcommand | Description |
+|---|---|
+| `build` | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. |
+| `query cycles` | Print dependency cycles (`a -> b -> a`), or "No cycles found." |
+| `query orphans` | Print modules with no resolved inbound or outbound edges. |
+| `affected <file>` | Print `## Dependencies` and `## Dependents` for the target file. |
+
+Only the exact queries `cycles` and `orphans` are accepted; anything else exits
+`1`. `affected` with no file argument prints usage and exits `1`.
+
+---
+
+## ctx
+
+Token-aware wrapper that runs common developer commands and reads files, printing
+a compact Markdown summary while persisting the full raw output under
+`.metaproject/data/gdctx/`.
+
+```
+gd-metapro ctx status
+gd-metapro ctx diff [git-diff-args...]
+gd-metapro ctx rg "<pattern>" [path]
+gd-metapro ctx read <file> [--mode outline|compact|full]
+gd-metapro ctx run -- <command...>
+gd-metapro ctx show [latest|<name>] [--raw]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `status` | — | Report metaproject/manifest/config/data presence and whether gdctx is enabled. |
+| `diff` | git-diff args (e.g. `--staged`, `--stat`) | Run `git diff <args>` and summarize (files, risk hints, hunks, errors). |
+| `rg` | `"<pattern>" [path]` | Run ripgrep and summarize top files + example matches. Requires ≥1 arg. |
+| `read` | `<file>`, `--mode outline\|compact\|full` | Read and summarize a file. Default mode `compact`. |
+| `run` | `-- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. |
+| `show` | `[latest\|<name>]`, `--raw` | Print a saved artifact summary (`.md`), or the raw `.log` with `--raw`. |
+
+---
+
+## wiki
+
+Manage the local, Markdown-on-disk project knowledge base under
+`.metaproject/wiki/` (architecture, domain models, business rules, decisions, and
+more), including auto-collected drafts from other modules' data.
+
+```
+gd-metapro wiki status
+gd-metapro wiki new <type> <slug> --title "<title>" [--force]
+gd-metapro wiki collect [--force] [--limit <n>]
+gd-metapro wiki index
+gd-metapro wiki check-links
+gd-metapro wiki validate
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
+| `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
+| `collect` | `--force`, `--limit <n>` | Auto-generate draft pages from gdgraph/health/testing data, then rebuild the index. `--limit` defaults to 12. |
+| `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |
+| `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
+| `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
+
+Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
+`component`, `service`, `integration`, `decision`.
+
+---
+
+## skills
+
+Manage the working-skills subsystem: a bundled catalog of skills and per-project
+skill packages, plus routing, verification, learning, export, and JSON contracts.
+
+```
+gd-metapro skills status
+gd-metapro skills list
+gd-metapro skills inspect <project-skill>
+gd-metapro skills route <query-or-target>
+gd-metapro skills catalog [--profile recommended]
+gd-metapro skills install [--profile recommended]
+gd-metapro skills create <target> --module <module> --name <skill-name>
+gd-metapro skills verify <skill-or-target>
+gd-metapro skills learn --from-review <path> --skill <module>/<skill>
+gd-metapro skills learn apply <proposal.json>
+gd-metapro skills export <project-skill> --runtime codex|claude
+gd-metapro skills sync --runtime codex|claude --target <dir>
+gd-metapro skills contracts validate <file> --schema <name>
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `status` | `--json` | Print the local gdskills install status summary. |
+| `list` | `--json` | List registered project skills as a table. |
+| `inspect <project-skill>` | `--json` | Inspect one project skill: metadata + file presence. Missing target exits `1`. |
+| `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
+| `catalog` | `--profile minimal\|recommended\|full\|custom` | Print the bundled catalog for a profile. |
+| `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
+| `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
+| `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
+| `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |
+| `learn apply <proposal.json>` | `--dry-run`, `--json` | Apply a reviewed proposal to SKILL.md + changelog; bump patch version. |
+| `export <project-skill>` | `--runtime codex\|claude`, `--dry-run`, `--json` | Export a project skill to a runtime artifact. |
+| `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
+| `contracts list` | — | Print name/path/description for all contract schemas. |
+| `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
+
+Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
+`subagent-result`, `subagent-dispatch`, `agent-event`, `orchestrator-state`,
+`review-finding`.
+
+---
+
+## skill-verify-skill
+
+Top-level alias for `skills verify` — verify a project skill against current repo
+evidence and write a verification report.
+
+```
+gd-metapro skill-verify-skill <skill-or-target>
+```
+
+Accepts the same flags as `skills verify` (`--dry-run`, `--json`, `--all`).
+
+---
+
+## health
+
+Aggregate code-quality signals from multiple tools (ESLint, TypeScript, tests,
+dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
+per-scope health scores, compare against a baseline, and evaluate a pass/warn/fail
+quality gate.
+
+```
+gd-metapro health run [--strict] [--scope <sel>] [--changed [--since <ref>]] [--source <list>]
+gd-metapro health status
+gd-metapro health gate [--strict-warn]
+gd-metapro health sources
+gd-metapro health explain <file-or-module>
+gd-metapro health baseline update [--scope <sel>]
+gd-metapro health trend [--scope <key>] [--limit <n>]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `run` | `--strict`, `--scope project\|module:<name>\|file:<path>`, `--changed`, `--since <ref>`, `--source eslint,typescript,...` | Run the full pipeline, write `latest.json`/`latest.md` + history, print gate + score. Exit `1` if gate = fail. |
+| `status` | — | Read the last report: enabled, last run, gate, project score, regressed scopes, per-source status, trend. |
+| `gate` | `--strict-warn` | Re-read the last report's gate (no re-run). Exit `1` on fail, or on warn with `--strict-warn`. |
+| `sources` | — | Detect and list each source's mode/required/status without running the tools. |
+| `explain <file-or-module>` | — | Print a scope's metrics + its first 20 findings from the last report. |
+| `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
+| `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
+
+---
+
+## test
+
+Discover the project's test context and run its existing test runner, normalizing
+output into JSON + Markdown reports under `.metaproject/data/testing/`.
+
+```
+gd-metapro test init
+gd-metapro test analyze
+gd-metapro test run [--changed] [--since <ref>] [--strict] [--scope <path>] [--kind <k>]
+gd-metapro test status
+gd-metapro test context
+gd-metapro test report latest [--json]
+gd-metapro test related <file>
+gd-metapro test explain <file-or-scope>
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `init` | — | Alias of `analyze` (same code path). |
+| `analyze` | — | Scan the tree, detect the test stack, write `context.{json,md}` + `recommendations.md`. |
+| `run` | `--changed`, `--since <ref>`, `--strict` (alias `--gate`), `--scope <path>`, `--kind unit\|integration\|e2e\|smoke` | Select tests, run the runner, parse output, write the report. Exit `1` on fail/error. |
+| `status` | — | One-line summary: enabled, frameworks, test-file count, last run + status. |
+| `context` | — | Print saved context + recommendations (hints to run `analyze` if absent). |
+| `report latest` | `--json` | Print the latest normalized report (Markdown, or raw JSON with `--json`). |
+| `related <file>` | — | List tests related to a source file by naming/directory heuristics. |
+| `explain <file-or-scope>` | — | Frameworks + related tests + latest failures filtered by the target. |
+
+`--changed` selects tests for changed files (via `git`); with `--strict` and no
+matched tests, the run fails — this drives the pre-push gate.
+
+---
+
+## memory
+
+Long-term, typed project memory: durable Markdown entries (lessons, decisions,
+constraints, known mistakes, patterns, …) under `.metaproject/memory/`, with
+deterministic (non-LLM) search, dedup, and consolidation.
+
+```
+gd-metapro memory new <type> [slug] --title "<title>" [--force]
+gd-metapro memory index
+gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
+gd-metapro memory ingest --from-<source> <path>
+gd-metapro memory check
+gd-metapro memory reflect
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `new <type> [slug]` | `--title "<t>"`, `--force` | Scaffold a new draft entry; print possible duplicates. |
+| `index` | — | Build `data/memory/index/index.json` from all entries. |
+| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` | Ranked retrieval; write `latest.md`/`latest.json`, print the ranked list. |
+| `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
+| `check` | — | Integrity/lint pass (metadata, links, dedup, conflicts, index). Exit `1` on issues. |
+| `reflect` | — | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. |
+
+Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
+`historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
+`migration-note`, `integration-note`.
+
+---
+
+## flow
+
+Agent-first work lifecycle ("Task Manager"; manifest module id `tasks`). Each unit
+of work is a self-contained package under `.metaproject/flows/`, driven through a
+strict status state machine with hard completion gates. The CLI is the sole writer
+of flow state.
+
+```
+gd-metapro flow init (--issue <url> | --title "<t>") [--slug <s>]
+gd-metapro flow list
+gd-metapro flow status <id>
+gd-metapro flow freeze <id>
+gd-metapro flow start <id>
+gd-metapro flow task add <id> --title "<t>" [--kind <k>]
+gd-metapro flow task done <id> <taskId>
+gd-metapro flow ac confirm <id> <ACn> [--note "<evidence>"]
+gd-metapro flow ac update <id> --reason "<why>"
+gd-metapro flow implemented <id> --pr <url>
+gd-metapro flow complete <id> [--comment]
+gd-metapro flow block <id> --reason "<why>"
+gd-metapro flow unblock <id>
+gd-metapro flow check
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>` | Scaffold a flow package. Requires a title or issue URL. |
+| `list` | — | List all flows with status + task counts. |
+| `status <id>` | — | Print one flow: status, source, AC state, PR, tasks, recent history. |
+| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
+| `start <id>` | — | Transition `ready → in-progress`. |
+| `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|review\|docs` | Append a task. |
+| `task done <id> <taskId>` | — | Mark a task `done`. |
+| `ac confirm <id> <ACn>` | `--note "<evidence>"` | Confirm one acceptance criterion. |
+| `ac update <id>` | `--reason "<why>"` (required) | Re-freeze the AC checksum; void prior confirmations. |
+| `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
+| `complete <id>` | `--comment` | Run completion gates; on pass `→ done` (optionally comment the issue), on fail `→ in-progress`. |
+| `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
+| `unblock <id>` | — | Restore the saved previous status. |
+| `check` | — | Consistency audit across all flows. |
+
+Statuses: `initializing`, `ready`, `in-progress`, `implemented`, `completing`,
+`done`, `blocked`. `task` and `ac` are command groups — the atomic verbs are
+`task add`, `task done`, `ac confirm`, `ac update`.
+
+---
+
+## rules
+
+Keep the root agent entrypoints (`AGENTS.md`, `CLAUDE.md`) in sync with the
+`.metaproject/` workspace by importing them as high-priority project rules and
+injecting a managed routing block. Requires an initialized workspace.
+
+```
+gd-metapro rules sync
+gd-metapro rules distill
+```
+
+| Subcommand | Description |
+|---|---|
+| `sync` | Import each root entrypoint into `.metaproject/rules/<slug>.md`, inject/upgrade the managed Metaproject routing block, and refresh the index. |
+| `distill` | Superset of `sync`: additionally split large entrypoints into typed artifacts (project rules, project skills, root-only sections) and rewrite the trimmed root file. |
+
+Only `sync` and `distill` are accepted; the only recognized flag is `--help`/`-h`.
+An unknown subcommand prints an error and exits `1`.
