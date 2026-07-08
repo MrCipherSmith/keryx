@@ -3,17 +3,51 @@
   "id": "009",
   "slug": "block-c-memory-knowledge-precision",
   "title": "Block C — Memory & Knowledge Precision",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-08T06:12:14.133Z",
-  "updatedAt": "2026-07-08T06:45:13.835Z",
+  "updatedAt": "2026-07-08T06:46:37.105Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:b2ed8b3323021f8ad438808895db03c5405a25febc64cb23537094be011f3820",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-08T06:46:10.745Z"
+    },
+    "AC2": {
+      "at": "2026-07-08T06:46:10.877Z"
+    },
+    "AC3": {
+      "at": "2026-07-08T06:46:11.011Z"
+    },
+    "AC4": {
+      "at": "2026-07-08T06:46:11.150Z"
+    },
+    "AC5": {
+      "at": "2026-07-08T06:46:11.275Z"
+    },
+    "AC6": {
+      "at": "2026-07-08T06:46:11.411Z"
+    },
+    "AC7": {
+      "at": "2026-07-08T06:46:11.549Z"
+    },
+    "AC8": {
+      "at": "2026-07-08T06:46:11.689Z"
+    },
+    "AC9": {
+      "at": "2026-07-08T06:46:11.831Z"
+    },
+    "AC10": {
+      "at": "2026-07-08T06:46:11.978Z"
+    },
+    "AC11": {
+      "at": "2026-07-08T06:46:12.135Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/meta-project/pull/14"
   },
   "tasks": [
     {
@@ -92,7 +126,7 @@
       "id": "T13",
       "title": "Adversarial review + draft PR",
       "kind": "implement",
-      "status": "todo"
+      "status": "done"
     }
   ],
   "history": [
@@ -213,6 +247,80 @@
       "at": "2026-07-08T06:45:13.835Z",
       "event": "task-done",
       "detail": "T12: Docs: roadmap status + runtime/model id"
+    },
+    {
+      "at": "2026-07-08T06:46:08.355Z",
+      "event": "task-done",
+      "detail": "T13: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T06:46:10.602Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/meta-project/pull/14 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-08T06:46:10.745Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-08T06:46:10.877Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-08T06:46:11.011Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-08T06:46:11.150Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-08T06:46:11.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-08T06:46:11.411Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-07-08T06:46:11.549Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-07-08T06:46:11.689Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-07-08T06:46:11.831Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-07-08T06:46:11.978Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-07-08T06:46:12.136Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-07-08T06:46:34.993Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-08T06:46:37.105Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

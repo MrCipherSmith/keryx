@@ -24,3 +24,18 @@
 - 2026-07-08T06:45:13.565Z - task-done: T10: C4 MCP resources + wiki.ask/memory.search tools
 - 2026-07-08T06:45:13.695Z - task-done: T11: Fixtures + tests (temporal, paraphrase, fallback, no-network, store-guard, MCP round-trip)
 - 2026-07-08T06:45:13.835Z - task-done: T12: Docs: roadmap status + runtime/model id
+- 2026-07-08T06:46:08.355Z - task-done: T13: Adversarial review + draft PR
+- 2026-07-08T06:46:10.602Z - implemented: draft PR: https://github.com/MrCipherSmith/meta-project/pull/14 (warning: PR is not a draft)
+- 2026-07-08T06:46:10.745Z - ac-confirmed: AC1
+- 2026-07-08T06:46:10.877Z - ac-confirmed: AC2
+- 2026-07-08T06:46:11.011Z - ac-confirmed: AC3
+- 2026-07-08T06:46:11.150Z - ac-confirmed: AC4
+- 2026-07-08T06:46:11.275Z - ac-confirmed: AC5
+- 2026-07-08T06:46:11.411Z - ac-confirmed: AC6
+- 2026-07-08T06:46:11.549Z - ac-confirmed: AC7
+- 2026-07-08T06:46:11.689Z - ac-confirmed: AC8
+- 2026-07-08T06:46:11.831Z - ac-confirmed: AC9
+- 2026-07-08T06:46:11.978Z - ac-confirmed: AC10
+- 2026-07-08T06:46:12.136Z - ac-confirmed: AC11
+- 2026-07-08T06:46:34.993Z - completing
+- 2026-07-08T06:46:37.105Z - done: all gates passed
