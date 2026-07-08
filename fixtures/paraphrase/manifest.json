@@ -1,0 +1,30 @@
+{
+  "description": "Query -> expected-memory pairs (incl. paraphrases) proving recall@k(index) > recall@k(lexical). AC-C2 / AC-C12.",
+  "k": 1,
+  "recallThreshold": {
+    "note": "Deterministic stub embedder (bag-of-token TF cosine). Assertion is recall@k(index) > recall@k(lexical); exact values recorded by the harness test.",
+    "minIndexRecall": 0.75
+  },
+  "cases": [
+    {
+      "id": "retry",
+      "query": "how should the service retry failed outbound network requests",
+      "expected": "patterns/retry-backoff.md"
+    },
+    {
+      "id": "datastore",
+      "query": "which database engine did we pick for the primary persistent datastore",
+      "expected": "patterns/datastore-choice.md"
+    },
+    {
+      "id": "idempotency",
+      "query": "how do we make the payment webhook handler safe to retry idempotently",
+      "expected": "patterns/idempotent-webhooks.md"
+    },
+    {
+      "id": "logging",
+      "query": "what structured logging format should backend services emit to stdout",
+      "expected": "patterns/structured-logging.md"
+    }
+  ]
+}

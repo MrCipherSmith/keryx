@@ -1,5 +1,7 @@
 import { tokenSet, tokenize } from "./text";
+import { memoryClassOf } from "./types";
 import type {
+  MemoryClass,
   MemoryConfig,
   MemoryEntry,
   ScoredEntry,
@@ -14,7 +16,13 @@ export function searchEntries(
   now: Date,
 ): ScoredEntry[] {
   const queryTokens = [...new Set(tokenize(query))];
-  const filtered = entries.filter((entry) => matchesFilters(entry, filters));
+  const today = now.toISOString().slice(0, 10);
+  const filtered = entries.filter(
+    (entry) =>
+      matchesFilters(entry, filters) &&
+      classMatch(entry, filters.class) &&
+      temporalMatch(entry, filters.asOf ?? null, config, today),
+  );
 
   const scored = filtered.map((entry) =>
     scoreEntry(entry, queryTokens, filters, config, now),
@@ -31,6 +39,34 @@ export function searchEntries(
     .slice(0, filters.limit ?? config.ranking.maxResults);
 }
 
+// C1 rerank candidate pool: the top-k entries by deterministic lexical score,
+// applying the SAME status/module/entity/class/temporal filters as `searchEntries`
+// but WITHOUT the `relevance > 0` drop. This gives the embedding reranker a pool
+// that includes semantically-relevant entries lexical scoring would rank low,
+// while never introducing entries absent from Markdown. Used only on the opt-in
+// semantic path; the default path is unaffected.
+export function candidatePool(
+  entries: MemoryEntry[],
+  query: string,
+  filters: SearchFilters,
+  config: MemoryConfig,
+  now: Date,
+  k: number,
+): ScoredEntry[] {
+  const queryTokens = [...new Set(tokenize(query))];
+  const today = now.toISOString().slice(0, 10);
+  return entries
+    .filter(
+      (entry) =>
+        matchesFilters(entry, filters) &&
+        classMatch(entry, filters.class) &&
+        temporalMatch(entry, filters.asOf ?? null, config, today),
+    )
+    .map((entry) => scoreEntry(entry, queryTokens, filters, config, now))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(0, k));
+}
+
 function matchesFilters(entry: MemoryEntry, filters: SearchFilters): boolean {
   if (filters.status && entry.status !== filters.status) {
     return false;
@@ -45,6 +81,52 @@ function matchesFilters(entry: MemoryEntry, filters: SearchFilters): boolean {
     }
   }
   if (filters.entity && entry.scopes.entity !== filters.entity) {
+    return false;
+  }
+  return true;
+}
+
+// C5: restrict to a single knowledge class. No filter ⇒ pass. Resolution uses
+// the entry's explicit class or the class mapped from its type (always total).
+function classMatch(entry: MemoryEntry, cls: MemoryClass | undefined): boolean {
+  if (!cls) {
+    return true;
+  }
+  return memoryClassOf(entry) === cls;
+}
+
+// C2 bitemporal filter. Deterministic string/date comparison — no runtime, no
+// network. A no-op for entries without validity fields (byte-identical default).
+//   as-of <d>: include iff Valid-From ≤ d AND (Valid-To unset OR Valid-To > d).
+//   current  : exclude entries with a past Valid-To or any Superseded-By.
+function temporalMatch(
+  entry: MemoryEntry,
+  asOf: string | null,
+  config: MemoryConfig,
+  today: string,
+): boolean {
+  if (!config.temporal.enabled) {
+    return true;
+  }
+  if (asOf) {
+    const from = entry.validFrom ?? null;
+    const to = entry.validTo ?? null;
+    if (from && from > asOf) {
+      return false; // not yet valid at asOf
+    }
+    if (to && to <= asOf) {
+      return false; // validity interval [from, to) already closed at asOf
+    }
+    return true;
+  }
+  // No explicit as-of date. Only the "current" default performs exclusion.
+  if (config.temporal.defaultQuery === "as-of") {
+    return true;
+  }
+  if (entry.supersededBy) {
+    return false;
+  }
+  if (entry.validTo && entry.validTo < today) {
     return false;
   }
   return true;

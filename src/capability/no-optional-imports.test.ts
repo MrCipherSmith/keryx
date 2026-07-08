@@ -66,6 +66,38 @@ test("no top-level import of any optionalDependencies package exists in src/", a
   expect(violations).toEqual([]);
 });
 
+// Block C (C0-2, AC-C0): `@xenova/transformers` — the memory embedding runtime —
+// must be imported ONLY via the seam's lazy `await import()`, never statically,
+// and specifically not by the embedding adapter that consumes it.
+test("@xenova/transformers is never statically imported (embedding runtime guard)", async () => {
+  const dep = "@xenova/transformers";
+  const pkg = JSON.parse(await readFile(path.join(PKG_ROOT, "package.json"), "utf8")) as {
+    optionalDependencies?: Record<string, string>;
+  };
+  // It must remain an OPTIONAL dependency, never a hard one.
+  expect(Object.keys(pkg.optionalDependencies ?? {})).toContain(dep);
+
+  const files = await tsFiles(SRC_ROOT);
+  const violations: string[] = [];
+  for (const file of files) {
+    const content = await readFile(file, "utf8");
+    for (const pattern of staticImportPatterns(dep)) {
+      if (pattern.test(content)) {
+        violations.push(`${path.relative(PKG_ROOT, file)} statically imports "${dep}"`);
+      }
+    }
+  }
+  expect(violations).toEqual([]);
+
+  // The adapter that consumes it must not name it in a static import/require.
+  const adapter = await readFile(
+    path.join(SRC_ROOT, "memory", "embedding", "adapter.ts"),
+    "utf8",
+  );
+  expect(/from\s*['"]@xenova\/transformers['"]/.test(adapter)).toBe(false);
+  expect(/require\s*\(\s*['"]@xenova\/transformers['"]/.test(adapter)).toBe(false);
+});
+
 test("dependencies block stays empty (zero-dep floor, AC0-1)", async () => {
   const pkg = JSON.parse(await readFile(path.join(PKG_ROOT, "package.json"), "utf8")) as {
     dependencies?: Record<string, string>;

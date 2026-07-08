@@ -2,7 +2,9 @@ import { createMemoryService } from "../memory/service";
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
 import { optionValue } from "../lib/args";
-import type { MemoryStatus, SearchFilters } from "../memory/types";
+import { runAssetsSubcommand } from "../assets/command";
+import { MEMORY_CLASS_VALUES } from "../memory/types";
+import type { MemoryClass, MemoryStatus, SearchFilters } from "../memory/types";
 
 let service: ReturnType<typeof createMemoryService> | null = null;
 
@@ -31,11 +33,25 @@ export async function memoryCommand(args: string[]): Promise<void> {
     return;
   }
   if (command === "index") {
-    await runIndex();
+    await runIndex(args.slice(1));
     return;
   }
   if (command === "search") {
     await runSearch(args.slice(1));
+    return;
+  }
+  if (command === "supersede") {
+    await runSupersede(args.slice(1));
+    return;
+  }
+  if (command === "assets") {
+    const result = await runAssetsSubcommand(process.cwd(), "memory", args.slice(1));
+    for (const line of result.lines) {
+      console.log(line);
+    }
+    if (result.exitCode !== 0) {
+      process.exitCode = result.exitCode;
+    }
     return;
   }
   if (command === "ingest") {
@@ -82,9 +98,19 @@ async function runNew(args: string[]): Promise<void> {
   }
 }
 
-async function runIndex(): Promise<void> {
-  const result = await getService().index({ cwd: process.cwd() });
+async function runIndex(args: string[]): Promise<void> {
+  const embeddings = args.includes("--embeddings");
+  const result = await getService().index({ cwd: process.cwd(), embeddings });
   console.log(`Indexed ${result.entryCount} entries -> ${result.path}`);
+  if (result.embeddings) {
+    if (result.embeddings.built) {
+      console.log(
+        `Embedding index: ${result.embeddings.vectorCount ?? 0} vector(s) (${result.embeddings.model ?? "?"}) -> ${result.embeddings.path ?? ""}`,
+      );
+    } else {
+      console.log("Embedding index: capability unavailable; lexical index only.");
+    }
+  }
 }
 
 async function runSearch(args: string[]): Promise<void> {
@@ -96,11 +122,20 @@ async function runSearch(args: string[]): Promise<void> {
   }
 
   const limitArg = optionValue(args, "--limit");
+  const classArg = optionValue(args, "--class");
+  if (classArg && !MEMORY_CLASS_VALUES.includes(classArg as MemoryClass)) {
+    console.error(`Invalid --class: ${classArg}. Use one of: ${MEMORY_CLASS_VALUES.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
   const filters: SearchFilters = {
     module: optionValue(args, "--module"),
     entity: optionValue(args, "--entity"),
     status: optionValue(args, "--status") as MemoryStatus | undefined,
     limit: limitArg ? Number(limitArg) : undefined,
+    asOf: optionValue(args, "--as-of"),
+    class: classArg as MemoryClass | undefined,
+    semantic: args.includes("--semantic") ? true : undefined,
   };
 
   const result = await getService().search({ cwd: process.cwd(), query, filters });
@@ -116,6 +151,37 @@ async function runSearch(args: string[]): Promise<void> {
   console.log("");
   console.log(`report: ${result.markdownPath}`);
   console.log(`json: ${result.jsonPath}`);
+}
+
+async function runSupersede(args: string[]): Promise<void> {
+  const oldPath = args.find((arg) => !arg.startsWith("--"));
+  const newPath = optionValue(args, "--by");
+  if (!oldPath || !newPath) {
+    console.error(
+      'Usage: gd-metapro memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]',
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const date = optionValue(args, "--date");
+  const result = await getService().supersede({
+    cwd: process.cwd(),
+    oldPath,
+    newPath,
+    ...(date ? { date } : {}),
+  });
+
+  if (result.securitySkipped) {
+    console.log(`Supersede blocked by security gate: ${result.securitySkipped} (no files changed).`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!result.changed) {
+    console.log(`Already superseded: ${result.superseded} -> ${result.supersededBy} (no change).`);
+    return;
+  }
+  console.log(`Superseded ${result.superseded} -> ${result.supersededBy}.`);
+  console.log("Both entries remain on disk (non-destructive, git-diffable).");
 }
 
 async function runIngest(args: string[]): Promise<void> {
@@ -203,8 +269,10 @@ function printHelp(): void {
 
 Usage:
   gd-metapro memory new <type> [slug] --title "<title>" [--force]
-  gd-metapro memory index
-  gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
+  gd-metapro memory index [--embeddings]
+  gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic]
+  gd-metapro memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
+  gd-metapro memory assets <list|verify|pull> [<id>]
   gd-metapro memory ingest --from-<review|health|job|skill-verifier> <path>
   gd-metapro memory check
   gd-metapro memory reflect

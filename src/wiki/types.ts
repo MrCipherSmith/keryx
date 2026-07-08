@@ -161,6 +161,28 @@ export type WikiCollectResult = {
   index: WikiIndexResult;
 };
 
+export type WikiAskInput = {
+  cwd: string;
+  question: string;
+  k?: number | undefined;
+  // Opt into a C1 embedding rerank of the deterministic citation set (when the
+  // memory.embedding capability resolves). Default false ⇒ pure lexical.
+  rerank?: boolean | undefined;
+};
+export type WikiAskCitation = {
+  path: string;
+  title: string;
+  excerpt: string;
+  score: number;
+  source: "wiki" | "memory";
+};
+export type WikiAskResult = {
+  question: string;
+  citations: WikiAskCitation[];
+  // Assembled deterministically from the citations (C-6, C-8).
+  answerMarkdown: string;
+};
+
 export interface GdWikiService {
   status(input: WikiStatusInput): Promise<WikiStatusResult>;
   createPage(input: WikiCreatePageInput): Promise<WikiCreatePageResult>;
@@ -168,4 +190,5 @@ export interface GdWikiService {
   checkLinks(input: WikiCheckLinksInput): Promise<WikiCheckLinksResult>;
   validate(input: WikiValidateInput): Promise<WikiValidateResult>;
   collect(input: WikiCollectInput): Promise<WikiCollectResult>;
+  ask(input: WikiAskInput): Promise<WikiAskResult>;
 }

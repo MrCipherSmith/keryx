@@ -1,0 +1,15 @@
+{
+  "description": "Expected temporal resolution for the authentication supersession chain (AC-C5).",
+  "query": "authentication",
+  "current": {
+    "excludes": ["decisions/auth-sessions.md", "decisions/auth-jwt.md"],
+    "includes": ["decisions/auth-oauth.md"]
+  },
+  "asOf": [
+    { "date": "2026-02-01", "expected": "decisions/auth-sessions.md" },
+    { "date": "2026-03-01", "expected": "decisions/auth-jwt.md" },
+    { "date": "2026-05-31", "expected": "decisions/auth-jwt.md" },
+    { "date": "2026-06-01", "expected": "decisions/auth-oauth.md" },
+    { "date": "2026-12-31", "expected": "decisions/auth-oauth.md" }
+  ]
+}

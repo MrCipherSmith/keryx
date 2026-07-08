@@ -24,6 +24,12 @@
       "url": "https://assets.gd-metapro.dev/treesitter/tree-sitter-javascript-0.22.0.wasm",
       "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
       "size": 393216
+    },
+    "memory-embed-default": {
+      "version": "1.0.0",
+      "url": "https://assets.gd-metapro.dev/memory/all-MiniLM-L6-v2-1.0.0.tar.gz",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "size": 23000000
     }
   }
 }

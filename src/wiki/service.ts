@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { guardOutput } from "../security/guard";
+import { wikiAsk } from "./ask";
 import {
   WIKI_INDEX_BEGIN,
   WIKI_INDEX_END,
@@ -288,6 +289,7 @@ export function createGdWikiService(): GdWikiService {
     checkLinks: (input) => wikiCheckLinks(input.cwd),
     validate: (input) => wikiValidate(input.cwd),
     collect: (input) => wikiCollect(input),
+    ask: (input) => wikiAsk(input),
   };
 }
 
@@ -691,7 +693,7 @@ async function writeCollectedPage(
   };
 }
 
-async function collectPages(cwd: string): Promise<WikiPage[]> {
+export async function collectPages(cwd: string): Promise<WikiPage[]> {
   const root = wikiRootPath(cwd);
   const pages: WikiPage[] = [];
 

@@ -240,6 +240,25 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
+      name: "wiki.ask",
+      module: "wiki",
+      description:
+        "Ask a question answered deterministically from the project's own wiki + memory, with citations.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          question: { type: "string", description: "The natural-language question." },
+          k: { type: "number", description: "Max citations to return." },
+        },
+        ["question"],
+      ),
+      mutating: false,
+      async invoke(cwd, params) {
+        const question = stringParam(params, "question") ?? "";
+        const k = typeof params.k === "number" ? params.k : undefined;
+        return createGdWikiService().ask({ cwd, question, ...(k ? { k } : {}) });
+      },
+    },
+    {
       name: "standard.validate",
       module: "standard",
       description: "Validate the workspace against the Metaproject Standard.",

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { loadMemoryConfig } from "../memory/config";
+import { renderProceduralMemoryForScope } from "../memory/inject";
 import { searchEntries } from "../memory/search";
 import { collectEntries } from "../memory/store";
 import type { TrackerAdapter, TrackerRef } from "./types";
@@ -56,6 +57,23 @@ export async function collectContext(input: {
           .join("\n")}`,
       );
       notes.push(`memory: ${results.length} related entries`);
+    }
+  } catch {
+    // memory module absent - fine
+  }
+
+  // 2b. Procedural memory injection (C3, AC-C8): splice accepted/current
+  // procedural memory for this task scope into the assembled prompt. Empty
+  // scope ⇒ empty block ⇒ the prompt is byte-for-byte unchanged.
+  try {
+    const proceduralBlock = await renderProceduralMemoryForScope(
+      cwd,
+      { module: null, target: title, files: [] },
+      now,
+    );
+    if (proceduralBlock.trim().length > 0) {
+      sections.push(proceduralBlock.trimEnd());
+      notes.push("memory: procedural block injected");
     }
   } catch {
     // memory module absent - fine

@@ -1,8 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { MEMORY_TYPES } from "./types";
-import type { Confidence, MemoryEntry, MemoryStatus } from "./types";
+import { MEMORY_CLASS_VALUES, MEMORY_TYPES, classForType } from "./types";
+import type { Confidence, MemoryClass, MemoryEntry, MemoryStatus } from "./types";
 
 const STATUSES = new Set<MemoryStatus>([
   "draft",
@@ -53,10 +53,20 @@ export function parseEntry(
   const confidence = normalizeConfidence(field(lines, "Confidence"));
   const provenance = sections["Provenance"] ?? [];
 
+  const type = field(lines, "Type") ?? folderType;
+  const created = bulletField(provenance, "Created");
+  // C2/C3 header fields (all optional; absence ⇒ null / class-by-type).
+  const entryClass = normalizeClass(field(lines, "Class")) ?? classForType(type);
+  const validFrom = field(lines, "Valid-From");
+  const validTo = field(lines, "Valid-To");
+  const recordedAt = field(lines, "Recorded-At") ?? created;
+  const supersedes = field(lines, "Supersedes");
+  const supersededBy = field(lines, "Superseded-By");
+
   return {
     absolutePath,
     relativePath,
-    type: field(lines, "Type") ?? folderType,
+    type,
     title: titleLine ? titleLine.slice(2).trim() : relativePath,
     version: field(lines, "Version"),
     status,
@@ -65,13 +75,29 @@ export function parseEntry(
     details: (sections["Details"] ?? []).join("\n").trim(),
     tags: bulletValues(sections["Tags"] ?? []),
     scopes: parseScopes(sections["Related Scopes"] ?? []),
-    created: bulletField(provenance, "Created"),
-    updated: bulletField(provenance, "Updated") ?? bulletField(provenance, "Created"),
+    created,
+    updated: bulletField(provenance, "Updated") ?? created,
     provenance: {
       source: bulletField(provenance, "Source"),
       link: bulletField(provenance, "Link"),
     },
+    class: entryClass,
+    validFrom,
+    validTo,
+    recordedAt,
+    supersedes,
+    supersededBy,
   };
+}
+
+function normalizeClass(value: string | null): MemoryClass | null {
+  if (!value) {
+    return null;
+  }
+  const lower = value.toLowerCase();
+  return MEMORY_CLASS_VALUES.includes(lower as MemoryClass)
+    ? (lower as MemoryClass)
+    : null;
 }
 
 function splitSections(lines: string[]): Record<string, string[]> {

@@ -1,0 +1,26 @@
+# Flow Journal
+
+- 2026-07-08T06:12:14.133Z - flow created
+- 2026-07-08T06:14:46.807Z - task-added: T5: CLI: memory search flags + memory supersede
+- 2026-07-08T06:14:46.858Z - task-added: T6: C1 embedding adapter + index config + assets + import guard
+- 2026-07-08T06:14:46.910Z - task-added: T7: C1 index build/load (derived/disposable/content-hash)
+- 2026-07-08T06:14:46.962Z - task-added: T8: C1 search wiring (lexical-first rerank) + CLI
+- 2026-07-08T06:14:47.013Z - task-added: T9: C4 wiki ask + GdWikiService.ask + CLI
+- 2026-07-08T06:14:47.068Z - task-added: T10: C4 MCP resources + wiki.ask/memory.search tools
+- 2026-07-08T06:14:47.123Z - task-added: T11: Fixtures + tests (temporal, paraphrase, fallback, no-network, store-guard, MCP round-trip)
+- 2026-07-08T06:14:47.177Z - task-added: T12: Docs: roadmap status + runtime/model id
+- 2026-07-08T06:14:47.229Z - task-added: T13: Adversarial review + draft PR
+- 2026-07-08T06:14:47.283Z - frozen: 11 criteria; checksum recorded
+- 2026-07-08T06:14:47.336Z - started
+- 2026-07-08T06:14:47.390Z - task-done: T1: Collect remaining context
+- 2026-07-08T06:45:12.443Z - task-done: T2: Implement per plan
+- 2026-07-08T06:45:12.587Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-08T06:45:12.744Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-08T06:45:12.884Z - task-done: T5: CLI: memory search flags + memory supersede
+- 2026-07-08T06:45:13.019Z - task-done: T6: C1 embedding adapter + index config + assets + import guard
+- 2026-07-08T06:45:13.170Z - task-done: T7: C1 index build/load (derived/disposable/content-hash)
+- 2026-07-08T06:45:13.310Z - task-done: T8: C1 search wiring (lexical-first rerank) + CLI
+- 2026-07-08T06:45:13.440Z - task-done: T9: C4 wiki ask + GdWikiService.ask + CLI
+- 2026-07-08T06:45:13.565Z - task-done: T10: C4 MCP resources + wiki.ask/memory.search tools
+- 2026-07-08T06:45:13.695Z - task-done: T11: Fixtures + tests (temporal, paraphrase, fallback, no-network, store-guard, MCP round-trip)
+- 2026-07-08T06:45:13.835Z - task-done: T12: Docs: roadmap status + runtime/model id

@@ -6,6 +6,7 @@ import {
   wikiStatus,
   wikiValidate,
 } from "../wiki/service";
+import { wikiAsk } from "../wiki/ask";
 import { optionValue } from "../lib/args";
 
 export async function wikiCommand(args: string[]): Promise<void> {
@@ -43,6 +44,11 @@ export async function wikiCommand(args: string[]): Promise<void> {
 
   if (command === "validate") {
     await runValidate();
+    return;
+  }
+
+  if (command === "ask") {
+    await runAsk(args.slice(1));
     return;
   }
 
@@ -175,6 +181,24 @@ async function runValidate(): Promise<void> {
   process.exitCode = 1;
 }
 
+async function runAsk(args: string[]): Promise<void> {
+  const question = args.find((arg) => !arg.startsWith("--"));
+  if (!question) {
+    console.error('Usage: gd-metapro wiki ask "<question>" [--k <n>] [--rerank]');
+    process.exitCode = 1;
+    return;
+  }
+  const kValue = optionValue(args, "--k");
+  const result = await wikiAsk({
+    cwd: process.cwd(),
+    question,
+    ...(kValue ? { k: Number.parseInt(kValue, 10) } : {}),
+    ...(args.includes("--rerank") ? { rerank: true } : {}),
+  });
+
+  console.log(result.answerMarkdown);
+}
+
 function printHelp(): void {
   console.log(`gd-metapro wiki
 
@@ -185,6 +209,7 @@ Usage:
   gd-metapro wiki index
   gd-metapro wiki check-links
   gd-metapro wiki validate
+  gd-metapro wiki ask "<question>" [--k <n>] [--rerank]
 
 Page types:
   architecture, domain-model, business-rule, user-scenario,

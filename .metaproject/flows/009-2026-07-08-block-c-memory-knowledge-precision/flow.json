@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "id": "009",
+  "slug": "block-c-memory-knowledge-precision",
+  "title": "Block C — Memory & Knowledge Precision",
+  "status": "in-progress",
+  "createdAt": "2026-07-08T06:12:14.133Z",
+  "updatedAt": "2026-07-08T06:45:13.835Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b2ed8b3323021f8ad438808895db03c5405a25febc64cb23537094be011f3820",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "CLI: memory search flags + memory supersede",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "C1 embedding adapter + index config + assets + import guard",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "C1 index build/load (derived/disposable/content-hash)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "C1 search wiring (lexical-first rerank) + CLI",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "C4 wiki ask + GdWikiService.ask + CLI",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T10",
+      "title": "C4 MCP resources + wiki.ask/memory.search tools",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T11",
+      "title": "Fixtures + tests (temporal, paraphrase, fallback, no-network, store-guard, MCP round-trip)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T12",
+      "title": "Docs: roadmap status + runtime/model id",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T13",
+      "title": "Adversarial review + draft PR",
+      "kind": "implement",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-08T06:12:14.133Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-08T06:14:46.807Z",
+      "event": "task-added",
+      "detail": "T5: CLI: memory search flags + memory supersede"
+    },
+    {
+      "at": "2026-07-08T06:14:46.858Z",
+      "event": "task-added",
+      "detail": "T6: C1 embedding adapter + index config + assets + import guard"
+    },
+    {
+      "at": "2026-07-08T06:14:46.910Z",
+      "event": "task-added",
+      "detail": "T7: C1 index build/load (derived/disposable/content-hash)"
+    },
+    {
+      "at": "2026-07-08T06:14:46.962Z",
+      "event": "task-added",
+      "detail": "T8: C1 search wiring (lexical-first rerank) + CLI"
+    },
+    {
+      "at": "2026-07-08T06:14:47.013Z",
+      "event": "task-added",
+      "detail": "T9: C4 wiki ask + GdWikiService.ask + CLI"
+    },
+    {
+      "at": "2026-07-08T06:14:47.068Z",
+      "event": "task-added",
+      "detail": "T10: C4 MCP resources + wiki.ask/memory.search tools"
+    },
+    {
+      "at": "2026-07-08T06:14:47.123Z",
+      "event": "task-added",
+      "detail": "T11: Fixtures + tests (temporal, paraphrase, fallback, no-network, store-guard, MCP round-trip)"
+    },
+    {
+      "at": "2026-07-08T06:14:47.177Z",
+      "event": "task-added",
+      "detail": "T12: Docs: roadmap status + runtime/model id"
+    },
+    {
+      "at": "2026-07-08T06:14:47.229Z",
+      "event": "task-added",
+      "detail": "T13: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T06:14:47.283Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-08T06:14:47.336Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-08T06:14:47.390Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-08T06:45:12.443Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-08T06:45:12.587Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-08T06:45:12.744Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-08T06:45:12.884Z",
+      "event": "task-done",
+      "detail": "T5: CLI: memory search flags + memory supersede"
+    },
+    {
+      "at": "2026-07-08T06:45:13.019Z",
+      "event": "task-done",
+      "detail": "T6: C1 embedding adapter + index config + assets + import guard"
+    },
+    {
+      "at": "2026-07-08T06:45:13.170Z",
+      "event": "task-done",
+      "detail": "T7: C1 index build/load (derived/disposable/content-hash)"
+    },
+    {
+      "at": "2026-07-08T06:45:13.310Z",
+      "event": "task-done",
+      "detail": "T8: C1 search wiring (lexical-first rerank) + CLI"
+    },
+    {
+      "at": "2026-07-08T06:45:13.440Z",
+      "event": "task-done",
+      "detail": "T9: C4 wiki ask + GdWikiService.ask + CLI"
+    },
+    {
+      "at": "2026-07-08T06:45:13.565Z",
+      "event": "task-done",
+      "detail": "T10: C4 MCP resources + wiki.ask/memory.search tools"
+    },
+    {
+      "at": "2026-07-08T06:45:13.695Z",
+      "event": "task-done",
+      "detail": "T11: Fixtures + tests (temporal, paraphrase, fallback, no-network, store-guard, MCP round-trip)"
+    },
+    {
+      "at": "2026-07-08T06:45:13.835Z",
+      "event": "task-done",
+      "detail": "T12: Docs: roadmap status + runtime/model id"
+    }
+  ]
+}

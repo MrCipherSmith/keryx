@@ -21,6 +21,21 @@ export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   dedup: { titleSimilarity: 0.8, summaryJaccard: 0.6, minSharedScopeOrTags: 1 },
   ingest: { defaultStatus: "draft", allowAutoAccept: false },
   reflect: { minClusterSize: 3 },
+  index: {
+    enabled: false, // C1 default OFF ⇒ lexical only (C-2, AC-C1)
+    runtime: "@xenova/transformers",
+    modelAssetId: "memory-embed-default",
+    k: 20,
+    minScore: 0.0,
+  },
+  temporal: {
+    enabled: true, // additive; a no-op on entries without validity fields
+    defaultQuery: "current",
+  },
+  typing: {
+    injectClasses: ["procedural"],
+    injectLimit: 10,
+  },
 };
 
 export function memoryConfigPath(cwd: string): string {
@@ -50,6 +65,9 @@ export async function loadMemoryConfig(cwd: string): Promise<MemoryConfig> {
     dedup: { ...base.dedup, ...(parsed.dedup ?? {}) },
     ingest: { ...base.ingest, ...(parsed.ingest ?? {}) },
     reflect: { ...base.reflect, ...(parsed.reflect ?? {}) },
+    index: { ...base.index, ...(parsed.index ?? {}) },
+    temporal: { ...base.temporal, ...(parsed.temporal ?? {}) },
+    typing: { ...base.typing, ...(parsed.typing ?? {}) },
   };
 }
 
