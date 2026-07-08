@@ -1,0 +1,30 @@
+# keryx
+
+> A CLI-first metaproject workspace: code graph, memory, health, wiki, skills, security, and an MCP server surface for AI agents.
+
+Metaproject Standard version: 0.1.0
+
+## Modules
+
+- [gdctx](.metaproject/modules/gdctx.md) — commands: diff, read, rg, run, show, status
+- [gdgraph](.metaproject/modules/gdgraph.md) — commands: affected, build, query
+- [gdskills](.metaproject/modules/gdskills.md) — commands: catalog, contracts, create, export, inspect, install, learn, list, route, status, sync, verify
+- [gdwiki](.metaproject/modules/gdwiki.md) — commands: check-links, collect, index, new, status, validate
+- [health](.metaproject/modules/health.md) — commands: baseline, explain, gate, run, sources, status, trend
+- [memory](.metaproject/modules/memory.md) — commands: check, index, ingest, new, reflect, search
+- [security](.metaproject/modules/security.md) — commands: check-input, check-output, incidents, policy, redact, report, scan, status
+- [tasks](.metaproject/modules/tasks.md) — commands: ac, block, check, complete, freeze, implemented, init, list, start, status, task, unblock
+- [testing](.metaproject/modules/testing.md) — commands: analyze, context, explain, init, related, report, run, status
+
+## Generated artifacts
+
+- [.metaproject/data/gdgraph/artifacts/module-map.json](.metaproject/data/gdgraph/artifacts/module-map.json)
+- [.metaproject/data/gdgraph/artifacts/summary.md](.metaproject/data/gdgraph/artifacts/summary.md)
+- [.metaproject/data/health/artifacts/latest.json](.metaproject/data/health/artifacts/latest.json)
+- [.metaproject/data/health/artifacts/latest.md](.metaproject/data/health/artifacts/latest.md)
+- [.metaproject/data/memory/artifacts/latest.json](.metaproject/data/memory/artifacts/latest.json)
+- [.metaproject/data/memory/artifacts/latest.md](.metaproject/data/memory/artifacts/latest.md)
+- [.metaproject/data/security/artifacts/latest.json](.metaproject/data/security/artifacts/latest.json)
+- [.metaproject/data/security/artifacts/latest.md](.metaproject/data/security/artifacts/latest.md)
+- [.metaproject/data/testing/artifacts/latest.json](.metaproject/data/testing/artifacts/latest.json)
+- [.metaproject/data/testing/artifacts/latest.md](.metaproject/data/testing/artifacts/latest.md)

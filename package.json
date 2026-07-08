@@ -1,0 +1,59 @@
+{
+  "name": "keryx",
+  "version": "0.1.0",
+  "description": "CLI-first metaproject workspace for AI agents, code graph, project memory, health reports, testing context, wiki, skills, and task flows.",
+  "private": false,
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/MrCipherSmith/keryx.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "agent-tooling",
+    "code-graph",
+    "project-memory",
+    "developer-tools",
+    "bun",
+    "typescript",
+    "cli",
+    "knowledge-base",
+    "multi-agent"
+  ],
+  "bin": {
+    "keryx": "./dist/cli.js"
+  },
+  "scripts": {
+    "keryx": "bun ./src/cli.ts",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers",
+    "prepack": "bun run build",
+    "prepare": "bun run build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "tsc --noEmit && bun test"
+  },
+  "files": [
+    "dist",
+    "src/gdgraph",
+    "src/gdskills/bundled",
+    "src/gdskills/contracts",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ],
+  "dependencies": {},
+  "optionalDependencies": {
+    "web-tree-sitter": "^0.22.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@xenova/transformers": "^2.17.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "bun-types": "latest",
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

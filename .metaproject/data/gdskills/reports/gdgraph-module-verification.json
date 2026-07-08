@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "status": "fresh",
+  "module": "gdgraph",
+  "name": "module",
+  "target": "src/gdgraph",
+  "skillPath": ".metaproject/project-skills/gdgraph/module",
+  "reportPath": ".metaproject/data/gdskills/reports/gdgraph-module-verification.json",
+  "verifiedAt": "2026-07-06T19:04:50.397Z",
+  "signals": [
+    {
+      "name": "required:SKILL.md",
+      "status": "pass",
+      "message": "Required package file exists.",
+      "path": ".metaproject/project-skills/gdgraph/module/SKILL.md"
+    },
+    {
+      "name": "required:skill-changelog.md",
+      "status": "pass",
+      "message": "Required package file exists.",
+      "path": ".metaproject/project-skills/gdgraph/module/skill-changelog.md"
+    },
+    {
+      "name": "metadata:version",
+      "status": "pass",
+      "message": "Version 0.1.0",
+      "path": ".metaproject/project-skills/gdgraph/module/SKILL.md"
+    },
+    {
+      "name": "metadata:target",
+      "status": "pass",
+      "message": "Target src/gdgraph",
+      "path": ".metaproject/project-skills/gdgraph/module/SKILL.md"
+    },
+    {
+      "name": "metadata:last-verified",
+      "status": "pass",
+      "message": "Last verified at 2026-07-06T19:04:44.233Z",
+      "path": ".metaproject/project-skills/gdgraph/module/SKILL.md"
+    },
+    {
+      "name": "registry",
+      "status": "pass",
+      "message": "Skill is registered in metaproject manifest.",
+      "path": ".metaproject/metaproject.json"
+    },
+    {
+      "name": "target",
+      "status": "pass",
+      "message": "Target path exists.",
+      "path": "src/gdgraph"
+    },
+    {
+      "name": "evidence:gdgraph",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/gdgraph/artifacts/summary.md, .metaproject/data/gdgraph/artifacts/module-map.json",
+      "path": ".metaproject/data/gdgraph/artifacts/summary.md"
+    },
+    {
+      "name": "evidence:gdctx",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/gdctx/artifacts/latest.md",
+      "path": ".metaproject/data/gdctx/artifacts/latest.md"
+    },
+    {
+      "name": "evidence:gdwiki",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/wiki/index.md",
+      "path": ".metaproject/wiki/index.md"
+    },
+    {
+      "name": "evidence:code-health",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/health/artifacts/latest.json, .metaproject/data/health/artifacts/latest.md",
+      "path": ".metaproject/data/health/artifacts/latest.json"
+    },
+    {
+      "name": "evidence:documentation-memory",
+      "status": "warn",
+      "message": "No documentation-memory evidence artifact found."
+    }
+  ],
+  "recommendations": [
+    "Search Documentation Memory before learning from repeated decisions or mistakes."
+  ],
+  "dryRun": false
+}

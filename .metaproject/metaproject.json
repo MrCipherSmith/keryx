@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "name": "keryx",
+  "createdBy": "keryx",
+  "paths": {
+    "root": ".metaproject",
+    "core": ".metaproject/core",
+    "data": ".metaproject/data",
+    "rules": ".metaproject/rules",
+    "skills": ".metaproject/skills",
+    "modules": ".metaproject/modules"
+  },
+  "modules": {
+    "gdgraph": {
+      "enabled": true,
+      "core": ".metaproject/core/gdgraph",
+      "data": ".metaproject/data/gdgraph",
+      "manifest": ".metaproject/modules/gdgraph.md",
+      "commands": [
+        "build",
+        "query",
+        "affected"
+      ],
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
+    },
+    "gdctx": {
+      "enabled": true,
+      "core": ".metaproject/core/gdctx",
+      "data": ".metaproject/data/gdctx",
+      "manifest": ".metaproject/modules/gdctx.md",
+      "commands": [
+        "status",
+        "diff",
+        "rg",
+        "read",
+        "run",
+        "show"
+      ]
+    },
+    "gdskills": {
+      "enabled": true,
+      "core": ".metaproject/core/gdskills",
+      "data": ".metaproject/data/gdskills",
+      "manifest": ".metaproject/modules/gdskills.md",
+      "commands": [
+        "status",
+        "list",
+        "inspect",
+        "route",
+        "catalog",
+        "install",
+        "create",
+        "verify",
+        "learn",
+        "export",
+        "sync",
+        "contracts"
+      ],
+      "profile": "recommended",
+      "skills": ".metaproject/skills/gdskills",
+      "catalog": ".metaproject/skills/catalog.md",
+      "projectSkills": ".metaproject/project-skills",
+      "projectSkillRegistry": [
+        {
+          "module": "gdgraph",
+          "name": "module",
+          "target": "src/gdgraph",
+          "path": ".metaproject/project-skills/gdgraph/module",
+          "version": "0.1.0",
+          "status": "active",
+          "updatedAt": "2026-07-06T19:04:32.307Z"
+        },
+        {
+          "module": "metaproject",
+          "name": "init-command",
+          "target": "src/commands/init.ts",
+          "path": ".metaproject/project-skills/metaproject/init-command",
+          "version": "0.1.0",
+          "status": "active",
+          "updatedAt": "2026-07-06T18:48:25.291Z"
+        }
+      ],
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
+    },
+    "memory": {
+      "enabled": true,
+      "core": ".metaproject/core/memory",
+      "data": ".metaproject/data/memory",
+      "manifest": ".metaproject/modules/memory.md",
+      "commands": [
+        "new",
+        "index",
+        "search",
+        "ingest",
+        "check",
+        "reflect"
+      ]
+    },
+    "tasks": {
+      "enabled": true,
+      "core": ".metaproject/flows",
+      "data": ".metaproject/data/tasks",
+      "manifest": ".metaproject/modules/tasks.md",
+      "commands": [
+        "init",
+        "list",
+        "status",
+        "freeze",
+        "start",
+        "task",
+        "ac",
+        "implemented",
+        "complete",
+        "block",
+        "unblock",
+        "check"
+      ]
+    },
+    "health": {
+      "enabled": true,
+      "core": ".metaproject/core/health",
+      "data": ".metaproject/data/health",
+      "manifest": ".metaproject/modules/health.md",
+      "commands": [
+        "run",
+        "status",
+        "gate",
+        "sources",
+        "explain",
+        "baseline",
+        "trend"
+      ],
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
+    },
+    "testing": {
+      "enabled": true,
+      "core": ".metaproject/core/testing",
+      "data": ".metaproject/data/testing",
+      "manifest": ".metaproject/modules/testing.md",
+      "commands": [
+        "init",
+        "analyze",
+        "run",
+        "status",
+        "context",
+        "explain",
+        "related",
+        "report"
+      ],
+      "hooks": {
+        "gitPostCommit": ".git/hooks/post-commit",
+        "postUpdate": ".metaproject/hooks/post-update.d"
+      }
+    },
+    "gdwiki": {
+      "enabled": true,
+      "core": ".metaproject/wiki",
+      "data": ".metaproject/data/gdwiki",
+      "manifest": ".metaproject/modules/gdwiki.md",
+      "commands": [
+        "status",
+        "new",
+        "collect",
+        "index",
+        "check-links",
+        "validate"
+      ]
+    },
+    "security": {
+      "enabled": true,
+      "version": "0.1.0",
+      "core": ".metaproject/core/security",
+      "data": ".metaproject/data/security",
+      "manifest": ".metaproject/modules/security.md",
+      "config": ".metaproject/security.config.json",
+      "commands": [
+        "status",
+        "scan",
+        "check-input",
+        "check-output",
+        "redact",
+        "report",
+        "policy",
+        "incidents"
+      ],
+      "capabilities": [
+        "security.secrets",
+        "security.pii",
+        "security.prompt-injection",
+        "security.egress-control"
+      ],
+      "hooks": {
+        "prePush": ".git/hooks/pre-push",
+        "agent": ".claude/settings.json"
+      }
+    }
+  },
+  "agentEntrypoints": {
+    "index": ".metaproject/index.md",
+    "readme": ".metaproject/README.md",
+    "root": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ],
+    "metaproject": ".metaproject/index.md"
+  },
+  "standardVersion": "0.1.0",
+  "profiles": [
+    "minimal",
+    "agent",
+    "ci",
+    "full"
+  ],
+  "updatedAt": "2026-07-08T13:09:20.483Z"
+}

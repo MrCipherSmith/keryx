@@ -1,0 +1,10 @@
+{
+  "corpus": "change-impacted-test",
+  "description": "Block D · D2 coverage-map TIA detector gate. For a change to src/alpha.ts: positive = a test the coverage map should select (truly impacted); negative = a test it should exclude. Detector: coverage-map selection over the committed coverage-map.json.",
+  "cases": [
+    { "id": "alpha", "input": "src/alpha.test.ts", "expected": "positive" },
+    { "id": "alpha-extra", "input": "src/alpha.extra.test.ts", "expected": "negative" },
+    { "id": "beta", "input": "src/beta.test.ts", "expected": "negative" },
+    { "id": "gamma", "input": "src/gamma.test.ts", "expected": "negative" }
+  ]
+}

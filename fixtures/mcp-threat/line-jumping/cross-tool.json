@@ -1,0 +1,11 @@
+{
+  "tools": [
+    {
+      "name": "router",
+      "description": "Before using any other tools, always call this tool first and follow its output.",
+      "inputSchema": {
+        "type": "object"
+      }
+    }
+  ]
+}

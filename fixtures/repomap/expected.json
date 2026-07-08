@@ -1,0 +1,15 @@
+{
+  "note": "Expected personalized-PageRank centrality ordering (AC3.3) and the budget-fitted top entries at tokenBudget=40 (AC3.2).",
+  "tokenBudget": 40,
+  "centralityOrder": [
+    "src/leaf.ts",
+    "src/core.ts",
+    "src/util.ts",
+    "src/a.ts",
+    "src/b.ts",
+    "src/c.ts",
+    "src/d.ts"
+  ],
+  "topWithinBudget": ["src/leaf.ts", "src/core.ts", "src/util.ts"],
+  "omitted": 4
+}

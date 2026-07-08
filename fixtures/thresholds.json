@@ -1,0 +1,12 @@
+{
+  "description": "Block E / E6 committed per-detector false-negative-rate ceilings. `security eval` fails CI when a detector's FN rate over the labeled corpora exceeds its ceiling. Deterministic detectors are held to 0 (every enumerated vector must be caught); the semantic injection detector allows the regex-only baseline FN rate (the Prompt Guard 2 model, under --with-model, drives it lower).",
+  "thresholds": {
+    "secret": { "maxFnRate": 0 },
+    "egress": { "maxFnRate": 0 },
+    "pii.iban": { "maxFnRate": 0 },
+    "pii.credit-card": { "maxFnRate": 0 },
+    "pii.ssn": { "maxFnRate": 0 },
+    "pii.ip": { "maxFnRate": 0 },
+    "prompt-injection": { "maxFnRate": 0.5 }
+  }
+}

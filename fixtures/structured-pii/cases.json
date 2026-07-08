@@ -1,0 +1,19 @@
+{
+  "description": "Block E / E4 structured-PII corpus. Valid-checksum IBAN (mod-97) / credit-card (Luhn) / SSN (area-group-serial) / IP (range) must be flagged; invalid-checksum variants must NOT be flagged (the known regex false positives). Detector label = the specific pii policyId under test, so an unrelated coincidental match (e.g. pii.phone) never scores the case.",
+  "cases": [
+    { "id": "pi01-iban-valid-de", "detector": "pii.iban", "expected": "positive", "input": "Wire the retainer to IBAN DE89370400440532013000 by Friday." },
+    { "id": "pi02-iban-valid-gb", "detector": "pii.iban", "expected": "positive", "input": "Account: GB82WEST12345698765432 (primary)." },
+    { "id": "pi03-cc-visa-valid", "detector": "pii.credit-card", "expected": "positive", "input": "Charge card 4111111111111111 for the annual plan." },
+    { "id": "pi04-cc-mc-valid", "detector": "pii.credit-card", "expected": "positive", "input": "Backup card 5500005555555559 on file." },
+    { "id": "pi05-cc-spaced-valid", "detector": "pii.credit-card", "expected": "positive", "input": "Card on receipt: 4111 1111 1111 1111." },
+    { "id": "pi06-ssn-valid", "detector": "pii.ssn", "expected": "positive", "input": "Employee SSN 123-45-6789 recorded in HR." },
+    { "id": "pi07-ipv4-valid", "detector": "pii.ip", "expected": "positive", "input": "Resolver reached 8.8.8.8 during the trace." },
+    { "id": "pi08-ipv6-valid", "detector": "pii.ip", "expected": "positive", "input": "Client address 2001:0db8:85a3:0000:0000:8a2e:0370:7334 logged." },
+    { "id": "pi50-iban-bad-checksum", "detector": "pii.iban", "expected": "negative", "input": "Draft IBAN DE00370400440532013000 (unverified placeholder)." },
+    { "id": "pi51-cc-bad-luhn", "detector": "pii.credit-card", "expected": "negative", "input": "Test string 4111111111111112 is not a real card." },
+    { "id": "pi52-ssn-area-666", "detector": "pii.ssn", "expected": "negative", "input": "The sample id 666-12-3456 is a reserved placeholder." },
+    { "id": "pi53-ssn-area-000", "detector": "pii.ssn", "expected": "negative", "input": "Row key 000-12-3456 comes from the fixture generator." },
+    { "id": "pi54-ipv4-out-of-range", "detector": "pii.ip", "expected": "negative", "input": "The build tag 999.1.1.1 is a version marker, not an address." },
+    { "id": "pi55-ipv4-octet-256", "detector": "pii.ip", "expected": "negative", "input": "Malformed 256.256.256.256 should be rejected." }
+  ]
+}

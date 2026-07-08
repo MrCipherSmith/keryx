@@ -1,0 +1,1689 @@
+import {
+  chmod,
+  mkdir,
+  readFile,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { optionValue } from "../lib/args";
+import { moduleCommands } from "./module-commands";
+import { pathExists } from "../lib/fs";
+import { choice, confirm } from "../lib/prompt";
+import {
+  banner,
+  heading,
+  helpOptions,
+  helpTitle,
+  helpUsage,
+  note,
+  statusLine,
+  style,
+  symbols,
+  nextSteps,
+} from "../lib/ui";
+import {
+  GDSKILLS_PROFILES,
+  type GdskillsProfile,
+  normalizeGdskillsProfile,
+} from "../gdskills/catalog";
+import { installGdskills } from "../gdskills/install";
+import {
+  renderGdwikiManifest,
+  renderGdwikiSkillReadme,
+  renderWikiIndexScaffold,
+  renderWikiPageTemplate,
+} from "../wiki/templates";
+import { WIKI_PAGE_TYPES } from "../wiki/types";
+import { renderHealthConfig } from "../health/config";
+import {
+  renderHealthCoreReadme,
+  renderHealthManifest,
+  renderHealthSkillReadme,
+} from "../health/templates";
+import { renderSecurityConfig } from "../security/config";
+import {
+  renderSecurityCoreReadme,
+  renderSecurityManifest,
+  securityCapabilities,
+} from "../security/templates";
+import {
+  installSecurityAgentHooks,
+  uninstallSecurityAgentHooks,
+  agentSettingsPath,
+  AGENT_HOOKS_SENTINEL,
+  AGENT_SETTINGS_RELATIVE_PATH,
+} from "../security/agent-hooks";
+import { renderMemoryConfig } from "../memory/config";
+import { MEMORY_TYPES } from "../memory/types";
+import {
+  renderMemoryCoreReadme,
+  renderMemoryEntryTemplate,
+  renderMemoryIndexScaffold,
+  renderMemoryManifest,
+  renderMemorySkillReadme,
+} from "../memory/templates";
+import {
+  renderFlowCompleteSkill,
+  renderFlowInitSkill,
+  renderFlowManageSkill,
+  renderFlowSkillRouter,
+  renderFlowsReadme,
+  renderTasksManifest,
+} from "../flow/templates";
+import { analyzeTestingProject } from "../testing/service";
+import {
+  renderTestingConfig,
+  renderTestingCoreReadme,
+  renderTestingManifest,
+  renderTestingPostCommitHook,
+  renderTestingPrePushHook,
+  renderTestingSkillReadme,
+  renderTestingWikiConventions,
+  renderTestingWikiReadme,
+} from "../testing/templates";
+import {
+  renderGdctxCoreReadme,
+  renderGdctxConfig,
+  renderGdctxManifest,
+  renderGdctxSkillReadme,
+  renderGdgraphCoreCli,
+  renderGdgraphManifest,
+  renderGdgraphPostCommitHook,
+  renderGdwikiPostCommitHook,
+  renderHealthPostCommitHook,
+  renderGdskillsPostCommitHook,
+  renderMetaprojectDashboardPostCommitHook,
+  renderSecurityPrePushHook,
+  renderGdgraphCoreReadme,
+  renderGdgraphSkillReadme,
+  renderHooksReadme,
+  renderMetaprojectCoreReadme,
+  renderMetaprojectGitignoreBlock,
+  renderMetaprojectDashboardHtml,
+  renderIndexMarkdown,
+  renderMetaprojectReadme,
+  renderProjectRulesReadme,
+  renderProjectRulesSkillReadme,
+} from "../lib/templates";
+import { syncAgentRules } from "../rules/agent-entrypoints";
+import { hasDistilledEntrypoints } from "../rules/distill";
+import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
+import { registerCapabilitiesFromArgs } from "../capability/registry";
+import {
+  buildMcpModuleEntry,
+  installMcpClient,
+  renderMcpConfig,
+  renderMcpCoreReadme,
+  renderMcpManifest,
+} from "../mcp/client-config";
+
+// Runtime a user can opt into wiring during interactive init; `skip` writes no
+// client config (the manifest still enables the module).
+type McpInitRuntime = "cursor" | "claude" | "generic" | "skip";
+const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "generic", "skip"];
+
+type InitOptions = {
+  help: boolean;
+  yes: boolean;
+  noGdgraph: boolean;
+  noGdctx: boolean;
+  noGdwiki: boolean;
+  noGdskills: boolean;
+  gdskillsProfile: GdskillsProfile;
+  noHealth: boolean;
+  noTesting: boolean;
+  noMemory: boolean;
+  noTasks: boolean;
+  noSecurity: boolean;
+  noGdgraphHook: boolean;
+  noGdskillsHook: boolean;
+  noHealthHook: boolean;
+  noTestingPostCommitHook: boolean;
+  noTestingPrePushHook: boolean;
+  noSecurityHook: boolean;
+  noSecurityAgentHook: boolean;
+  mcp: boolean;
+  noMcp: boolean;
+  treesitter: boolean;
+  noTreesitter: boolean;
+  testingTia: boolean;
+  noTestingTia: boolean;
+};
+
+type ModuleConfig =
+  | {
+      enabled: true;
+      core: string;
+      data: string;
+      manifest: string;
+      commands: string[];
+      version?: string;
+      config?: string;
+      capabilities?: string[];
+      profile?: GdskillsProfile;
+      skills?: string;
+      catalog?: string;
+      projectSkills?: string;
+      projectSkillRegistry?: Array<{
+        module: string;
+        name: string;
+        target: string;
+        path: string;
+        version: string;
+        status: string;
+        updatedAt: string;
+      }>;
+      hooks?: {
+        gitPostCommit?: string;
+        prePush?: string;
+        agent?: string;
+        postUpdate?: string;
+      };
+    }
+  | {
+      enabled: false;
+    };
+
+type MetaprojectManifest = {
+  schemaVersion: 1;
+  standardVersion: string;
+  name: string;
+  createdBy: "keryx";
+  profiles: string[];
+  paths: {
+    root: string;
+    core: string;
+    data: string;
+    rules: string;
+    skills: string;
+    modules: string;
+  };
+  modules: Record<string, ModuleConfig>;
+  updatedAt: string;
+  agentEntrypoints: {
+    index: string;
+    readme: string;
+    root: string[];
+  };
+};
+
+export async function initCommand(args: string[]): Promise<void> {
+  const options = parseInitArgs(args);
+  if (options.help) {
+    printInitHelp();
+    return;
+  }
+
+  const projectRoot = process.cwd();
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  const alreadyExists = await pathExists(metaprojectRoot);
+  const existingManifest = await readExistingManifest(metaprojectRoot);
+
+  banner(
+    "keryx init",
+    alreadyExists
+      ? `Updating the .metaproject workspace in ${path.basename(projectRoot)}/`
+      : `Setting up a .metaproject workspace in ${path.basename(projectRoot)}/`,
+  );
+  if (!options.yes) {
+    note("Press Enter to accept the Recommended default for each question.");
+    heading("Modules");
+  }
+
+  let enableGdgraph = true;
+  let enableGdctx = true;
+  let enableGdwiki = true;
+  let enableGdskills = true;
+  let gdskillsProfile = options.gdskillsProfile;
+  let enableHealth = true;
+  let enableTesting = true;
+  let enableMemory = true;
+  let enableTasks = true;
+  let enableSecurity = true;
+  let enableGdgraphHook = false;
+  let enableGdskillsHook = false;
+  let enableHealthHook = false;
+  let enableTestingPostCommitHook = false;
+  let enableTestingPrePushHook = false;
+  let enableSecurityPrePushHook = false;
+  let enableSecurityAgentHook = false;
+  if (options.noGdgraph) {
+    enableGdgraph = false;
+  } else if (!options.yes) {
+    enableGdgraph = await confirm("Enable gdgraph module? Recommended", true);
+  }
+
+  if (options.noGdctx) {
+    enableGdctx = false;
+  } else if (!options.yes) {
+    enableGdctx = await confirm(
+      "Enable gdctx module for compact command/search/read output? Recommended",
+      true,
+    );
+  }
+
+  if (options.noGdwiki) {
+    enableGdwiki = false;
+  } else if (!options.yes) {
+    enableGdwiki = await confirm(
+      "Enable gdwiki module for a local project knowledge base? Recommended",
+      true,
+    );
+  }
+
+  if (options.noGdskills) {
+    enableGdskills = false;
+  } else if (!options.yes) {
+    enableGdskills = await confirm(
+      "Enable gdskills module with project-local bundled working skills? Recommended",
+      true,
+    );
+    if (enableGdskills) {
+      gdskillsProfile = await choice(
+        "Select gdskills install profile",
+        GDSKILLS_PROFILES,
+        gdskillsProfile === "custom" ? "recommended" : gdskillsProfile,
+      );
+    }
+  }
+
+  if (options.noHealth) {
+    enableHealth = false;
+  } else if (!options.yes) {
+    enableHealth = await confirm(
+      "Enable Code Health reports (lint, type, test, coverage, audit)? Recommended",
+      true,
+    );
+  }
+
+  if (options.noTesting) {
+    enableTesting = false;
+  } else if (!options.yes) {
+    enableTesting = await confirm(
+      "Enable Testing module to analyze test stack and create testing context? Recommended",
+      true,
+    );
+  }
+
+  if (options.noMemory) {
+    enableMemory = false;
+  } else if (!options.yes) {
+    enableMemory = await confirm(
+      "Enable Documentation Memory (lessons, decisions, constraints, known mistakes)? Recommended",
+      true,
+    );
+  }
+
+  if (options.noTasks) {
+    enableTasks = false;
+  } else if (!options.yes) {
+    enableTasks = await confirm(
+      "Enable Task Manager (agent-first flow lifecycle with frozen acceptance criteria)? Recommended",
+      true,
+    );
+  }
+
+  if (options.noSecurity) {
+    enableSecurity = false;
+  } else if (!options.yes) {
+    enableSecurity = await confirm(
+      "Enable Metaproject Security (policy-based scanning, redaction, guardrails, audit reports)? Recommended",
+      true,
+    );
+  }
+
+  // MCP is an opt-in cross-cutting module (spec §4; Flow 012). Default OFF for
+  // the ceiling, so the default `init` manifest + output stay byte-identical
+  // (golden rule). The `--mcp`/`--no-mcp` flags set it non-interactively; `--yes`
+  // never writes a client config.
+  let enableMcp = false;
+  let mcpInitRuntime: McpInitRuntime = "skip";
+  if (options.noMcp) {
+    enableMcp = false;
+  } else if (options.mcp) {
+    enableMcp = true;
+  } else if (!options.yes) {
+    enableMcp = await confirm(
+      "Enable the MCP server (expose this project to Cursor / Claude Code)?",
+      false,
+    );
+    if (enableMcp) {
+      mcpInitRuntime = await choice(
+        "Write an MCP client config for which runtime?",
+        MCP_INIT_RUNTIMES,
+        "skip",
+      );
+    }
+  }
+
+  if (
+    !options.yes &&
+    (enableGdgraph || enableGdskills || enableHealth || enableTesting || enableSecurity)
+  ) {
+    heading("Git hooks");
+  }
+
+  if (enableGdgraph) {
+    if (options.noGdgraphHook) {
+      enableGdgraphHook = false;
+    } else if (options.yes) {
+      enableGdgraphHook = true;
+    } else {
+      enableGdgraphHook = await confirm(
+        "Install git post-commit hook to refresh gdgraph only after relevant file changes? Recommended",
+        true,
+      );
+    }
+  }
+
+  if (enableGdskills) {
+    if (options.noGdskillsHook) {
+      enableGdskillsHook = false;
+    } else if (options.yes) {
+      enableGdskillsHook = true;
+    } else {
+      enableGdskillsHook = await confirm(
+        "Install git post-commit hook to verify project-skills after relevant changes? Recommended",
+        true,
+      );
+    }
+  }
+
+  if (enableHealth) {
+    if (options.noHealthHook) {
+      enableHealthHook = false;
+    } else if (options.yes) {
+      enableHealthHook = true;
+    } else {
+      enableHealthHook = await confirm(
+        "Install git post-commit hook for lightweight changed-scope Code Health checks? Recommended",
+        true,
+      );
+    }
+  }
+
+  if (enableTesting) {
+    if (options.noTestingPostCommitHook) {
+      enableTestingPostCommitHook = false;
+    } else if (options.yes) {
+      enableTestingPostCommitHook = true;
+    } else {
+      enableTestingPostCommitHook = await confirm(
+        "Install git post-commit hook to refresh testing context after relevant changes? Recommended",
+        true,
+      );
+    }
+
+    if (options.noTestingPrePushHook) {
+      enableTestingPrePushHook = false;
+    } else if (options.yes) {
+      enableTestingPrePushHook = false;
+    } else {
+      enableTestingPrePushHook = await confirm(
+        "Install git pre-push hook to run changed-scope tests and block failing pushes?",
+        false,
+      );
+    }
+  }
+
+  if (enableSecurity) {
+    if (options.noSecurityHook) {
+      enableSecurityPrePushHook = false;
+    } else if (options.yes) {
+      enableSecurityPrePushHook = true;
+    } else {
+      enableSecurityPrePushHook = await confirm(
+        "Install git pre-push hook to run the security guard and block pushes on secret/critical findings (enforced/ci mode only)? Recommended",
+        true,
+      );
+    }
+
+    if (options.noSecurityAgentHook) {
+      enableSecurityAgentHook = false;
+    } else if (options.yes) {
+      enableSecurityAgentHook = true;
+    } else {
+      enableSecurityAgentHook = await confirm(
+        "Install project-local .claude/settings.json security hooks (guard agent input/output)? Recommended",
+        true,
+      );
+    }
+  }
+
+  // gdgraph tree-sitter symbol layer (Block B, B1). Opt-in ceiling; default OFF.
+  // The manifest is only touched when a --treesitter/--no-treesitter flag is
+  // present, so the default `init` manifest stays byte-identical (golden rule).
+  const enableTreesitter = options.treesitter && !options.noTreesitter;
+  const treesitterFlagPresent = options.treesitter || options.noTreesitter;
+
+  // testing coverage-map TIA (Block D, D2). Opt-in ceiling; default OFF. The
+  // manifest + config are only touched when a --testing-tia/--no-testing-tia
+  // flag is present, so the default `init` output stays byte-identical.
+  const enableTestingTia = options.testingTia && !options.noTestingTia;
+  const testingTiaFlagPresent = options.testingTia || options.noTestingTia;
+
+  await createBaseStructure(metaprojectRoot);
+  await syncGitignore(projectRoot);
+  const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
+    enableTasks,
+    createDefault: true,
+  });
+  const agentRuleSources = syncedAgentRules.map((rule) => rule.source);
+
+  if (enableGdgraph) {
+    await createGdgraphStructure(metaprojectRoot);
+    await installGdgraphCoreScripts(metaprojectRoot);
+    if (enableGdgraphHook) {
+      await installGdgraphPostCommitHook(projectRoot);
+    }
+  }
+
+  if (enableGdctx) {
+    await createGdctxStructure(metaprojectRoot);
+  }
+
+  if (enableGdwiki) {
+    await createGdwikiStructure(metaprojectRoot);
+    if (enableGdgraphHook) {
+      await installGdwikiPostCommitHook(projectRoot);
+    }
+  }
+
+  if (enableGdskills) {
+    await installGdskills(metaprojectRoot, gdskillsProfile);
+    if (enableGdskillsHook) {
+      await installGdskillsPostCommitHook(projectRoot);
+    }
+  }
+
+  if (enableHealth) {
+    await createHealthStructure(metaprojectRoot);
+    if (enableHealthHook) {
+      await installHealthPostCommitHook(projectRoot);
+    }
+  }
+
+  if (enableTesting) {
+    await createTestingStructure(metaprojectRoot, enableGdwiki);
+    if (enableTestingPostCommitHook) {
+      await installTestingPostCommitHook(projectRoot);
+    }
+    if (enableGdgraphHook || enableGdskillsHook || enableHealthHook || enableTestingPostCommitHook) {
+      await installMetaprojectDashboardPostCommitHook(projectRoot);
+    }
+    if (enableTestingPrePushHook) {
+      await installTestingPrePushHook(projectRoot);
+    }
+    await analyzeTestingProject(projectRoot);
+  }
+
+  if (enableMemory) {
+    await createMemoryStructure(metaprojectRoot);
+  }
+
+  if (enableTasks) {
+    await createTasksStructure(metaprojectRoot);
+  }
+
+  if (enableSecurity) {
+    await createSecurityStructure(metaprojectRoot);
+    if (enableSecurityPrePushHook) {
+      await installSecurityPrePushHook(projectRoot);
+    }
+    if (enableSecurityAgentHook) {
+      await installSecurityAgentHooks(projectRoot);
+    }
+  }
+
+  if (enableMcp) {
+    await createMcpStructure(metaprojectRoot);
+  }
+
+  // Reconcile disabled security hooks with on-disk reality. When a hook is now
+  // off (module disabled via --no-security, or --no-security-agent-hook /
+  // --no-security-hook) but was previously installed, remove the managed
+  // artifact so the manifest and the filesystem stay in sync. Only
+  // security-owned content is touched; other modules and user entries are kept.
+  const existingSecurityModule = existingManifest?.modules?.security;
+  const existingSecurityHooks =
+    existingSecurityModule?.enabled === true ? existingSecurityModule.hooks : undefined;
+  const securityAgentHookPreviouslyInstalled =
+    Boolean(existingSecurityHooks?.agent) ||
+    (await agentSettingsHasSecuritySentinel(projectRoot));
+  if (!enableSecurityAgentHook && securityAgentHookPreviouslyInstalled) {
+    await uninstallSecurityAgentHooks(projectRoot);
+  }
+  const securityPrePushPreviouslyInstalled =
+    Boolean(existingSecurityHooks?.prePush) ||
+    (await prePushHasSecurityBlock(projectRoot));
+  if (!enableSecurityPrePushHook && securityPrePushPreviouslyInstalled) {
+    await removeManagedHook(projectRoot, "pre-push", "security-pre-push");
+  }
+
+  const manifest = buildManifest({
+    projectName: path.basename(projectRoot),
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    gdskillsProfile,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+    enableGdgraphHook,
+    enableGdskillsHook,
+    enableHealthHook,
+    enableTestingPostCommitHook,
+    enableTestingPrePushHook,
+    enableSecurityPrePushHook,
+    enableSecurityAgentHook,
+    agentRuleSources,
+    existingManifest,
+  });
+
+  // Add the opt-in mcp module entry (spec §4). Only when --mcp is passed, so the
+  // default manifest is unchanged. `http`/`expose` are extra (schema-tolerant)
+  // fields; `capabilities` stays a string[] to satisfy the module schema.
+  if (enableMcp) {
+    (manifest.modules as Record<string, unknown>).mcp = buildMcpModuleEntry();
+  }
+
+  // Attach the gdgraph tree-sitter capability entry (B1). Only when a flag was
+  // passed, so the default manifest is unchanged. The enriched `{ id, enabled,
+  // kind, optionalDependency }` object is what `resolveCapability(
+  // "gdgraph.treesitter")` gate 1 (`isCapabilityEnabled`) reads (C0-9).
+  if (enableGdgraph && treesitterFlagPresent) {
+    const gdgraphModule = (manifest.modules as Record<string, Record<string, unknown>>).gdgraph;
+    if (gdgraphModule && typeof gdgraphModule === "object") {
+      gdgraphModule.capabilities = [gdgraphTreesitterCapability(enableTreesitter)];
+    }
+  }
+
+  // Attach the testing coverage-map capability entry (Block D, D2). Only when a
+  // --testing-tia flag was passed, so the default manifest is unchanged. The
+  // enriched `{ id, enabled, kind }` object is what `isTestingCapabilityEnabled`
+  // reads to gate map-first selection (C0-3, C0-9).
+  if (enableTesting && testingTiaFlagPresent) {
+    const testingModule = (manifest.modules as Record<string, Record<string, unknown>>).testing;
+    if (testingModule && typeof testingModule === "object") {
+      testingModule.capabilities = [testingCoverageMapCapability(enableTestingTia)];
+    }
+  }
+
+  await writeJsonIfChanged(
+    path.join(metaprojectRoot, "metaproject.json"),
+    manifest,
+  );
+
+  // Register any opt-in capabilities selected via uniform --<cap>/--no-<cap>
+  // flags (ceilings default OFF). No-op with the empty Block 0 registry, so the
+  // default `init` manifest stays byte-identical (golden rule, AC0-22).
+  await registerCapabilitiesFromArgs(projectRoot, args);
+
+  await writeTextIfMissing(
+    path.join(metaprojectRoot, "README.md"),
+    renderMetaprojectReadme({
+      enableGdgraph,
+      enableGdctx,
+      enableGdwiki,
+      enableGdskills,
+      enableHealth,
+      enableTesting,
+      enableMemory,
+      enableTasks,
+      enableSecurity,
+    }),
+  );
+  await writeTextIfMissing(
+    path.join(metaprojectRoot, "core", "README.md"),
+    renderMetaprojectCoreReadme(),
+  );
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, "hooks", "README.md"),
+    renderHooksReadme(),
+  );
+  await writeTextIfMissing(
+    path.join(metaprojectRoot, "rules", "README.md"),
+    renderProjectRulesReadme(),
+  );
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, "skills", "project-rules", "README.md"),
+    renderProjectRulesSkillReadme({ sources: agentRuleSources }),
+  );
+
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, "index.md"),
+    renderIndexMarkdown({
+      enableGdgraph,
+      enableGdctx,
+      enableGdwiki,
+      enableGdskills,
+      enableHealth,
+      enableTesting,
+      enableMemory,
+      enableTasks,
+      enableSecurity,
+      ruleSources: agentRuleSources,
+      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+    }),
+  );
+  await writeTextIfChanged(
+    path.join(metaprojectRoot, "keryx-dashboard.html"),
+    renderMetaprojectDashboardHtml({
+      enableGdgraph,
+      enableGdctx,
+      enableGdwiki,
+      enableGdskills,
+      enableHealth,
+      enableTesting,
+      enableMemory,
+      enableTasks,
+      enableSecurity,
+    }),
+  );
+
+  if (enableGdgraph) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "gdgraph.md"),
+      renderGdgraphManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "gdgraph", "README.md"),
+      renderGdgraphCoreReadme(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "gdgraph", "SKILL.md"),
+      renderGdgraphSkillReadme(),
+    );
+    await removeLegacyGdgraphSkillReadme(metaprojectRoot);
+  }
+
+  if (enableGdctx) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "gdctx.config.json"),
+      renderGdctxConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "gdctx.md"),
+      renderGdctxManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "gdctx", "README.md"),
+      renderGdctxCoreReadme(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "gdctx", "SKILL.md"),
+      renderGdctxSkillReadme(),
+    );
+  }
+
+  if (enableGdwiki) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "wiki", "index.md"),
+      renderWikiIndexScaffold(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "wiki", "templates", "page.md"),
+      renderWikiPageTemplate(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "gdwiki.md"),
+      renderGdwikiManifest(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "gdwiki", "SKILL.md"),
+      renderGdwikiSkillReadme(),
+    );
+  }
+
+  if (enableHealth) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "health.config.json"),
+      renderHealthConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "health.md"),
+      renderHealthManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "health", "README.md"),
+      renderHealthCoreReadme(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "health", "SKILL.md"),
+      renderHealthSkillReadme(),
+    );
+  }
+
+  if (enableTesting) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "testing.config.json"),
+      renderTestingConfig({
+        postCommitRefresh: enableTestingPostCommitHook,
+        prePushGate: enableTestingPrePushHook,
+        coverageMapEnabled: enableTestingTia,
+      }),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "testing.md"),
+      renderTestingManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "testing", "README.md"),
+      renderTestingCoreReadme(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "testing", "SKILL.md"),
+      renderTestingSkillReadme(),
+    );
+    if (enableGdwiki) {
+      await writeTextIfMissing(
+        path.join(metaprojectRoot, "wiki", "testing", "README.md"),
+        renderTestingWikiReadme(),
+      );
+      await writeTextIfMissing(
+        path.join(metaprojectRoot, "wiki", "testing", "conventions.md"),
+        renderTestingWikiConventions(),
+      );
+    }
+  }
+
+  if (enableMemory) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "memory.config.json"),
+      renderMemoryConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "memory", "index.md"),
+      renderMemoryIndexScaffold(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "memory", "templates", "entry.md"),
+      renderMemoryEntryTemplate(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "memory.md"),
+      renderMemoryManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "memory", "README.md"),
+      renderMemoryCoreReadme(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "memory", "SKILL.md"),
+      renderMemorySkillReadme(),
+    );
+  }
+
+  if (enableTasks) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "flows", "README.md"),
+      renderFlowsReadme(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "tasks.md"),
+      renderTasksManifest(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "SKILL.md"),
+      renderFlowSkillRouter(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "init.md"),
+      renderFlowInitSkill(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "manage.md"),
+      renderFlowManageSkill(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "flow", "complete.md"),
+      renderFlowCompleteSkill(),
+    );
+  }
+
+  if (enableSecurity) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "security.config.json"),
+      renderSecurityConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "security.md"),
+      renderSecurityManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "security", "README.md"),
+      renderSecurityCoreReadme(),
+    );
+  }
+
+  if (enableMcp) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "mcp", "mcp.config.json"),
+      renderMcpConfig(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "mcp.md"),
+      renderMcpManifest(),
+    );
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "core", "mcp", "README.md"),
+      renderMcpCoreReadme(),
+    );
+  }
+
+  // Interactive-only: write the chosen runtime's MCP client config. Never under
+  // `--yes`/non-interactive (`mcpInitRuntime` stays "skip" there), so the
+  // non-interactive `init` output writes no client config (golden rule).
+  if (enableMcp && mcpInitRuntime !== "skip") {
+    const report = await installMcpClient(projectRoot, [mcpInitRuntime]);
+    for (const outcome of report.outcomes) {
+      if (outcome.filePath === null) {
+        note(`Paste this MCP client config into your ${outcome.id} runtime:`);
+        console.log(outcome.snippet ?? "");
+      } else {
+        note(`Wrote ${outcome.id} MCP client config → ${path.relative(projectRoot, outcome.filePath)}`);
+      }
+    }
+    if (!report.sdk.available) {
+      note(`Optional MCP SDK not found — install it to run \`keryx mcp serve\`: ${report.sdk.hint}`);
+    }
+  }
+
+  const enabledModuleCount = [
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+  ].filter(Boolean).length;
+
+  heading(
+    alreadyExists
+      ? `${style.green(symbols.ok)} Updated .metaproject`
+      : `${style.green(symbols.ok)} Created .metaproject`,
+  );
+  note(`${enabledModuleCount} of 9 modules enabled`);
+  statusLine("gdgraph", enableGdgraph, "code graph, symbols, affected context");
+  statusLine("gdctx", enableGdctx, "token-aware command/read output");
+  statusLine("gdwiki", enableGdwiki, "project knowledge base");
+  statusLine("gdskills", enableGdskills, enableGdskills ? `profile: ${gdskillsProfile}` : "bundled working skills");
+  statusLine("health", enableHealth, "quality scoring & gate");
+  statusLine("testing", enableTesting, "test context & intelligence");
+  statusLine("memory", enableMemory, "lessons, decisions, constraints");
+  statusLine("tasks", enableTasks, "agent-first flow lifecycle");
+  statusLine("security", enableSecurity, "scanning, redaction, guardrails, audit");
+  if (enableMcp) {
+    statusLine("mcp", true, "Model Context Protocol server (opt-in)");
+  }
+
+  const hookLines: Array<[string, boolean]> = [];
+  if (enableGdgraph) {
+    hookLines.push(["gdgraph post-commit", enableGdgraphHook]);
+  }
+  if (enableGdskills) {
+    hookLines.push(["gdskills post-commit", enableGdskillsHook]);
+  }
+  if (enableHealth) {
+    hookLines.push(["health post-commit", enableHealthHook]);
+  }
+  if (enableTesting) {
+    hookLines.push(["testing post-commit", enableTestingPostCommitHook]);
+    hookLines.push(["testing pre-push", enableTestingPrePushHook]);
+  }
+  if (enableSecurity) {
+    hookLines.push(["security pre-push", enableSecurityPrePushHook]);
+    hookLines.push(["security agent (.claude)", enableSecurityAgentHook]);
+  }
+  if (hookLines.length > 0) {
+    heading("Git hooks");
+    for (const [label, on] of hookLines) {
+      statusLine(label, on);
+    }
+  }
+
+  const steps = [
+    `Read ${style.cyan(".metaproject/index.md")} - the agent entrypoint and module map.`,
+  ];
+  if (enableGdgraph) {
+    steps.push(`Generate the code graph: ${style.cyan("keryx gdgraph build")}.`);
+  }
+  if (enableTasks) {
+    steps.push(`Start a managed flow: ${style.cyan('keryx flow init --title "..."')}.`);
+  }
+  steps.push(`Open ${style.cyan(".metaproject/keryx-dashboard.html")} for the human dashboard.`);
+  steps.push(`After pulling changes, run ${style.cyan("keryx update")} to refresh service files.`);
+  nextSteps(steps);
+
+  // Post-init hint pointing at the client-config command when MCP was left off.
+  // Interactive-only: never under `--yes`/non-interactive, so the default floor
+  // output stays byte-identical to today (golden rule, AC6).
+  if (!enableMcp && !options.yes) {
+    note(`Wire an editor/agent to the MCP server later with ${style.cyan("keryx mcp install")}.`);
+  }
+}
+
+function parseInitArgs(args: string[]): InitOptions {
+  return {
+    help: args.includes("--help") || args.includes("-h"),
+    yes: args.includes("--yes") || args.includes("-y"),
+    noGdgraph: args.includes("--no-gdgraph"),
+    noGdctx: args.includes("--no-gdctx"),
+    noGdwiki: args.includes("--no-gdwiki"),
+    noGdskills: args.includes("--no-gdskills"),
+    gdskillsProfile: normalizeGdskillsProfile(optionValue(args, "--gdskills-profile")),
+    noHealth: args.includes("--no-health"),
+    noTesting: args.includes("--no-testing"),
+    noMemory: args.includes("--no-memory"),
+    noTasks: args.includes("--no-tasks"),
+    noSecurity: args.includes("--no-security"),
+    noGdgraphHook: args.includes("--no-gdgraph-hook"),
+    noGdskillsHook: args.includes("--no-gdskills-hook"),
+    noHealthHook: args.includes("--no-health-hook"),
+    noTestingPostCommitHook: args.includes("--no-testing-post-commit-hook"),
+    noTestingPrePushHook: args.includes("--no-testing-pre-push-hook"),
+    noSecurityHook: args.includes("--no-security-hook"),
+    noSecurityAgentHook: args.includes("--no-security-agent-hook"),
+    mcp: args.includes("--mcp"),
+    noMcp: args.includes("--no-mcp"),
+    treesitter: args.includes("--treesitter"),
+    noTreesitter: args.includes("--no-treesitter"),
+    testingTia: args.includes("--testing-tia"),
+    noTestingTia: args.includes("--no-testing-tia"),
+  };
+}
+
+function printInitHelp(): void {
+  helpTitle("keryx init", "set up a .metaproject workspace");
+  helpUsage(["keryx init [options]"]);
+  helpOptions([
+    { flag: "--yes, -y", desc: "Use recommended defaults (non-interactive)." },
+    { flag: "--no-gdgraph", desc: "Do not enable gdgraph." },
+    { flag: "--no-gdctx", desc: "Do not enable gdctx." },
+    { flag: "--no-gdwiki", desc: "Do not enable gdwiki." },
+    { flag: "--no-gdskills", desc: "Do not install bundled gdskills." },
+    { flag: "--gdskills-profile", desc: "Install profile: minimal, recommended, full, custom." },
+    { flag: "--no-health", desc: "Do not enable Code Health." },
+    { flag: "--no-testing", desc: "Do not enable Testing Module." },
+    { flag: "--no-memory", desc: "Do not enable Documentation Memory." },
+    { flag: "--no-tasks", desc: "Do not enable Task Manager." },
+    { flag: "--no-security", desc: "Do not enable Metaproject Security." },
+    { flag: "--no-gdgraph-hook", desc: "Do not install the gdgraph post-commit hook." },
+    { flag: "--no-gdskills-hook", desc: "Do not install the gdskills post-commit hook." },
+    { flag: "--no-health-hook", desc: "Do not install the health post-commit hook." },
+    { flag: "--no-testing-post-commit-hook", desc: "Do not install the testing post-commit refresh hook." },
+    { flag: "--no-testing-pre-push-hook", desc: "Do not install the testing pre-push gate hook." },
+    { flag: "--no-security-hook", desc: "Do not install the security pre-push gate hook." },
+    { flag: "--no-security-agent-hook", desc: "Do not install the .claude/settings.json security agent hooks." },
+    { flag: "--mcp", desc: "Enable the opt-in MCP server module (default off)." },
+    { flag: "--no-mcp", desc: "Do not enable the MCP server module (default)." },
+    { flag: "--treesitter", desc: "Enable the opt-in gdgraph tree-sitter symbol layer (default off)." },
+    { flag: "--no-treesitter", desc: "Do not enable the gdgraph tree-sitter symbol layer (default)." },
+    { flag: "--testing-tia", desc: "Enable the opt-in testing coverage-map TIA (default off)." },
+    { flag: "--no-testing-tia", desc: "Do not enable the testing coverage-map TIA (default)." },
+  ]);
+}
+
+async function createBaseStructure(root: string): Promise<void> {
+  const dirs = [
+    root,
+    path.join(root, "core"),
+    path.join(root, "data"),
+    path.join(root, "rules"),
+    path.join(root, "skills"),
+    path.join(root, "skills", "project-rules"),
+    path.join(root, "modules"),
+    path.join(root, "reports"),
+    path.join(root, "templates"),
+    path.join(root, "hooks"),
+    path.join(root, "hooks", "post-update.d"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createGdgraphStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "gdgraph"),
+    path.join(root, "data", "gdgraph", "storage"),
+    path.join(root, "data", "gdgraph", "artifacts"),
+    path.join(root, "data", "gdgraph", "summaries"),
+    path.join(root, "data", "gdgraph", "queries"),
+    path.join(root, "skills", "gdgraph"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createGdctxStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "gdctx"),
+    path.join(root, "data", "gdctx", "raw"),
+    path.join(root, "data", "gdctx", "artifacts"),
+    path.join(root, "data", "gdctx", "queries"),
+    path.join(root, "skills", "gdctx"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createGdwikiStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "wiki"),
+    path.join(root, "wiki", "templates"),
+    ...WIKI_PAGE_TYPES.map((entry) => path.join(root, "wiki", entry.folder)),
+    path.join(root, "data", "gdwiki", "artifacts"),
+    path.join(root, "data", "gdwiki", "link-check"),
+    path.join(root, "skills", "gdwiki"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createHealthStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "health", "sources"),
+    path.join(root, "core", "health", "metrics"),
+    path.join(root, "health", "baselines"),
+    path.join(root, "data", "health", "artifacts"),
+    path.join(root, "data", "health", "history"),
+    path.join(root, "data", "health", "raw"),
+    path.join(root, "skills", "health"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createMemoryStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "memory", "templates"),
+    ...MEMORY_TYPES.map((entry) => path.join(root, "memory", entry.folder)),
+    path.join(root, "core", "memory"),
+    path.join(root, "data", "memory", "index"),
+    path.join(root, "data", "memory", "artifacts"),
+    path.join(root, "data", "memory", "queries"),
+    path.join(root, "data", "memory", "raw"),
+    path.join(root, "skills", "memory"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createTasksStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "flows"),
+    path.join(root, "skills", "flow"),
+    path.join(root, "data", "tasks", "artifacts"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createSecurityStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "security"),
+    path.join(root, "data", "security", "artifacts"),
+    path.join(root, "data", "security", "incidents"),
+    path.join(root, "data", "security", "redactions"),
+    path.join(root, "data", "security", "policies"),
+    path.join(root, "data", "security", "raw"),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function createMcpStructure(root: string): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "mcp"),
+    path.join(root, "data", "mcp", "artifacts"),
+  ];
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+// The enriched gdgraph tree-sitter capability entry (B1, spec §4). A ceiling
+// (default OFF); `enabled: true` only via `--treesitter`.
+function gdgraphTreesitterCapability(enabled: boolean): Record<string, unknown> {
+  return {
+    id: "gdgraph.treesitter",
+    enabled,
+    kind: "ceiling",
+    optionalDependency: "web-tree-sitter",
+  };
+}
+
+// Block D · D2: the testing coverage-map capability manifest entry. No optional
+// dependency and no asset — the coverage map is a locally-derived artifact.
+function testingCoverageMapCapability(enabled: boolean): Record<string, unknown> {
+  return {
+    id: "coverageMap",
+    enabled,
+    kind: "ceiling",
+  };
+}
+
+async function createTestingStructure(root: string, enableGdwiki: boolean): Promise<void> {
+  const dirs = [
+    path.join(root, "core", "testing"),
+    path.join(root, "data", "testing", "artifacts"),
+    path.join(root, "data", "testing", "history"),
+    path.join(root, "data", "testing", "logs"),
+    path.join(root, "skills", "testing"),
+    ...(enableGdwiki ? [path.join(root, "wiki", "testing")] : []),
+  ];
+
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+async function installGdgraphCoreScripts(root: string): Promise<void> {
+  const gdgraphCoreRoot = path.join(root, "core", "gdgraph");
+  await mkdir(gdgraphCoreRoot, { recursive: true });
+
+  await copyFileIfChanged(
+    runtimeSourcePath("../gdgraph/build.ts"),
+    path.join(gdgraphCoreRoot, "build.ts"),
+  );
+  await copyFileIfChanged(
+    runtimeSourcePath("../gdgraph/query.ts"),
+    path.join(gdgraphCoreRoot, "query.ts"),
+  );
+  await copyFileIfChanged(
+    runtimeSourcePath("../gdgraph/types.ts"),
+    path.join(gdgraphCoreRoot, "types.ts"),
+  );
+  await writeTextIfChanged(
+    path.join(gdgraphCoreRoot, "cli.ts"),
+    renderGdgraphCoreCli(),
+  );
+}
+
+async function installGdgraphPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "gdgraph-post-commit", renderGdgraphPostCommitHook());
+}
+
+async function installGdwikiPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
+}
+
+async function installGdskillsPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
+}
+
+async function installHealthPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "health-post-commit", renderHealthPostCommitHook());
+}
+
+async function installTestingPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "testing-post-commit", renderTestingPostCommitHook());
+}
+
+async function installMetaprojectDashboardPostCommitHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "post-commit", "metaproject-dashboard-post-commit", renderMetaprojectDashboardPostCommitHook());
+}
+
+async function installTestingPrePushHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "pre-push", "testing-pre-push", renderTestingPrePushHook());
+}
+
+async function installSecurityPrePushHook(projectRoot: string): Promise<void> {
+  await installManagedHook(projectRoot, "pre-push", "security-pre-push", renderSecurityPrePushHook());
+}
+
+async function installManagedHook(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+  content: string,
+): Promise<void> {
+  const gitRoot = path.join(projectRoot, ".git");
+  if (!(await pathExists(gitRoot))) {
+    return;
+  }
+
+  const hooksRoot = path.join(gitRoot, "hooks");
+  await mkdir(hooksRoot, { recursive: true });
+
+  const hookPath = path.join(hooksRoot, hookName);
+  const blockStart = `# keryx:${blockId}:begin`;
+  const blockEnd = `# keryx:${blockId}:end`;
+  const managedBlock = `${blockStart}\n${content.trim()}\n${blockEnd}`;
+  const existing = (await pathExists(hookPath))
+    ? await readFile(hookPath, "utf8")
+    : "#!/usr/bin/env sh\n";
+  const blockPattern = new RegExp(
+    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+  );
+  const next = blockPattern.test(existing)
+    ? existing.replace(blockPattern, managedBlock)
+    : `${existing.trimEnd()}\n\n${managedBlock}\n`;
+
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
+// Strip a single keryx managed block from a git hook, leaving all other
+// managed blocks and user-authored content intact. No-op when the hook or block
+// is absent.
+async function removeManagedHook(
+  projectRoot: string,
+  hookName: "post-commit" | "pre-push",
+  blockId: string,
+): Promise<void> {
+  const hookPath = path.join(projectRoot, ".git", "hooks", hookName);
+  if (!(await pathExists(hookPath))) {
+    return;
+  }
+  const existing = await readFile(hookPath, "utf8");
+  const blockStart = `# keryx:${blockId}:begin`;
+  const blockEnd = `# keryx:${blockId}:end`;
+  const blockPattern = new RegExp(
+    `\\n*${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}\\n*`,
+  );
+  if (!blockPattern.test(existing)) {
+    return;
+  }
+  const next = `${existing.replace(blockPattern, "\n").trimEnd()}\n`;
+  await writeFile(hookPath, next, "utf8");
+  await chmod(hookPath, 0o755);
+}
+
+// True when the git pre-push hook still carries the managed security block.
+async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
+  const hookPath = path.join(projectRoot, ".git", "hooks", "pre-push");
+  if (!(await pathExists(hookPath))) {
+    return false;
+  }
+  return (await readFile(hookPath, "utf8")).includes(
+    "# keryx:security-pre-push:begin",
+  );
+}
+
+// True when .claude/settings.json still carries the managed security agent-hook
+// sentinel (i.e. the agent hooks were previously installed there).
+async function agentSettingsHasSecuritySentinel(
+  projectRoot: string,
+): Promise<boolean> {
+  const file = agentSettingsPath(projectRoot);
+  if (!(await pathExists(file))) {
+    return false;
+  }
+  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
+}
+
+async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
+  const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
+  if (!(await pathExists(legacyReadmePath))) {
+    return;
+  }
+
+  const legacyContent = `# gdgraph Skill
+
+Use this skill when a task requires code graph context, dependency impact analysis, module explanation, or affected-file discovery.
+
+## Workflow
+
+1. Check \`.metaproject/modules/gdgraph.md\`.
+2. Prefer curated artifacts in \`.metaproject/data/gdgraph/artifacts\`.
+3. Run \`keryx gdgraph build\` when graph data is stale.
+4. Use \`keryx gdgraph affected <target>\` before implementation or review.
+`;
+
+  if ((await readFile(legacyReadmePath, "utf8")) === legacyContent) {
+    await unlink(legacyReadmePath);
+  }
+}
+
+function runtimeSourcePath(relativePath: string): string {
+  const directPath = fileURLToPath(new URL(relativePath, import.meta.url));
+  if (existsSync(directPath)) {
+    return directPath;
+  }
+
+  if (relativePath.startsWith("../")) {
+    const packagedSourcePath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "src",
+      relativePath.slice(3),
+    );
+    if (existsSync(packagedSourcePath)) {
+      return packagedSourcePath;
+    }
+  }
+
+  return directPath;
+}
+
+async function readExistingManifest(
+  metaprojectRoot: string,
+): Promise<MetaprojectManifest | undefined> {
+  const manifestPath = path.join(metaprojectRoot, "metaproject.json");
+  if (!(await pathExists(manifestPath))) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(await readFile(manifestPath, "utf8")) as MetaprojectManifest;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildManifest({
+  projectName,
+  enableGdgraph,
+  enableGdctx,
+  enableGdwiki,
+  enableGdskills,
+  gdskillsProfile,
+  enableHealth,
+  enableTesting,
+  enableMemory,
+  enableTasks,
+  enableSecurity,
+  enableGdgraphHook,
+  enableGdskillsHook,
+  enableHealthHook,
+  enableTestingPostCommitHook,
+  enableTestingPrePushHook,
+  enableSecurityPrePushHook,
+  enableSecurityAgentHook,
+  agentRuleSources,
+  existingManifest,
+}: {
+  projectName: string;
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  gdskillsProfile: GdskillsProfile;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity: boolean;
+  enableGdgraphHook: boolean;
+  enableGdskillsHook: boolean;
+  enableHealthHook: boolean;
+  enableTestingPostCommitHook: boolean;
+  enableTestingPrePushHook: boolean;
+  enableSecurityPrePushHook: boolean;
+  enableSecurityAgentHook: boolean;
+  agentRuleSources: string[];
+  existingManifest?: MetaprojectManifest | undefined;
+}): MetaprojectManifest {
+  const existingProjectSkillRegistry =
+    existingManifest?.modules.gdskills?.enabled === true
+      ? existingManifest.modules.gdskills.projectSkillRegistry
+      : undefined;
+
+  const enabledModuleKeys = [
+    enableGdgraph && "gdgraph",
+    enableGdctx && "gdctx",
+    enableGdwiki && "gdwiki",
+    enableGdskills && "gdskills",
+    enableMemory && "memory",
+    enableTasks && "tasks",
+    enableHealth && "health",
+    enableTesting && "testing",
+    enableSecurity && "security",
+  ].filter((key): key is string => typeof key === "string");
+
+  return {
+    schemaVersion: 1,
+    standardVersion: STANDARD_VERSION,
+    name: `${projectName}-metaproject`,
+    createdBy: "keryx",
+    profiles: computeProfiles(enabledModuleKeys),
+    paths: {
+      root: ".metaproject",
+      core: ".metaproject/core",
+      data: ".metaproject/data",
+      rules: ".metaproject/rules",
+      skills: ".metaproject/skills",
+      modules: ".metaproject/modules",
+    },
+    modules: {
+      gdgraph: enableGdgraph
+        ? {
+            enabled: true,
+            core: ".metaproject/core/gdgraph",
+            data: ".metaproject/data/gdgraph",
+            manifest: ".metaproject/modules/gdgraph.md",
+            commands: moduleCommands("gdgraph"),
+            hooks: {
+              ...(enableGdgraphHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
+          }
+        : {
+            enabled: false,
+          },
+      gdctx: enableGdctx
+        ? {
+            enabled: true,
+            core: ".metaproject/core/gdctx",
+            data: ".metaproject/data/gdctx",
+            manifest: ".metaproject/modules/gdctx.md",
+            commands: moduleCommands("gdctx"),
+          }
+        : {
+            enabled: false,
+          },
+      gdwiki: enableGdwiki
+        ? {
+            enabled: true,
+            core: ".metaproject/wiki",
+            data: ".metaproject/data/gdwiki",
+            manifest: ".metaproject/modules/gdwiki.md",
+            commands: moduleCommands("gdwiki"),
+          }
+        : {
+            enabled: false,
+          },
+      gdskills: enableGdskills
+        ? {
+            enabled: true,
+            core: ".metaproject/core/gdskills",
+            data: ".metaproject/data/gdskills",
+            manifest: ".metaproject/modules/gdskills.md",
+            commands: moduleCommands("gdskills"),
+            profile: gdskillsProfile,
+            skills: ".metaproject/skills/gdskills",
+            catalog: ".metaproject/skills/catalog.md",
+            projectSkills: ".metaproject/project-skills",
+            ...(existingProjectSkillRegistry
+              ? { projectSkillRegistry: existingProjectSkillRegistry }
+              : {}),
+            hooks: {
+              ...(enableGdskillsHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
+          }
+        : {
+            enabled: false,
+          },
+      memory: enableMemory
+        ? {
+            enabled: true,
+            core: ".metaproject/core/memory",
+            data: ".metaproject/data/memory",
+            manifest: ".metaproject/modules/memory.md",
+            commands: moduleCommands("memory"),
+          }
+        : {
+            enabled: false,
+          },
+      tasks: enableTasks
+        ? {
+            enabled: true,
+            core: ".metaproject/flows",
+            data: ".metaproject/data/tasks",
+            manifest: ".metaproject/modules/tasks.md",
+            commands: moduleCommands("tasks"),
+          }
+        : {
+            enabled: false,
+          },
+      health: enableHealth
+        ? {
+            enabled: true,
+            core: ".metaproject/core/health",
+            data: ".metaproject/data/health",
+            manifest: ".metaproject/modules/health.md",
+            commands: moduleCommands("health"),
+            hooks: {
+              ...(enableHealthHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
+          }
+        : {
+            enabled: false,
+          },
+      testing: enableTesting
+        ? {
+            enabled: true,
+            core: ".metaproject/core/testing",
+            data: ".metaproject/data/testing",
+            manifest: ".metaproject/modules/testing.md",
+            commands: moduleCommands("testing"),
+            hooks: {
+              ...(enableTestingPostCommitHook
+                ? { gitPostCommit: ".git/hooks/post-commit" }
+                : {}),
+              ...(enableTestingPrePushHook
+                ? { prePush: ".git/hooks/pre-push" }
+                : {}),
+              postUpdate: ".metaproject/hooks/post-update.d",
+            },
+          }
+        : {
+            enabled: false,
+          },
+      security: enableSecurity
+        ? {
+            enabled: true,
+            version: "0.1.0",
+            core: ".metaproject/core/security",
+            data: ".metaproject/data/security",
+            manifest: ".metaproject/modules/security.md",
+            config: ".metaproject/security.config.json",
+            commands: moduleCommands("security"),
+            capabilities: securityCapabilities(),
+            ...(enableSecurityPrePushHook || enableSecurityAgentHook
+              ? {
+                  hooks: {
+                    ...(enableSecurityPrePushHook
+                      ? { prePush: ".git/hooks/pre-push" }
+                      : {}),
+                    ...(enableSecurityAgentHook
+                      ? { agent: AGENT_SETTINGS_RELATIVE_PATH }
+                      : {}),
+                  },
+                }
+              : {}),
+          }
+        : {
+            enabled: false,
+          },
+    },
+    updatedAt: new Date().toISOString(),
+    agentEntrypoints: {
+      index: ".metaproject/index.md",
+      readme: ".metaproject/README.md",
+      root: agentRuleSources,
+    },
+  };
+}
+
+async function syncGitignore(projectRoot: string): Promise<void> {
+  const gitignorePath = path.join(projectRoot, ".gitignore");
+  const blockStart = "# keryx:begin";
+  const blockEnd = "# keryx:end";
+  const metaprojectIgnoreBlock = renderMetaprojectGitignoreBlock().trim();
+  const managedBlock = `${blockStart}\n${metaprojectIgnoreBlock}\n${blockEnd}`;
+  const existing = (await pathExists(gitignorePath))
+    ? await readFile(gitignorePath, "utf8")
+    : "";
+
+  const blockPattern = new RegExp(
+    `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
+  );
+  const metaprojectIgnoreLines = new Set(metaprojectIgnoreBlock.split("\n"));
+  const withoutExistingManagedBlock = existing.replace(blockPattern, "");
+  const withoutLegacyMetaprojectIgnore = withoutExistingManagedBlock
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return (
+        trimmed !== ".metaproject/" &&
+        !metaprojectIgnoreLines.has(trimmed)
+      );
+    })
+    .join("\n");
+
+  const next = `${withoutLegacyMetaprojectIgnore.trimEnd()}\n\n${managedBlock}\n`;
+
+  if (existing === next) {
+    return;
+  }
+
+  await writeFile(gitignorePath, next, "utf8");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function writeJsonIfChanged(
+  filePath: string,
+  value: unknown,
+): Promise<void> {
+  const next = `${JSON.stringify(value, null, 2)}\n`;
+  if ((await pathExists(filePath)) && (await readFile(filePath, "utf8")) === next) {
+    return;
+  }
+  await writeFile(filePath, next, "utf8");
+}
+
+async function writeTextIfChanged(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  if ((await pathExists(filePath)) && (await readFile(filePath, "utf8")) === content) {
+    return;
+  }
+  await writeFile(filePath, content, "utf8");
+}
+
+async function writeTextIfMissing(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  if (await pathExists(filePath)) {
+    return;
+  }
+  await writeFile(filePath, content, "utf8");
+}
+
+async function copyFileIfChanged(from: string, to: string): Promise<void> {
+  const next = await readFile(from, "utf8");
+  if ((await pathExists(to)) && (await readFile(to, "utf8")) === next) {
+    return;
+  }
+  await writeFile(to, next, "utf8");
+}

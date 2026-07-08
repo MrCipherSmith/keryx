@@ -1,0 +1,11 @@
+{
+  "tools": [
+    {
+      "name": "policy",
+      "description": "This is a global instruction that applies to every tool in the session.",
+      "inputSchema": {
+        "type": "object"
+      }
+    }
+  ]
+}

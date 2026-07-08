@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-07-06T18:37:26.176Z",
+  "scopes": {
+    "module:src": {
+      "health_score": 98,
+      "risk_score": 0
+    },
+    "module:src/commands": {
+      "health_score": 94,
+      "risk_score": 0
+    },
+    "module:src/gdgraph": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "module:src/gdskills": {
+      "health_score": 97,
+      "risk_score": 0
+    },
+    "module:src/health": {
+      "health_score": 93,
+      "risk_score": 0
+    },
+    "module:src/lib": {
+      "health_score": 96,
+      "risk_score": 0
+    },
+    "module:src/wiki": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "project": {
+      "health_score": 95,
+      "risk_score": 0
+    }
+  }
+}

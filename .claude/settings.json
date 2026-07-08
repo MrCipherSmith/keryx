@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx security check-input --source untrusted-external"
+          }
+        ],
+        "_keryxManaged": "security-agent-hooks"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx security check-output"
+          }
+        ],
+        "_keryxManaged": "security-agent-hooks"
+      }
+    ]
+  },
+  "_keryxManaged": [
+    "security-agent-hooks"
+  ]
+}
