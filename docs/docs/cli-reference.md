@@ -41,6 +41,18 @@ code `1`.
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
+| `mcp` | Expose read-only Metaproject services over the Model Context Protocol (opt-in, off by default). |
+
+### Optional dependencies and graceful degradation
+
+Several commands ship as opt-in capabilities that lean on an optional dependency
+(e.g. a tree-sitter grammar, an embedding/model backend) or a pulled asset. When
+that dependency or asset is absent, the command **degrades gracefully**: it warns
+once, falls back to the deterministic built-in path, and still exits `0` (for
+example `memory index --embeddings` builds the lexical index only, and
+`security eval --with-model` silently uses the pure detector path). The single
+sanctioned exception is **`mcp serve`**, which hard-fails with an actionable
+message when the optional MCP SDK is not installed.
 
 ---
 
@@ -52,7 +64,7 @@ the `metaproject.json` manifest. Re-running `init` over an existing workspace
 updates managed files but never clobbers seeded user files or `data/`.
 
 ```
-gd-metapro init [--yes] [module flags] [hook flags]
+gd-metapro init [--yes] [module flags] [hook flags] [capability flags]
 ```
 
 | Flag | Description |
@@ -89,6 +101,17 @@ Pass the matching `--no-*-hook` flag to force a hook off:
 | `--no-testing-pre-push-hook` | testing pre-push (gate) hook. |
 | `--no-security-hook` | security **pre-push** gate hook. |
 | `--no-security-agent-hook` | security **`.claude/settings.json`** agent hook. |
+
+**Capability flags** — opt-in ceilings that are **off by default**. Each has a
+matching `--no-<capability>` form (the default) that keeps the generated
+`metaproject.json` byte-identical to a plain `init`; only passing the positive
+flag touches the manifest:
+
+| Flag | Enables capability |
+|---|---|
+| `--mcp` / `--no-mcp` | The opt-in MCP server module (`mcp serve`). |
+| `--treesitter` / `--no-treesitter` | The gdgraph tree-sitter symbol layer (optional `web-tree-sitter` dependency). |
+| `--testing-tia` / `--no-testing-tia` | The testing coverage-map test-impact analysis (drives map-first `test run --changed`). |
 
 The two security hooks are offered only when the `security` module is enabled and
 default on (confirm prompt; accepted under `--yes`). The **pre-push** hook adds a
@@ -182,21 +205,27 @@ Requires an initialized workspace; an unknown subcommand exits `1`.
 ## gdgraph
 
 Build a lightweight intra-project import/dependency graph (regex-based) and query
-it. Delegates to a project-local `.metaproject/core/gdgraph/cli.ts` if present
-(unless `GD_METAPRO_GDGRAPH_LOCAL=1`). No flags are parsed by any subcommand.
+it. Delegates the legacy `build`/`query`/flag-less `affected` subcommands to a
+project-local `.metaproject/core/gdgraph/cli.ts` if present (unless
+`GD_METAPRO_GDGRAPH_LOCAL=1`); the newer `repomap`/`assets` surfaces and the
+`affected` flags run in the package runner.
 
 ```
 gd-metapro gdgraph build
 gd-metapro gdgraph query <cycles|orphans>
-gd-metapro gdgraph affected <file>
+gd-metapro gdgraph affected <file> [--depth N] [--ranked] [--json]
+gd-metapro gdgraph repomap [--budget N] [--seed <path>...] [--changed]
+gd-metapro gdgraph assets list | verify [<id>] | pull <id>
 ```
 
-| Subcommand | Description |
-|---|---|
-| `build` | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. |
-| `query cycles` | Print dependency cycles (`a -> b -> a`), or "No cycles found." |
-| `query orphans` | Print modules with no resolved inbound or outbound edges. |
-| `affected <file>` | Print `## Dependencies` and `## Dependents` for the target file. |
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `build` | — | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. |
+| `query cycles` | — | Print dependency cycles (`a -> b -> a`), or "No cycles found." |
+| `query orphans` | — | Print modules with no resolved inbound or outbound edges. |
+| `affected <file>` | `--depth <N>`, `--ranked`, `--json` | Print `## Dependencies` and `## Dependents` for the target file. Default (or `--depth 1`) output is byte-for-byte unchanged; a higher `--depth` walks the transitive closure. `--ranked` appends a `## Blast Radius (ranked)` section (by hop + fan-in); `--json` emits the full result object. |
+| `repomap` | `--budget <N>`, `--seed <path>...`, `--changed` | Write a token-budgeted repo map artifact. `--budget` caps the token estimate, `--seed` biases toward one or more paths (repeatable), and `--changed` seeds from locally changed files (`git diff --name-only HEAD`). |
+| `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json`: `list` shows resolved/missing state, `verify` checks checksums (exit `1` on mismatch), `pull` fetches and verifies one asset (the only networked verb). |
 
 Only the exact queries `cycles` and `orphans` are accepted; anything else exits
 `1`. `affected` with no file argument prints usage and exits `1`.
@@ -242,6 +271,7 @@ gd-metapro wiki collect [--force] [--limit <n>] [--changed]
 gd-metapro wiki index
 gd-metapro wiki check-links
 gd-metapro wiki validate
+gd-metapro wiki ask "<question>" [--k <n>] [--rerank]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -252,6 +282,7 @@ gd-metapro wiki validate
 | `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
+| `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
 
 Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
 `component`, `service`, `integration`, `decision`.
@@ -278,7 +309,7 @@ gd-metapro skills create <target> --module <module> --name <skill-name>
 gd-metapro skills verify <skill-or-target>
 gd-metapro skills learn --from-review <path> --skill <module>/<skill>
 gd-metapro skills learn apply <proposal.json>
-gd-metapro skills export <project-skill> --runtime codex|claude
+gd-metapro skills export <project-skill> --runtime codex|claude|plugin
 gd-metapro skills sync --runtime codex|claude --target <dir>
 gd-metapro skills contracts validate <file> --schema <name>
 ```
@@ -295,7 +326,7 @@ gd-metapro skills contracts validate <file> --schema <name>
 | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
 | `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |
 | `learn apply <proposal.json>` | `--dry-run`, `--json` | Apply a reviewed proposal to SKILL.md + changelog; bump patch version. |
-| `export <project-skill>` | `--runtime codex\|claude`, `--dry-run`, `--json` | Export a project skill to a runtime artifact. |
+| `export <project-skill>` | `--runtime codex\|claude\|plugin`, `--dry-run`, `--json` | Export a project skill to a runtime artifact. The `plugin` runtime (alongside `codex` and `claude`) emits a Claude Code plugin package. |
 | `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
 | `contracts list` | — | Print name/path/description for all contract schemas. |
 | `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
@@ -362,6 +393,7 @@ gd-metapro test context
 gd-metapro test report latest [--json]
 gd-metapro test related <file>
 gd-metapro test explain <file-or-scope>
+gd-metapro test coverage-map build|status
 ```
 
 | Subcommand | Flags / args | Description |
@@ -374,9 +406,17 @@ gd-metapro test explain <file-or-scope>
 | `report latest` | `--json` | Print the latest normalized report (Markdown, or raw JSON with `--json`). |
 | `related <file>` | — | List tests related to a source file by naming/directory heuristics. |
 | `explain <file-or-scope>` | — | Frameworks + related tests + latest failures filtered by the target. |
+| `coverage-map build` | — | Build the test-impact coverage map (source → covering tests) and write the artifact. Prints the source strategy and entry count. |
+| `coverage-map status` (default) | — | Report the coverage-map capability + config state, whether a map is present, its `gitRef`, and whether it is stale (a stale map falls back to static selection). Bare `coverage-map` defaults to `status`. |
 
 `--changed` selects tests for changed files (via `git`); with `--strict` and no
 matched tests, the run fails — this drives the pre-push gate.
+
+When the opt-in testing coverage-map TIA capability is enabled (see
+`init --testing-tia`) and a fresh map exists, `run --changed` prefers the
+coverage map to pick precisely the tests that cover the changed sources; it falls
+back to the static naming/directory heuristics when the map is missing or stale.
+The `smoke` tier (`--kind smoke`) selects the fast smoke subset.
 
 When the `security` module is enabled, `run` runs an advisory security check on the
 captured raw log before persisting it. Advisory (the default) reports and still
@@ -393,8 +433,10 @@ deterministic (non-LLM) search, dedup, and consolidation.
 
 ```
 gd-metapro memory new <type> [slug] --title "<title>" [--force]
-gd-metapro memory index
-gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]
+gd-metapro memory index [--embeddings]
+gd-metapro memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic]
+gd-metapro memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
+gd-metapro memory assets list | verify [<id>] | pull <id>
 gd-metapro memory ingest --from-<source> <path>
 gd-metapro memory check
 gd-metapro memory reflect
@@ -403,8 +445,10 @@ gd-metapro memory reflect
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `new <type> [slug]` | `--title "<t>"`, `--force` | Scaffold a new draft entry; print possible duplicates. |
-| `index` | — | Build `data/memory/index/index.json` from all entries. |
-| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` | Ranked retrieval; write `latest.md`/`latest.json`, print the ranked list. |
+| `index` | `--embeddings` | Build `data/memory/index/index.json` from all entries. `--embeddings` additionally builds a vector index when the embedding capability is available; if it is absent, it warns and keeps the lexical index only. |
+| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>`, `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic` | Ranked retrieval; write `latest.md`/`latest.json`, print the ranked list. `--as-of` restricts to entries as of a date, `--class` filters by memory class, and `--semantic` prefers semantic (vector) ranking when available. |
+| `supersede <old-path>` | `--by <new-path>` (required), `--date <YYYY-MM-DD>` | Mark one entry as superseded by another. Non-destructive and git-diffable — both entries stay on disk. A blocking security gate can abort the write. |
+| `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json` (`list`/`verify`/`pull`; `pull` is the only networked verb). |
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
 | `check` | — | Integrity/lint pass (metadata, links, dedup, conflicts, index). Exit `1` on issues. |
 | `reflect` | — | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. |
@@ -503,6 +547,7 @@ runtime.
 gd-metapro standard validate
 gd-metapro standard doctor
 gd-metapro standard capabilities
+gd-metapro standard emit llms [--stdout]
 ```
 
 | Subcommand | Description |
@@ -510,6 +555,7 @@ gd-metapro standard capabilities
 | `validate` | Check required files/dirs, the `metaproject.json` schema (`metaproject.schema.json` + per-module `module.schema.json`), declared `paths.*`, enabled-module manifests, and that root `AGENTS.md`/`CLAUDE.md` link `.metaproject/index.md`. Prints a `PASS`/`FAIL` report and exits `1` on failure. |
 | `doctor` | Same findings as `validate`, rendered as actionable diagnostics with a concrete fix hint per issue. Exits `1` when unresolved issues remain. |
 | `capabilities` | Print the standard version, declared and satisfied profiles, and each enabled module with its commands/capabilities, sourced from `metaproject.json`. Exits `0`. |
+| `emit llms` | Generate a deterministic `llms.txt` from the manifest + artifact index. Writes the file by default (validating the result), or streams it to stdout with `--stdout`. Exits `1` if the generated file is not valid `llms.txt`. |
 
 `validate` and `doctor` also emit profile warnings when the manifest's declared
 `profiles` array drifts from the profiles the workspace actually satisfies
@@ -537,24 +583,34 @@ gateway mode (Phase 4) are not implemented.
 ```
 gd-metapro security status
 gd-metapro security scan <path> [--json] [--source <kind>]
+gd-metapro security scan-mcp <manifest.json|dir> [--json] [--pin <manifest>] [--strict]
 gd-metapro security check-input [--source <kind>] [--file <path>] [--json]
 gd-metapro security check-output [--target <kind>] [--file <path>] [--json]
 gd-metapro security redact <path> [--out <path>]
 gd-metapro security report [--since <ref>] [--json]
 gd-metapro security policy validate
 gd-metapro security incidents [--limit <n>]
+gd-metapro security hooks install|uninstall --runtime <claude|cursor|windsurf|generic-mcp|all>
+gd-metapro security eval [--corpus <name|all>] [--with-model] [--json]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `status` | — | Print the effective config: mode, raw-retention, gate (`failOn` + `minConfidence`), config-checksum state, and each policy with its action. |
 | `scan <path>` | `<path>`, `--json`, `--source <kind>` | Scan a file, resolve findings into a decision, and write committable artifacts (`data/security/artifacts/latest.{md,json}`). Prints the gate, action, and findings (or raw JSON with `--json`). |
+| `scan-mcp <manifest\|dir>` | `--json`, `--pin <manifest>`, `--strict` | Scan one MCP tool manifest (or every `*.json` under a directory, recursively) for MCP threats. Findings are leak-safe (category + policy id only). `--pin` records a rug-pull baseline instead of scanning; `--strict` exits `1` when any threat is found. Pure and network-free. |
 | `check-input` | `--source <kind>`, `--file <path>`, `--json` | Evaluate incoming content (defaults source `untrusted-external`). Reads from `--file` or stdin. Prints the decision. |
 | `check-output` | `--target <kind>`, `--file <path>`, `--json` | Evaluate outgoing/generated content (defaults source `generated`, target `unknown`). Reads from `--file` or stdin. Prints the decision and, when applicable, the redacted preview. |
 | `redact <path>` | `<path>`, `--out <path>` | Apply fixed-width masks to detected sensitive spans. Writes to `--out`, else prints the redacted content to stdout. Reads from the path or stdin. |
 | `report` | `--since <ref>`, `--json` | Aggregate the latest scan artifact (never re-scans) into a summary: gate, mode, and finding counts by category. |
 | `policy validate` | — | Validate the config against its schema and verify the config checksum. Exit `1` on schema errors or a checksum mismatch. |
 | `incidents` | `--limit <n>` | List the append-only incident trail (mode downgrades, disabled policies, checksum mismatches). Newest first; `--limit` caps the count. |
+| `hooks install\|uninstall` | `--runtime <id>` | Merge-safe install/uninstall of the agent security hooks for one or more runtimes. `--runtime` takes a runtime id, a comma-separated list, or `all` (defaults to `claude`); after install the rendered settings are validated. |
+| `eval` | `--corpus <name\|all>`, `--with-model`, `--json` | Run the labeled security corpora through the detectors and print a deterministic per-detector false-negative-rate report, exiting `1` when a detector breaches its committed threshold. `--corpus` defaults to `all` (or a comma list of corpus names); `--with-model` also exercises the opt-in model backends, warning once and falling back to the pure path when the model asset is absent. |
+
+Runtime ids (`--runtime`): `claude`, `cursor`, `windsurf`, `generic-mcp`, or
+`all`. Eval corpora (`--corpus`): `injection`, `exfil`, `structured-pii`,
+`secret`, or `all`.
 
 Source kinds (`--source`): `trusted-project`, `trusted-user`,
 `untrusted-external`, `tool-output`, `generated`. Target kinds (`--target`):
@@ -565,5 +621,35 @@ Source kinds (`--source`): `trusted-project`, `trusted-user`,
 in **ci** mode they exit `1` on a gate **fail**; in **enforced** mode they exit
 `1` on a gate **fail** or **needs-approval**. `report` exits `1` only under `ci`
 mode when the aggregated gate is `fail`. `policy validate` exits `1` on schema or
-checksum failure. `status`, `redact`, and `incidents` do not gate. An unknown
-subcommand prints an error and exits `1`.
+checksum failure. `scan-mcp` exits `1` only with `--strict` when a threat is
+found; `eval` exits `1` when any detector breaches its threshold; `hooks` exits
+`1` on an unknown runtime or a post-install validation error. `status`, `redact`,
+and `incidents` do not gate. An unknown subcommand prints an error and exits `1`.
+
+---
+
+## mcp
+
+Expose read-only Metaproject services (code graph, security, flow status, memory,
+health, wiki, standard) over the [Model Context Protocol](https://modelcontextprotocol.io).
+A thin protocol adapter — it defines no new module logic and routes every tool
+result through the security redaction seam before transport. Opt-in: the module is
+off by default; enable it with `gd-metapro init --mcp`.
+
+```
+gd-metapro mcp serve            # stdio JSON-RPC MCP server (default transport)
+gd-metapro mcp serve --http     # isolated HTTP/SSE opt-in (localhost only)
+gd-metapro mcp                  # alias for `mcp serve`
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `serve` (default) | `--http` | Start the MCP server over stdio (the default). `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. Bare `mcp` is an alias for `mcp serve`. |
+
+Tool and resource exposure is filtered by the manifest's `expose.modules` list — a
+disabled module is hidden from `tools/list` and `resources/list`.
+
+Unlike every other opt-in command, `mcp serve` **hard-fails** (prints an actionable
+message and exits `1`) when the optional `@modelcontextprotocol/sdk` dependency is
+not installed — this is the one sanctioned exception to graceful degradation. An
+unknown subcommand prints an error and exits `1`.

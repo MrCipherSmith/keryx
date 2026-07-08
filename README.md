@@ -259,6 +259,26 @@ Ignored by default:
 - `.metaproject/data/testing/artifacts/latest.json`
 - `.metaproject/reports/`
 
+## Capability System
+
+The deterministic, local, offline, git-diffable core is preserved. Every model
+or precision feature added since the roadmap-2026 blocks is an **opt-in
+capability**, so with zero opt-in flags and no assets every command is
+byte-identical to before.
+
+- **Zero runtime dependencies.** `package.json` `dependencies` stays `{}`.
+  Optional runtimes (`web-tree-sitter`, `@modelcontextprotocol/sdk`,
+  `@xenova/transformers`) live only under `optionalDependencies` and are never
+  required.
+- **One seam.** `resolveCapability(cwd, spec)` (`src/capability/seam.ts`) returns
+  an adapter only when the capability is (1) manifest-enabled, (2) its optional
+  dependency imports via lazy `await import()`, and (3) its asset resolves and
+  passes sha256 verification. It never throws — any missing part degrades to the
+  deterministic fallback plus a single stderr warning and exit 0.
+- **Assets are never bundled or auto-downloaded.** They resolve through the Asset
+  Resolver (`.metaproject/assets.lock.json`), managed per module with
+  `gd-metapro <module> assets list | verify [<id>] | pull <id>`.
+
 ## Commands
 
 ```bash
@@ -280,15 +300,21 @@ gd-metapro rules sync
 gd-metapro gdgraph build
 gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
-gd-metapro gdgraph affected src/example.ts
+gd-metapro gdgraph affected src/example.ts [--depth N] [--ranked] [--json]
+gd-metapro gdgraph repomap [--budget N] [--seed <path>...] [--changed]
 gd-metapro ctx status
 gd-metapro ctx diff
 gd-metapro wiki status
+gd-metapro wiki ask "How does auth work?"
 gd-metapro skills status
 gd-metapro test analyze
 gd-metapro test run --changed
+gd-metapro test coverage-map build
 gd-metapro health run --changed
 gd-metapro memory search "decision"
+gd-metapro memory search "retry" --as-of 2026-01-01 --class procedural
+gd-metapro memory supersede <old> --by <new>
+gd-metapro memory index --embeddings
 gd-metapro flow init --title "Task title"
 gd-metapro flow list
 gd-metapro flow status <id>
@@ -296,10 +322,15 @@ gd-metapro flow complete <id>
 gd-metapro standard validate
 gd-metapro standard doctor
 gd-metapro standard capabilities
+gd-metapro standard emit llms
 gd-metapro security status
 gd-metapro security scan src/example.ts
+gd-metapro security scan-mcp <manifest.json|dir>
 gd-metapro security check-output --file draft.md
 gd-metapro security report
+gd-metapro security hooks install --runtime claude
+gd-metapro security eval --corpus all
+gd-metapro mcp serve
 ```
 
 This lists the most common entry points only. Each command has additional
@@ -329,15 +360,16 @@ against the [Metaproject Standard](docs/requirements/metaproject-standard/specif
 and manages the `.metaproject` structure and module manifest. It ships the
 following modules:
 
-- `gdgraph`: code graph module for dependencies and affected context.
+- `gdgraph`: code graph module for dependencies and affected context; N-hop `affected` blast radius and PageRank `repomap`, with an opt-in tree-sitter symbol/call graph (`init --treesitter`).
 - `gdctx`: context module for compact command/search/read output.
-- `gdwiki`: Markdown project knowledge base with page templates, link checks, and index generation.
-- `gdskills`: bundled agent-facing skills plus generated project-skill creation, routing, verification, learning, export, and sync.
-- `health`: normalized code health reports from TypeScript, tests, audit, complexity, coverage, lint, and optional SonarQube.
-- `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports.
-- `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection.
+- `gdwiki`: Markdown project knowledge base with page templates, link checks, and index generation; grounded `wiki ask` retrieval over the pages.
+- `gdskills`: bundled agent-facing skills plus generated project-skill creation, routing, verification, learning, export (`codex|claude|plugin`), and sync.
+- `health`: normalized code health reports from TypeScript, tests, audit, complexity, coverage, lint, and optional SonarQube; opt-in churn×complexity hotspot signal (`scoring.hotspotWeight`, default 0, so scores are unchanged by default).
+- `testing`: project testing context, related-test selection, changed-scope runs, and normalized reports; an always-on smoke tier plus an opt-in coverage-map Test Impact Analysis (`init --testing-tia`).
+- `memory`: long-term Markdown project memory with indexing, search, ingest, deduplication, and reflection; bitemporal `Valid-From`/`Valid-To`/`Superseded-By` fields, semantic/episodic/procedural classes, non-destructive `supersede`, opt-in local embeddings, and procedural memory auto-injected into task-implementer prompts.
 - `tasks`: agent-first Task Manager, driven by `gd-metapro flow`, for issue/task lifecycle tracking.
-- `security`: agent input/output and artifact security, driven by `gd-metapro security` - deterministic secrets/PII/prompt-injection/egress scanning, redaction, and a policy gate, with in-process guards at the memory/wiki/testing/gdctx/flow write seams and optional git + agent hooks. See [Security](#security).
+- `security`: agent input/output and artifact security, driven by `gd-metapro security` - deterministic secrets/PII/prompt-injection/egress scanning, redaction, and a policy gate, with in-process guards at the memory/wiki/testing/gdctx/flow write seams and optional git + multi-runtime agent hooks. See [Security](#security).
+- `mcp`: opt-in Model Context Protocol server (`gd-metapro mcp serve`) exposing read-only module services to agents; disabled by default (`modules.mcp.enabled=false`, needs the optional MCP SDK). See [Agent And IDE Integration](#agent-and-ide-integration).
 
 ## Security
 
@@ -347,8 +379,11 @@ agent inputs, outputs, and `.metaproject/` artifacts. It is deterministic
 from `security-audit` (dependencies / secrets in git history).
 
 **Detects** secrets (provider keys, private keys, `.env`, URL creds, JWT),
-PII (email/phone/…), prompt-injection, and egress attempts, then applies a policy
-action with the precedence `block > require-approval > redact > warn > allow`.
+checksum-verified structured PII (IBAN/Luhn/SSN/IP alongside email/phone/…),
+prompt-injection, modern exfiltration (markdown-image/EchoLeak, SSRF/metadata),
+and egress attempts against a deny-by-default `policies.egress.allowlist`, then
+applies a policy action with the precedence
+`block > require-approval > redact > warn > allow`.
 Redaction is leak-safe: fixed-width masks, HMAC-keyed hashing with a local-only,
 never-committed key, and committable reports that carry no raw secrets.
 
@@ -357,13 +392,23 @@ never-committed key, and committable reports that carry no raw secrets.
 ```bash
 gd-metapro security status
 gd-metapro security scan <path> [--json]
+gd-metapro security scan-mcp <manifest.json|dir> [--json] [--pin <manifest>] [--strict]
 gd-metapro security check-input [--source <kind>] [--file <path>]
 gd-metapro security check-output [--target <kind>] [--file <path>]
 gd-metapro security redact <path> [--out <path>]
 gd-metapro security report [--since <ref>]
 gd-metapro security policy validate
 gd-metapro security incidents [--limit <n>]
+gd-metapro security hooks install|uninstall --runtime <claude|cursor|windsurf|generic-mcp|all>
+gd-metapro security eval [--corpus <name|all>] [--with-model]
 ```
+
+**Opt-in model backends.** On the `backends` seam, an optional Prompt Guard 2
+injection model and an NER PII backend can raise recall; both are off by default
+and degrade to the deterministic detectors when their assets are absent.
+`security eval` runs labeled corpora through the detectors and reports a
+per-detector false-negative rate, exiting non-zero when a detector breaches its
+committed threshold.
 
 **Modes** (`.metaproject/security.config.json`): `advisory` (default - report and
 continue, never block), `enforced` (block the controlled write), `ci` (exit
@@ -428,6 +473,20 @@ gd-metapro gdgraph query cycles
 gd-metapro gdgraph query orphans
 gd-metapro gdgraph affected <file>
 ```
+
+`affected` takes an optional `--depth N` for a transitive N-hop blast radius,
+plus `--ranked` and `--json`; the default (`--depth 1`) output is unchanged.
+`gdgraph repomap [--budget N] [--seed <path>...] [--changed]` writes a
+PageRank-ranked, token-budgeted `repomap.md`:
+
+```bash
+gd-metapro gdgraph affected <file> --depth 3 --ranked
+gd-metapro gdgraph repomap --budget 2000 --changed
+```
+
+An opt-in tree-sitter symbol graph (`gd-metapro init --treesitter`) additively
+writes `symbols.jsonl`/`calls.jsonl`; the regex-based scanner stays the default
+and the graph is byte-identical without it.
 
 ## gdgraph Refresh Policy
 
@@ -526,6 +585,18 @@ Practical integration pattern:
 - Review or implementation agents: read `health`, `testing`, `memory`, and
   `gdgraph` artifacts before touching broad source files.
 
+### MCP Server
+
+For agents that speak the Model Context Protocol, `gd-metapro mcp serve` exposes
+the module services as a stdio-first MCP server (`--http` is a separate opt-in).
+The tools are thin, read-only adapters over the module service facades
+(`gdgraph.affected`/`cycles`/`orphans`, `security.check`/`scan`/`scan-mcp`,
+`flow.status`, `memory.search`, `health.gate`/`status`, `wiki.query`,
+`standard.validate`), plus read-only Resources under
+`metaproject://<class>/<relpath>`. The `mcp` module is off by default and needs
+the optional MCP SDK. Related surfaces: `security scan-mcp`,
+`standard emit llms`, and `skills export --runtime plugin`.
+
 ## CI Integration
 
 `gd-metapro` is designed so CI can publish normalized artifacts that agents and
@@ -553,6 +624,11 @@ Recommended CI artifacts:
 
 Use `gd-metapro health gate --strict-warn` when you want a CI job to fail on
 the normalized health gate instead of parsing raw linter/test logs.
+
+For security-sensitive repositories, `gd-metapro security eval --corpus all`
+runs the red-team corpora and fails the job when any detector's false-negative
+rate breaches its committed threshold (gate the model-backed run separately with
+`--with-model`).
 
 ## Custom Module Convention
 

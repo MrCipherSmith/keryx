@@ -13,6 +13,20 @@ key source files, mechanics, the `.metaproject/` paths each module reads and wri
 and cross-module integrations. Behavior described here is what the source actually
 implements.
 
+**Cross-cutting opt-in substrate (roadmap-2026).** The optional, model/asset-backed
+features described below (gdgraph's symbol layer, memory's embedding index, the
+security model backends, etc.) all instantiate three shared, deterministic-safe
+mechanisms rather than each rolling their own: the **Capability System**
+(`src/capability/` — `resolveCapability(cwd, spec)` returns an adapter only when the
+capability is enabled in the manifest, its optional dependency imports lazily, and
+its asset resolves; otherwise it returns `null` and the caller runs its
+deterministic fallback), the **Asset Resolver** (`src/assets/` — resolves + sha256-
+verifies an opt-in asset from a config path / cache, never networking implicitly),
+and the **fixture harness** (`src/harness/` — runs a block's detector over a committed
+labeled corpus and computes a reproducible precision/recall report). The invariant
+across every module is the same: **the deterministic path is the default and the
+fallback; each model/asset feature is opt-in and degrades gracefully to that path.**
+
 ---
 
 ## cli-core
@@ -101,20 +115,28 @@ dependencies/dependents of a given file.
 - `build` — builds the graph for `process.cwd()`, writes artifacts, prints node/edge counts.
 - `query cycles` — prints each cycle as `a -> b -> a`, or "No cycles found."
 - `query orphans` — prints orphan module paths, or "No orphan modules found."
-- `affected <file>` — prints a Markdown block with `## Dependencies` and `## Dependents`.
+- `affected <file> [--depth N] [--ranked] [--json]` — prints a Markdown block with `## Dependencies` and `## Dependents`; `--depth N` walks the transitive N-hop dependent closure (default `1` = today's direct set), `--ranked` appends a blast-radius ranking, `--json` emits the structured result.
+- `repomap [--budget N] [--seed <path>...] [--changed]` — writes a PageRank-ranked, token-budgeted `artifacts/repomap.md`.
+- `assets list | verify [<id>] | pull <id>` — manage the optional tree-sitter grammar assets.
 - `--help`/`-h`/no args — usage.
 
-Only `cycles` and `orphans` are valid queries (anything else errors, exit 1). No
-other flags exist (`--json`, `--output`, depth limits are not implemented). Unless
-`GD_METAPRO_GDGRAPH_LOCAL=1`, the command first tries to delegate to a project-local
+Only `cycles` and `orphans` are valid `query` targets (anything else errors, exit
+1). Unless `GD_METAPRO_GDGRAPH_LOCAL=1`, the command first tries to delegate `build`,
+`query`, and flag-less `affected` to a project-local
 `.metaproject/core/gdgraph/cli.ts`, letting a project pin its own gdgraph version;
-if that file is absent the built-in implementation runs.
+if that file is absent (or the newer `repomap`/`assets`/flagged-`affected` surfaces
+are used) the built-in implementation runs.
 
 **Key files.**
 - `src/commands/gdgraph.ts` — dispatcher, local-runner delegation, help, output.
 - `src/gdgraph/build.ts` — filesystem walk, import-specifier extraction, resolution, artifact writing.
-- `src/gdgraph/query.ts` — graph loading + the three query algorithms.
-- `src/gdgraph/types.ts` — `GraphNode`, `GraphEdge`, `GraphData`.
+- `src/gdgraph/query.ts` — graph loading (incl. the symbol layer) + the three query algorithms.
+- `src/gdgraph/types.ts` — `GraphNode`, `GraphEdge`, `GraphData`, plus the additive `SymbolNode`/`CallEdge`/`SymbolLayer`.
+- `src/gdgraph/service.ts` — `createGdgraphService()` facade (`build`/`loadGraph`/`affected`/`repomap`/`query`): the transport-independent service contract for in-process callers.
+- `src/gdgraph/affected.ts` — pure N-hop transitive `affected` (BFS over reverse-dependents).
+- `src/gdgraph/pagerank.ts` + `repomap.ts` — deterministic personalized PageRank + the token-budgeted repo map.
+- `src/gdgraph/config.ts` — optional `.metaproject/gdgraph.config.json` loader (deep-merged over defaults; missing/malformed ⇒ defaults).
+- `src/gdgraph/treesitter/` — the opt-in `web-tree-sitter` symbol-layer adapter (`adapter.ts`, `extract.ts`, `grammars.ts`) + `enrich.ts`.
 
 **How it works.** `collectSourceFiles` walks the tree from the project root,
 skipping `IGNORE_DIRS` (`.git`, `.metaproject`, `node_modules`, build/output dirs,
@@ -130,10 +152,29 @@ Queries: `getOrphans` returns nodes with no inbound/outbound resolved edges;
 recursive DFS over `imports` edges only, deduping cycles by canonical rotation
 (reports one representative per rotation, not all elementary circuits).
 
+**Block B additions (symbol layer + ranked map).** An optional **symbol layer** —
+`src/gdgraph/treesitter/`, an adapter over `web-tree-sitter`, opt-in via
+`init --treesitter` — parses sources into function/class/method `SymbolNode`s and
+`calls`/`defines` `CallEdge`s, written **additively** to `storage/symbols.jsonl` +
+`storage/calls.jsonl`. It is the only code in `src/` that loads `web-tree-sitter`
+(lazily via `await import()` behind the shared Capability Seam) and it never throws
+out: when the dependency or a grammar asset is unavailable it degrades to `null` and
+the regex/file-level graph stays the **byte-identical default**. `affected` is now
+transitive (`affected.ts`, a BFS over reverse-dependents to `--depth N`, with a
+`--ranked` blast radius and `--json`); at depth 1 the rendered `Dependencies`/
+`Dependents` output is byte-for-byte identical to the pre-block renderer. `repomap`
+(`pagerank.ts` + `repomap.ts`) ranks files (and symbols, when the layer is present)
+by deterministic personalized PageRank and renders a hard-token-budgeted
+`artifacts/repomap.md`. `createGdgraphService()` (`service.ts`) is the new
+transport-independent facade over these surfaces; `config.ts` supplies the optional,
+deep-merged config.
+
 **Data & artifacts.** Storage `.metaproject/data/gdgraph/storage/`: `nodes.jsonl`,
-`edges.jsonl`. Artifacts `.metaproject/data/gdgraph/artifacts/`: `module-map.json`
-(module → file paths) and `summary.md` (stats, top modules, unresolved imports,
-skipped dirs, next-command hints).
+`edges.jsonl` (and, only when the tree-sitter capability is active, `symbols.jsonl`
++ `calls.jsonl`). Artifacts `.metaproject/data/gdgraph/artifacts/`: `module-map.json`
+(module → file paths), `summary.md` (stats, top modules, unresolved imports, skipped
+dirs, next-command hints), and — from `repomap` — `repomap.md`. Optional config
+`.metaproject/gdgraph.config.json`.
 
 **Dependencies / integrations.** Node builtins only (`fs`, `path`,
 `child_process`); self-contained, no shared-lib or cross-module imports. Its
@@ -212,6 +253,7 @@ deterministic draft pages from sibling modules' generated data.
 | `wiki index` | rebuild the managed index block in `index.md` | 0 |
 | `wiki check-links` | resolve internal Markdown links, write report | **1 if broken** |
 | `wiki validate` | metadata + link + index-staleness checks (superset of check-links) | **1 if issues** |
+| `wiki ask "<q>" [--k <n>] [--rerank]` | deterministic Q&A over wiki pages + current memory, returns cited answer | 0 |
 
 Eight fixed page types (`WIKI_PAGE_TYPES`), each mapping to a folder: `architecture`,
 `domain-model`, `business-rule`, `user-scenario`, `component`, `service`,
@@ -219,9 +261,10 @@ Eight fixed page types (`WIKI_PAGE_TYPES`), each mapping to a folder: `architect
 
 **Key files.**
 - `src/commands/wiki.ts` — thin CLI handler.
-- `src/wiki/service.ts` — all domain logic (status/create/index/collect/check-links/validate + collectors).
+- `src/wiki/service.ts` — all domain logic (status/create/index/collect/check-links/validate + collectors) + the `createGdWikiService()` facade.
+- `src/wiki/ask.ts` — `wikiAsk`: deterministic lexical Q&A over collected wiki pages + current memory, returning citations + an assembled Markdown answer.
 - `src/wiki/templates.ts` — Markdown renderers + managed-block sentinels.
-- `src/wiki/types.ts` — `WikiPageType`, `WIKI_PAGE_TYPES`, DTOs, `GdWikiService` interface.
+- `src/wiki/types.ts` — `WikiPageType`, `WIKI_PAGE_TYPES`, DTOs, `GdWikiService` interface (incl. `ask`), `WikiAsk*` types.
 
 **How it works.** Pages carry plain-text metadata lines (`Version:`, `Type:`,
 `Status:` — regex-parsed, not YAML frontmatter). `wikiCollect` reads three
@@ -236,6 +279,15 @@ untouched. `wikiGenerateIndex` maintains a managed block between
 `wikiCheckLinks` walks all `.md` (except `templates/`), resolves internal links, and
 reports broken ones. `wikiValidate` folds link checks + metadata checks +
 index-staleness into one pass.
+
+**Block C addition (`ask`).** `GdWikiService.ask` (`src/wiki/ask.ts`) answers a
+question **deterministically** by lexical (Jaccard) retrieval scoped strictly to the
+project's own collected wiki pages + current (non-superseded, in-validity) memory
+entries — never an arbitrary corpus — returning the top-k **citations** and an
+assembled Markdown answer. An optional embedding rerank reorders the citation set
+when the memory embedding capability resolves; it never changes the set's provenance
+and degrades back to the deterministic lexical order. It is exposed as an MCP **Tool**
+(`wiki.ask`), alongside the wiki/memory trees served as read-only MCP **Resources**.
 
 **Data & artifacts.** Wiki root `.metaproject/wiki/` (existence = "enabled"), pages
 under `wiki/<folder>/<slug>.md`, `wiki/index.md`, `wiki/templates/page.md`, and the
@@ -354,7 +406,7 @@ health."
 `health/run.ts` (the run pipeline), `health/scoring.ts` (pure math), `health/scopes.ts`,
 `health/gate.ts`, `health/config.ts`, `health/baseline.ts`, `health/history.ts`,
 `health/report.ts`, `health/skills.ts` (file→skill ownership), plus `metrics/*`
-(complexity/coverage/churn) and `sources/*` (adapters).
+(complexity/coverage/churn/**hotspot**) and `sources/*` (adapters).
 
 **How it works.** Architecture is an **adapter (plugin) pattern + linear pipeline**.
 Each quality tool is a `SourceAdapter` (`detect/run/import/parse`) registered in
@@ -370,6 +422,13 @@ vs baseline; `regression_score` = baseline − current. The **gate** escalates
 pass<warn<fail: any P0 → fail, regression ≥10 → fail (≥3 → warn), missing required
 source → fail only under `--strict`, coverage below soft floor → warn. `strict` mode
 makes auto-mode importers return `missing` instead of spawning tools.
+
+**Block D addition (hotspots).** A churn×complexity **hotspot** signal
+(`src/health/metrics/hotspot.ts`, `rankHotspots` — score = git churn × Σ per-function
+cyclomatic complexity, ranked score-desc) is folded **additively** into `healthScore`
+via `scoring.hotspotWeight`, which **defaults to `0`** — so default scores, the
+baseline, and the gate are all unchanged out of the box — and is surfaced as
+`report.hotspots`. `computeGate` is unchanged.
 
 **Data & artifacts.** Under `.metaproject/data/health/`: `artifacts/latest.json`
 (the full `HealthReport`, source for status/gate/explain), `artifacts/latest.md`
@@ -411,7 +470,8 @@ installs dependencies, or invents a stack.
 `--gate` is an alias for `--strict`.
 
 **Key files.** `src/commands/test.ts` (thin dispatcher), `src/testing/service.ts`
-(all domain logic — analyze, run, select, parse, persist, render), `types.ts` (data
+(all domain logic — analyze, run, select, parse, persist, render), `coverage-map.ts`
+(coverage-map Test Impact Analysis: parse/normalize/select), `types.ts` (data
 contracts), `templates.ts` (config/manifest/hook generators).
 
 **How it works.** `analyzeTestingProject` walks the tree, reads `package.json`
@@ -427,6 +487,18 @@ but per-test extraction is approximate. The **strict gate** is the key rule:
 fallback isn't `"none"` — this makes the pre-push hook block. Note some declared
 config (`changedSelection.strategies` incl. `gdgraph`, `runner` mode, `historyLimit`,
 `keepRawLogs`) is **latent/aspirational** — not honored by current logic.
+
+**Block D additions (coverage-map TIA + smoke tier).** An opt-in **Test Impact
+Analysis** (`src/testing/coverage-map.ts`, the `coverageMap` capability) selects tests
+**map-first** when a normalized `coverage-map.json` is present — intersecting changed
+files/lines against a `testFile → coveredFiles` map parsed from **existing** lcov /
+V8-bun coverage output (no bespoke instrumentation on the default path, no new
+dependency) — and otherwise falls back to the **byte-identical** static changed-file
+selection (`loadCoverageMap` returns `null` on an absent/malformed map, never throws).
+An always-on **smoke tier** (`smoke.selectors`, **empty by default ⇒ no-op**) is
+unioned into every selection mode, composing with rather than suppressing the
+scoped/changed set. Any persisted raw coverage log is routed through the security
+write seam.
 
 **Data & artifacts.** Under `.metaproject/data/testing/`: `context.json`/`context.md`/
 `recommendations.md` (from analyze), `artifacts/latest.json`/`latest.md` (newest
@@ -449,7 +521,8 @@ adapter reads normalized reports via `loadCompatibleTestingReport`) and **gdskil
 durable, agent-facing knowledge base of lessons, decisions, constraints, known
 mistakes, patterns, and more. Markdown files under `.metaproject/memory/` are the
 source of truth; the module reads, ranks, deduplicates, and consolidates them
-**deterministically** — no LLM, no embeddings, pure token/trigram similarity. It is
+**deterministically** by default — pure token/trigram similarity, with an optional
+embedding rerank (Block C) that is opt-in and always degrades back to lexical. It is
 a Mem0-style memory layer reimplemented deterministically, and it feeds a "learning
 signal" (only `accepted` entries) into gdskills.
 
@@ -459,7 +532,8 @@ signal" (only `accepted` entries) into gdskills.
 |---|---|
 | `memory new` | `new <type> [slug] --title "<t>" [--force]` — scaffold a draft entry; prints possible duplicates |
 | `memory index` | build `data/memory/index/index.json` |
-| `memory search` | `search "<q>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]` — ranked retrieval |
+| `memory search` | `search "<q>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--semantic]` — ranked retrieval (`current` by default; `--as-of` for a point-in-time view; `--semantic` opts into the embedding rerank) |
+| `memory supersede` | `supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]` — non-destructively replace an entry (sets `Supersedes`/`Superseded-By`, closes the old validity interval) |
 | `memory ingest` | `ingest --from-<review\|health\|job\|skill-verifier> <path>` — ADD/UPDATE entries |
 | `memory check` | integrity lint; non-zero exit on issues |
 | `memory reflect` | cluster entries by tag; create `pattern` drafts for clusters ≥ minClusterSize |
@@ -468,11 +542,13 @@ There are **11 entry types** (`MEMORY_TYPES`), of which `lesson`, `decision`,
 `constraint`, `known-mistake` are first-class "new-able" MVP types.
 
 **Key files.** `commands/memory.ts` (dispatcher), `memory/service.ts`
-(`createMemoryService` facade: create/index/search/ingest/check), `store.ts`
-(Markdown→`MemoryEntry` parser), `search.ts` (weighted ranking), `dedup.ts`,
-`text.ts` (similarity primitives), `ingest.ts` (ADD-or-UPDATE), `reflect.ts`
-(consolidation), `relevant.ts` (cross-module lookup), `check.ts`, `config.ts`,
-`templates.ts`.
+(`createMemoryService` facade: create/index/search/ingest/**supersede**/check),
+`store.ts` (Markdown→`MemoryEntry` parser, incl. the bitemporal header), `search.ts`
+(weighted ranking + optional semantic rerank), `dedup.ts`, `text.ts` (similarity
+primitives), `ingest.ts` (ADD-or-UPDATE), `reflect.ts` (consolidation), `relevant.ts`
+(cross-module lookup), `supersede.ts` (non-destructive replacement), `inject.ts`
+(procedural-memory prompt injection), `embedding/` (opt-in embedding index over
+`@xenova/transformers`), `check.ts`, `config.ts`, `templates.ts`.
 
 **How it works.** **Markdown-as-database:** `parseEntry` extracts a structured
 record from `# Title`, `Key: value` header fields, and `##` sections.
@@ -487,13 +563,32 @@ decisions/constraints against accepted ones (never auto-resolves). `check` lints
 metadata, links, dedup, conflicts, and index presence. Note `reflect` and
 `relevant` bypass the `MemoryService` interface (5 of the 6 subcommands).
 
+**Block C additions (bitemporal + typing + embeddings).** Entries gained an optional
+**bitemporal** header (`Class`, `Valid-From`, `Valid-To`, `Recorded-At`, `Supersedes`,
+`Superseded-By`) parsed by `store.ts`; queries return `current` entries by default
+and honor `--as-of <date>` for a point-in-time view, and `supersede.ts` records a
+**non-destructive** replacement (sets both sides + closes the old validity interval,
+idempotent — it never deletes). Entries authored before Block C omit these fields
+and parse exactly as before. **Memory typing** maps every type to a knowledge class
+via `MEMORY_CLASS_MAP` (`semantic`/`episodic`/`procedural`, total and defaulting to
+`semantic`); `inject.ts` splices accepted, current, `procedural`-class memory into
+task-implementer / flow prompts (`typing.injectClasses` defaults to `["procedural"]`).
+An optional **embedding index** (`src/memory/embedding/` over `@xenova/transformers`,
+resolved through the Capability Seam + Asset Resolver) is a **derived, disposable**
+content-hash-keyed vector cache under `data/memory/embeddings/` that reranks the
+lexical candidate pool; it never mutates the Markdown store, and lexical search stays
+the default and the fallback on any unavailability or error.
+
 **Data & artifacts.** Two roots: `memoryRoot` = `.metaproject/memory/` (Markdown
 source of truth, one subfolder per type) and `dataRoot` =
 `.metaproject/data/memory/` (generated: `index/index.json`, `artifacts/latest.md`,
-`artifacts/latest.json`). Config `.metaproject/memory.config.json`.
+`artifacts/latest.json`, and — only when the embedding capability is active — the
+derived, disposable `embeddings/`). Config `.metaproject/memory.config.json`.
 
-**Dependencies / integrations.** Node builtins only + `lib/fs`, `lib/json`,
-`lib/args`. **Consumed by gdskills** via `relevantAcceptedMemory` (the memory→skills
+**Dependencies / integrations.** Node builtins + `lib/fs`, `lib/json`, `lib/args`;
+the embedding runtime (`@xenova/transformers`) is an **optional** dependency imported
+lazily only by the embedding adapter (default off). **Consumed by gdskills** via
+`relevantAcceptedMemory` (the memory→skills
 learning signal, `skills learn --from-memory`); `init`/`update` scaffold config/index/
 skill files via `templates.ts`. `allowAutoAccept` is defined in config but never
 read (latent flag).
@@ -581,11 +676,13 @@ a pass/needs-approval/fail gate that can block a controlled write or CI run. It 
 deliberately separate from `health` (which imports dependency findings as quality
 signals) and from `security-audit` (dependency/committed-secret scanning): this
 module protects prompts, external content, generated outputs, and `.metaproject/`
-artifacts. It is **deterministic** (rule + entropy detectors, no model backend) and
-**leak-safe** — findings never carry raw sensitive values, only fixed-width masks
-and local-only HMAC hashes. The shipped scope is spec §16 **Phase 1+2+3** (engine +
-CLI + write-seam integrations); the model/API backends and gateway mode (Phase 4)
-are **not** implemented.
+artifacts. It is **deterministic by default** (rule + entropy detectors; the model
+backends are opt-in and default off) and **leak-safe** — findings never carry raw
+sensitive values, only fixed-width masks and local-only HMAC hashes. The shipped
+scope is spec §16 **Phase 1+2+3** (engine + CLI + write-seam integrations), extended
+by roadmap-2026 **Block E** with modern exfil/PII detectors, a multi-runtime hook
+registry, a red-team eval harness, and **opt-in** model backends (below); the
+always-on gateway mode (Phase 4) remains **not** implemented.
 
 **CLI surface.** Dispatched by `securityCommand`:
 
@@ -607,7 +704,8 @@ The mode-gated commands honor `config.mode`: **advisory** (default) always exits
 **Key files.**
 - `src/commands/security.ts` — CLI dispatcher, arg/flag parsing, rendering, exit-code mapping, help.
 - `src/security/service.ts` — `analyze`/`runScan`/`runReport`/`runGate` + the `createSecurityService` in-process contract (advisory-safe `check`, `redact`, `report`, `gate`).
-- `src/security/detect/` — the deterministic detectors: `secrets.ts`, `entropy.ts`, `pii.ts`, `injection.ts`, `egress.ts`, plus `index.ts` (`runDetectors` + overlap dedup).
+- `src/security/detect/` — the deterministic detectors: `secrets.ts`, `entropy.ts`, `pii.ts` (checksum-validated structured PII), `injection.ts`, `egress.ts`, `exfil.ts` (markdown-image/EchoLeak), `mcp.ts` (MCP-manifest scan), plus `index.ts` (`runDetectors` + overlap dedup); opt-in model adapters live under `detect/injection/adapter.ts` (Prompt Guard 2) and `detect/pii/ner-adapter.ts` (NER).
+- `src/security/agent-hooks/runtimes.ts` — multi-runtime agent-hook registry; `src/security/eval/harness.ts` — labeled-corpus red-team eval harness.
 - `src/security/resolve.ts` — finding construction, action precedence, injection→egress escalation, confidence gate, `computeGate`.
 - `src/security/redact.ts` — fixed-width masks, safe `redactedPreview`, local-only HMAC key management + `hmacHash`.
 - `src/security/self-protect.ts` — config-checksum / mode-downgrade / disabled-policy self-protection.
@@ -635,6 +733,23 @@ findings into the decision when the config checksum mismatches (policies edited
 outside the tool), the mode is downgraded, or a policy is disabled — each also
 appends an incident. Reports are written to `data/security/artifacts/latest.{md,json}`;
 `report`/`gate` read that artifact and never re-scan.
+
+**Block E additions (roadmap-2026 hardening).** Modern data-exfiltration detectors
+(`src/security/detect/exfil.ts`) flag markdown-image / auto-render **EchoLeak**-style
+leaks (CVE-2025-32711) against a `policies.egress.allowlist` (deny-by-default), and
+`egress.ts` adds always-on **SSRF / cloud-metadata** host detection (RFC-1918 /
+loopback / link-local / `metadata.google.internal`). Structured-PII validators are now
+**checksum-verified** (`detect/pii.ts`: IBAN mod-97, credit-card Luhn, US-SSN range,
+IP) so invalid-checksum candidates are not flagged. Agent hooks became **multi-runtime**
+(`agent-hooks/runtimes.ts`: claude / cursor / windsurf / generic-mcp), and a
+labeled-corpus **red-team eval harness** (`eval/harness.ts`, `security eval [--corpus
+<injection\|exfil\|structured-pii\|secret\|all>] [--with-model]`) proves detection
+quality against committed fixtures. Two **opt-in** model backends sit on the
+`backends` config seam — both **default off**, resolved through the Capability Seam +
+Asset Resolver: a **Prompt Guard 2** injection adapter (`detect/injection/adapter.ts`,
+`backends.injectionModel`) and an **NER PII** adapter (`detect/pii/ner-adapter.ts`,
+`backends.piiModel`). All remain leak-safe and degrade to the deterministic rule
+detectors when a dependency/asset is unavailable.
 
 **Data & artifacts.** Config `.metaproject/security.config.json` (seed-once). Data
 root `.metaproject/data/security/` with subtrees `artifacts/` (committable
@@ -693,6 +808,58 @@ never blocks; enforced/ci block**.
   `security.hooks.agent`. Opt out with `--no-security-agent-hook`.
 
 `update` refreshes each hook only when the manifest already records it.
+
+---
+
+## mcp
+
+**Purpose.** `mcp` (Block A, roadmap-2026) is a **new, opt-in, cross-cutting module**
+that exposes gd-metapro's existing module **service facades** over the **Model Context
+Protocol** so an external agent can call them as MCP **Tools** and read generated
+`.metaproject/` artifacts as read-only MCP **Resources**. It adds no new domain logic:
+every Tool is a thin wrapper that shapes input, calls one facade method, and returns
+the typed result. It is **stdio-first** (an isolated localhost HTTP/SSE transport is a
+further opt-in), and `modules.mcp` **defaults off** — the module entry + config are
+scaffolded only via `init --mcp`.
+
+**CLI surface.** Dispatched by `mcpCommand`:
+
+| Subcommand | Behavior |
+|---|---|
+| `mcp` / `mcp serve` | run the stdio JSON-RPC MCP server (default) |
+| `mcp serve --http` | use the isolated localhost HTTP/SSE transport (requires `http.enabled`) |
+| `mcp --help` / `-h` | usage |
+
+**Key files.**
+- `src/commands/mcp.ts` — thin handler; parses `serve`/`--http`, never imports the SDK.
+- `src/mcp/server.ts` — stdio-first server loop; lazy-loads `@modelcontextprotocol/sdk` via `await import()` and hard-fails with an actionable message when it is absent (the sanctioned opt-in exception).
+- `src/mcp/tools.ts` — the Tool registry over the gdgraph/security/memory/health/wiki/flow/standard facades.
+- `src/mcp/resources.ts` — the read-only `metaproject://<class>/<relpath>` Resource registry (`artifacts`/`wiki`/`memory`), path-confined to each class root.
+- `src/mcp/dispatch.ts`, `discovery.ts`, `config.ts`, `redact-seam.ts`, `transport/{stdio,http-sse}.ts`.
+
+**How it works.** Tools wrap the module facades (`createSecurityService`,
+`createMemoryService`, `createCodeHealthService`, `createGdWikiService`,
+`createFlowService`, `runValidate`) plus gdgraph's pure query module
+(`getAffected`/`getCycles`/`getOrphans`/`loadGraph`); there is no logic in `mcp/`
+beyond input shaping. Resources
+enumerate and read on-disk generated artifacts only — no computation, no mutation —
+and every URI is resolved and **confined** to its class root (any path escaping the
+root is rejected). The module is boundary-guarded: an import test enforces that
+`src/mcp/` imports **only** service facades + `src/lib/*` + the security `guard` seam
+(never a module's internals), and the golden-rule static guard forbids any top-level
+import of the MCP SDK anywhere in `src/`.
+
+**Data & artifacts.** Reads (read-only) the generated `.metaproject/` trees it serves
+as Resources (`data/**/artifacts`, `wiki/`, `memory/`). Config
+`.metaproject/core/mcp/mcp.config.json` (deep-merged over defaults: transport, HTTP
+host/port default off, Tool include/exclude, Resource roots). `init --mcp` scaffolds
+the `core/mcp/` structure + config and the `modules.mcp` manifest entry.
+
+**Dependencies / integrations.** Node/Bun builtins + `lib/*` + each module's service
+facade + the security `guard` seam; the MCP SDK (`@modelcontextprotocol/sdk`) is an
+**optional** dependency loaded lazily only in `server.ts`. It is the outbound consumer
+of every other module's facade — the first cross-module integration that reaches in
+through the public service contracts rather than the shared file workspace.
 
 ---
 

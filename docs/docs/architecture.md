@@ -24,6 +24,12 @@ src/<feature>/service.ts (+ *.ts) Layer 3 — Feature/service (domain logic)
    ▼
 src/lib/*                         Layer 4 — Shared toolkit
       args · fs · json · prompt · ui · templates   (+ external tool adapters)
+
+── opt-in substrate (cross-cutting, roadmap-2026) ────────────────────────
+src/capability/  the seam every opt-in layer instantiates (resolve-or-null)
+src/assets/      local-only, sha256-verified asset resolution (+ pull path)
+src/harness/     fixture-corpus precision/recall acceptance gates
+src/mcp/         stdio-first protocol surface over the service facades
 ```
 
 - **Layer 1 (`cli.ts`)** is a thin flat dispatcher: `command = args[0]`, one branch per subcommand, each returning after awaiting its handler. Top-level errors are caught only under `import.meta.main` and mapped to `exitCode = 1`.
@@ -55,8 +61,68 @@ Two invariants define the system and recur across every module:
 | **memory** | `src/memory/` | `memory` | Long-term typed project memory (lessons/decisions/constraints); deterministic search, dedup, ingest, reflect. |
 | **flow** | `src/flow/` | `flow` (manifest id `tasks`) | Agent-first work lifecycle: scaffold a "flow" package, drive a status state machine, enforce completion gates. |
 | **security** | `src/security/` | `security` | Agent input/output + artifact security: deterministic secret/PII/injection/egress detectors, policy resolution, redaction, and a pass/needs-approval/fail gate. |
+| **capability** | `src/capability/` | — (substrate) | The opt-in seam every feature layer instantiates: `resolveCapability(cwd, spec)` gates on manifest + optional dep + verified asset, returns an adapter or `null`. Never throws. |
+| **assets** | `src/assets/` | `assets` (per module) | Local-only, sha256-verified asset resolution (`resolveAsset`); `pullAsset` is the sole network path (verify-or-refuse); `assets.lock.json` pins provenance; `assets list\|verify\|pull`. |
+| **harness** | `src/harness/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
+| **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry, read-only `metaproject://` Resources, single redaction choke point. |
 
-_12 modules: `cli-core` and `shared-lib` are the two cross-cutting groups alongside the 10 feature modules._
+_The 12 core modules (`cli-core` + `shared-lib` + 10 feature modules) are joined by the roadmap-2026 additions: three cross-cutting **opt-in substrates** (`capability`, `assets`, `harness`) plus the `mcp` protocol surface. See "Capability System — opt-in layers" below._
+
+## Capability System — opt-in layers
+
+The roadmap-2026 blocks add smarter, heavier behaviors (tree-sitter symbol graphs, embeddings, model-based threat/PII detection, coverage maps, an MCP server) **without** compromising the local-first, offline, deterministic core. They do this through a single architectural substrate — the **Capability Seam** — governed by one cross-cutting invariant: the **golden rule**.
+
+### The golden rule (determinism invariant)
+
+> With **zero opt-in flags and no assets present**, every command and the full test suite behave **byte-identically** to the deterministic core — no optional dependency is loaded, and no socket is opened.
+
+This is the third system invariant (alongside the idempotent reconciler and data-vs-service separation). It frames the whole design as a **floor** vs opt-in **ceilings** model: the deterministic algorithms (regex graphing, token/trigram memory search, pattern-based security, heuristic test parsing) are the always-present *floor* and the *default fallback*; every heavier capability is a *ceiling* that must be explicitly opted into and can never change the floor's output. A dedicated `capability/golden-rule.test.ts` asserts the invariant (including a no-socket check); `no-optional-imports.test.ts` and `mcp/no-network.test.ts` guard the "no top-level optional import / no network" halves.
+
+### The Capability Seam (`src/capability/`)
+
+`resolveCapability(cwd, spec: CapabilitySpec) → CapabilityAdapter | null` is the sanctioned way to reach any opt-in behavior. It gates, in order, on:
+
+1. **Manifest-enabled** — the capability id appears as an enriched `{ id, enabled: true }` entry in some `modules.<m>.capabilities[]` of `metaproject.json` (a bare-string entry is an advertised floor, never an enabled ceiling; a missing manifest = off).
+2. **Optional dependency importable** — loaded lazily via `await import(spec.optionalDependency)` inside the seam only (the sole place an optional dep is loaded).
+3. **Asset resolved + sha256-verified** — via the Asset Resolver (below).
+4. **Adapter available** — the built adapter's `isAvailable()` probe returns true.
+
+The instant any gate fails, the seam returns `null` and the caller runs its deterministic fallback. It **never throws**: every gate is wrapped in try/catch, there is an outer backstop, and each failure on an *enabled-but-unsatisfiable* ceiling emits a process-scoped **warn-once** (a disabled ceiling — the normal default — is silent, loads no dep, and touches no asset). `runCapabilityOrFallback(adapter, input, fallback)` is the sanctioned call pattern: it runs the adapter when present and catches any `run()` error, degrading to the fallback so an opt-in ceiling can never break a deterministic seam. The seam imports only shared libs + the Asset Resolver, keeping it acyclic (mirroring `security/guard.ts`). It **generalizes the pre-existing `security.backends` opt-in idiom** into one project-wide substrate that every Block A–E layer instantiates.
+
+The shipped `CAPABILITY_REGISTRY` is intentionally **empty** — the base tool offers no capability flags and stays byte-identical; individual blocks append descriptors to gain uniform `--<cap>`/`--no-<cap>` init/update wiring for free.
+
+### Dependency policy
+
+`package.json` `dependencies` stays `{}`. The opt-in runtimes — `web-tree-sitter`, `@modelcontextprotocol/sdk`, `@xenova/transformers` — live **only** under `optionalDependencies` and are imported lazily inside their adapter (or the seam) only. A static test (`capability/no-optional-imports.test.ts`, plus `mcp/`'s own import-boundary guard) fails on any top-level import of an optional runtime, so a fresh `install` with `--omit=optional` yields a fully working deterministic tool.
+
+### Asset Resolver (`src/assets/`)
+
+`resolveAsset(registry, id)` reads **local files only** and re-verifies sha256 on **every** load, returning `null` on a missing or tampered asset (⇒ deterministic fallback); it never opens a socket. `pullAsset(id, lock)` is the **sole network path** in gd-metapro: it fetches the pinned url, verifies the download's sha256, and **refuses on mismatch — writing nothing** before the check passes. `.metaproject/assets.lock.json` is the committed provenance record, pinning `{ version, url, sha256, size }` per asset id. A single `assets list | verify [<id>] | pull <id>` subcommand (delegated to by every opt-in module) is the only asset-management surface.
+
+### Fixture-corpus harness (`src/harness/`)
+
+`runCorpus(dir, detect)` runs a block's detector over a committed `fixtures/<corpus>/cases.json` of labeled cases and computes a deterministic `CorpusReport` (precision, recall, false-negative rate; cases sorted by id so re-runs diff empty). `gateCorpus(report, { maxFnRate })` turns that into a pass/fail CI gate. This generalizes "prove quality against labeled data, not prose" into a shared, per-block-code-free runner used as an acceptance gate by multiple blocks (mcp-threat, symbol-graph, temporal, paraphrase, churn-complexity, and the injection/exfil/PII corpora).
+
+### MCP surface (`src/mcp/`, Block A)
+
+A thin, **stdio-first** Model Context Protocol adapter that exposes existing capabilities without inventing new domain logic:
+
+- A **pure, SDK-free dispatch core** (`dispatch.ts`) drivable directly in-process by unit tests (the parity gate) and by the real server.
+- A **Tool registry** (`tools.ts`) where each tool is a thin adapter over exactly one `createXService()` facade method; `src/mcp/` imports **only** service facades + shared libs + the redaction guard — never a module's internals (an import-boundary test enforces this).
+- Read-only **`metaproject://` Resources** (`resources.ts`) over configured roots.
+- A single **`redactRaw` choke point** (`redact-seam.ts`): every tool result passes through the security engine's redaction before it reaches a transport; disabled security ⇒ byte-identical, any error ⇒ original content (never blocks a response).
+- The **MCP SDK is lazy-loaded only in `server.ts`** and only on the `mcp serve` path (the one sanctioned opt-in command allowed to *hard-fail* with an actionable message when its optional dep is absent, rather than degrade). The stdio transport is the default; an isolated HTTP/SSE transport is a separate, capability-gated opt-in.
+
+### Per-module opt-in layers
+
+Each feature module keeps its deterministic algorithm as the default+fallback and adds a Capability-Seam-mediated ceiling:
+
+- **gdgraph** — tree-sitter symbol graph (`src/gdgraph/treesitter/`, `web-tree-sitter`) over the default regex import graph.
+- **memory** — embedding-based semantic recall (`src/memory/embedding/`, `@xenova/transformers`) over the default token/trigram Jaccard search.
+- **security** — Prompt Guard 2 injection detection and NER-based PII (`src/security/detect/injection/`, `.../pii/ner-adapter.ts`) over the default pattern detectors — the original `security.backends` idiom, now expressed through the shared seam.
+- **testing** — a coverage-map capability (`src/testing/coverage-map.ts`, `src/testing/capability.ts`) over the default heuristic report.
+
+In every case the seam resolving to `null` (flag off, dep absent, or asset missing/tampered) transparently restores the deterministic floor.
 
 ## The `.metaproject/` workspace contract
 
@@ -218,7 +284,7 @@ gdskills also ships **five JSON Schema contracts** (`subagent-dispatch`/`-result
 - **Fail-soft I/O** — `pathExists`/`readJsonFileOr` swallow errors; JSONL parsers skip bad lines; missing external tools return null rather than throwing. `readJsonFile` is the one helper that rethrows (with the file path) for actionable manifest errors.
 - **TTY-graceful UI** — `ui.ts` gates color on `NO_COLOR`/`FORCE_COLOR`/`isTTY`; `prompt.ts` returns defaults when stdin is not a TTY, so CI and piped runs never hang or emit ANSI noise.
 - **Offline-safe self-contained HTML** — the dashboard inlines all CSS/JS and embeds size-capped Markdown/JSON, because `fetch` is blocked under `file://`.
-- **Deterministic, no-ML algorithms** — memory search/dedup use token/trigram Jaccard; health complexity is token-based cyclomatic counting; gdgraph parsing is regex, not AST. Time is injected (`now: Date`) for testability.
+- **Deterministic, no-ML floor (with opt-in ML ceilings)** — the *default* algorithms are deterministic and dependency-free: memory search/dedup use token/trigram Jaccard; health complexity is token-based cyclomatic counting; gdgraph parsing is regex, not AST. Time is injected (`now: Date`) for testability. Heavier ML/AST behaviors (embeddings, tree-sitter, model-based detection) exist only as Capability-Seam ceilings that fall back to this floor when unresolved — see "Capability System — opt-in layers".
 - **Co-located `*.test.ts` (bun test)** — tests sit beside sources throughout; the quality gate is `tsc --noEmit && bun test`.
 
 ## Known limitations / tech-debt
