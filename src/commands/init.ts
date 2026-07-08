@@ -112,7 +112,18 @@ import { syncAgentRules } from "../rules/agent-entrypoints";
 import { hasDistilledEntrypoints } from "../rules/distill";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { registerCapabilitiesFromArgs } from "../capability/registry";
-import { MCP_CONFIG_DEFAULTS } from "../mcp/config";
+import {
+  buildMcpModuleEntry,
+  installMcpClient,
+  renderMcpConfig,
+  renderMcpCoreReadme,
+  renderMcpManifest,
+} from "../mcp/client-config";
+
+// Runtime a user can opt into wiring during interactive init; `skip` writes no
+// client config (the manifest still enables the module).
+type McpInitRuntime = "cursor" | "claude" | "generic" | "skip";
+const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "generic", "skip"];
 
 type InitOptions = {
   help: boolean;
@@ -324,6 +335,30 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  // MCP is an opt-in cross-cutting module (spec §4; Flow 012). Default OFF for
+  // the ceiling, so the default `init` manifest + output stay byte-identical
+  // (golden rule). The `--mcp`/`--no-mcp` flags set it non-interactively; `--yes`
+  // never writes a client config.
+  let enableMcp = false;
+  let mcpInitRuntime: McpInitRuntime = "skip";
+  if (options.noMcp) {
+    enableMcp = false;
+  } else if (options.mcp) {
+    enableMcp = true;
+  } else if (!options.yes) {
+    enableMcp = await confirm(
+      "Enable the MCP server (expose this project to Cursor / Claude Code)?",
+      false,
+    );
+    if (enableMcp) {
+      mcpInitRuntime = await choice(
+        "Write an MCP client config for which runtime?",
+        MCP_INIT_RUNTIMES,
+        "skip",
+      );
+    }
+  }
+
   if (
     !options.yes &&
     (enableGdgraph || enableGdskills || enableHealth || enableTesting || enableSecurity)
@@ -417,10 +452,6 @@ export async function initCommand(args: string[]): Promise<void> {
       );
     }
   }
-
-  // MCP is an opt-in cross-cutting module (spec §4). Default OFF for the
-  // ceiling, so the default `init` manifest stays byte-identical (golden rule).
-  const enableMcp = options.mcp && !options.noMcp;
 
   // gdgraph tree-sitter symbol layer (Block B, B1). Opt-in ceiling; default OFF.
   // The manifest is only touched when a --treesitter/--no-treesitter flag is
@@ -846,6 +877,24 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  // Interactive-only: write the chosen runtime's MCP client config. Never under
+  // `--yes`/non-interactive (`mcpInitRuntime` stays "skip" there), so the
+  // non-interactive `init` output writes no client config (golden rule).
+  if (enableMcp && mcpInitRuntime !== "skip") {
+    const report = await installMcpClient(projectRoot, [mcpInitRuntime]);
+    for (const outcome of report.outcomes) {
+      if (outcome.filePath === null) {
+        note(`Paste this MCP client config into your ${outcome.id} runtime:`);
+        console.log(outcome.snippet ?? "");
+      } else {
+        note(`Wrote ${outcome.id} MCP client config → ${path.relative(projectRoot, outcome.filePath)}`);
+      }
+    }
+    if (!report.sdk.available) {
+      note(`Optional MCP SDK not found — install it to run \`gd-metapro mcp serve\`: ${report.sdk.hint}`);
+    }
+  }
+
   const enabledModuleCount = [
     enableGdgraph,
     enableGdctx,
@@ -914,6 +963,13 @@ export async function initCommand(args: string[]): Promise<void> {
   steps.push(`Open ${style.cyan(".metaproject/gd-metapro-dashboard.html")} for the human dashboard.`);
   steps.push(`After pulling changes, run ${style.cyan("gd-metapro update")} to refresh service files.`);
   nextSteps(steps);
+
+  // Post-init hint pointing at the client-config command when MCP was left off.
+  // Interactive-only: never under `--yes`/non-interactive, so the default floor
+  // output stays byte-identical to today (golden rule, AC6).
+  if (!enableMcp && !options.yes) {
+    note(`Wire an editor/agent to the MCP server later with ${style.cyan("gd-metapro mcp install")}.`);
+  }
 }
 
 function parseInitArgs(args: string[]): InitOptions {
@@ -1093,27 +1149,6 @@ async function createMcpStructure(root: string): Promise<void> {
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
 }
 
-// The opt-in mcp manifest entry (spec §4). `capabilities` stays a string[] to
-// satisfy the standard module schema; the HTTP opt-in lives under `http` and the
-// discovery filter under `expose` (both schema-tolerant extra fields).
-function buildMcpModuleEntry(): Record<string, unknown> {
-  return {
-    enabled: true,
-    core: ".metaproject/core/mcp",
-    data: ".metaproject/data/mcp",
-    manifest: ".metaproject/modules/mcp.md",
-    config: ".metaproject/core/mcp/mcp.config.json",
-    commands: ["serve"],
-    capabilities: [],
-    http: { enabled: false },
-    expose: {
-      tools: true,
-      resources: true,
-      modules: ["gdgraph", "security", "flow", "memory", "health", "wiki", "standard"],
-    },
-  };
-}
-
 // The enriched gdgraph tree-sitter capability entry (B1, spec §4). A ceiling
 // (default OFF); `enabled: true` only via `--treesitter`.
 function gdgraphTreesitterCapability(enabled: boolean): Record<string, unknown> {
@@ -1133,49 +1168,6 @@ function testingCoverageMapCapability(enabled: boolean): Record<string, unknown>
     enabled,
     kind: "ceiling",
   };
-}
-
-function renderMcpConfig(): string {
-  return `${JSON.stringify(MCP_CONFIG_DEFAULTS, null, 2)}\n`;
-}
-
-function renderMcpManifest(): string {
-  return `# MCP Module
-
-Version: 0.1.0
-Type: module
-Status: active
-
-## Summary
-
-Exposes read-only Metaproject services (code graph, security, flow status,
-memory, health, wiki, standard) over the Model Context Protocol (MCP). A thin
-protocol adapter — it defines no new module logic.
-
-## Commands
-
-- \`gd-metapro mcp serve\` — stdio JSON-RPC MCP server (default transport).
-- \`gd-metapro mcp serve --http\` — isolated HTTP/SSE opt-in (localhost only;
-  requires \`http.enabled=true\` in this module's manifest entry).
-
-## Notes
-
-- Requires the optional \`@modelcontextprotocol/sdk\`. Disabled by default.
-- Every tool result is routed through the security \`redactRaw\` seam before
-  transport.
-- Tool/resource exposure is filtered by the manifest (\`expose.modules\`); a
-  disabled module is hidden from \`tools/list\` and \`resources/list\`.
-`;
-}
-
-function renderMcpCoreReadme(): string {
-  return `# MCP Core
-
-Configuration for the \`mcp\` module lives in \`mcp.config.json\` (deep-merged over
-built-in defaults). Transports are stdio (default) and an opt-in HTTP/SSE bridge.
-
-See \`.metaproject/modules/mcp.md\` for the command surface.
-`;
 }
 
 async function createTestingStructure(root: string, enableGdwiki: boolean): Promise<void> {

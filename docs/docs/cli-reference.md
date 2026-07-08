@@ -109,7 +109,7 @@ flag touches the manifest:
 
 | Flag | Enables capability |
 |---|---|
-| `--mcp` / `--no-mcp` | The opt-in MCP server module (`mcp serve`). |
+| `--mcp` / `--no-mcp` | The opt-in MCP server module (`mcp serve`). Interactively, `init` also offers this as a question (default No); `--mcp`/`--no-mcp` set it non-interactively. Wire a client config afterwards with `mcp install`. |
 | `--treesitter` / `--no-treesitter` | The gdgraph tree-sitter symbol layer (optional `web-tree-sitter` dependency). |
 | `--testing-tia` / `--no-testing-tia` | The testing coverage-map test-impact analysis (drives map-first `test run --changed`). |
 
@@ -640,11 +640,19 @@ off by default; enable it with `gd-metapro init --mcp`.
 gd-metapro mcp serve            # stdio JSON-RPC MCP server (default transport)
 gd-metapro mcp serve --http     # isolated HTTP/SSE opt-in (localhost only)
 gd-metapro mcp                  # alias for `mcp serve`
+gd-metapro mcp install --runtime <cursor|claude|generic|all> [--dry-run]
+gd-metapro mcp uninstall --runtime <cursor|claude|generic|all>
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `serve` (default) | `--http` | Start the MCP server over stdio (the default). `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. Bare `mcp` is an alias for `mcp serve`. |
+| `install` | `--runtime <cursor\|claude\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json` (project root), `generic` prints a ready snippet and writes no file. `all` targets cursor + claude. Adds `mcpServers.gd-metapro = { command: "gd-metapro", args: ["mcp","serve"] }` (marked with a managed sentinel), preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
+| `uninstall` | `--runtime <cursor\|claude\|generic\|all>` (default `all`) | Remove ONLY the managed `gd-metapro` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
+
+`init` also offers to enable the MCP server interactively (default **No**); the
+`--mcp` / `--no-mcp` flags set it non-interactively. The default non-interactive
+`init` never enables MCP nor writes a client config.
 
 Tool and resource exposure is filtered by the manifest's `expose.modules` list — a
 disabled module is hidden from `tools/list` and `resources/list`.

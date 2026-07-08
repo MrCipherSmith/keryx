@@ -197,6 +197,7 @@ Usage:
   gd-metapro security hooks install --runtime <claude|cursor|windsurf|generic-mcp|all>
   gd-metapro security eval [--corpus <name|all>] [--with-model]
   gd-metapro mcp serve [--http]
+  gd-metapro mcp install|uninstall --runtime <cursor|claude|generic|all> [--dry-run]
   gd-metapro --version
 
 Commands:

@@ -597,6 +597,28 @@ The tools are thin, read-only adapters over the module service facades
 the optional MCP SDK. Related surfaces: `security scan-mcp`,
 `standard emit llms`, and `skills export --runtime plugin`.
 
+Wire the server into an editor/agent in one command, project-scoped and
+merge-safe:
+
+```bash
+gd-metapro mcp install --runtime cursor      # writes .cursor/mcp.json
+gd-metapro mcp install --runtime claude      # writes .mcp.json (project root)
+gd-metapro mcp install --runtime all         # cursor + claude (default)
+gd-metapro mcp install --runtime generic     # prints a ready snippet, writes no file
+gd-metapro mcp install --runtime cursor --dry-run   # preview only, writes nothing
+gd-metapro mcp uninstall --runtime cursor    # removes only the managed gd-metapro server
+```
+
+`install` merges `mcpServers.gd-metapro = { command: "gd-metapro", args: ["mcp",
+"serve"] }` into the client config (preserving any existing servers and keys; a
+re-install is idempotent), sets `modules.mcp.enabled=true` in
+`.metaproject/metaproject.json`, and probes the optional MCP SDK — printing
+`bun add @modelcontextprotocol/sdk` when it is absent. It never auto-installs the
+SDK and never opens a network connection. The managed entry carries a sentinel so
+`uninstall` removes only `gd-metapro` and leaves your other servers intact. Since
+`init` also offers to enable MCP interactively (default **No**), the default
+non-interactive `init` never enables MCP or writes a client config.
+
 ## CI Integration
 
 `gd-metapro` is designed so CI can publish normalized artifacts that agents and
