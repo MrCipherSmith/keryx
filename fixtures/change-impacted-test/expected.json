@@ -1,0 +1,17 @@
+{
+  "description": "Change-impacted-test corpus (Block D · D2, AC8/AC9/AC11). Changing alpha.ts truly impacts only alpha.test.ts. The naming heuristic over-selects alpha.extra.test.ts (prefix match, actually covers beta.ts) — the coverage map excludes it, so coverage-map precision > static precision.",
+  "testFiles": [
+    "src/alpha.extra.test.ts",
+    "src/alpha.test.ts",
+    "src/beta.test.ts",
+    "src/gamma.test.ts"
+  ],
+  "change": ["src/alpha.ts"],
+  "impacted": ["src/alpha.test.ts"],
+  "staticSelection": ["src/alpha.extra.test.ts", "src/alpha.test.ts"],
+  "coverageSelection": ["src/alpha.test.ts"],
+  "staticPrecision": 0.5,
+  "coveragePrecision": 1.0,
+  "mapAbsentChange": ["src/gamma.ts"],
+  "mapAbsentSelection": ["src/gamma.test.ts"]
+}

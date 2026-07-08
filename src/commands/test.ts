@@ -1,11 +1,14 @@
 import {
   analyzeTestingProject,
   findRelatedTests,
+  loadTestingConfig,
   loadTestingContext,
   loadTestingReport,
   runTesting,
   testingDataRoot,
 } from "../testing/service";
+import { buildCoverageMap, coverageMapPath, loadCoverageMap } from "../testing/coverage-map";
+import { isTestingCapabilityEnabled } from "../testing/capability";
 import { optionValue } from "../lib/args";
 
 export async function testCommand(args: string[]): Promise<void> {
@@ -41,6 +44,10 @@ export async function testCommand(args: string[]): Promise<void> {
   }
   if (command === "explain") {
     await runExplain(args.slice(1));
+    return;
+  }
+  if (command === "coverage-map") {
+    await runCoverageMap(args.slice(1));
     return;
   }
 
@@ -198,6 +205,58 @@ async function runExplain(args: string[]): Promise<void> {
   }
 }
 
+async function runCoverageMap(args: string[]): Promise<void> {
+  const sub = args[0];
+  const cwd = process.cwd();
+  const config = await loadTestingConfig(cwd);
+
+  if (sub === "build") {
+    const context = (await loadTestingContext(cwd)) ?? (await analyzeTestingProject(cwd));
+    const gitRef = await gitRefOf(cwd);
+    const result = await buildCoverageMap(cwd, config, { testFiles: context.testFiles, gitRef });
+    console.log("# testing coverage-map build");
+    console.log("");
+    console.log(`source: ${config.coverageMap.source}`);
+    console.log(`entries: ${Object.keys(result.map.map).length}`);
+    console.log(`artifact: ${coverageMapPath(cwd, config)}`);
+    for (const warning of result.securityWarnings) {
+      console.log(`security: ${warning}`);
+    }
+    return;
+  }
+
+  if (sub === "status" || !sub) {
+    const map = await loadCoverageMap(cwd, config);
+    const enabled = await isTestingCapabilityEnabled(cwd, "coverageMap");
+    const currentRef = await gitRefOf(cwd);
+    console.log("# testing coverage-map status");
+    console.log("");
+    console.log(`capability: ${enabled ? "enabled" : "disabled"}`);
+    console.log(`config.enabled: ${config.coverageMap.enabled}`);
+    console.log(`map present: ${map ? "yes" : "no"}`);
+    if (map) {
+      console.log(`entries: ${Object.keys(map.map).length}`);
+      console.log(`generatedAt: ${map.generatedAt}`);
+      console.log(`gitRef: ${map.gitRef ?? "n/a"}`);
+      const stale = map.gitRef && currentRef && map.gitRef !== currentRef;
+      console.log(`stale: ${stale ? "yes (falls back to static selection)" : "no"}`);
+    }
+    return;
+  }
+
+  console.error("Usage: gd-metapro test coverage-map build|status");
+  process.exitCode = 1;
+}
+
+async function gitRefOf(cwd: string): Promise<string | null> {
+  if (!Bun.which("git")) {
+    return null;
+  }
+  const proc = Bun.spawn(["git", "rev-parse", "--short", "HEAD"], { cwd, stdout: "pipe", stderr: "pipe" });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  return code === 0 ? out.trim() : null;
+}
+
 function printHelp(): void {
   console.log(`gd-metapro test
 
@@ -210,5 +269,7 @@ Usage:
   gd-metapro test explain <file-or-scope>
   gd-metapro test related <file>
   gd-metapro test report latest [--json]
+  gd-metapro test coverage-map build
+  gd-metapro test coverage-map status
 `);
 }

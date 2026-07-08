@@ -1,0 +1,15 @@
+{
+  "description": "Seeded churn×complexity hotspot corpus (Block D · D1, AC2/AC3/AC5/AC6). complexity = Σ per-function cyclomatic; churn from churn.json; score = churn × complexity.",
+  "files": {
+    "src/hot.ts": { "churn": 100, "complexity": 6, "score": 600 },
+    "src/churny-simple.ts": { "churn": 80, "complexity": 1, "score": 80 },
+    "src/complex-stable.ts": { "churn": 10, "complexity": 6, "score": 60 },
+    "src/cold.ts": { "churn": 2, "complexity": 1, "score": 2 }
+  },
+  "ranking": [
+    "src/hot.ts",
+    "src/churny-simple.ts",
+    "src/complex-stable.ts",
+    "src/cold.ts"
+  ]
+}

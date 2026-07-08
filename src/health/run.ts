@@ -5,6 +5,7 @@ import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
 import { loadBaseline, writeBaseline } from "./baseline";
 import { getChurn } from "./metrics/churn";
+import { rankHotspots } from "./metrics/hotspot";
 import { getComplexityFindings } from "./metrics/complexity-findings";
 import { getCoverage } from "./metrics/coverage";
 import { renderReportMarkdown } from "./report";
@@ -139,6 +140,10 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     strict,
   });
 
+  // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
+  // nullable; deterministic (reuses the already-loaded churn + source analysis).
+  const hotspots = rankHotspots(sourceFiles, churn, sourceAnalysis);
+
   const report: HealthReport = {
     schemaVersion: config.schemaVersion,
     generatedAt: new Date().toISOString(),
@@ -149,6 +154,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     sources: sourceInfos,
     metrics,
     findings,
+    hotspots,
   };
 
   const paths = await writeOutputs(cwd, report, config, stamp);

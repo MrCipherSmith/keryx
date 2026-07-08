@@ -4,10 +4,12 @@ import {
   complexityPenalty,
   coveragePenalty,
   healthScore,
+  hotspotPenalty,
   regressionScore,
   riskScore,
   trendOf,
 } from "./scoring";
+import { rankHotspots } from "./metrics/hotspot";
 import type { CoverageData } from "./metrics/coverage";
 import type { BaselineEntry } from "./baseline";
 import type { SkillOwnership } from "./skills";
@@ -60,6 +62,13 @@ export async function computeMetrics(input: {
       (value) => value > config.metrics.complexityThreshold,
     );
 
+    // D1: per-scope hotspot ranking + aggregate. Pure (reuses the already-
+    // loaded churn map + source analysis). The penalty is folded additively
+    // into the health score and is EXACTLY 0 at the default hotspotWeight 0,
+    // so the score stays byte-identical to pre-D1.
+    const fileHotspots = rankHotspots(files, churn, sourceAnalysis);
+    const hotspotAggregate = fileHotspots.reduce((sum, entry) => sum + entry.score, 0);
+
     const bySeverity = countBy(scopeFindings, (f) => f.severity, SEVERITIES);
     const byPriority = countBy(scopeFindings, (f) => f.priority, PRIORITIES);
     const bySource = tally(scopeFindings.map((f) => f.source));
@@ -71,6 +80,7 @@ export async function computeMetrics(input: {
         coverage: coveragePenalty(coverageValue, config),
         complexity: complexityPenalty(fnComplexities, config),
         loc,
+        hotspot: hotspotPenalty(fileHotspots, config),
       },
       config,
     );
@@ -88,6 +98,7 @@ export async function computeMetrics(input: {
         fnComplexities.length > 0
           ? { max: Math.max(...fnComplexities), aboveThreshold: above.length }
           : null,
+      hotspot: fileHotspots.length > 0 ? hotspotAggregate : null,
       health_score: health,
       risk_score: risk,
       trend: trendOf(health, baseHealth),

@@ -48,6 +48,9 @@ export type TestingReport = {
     selectedTests: string[];
     changedFiles: string[];
     fallback: "none" | "warn" | "full" | "skipped";
+    // D3: always-on smoke tier unioned into every selection mode. Empty by
+    // default ⇒ a no-op union (byte-identical selection behavior).
+    smokeTests: string[];
   };
   failures: TestingFailure[];
   relatedFiles: string[];
@@ -64,6 +67,23 @@ export type TestingRunInput = {
   strict?: boolean;
 };
 
+// D2: coverage-map source. `import` parses an existing report without running
+// tests; `lcov`/`v8` build by running the suite with coverage; `auto` picks.
+export type CoverageMapSource = "auto" | "lcov" | "v8" | "import";
+
+// D2: normalized, deterministic coverage map (`testFile → covered files/lines`).
+// Git-diffable; re-building the same inputs yields an identical file.
+export type CoverageMapEntry = {
+  coveredFiles: string[];
+  coveredLines?: Record<string, number[]>;
+};
+export type CoverageMap = {
+  schemaVersion: 1;
+  generatedAt: string;
+  gitRef: string | null;
+  map: Record<string, CoverageMapEntry>;
+};
+
 export type TestingConfig = {
   schemaVersion: number;
   enabled: boolean;
@@ -71,6 +91,19 @@ export type TestingConfig = {
   changedSelection: {
     strategies: string[];
     fallbackWhenEmpty: TestingFallbackWhenEmpty;
+  };
+  // D2: coverage-map Test Impact Analysis. Default OFF ⇒ static fallback
+  // (byte-identical). Deep-merged over defaults; malformed JSON ⇒ defaults.
+  coverageMap: {
+    enabled: boolean;
+    source: CoverageMapSource;
+    path: string;
+    artifact: string;
+    lineGranularity: boolean;
+  };
+  // D3: always-on smoke tier. Empty selectors ⇒ no smoke ⇒ byte-identical.
+  smoke: {
+    selectors: string[];
   };
   hooks: {
     postCommitRefresh: boolean;

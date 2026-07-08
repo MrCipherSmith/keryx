@@ -4,7 +4,7 @@ import { readJsonFileOr } from "../lib/json";
 import type { HealthConfig } from "./types";
 
 export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   ignore: {
     paths: [
       "node_modules/**",
@@ -41,12 +41,14 @@ export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
     coverageSoftFloor: 60,
     complexityThreshold: 10,
     churnWindowDays: 90,
+    hotspotThreshold: 0,
   },
   scoring: {
     priorityWeights: { P0: 100, P1: 20, P2: 5, P3: 1 },
     coverageWeight: 1,
     complexityWeight: 2,
     normalizePerLoc: 1000,
+    hotspotWeight: 0,
   },
   gate: {
     failOnPriorities: ["P0"],

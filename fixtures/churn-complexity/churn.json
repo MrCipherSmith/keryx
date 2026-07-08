@@ -1,0 +1,6 @@
+{
+  "src/hot.ts": 100,
+  "src/churny-simple.ts": 80,
+  "src/complex-stable.ts": 10,
+  "src/cold.ts": 2
+}

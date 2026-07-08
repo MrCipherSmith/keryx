@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "id": "010",
+  "slug": "block-d-quality-signals-health-testing",
+  "title": "Block D — Quality Signals (health + testing)",
+  "status": "in-progress",
+  "createdAt": "2026-07-08T06:48:06.171Z",
+  "updatedAt": "2026-07-08T07:15:35.917Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:4fbf91399647a92376deaf1d4569b86c85de10b4eedceb69d17fe0ce83221c37",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "D2 capability wiring + coverage-map selection",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "D3 always-on smoke tier",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "Fixtures + tests (churn-complexity, change-impacted-test, no-network, byte-identical)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "Docs: roadmap-2026 link reconcile + landed",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "Adversarial review + draft PR",
+      "kind": "implement",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-08T06:48:06.171Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-08T06:51:22.809Z",
+      "event": "task-added",
+      "detail": "T5: D2 capability wiring + coverage-map selection"
+    },
+    {
+      "at": "2026-07-08T06:51:22.947Z",
+      "event": "task-added",
+      "detail": "T6: D3 always-on smoke tier"
+    },
+    {
+      "at": "2026-07-08T06:51:23.078Z",
+      "event": "task-added",
+      "detail": "T7: Fixtures + tests (churn-complexity, change-impacted-test, no-network, byte-identical)"
+    },
+    {
+      "at": "2026-07-08T06:51:23.210Z",
+      "event": "task-added",
+      "detail": "T8: Docs: roadmap-2026 link reconcile + landed"
+    },
+    {
+      "at": "2026-07-08T06:51:23.360Z",
+      "event": "task-added",
+      "detail": "T9: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T06:51:23.490Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-08T06:51:23.626Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-08T06:51:23.746Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-08T07:15:35.582Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-08T07:15:35.636Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-08T07:15:35.691Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-08T07:15:35.747Z",
+      "event": "task-done",
+      "detail": "T5: D2 capability wiring + coverage-map selection"
+    },
+    {
+      "at": "2026-07-08T07:15:35.803Z",
+      "event": "task-done",
+      "detail": "T6: D3 always-on smoke tier"
+    },
+    {
+      "at": "2026-07-08T07:15:35.859Z",
+      "event": "task-done",
+      "detail": "T7: Fixtures + tests (churn-complexity, change-impacted-test, no-network, byte-identical)"
+    },
+    {
+      "at": "2026-07-08T07:15:35.917Z",
+      "event": "task-done",
+      "detail": "T8: Docs: roadmap-2026 link reconcile + landed"
+    }
+  ]
+}
