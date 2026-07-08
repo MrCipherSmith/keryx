@@ -10,7 +10,7 @@
 // entry here (and only here). The init/update generators consume this map, and
 // module-commands.test.ts verifies the generated manifest stays in sync.
 export const MODULE_COMMANDS = {
-  gdgraph: ["build", "query", "affected"],
+  gdgraph: ["build", "query", "affected", "repomap"],
   gdctx: ["status", "diff", "rg", "read", "run", "show"],
   gdwiki: ["status", "new", "collect", "index", "check-links", "validate"],
   gdskills: [

@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "id": "008",
+  "slug": "block-b-code-understanding-gdgraph-upgra",
+  "title": "Block B — Code Understanding (gdgraph upgrades)",
+  "status": "done",
+  "createdAt": "2026-07-08T00:23:45.129Z",
+  "updatedAt": "2026-07-08T06:10:34.666Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2df22cf032ec4922461d107f247410b5d1b0d9a6cc872ed7bb8ced1b85cf499a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-08T06:10:11.686Z"
+    },
+    "AC2": {
+      "at": "2026-07-08T06:10:11.740Z"
+    },
+    "AC3": {
+      "at": "2026-07-08T06:10:11.792Z"
+    },
+    "AC4": {
+      "at": "2026-07-08T06:10:11.847Z"
+    },
+    "AC5": {
+      "at": "2026-07-08T06:10:11.900Z"
+    },
+    "AC6": {
+      "at": "2026-07-08T06:10:11.955Z"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/meta-project/pull/13"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "B3 repomap renderer + CLI + manifest command",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "B1 schema: additive SymbolNode/CallEdge/SymbolLayer + loadGraph",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "B1 deps+assets: grammar assets + grammars.ts + extend import guard",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "B1 tree-sitter adapter + extraction",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "B1 build wiring behind resolveCapability + init flag",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T10",
+      "title": "Fixtures + tests (3 corpora, fallback snapshot, no-network)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T11",
+      "title": "Docs: roadmap status + link reconcile + gdgraph docs",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T12",
+      "title": "Adversarial review + draft PR",
+      "kind": "implement",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-08T00:23:45.129Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-08T00:26:53.128Z",
+      "event": "task-added",
+      "detail": "T5: B3 repomap renderer + CLI + manifest command"
+    },
+    {
+      "at": "2026-07-08T00:26:53.299Z",
+      "event": "task-added",
+      "detail": "T6: B1 schema: additive SymbolNode/CallEdge/SymbolLayer + loadGraph"
+    },
+    {
+      "at": "2026-07-08T00:26:53.464Z",
+      "event": "task-added",
+      "detail": "T7: B1 deps+assets: grammar assets + grammars.ts + extend import guard"
+    },
+    {
+      "at": "2026-07-08T00:26:53.620Z",
+      "event": "task-added",
+      "detail": "T8: B1 tree-sitter adapter + extraction"
+    },
+    {
+      "at": "2026-07-08T00:26:53.814Z",
+      "event": "task-added",
+      "detail": "T9: B1 build wiring behind resolveCapability + init flag"
+    },
+    {
+      "at": "2026-07-08T00:26:53.979Z",
+      "event": "task-added",
+      "detail": "T10: Fixtures + tests (3 corpora, fallback snapshot, no-network)"
+    },
+    {
+      "at": "2026-07-08T00:26:54.134Z",
+      "event": "task-added",
+      "detail": "T11: Docs: roadmap status + link reconcile + gdgraph docs"
+    },
+    {
+      "at": "2026-07-08T00:26:54.279Z",
+      "event": "task-added",
+      "detail": "T12: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T00:26:54.411Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-08T00:26:54.542Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-08T00:26:54.665Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-08T06:09:01.238Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-08T06:09:01.291Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-08T06:09:01.340Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-08T06:09:01.393Z",
+      "event": "task-done",
+      "detail": "T5: B3 repomap renderer + CLI + manifest command"
+    },
+    {
+      "at": "2026-07-08T06:09:01.444Z",
+      "event": "task-done",
+      "detail": "T6: B1 schema: additive SymbolNode/CallEdge/SymbolLayer + loadGraph"
+    },
+    {
+      "at": "2026-07-08T06:09:01.496Z",
+      "event": "task-done",
+      "detail": "T7: B1 deps+assets: grammar assets + grammars.ts + extend import guard"
+    },
+    {
+      "at": "2026-07-08T06:09:01.549Z",
+      "event": "task-done",
+      "detail": "T8: B1 tree-sitter adapter + extraction"
+    },
+    {
+      "at": "2026-07-08T06:09:01.604Z",
+      "event": "task-done",
+      "detail": "T9: B1 build wiring behind resolveCapability + init flag"
+    },
+    {
+      "at": "2026-07-08T06:09:01.658Z",
+      "event": "task-done",
+      "detail": "T10: Fixtures + tests (3 corpora, fallback snapshot, no-network)"
+    },
+    {
+      "at": "2026-07-08T06:09:01.715Z",
+      "event": "task-done",
+      "detail": "T11: Docs: roadmap status + link reconcile + gdgraph docs"
+    },
+    {
+      "at": "2026-07-08T06:10:09.074Z",
+      "event": "task-done",
+      "detail": "T12: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T06:10:11.634Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/meta-project/pull/13 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-08T06:10:11.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-08T06:10:11.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-08T06:10:11.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-08T06:10:11.847Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-08T06:10:11.900Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-08T06:10:11.955Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-07-08T06:10:32.747Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-08T06:10:34.666Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

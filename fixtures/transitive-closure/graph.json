@@ -1,0 +1,24 @@
+{
+  "note": "B2 acceptance corpus (F-1). A chain a<-b<-c<-d<-e with an extra dependent f->a (fan-in on a), plus an independent 3-node cycle x->y->z->x to prove cycle termination. Edge from->to means 'from imports to', so dependents(to) = all froms.",
+  "nodes": [
+    { "id": "src/a.ts", "kind": "file", "path": "src/a.ts", "language": "typescript" },
+    { "id": "src/b.ts", "kind": "file", "path": "src/b.ts", "language": "typescript" },
+    { "id": "src/c.ts", "kind": "file", "path": "src/c.ts", "language": "typescript" },
+    { "id": "src/d.ts", "kind": "file", "path": "src/d.ts", "language": "typescript" },
+    { "id": "src/e.ts", "kind": "file", "path": "src/e.ts", "language": "typescript" },
+    { "id": "src/f.ts", "kind": "file", "path": "src/f.ts", "language": "typescript" },
+    { "id": "src/x.ts", "kind": "file", "path": "src/x.ts", "language": "typescript" },
+    { "id": "src/y.ts", "kind": "file", "path": "src/y.ts", "language": "typescript" },
+    { "id": "src/z.ts", "kind": "file", "path": "src/z.ts", "language": "typescript" }
+  ],
+  "edges": [
+    { "id": "edge:1", "from": "src/b.ts", "to": "src/a.ts", "kind": "imports", "specifier": "./a" },
+    { "id": "edge:2", "from": "src/f.ts", "to": "src/a.ts", "kind": "imports", "specifier": "./a" },
+    { "id": "edge:3", "from": "src/c.ts", "to": "src/b.ts", "kind": "imports", "specifier": "./b" },
+    { "id": "edge:4", "from": "src/d.ts", "to": "src/c.ts", "kind": "imports", "specifier": "./c" },
+    { "id": "edge:5", "from": "src/e.ts", "to": "src/d.ts", "kind": "imports", "specifier": "./d" },
+    { "id": "edge:6", "from": "src/x.ts", "to": "src/y.ts", "kind": "imports", "specifier": "./y" },
+    { "id": "edge:7", "from": "src/y.ts", "to": "src/z.ts", "kind": "imports", "specifier": "./z" },
+    { "id": "edge:8", "from": "src/z.ts", "to": "src/x.ts", "kind": "imports", "specifier": "./x" }
+  ]
+}

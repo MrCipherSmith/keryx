@@ -1,12 +1,23 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { GraphData, GraphEdge, GraphNode } from "./types";
+import type { CallEdge, GraphData, GraphEdge, GraphNode, SymbolNode } from "./types";
 
 export async function loadGraph(projectRoot: string): Promise<GraphData> {
   const storageDir = path.join(projectRoot, ".metaproject", "data", "gdgraph", "storage");
   const nodes = await readJsonl<GraphNode>(path.join(storageDir, "nodes.jsonl"));
   const edges = await readJsonl<GraphEdge>(path.join(storageDir, "edges.jsonl"));
-  return { nodes, edges };
+  // B1 symbol layer: loaded ONLY if present. Missing files ⇒ empty/omitted layer
+  // (never an error — mirrors `readJsonl` tolerance). File-level graph unchanged.
+  const symbols = await readJsonl<SymbolNode>(path.join(storageDir, "symbols.jsonl"));
+  const calls = await readJsonl<CallEdge>(path.join(storageDir, "calls.jsonl"));
+  const graph: GraphData = { nodes, edges };
+  if (symbols.length > 0) {
+    graph.symbols = symbols;
+  }
+  if (calls.length > 0) {
+    graph.calls = calls;
+  }
+  return graph;
 }
 
 export function getOrphans(graph: GraphData): string[] {
@@ -94,7 +105,14 @@ export function getCycles(graph: GraphData): string[][] {
 }
 
 async function readJsonl<T>(filePath: string): Promise<T[]> {
-  const content = await readFile(filePath, "utf8");
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf8");
+  } catch {
+    // Absent file ⇒ empty layer (the symbol layer is optional, and a missing
+    // core file should degrade rather than crash graph navigation).
+    return [];
+  }
   const items: T[] = [];
   for (const line of content.split("\n").map((entry) => entry.trim()).filter(Boolean)) {
     try {

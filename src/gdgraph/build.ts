@@ -81,9 +81,11 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
 
   const edges: GraphEdge[] = [];
   const assetNodes = new Map<string, GraphNode>();
+  const fileRecords: Array<{ path: string; content: string }> = [];
   for (const file of files) {
     const absolutePath = path.join(projectRoot, file);
     const content = await readFile(absolutePath, "utf8");
+    fileRecords.push({ path: file, content });
     const specifiers = extractImportSpecifiers(content);
 
     for (const specifier of specifiers) {
@@ -115,6 +117,19 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
   const graph = { nodes: [...nodes, ...assetNodes.values()].sort((a, b) => a.path.localeCompare(b.path)), edges };
   await writeGraph(projectRoot, graph);
   const summaryPath = await writeSummary(projectRoot, graph, collection);
+
+  // B1: after the UNCHANGED file-level build, optionally enrich with the
+  // tree-sitter symbol layer behind the Block 0 capability seam. Loaded
+  // DYNAMICALLY + defensively so an environment lacking the seam (e.g. the
+  // copied core runner) degrades cleanly to file-level output. When the
+  // capability is disabled/unavailable this is a no-op and the four legacy
+  // artifacts stay byte-identical (the golden rule, B-1/C0-7/F-3).
+  try {
+    const { enrichBuildWithSymbols } = await import("./enrich");
+    await enrichBuildWithSymbols(projectRoot, fileRecords);
+  } catch {
+    // Enrichment module or seam unavailable ⇒ file-level graph only.
+  }
 
   return {
     nodes: nodes.length,

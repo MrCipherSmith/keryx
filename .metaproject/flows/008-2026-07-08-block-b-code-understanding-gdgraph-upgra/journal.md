@@ -1,0 +1,34 @@
+# Flow Journal
+
+- 2026-07-08T00:23:45.129Z - flow created
+- 2026-07-08T00:26:53.128Z - task-added: T5: B3 repomap renderer + CLI + manifest command
+- 2026-07-08T00:26:53.299Z - task-added: T6: B1 schema: additive SymbolNode/CallEdge/SymbolLayer + loadGraph
+- 2026-07-08T00:26:53.464Z - task-added: T7: B1 deps+assets: grammar assets + grammars.ts + extend import guard
+- 2026-07-08T00:26:53.620Z - task-added: T8: B1 tree-sitter adapter + extraction
+- 2026-07-08T00:26:53.814Z - task-added: T9: B1 build wiring behind resolveCapability + init flag
+- 2026-07-08T00:26:53.979Z - task-added: T10: Fixtures + tests (3 corpora, fallback snapshot, no-network)
+- 2026-07-08T00:26:54.134Z - task-added: T11: Docs: roadmap status + link reconcile + gdgraph docs
+- 2026-07-08T00:26:54.279Z - task-added: T12: Adversarial review + draft PR
+- 2026-07-08T00:26:54.411Z - frozen: 6 criteria; checksum recorded
+- 2026-07-08T00:26:54.542Z - started
+- 2026-07-08T00:26:54.665Z - task-done: T1: Collect remaining context
+- 2026-07-08T06:09:01.238Z - task-done: T2: Implement per plan
+- 2026-07-08T06:09:01.291Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-08T06:09:01.340Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-08T06:09:01.393Z - task-done: T5: B3 repomap renderer + CLI + manifest command
+- 2026-07-08T06:09:01.444Z - task-done: T6: B1 schema: additive SymbolNode/CallEdge/SymbolLayer + loadGraph
+- 2026-07-08T06:09:01.496Z - task-done: T7: B1 deps+assets: grammar assets + grammars.ts + extend import guard
+- 2026-07-08T06:09:01.549Z - task-done: T8: B1 tree-sitter adapter + extraction
+- 2026-07-08T06:09:01.604Z - task-done: T9: B1 build wiring behind resolveCapability + init flag
+- 2026-07-08T06:09:01.658Z - task-done: T10: Fixtures + tests (3 corpora, fallback snapshot, no-network)
+- 2026-07-08T06:09:01.715Z - task-done: T11: Docs: roadmap status + link reconcile + gdgraph docs
+- 2026-07-08T06:10:09.074Z - task-done: T12: Adversarial review + draft PR
+- 2026-07-08T06:10:11.634Z - implemented: draft PR: https://github.com/MrCipherSmith/meta-project/pull/13 (warning: PR is not a draft)
+- 2026-07-08T06:10:11.686Z - ac-confirmed: AC1
+- 2026-07-08T06:10:11.740Z - ac-confirmed: AC2
+- 2026-07-08T06:10:11.792Z - ac-confirmed: AC3
+- 2026-07-08T06:10:11.847Z - ac-confirmed: AC4
+- 2026-07-08T06:10:11.900Z - ac-confirmed: AC5
+- 2026-07-08T06:10:11.955Z - ac-confirmed: AC6
+- 2026-07-08T06:10:32.747Z - completing
+- 2026-07-08T06:10:34.666Z - done: all gates passed

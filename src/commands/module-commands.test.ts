@@ -37,7 +37,10 @@ test("init writes module command lists from the canonical source of truth", asyn
   }
 });
 
-// The canonical map must not itself reintroduce the removed gdgraph commands.
+// The canonical map must not reintroduce the removed gdgraph commands
+// (explain/path) and must advertise exactly the implemented surface. `repomap`
+// was added by Block B (ranked repo map); it is a real, always-available
+// subcommand dispatched by src/commands/gdgraph.ts.
 test("MODULE_COMMANDS matches the implemented gdgraph surface", () => {
-  expect([...MODULE_COMMANDS.gdgraph]).toEqual(["build", "query", "affected"]);
+  expect([...MODULE_COMMANDS.gdgraph]).toEqual(["build", "query", "affected", "repomap"]);
 });

@@ -1,0 +1,7 @@
+{"id":"defines:src/widget.ts=>src/widget.ts#Shape","from":"src/widget.ts","to":"src/widget.ts#Shape","kind":"defines","resolved":true}
+{"id":"defines:src/widget.ts=>src/widget.ts#Widget","from":"src/widget.ts","to":"src/widget.ts#Widget","kind":"defines","resolved":true}
+{"id":"defines:src/widget.ts=>src/widget.ts#Widget.render","from":"src/widget.ts","to":"src/widget.ts#Widget.render","kind":"defines","resolved":true}
+{"id":"defines:src/widget.ts=>src/widget.ts#alpha","from":"src/widget.ts","to":"src/widget.ts#alpha","kind":"defines","resolved":true}
+{"id":"defines:src/widget.ts=>src/widget.ts#helper","from":"src/widget.ts","to":"src/widget.ts#helper","kind":"defines","resolved":true}
+{"id":"calls:src/widget.ts#Widget.render=>src/widget.ts#alpha","from":"src/widget.ts#Widget.render","to":"src/widget.ts#alpha","kind":"calls","resolved":true}
+{"id":"calls:src/widget.ts#alpha=>src/widget.ts#helper","from":"src/widget.ts#alpha","to":"src/widget.ts#helper","kind":"calls","resolved":true}

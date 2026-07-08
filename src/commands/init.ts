@@ -136,6 +136,8 @@ type InitOptions = {
   noSecurityAgentHook: boolean;
   mcp: boolean;
   noMcp: boolean;
+  treesitter: boolean;
+  noTreesitter: boolean;
 };
 
 type ModuleConfig =
@@ -418,6 +420,12 @@ export async function initCommand(args: string[]): Promise<void> {
   // ceiling, so the default `init` manifest stays byte-identical (golden rule).
   const enableMcp = options.mcp && !options.noMcp;
 
+  // gdgraph tree-sitter symbol layer (Block B, B1). Opt-in ceiling; default OFF.
+  // The manifest is only touched when a --treesitter/--no-treesitter flag is
+  // present, so the default `init` manifest stays byte-identical (golden rule).
+  const enableTreesitter = options.treesitter && !options.noTreesitter;
+  const treesitterFlagPresent = options.treesitter || options.noTreesitter;
+
   await createBaseStructure(metaprojectRoot);
   await syncGitignore(projectRoot);
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
@@ -544,6 +552,17 @@ export async function initCommand(args: string[]): Promise<void> {
   // fields; `capabilities` stays a string[] to satisfy the module schema.
   if (enableMcp) {
     (manifest.modules as Record<string, unknown>).mcp = buildMcpModuleEntry();
+  }
+
+  // Attach the gdgraph tree-sitter capability entry (B1). Only when a flag was
+  // passed, so the default manifest is unchanged. The enriched `{ id, enabled,
+  // kind, optionalDependency }` object is what `resolveCapability(
+  // "gdgraph.treesitter")` gate 1 (`isCapabilityEnabled`) reads (C0-9).
+  if (enableGdgraph && treesitterFlagPresent) {
+    const gdgraphModule = (manifest.modules as Record<string, Record<string, unknown>>).gdgraph;
+    if (gdgraphModule && typeof gdgraphModule === "object") {
+      gdgraphModule.capabilities = [gdgraphTreesitterCapability(enableTreesitter)];
+    }
   }
 
   await writeJsonIfChanged(
@@ -900,6 +919,8 @@ function parseInitArgs(args: string[]): InitOptions {
     noSecurityAgentHook: args.includes("--no-security-agent-hook"),
     mcp: args.includes("--mcp"),
     noMcp: args.includes("--no-mcp"),
+    treesitter: args.includes("--treesitter"),
+    noTreesitter: args.includes("--no-treesitter"),
   };
 }
 
@@ -927,6 +948,8 @@ function printInitHelp(): void {
     { flag: "--no-security-agent-hook", desc: "Do not install the .claude/settings.json security agent hooks." },
     { flag: "--mcp", desc: "Enable the opt-in MCP server module (default off)." },
     { flag: "--no-mcp", desc: "Do not enable the MCP server module (default)." },
+    { flag: "--treesitter", desc: "Enable the opt-in gdgraph tree-sitter symbol layer (default off)." },
+    { flag: "--no-treesitter", desc: "Do not enable the gdgraph tree-sitter symbol layer (default)." },
   ]);
 }
 
@@ -1064,6 +1087,17 @@ function buildMcpModuleEntry(): Record<string, unknown> {
       resources: true,
       modules: ["gdgraph", "security", "flow", "memory", "health", "wiki", "standard"],
     },
+  };
+}
+
+// The enriched gdgraph tree-sitter capability entry (B1, spec §4). A ceiling
+// (default OFF); `enabled: true` only via `--treesitter`.
+function gdgraphTreesitterCapability(enabled: boolean): Record<string, unknown> {
+  return {
+    id: "gdgraph.treesitter",
+    enabled,
+    kind: "ceiling",
+    optionalDependency: "web-tree-sitter",
   };
 }
 
