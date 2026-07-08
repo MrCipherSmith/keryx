@@ -1,0 +1,10 @@
+{
+  "corpus": "churn-complexity",
+  "description": "Block D · D1 hotspot detector gate. positive = a true churn×complexity hotspot; negative = complex-but-stable / churny-but-trivial / cold. Detector: score = churn × complexity, flagged when score > 100.",
+  "cases": [
+    { "id": "hot", "input": "src/hot.ts", "expected": "positive" },
+    { "id": "churny-simple", "input": "src/churny-simple.ts", "expected": "negative" },
+    { "id": "complex-stable", "input": "src/complex-stable.ts", "expected": "negative" },
+    { "id": "cold", "input": "src/cold.ts", "expected": "negative" }
+  ]
+}

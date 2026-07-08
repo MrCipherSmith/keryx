@@ -30,12 +30,18 @@ export type HealthConfig = {
     coverageSoftFloor: number;
     complexityThreshold: number;
     churnWindowDays: number;
+    // D1: files with hotspot score > threshold are counted as "hot". Inert
+    // while `scoring.hotspotWeight` is 0 (the default).
+    hotspotThreshold: number;
   };
   scoring: {
     priorityWeights: Record<Priority, number>;
     coverageWeight: number;
     complexityWeight: number;
     normalizePerLoc: number;
+    // D1: additive hotspot penalty weight. DEFAULT 0 ⇒ the hotspot term is
+    // exactly 0 and the health score stays byte-identical to pre-D1.
+    hotspotWeight: number;
   };
   gate: {
     failOnPriorities: Priority[];
@@ -43,6 +49,15 @@ export type HealthConfig = {
     warnOnRegressionDrop: number;
     failOnMissingRequiredSource: boolean;
   };
+};
+
+// D1: a single file's git-churn × complexity hotspot record (specification.md
+// §7.1). Additive/nullable in artifacts.
+export type FileHotspot = {
+  file: string;
+  churn: number;
+  complexity: number;
+  score: number;
 };
 
 export type FindingScope = {
@@ -104,6 +119,10 @@ export type ScopeMetrics = {
   coverage: number | null;
   churn: number | null;
   complexity: { max: number; aboveThreshold: number } | null;
+  // D1: aggregate hotspot score (sum of member files' churn×complexity).
+  // Additive/optional/nullable — `null` when no source files contribute a
+  // hotspot, absent from pre-D1 (schemaVersion 1) callers/fixtures.
+  hotspot?: number | null;
   health_score: number;
   risk_score: number;
   trend: "improved" | "stable" | "regressed" | "unknown";
@@ -135,6 +154,9 @@ export type HealthReport = {
   sources: SourceRunInfo[];
   metrics: ScopeMetrics[];
   findings: Finding[];
+  // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
+  // nullable — omitted from older (schemaVersion 1) reports.
+  hotspots?: FileHotspot[];
 };
 
 export type ScopeSelector =

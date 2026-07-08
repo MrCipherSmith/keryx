@@ -1,4 +1,5 @@
 import type {
+  FileHotspot,
   Finding,
   HealthConfig,
   HealthReport,
@@ -51,6 +52,10 @@ ${report.sources
 
 ${renderFindings(top)}
 
+## Hotspots
+
+${renderHotspots(report.hotspots)}
+
 ## Affected Scopes
 
 ${renderAffected(report.metrics)}
@@ -79,8 +84,22 @@ function renderProject(project: ScopeMetrics | undefined): string {
     `- coverage: ${project.coverage ?? "n/a"}${typeof project.coverage === "number" ? "%" : ""}`,
     `- churn: ${project.churn ?? "n/a"}`,
     `- complexity: ${complexity}`,
+    `- hotspot: ${project.hotspot ?? "n/a"}`,
     `- loc: ${project.loc}`,
   ].join("\n");
+}
+
+function renderHotspots(hotspots: FileHotspot[] | undefined): string {
+  const ranked = (hotspots ?? []).filter((h) => h.score > 0).slice(0, 10);
+  if (ranked.length === 0) {
+    return "- none";
+  }
+  return ranked
+    .map(
+      (h) =>
+        `- ${h.file}: score ${h.score} (churn ${h.churn} × complexity ${h.complexity})`,
+    )
+    .join("\n");
 }
 
 function renderFindings(findings: Finding[]): string {

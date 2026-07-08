@@ -138,6 +138,8 @@ type InitOptions = {
   noMcp: boolean;
   treesitter: boolean;
   noTreesitter: boolean;
+  testingTia: boolean;
+  noTestingTia: boolean;
 };
 
 type ModuleConfig =
@@ -426,6 +428,12 @@ export async function initCommand(args: string[]): Promise<void> {
   const enableTreesitter = options.treesitter && !options.noTreesitter;
   const treesitterFlagPresent = options.treesitter || options.noTreesitter;
 
+  // testing coverage-map TIA (Block D, D2). Opt-in ceiling; default OFF. The
+  // manifest + config are only touched when a --testing-tia/--no-testing-tia
+  // flag is present, so the default `init` output stays byte-identical.
+  const enableTestingTia = options.testingTia && !options.noTestingTia;
+  const testingTiaFlagPresent = options.testingTia || options.noTestingTia;
+
   await createBaseStructure(metaprojectRoot);
   await syncGitignore(projectRoot);
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
@@ -562,6 +570,17 @@ export async function initCommand(args: string[]): Promise<void> {
     const gdgraphModule = (manifest.modules as Record<string, Record<string, unknown>>).gdgraph;
     if (gdgraphModule && typeof gdgraphModule === "object") {
       gdgraphModule.capabilities = [gdgraphTreesitterCapability(enableTreesitter)];
+    }
+  }
+
+  // Attach the testing coverage-map capability entry (Block D, D2). Only when a
+  // --testing-tia flag was passed, so the default manifest is unchanged. The
+  // enriched `{ id, enabled, kind }` object is what `isTestingCapabilityEnabled`
+  // reads to gate map-first selection (C0-3, C0-9).
+  if (enableTesting && testingTiaFlagPresent) {
+    const testingModule = (manifest.modules as Record<string, Record<string, unknown>>).testing;
+    if (testingModule && typeof testingModule === "object") {
+      testingModule.capabilities = [testingCoverageMapCapability(enableTestingTia)];
     }
   }
 
@@ -716,6 +735,7 @@ export async function initCommand(args: string[]): Promise<void> {
       renderTestingConfig({
         postCommitRefresh: enableTestingPostCommitHook,
         prePushGate: enableTestingPrePushHook,
+        coverageMapEnabled: enableTestingTia,
       }),
     );
     await writeTextIfMissing(
@@ -921,6 +941,8 @@ function parseInitArgs(args: string[]): InitOptions {
     noMcp: args.includes("--no-mcp"),
     treesitter: args.includes("--treesitter"),
     noTreesitter: args.includes("--no-treesitter"),
+    testingTia: args.includes("--testing-tia"),
+    noTestingTia: args.includes("--no-testing-tia"),
   };
 }
 
@@ -950,6 +972,8 @@ function printInitHelp(): void {
     { flag: "--no-mcp", desc: "Do not enable the MCP server module (default)." },
     { flag: "--treesitter", desc: "Enable the opt-in gdgraph tree-sitter symbol layer (default off)." },
     { flag: "--no-treesitter", desc: "Do not enable the gdgraph tree-sitter symbol layer (default)." },
+    { flag: "--testing-tia", desc: "Enable the opt-in testing coverage-map TIA (default off)." },
+    { flag: "--no-testing-tia", desc: "Do not enable the testing coverage-map TIA (default)." },
   ]);
 }
 
@@ -1098,6 +1122,16 @@ function gdgraphTreesitterCapability(enabled: boolean): Record<string, unknown> 
     enabled,
     kind: "ceiling",
     optionalDependency: "web-tree-sitter",
+  };
+}
+
+// Block D · D2: the testing coverage-map capability manifest entry. No optional
+// dependency and no asset — the coverage map is a locally-derived artifact.
+function testingCoverageMapCapability(enabled: boolean): Record<string, unknown> {
+  return {
+    id: "coverageMap",
+    enabled,
+    kind: "ceiling",
   };
 }
 

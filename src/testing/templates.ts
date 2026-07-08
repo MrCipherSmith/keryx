@@ -1,6 +1,8 @@
 export function renderTestingConfig(input: {
   postCommitRefresh: boolean;
   prePushGate: boolean;
+  // D2: coverage-map TIA toggle (default OFF ⇒ static fallback, byte-identical).
+  coverageMapEnabled?: boolean;
 }): string {
   return `${JSON.stringify(
     {
@@ -10,6 +12,16 @@ export function renderTestingConfig(input: {
       changedSelection: {
         strategies: ["runner", "gdgraph", "naming"],
         fallbackWhenEmpty: "warn",
+      },
+      coverageMap: {
+        enabled: input.coverageMapEnabled ?? false,
+        source: "auto",
+        path: "coverage/lcov.info",
+        artifact: ".metaproject/data/testing/coverage-map.json",
+        lineGranularity: true,
+      },
+      smoke: {
+        selectors: [],
       },
       hooks: {
         postCommitRefresh: input.postCommitRefresh,

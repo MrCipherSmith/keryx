@@ -3,10 +3,13 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { guardOutput, redactRaw, formatGuardWarning } from "../security/guard";
+import { isTestingCapabilityEnabled } from "./capability";
+import { loadCoverageMap, selectByCoverageMap, coveredFilesInMap } from "./coverage-map";
+import { relatedByNamingAndDirectory as relatedNaming, resolveSmokeSet, staticChangedSelection } from "./selection";
 import type {
+  CoverageMap,
   TestingConfig,
   TestingContext,
-  TestingFallbackWhenEmpty,
   TestingFailure,
   TestingReport,
   TestingRunInput,
@@ -38,6 +41,16 @@ const DEFAULT_TESTING_CONFIG: TestingConfig = {
   changedSelection: {
     strategies: ["runner", "gdgraph", "naming"],
     fallbackWhenEmpty: "warn",
+  },
+  coverageMap: {
+    enabled: false,
+    source: "auto",
+    path: "coverage/lcov.info",
+    artifact: ".metaproject/data/testing/coverage-map.json",
+    lineGranularity: true,
+  },
+  smoke: {
+    selectors: [],
   },
   hooks: {
     postCommitRefresh: false,
@@ -97,9 +110,17 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
   const started = Date.now();
   const config = await loadTestingConfig(cwd);
   const context = await ensureContext(cwd);
-  const selectedTests = input.changed
-    ? await selectChangedTests(cwd, context, input.since, config.changedSelection.fallbackWhenEmpty)
-    : selectScopeTests(context, input.scope);
+  const baseSelection = input.changed
+    ? await selectChangedTests(cwd, context, input.since, config)
+    : { ...selectScopeTests(context, input.scope), strategies: [...BASE_STRATEGIES] };
+  // D3: always-on smoke tier — unioned into EVERY selection mode, composing with
+  // (never suppressing) the scoped/changed set. Empty selectors ⇒ [] ⇒ no-op
+  // union ⇒ byte-identical default (AC12, AC13, AC14).
+  const smokeTests = resolveSmokeSet(config.smoke, context.testFiles);
+  const selectedTests = {
+    ...baseSelection,
+    selectedTests: Array.from(new Set([...baseSelection.selectedTests, ...smokeTests])).sort(),
+  };
   const command = resolveTestCommand(cwd, context, {
     changed: Boolean(input.changed),
     kind: input.kind,
@@ -193,10 +214,11 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
     counts,
     selection: {
       changed: Boolean(input.changed),
-      strategies: ["runner", "gdgraph", "naming"],
+      strategies: selectedTests.strategies,
       selectedTests: selectedTests.selectedTests,
       changedFiles: selectedTests.changedFiles,
       fallback: selectedTests.fallback,
+      smokeTests,
     },
     failures,
     relatedFiles: Array.from(new Set([...selectedTests.changedFiles, ...selectedTests.selectedTests])).sort(),
@@ -344,7 +366,7 @@ async function readPackageJson(cwd: string): Promise<Record<string, unknown> | n
   }
 }
 
-async function loadTestingConfig(cwd: string): Promise<TestingConfig> {
+export async function loadTestingConfig(cwd: string): Promise<TestingConfig> {
   const file = path.join(cwd, ".metaproject", "testing.config.json");
   if (!(await pathExists(file))) {
     return DEFAULT_TESTING_CONFIG;
@@ -358,6 +380,14 @@ async function loadTestingConfig(cwd: string): Promise<TestingConfig> {
       changedSelection: {
         ...DEFAULT_TESTING_CONFIG.changedSelection,
         ...(parsed.changedSelection ?? {}),
+      },
+      coverageMap: {
+        ...DEFAULT_TESTING_CONFIG.coverageMap,
+        ...(parsed.coverageMap ?? {}),
+      },
+      smoke: {
+        ...DEFAULT_TESTING_CONFIG.smoke,
+        ...(parsed.smoke ?? {}),
       },
       hooks: {
         ...DEFAULT_TESTING_CONFIG.hooks,
@@ -458,37 +488,71 @@ function buildRecommendations(input: {
   return recommendations;
 }
 
-async function selectChangedTests(
+const BASE_STRATEGIES = ["runner", "gdgraph", "naming"];
+
+export async function selectChangedTests(
   cwd: string,
   context: TestingContext,
-  since?: string | null,
-  fallbackWhenEmpty: TestingFallbackWhenEmpty = "warn",
+  since: string | null | undefined,
+  config: TestingConfig,
 ): Promise<{
   selectedTests: string[];
   changedFiles: string[];
   fallback: "none" | "warn" | "full" | "skipped";
+  strategies: string[];
 }> {
+  const fallbackWhenEmpty = config.changedSelection.fallbackWhenEmpty;
   const changedFiles = await getChangedFiles(cwd, since ?? "HEAD");
-  const selected = new Set<string>();
-  for (const file of changedFiles) {
-    if (TEST_FILE_RE.test(file)) {
-      selected.add(file);
-    }
-    for (const related of relatedByNamingAndDirectory(file, context.testFiles)) {
-      selected.add(related);
-    }
+
+  // Map-first selection ONLY when the coverageMap capability is enabled in the
+  // manifest AND a coverage map is present. Otherwise the static path below runs
+  // unchanged — no map read, no coverage command (AC11 byte-identical fallback).
+  let map: CoverageMap | null = null;
+  if (await isTestingCapabilityEnabled(cwd, "coverageMap")) {
+    map = await loadCoverageMap(cwd, config);
   }
+
+  if (map) {
+    const mapSelected = selectByCoverageMap(changedFiles, map).selectedTests;
+    const inMap = coveredFilesInMap(map);
+    // Changed files ABSENT from the map (new/uncovered) fall back to the naming
+    // heuristic, unioned in — no changed file is silently dropped (AC9).
+    const selected = new Set<string>(mapSelected);
+    for (const file of changedFiles) {
+      const normalized = normalizePath(file);
+      if (inMap.has(normalized)) {
+        continue;
+      }
+      if (TEST_FILE_RE.test(file)) {
+        selected.add(file);
+      }
+      for (const related of relatedNaming(file, context.testFiles)) {
+        selected.add(related);
+      }
+    }
+    return {
+      selectedTests: Array.from(selected).sort(),
+      changedFiles,
+      fallback: selected.size > 0 ? "none" : fallbackWhenEmpty === "skipped" ? "skipped" : "warn",
+      strategies: [...BASE_STRATEGIES, "coverage-map"],
+    };
+  }
+
+  // Static path — byte-identical to pre-D2.
+  const selected = staticChangedSelection(changedFiles, context.testFiles);
   if (selected.size === 0 && fallbackWhenEmpty === "full") {
     return {
       selectedTests: context.testFiles,
       changedFiles,
       fallback: "full",
+      strategies: BASE_STRATEGIES,
     };
   }
   return {
     selectedTests: Array.from(selected).sort(),
     changedFiles,
     fallback: selected.size > 0 ? "none" : fallbackWhenEmpty === "skipped" ? "skipped" : "warn",
+    strategies: BASE_STRATEGIES,
   };
 }
 
@@ -767,6 +831,7 @@ durationMs: ${report.durationMs}
 - changed: ${report.selection.changed ? "yes" : "no"}
 - strategies: ${report.selection.strategies.join(", ")}
 - fallback: ${report.selection.fallback}
+- smoke tests: ${report.selection.smokeTests.length}
 - selected tests: ${report.selection.selectedTests.length}
 
 ${list(report.selection.selectedTests)}
