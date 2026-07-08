@@ -22,3 +22,13 @@
 - 2026-07-08T06:09:01.604Z - task-done: T9: B1 build wiring behind resolveCapability + init flag
 - 2026-07-08T06:09:01.658Z - task-done: T10: Fixtures + tests (3 corpora, fallback snapshot, no-network)
 - 2026-07-08T06:09:01.715Z - task-done: T11: Docs: roadmap status + link reconcile + gdgraph docs
+- 2026-07-08T06:10:09.074Z - task-done: T12: Adversarial review + draft PR
+- 2026-07-08T06:10:11.634Z - implemented: draft PR: https://github.com/MrCipherSmith/meta-project/pull/13 (warning: PR is not a draft)
+- 2026-07-08T06:10:11.686Z - ac-confirmed: AC1
+- 2026-07-08T06:10:11.740Z - ac-confirmed: AC2
+- 2026-07-08T06:10:11.792Z - ac-confirmed: AC3
+- 2026-07-08T06:10:11.847Z - ac-confirmed: AC4
+- 2026-07-08T06:10:11.900Z - ac-confirmed: AC5
+- 2026-07-08T06:10:11.955Z - ac-confirmed: AC6
+- 2026-07-08T06:10:32.747Z - completing
+- 2026-07-08T06:10:34.666Z - done: all gates passed

@@ -3,17 +3,36 @@
   "id": "008",
   "slug": "block-b-code-understanding-gdgraph-upgra",
   "title": "Block B — Code Understanding (gdgraph upgrades)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-08T00:23:45.129Z",
-  "updatedAt": "2026-07-08T06:09:01.715Z",
+  "updatedAt": "2026-07-08T06:10:34.666Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2df22cf032ec4922461d107f247410b5d1b0d9a6cc872ed7bb8ced1b85cf499a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-08T06:10:11.686Z"
+    },
+    "AC2": {
+      "at": "2026-07-08T06:10:11.740Z"
+    },
+    "AC3": {
+      "at": "2026-07-08T06:10:11.792Z"
+    },
+    "AC4": {
+      "at": "2026-07-08T06:10:11.847Z"
+    },
+    "AC5": {
+      "at": "2026-07-08T06:10:11.900Z"
+    },
+    "AC6": {
+      "at": "2026-07-08T06:10:11.955Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/meta-project/pull/13"
   },
   "tasks": [
     {
@@ -86,7 +105,7 @@
       "id": "T12",
       "title": "Adversarial review + draft PR",
       "kind": "implement",
-      "status": "todo"
+      "status": "done"
     }
   ],
   "history": [
@@ -197,6 +216,55 @@
       "at": "2026-07-08T06:09:01.715Z",
       "event": "task-done",
       "detail": "T11: Docs: roadmap status + link reconcile + gdgraph docs"
+    },
+    {
+      "at": "2026-07-08T06:10:09.074Z",
+      "event": "task-done",
+      "detail": "T12: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T06:10:11.634Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/meta-project/pull/13 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-08T06:10:11.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-08T06:10:11.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-08T06:10:11.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-08T06:10:11.847Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-08T06:10:11.900Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-08T06:10:11.955Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-07-08T06:10:32.747Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-08T06:10:34.666Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
