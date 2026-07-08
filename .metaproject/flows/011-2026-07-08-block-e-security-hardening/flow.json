@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "id": "011",
+  "slug": "block-e-security-hardening",
+  "title": "Block E — Security Hardening",
+  "status": "in-progress",
+  "createdAt": "2026-07-08T07:18:10.936Z",
+  "updatedAt": "2026-07-08T07:51:24.635Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f56784ccaae4e5f9b5f327c221c1f0338d3572e35836d33fbe6599142b53b7f4",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "E6 eval harness + security eval CLI + thresholds",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "E1 injection model adapter on backends seam",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "E4-NER PII adapter on backends seam",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "Fixtures + tests (exfil/pii/injection/secret, FN-gate, byte-identical, no-network)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: E3 cross-ref + roadmap-2026 complete",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T10",
+      "title": "Adversarial review + draft PR",
+      "kind": "implement",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-08T07:18:10.936Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-08T07:20:43.024Z",
+      "event": "task-added",
+      "detail": "T5: E6 eval harness + security eval CLI + thresholds"
+    },
+    {
+      "at": "2026-07-08T07:20:43.075Z",
+      "event": "task-added",
+      "detail": "T6: E1 injection model adapter on backends seam"
+    },
+    {
+      "at": "2026-07-08T07:20:43.129Z",
+      "event": "task-added",
+      "detail": "T7: E4-NER PII adapter on backends seam"
+    },
+    {
+      "at": "2026-07-08T07:20:43.183Z",
+      "event": "task-added",
+      "detail": "T8: Fixtures + tests (exfil/pii/injection/secret, FN-gate, byte-identical, no-network)"
+    },
+    {
+      "at": "2026-07-08T07:20:43.235Z",
+      "event": "task-added",
+      "detail": "T9: Docs: E3 cross-ref + roadmap-2026 complete"
+    },
+    {
+      "at": "2026-07-08T07:20:43.287Z",
+      "event": "task-added",
+      "detail": "T10: Adversarial review + draft PR"
+    },
+    {
+      "at": "2026-07-08T07:20:43.338Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-08T07:20:43.392Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-08T07:20:43.444Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-08T07:51:24.259Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-08T07:51:24.313Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-08T07:51:24.364Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-08T07:51:24.417Z",
+      "event": "task-done",
+      "detail": "T5: E6 eval harness + security eval CLI + thresholds"
+    },
+    {
+      "at": "2026-07-08T07:51:24.468Z",
+      "event": "task-done",
+      "detail": "T6: E1 injection model adapter on backends seam"
+    },
+    {
+      "at": "2026-07-08T07:51:24.526Z",
+      "event": "task-done",
+      "detail": "T7: E4-NER PII adapter on backends seam"
+    },
+    {
+      "at": "2026-07-08T07:51:24.578Z",
+      "event": "task-done",
+      "detail": "T8: Fixtures + tests (exfil/pii/injection/secret, FN-gate, byte-identical, no-network)"
+    },
+    {
+      "at": "2026-07-08T07:51:24.635Z",
+      "event": "task-done",
+      "detail": "T9: Docs: E3 cross-ref + roadmap-2026 complete"
+    }
+  ]
+}

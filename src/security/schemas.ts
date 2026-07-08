@@ -188,6 +188,23 @@ const POLICY_SCHEMA: JsonSchema = {
   },
 };
 
+// Egress reuses the policy shape but additionally allows a host allowlist
+// (Block E, E3). Kept separate so the other policies stay strict.
+const EGRESS_POLICY_SCHEMA: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["enabled", "action"],
+  properties: {
+    enabled: { type: "boolean" },
+    action: {
+      type: "string",
+      enum: ["allow", "redact", "block", "require-approval", "warn"],
+    },
+    minConfidence: { type: "number", minimum: 0, maximum: 1 },
+    allowlist: { type: "array", items: { type: "string" } },
+  },
+};
+
 export const SECURITY_CONFIG_SCHEMA: JsonSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://metaproject.dev/schemas/security-config.schema.json",
@@ -218,7 +235,7 @@ export const SECURITY_CONFIG_SCHEMA: JsonSchema = {
         secrets: POLICY_SCHEMA,
         pii: POLICY_SCHEMA,
         promptInjection: POLICY_SCHEMA,
-        egress: POLICY_SCHEMA,
+        egress: EGRESS_POLICY_SCHEMA,
         artifactSafety: POLICY_SCHEMA,
       },
     },

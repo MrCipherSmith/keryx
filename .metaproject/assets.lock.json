@@ -30,6 +30,24 @@
       "url": "https://assets.gd-metapro.dev/memory/all-MiniLM-L6-v2-1.0.0.tar.gz",
       "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
       "size": 23000000
+    },
+    "prompt-guard-2-22m": {
+      "version": "2.0.0",
+      "url": "https://assets.gd-metapro.dev/security/prompt-guard-2-22m-2.0.0.tar.gz",
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "size": 22000000
+    },
+    "prompt-guard-2-86m": {
+      "version": "2.0.0",
+      "url": "https://assets.gd-metapro.dev/security/prompt-guard-2-86m-2.0.0.tar.gz",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "size": 86000000
+    },
+    "pii-ner": {
+      "version": "1.0.0",
+      "url": "https://assets.gd-metapro.dev/security/pii-ner-1.0.0.tar.gz",
+      "sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "size": 45000000
     }
   }
 }

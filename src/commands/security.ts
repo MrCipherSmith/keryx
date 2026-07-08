@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   heading,
   helpOptions,
@@ -30,6 +31,22 @@ import {
   configPath,
 } from "../security/config";
 import { listIncidents } from "../security/incidents";
+import {
+  installRuntimeHooks,
+  resolveRuntimes,
+  uninstallRuntimeHooks,
+  runtimeIds,
+} from "../security/agent-hooks";
+import { runDetectorsAsync } from "../security/detect";
+import {
+  DEFAULT_CORPORA,
+  formatEvalReport,
+  gateEval,
+  loadThresholds,
+  pureDetect,
+  runEval,
+  type DetectFn,
+} from "../security/eval/harness";
 import { pathExists } from "../lib/fs";
 import type {
   SecurityCheck,
@@ -94,6 +111,12 @@ export async function securityCommand(
       return;
     case "incidents":
       await handleIncidents(cwd, rest);
+      return;
+    case "hooks":
+      await handleHooks(cwd, rest);
+      return;
+    case "eval":
+      await handleEval(cwd, rest);
       return;
     default:
       console.error(`Unknown security command: ${subcommand}`);
@@ -468,6 +491,106 @@ async function handleIncidents(cwd: string, args: string[]): Promise<void> {
   }
 }
 
+// `security hooks install|uninstall --runtime <id|all>[,...]` (E5). Merge-safe
+// per-runtime installer; validates the rendered config after install.
+async function handleHooks(cwd: string, args: string[]): Promise<void> {
+  const action = args[0];
+  if (action !== "install" && action !== "uninstall") {
+    console.error(
+      `Usage: gd-metapro security hooks <install|uninstall> --runtime <${runtimeIds().join("|")}|all>`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const runtimeArg = optionValue(args, "--runtime") ?? "claude";
+  const requested = runtimeArg.split(",").map((s) => s.trim()).filter(Boolean);
+  const { runtimes, unknown } = resolveRuntimes(requested);
+  if (unknown.length > 0) {
+    console.error(`Unknown runtime(s): ${unknown.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  heading(`gd-metapro security hooks ${action}`);
+  for (const runtime of runtimes) {
+    if (action === "install") {
+      await installRuntimeHooks(cwd, runtime);
+      const errors = runtime.validate(
+        JSON.parse(await readFile(runtime.settingsPath(cwd), "utf8")) as Record<string, unknown>,
+      );
+      if (errors.length === 0) {
+        console.log(
+          `  ${style.green(symbols.ok)} ${runtime.id} → ${path.relative(cwd, runtime.settingsPath(cwd))}`,
+        );
+      } else {
+        for (const e of errors) {
+          console.log(`  ${style.red(symbols.cross)} ${e}`);
+        }
+        process.exitCode = 1;
+      }
+    } else {
+      const removed = await uninstallRuntimeHooks(cwd, runtime);
+      console.log(
+        `  ${removed ? style.green(symbols.ok) : style.gray(symbols.off)} ${runtime.id} ${style.dim(removed ? "removed" : "nothing to remove")}`,
+      );
+    }
+  }
+}
+
+// Resolve the committed fixtures root (repo-local; not shipped in the package).
+function fixturesRoot(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures");
+}
+
+// `security eval [--corpus <name|all>] [--with-model]` (E6). Runs the labeled
+// corpora through the detectors, prints a deterministic per-detector FN-rate
+// report, and exits non-zero when a detector breaches its committed threshold.
+async function handleEval(cwd: string, args: string[]): Promise<void> {
+  const corpusArg = optionValue(args, "--corpus") ?? "all";
+  const corpora =
+    corpusArg === "all" ? DEFAULT_CORPORA : corpusArg.split(",").map((s) => s.trim());
+  const withModel = args.includes("--with-model");
+  const asJson = args.includes("--json");
+  const root = fixturesRoot();
+
+  let detect: DetectFn;
+  if (withModel) {
+    // Force the injection backend on for this run; when the asset is absent the
+    // seam warns once and the pure path is used (AC6.3, C0-5).
+    const config = await loadSecurityConfig(cwd);
+    if (config.backends.injectionModel) {
+      config.backends.injectionModel.enabled = true;
+    }
+    if (config.backends.piiModel) {
+      config.backends.piiModel.enabled = true;
+    }
+    detect = (input: string) => runDetectorsAsync(cwd, input, config);
+  } else {
+    detect = await pureDetect(cwd);
+  }
+
+  const report = await runEval({ fixturesRoot: root, corpora, detect });
+  const thresholds = await loadThresholds(path.join(root, "thresholds.json"));
+  const gate = gateEval(report, thresholds);
+
+  if (asJson) {
+    console.log(JSON.stringify({ report, gate }, null, 2));
+  } else {
+    heading("gd-metapro security eval");
+    process.stdout.write(formatEvalReport(report, thresholds));
+    if (gate.status === "fail") {
+      console.log("");
+      for (const reason of gate.reasons) {
+        console.log(`  ${style.red(symbols.cross)} ${reason}`);
+      }
+    } else {
+      console.log(`  ${style.green(symbols.ok)} all detectors within FN-rate ceilings`);
+    }
+  }
+
+  process.exitCode = gate.status === "fail" ? 1 : 0;
+}
+
 function renderDecision(decision: SecurityDecision): void {
   console.log("");
   console.log(`  gate: ${gateLabel(decision.gate)}`);
@@ -528,6 +651,9 @@ export function printSecurityHelp(): void {
     "gd-metapro security report [--since <ref>] [--json]",
     "gd-metapro security policy validate",
     "gd-metapro security incidents [--limit <n>]",
+    "gd-metapro security hooks install --runtime <claude|cursor|windsurf|generic-mcp|all>",
+    "gd-metapro security hooks uninstall --runtime <...>",
+    "gd-metapro security eval [--corpus <injection|exfil|structured-pii|secret|all>] [--with-model]",
   ]);
   helpOptions([
     { flag: "--json", desc: "Emit machine-readable JSON." },
@@ -537,5 +663,8 @@ export function printSecurityHelp(): void {
     { flag: "--out <path>", desc: "Write redacted output to a file." },
     { flag: "--since <ref>", desc: "Restrict report to findings since a ref/date." },
     { flag: "--limit <n>", desc: "Limit the number of incidents listed." },
+    { flag: "--runtime <id>", desc: "Agent runtime(s) for hook install/uninstall (comma list or 'all')." },
+    { flag: "--corpus <name>", desc: "Eval corpus to run ('all' for every corpus)." },
+    { flag: "--with-model", desc: "Include opt-in model backends in the eval run." },
   ]);
 }

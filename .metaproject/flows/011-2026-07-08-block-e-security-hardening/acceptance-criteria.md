@@ -1,0 +1,25 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `gd-metapro flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `gd-metapro flow ac confirm <id> <ACn>`.
+
+These consolidate Block E's AC0..AC6 + AC-F (docs/requirements/roadmap-2026/E-security-hardening/acceptance-criteria.md).
+
+## Criteria
+
+- AC1: With all Block E backends off (`injectionModel.enabled=false`, `piiModel.enabled=false`) and no assets present, `runDetectors` output on the existing security test suite and every `security` command is byte-identical to today; no optional dep imported; no socket opened (no-network sandbox). `dependencies` stays empty; any new lib (Prompt Guard 2 runtime, NER) is only under `optionalDependencies`, imported via `await import()` inside its adapter (static guard extended). Leak-safety unchanged/stronger: no raw secret/PII in committable artifacts; fixed-width masks; HMAC fingerprints + fail-closed gate intact. This is the package-wide golden-rule gate. [AC0.1, AC0.2, AC0.3]
+- AC2: Every enumerated markdown-image and reference-style-link vector in `fixtures/exfil/` — inline `![alt](URL)`, reference `![alt][ref]` + `[ref]: URL`, and `<img src=URL>` — is flagged `category:"egress"` with a redactable URL span (`applyRedaction` strips it); 100% of enumerated vectors caught, benign controls not flagged. [AC2.1]
+- AC3: With a non-empty `egress.allowlist`, a URL to a non-allowlisted domain is flagged regardless of send-verb proximity (deny-by-default) and an allowlisted host is not flagged by the allowlist rule; empty/absent allowlist preserves today's send-verb proximity behavior and the existing security suite passes with no new false positives. [AC2.2, AC2.3]
+- AC4: RFC-1918, `127/8`, `169.254/16`, `169.254.169.254`, and `metadata.google.internal` fixtures are flagged `egress.ssrf-metadata`; benign public URLs are not. [AC2.4]
+- AC5: In `fixtures/structured-pii/`, valid-checksum IBAN (mod-97) and credit-card (Luhn) items are flagged `category:"pii"` with a typed mask and invalid-checksum items are NOT flagged (false positives eliminated); well-formed SSN and valid IPv4/IPv6 are flagged and malformed variants are not. [AC4.1, AC4.2]
+- AC6: `piiModel.enabled=false` ⇒ deterministic PII only, byte-identical to today; enabled with the NER asset ⇒ NER `category:"pii"` findings merge; enabled without asset ⇒ warn once, deterministic PII only, exit 0. [AC4.3]
+- AC7: `backends.injectionModel.enabled=false` (default) ⇒ injection detection is exactly today's regex `detectInjection` (no dep, no asset); with the backend enabled and a Prompt Guard 2 asset resolved & sha256-verified, injection recall on `fixtures/injection/` is measurably higher than the regex-only baseline (measured by the harness); backend enabled but asset absent/unverified ⇒ warn once, fall back to regex, exit 0, adapter never throws; model findings are `category:"prompt-injection"` and escalated to require-approval when an egress signal co-occurs (same as the regex path). [AC1.1, AC1.2, AC1.3, AC1.4]
+- AC8: ≥3 runtime targets (Claude Code + Cursor + Windsurf/generic MCP) each emit a validator-checked hook config routing input/output through `security check-input`/`check-output`; installing hooks for a second runtime into a config with user-authored keys preserves every pre-existing key and user hook entry (sentinel pattern) and re-install is idempotent; uninstall removes only the managed entries for the named runtime, leaving user content and other runtimes untouched. [AC5.1, AC5.2, AC5.3]
+- AC9: `security eval --corpus all` runs every labeled corpus (injection/exfil/secret/PII) through `runDetectors` (+ enabled backends) and emits a per-detector false-negative-rate report that is deterministic and git-diffable; the harness fails CI (non-zero exit) when any detector's FN rate exceeds its committed threshold in `fixtures/thresholds.json` and passes when all are within threshold (a seeded regression removing a detector rule flips the gate to fail); the harness runs pure (all model backends off) by default and, with `--with-model` + the injection asset present, includes the model detector's FN rate. [AC6.1, AC6.2, AC6.3]
+- AC10: Each of `fixtures/{injection,exfil,structured-pii,secret}/` is committed, deterministic, and labeled and named as the acceptance gate for its item; each opt-in capability (E1, E4-NER) has both an availability-true path test (asset stubbed) and an availability-false fallback test asserting byte-identical deterministic output; `detect/mcp.ts` (Block A scan-mcp, E3) remains compatible with this block's `DetectorMatch[]` + guard-seam conventions (cross-reference, no Block E re-test). [AC-F.1, AC-F.2, AC3.1]
+- AC11: `bun run check` (typecheck + full suite) passes with the 322 pre-existing tests unchanged; `package.json` `dependencies` stays empty; roadmap-2026 status updated (Block E marks the roadmap complete).

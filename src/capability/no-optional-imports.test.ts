@@ -98,6 +98,27 @@ test("@xenova/transformers is never statically imported (embedding runtime guard
   expect(/require\s*\(\s*['"]@xenova\/transformers['"]/.test(adapter)).toBe(false);
 });
 
+// Block E (E1 / E4-NER): the security model adapters reuse the same optional
+// transformers runtime — imported ONLY via the seam's lazy `await import()`.
+// Neither adapter, nor the detect pipeline that wires them, may name the runtime
+// in a static import/require.
+test("security injection + NER adapters never statically import the model runtime", async () => {
+  const dep = "@xenova/transformers";
+  const targets = [
+    path.join(SRC_ROOT, "security", "detect", "injection", "adapter.ts"),
+    path.join(SRC_ROOT, "security", "detect", "pii", "ner-adapter.ts"),
+    path.join(SRC_ROOT, "security", "detect", "index.ts"),
+  ];
+  for (const file of targets) {
+    const content = await readFile(file, "utf8");
+    for (const pattern of staticImportPatterns(dep)) {
+      expect(`${path.relative(PKG_ROOT, file)}:${pattern.test(content)}`).toBe(
+        `${path.relative(PKG_ROOT, file)}:false`,
+      );
+    }
+  }
+});
+
 test("dependencies block stays empty (zero-dep floor, AC0-1)", async () => {
   const pkg = JSON.parse(await readFile(path.join(PKG_ROOT, "package.json"), "utf8")) as {
     dependencies?: Record<string, string>;

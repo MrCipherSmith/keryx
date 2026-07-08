@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { SECURITY_CONFIG_SCHEMA, validateAgainstSchema } from "./schemas";
-import type { PolicyConfig, SecurityConfig } from "./types";
+import type { InjectionModelBackend, PolicyConfig, SecurityConfig } from "./types";
 
 // Default config from specification.md §5. `configChecksum` is intentionally
 // omitted from the default object and computed on demand (see below).
@@ -23,8 +23,15 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   backends: {
     rules: { enabled: true },
     entropy: { enabled: true },
-    piiModel: { enabled: false, provider: "custom" },
+    piiModel: { enabled: false, provider: "custom", assetId: "pii-ner" },
     externalApi: { enabled: false },
+    injectionModel: {
+      enabled: false,
+      provider: "prompt-guard-2",
+      size: "22M",
+      assetId: "prompt-guard-2-22m",
+      minConfidence: 0.5,
+    },
   },
   gate: { failOn: "critical", minConfidence: 0.5 },
 };
@@ -49,6 +56,62 @@ function mergePolicy(base: PolicyConfig, override?: Partial<PolicyConfig>): Poli
   return merged;
 }
 
+// Merge the egress policy, carrying through a user-provided host allowlist
+// (Block E, E3). The allowlist is only materialized when the source config
+// provides a valid string[] — an absent or malformed value leaves the field
+// undefined so the default config, its rendered form, and its `configChecksum`
+// stay byte-identical to today (AC0.1, AC2.3). A non-empty allowlist IS included
+// (and thus checksummed) so tampering is detected (§5).
+function mergeEgressPolicy(
+  base: PolicyConfig,
+  override?: Partial<PolicyConfig>,
+): PolicyConfig {
+  const merged = mergePolicy(base, override);
+  const raw = override?.allowlist ?? base.allowlist;
+  if (Array.isArray(raw)) {
+    const hosts = raw.filter((h): h is string => typeof h === "string");
+    if (hosts.length > 0) {
+      merged.allowlist = hosts;
+    }
+  }
+  return merged;
+}
+
+// Merge the opt-in injection-model backend (Block E, E1) field-by-field over the
+// default (which is `enabled:false`). A malformed/absent block yields the default
+// off state, so the deterministic regex path is the floor (AC1.1).
+function mergeInjectionModel(
+  override?: Partial<InjectionModelBackend>,
+): InjectionModelBackend {
+  const base = DEFAULT_SECURITY_CONFIG.backends.injectionModel as InjectionModelBackend;
+  const minConfidence =
+    typeof override?.minConfidence === "number" ? override.minConfidence : base.minConfidence;
+  return {
+    enabled: override?.enabled ?? base.enabled,
+    provider: override?.provider ?? base.provider,
+    size: override?.size ?? base.size,
+    assetId: override?.assetId ?? base.assetId,
+    minConfidence,
+  };
+}
+
+// Merge the PII-model backend, carrying an optional `assetId` (Block E, E4-NER)
+// only when defined so `exactOptionalPropertyTypes` stays satisfied.
+function mergePiiModel(
+  override?: Partial<SecurityConfig["backends"]["piiModel"]>,
+): SecurityConfig["backends"]["piiModel"] {
+  const base = DEFAULT_SECURITY_CONFIG.backends.piiModel;
+  const assetId = override?.assetId ?? base.assetId;
+  const merged: SecurityConfig["backends"]["piiModel"] = {
+    enabled: override?.enabled ?? base.enabled,
+    provider: override?.provider ?? base.provider,
+  };
+  if (assetId !== undefined) {
+    merged.assetId = assetId;
+  }
+  return merged;
+}
+
 // Deep-merge a partial user config over the defaults. Unknown keys are ignored;
 // each known block falls back field-by-field to the default.
 export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityConfig {
@@ -64,19 +127,17 @@ export function mergeSecurityConfig(parsed: Partial<SecurityConfig>): SecurityCo
       secrets: mergePolicy(base.policies.secrets, policies.secrets),
       pii: mergePolicy(base.policies.pii, policies.pii),
       promptInjection: mergePolicy(base.policies.promptInjection, policies.promptInjection),
-      egress: mergePolicy(base.policies.egress, policies.egress),
+      egress: mergeEgressPolicy(base.policies.egress, policies.egress),
       artifactSafety: mergePolicy(base.policies.artifactSafety, policies.artifactSafety),
     },
     backends: {
       rules: { enabled: parsed.backends?.rules?.enabled ?? base.backends.rules.enabled },
       entropy: { enabled: parsed.backends?.entropy?.enabled ?? base.backends.entropy.enabled },
-      piiModel: {
-        enabled: parsed.backends?.piiModel?.enabled ?? base.backends.piiModel.enabled,
-        provider: parsed.backends?.piiModel?.provider ?? base.backends.piiModel.provider,
-      },
+      piiModel: mergePiiModel(parsed.backends?.piiModel),
       externalApi: {
         enabled: parsed.backends?.externalApi?.enabled ?? base.backends.externalApi.enabled,
       },
+      injectionModel: mergeInjectionModel(parsed.backends?.injectionModel),
     },
     gate: {
       failOn: parsed.gate?.failOn ?? base.gate.failOn,

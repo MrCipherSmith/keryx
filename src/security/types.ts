@@ -112,6 +112,21 @@ export type PolicyConfig = {
   enabled: boolean;
   action: SecurityAction;
   minConfidence?: number;
+  // Egress-only (Block E, E3): deny-by-default host allowlist. Present ONLY when
+  // a user configures it — an absent/empty allowlist preserves the shipped
+  // send-verb proximity behavior byte-for-byte (AC2.3). When non-empty it is
+  // covered by `configChecksum` so tampering is detected.
+  allowlist?: string[];
+};
+
+// Block E (E1): opt-in semantic injection backend on the shipped `backends`
+// seam. Default off ⇒ deterministic regex path only, no dep, no asset (AC1.1).
+export type InjectionModelBackend = {
+  enabled: boolean;
+  provider: string; // "prompt-guard-2"
+  size: string; // "22M" | "86M"
+  assetId: string; // resolved via Block 0 assets.lock.json
+  minConfidence: number;
 };
 
 export type SecurityConfig = {
@@ -130,8 +145,11 @@ export type SecurityConfig = {
   backends: {
     rules: { enabled: boolean };
     entropy: { enabled: boolean };
-    piiModel: { enabled: boolean; provider: string };
+    // Block E (E4-NER): `assetId` wires the optional NER PII backend to a Block 0
+    // asset. Default off ⇒ deterministic PII only (AC4.3).
+    piiModel: { enabled: boolean; provider: string; assetId?: string };
     externalApi: { enabled: boolean };
+    injectionModel?: InjectionModelBackend;
   };
   gate: { failOn: SecuritySeverity; minConfidence: number };
   configChecksum?: string;

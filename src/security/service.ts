@@ -2,7 +2,7 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { pathExists } from "../lib/fs";
 import { loadSecurityConfig } from "./config";
-import { runDetectors } from "./detect";
+import { runDetectorsAsync } from "./detect";
 import { getHmacKey, hmacHash } from "./redact";
 import {
   computeGate,
@@ -54,7 +54,7 @@ export async function analyze(
   input: SecurityCheck,
 ): Promise<AnalysisResult> {
   const config = await loadSecurityConfig(cwd);
-  const matches = runDetectors(input.content, config);
+  const matches = await runDetectorsAsync(cwd, input.content, config);
   const hashFn = await hashFnFor(cwd);
 
   const buildOpts: BuildFindingOptions = {
@@ -169,7 +169,7 @@ export function createSecurityService(cwd: string = process.cwd()): SecurityServ
       opts?: { source?: SecuritySource },
     ): Promise<{ redacted: string; findings: SecurityFinding[] }> {
       const config = await loadSecurityConfig(cwd);
-      const matches = runDetectors(content, config);
+      const matches = await runDetectorsAsync(cwd, content, config);
       const hashFn = await hashFnFor(cwd);
       const source: SecuritySource = opts?.source ?? "generated";
       const decision = resolveDecision(config, {
