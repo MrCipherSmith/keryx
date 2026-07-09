@@ -218,14 +218,32 @@ structured prose into fixed sections. It is NOT deep reasoning. Run it on a
 flagship model on it. If you orchestrate, dispatch **one subagent per page on
 the cheap model**; the flagship's job is only to review a sample at the end.
 
+### Work-front
+
+The scaffold is graph-driven and covers the WHOLE project — a page per module at
+every nesting depth (\`src/pipelines\`, \`src/pipelines/store\`,
+\`src/pipelines/features/pipeline-variables\`, …), so there can be many draft
+pages. Do NOT try to enrich all at once — work in priority batches, incrementally.
+
 ### Procedure
 
-1. List the drafts to enrich:
+0. Prepare (deterministic, do this yourself — no subagents):
+   \`\`\`bash
+   keryx gdgraph build     # fresh symbols + cross-file links (feeds Public API)
+   keryx wiki collect      # full scaffold; read its final line:
+                           #   "enrichment needed: N component page(s) still Status: draft"
+   keryx wiki index
+   \`\`\`
+   That \`enrichment needed\` count is your work-front. On later commits,
+   \`keryx wiki collect --changed --since HEAD~1\` re-scaffolds only the modules
+   whose graph shape moved — enrich exactly those.
+1. List + order the drafts to enrich:
    \`\`\`bash
    grep -rl "Status: draft" .metaproject/wiki/components .metaproject/wiki/architecture
    \`\`\`
-   Order by importance - largest / most-depended-on modules first (they anchor
-   the Project Map). Use the page's \`Reference\` -> \`Depended on by\`.
+   Order by importance - most-depended-on modules first (they anchor the Project
+   Map). Use the page's \`Reference\` -> \`Depended on by\`. Take a batch (e.g. 20);
+   leave the rest for the next pass.
 2. For each draft page, read the files listed under \`Reference\` -> \`Key files\`
    (they are the highest-connectivity files, i.e. the module's core). Read a few
    more if needed. Do NOT read the whole module.
@@ -240,7 +258,13 @@ the cheap model**; the flagship's job is only to review a sample at the end.
 5. Set \`Status: accepted\` and bump \`Version\` (e.g. to \`1.0.0\`). This marks the
    page human-owned; \`keryx wiki collect --force\` will never overwrite it.
 6. Ground every claim in code you read - write "appears to" rather than
-   inventing. Then run \`keryx wiki index\`.
+   inventing. Where useful, link related pages with markdown links (feeds the
+   \`keryx wiki backlinks\` graph).
+7. As orchestrator you do NOT read code or write prose yourself — only subagents
+   do (one per page, cheap model). When the batch is done, review a sample
+   (prose accurate, real symbol names, \`## Reference\` untouched), then run
+   \`keryx wiki index\` and \`keryx wiki check-links\`. Report: pages enriched,
+   pages still draft, next batch.
 
 \`--force\` regenerates only unmodified drafts, so collect and enrich compose:
 re-run collect after code changes, then enrich the newly created drafts.
