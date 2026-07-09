@@ -6,6 +6,7 @@ import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
+import { findNodes } from "../gdgraph/find";
 import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
 
@@ -59,9 +60,17 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
       return;
     }
 
-    console.error(`Unsupported gdgraph query: ${query || "<empty>"}`);
-    console.error("Supported queries: cycles, orphans");
+    console.error(`gdgraph query supports only: cycles, orphans (not "${query || "<empty>"}").`);
+    console.error("gdgraph query does not do semantic/natural-language search. Instead:");
+    console.error(`  find files by concept:   keryx gdgraph find "${query}"`);
+    console.error('  search file contents:    keryx ctx rg "<pattern>"');
+    console.error("  then map relationships:  keryx gdgraph affected <file>");
     process.exitCode = 1;
+    return;
+  }
+
+  if (command === "find") {
+    await runFind(args.slice(1));
     return;
   }
 
@@ -97,6 +106,33 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
   console.error(`Unknown gdgraph command: ${command}`);
   printHelp();
   process.exitCode = 1;
+}
+
+async function runFind(rest: string[]): Promise<void> {
+  const query = positionals(rest).join(" ").trim() || rest.filter((a) => !a.startsWith("--")).join(" ").trim();
+  if (!query) {
+    console.error('Usage: keryx gdgraph find "<terms>"');
+    process.exitCode = 1;
+    return;
+  }
+
+  const graph = await loadGraph(process.cwd());
+  const results = findNodes(graph, query);
+  if (results.length === 0) {
+    console.log(`# gdgraph find: ${query}`);
+    console.log("");
+    console.log("No files matched by path. For content search use:");
+    console.log(`  keryx ctx rg "<pattern>"`);
+    return;
+  }
+
+  console.log(`# gdgraph find: ${query}`);
+  console.log("");
+  for (const result of results) {
+    console.log(`- ${result.path}  (score ${result.score}, dependents ${result.dependents})`);
+  }
+  console.log("");
+  console.log("Next: keryx gdgraph affected <file> for relationships / blast radius.");
 }
 
 async function runAffected(rest: string[]): Promise<void> {
@@ -250,7 +286,11 @@ async function delegateToLocalRunner(args: string[]): Promise<boolean> {
   // New surfaces (repomap/assets) + affected flags are only implemented in this
   // package runner, not the copied core cli.ts. Delegate legacy commands only.
   const command = args[0];
-  const delegatable = command === "build" || command === "query"
+  // Only delegate query for the two verbs the local runner actually implements;
+  // an unsupported query must reach the package handler so it can redirect to
+  // `find` / `ctx rg` / `affected`. `find` is package-only (never delegates).
+  const delegatable = command === "build"
+    || (command === "query" && (args[1] === "cycles" || args[1] === "orphans"))
     || (command === "affected" && !args.some((arg) => arg.startsWith("--")));
   if (!delegatable) {
     return false;
@@ -283,6 +323,7 @@ Usage:
   keryx gdgraph build
   keryx gdgraph query cycles
   keryx gdgraph query orphans
+  keryx gdgraph find "<terms>"
   keryx gdgraph affected <file> [--depth N] [--ranked] [--json]
   keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
   keryx gdgraph context

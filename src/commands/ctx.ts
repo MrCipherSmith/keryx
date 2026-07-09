@@ -157,9 +157,17 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
     return;
   }
 
-  const command = ["rg", "--line-number", "--column", "--no-heading", ...args];
+  // `--files-with-matches`/`--files`/`--count` make rg emit bare paths (or
+  // `path:count`), not the `file:line:col:text` the match parser expects — so
+  // summarize those as a file list instead of garbled "(unknown) 0:0" matches.
+  const listMode = rgListMode(args);
+  const command = listMode
+    ? ["rg", "--no-heading", ...args]
+    : ["rg", "--line-number", "--column", "--no-heading", ...args];
   const result = await runCommand(command);
-  const summary = summarizeRg(command.join(" "), result, config);
+  const summary = listMode
+    ? summarizeRgFileList(command.join(" "), result, config, listMode)
+    : summarizeRg(command.join(" "), result, config);
   const artifact = await writeArtifact({
     kind: "rg",
     command: command.join(" "),
@@ -443,6 +451,43 @@ ${hunks.length > 0 ? hunks.join("\n") : "(no hunk headers)"}
 
 ${errors.length > 0 ? renderTextSection("Errors / Warnings", errors) : ""}
 `;
+}
+
+// rg flags that change output from matches to a file list (or per-file counts).
+export function rgListMode(args: string[]): "files" | "count" | null {
+  const has = (flags: string[]): boolean => args.some((a) => flags.includes(a));
+  if (has(["-l", "--files-with-matches", "--files-without-match", "--files"])) {
+    return "files";
+  }
+  if (has(["-c", "--count", "--count-matches"])) {
+    return "count";
+  }
+  return null;
+}
+
+// Summarize `rg --files-with-matches` / `--files` / `--count` output, whose lines
+// are bare paths (or `path:count`), not `file:line:col:text`.
+export function summarizeRgFileList(
+  command: string,
+  result: CommandResult,
+  config: CtxConfig,
+  mode: "files" | "count",
+): string {
+  const lines = nonEmptyLines(result.raw);
+  const shown = lines.slice(0, config.maxOutputLines);
+  const omitted = lines.length - shown.length;
+
+  return `# gdctx rg (file list)
+
+Command: \`${command}\`
+Exit code: \`${result.exitCode}\`
+${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`
+
+## Files
+
+${shown.length > 0 ? shown.map((line) => `- ${line}`).join("\n") : "- none"}
+${omitted > 0 ? `\n… omitted ${omitted} more` : ""}
+${result.stderr.trim() ? `\n${renderTextSection("stderr", result.stderr.split("\n").slice(0, config.maxImportantLines))}` : ""}`;
 }
 
 function summarizeRg(

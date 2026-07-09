@@ -27,6 +27,15 @@ export function detectEntropy(content: string): DetectorMatch[] {
   let m: RegExpExecArray | null;
   while ((m = TOKEN.exec(content)) !== null) {
     const value = m[0];
+    // Code identifiers (camelCase / PascalCase / snake_case) routinely exceed
+    // 20 chars and sit near an "api"/"key" substring embedded in a NEIGHBOURING
+    // identifier — e.g. `PipelineVariablesStore` right after `...VariablesApi` —
+    // producing false positives. Real credentials are random blobs that almost
+    // always contain a digit or a base64 symbol; an alpha/underscore/hyphen-only
+    // token is an identifier, not a secret. Require a secret-shaped character.
+    if (!/[0-9]/.test(value) && !/[+/=]/.test(value)) {
+      continue;
+    }
     const entropy = shannonEntropy(value);
     if (entropy < 3.6) {
       continue;
