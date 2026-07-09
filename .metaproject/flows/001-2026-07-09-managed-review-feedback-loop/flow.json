@@ -3,9 +3,9 @@
   "id": "001",
   "slug": "managed-review-feedback-loop",
   "title": "Implement Managed Review Feedback Loop from requirements docpack",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-09T18:54:04.831Z",
-  "updatedAt": "2026-07-09T19:09:23.864Z",
+  "updatedAt": "2026-07-09T19:18:55.436Z",
   "source": {
     "type": "description",
     "ref": null
@@ -58,7 +58,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/20"
   },
   "tasks": [
     {
@@ -366,6 +366,20 @@
       "at": "2026-07-09T19:09:23.864Z",
       "event": "ac-confirmed",
       "detail": "AC11: bun run check passed 403 tests; test run --changed passed 7; review package 2026-07-09-branch-managed-review-feedback-loop is closed"
+    },
+    {
+      "at": "2026-07-09T19:18:50.459Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/20 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-07-09T19:18:54.723Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-09T19:18:55.436Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
