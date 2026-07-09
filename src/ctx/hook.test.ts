@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { classifyCommand, extractBashCommand } from "./hook";
+import { classifyCommand } from "./hook-classify";
+import { CLAUDE_RUNTIME } from "./runtimes";
+
+const extractBashCommand = (payload: string) => CLAUDE_RUNTIME.parseCommand(payload);
 
 test("blocks raw rg and suggests ctx rg", () => {
   const result = classifyCommand('rg "getDetails" src');

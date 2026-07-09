@@ -1,124 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { CTX_HOOK_COMMAND, CTX_HOOK_SENTINEL } from "./hook";
+import type { CtxRuntime, Settings } from "./runtimes";
 
-// Opt-in installer for the gdctx routing guard (Claude Code only). Mirrors the
-// merge-safe discipline of the security agent-hooks installer: managed groups
-// carry a sentinel so uninstall removes ONLY this installer's entry, re-install
-// never duplicates, and every pre-existing key/entry (including the security
-// hooks) is preserved untouched. Coexists with `security-agent-hooks` in the
-// shared top-level `_keryxManaged` array.
-
-const MANAGED_KEY = "_keryxManaged";
-const PRE_TOOL_MATCHER = "Bash";
-
-type Settings = Record<string, unknown>;
-
-export function ctxHookSettingsPath(projectRoot: string): string {
-  return path.join(projectRoot, ".claude", "settings.json");
-}
-
-function isCtxManagedGroup(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<string, unknown>)[MANAGED_KEY] === CTX_HOOK_SENTINEL
-  );
-}
-
-function stripCtxManaged(existing: unknown): unknown[] {
-  return Array.isArray(existing) ? existing.filter((g) => !isCtxManagedGroup(g)) : [];
-}
-
-function addSentinel(settings: Settings): void {
-  const managed = Array.isArray(settings[MANAGED_KEY])
-    ? (settings[MANAGED_KEY] as unknown[]).filter((v) => v !== CTX_HOOK_SENTINEL)
-    : [];
-  settings[MANAGED_KEY] = [...managed, CTX_HOOK_SENTINEL];
-}
-
-function removeSentinel(settings: Settings): void {
-  if (!Array.isArray(settings[MANAGED_KEY])) {
-    return;
-  }
-  const managed = (settings[MANAGED_KEY] as unknown[]).filter((v) => v !== CTX_HOOK_SENTINEL);
-  if (managed.length > 0) {
-    settings[MANAGED_KEY] = managed;
-  } else {
-    delete settings[MANAGED_KEY];
-  }
-}
-
-function hooksObject(settings: Settings): Settings {
-  return typeof settings.hooks === "object" &&
-    settings.hooks !== null &&
-    !Array.isArray(settings.hooks)
-    ? { ...(settings.hooks as Settings) }
-    : {};
-}
-
-// Merge the managed PreToolUse(Bash) guard group into `settings`, preserving all
-// other content and staying idempotent.
-export function mergeCtxHook(settings: Settings): Settings {
-  const hooks = hooksObject(settings);
-  hooks.PreToolUse = [
-    ...stripCtxManaged(hooks.PreToolUse),
-    {
-      matcher: PRE_TOOL_MATCHER,
-      hooks: [{ type: "command", command: CTX_HOOK_COMMAND }],
-      [MANAGED_KEY]: CTX_HOOK_SENTINEL,
-    },
-  ];
-  settings.hooks = hooks;
-  addSentinel(settings);
-  return settings;
-}
-
-// Remove ONLY the managed guard group + sentinel, preserving user content.
-export function stripCtxHook(settings: Settings): Settings {
-  if (
-    typeof settings.hooks !== "object" ||
-    settings.hooks === null ||
-    Array.isArray(settings.hooks)
-  ) {
-    removeSentinel(settings);
-    return settings;
-  }
-  const hooks = { ...(settings.hooks as Settings) };
-  if (Array.isArray(hooks.PreToolUse)) {
-    const remaining = stripCtxManaged(hooks.PreToolUse);
-    if (remaining.length > 0) {
-      hooks.PreToolUse = remaining;
-    } else {
-      delete hooks.PreToolUse;
-    }
-  }
-  if (Object.keys(hooks).length > 0) {
-    settings.hooks = hooks;
-  } else {
-    delete settings.hooks;
-  }
-  removeSentinel(settings);
-  return settings;
-}
-
-// Structural validation: the rendered config routes a Bash PreToolUse hook to
-// the ctx guard. Empty array = valid.
-export function validateCtxHook(settings: Settings): string[] {
-  const hooks = settings.hooks as Settings | undefined;
-  const groups = Array.isArray(hooks?.PreToolUse) ? (hooks?.PreToolUse as unknown[]) : [];
-  const found = groups.some((group) => {
-    if (!group || typeof group !== "object") return false;
-    const g = group as { matcher?: unknown; hooks?: unknown };
-    if (g.matcher !== PRE_TOOL_MATCHER) return false;
-    return (
-      Array.isArray(g.hooks) &&
-      (g.hooks as Array<{ command?: unknown }>).some((h) => h?.command === CTX_HOOK_COMMAND)
-    );
-  });
-  return found ? [] : ["ctx: missing PreToolUse(Bash) routing-guard hook"];
-}
+// Opt-in, merge-safe installer for the gdctx routing guard across harnesses.
+// The per-runtime merge/strip lives in runtimes.ts; this module only owns the
+// generic read/write of a JSON settings file and the install/uninstall loop.
+// Never clobbers user config: managed entries carry the `ctx-agent-hooks`
+// sentinel, so uninstall targets ONLY our entry and re-install is idempotent.
 
 async function readSettings(file: string): Promise<Settings> {
   if (!(await pathExists(file))) {
@@ -140,19 +29,46 @@ async function writeSettings(file: string, settings: Settings): Promise<void> {
   await writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
 }
 
-export async function installCtxHook(projectRoot: string): Promise<string> {
-  const file = ctxHookSettingsPath(projectRoot);
+// Install the guard for one runtime; returns { path, errors } ([] errors = ok).
+// JSON runtimes go through merge + on-disk validate; runtimes that own a
+// non-JSON artifact (OpenCode plugin) delegate to customInstall.
+export async function installRuntimeHook(
+  projectRoot: string,
+  runtime: CtxRuntime,
+): Promise<{ path: string; errors: string[] }> {
+  const file = runtime.locate(projectRoot);
+  if (runtime.customInstall) {
+    const errors = await runtime.customInstall(projectRoot);
+    return { path: file, errors };
+  }
+  const merge = runtime.merge;
+  const validate = runtime.validate;
+  if (!merge || !validate) {
+    return { path: file, errors: [`${runtime.id}: no installer defined`] };
+  }
   const settings = await readSettings(file);
-  await writeSettings(file, mergeCtxHook(settings));
-  return file;
+  await writeSettings(file, merge(settings));
+  const errors = validate(await readSettings(file));
+  return { path: file, errors };
 }
 
-export async function uninstallCtxHook(projectRoot: string): Promise<boolean> {
-  const file = ctxHookSettingsPath(projectRoot);
+// Remove ONLY the managed guard for one runtime; false if nothing was present.
+export async function uninstallRuntimeHook(
+  projectRoot: string,
+  runtime: CtxRuntime,
+): Promise<boolean> {
+  if (runtime.customUninstall) {
+    return runtime.customUninstall(projectRoot);
+  }
+  const file = runtime.locate(projectRoot);
   if (!(await pathExists(file))) {
     return false;
   }
+  const strip = runtime.strip;
+  if (!strip) {
+    return false;
+  }
   const settings = await readSettings(file);
-  await writeSettings(file, stripCtxHook(settings));
+  await writeSettings(file, strip(settings));
   return true;
 }

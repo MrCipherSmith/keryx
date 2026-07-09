@@ -2519,17 +2519,24 @@ keryx ctx show latest
 ## Enforcement (optional)
 
 The search rule above is advisory by default. To make it a hard gate, install the
-routing guard — a Claude Code \`PreToolUse(Bash)\` hook:
+routing guard — a pre-shell-execution hook for your agent harness:
 
 \`\`\`bash
-keryx ctx install-hook     # opt-in, per-project; keryx ctx uninstall-hook to remove
+keryx ctx install-hook                       # default: claude
+keryx ctx install-hook --runtime all         # every supported harness
+keryx ctx install-hook --runtime cursor,codex
+keryx ctx uninstall-hook [--runtime <id|all>]
 \`\`\`
 
-It blocks raw \`rg\`/\`grep\`/\`cat\`/\`head\`/\`tail\`/\`git diff|log|show\` (deny + feedback)
-and points the agent to the \`keryx ctx\` equivalent. It is routing-only: any other
-command passes through, so a generic output-compressing proxy can coexist. When a
-raw command is genuinely required, append an escape marker with a reason:
-\`rg "<pcre>" # keryx:raw <why>\`. The guard fails open on unparseable input.
+Supported harnesses: \`claude\`, \`codex\`, \`cursor\`, \`windsurf\` (verified),
+\`antigravity\`, \`opencode\` (experimental — verify on a live install). Zed has no
+scriptable pre-exec hook yet (use its static tool_permissions).
+
+The guard blocks raw \`rg\`/\`grep\`/\`cat\`/\`head\`/\`tail\`/\`git diff|log|show\` (deny +
+feedback) and points the agent to the \`keryx ctx\` equivalent. It is routing-only:
+any other command passes through, so a generic output-compressing proxy can
+coexist. When a raw command is genuinely required, append an escape marker with a
+reason: \`rg "<pcre>" # keryx:raw <why>\`. The guard fails open on unparseable input.
 
 ## Skip When
 

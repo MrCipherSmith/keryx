@@ -5,13 +5,8 @@ import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { redactRaw } from "../security/guard";
 import { runCtxHook } from "../ctx/hook";
-import {
-  ctxHookSettingsPath,
-  installCtxHook,
-  uninstallCtxHook,
-  validateCtxHook,
-} from "../ctx/hook-install";
-import { readFile as fsReadFile } from "node:fs/promises";
+import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
+import { resolveRuntimes, runtimeIds, UNSUPPORTED_RUNTIMES } from "../ctx/runtimes";
 
 type CtxArtifact = {
   id: string;
@@ -102,12 +97,12 @@ export async function ctxCommand(args: string[]): Promise<void> {
   }
 
   if (command === "install-hook") {
-    await handleInstallHook();
+    await handleInstallHook(args.slice(1));
     return;
   }
 
   if (command === "uninstall-hook") {
-    await handleUninstallHook();
+    await handleUninstallHook(args.slice(1));
     return;
   }
 
@@ -257,39 +252,68 @@ async function showArtifact(args: string[]): Promise<void> {
   console.log(await readFile(filePath, "utf8"));
 }
 
-// Opt-in install of the routing guard into this project's .claude/settings.json.
-// Validates the rendered config so a silent no-op is impossible.
-async function handleInstallHook(): Promise<void> {
+function parseRuntimeArg(args: string[]): string[] {
+  const value = optionValue(args, "--runtime") ?? "claude";
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function reportUnsupported(ids: string[]): void {
+  for (const id of ids) {
+    console.log(`  · ${id} — not supported: ${UNSUPPORTED_RUNTIMES[id]}`);
+  }
+}
+
+// Opt-in install of the routing guard for one or more harnesses. Validates each
+// rendered config so a silent no-op is impossible.
+async function handleInstallHook(args: string[]): Promise<void> {
   const cwd = process.cwd();
-  const file = await installCtxHook(cwd);
-  const errors = validateCtxHook(
-    JSON.parse(await fsReadFile(file, "utf8")) as Record<string, unknown>,
-  );
-  if (errors.length > 0) {
-    for (const error of errors) {
-      console.error(error);
-    }
+  const { runtimes, unknown, unsupported } = resolveRuntimes(parseRuntimeArg(args));
+  if (unknown.length > 0) {
+    console.error(`Unknown runtime(s): ${unknown.join(", ")}`);
+    console.error(`Supported: ${runtimeIds().join(", ")}, all`);
     process.exitCode = 1;
     return;
   }
+
   console.log("# gdctx routing guard installed");
   console.log("");
-  console.log(`settings: ${path.relative(cwd, file)}`);
-  console.log("hook: PreToolUse(Bash) -> keryx ctx hook claude");
   console.log("mode: deny + feedback (raw rg/grep/cat/head/tail/git diff|log|show -> keryx ctx ...)");
   console.log("escape: append `# keryx:raw <reason>` to run a raw command anyway");
+  console.log("");
+  for (const runtime of runtimes) {
+    const { path: file, errors } = await installRuntimeHook(cwd, runtime);
+    const tag = runtime.confidence === "experimental" ? " (experimental — verify on a live install)" : "";
+    if (errors.length > 0) {
+      for (const error of errors) console.error(`  ✗ ${error}`);
+      process.exitCode = 1;
+    } else {
+      console.log(`  ✓ ${runtime.id} -> ${path.relative(cwd, file)}${tag}`);
+    }
+  }
+  reportUnsupported(unsupported);
 }
 
-async function handleUninstallHook(): Promise<void> {
+async function handleUninstallHook(args: string[]): Promise<void> {
   const cwd = process.cwd();
-  const removed = await uninstallCtxHook(cwd);
+  const { runtimes, unknown, unsupported } = resolveRuntimes(parseRuntimeArg(args));
+  if (unknown.length > 0) {
+    console.error(`Unknown runtime(s): ${unknown.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+
   console.log("# gdctx routing guard uninstall");
   console.log("");
-  console.log(
-    removed
-      ? `removed managed guard from ${path.relative(cwd, ctxHookSettingsPath(cwd))}`
-      : "nothing to remove (no settings file)",
-  );
+  for (const runtime of runtimes) {
+    const removed = await uninstallRuntimeHook(cwd, runtime);
+    console.log(
+      `  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${path.relative(cwd, runtime.locate(cwd))}` : "nothing to remove"}`,
+    );
+  }
+  reportUnsupported(unsupported);
 }
 
 async function runCommand(command: string[]): Promise<CommandResult> {
@@ -717,8 +741,8 @@ Usage:
   keryx ctx read <file> [--mode outline|compact|full]
   keryx ctx run -- <command...>
   keryx ctx show latest [--raw]
-  keryx ctx install-hook            # opt-in PreToolUse(Bash) routing guard
-  keryx ctx uninstall-hook
-  keryx ctx hook <runtime>          # internal: invoked by the installed hook
+  keryx ctx install-hook [--runtime <id|all>]   # opt-in routing guard
+  keryx ctx uninstall-hook [--runtime <id|all>]
+  keryx ctx hook <runtime>                       # internal: invoked by the hook
 `);
 }
