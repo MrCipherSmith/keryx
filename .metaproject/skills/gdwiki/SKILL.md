@@ -101,9 +101,9 @@ re-run collect after code changes, then enrich the newly created drafts.
 
 ## Skip When
 
-- The request is a pure code lookup with no architectural/domain/business context.
+- The request is a pure code lookup with no architectural/domain/business context. Skipping the wiki is fine here — but it does not license raw `rg`: the code lookup itself still goes through gdgraph and `keryx ctx rg` (see the gdgraph and gdctx skills).
 - `keryx wiki` is unavailable.
 
 ## Reporting
 
-When wiki context is used, mention which pages were read.
+When wiki context is used, mention which pages were read. For non-trivial tasks, record `wiki_used: pages / not-relevant / unavailable` as part of the routing audit (see the gdgraph skill's Reporting section).

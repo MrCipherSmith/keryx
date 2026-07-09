@@ -182,9 +182,10 @@ export function renderIndexMarkdown({
       : "Use this index as the routing table before choosing module commands.",
     "Prefer MCP tools/resources for enabled Metaproject capabilities when the connected agent exposes them; otherwise use the matching skill and `keryx` CLI command.",
     "Route by question type: structural questions go to gdgraph first; conceptual questions go to gdwiki first; gdctx runs in parallel to keep output compact.",
+    "Any text, symbol, or pattern search over project code goes through `keryx ctx rg`, never a bare `rg`/`grep` — even a single targeted search, and even when gdgraph/gdwiki are skipped. Raw `rg`/`grep` is a last resort only, with a stated reason.",
     enableGdgraph
-      ? "For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before broad raw file search. The user does not need to request graph usage explicitly."
-      : "Use relevant skills from `skills/` before broad raw file search.",
+      ? "For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before any raw file search. The user does not need to request graph usage explicitly."
+      : "Use relevant skills from `skills/` before raw file search.",
     ...(enableGdwiki
       ? [
           "For conceptual questions (how does X work, why, architecture, domain models, business rules, user scenarios, auth and other flows, integrations, known decisions) read `wiki/index.md` first via `skills/gdwiki/SKILL.md`, then use gdgraph to jump from the wiki page to code.",
@@ -2343,9 +2344,9 @@ Use this skill by default for project navigation and file discovery. The user do
 
 When command output, search results, diff, logs, or large file reads may be long, pair this with \`skills/gdctx/SKILL.md\` so graph narrows the file set and gdctx compresses the output.
 
-Run gdgraph before broad raw file search when the task involves finding relevant files, understanding project structure, implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation.
+Run gdgraph before raw file search when the task involves finding relevant files, understanding project structure, implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation. A "targeted" \`rg\` does not exempt you: any text, symbol, or pattern search over project code is a search step and goes through the routing layer, not a bare \`rg\`/\`grep\`.
 
-Skip gdgraph only when the request is clearly unrelated to project files, asks for a single known file's literal contents, or when gdgraph is unavailable.
+Skip gdgraph only when the request is clearly unrelated to project files, asks for a single known file's literal contents, or when gdgraph is unavailable. Skipping gdgraph is NOT permission to run raw \`rg\`: when the graph cannot seed the first hop (unknown symbol, no known file), do the text search with \`keryx ctx rg "<pattern>"\`, then feed the seed file back into \`keryx gdgraph affected <file>\`. Raw \`rg\`/\`grep\` is a last resort only, and only with a stated reason.
 
 ## Trigger Examples
 
@@ -2366,7 +2367,7 @@ Skip gdgraph only when the request is clearly unrelated to project files, asks f
 ## Workflow
 
 1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
-2. If the task requires finding relevant project files or understanding relationships, use graph context before broad \`rg\` or reading many files.
+2. If the task requires finding relevant project files or understanding relationships, use graph context before any \`rg\` or reading many files. When you do need a text/symbol search, run it as \`keryx ctx rg\`, not raw \`rg\`.
 3. Do not rebuild the graph on every user question. Prefer existing graph storage and curated artifacts.
 4. Run build only when graph storage is missing, obviously stale, or the user explicitly asks to refresh it:
 
@@ -2408,10 +2409,11 @@ Graph refresh should happen through one of these paths:
 
 ## Reporting
 
-When answering, include a short graph context note:
+When answering a non-trivial navigation, debugging, review, or investigation task, include a routing audit. It is not optional; an omitted layer must be justified, not silently skipped:
 
-- \`graph_context: used\` with commands run;
-- \`graph_context: unavailable\` with the reason.
+- \`graph_used\`: commands run, or \`unavailable\`/\`not-relevant\` with the reason;
+- \`ctx_used\`: \`keryx ctx\` commands run (search/read/diff), or the reason none were;
+- \`raw_rg_used\`: \`yes\`/\`no\` — if \`yes\`, why the routing layer could not cover it.
 
 Graph output is navigation context, not proof. Verify behavior in actual code before making claims.
 `;
@@ -2491,6 +2493,8 @@ description: Use for commands, search, diff, test logs, lint/build output, and l
 
 Use this skill by default when a task needs command output, search results, git diff/status, test logs, lint/build output, or large file reads that may produce more context than the agent should load directly. The user does not need to explicitly ask for gdctx usage.
 
+**Search rule (hard):** any text, symbol, or pattern search over project code goes through \`keryx ctx rg "<pattern>"\`, never a bare \`rg\`/\`grep\`. This holds even for a single "targeted" search and even when you skip gdgraph/gdwiki — \`ctx rg\` compresses the output while raw \`rg\` dumps it into context. Raw \`rg\`/\`grep\` is allowed only as a last resort when \`keryx ctx rg\` is unavailable or demonstrably cannot express the query, and the reason must be stated in the routing audit.
+
 ## Workflow
 
 1. Check whether \`.metaproject/modules/gdctx.md\` exists.
@@ -2513,12 +2517,14 @@ keryx ctx show latest
 
 ## Skip When
 
-- The command output is already tiny and exact raw output is more useful.
+- The command output is already tiny and exact raw output is more useful (a single-line status, a one-line command whose result you already know is short).
 - The user explicitly asks for literal full file contents.
 - \`keryx ctx\` is unavailable.
 
+Note: "the output is already tiny" is a judgement about a specific known command, not a blanket exemption. A code search whose result size is unknown up front is not tiny by default — route it through \`keryx ctx rg\`.
+
 ## Reporting
 
-When gdctx is used, mention the commands run and whether raw output was saved.
+When gdctx is used, mention the commands run and whether raw output was saved. For non-trivial tasks, report \`ctx_used\` and \`raw_rg_used: yes/no\` as part of the routing audit (see the gdgraph skill's Reporting section), justifying any raw \`rg\`/\`grep\`.
 `;
 }
