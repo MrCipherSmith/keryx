@@ -32,10 +32,10 @@ async function install(root: string, runtime: typeof CLAUDE_ORIENT): Promise<Rec
 
 test("resolve classifies verified / unknown / unsupported (windsurf, zed)", () => {
   expect(orientRuntimeIds()).toEqual(["claude", "codex", "cursor"]);
-  const { runtimes, unknown, unsupported } = resolveOrientRuntimes(["claude", "windsurf", "bogus", "zed"]);
+  const { runtimes, unknown, unsupported } = resolveOrientRuntimes(["claude", "windsurf", "bogus", "zed", "opencode"]);
   expect(runtimes.map((r) => r.id)).toEqual(["claude"]);
   expect(unknown).toEqual(["bogus"]);
-  expect(unsupported.sort()).toEqual(["windsurf", "zed"]);
+  expect(unsupported.sort()).toEqual(["opencode", "windsurf", "zed"]);
 });
 
 test("claude formats orientation as plain stdout", () => {

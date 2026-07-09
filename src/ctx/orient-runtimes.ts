@@ -163,6 +163,8 @@ export const CURSOR_ORIENT: OrientRuntime = {
 export const UNSUPPORTED_ORIENT: Record<string, string> = {
   windsurf: "Windsurf hooks are exit-code only (block/allow); no documented field injects context. Use its rules/memories for standing context.",
   zed: "Zed has no scriptable session/prompt hook. Use static agent settings.",
+  opencode: "OpenCode's chat.message / experimental.chat.system.transform can inject context in theory, but propagation is undocumented and known-buggy (sst/opencode#17100, oh-my-openagent#885). Left out until stable — use AGENTS.md for standing context.",
+  antigravity: "Antigravity's context-injection hook is unverified (no first-party docs). Its pre-exec block hook IS supported — see `keryx ctx install-hook --runtime antigravity`.",
 };
 
 export const ORIENT_RUNTIMES: OrientRuntime[] = [CLAUDE_ORIENT, CODEX_ORIENT, CURSOR_ORIENT];
