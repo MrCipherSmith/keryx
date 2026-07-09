@@ -42,3 +42,6 @@
 - 2026-07-09T19:09:13.869Z - ac-confirmed: AC9: src/review/managed.test.ts covers flow matching, artifact creation, schema validation, attach-review, review-flow, ingest, lightweight, and no flow.json mutation
 - 2026-07-09T19:09:18.803Z - ac-confirmed: AC10: Managed review service only reads flow metadata and writes review artifacts; test compares flow.json before and after attach-review
 - 2026-07-09T19:09:23.864Z - ac-confirmed: AC11: bun run check passed 403 tests; test run --changed passed 7; review package 2026-07-09-branch-managed-review-feedback-loop is closed
+- 2026-07-09T19:18:50.459Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/20 (tracker unavailable: existence not verified)
+- 2026-07-09T19:18:54.723Z - completing
+- 2026-07-09T19:18:55.436Z - done: all gates passed
