@@ -149,6 +149,22 @@ async function runCollect(args: string[]): Promise<void> {
   for (const page of result.pages) {
     console.log(`- ${page.action}: ${page.path} (${page.source})`);
   }
+
+  // Enrichment work-front: component pages still in draft (prose not written).
+  // This is what the gdwiki enrichment pass (and the post-commit hook) should target.
+  const { collectPages } = await import("../wiki/service");
+  const drafts = (await collectPages(process.cwd())).filter(
+    (page) => page.pageType === "component" && (page.status ?? "draft") === "draft",
+  );
+  console.log("");
+  console.log(`enrichment needed: ${drafts.length} component page(s) still Status: draft`);
+  if (drafts.length > 0) {
+    console.log("→ enrich prose via the gdwiki skill (cheap model, 1 subagent per page).");
+    for (const page of drafts.slice(0, 10)) {
+      console.log(`  - ${page.relativePath}`);
+    }
+    if (drafts.length > 10) console.log(`  - … +${drafts.length - 10} more`);
+  }
 }
 
 async function runCheckLinks(): Promise<void> {

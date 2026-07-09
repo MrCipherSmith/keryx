@@ -72,7 +72,7 @@ test("collect creates draft wiki pages from graph, health, and testing artifacts
     expect(await readFile(path.join(root, ".metaproject", "wiki", "architecture", "project-map.md"), "utf8"))
       .toContain("Module dependencies");
     expect(await readFile(path.join(root, ".metaproject", "wiki", "index.md"), "utf8"))
-      .toContain("Module src/pipelines");
+      .toContain("[src/pipelines](components/src-pipelines.md)");
 
     await writeFile(
       path.join(root, ".metaproject", "wiki", "architecture", "project-map.md"),

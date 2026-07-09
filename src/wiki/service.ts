@@ -830,6 +830,24 @@ function extractSummary(lines: string[]): string {
   return summary === "One paragraph summary." ? "" : summary;
 }
 
+// The module path a component page documents (title is "Module <path>").
+function moduleTitlePath(page: WikiPage): string {
+  return page.title.startsWith("Module ") ? page.title.slice("Module ".length) : page.relativePath;
+}
+
+// Render component pages as a nesting TREE by module path (src → pipelines →
+// store / features/…) so the index reflects the graph hierarchy, not a flat list.
+function renderComponentTree(pages: WikiPage[]): string[] {
+  const entries = pages
+    .map((page) => ({ path: moduleTitlePath(page), page }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  return entries.map(({ path: modulePath, page }) => {
+    const depth = Math.max(0, modulePath.split("/").length - 2);
+    const indent = "  ".repeat(depth);
+    return `${indent}- [${modulePath}](${page.relativePath}) (${page.status ?? "draft"})`;
+  });
+}
+
 function renderIndexBody(pages: WikiPage[], generatedAt: string): string {
   const lines = [`<!-- generated: ${generatedAt} | pages: ${pages.length} -->`, ""];
 
@@ -838,6 +856,10 @@ function renderIndexBody(pages: WikiPage[], generatedAt: string): string {
     lines.push(`### ${titleCase(type)}`, "");
     if (typed.length === 0) {
       lines.push("_No pages yet._", "");
+      continue;
+    }
+    if (type === "component") {
+      lines.push(...renderComponentTree(typed), "");
       continue;
     }
     for (const page of typed) {
