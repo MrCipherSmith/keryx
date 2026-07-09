@@ -6,8 +6,8 @@ import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
-import { findNodes } from "../gdgraph/find";
-import { querySymbol } from "../gdgraph/symbol";
+import { findNodes, findSymbols } from "../gdgraph/find";
+import { querySymbol, resolveSymbols } from "../gdgraph/symbol";
 import { findPath, labelNode } from "../gdgraph/path";
 import { isCapabilityEnabled } from "../capability/seam";
 import { loadGdgraphConfig } from "../gdgraph/config";
@@ -274,28 +274,43 @@ async function runFind(rest: string[]): Promise<void> {
   }
 
   const graph = await loadGraph(process.cwd());
+  const symbols = findSymbols(graph, query);
   const results = findNodes(graph, query);
-  if (results.length === 0) {
+
+  if (results.length === 0 && symbols.length === 0) {
     console.log(`# gdgraph find: ${query}`);
     console.log("");
-    console.log("No files matched by path. For content search use:");
+    console.log("No files or symbols matched. For content search use:");
     console.log(`  keryx ctx rg "<pattern>"`);
     return;
   }
 
   console.log(`# gdgraph find: ${query}`);
   console.log("");
+
+  if (symbols.length > 0) {
+    console.log(`## Symbols (${symbols.length})`);
+    for (const symbol of symbols) {
+      console.log(`- ${symbol.name} (${symbol.kind}) — ${symbol.path}:${symbol.startLine}`);
+    }
+    console.log("");
+  }
+
+  console.log(`## Files (${results.length})`);
+  if (results.length === 0) {
+    console.log("- none");
+  }
   for (const result of results) {
     console.log(`- ${result.path}  (score ${result.score}, dependents ${result.dependents})`);
   }
   console.log("");
-  console.log("Next: keryx gdgraph affected <file> for relationships / blast radius.");
+  console.log('Next: keryx gdgraph symbol "<name>" · keryx gdgraph affected <file>');
 }
 
 async function runAffected(rest: string[]): Promise<void> {
-  const target = positionals(rest)[0];
+  let target = positionals(rest)[0];
   if (!target) {
-    console.error("Usage: keryx gdgraph affected <file> [--depth N] [--ranked] [--json]");
+    console.error("Usage: keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]");
     process.exitCode = 1;
     return;
   }
@@ -307,10 +322,29 @@ async function runAffected(rest: string[]): Promise<void> {
   const depth = depthArg !== undefined ? Number.parseInt(depthArg, 10) : config.affected.defaultDepth;
 
   const graph = await loadGraph(process.cwd());
+
+  // Symbol-aware: if the target isn't a known file but names a symbol, resolve
+  // it to its owning file so `affected "clonePipeline"` just works.
+  const isFile = graph.nodes.some((n) => n.kind === "file" && n.path === target);
+  let resolutionNote = "";
+  if (!isFile && graph.symbols && graph.symbols.length > 0) {
+    const hits = resolveSymbols(graph.symbols, target, 5);
+    const files = [...new Set(hits.map((s) => s.path))];
+    if (files.length > 0) {
+      resolutionNote = `resolved symbol "${target}" → ${files[0]}${files.length > 1 ? ` (+${files.length - 1} more file)` : ""}`;
+      target = files[0]!;
+    }
+  }
+
   const affected = computeAffected(graph, target, {
     depth: Number.isFinite(depth) ? depth : config.affected.defaultDepth,
     ranked: ranked || asJson,
   });
+
+  if (resolutionNote && !asJson) {
+    console.log(`# ${resolutionNote}`);
+    console.log("");
+  }
 
   if (asJson) {
     console.log(JSON.stringify(affected, null, 2));
@@ -450,10 +484,11 @@ async function delegateToLocalRunner(args: string[]): Promise<boolean> {
     command === "build" && (await isCapabilityEnabled(process.cwd(), "gdgraph.treesitter"));
   // Only delegate query for the two verbs the local runner actually implements;
   // an unsupported query must reach the package handler so it can redirect to
-  // `find` / `ctx rg` / `affected`. `find`/`symbol` are package-only.
+  // `find` / `ctx rg` / `affected`. `affected` is package-only now so it can be
+  // symbol-aware (the package default output stays legacy-identical). `find` /
+  // `symbol` / `path` are package-only.
   const delegatable = (command === "build" && !treesitterOn)
-    || (command === "query" && (args[1] === "cycles" || args[1] === "orphans"))
-    || (command === "affected" && !args.some((arg) => arg.startsWith("--")));
+    || (command === "query" && (args[1] === "cycles" || args[1] === "orphans"));
   if (!delegatable) {
     return false;
   }
@@ -489,7 +524,7 @@ Usage:
   keryx gdgraph symbol "<name>"
   keryx gdgraph symbols <enable|disable|status>
   keryx gdgraph path "<A>" "<B>"
-  keryx gdgraph affected <file> [--depth N] [--ranked] [--json]
+  keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
   keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
   keryx gdgraph context
   keryx gdgraph assets list | verify [<id>] | pull <id>

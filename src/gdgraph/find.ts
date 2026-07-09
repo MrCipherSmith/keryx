@@ -14,12 +14,23 @@ export interface FindResult {
   dependents: number;
 }
 
+export interface SymbolFindResult {
+  id: string;
+  name: string;
+  kind: string;
+  path: string;
+  startLine: number;
+  score: number;
+  matched: string[];
+}
+
 const STOP = new Set([
   "and", "the", "of", "to", "a", "an", "in", "for", "or", "with", "on", "is", "at", "by",
 ]);
 
-export function findNodes(graph: GraphData, query: string, limit = 20): FindResult[] {
-  const terms = [
+// Split a free-text query into distinct, meaningful search terms.
+export function tokenize(query: string): string[] {
+  return [
     ...new Set(
       query
         .toLowerCase()
@@ -27,6 +38,42 @@ export function findNodes(graph: GraphData, query: string, limit = 20): FindResu
         .filter((t) => t.length >= 2 && !STOP.has(t)),
     ),
   ];
+}
+
+// Rank symbol nodes by name match — the precise half of `find` when the symbol
+// layer is active. Exact name match is boosted so `find "clonePipeline"` returns
+// the definition, not just path hits.
+export function findSymbols(graph: GraphData, query: string, limit = 15): SymbolFindResult[] {
+  const terms = tokenize(query);
+  const symbols = graph.symbols ?? [];
+  if (terms.length === 0 || symbols.length === 0) {
+    return [];
+  }
+
+  const results: SymbolFindResult[] = [];
+  for (const symbol of symbols) {
+    const nameLower = symbol.name.toLowerCase();
+    const matched = terms.filter((t) => nameLower.includes(t));
+    if (matched.length === 0) {
+      continue;
+    }
+    const exactBonus = terms.some((t) => nameLower === t) ? 20 : 0;
+    results.push({
+      id: symbol.id,
+      name: symbol.name,
+      kind: symbol.kind,
+      path: symbol.path,
+      startLine: symbol.startLine,
+      score: matched.length * 10 + exactBonus,
+      matched,
+    });
+  }
+  results.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.startLine - b.startLine);
+  return results.slice(0, limit);
+}
+
+export function findNodes(graph: GraphData, query: string, limit = 20): FindResult[] {
+  const terms = tokenize(query);
   if (terms.length === 0) {
     return [];
   }

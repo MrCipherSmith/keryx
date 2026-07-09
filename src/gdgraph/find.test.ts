@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { findNodes } from "./find";
-import type { GraphData } from "./types";
+import { findNodes, findSymbols } from "./find";
+import type { GraphData, SymbolNode } from "./types";
 
 function fileNode(path: string) {
   return { id: path, kind: "file" as const, path, language: "typescript" as const };
@@ -50,4 +50,29 @@ test("fan-in breaks ties (more-depended-on file ranks higher)", () => {
   const results = findNodes(GRAPH, "pipeline");
   const apiIdx = results.findIndex((r) => r.path.endsWith("pipeline-api.ts"));
   expect(results[apiIdx]?.dependents).toBe(2);
+});
+
+function sym(id: string, name: string, path: string, line: number): SymbolNode {
+  return { id, kind: "function", path, name, container: null, startLine: line, endLine: line + 2, language: "typescript" };
+}
+
+const SYMBOL_GRAPH: GraphData = {
+  nodes: [],
+  edges: [],
+  symbols: [
+    sym("a#clonePipeline", "clonePipeline", "src/a.ts", 12),
+    sym("b#clonePipelineDeep", "clonePipelineDeep", "src/b.ts", 30),
+    sym("c#unrelated", "unrelated", "src/c.ts", 1),
+  ],
+};
+
+test("findSymbols ranks an exact name match above a substring match", () => {
+  const results = findSymbols(SYMBOL_GRAPH, "clonePipeline");
+  expect(results[0]?.name).toBe("clonePipeline"); // exact-name bonus wins
+  expect(results.map((r) => r.name)).toContain("clonePipelineDeep");
+  expect(results.every((r) => r.name !== "unrelated")).toBe(true);
+});
+
+test("findSymbols returns [] when the symbol layer is absent", () => {
+  expect(findSymbols({ nodes: [], edges: [] }, "clonePipeline")).toEqual([]);
 });
