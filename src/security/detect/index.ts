@@ -18,8 +18,11 @@ export { detectEgress } from "./egress";
 export { detectExfil } from "./exfil";
 
 // The text-classification / NER runtime resolved lazily by the capability seam.
-// Reuses the already-declared optional runtime (never a top-level import).
-export const SECURITY_MODEL_RUNTIME = "@xenova/transformers";
+// No model runtime is shipped (the @xenova/onnx stack was removed for weight),
+// so this is empty ⇒ the model backends stay off and detection runs on the
+// deterministic floor (regex + entropy). Set to a transformers.js-API package to
+// opt back into the Prompt-Guard / NER model backends.
+export const SECURITY_MODEL_RUNTIME = "";
 
 // Run every enabled detector over `content` and return raw matches. Policy
 // enable flags gate which detector categories run; entropy is additionally gated

@@ -23,7 +23,10 @@ export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
   reflect: { minClusterSize: 3 },
   index: {
     enabled: false, // C1 default OFF ⇒ lexical only (C-2, AC-C1)
-    runtime: "@xenova/transformers",
+    // No model runtime shipped (the @xenova/onnx stack was removed for weight).
+    // Empty ⇒ the seam skips the dep gate and memory recall stays lexical. Set to
+    // a transformers.js-API package here to opt back into semantic embeddings.
+    runtime: "",
     modelAssetId: "memory-embed-default",
     k: 20,
     minScore: 0.0,
