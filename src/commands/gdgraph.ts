@@ -8,6 +8,7 @@ import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
 import { findNodes } from "../gdgraph/find";
 import { querySymbol } from "../gdgraph/symbol";
+import { findPath, labelNode } from "../gdgraph/path";
 import { isCapabilityEnabled } from "../capability/seam";
 import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
@@ -86,6 +87,11 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
     return;
   }
 
+  if (command === "path") {
+    await runPath(args.slice(1));
+    return;
+  }
+
   if (command === "affected") {
     await runAffected(args.slice(1));
     return;
@@ -118,6 +124,44 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
   console.error(`Unknown gdgraph command: ${command}`);
   printHelp();
   process.exitCode = 1;
+}
+
+async function runPath(rest: string[]): Promise<void> {
+  const positional = rest.filter((a) => !a.startsWith("--"));
+  const from = positional[0];
+  const to = positional[1];
+  if (!from || !to) {
+    console.error('Usage: keryx gdgraph path "<A>" "<B>"   (A/B: file path or symbol name)');
+    process.exitCode = 1;
+    return;
+  }
+
+  const graph = await loadGraph(process.cwd());
+  const result = findPath(graph, from, to);
+  const symbolsById = new Map((graph.symbols ?? []).map((s) => [s.id, s]));
+
+  console.log(`# gdgraph path: ${from} -> ${to}`);
+  console.log("");
+  if (result.fromResolved.length === 0) {
+    console.log(`Could not resolve "${from}" to a file or symbol. Try \`keryx gdgraph find\`.`);
+    return;
+  }
+  if (result.toResolved.length === 0) {
+    console.log(`Could not resolve "${to}" to a file or symbol. Try \`keryx gdgraph find\`.`);
+    return;
+  }
+  if (result.nodes.length === 0) {
+    console.log("No path found in the graph (they may be in disconnected components).");
+    if (!graph.symbols || graph.symbols.length === 0) {
+      console.log("Note: symbol layer inactive — only file imports are linked. `keryx gdgraph symbols enable`.");
+    }
+    return;
+  }
+
+  console.log(`${result.nodes.length} node(s), ${result.nodes.length - 1} hop(s):`);
+  result.nodes.forEach((node, i) => {
+    console.log(`${i === 0 ? "- " : "  ↓ "}${labelNode(node, symbolsById)}`);
+  });
 }
 
 async function runSymbolsCapability(rest: string[]): Promise<void> {
@@ -444,6 +488,7 @@ Usage:
   keryx gdgraph find "<terms>"
   keryx gdgraph symbol "<name>"
   keryx gdgraph symbols <enable|disable|status>
+  keryx gdgraph path "<A>" "<B>"
   keryx gdgraph affected <file> [--depth N] [--ranked] [--json]
   keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
   keryx gdgraph context
