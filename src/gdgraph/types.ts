@@ -41,7 +41,7 @@ export type SymbolNode = {
   // 1-based; positional, for stable disambiguation.
   startLine: number;
   endLine: number;
-  language: "typescript" | "javascript";
+  language: "typescript" | "javascript" | "java" | "python";
   // Rendered for repomap.
   signature?: string;
 };

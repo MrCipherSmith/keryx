@@ -6,7 +6,7 @@
 // and the `ctx.ts` config idiom). Every field falls back individually.
 
 import path from "node:path";
-import { glob } from "bun";
+import { Glob } from "bun";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 
@@ -119,23 +119,28 @@ type DeepPartial<T> = {
 export async function detectSupportedLanguages(cwd: string): Promise<string[]> {
   const detected = new Set<string>();
 
+  // True as soon as one matching file exists — short-circuits the scan.
+  const hasMatch = async (pattern: string): Promise<boolean> => {
+    for await (const _ of new Glob(pattern).scan({ cwd, onlyFiles: true })) {
+      return true;
+    }
+    return false;
+  };
+
   // Check for TypeScript/JavaScript files
-  const tsFiles = await glob({ cwd, match: "**/*.{ts,tsx,js,jsx,mjs,cjs}" });
-  if (tsFiles.length > 0) {
+  if (await hasMatch("**/*.{ts,tsx,js,jsx,mjs,cjs}")) {
     detected.add("typescript");
     detected.add("tsx");
     detected.add("javascript");
   }
 
   // Check for Java files
-  const javaFiles = await glob({ cwd, match: "**/*.java" });
-  if (javaFiles.length > 0) {
+  if (await hasMatch("**/*.java")) {
     detected.add("java");
   }
 
   // Check for Python files
-  const pyFiles = await glob({ cwd, match: "**/*.py" });
-  if (pyFiles.length > 0) {
+  if (await hasMatch("**/*.py")) {
     detected.add("python");
   }
 
