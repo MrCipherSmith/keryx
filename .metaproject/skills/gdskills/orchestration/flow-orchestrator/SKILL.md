@@ -1,6 +1,6 @@
 ---
 name: flow-orchestrator
-description: "Use when Task Manager is enabled and a non-trivial feature, issue, or story should be driven through keryx flow from initialization to done."
+description: "Use when Task Manager is enabled and a non-trivial feature, issue, or story should be driven through keryx flow from initialization to a user-selected completion, verified handoff, or open state."
 triggers:
   - "создай flow"
   - "создай фло"
@@ -12,7 +12,7 @@ triggers:
   - "managed implementation"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "orchestration"
 license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
@@ -26,8 +26,9 @@ Flow Orchestrator is the Task Manager-aware implementation orchestrator.
 It wraps the existing gdskills pipeline with `keryx flow` state.
 
 Use this skill instead of `job-orchestrator` when the user wants a managed
-story/issue lifecycle with frozen acceptance criteria, task state, draft PR
-gates, Code Health, and a durable flow package in `.metaproject/flows/`.
+story/issue lifecycle with frozen acceptance criteria, task state, an explicit
+completion choice, Code Health, and a durable flow package in
+`.metaproject/flows/`.
 
 Do not modify `job-orchestrator` or `task-implementer` behavior. They remain
 usable without Task Manager. This skill coordinates them through flow state.
@@ -79,10 +80,13 @@ flowchart TD
   F --> G["code-verifier + review-orchestrator"]
   G --> H{"All tasks, checks, review OK?"}
   H -- "no" --> F
-  H -- "yes" --> I["draft PR"]
-  I --> J["keryx flow implemented --pr"]
-  J --> K["confirm AC evidence"]
-  K --> L["keryx flow complete"]
+  H -- "yes" --> I{"Ask user how to finish"}
+  I -- "draft PR" --> J["create or confirm draft PR"]
+  J --> K["keryx flow implemented --pr"]
+  K --> L["confirm AC evidence"]
+  L --> M["keryx flow complete"]
+  I -- "verified handoff" --> N["report completion; keep flow in-progress"]
+  I -- "keep open" --> O["journal next steps; keep flow in-progress"]
 ```
 
 ## Phase 0: Route And Resume
@@ -248,20 +252,42 @@ The implementer never self-accepts. Only flow-orchestrator decides whether the
 flow can move to `implemented`. Record any applied skill updates in the
 completion report.
 
-## Phase 4: Draft PR Gate
+## Phase 4: Completion Choice
 
 When tasks, verification and review are complete:
 
-1. Create or confirm a draft PR in the author's name.
-2. Record it through the CLI:
+1. Stop before creating a PR or changing the flow to `implemented`.
+2. Ask the user how to finish. Do not infer that every flow needs a PR:
+
+```text
+How should this flow end?
+
+  A) Create a draft PR and complete the managed flow
+  B) Finish with a verified handoff and no PR
+  C) Keep the flow open for more work
+
+> pick a letter (no default; wait for the user)
+```
+
+3. Follow the selected outcome:
+
+- **A - Draft PR:** create or confirm a draft PR in the author's name, then
+  record it through the CLI:
 
 ```bash
 keryx flow implemented <id> --pr <draft-pr-url>
 ```
 
-Do not run `flow implemented` without a PR URL. If the user explicitly asks to
-skip PR creation, keep the flow in progress and explain that Task Manager's
-completion gate requires a PR record.
+- **B - Verified handoff without PR:** do not create a PR and do not run
+  `keryx flow implemented` or `keryx flow complete`. Produce the completion
+  report with verification and acceptance-criteria evidence, record that the
+  implementation work is finished, and leave the Task Manager flow
+  `in-progress`. Explain that the current CLI requires a recorded PR before it
+  can transition the flow to `done`.
+- **C - Keep open:** record remaining or deferred work in `journal.md`, report
+  the current verification state, and leave the flow `in-progress` for resume.
+
+Only continue to Phase 5 after the user selects A and the draft PR is recorded.
 
 ## Phase 5: Complete The Flow
 
@@ -287,11 +313,16 @@ create fix tasks, and repeat Phase 2.
 Finish with:
 
 - flow id and final status;
-- PR URL;
+- selected completion outcome;
+- PR URL when a PR was created;
 - tasks completed;
 - acceptance criteria evidence summary;
 - verification/review results;
 - unresolved risks or blocked gates.
+
+For a verified handoff without PR, distinguish "implementation work finished"
+from Task Manager status `done`: report the flow as `in-progress` and explain
+why it was intentionally not transitioned.
 
 ## Contracts
 

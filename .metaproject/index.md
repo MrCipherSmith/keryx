@@ -40,7 +40,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | testing | Read testing context before creating/changing tests and normalized reports before raw test logs | skills/testing/SKILL.md |
 | memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |
 | flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |
-| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + PR/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |
+| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + completion choice/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |
 
 ## Agent Operating Model
 

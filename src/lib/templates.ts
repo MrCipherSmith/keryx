@@ -125,7 +125,7 @@ export function renderIndexMarkdown({
       ? "| flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |"
       : "",
     enableTasks && enableGdskills
-      ? "| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + PR/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |"
+      ? "| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + completion choice/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |"
       : "",
   ]
     .filter(Boolean)

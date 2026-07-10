@@ -34,6 +34,8 @@ test("installs real bundled gdskills, contracts, shared assets, and rules", asyn
       "utf8",
     );
     expect(flowOrchestrator).toContain("Task Manager-aware implementation orchestrator");
+    expect(flowOrchestrator).toContain("How should this flow end?");
+    expect(flowOrchestrator).toContain("Verified handoff without PR");
     expect(await readFile(
       path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "flow-orchestrator", "input-contract.schema.json"),
       "utf8",

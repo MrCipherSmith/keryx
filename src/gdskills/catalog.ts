@@ -69,11 +69,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Break the work into phases with verification after each phase.",
     "Run review and skill-learning handoffs before final summary when relevant.",
   ], ["implement issue", "full workflow", "orchestrate task"]),
-  skill("flow-orchestrator", "orchestration", ["recommended", "full"], "Run Task Manager-backed implementation flows through keryx flow state, frozen acceptance criteria, PR gates, review, and Code Health.", [
+  skill("flow-orchestrator", "orchestration", ["recommended", "full"], "Run Task Manager-backed implementation flows through keryx flow state, frozen acceptance criteria, an explicit completion choice, review, and Code Health.", [
     "Require the Task Manager module and existing `.metaproject/skills/flow` router before starting.",
     "Create or resume a flow with `keryx flow init|list|status` and treat the flow package as the source of truth.",
     "Delegate context, test, implementation, review, and docs work to existing gdskills while keeping flow state changes in the CLI.",
-    "Move to implemented only after verification and a draft PR, then complete through acceptance-criteria and health gates.",
+    "After verification, ask the user whether to create a draft PR and complete the managed flow, finish with a verified handoff without PR, or keep the flow open.",
   ], ["создай фло", "create flow", "issue to flow", "managed implementation", "task manager orchestration"]),
   skill("job-documenter", "orchestration", ["recommended", "full"], "Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work.", [
     "Initialize job folders and state documents.",
