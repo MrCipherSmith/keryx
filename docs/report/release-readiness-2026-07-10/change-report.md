@@ -24,6 +24,7 @@ release was created.
 | `docs/README.md` | created | Added canonical navigation and documentation policy. |
 | `docs/docs/` | modified | Updated architecture, modules, CLI, onboarding, workspace lifecycle, and indexes. |
 | `docs/docs/complete-setup-and-agent-workflows.md` | created | Added global installation, full project configuration, command catalog, copy-ready scripts, troubleshooting, and agent prompts. |
+| `docs/docs/agent-installation-playbook.md` | created | Added autonomous Gherkin scenarios, runtime compatibility, safety constraints, and a structured handoff contract. |
 | `docs/plans/gdgraph-symbol-layer.md` | modified | Marked the plan implemented and historical. |
 | `docs/requirements/roadmap.md` | modified | Recorded the implemented managed-review runtime slice. |
 | `docs/report/release-readiness-2026-07-10/` | created | Added the implementation spec, release audit, cleanup plan, and this report. |
@@ -41,7 +42,7 @@ release was created.
 
 ## Verification Gate
 
-- Markdown local links: PASS — 23 files, 0 broken links
+- Markdown local links: PASS — 24 files, 0 broken links
 - Wiki link check: PASS — 39 pages, 72 internal links, 0 broken
 - Wiki validation: PASS
 - Flow consistency: PASS

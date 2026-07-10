@@ -10,6 +10,8 @@ intent, implementation plans, and release evidence do not get mixed together.
 - [Complete setup and agent workflows](docs/complete-setup-and-agent-workflows.md)
   — global installation, project configuration, command reference, scripts, and
   copy-ready agent prompts.
+- [Agent installation playbook](docs/agent-installation-playbook.md) — autonomous
+  Gherkin scenarios for complete setup, validation, repair, and handoff.
 - [Documentation index](docs/index.md) — compact navigation for the generated
   current-behavior reference.
 

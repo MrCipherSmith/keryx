@@ -18,6 +18,7 @@ keryx init
 
 - **[onboarding.md](./onboarding.md)** — Install paths (global / project-local / from source), first-run walkthrough, the typical build loop, and TTY/CI behavior.
 - **[complete-setup-and-agent-workflows.md](./complete-setup-and-agent-workflows.md)** — End-to-end global installation, full project setup, command catalog, copy-ready operational scripts, and reusable agent prompts.
+- **[agent-installation-playbook.md](./agent-installation-playbook.md)** — Autonomous Gherkin scenarios for installation, runtime configuration, optional capabilities, validation, repair, and structured handoff.
 - **[architecture.md](./architecture.md)** — System overview, the four-layer pattern, the two invariants, cross-module data flows, and external integrations.
 - **[modules.md](./modules.md)** — One section per module: purpose, CLI surface, key files, mechanics, the `.metaproject/` paths it reads/writes, and integrations.
 - **[cli-reference.md](./cli-reference.md)** — Complete reference for every command, subcommand, flag, and exit code.

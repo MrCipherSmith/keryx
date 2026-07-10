@@ -4,6 +4,9 @@ This guide takes a new user from prerequisites and global installation through a
 fully initialized project, optional integrations, verification, daily operation,
 and copy-ready prompts for controlling keryx through an AI coding agent.
 
+For an autonomous, parameterized Gherkin workflow, use the
+[Agent Installation Playbook](./agent-installation-playbook.md).
+
 All commands assume a Unix-like shell. Run project commands from the repository
 root unless a section says otherwise.
 

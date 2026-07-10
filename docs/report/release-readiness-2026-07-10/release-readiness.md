@@ -14,6 +14,8 @@ Health fails, and the English-only repository requirement is not yet satisfied.
   and navigation documentation.
 - Added a complete installation and agent-workflow guide with copy-ready setup,
   operational, verification, and prompt blocks.
+- Added an autonomous Gherkin installation playbook with parameterized runtime,
+  capability, repair, safety, publication, and handoff scenarios.
 - Documented symbol-aware graph navigation, wiki hierarchy/backlinks, orientation
   hooks, gdctx routing guards, managed review packages, and the removed shipped
   transformer runtime.
@@ -45,7 +47,7 @@ are current; prose sections are not presented as accepted architectural guidance
 | TypeScript | **FAIL** | `src/assets/seed.test.ts:42:65`, TS2532: object possibly undefined |
 | Wiki links | PASS | 39 pages, 72 internal links, 0 broken |
 | Wiki validation | PASS | metadata, links, and index checks passed |
-| Documentation links | PASS | 23 Markdown files checked; 0 broken local links |
+| Documentation links | PASS | 24 Markdown files checked; 0 broken local links |
 | Flow consistency | PASS | all managed flows consistent |
 | Security policy | PASS | config schema and checksum valid |
 | Metaproject Standard | **FAIL** | object-form `gdgraph` capability rejected by module schema; tasks data path warning |
