@@ -1,0 +1,5 @@
+{"id":"src/widget.ts#alpha","kind":"function","path":"src/widget.ts","name":"alpha","container":null,"startLine":1,"endLine":1,"language":"typescript","signature":"alpha()"}
+{"id":"src/widget.ts#helper","kind":"function","path":"src/widget.ts","name":"helper","container":null,"startLine":2,"endLine":2,"language":"typescript","signature":"helper()"}
+{"id":"src/widget.ts#Widget","kind":"class","path":"src/widget.ts","name":"Widget","container":null,"startLine":3,"endLine":5,"language":"typescript","signature":"class Widget"}
+{"id":"src/widget.ts#Widget.render","kind":"method","path":"src/widget.ts","name":"render","container":"Widget","startLine":4,"endLine":4,"language":"typescript","signature":"Widget.render()"}
+{"id":"src/widget.ts#Shape","kind":"interface","path":"src/widget.ts","name":"Shape","container":null,"startLine":6,"endLine":6,"language":"typescript","signature":"interface Shape"}

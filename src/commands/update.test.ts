@@ -1,0 +1,419 @@
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { expect, test } from "bun:test";
+import { withCwd } from "../lib/test-cwd";
+import { updateCommand } from "./update";
+
+test("refreshes service files without touching data artifacts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-"));
+  const graphSummaryPath = path.join(root, ".metaproject", "data", "gdgraph", "artifacts", "summary.md");
+  const testingContextPath = path.join(root, ".metaproject", "data", "testing", "context.md");
+  const graphSummary = "# sentinel graph summary\n";
+  const testingContext = "# sentinel testing context\n";
+
+  try {
+    await mkdir(path.dirname(graphSummaryPath), { recursive: true });
+    await mkdir(path.dirname(testingContextPath), { recursive: true });
+    await writeFile(graphSummaryPath, graphSummary, "utf8");
+    await writeFile(testingContextPath, testingContext, "utf8");
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          gdgraph: { enabled: true },
+          gdctx: { enabled: true },
+          gdwiki: { enabled: true },
+          gdskills: { enabled: true },
+          testing: { enabled: true },
+          memory: { enabled: true },
+          tasks: { enabled: true },
+        },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime"]);
+
+    expect(await readFile(path.join(root, ".metaproject", "keryx-dashboard.html"), "utf8")).toContain("Metaproject");
+    expect(await readFile(path.join(root, ".metaproject", "core", "gdgraph", "build.ts"), "utf8")).toContain("buildGraph");
+    expect(await readFile(path.join(root, ".metaproject", "flows", "README.md"), "utf8")).toContain("Flow");
+    expect(await readFile(path.join(root, ".metaproject", "skills", "catalog.md"), "utf8")).toContain("flow-orchestrator");
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("flow-orchestrator");
+    expect(await fileExists(path.join(root, ".metaproject", "data", "gdskills"))).toBe(false);
+    expect(await fileExists(path.join(root, ".metaproject", "data", "tasks"))).toBe(false);
+    expect(await readFile(graphSummaryPath, "utf8")).toBe(graphSummary);
+    expect(await readFile(testingContextPath, "utf8")).toBe(testingContext);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("recovers manifest and dashboard for existing metaprojects without metaproject.json", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-legacy-"));
+  const graphStoragePath = path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
+  const graphEdgesPath = path.join(root, ".metaproject", "data", "gdgraph", "storage", "edges.jsonl");
+  const healthReportPath = path.join(root, ".metaproject", "data", "health", "artifacts", "latest.md");
+  const healthJsonPath = path.join(root, ".metaproject", "data", "health", "artifacts", "latest.json");
+  const graphStorage = "{\"id\":\"src/a.ts\",\"kind\":\"file\",\"path\":\"src/a.ts\"}\n{\"id\":\"src/b.ts\",\"kind\":\"file\",\"path\":\"src/b.ts\"}\n";
+  const graphEdges = "{\"id\":\"edge:1\",\"from\":\"src/a.ts\",\"to\":\"src/b.ts\",\"kind\":\"imports\"}\n";
+  const healthReport = "# Code Health: PASS\n";
+  const healthJson = JSON.stringify({
+    gate: { status: "pass" },
+    sources: [{ source: "typescript", status: "available", findings: 0, required: true }],
+    metrics: [
+      {
+        key: "project",
+        kind: "project",
+        name: "project",
+        health_score: 97,
+        risk_score: 3,
+        findingCounts: { total: 1, byPriority: { P0: 0, P1: 1, P2: 0 } },
+      },
+      {
+        key: "module:src",
+        kind: "module",
+        name: "src",
+        health_score: 91,
+        risk_score: 3,
+        findingCounts: { total: 1 },
+        complexity: { max: 8 },
+      },
+    ],
+  });
+
+  try {
+    await mkdir(path.dirname(graphStoragePath), { recursive: true });
+    await mkdir(path.dirname(healthReportPath), { recursive: true });
+    await mkdir(path.join(root, ".git", "hooks"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject", "data", "testing"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject", "data", "gdctx"), { recursive: true });
+    await writeFile(graphStoragePath, graphStorage, "utf8");
+    await writeFile(graphEdgesPath, graphEdges, "utf8");
+    await writeFile(healthReportPath, healthReport, "utf8");
+    await writeFile(healthJsonPath, healthJson, "utf8");
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".git", "hooks", "post-commit"),
+      "#!/usr/bin/env sh\n\n# keryx:gdgraph-post-commit:begin\ntrue\n# keryx:gdgraph-post-commit:end\n",
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      modules: Record<string, { enabled: boolean }>;
+    };
+    const dashboard = await readFile(path.join(root, ".metaproject", "keryx-dashboard.html"), "utf8");
+    const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
+
+    expect(manifest.modules.gdgraph?.enabled).toBe(true);
+    expect(manifest.modules.gdctx?.enabled).toBe(true);
+    expect(manifest.modules.health?.enabled).toBe(true);
+    expect(manifest.modules.testing?.enabled).toBe(true);
+    expect(manifest.modules.tasks?.enabled).toBe(false);
+    expect(dashboard).toContain("<span class=\"card-name\">gdgraph</span>");
+    expect(dashboard).toContain("<span class=\"card-name\">health</span>");
+    expect(dashboard).toContain("<h2>Code Health</h2>");
+    expect(dashboard).toContain("<b>97</b><span>score</span>");
+    expect(dashboard).toContain("<h2>Graph</h2>");
+    expect(dashboard).toContain("<b>2</b><span>files</span>");
+    expect(dashboard).not.toContain("No modules enabled.");
+    await expectDashboardLinksToExist(root, dashboard);
+    const postCommitHook = await readFile(path.join(root, ".git", "hooks", "post-commit"), "utf8");
+    expect(postCommitHook).toContain("# keryx:metaproject-dashboard-post-commit:begin");
+    expect(postCommitHook).toContain("dashboard/service files may be stale");
+    expect(postCommitHook).not.toContain("keryx gdgraph build");
+    expect(postCommitHook).not.toContain("keryx health run --changed");
+    expect(postCommitHook).not.toContain("keryx test analyze");
+    expect(postCommitHook).not.toContain("keryx update --skip-runtime >/dev/null");
+    expect(postCommitHook).not.toContain("keryx update --skip-runtime --no-tasks");
+    expect(index).toContain("| gdgraph |");
+    expect(index).not.toContain("| _none_ | No modules enabled yet | - |");
+    expect(await readFile(graphStoragePath, "utf8")).toBe(graphStorage);
+    expect(await readFile(healthReportPath, "utf8")).toBe(healthReport);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("migrates legacy wiki manifest key to gdwiki", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-wiki-migrate-"));
+
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          wiki: { enabled: true },
+          gdgraph: { enabled: false },
+          tasks: { enabled: false },
+        },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      modules: Record<string, { enabled: boolean } | undefined>;
+    };
+    const dashboard = await readFile(path.join(root, ".metaproject", "keryx-dashboard.html"), "utf8");
+
+    expect(manifest.modules.gdwiki?.enabled).toBe(true);
+    expect(manifest.modules.wiki).toBeUndefined();
+    expect(dashboard).toContain("<span class=\"card-name\">gdwiki</span>");
+    expect(dashboard).not.toContain("<div class=\"disabled\"><span>gdwiki</span>");
+    expect(await fileExists(path.join(root, ".metaproject", "skills", "gdwiki", "SKILL.md"))).toBe(true);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("preserves existing git hooks and updates keryx managed blocks idempotently", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-hooks-"));
+  const hookPath = path.join(root, ".git", "hooks", "post-commit");
+  const userHook = [
+    "#!/usr/bin/env sh",
+    "echo user-defined-hook",
+    "",
+    "# keryx:gdgraph-post-commit:begin",
+    "echo stale-managed-block",
+    "# keryx:gdgraph-post-commit:end",
+    "",
+  ].join("\n");
+
+  try {
+    await mkdir(path.dirname(hookPath), { recursive: true });
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(hookPath, userHook, "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          gdgraph: { enabled: true, hooks: { gitPostCommit: true } },
+          gdskills: { enabled: true, hooks: { gitPostCommit: true } },
+          health: { enabled: true, hooks: { gitPostCommit: true } },
+          testing: { enabled: true, hooks: { gitPostCommit: true } },
+          tasks: { enabled: false },
+        },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime", "--no-tasks", "--hooks"]);
+    await updateCommand(["--skip-runtime", "--no-tasks", "--hooks"]);
+
+    const hook = await readFile(hookPath, "utf8");
+    expect(hook).toContain("#!/usr/bin/env sh");
+    expect(hook).toContain("echo user-defined-hook");
+    expect(hook).not.toContain("stale-managed-block");
+    expect(countOccurrences(hook, "# keryx:gdgraph-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# keryx:gdskills-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# keryx:health-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# keryx:testing-post-commit:begin")).toBe(1);
+    expect(countOccurrences(hook, "# keryx:metaproject-dashboard-post-commit:begin")).toBe(1);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("backfills the Task Manager for projects initialized before it existed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-backfill-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    // Pre-tasks manifest: tasks present but disabled, no flow scaffold.
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdgraph: { enabled: true }, tasks: { enabled: false } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime"]);
+
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      modules: Record<string, { enabled: boolean }>;
+    };
+    expect(manifest.modules.tasks?.enabled).toBe(true);
+    expect(await fileExists(path.join(root, ".metaproject", "skills", "flow", "SKILL.md"))).toBe(true);
+    expect(await fileExists(path.join(root, ".metaproject", "modules", "tasks.md"))).toBe(true);
+    expect(await readFile(path.join(root, ".metaproject", "flows", "README.md"), "utf8")).toContain("Flow");
+    // The flow discovery policy is migrated into the entrypoint.
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("Metaproject flow skill");
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("flow-orchestrator");
+    // Backfill does not create runtime data dirs.
+    expect(await fileExists(path.join(root, ".metaproject", "data", "tasks"))).toBe(false);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("respects --no-tasks and does not backfill", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-notasks-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdgraph: { enabled: true }, tasks: { enabled: false } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      modules: Record<string, { enabled: boolean }>;
+    };
+    expect(manifest.modules.tasks?.enabled).toBe(false);
+    expect(await fileExists(path.join(root, ".metaproject", "skills", "flow", "SKILL.md"))).toBe(false);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).not.toContain("Metaproject flow skill");
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("update removes security hooks that drifted out of the manifest, keeping user + testing content", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-sec-"));
+  const prePushPath = path.join(root, ".git", "hooks", "pre-push");
+  const settingsPath = path.join(root, ".claude", "settings.json");
+  try {
+    await mkdir(path.join(root, ".git", "hooks"), { recursive: true });
+    await mkdir(path.join(root, ".claude"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+
+    // Live on-disk security artifacts...
+    await writeFile(
+      prePushPath,
+      [
+        "#!/usr/bin/env sh",
+        "echo 'user pre-push guard'",
+        "",
+        "# keryx:testing-pre-push:begin",
+        "keryx_testing_pre_push || exit $?",
+        "# keryx:testing-pre-push:end",
+        "",
+        "# keryx:security-pre-push:begin",
+        "keryx_security_pre_push || exit $?",
+        "# keryx:security-pre-push:end",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      settingsPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            UserPromptSubmit: [
+              { hooks: [{ type: "command", command: "user-logger" }] },
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command: "keryx security check-input --source untrusted-external",
+                  },
+                ],
+                _keryxManaged: "security-agent-hooks",
+              },
+            ],
+            PreToolUse: [
+              {
+                matcher: "Write|Edit",
+                hooks: [{ type: "command", command: "keryx security check-output" }],
+                _keryxManaged: "security-agent-hooks",
+              },
+            ],
+          },
+          _keryxManaged: ["security-agent-hooks"],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    // ...but the manifest no longer records security hooks (drift).
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          security: { enabled: true },
+          testing: { enabled: true },
+        },
+        agentEntrypoints: { root: [] },
+      }),
+      "utf8",
+    );
+
+    await withCwd(root, async () => {
+    await updateCommand(["--skip-runtime"]);
+
+    const hook = await readFile(prePushPath, "utf8");
+    // Security block stripped; testing block + user content preserved.
+    expect(hook).not.toContain("security-pre-push");
+    expect(hook).toContain("# keryx:testing-pre-push:begin");
+    expect(hook).toContain("echo 'user pre-push guard'");
+
+    const settings = await readFile(settingsPath, "utf8");
+    expect(settings).not.toContain("security-agent-hooks");
+    expect(settings).not.toContain("keryx security check-input");
+    expect(settings).toContain("user-logger");
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function countOccurrences(value: string, needle: string): number {
+  return value.split(needle).length - 1;
+}
+
+async function expectDashboardLinksToExist(projectRoot: string, dashboard: string): Promise<void> {
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  const hrefs = [...dashboard.matchAll(/href="([^"]+)"/g)].flatMap((match) => match[1] ? [match[1]] : []);
+  const missing: string[] = [];
+  for (const href of hrefs) {
+    if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("#")) {
+      continue;
+    }
+    if (!(await fileExists(path.join(metaprojectRoot, href)))) {
+      missing.push(href);
+    }
+  }
+  expect(missing).toEqual([]);
+}

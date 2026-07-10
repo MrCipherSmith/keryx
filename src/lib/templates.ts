@@ -1,0 +1,2593 @@
+import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
+
+export function renderIndexMarkdown({
+  enableGdgraph,
+  enableGdctx,
+  enableGdwiki,
+  enableGdskills,
+  enableHealth,
+  enableTesting,
+  enableMemory,
+  enableTasks,
+  enableSecurity = false,
+  ruleSources,
+  hasDistilledEntrypoints = false,
+}: {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity?: boolean;
+  ruleSources: string[];
+  hasDistilledEntrypoints?: boolean;
+}): string {
+  const moduleRows = [
+    enableGdgraph
+      ? "| gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |"
+      : "",
+    enableGdctx
+      ? "| gdctx | Token-aware command output and context compression | modules/gdctx.md |"
+      : "",
+    enableGdwiki
+      ? "| gdwiki | Project knowledge base: architecture, domain, rules, decisions | modules/gdwiki.md |"
+      : "",
+    enableGdskills
+      ? "| gdskills | Native bundled working skills, orchestration, review, and project-skill lifecycle | modules/gdskills.md |"
+      : "",
+    enableHealth
+      ? "| health | Code quality aggregation, scoring, and quality gate | modules/health.md |"
+      : "",
+    enableTesting
+      ? "| testing | Test context, related tests, execution reports, and test intelligence | modules/testing.md |"
+      : "",
+    enableMemory
+      ? "| memory | Long-lived project memory: lessons, decisions, constraints, known mistakes | modules/memory.md |"
+      : "",
+    enableTasks
+      ? "| tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |"
+      : "",
+    enableSecurity
+      ? "| security | Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts | modules/security.md |"
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const dataRefItems = [
+    ...(enableGdgraph
+      ? [
+          "- `data/gdgraph/artifacts/summary.md`",
+          "- `data/gdgraph/artifacts/module-map.json`",
+          "- `data/gdgraph/queries/latest.md`",
+        ]
+      : []),
+    ...(enableGdctx ? ["- `data/gdctx/artifacts/latest.md`"] : []),
+    ...(enableGdwiki ? ["- `wiki/index.md`"] : []),
+    ...(enableGdskills
+      ? [
+          "- `skills/catalog.md`",
+          "- `skills/gdskills/`",
+          "- `project-skills/`",
+          "- `core/gdskills/contracts/` (skill/worker communication schemas: subagent-dispatch, subagent-result, agent-event, orchestrator-state, review-finding)",
+          "- `rules/core/` (shared engineering rules library)",
+          "- `data/gdskills/artifacts/latest.md`",
+        ]
+      : []),
+    ...(enableHealth ? ["- `data/health/artifacts/latest.md`"] : []),
+    ...(enableTesting
+      ? [
+          "- `data/testing/context.md`",
+          "- `data/testing/recommendations.md`",
+          "- `data/testing/artifacts/latest.md`",
+        ]
+      : []),
+    ...(enableMemory
+      ? [
+          "- `memory/index.md`",
+          "- `data/memory/index/index.json`",
+          "- `data/memory/artifacts/latest.md`",
+        ]
+      : []),
+    ...(enableTasks ? ["- `flows/` (flow packages)"] : []),
+    ...(enableSecurity ? ["- `data/security/artifacts/latest.md`"] : []),
+  ];
+  const dataRefs = dataRefItems.length > 0
+    ? dataRefItems.join("\n")
+    : "- No module data generated yet.";
+
+  const skillsRefs = [
+    enableGdgraph
+      ? "| gdgraph | Default navigation layer for finding relevant project files before broad raw search | skills/gdgraph/SKILL.md |"
+      : "",
+    enableGdctx
+      ? "| gdctx | Use compact command/search/read outputs before loading large raw output | skills/gdctx/SKILL.md |"
+      : "",
+    enableGdwiki
+      ? "| gdwiki | Read wiki/index.md first for architecture, domain, business rules, and decisions | skills/gdwiki/SKILL.md |"
+      : "",
+    enableGdskills
+      ? "| gdskills | Use project-local bundled working skills and project-skill routing before external/global skills | skills/catalog.md |"
+      : "",
+    enableHealth
+      ? "| health | Read data/health/artifacts/latest.md before claiming quality status or gate results | skills/health/SKILL.md |"
+      : "",
+    enableTesting
+      ? "| testing | Read testing context before creating/changing tests and normalized reports before raw test logs | skills/testing/SKILL.md |"
+      : "",
+    enableMemory
+      ? "| memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |"
+      : "",
+    enableTasks
+      ? "| flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |"
+      : "",
+    enableTasks && enableGdskills
+      ? "| flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + completion choice/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |"
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const operatingModelItems = [
+    "The user does not need to know keryx command names. Treat natural-language requests as intents and route them through this index.",
+    "First choose the capability: graph/navigation, compact context, wiki/domain knowledge, memory, testing, health, security, skills/orchestration, or flow lifecycle.",
+    "If the same capability is available through MCP tools/resources, prefer MCP because it preserves structured inputs and outputs. If MCP is unavailable, use the module skill and `keryx` CLI fallback.",
+    "Load the narrowest relevant skill/rule before reading broad source files. Do not ask the user which internal command to run unless multiple user-level outcomes are genuinely possible.",
+    "When reporting results, name the Metaproject sources used at a high level (for example: graph, wiki, memory, health), not every internal command.",
+  ].map((item) => `- ${item}`).join("\n");
+
+  const intentRows = [
+    enableGdskills
+      ? "| Any repository task / unclear request | `metaproject-router` | `skills/gdskills/core/metaproject-router/SKILL.md` | Classify the intent first, then route to the narrowest capability. |"
+      : "",
+    enableGdskills
+      ? "| Need context / where to start | `context-router` | `skills/gdskills/core/context-router/SKILL.md` | Choose graph, wiki, memory, health, testing, or project-skills before raw reads. |"
+      : "",
+    enableGdgraph
+      ? "| Find related files, dependencies, blast radius, cycles, or orphans | `gdgraph` | `skills/gdgraph/SKILL.md`; MCP `gdgraph.*` if available | Start with graph/affected context before broad search. |"
+      : "",
+    enableGdwiki
+      ? "| Understand architecture, domain behavior, business rules, scenarios, integrations, or decisions | `gdwiki` | `skills/gdwiki/SKILL.md`; `wiki/index.md`; MCP `wiki.*` if available | Use knowledge pages first, then jump from wiki concepts to code. |"
+      : "",
+    enableMemory
+      ? "| Recall past decisions, lessons, constraints, repeated mistakes, or project history | `memory` | `skills/memory/SKILL.md`; MCP `memory.search` if available | Search accepted memory before broad docs or assumptions. |"
+      : "",
+    enableTesting
+      ? "| Create/change/debug tests or decide what tests to run | `testing` | `skills/testing/SKILL.md`; `data/testing/context.md` | Use test context and related-test intelligence before raw logs. |"
+      : "",
+    enableHealth
+      ? "| Check quality, gate, regressions, complexity, lint/type/test status | `health` | `skills/health/SKILL.md`; MCP `health.*` if available | Read normalized health artifacts before claiming quality. |"
+      : "",
+    enableSecurity
+      ? "| Check secrets, PII, prompt injection, egress, unsafe external/tool output | `security` | `modules/security.md`; MCP `security.*` if available | Scan or check content before writing it into project artifacts. |"
+      : "",
+    enableGdskills
+      ? "| Implement, review, refactor, document, plan, analyze, or verify | `gdskills` | `skills/catalog.md`; `project-skills/`; `skills/gdskills/` | Route to local orchestrators/reviewers/quality skills before global skills. |"
+      : "",
+    enableTasks
+      ? "| Start, resume, track, or finish managed work | `flow` / `flow-orchestrator` | `skills/flow/SKILL.md`; `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` | Use Task Manager state and never edit flow files by hand. |"
+      : "",
+  ].filter(Boolean).join("\n");
+
+  const workflowItems = [
+    "Read this file first.",
+    "Treat the user's request as a natural-language intent; do not require the user to remember internal module, skill, MCP tool, or CLI names.",
+    "Check enabled modules.",
+    "Load relevant rules from `rules/`.",
+    enableGdskills
+      ? "For any non-trivial repository task, start with `skills/gdskills/core/metaproject-router/SKILL.md`; for context selection, use `skills/gdskills/core/context-router/SKILL.md`."
+      : "Use this index as the routing table before choosing module commands.",
+    "Prefer MCP tools/resources for enabled Metaproject capabilities when the connected agent exposes them; otherwise use the matching skill and `keryx` CLI command.",
+    "Route by question type: structural questions go to gdgraph first; conceptual questions go to gdwiki first; gdctx runs in parallel to keep output compact.",
+    "Any text, symbol, or pattern search over project code goes through `keryx ctx rg`, never a bare `rg`/`grep` — even a single targeted search, and even when gdgraph/gdwiki are skipped. Raw `rg`/`grep` is a last resort only, with a stated reason.",
+    enableGdgraph
+      ? "For structural questions (where is X, what files are related, what breaks if I change Y, usages, cycles, orphans) use `skills/gdgraph/SKILL.md` first, before any raw file search. The user does not need to request graph usage explicitly."
+      : "Use relevant skills from `skills/` before raw file search.",
+    ...(enableGdwiki
+      ? [
+          "For conceptual questions (how does X work, why, architecture, domain models, business rules, user scenarios, auth and other flows, integrations, known decisions) read `wiki/index.md` first via `skills/gdwiki/SKILL.md`, then use gdgraph to jump from the wiki page to code.",
+        ]
+      : []),
+    ...(enableGdctx
+      ? [
+          "In parallel, use `skills/gdctx/SKILL.md` for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output. The user does not need to request compact context usage explicitly.",
+        ]
+      : []),
+    ...(enableGdskills
+      ? [
+          "For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.",
+          "For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.",
+          "For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.",
+          "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.",
+        ]
+      : []),
+    ...(enableHealth
+      ? [
+          "For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `keryx health run`; do not claim quality status from raw logs.",
+        ]
+      : []),
+    ...(enableTesting
+      ? [
+          "For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.",
+        ]
+      : []),
+    ...(enableMemory
+      ? [
+          "For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `keryx memory search` before broad documentation reads.",
+        ]
+      : []),
+    ...(enableTasks
+      ? [
+          enableGdskills
+            ? "When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand."
+            : "When the user asks to start, create, track, or finish a piece of work (создай фло, create a flow from this issue, flow status, finish the story), use `skills/flow/SKILL.md` and the `keryx flow` CLI; never edit flow.json or frozen acceptance criteria by hand.",
+        ]
+      : []),
+    ...(enableSecurity
+      ? [
+          "Before writing external/tool content into memory, wiki, reports, or task context, or when scanning artifacts for secrets/PII/prompt-injection/egress, use `modules/security.md` and `keryx security check-output`/`security scan`; read `data/security/artifacts/latest.md` before claiming security status.",
+        ]
+      : []),
+    "Use relevant skills from `skills/`.",
+    "Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.",
+    "Use module manifests before reading raw generated data.",
+    "Prefer curated artifacts in `data/*/artifacts`.",
+    "Run module CLI commands when generated data is stale.",
+  ]
+    .map((item, index) => `${index + 1}. ${item}`)
+    .join("\n");
+
+  const rulesRows =
+    ruleSources.length > 0
+      ? ruleSources
+          .map((source) => {
+            const ruleFile = `${source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.md`;
+            return `| ${source} | high | Imported root agent-entrypoint rules; apply before module-specific guidance | rules/${ruleFile} |`;
+          })
+          .join("\n")
+      : "| _none_ | - | No project rules imported yet | - |";
+  const allRulesRows = [
+    rulesRows,
+    enableGdskills
+      ? "| rules/core | reference | Shared engineering rules library (error-handling, tdd-workflow, subagent-status-protocol, subagent-context-construction, security-baseline, api-contracts, clean-architecture, solid-principles, …) | rules/core/ |"
+      : "",
+    hasDistilledEntrypoints
+      ? "| distilled-entrypoints | high | Decomposed project rules extracted from root entrypoints | rules/entrypoints/index.md |"
+      : "",
+  ].filter(Boolean).join("\n");
+
+  return `# Metaproject Index
+
+## Purpose
+
+This \`.metaproject\` folder contains agent-readable context, tools (module CLIs), rules (\`rules/\`), skill/worker schemas (\`core/gdskills/contracts/\`), generated data, and module manifests for this codebase.
+
+Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
+
+## Enabled Modules
+
+| Module | Purpose | Entry |
+|--------|---------|-------|
+${moduleRows || "| _none_ | No modules enabled yet | - |"}
+## Rules
+
+| Source | Priority | Purpose | Entry |
+|--------|----------|---------|-------|
+${allRulesRows}
+
+## Skills
+
+| Skill | Purpose | Entry |
+|-------|---------|-------|
+| project-rules | Use imported repository rules before planning or editing | skills/project-rules/ |
+${hasDistilledEntrypoints ? "| entrypoint-distilled-skills | Project-specific skills extracted from root entrypoints | project-skills/entrypoints/ |" : ""}
+${skillsRefs}
+
+## Agent Operating Model
+
+${operatingModelItems}
+
+## Intent Router
+
+| User intent | Capability | Primary entry | Agent action |
+|-------------|------------|---------------|--------------|
+${intentRows || "| Any repository task | project rules | rules/ | Read imported rules, then use targeted files. |"}
+
+## Agent Workflow
+
+${workflowItems}
+
+## Data
+
+${dataRefs}
+
+## Refresh
+
+\`\`\`bash
+# Use only supported refresh commands:
+${enableGdgraph ? "keryx gdgraph build" : ""}
+${enableGdwiki ? "keryx wiki index" : ""}
+${enableTesting ? "keryx test analyze" : ""}
+${enableMemory ? "keryx memory index" : ""}
+\`\`\`
+`;
+}
+
+export type MetaprojectDashboardData = {
+  generatedAt?: string;
+  health?: {
+    status: string;
+    score: number | string;
+    trend?: string;
+    findings: number;
+    p0: number;
+    p1: number;
+    p2: number;
+    risk: number;
+    loc: number;
+    complexityMax: number | string;
+    complexityAbove: number;
+    riskByPriority: Array<{ priority: string; findings: number; weight: number; risk: number }>;
+    findingsBySource: Array<{ source: string; findings: number }>;
+    dataQualityWarnings: Array<{ tone: string; message: string }>;
+    findingsWithoutFile: number;
+    sources: Array<{ source: string; status: string; findings: number; required: boolean }>;
+    scopes: Array<{ name: string; kind: string; score: number | string; findings: number; risk: number; complexity?: number | string }>;
+    files: Array<{ name: string; score: number | string; findings: number; risk: number; complexity?: number | string }>;
+    reportHref?: string;
+  };
+  graph?: {
+    nodes: number;
+    files: number;
+    assets: number;
+    edges: number;
+    imports: number;
+    assetsEdges: number;
+    unresolved: number;
+    topModules: Array<{ name: string; files: number; edges: number }>;
+    storageHref?: string;
+  };
+  testing?: {
+    status: string;
+    runner?: string;
+    tests?: number;
+    failures?: number;
+    contextHref?: string;
+    reportHref?: string;
+  };
+  wiki?: {
+    pages: Array<{ title: string; href: string; group: string; content?: string }>;
+  };
+  memory?: {
+    entries: Array<{ title: string; href: string; group: string; content?: string }>;
+  };
+  // Markdown content keyed by dashboard href, embedded so links render in the
+  // in-page modal instead of opening the raw file (fetch is blocked on file://).
+  docs?: Record<string, string>;
+  tasks?: {
+    flows: Array<{
+      id: string;
+      title: string;
+      status: string;
+      tasksDone: number;
+      tasksTotal: number;
+      acConfirmed: number;
+      acTotal: number;
+      pr: string | null;
+    }>;
+  };
+};
+
+export function renderMetaprojectDashboardHtml({
+  enableGdgraph,
+  enableGdctx,
+  enableGdwiki,
+  enableGdskills,
+  enableHealth,
+  enableTesting,
+  enableMemory,
+  enableTasks,
+  enableSecurity = false,
+  data,
+}: {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity?: boolean;
+  data?: MetaprojectDashboardData;
+}): string {
+  const modules = [
+    {
+      enabled: enableGdgraph,
+      name: "gdgraph",
+      role: "Project structure",
+      summary: "File dependency graph, affected context, cycles, orphans, and module map.",
+      accent: "#2563eb",
+      links: [
+        ["Manifest", "modules/gdgraph.md"],
+        ["Core README", "core/gdgraph/README.md"],
+        ["Runner", "core/gdgraph/cli.ts"],
+        ["Skill", "skills/gdgraph/SKILL.md"],
+      ],
+      commands: ["keryx gdgraph build", "keryx gdgraph affected <file>", "keryx gdgraph query cycles"],
+    },
+    {
+      enabled: enableGdctx,
+      name: "gdctx",
+      role: "Compact context",
+      summary: "Token-aware wrappers for search, reads, diffs, and command output.",
+      accent: "#0891b2",
+      links: [
+        ["Manifest", "modules/gdctx.md"],
+        ["Core README", "core/gdctx/README.md"],
+        ["Config", "gdctx.config.json"],
+        ["Skill", "skills/gdctx/SKILL.md"],
+      ],
+      commands: ["keryx ctx diff", "keryx ctx rg \"pattern\"", "keryx ctx read <file>"],
+    },
+    {
+      enabled: enableGdwiki,
+      name: "gdwiki",
+      role: "Knowledge base",
+      summary: "Markdown wiki for architecture, business rules, scenarios, integrations, and decisions.",
+      accent: "#7c3aed",
+      links: [
+        ["Manifest", "modules/gdwiki.md"],
+        ["Wiki folder", "wiki/"],
+        ["Template", "wiki/templates/page.md"],
+        ["Skill", "skills/gdwiki/SKILL.md"],
+      ],
+      commands: ["keryx wiki collect", "keryx wiki new decision <slug>", "keryx wiki index"],
+    },
+    {
+      enabled: enableGdskills,
+      name: "gdskills",
+      role: "Agent skills",
+      summary: "Bundled working skills plus project-skill creation, routing, verification, learning, export, and sync.",
+      accent: "#db2777",
+      links: [
+        ["Manifest", "modules/gdskills.md"],
+        ["Catalog", "skills/catalog.md"],
+        ["Bundled skills", "skills/gdskills/"],
+        ["Project skills", "project-skills/"],
+      ],
+      commands: ["keryx skills status", "keryx skills route <target>", "keryx skills verify --all"],
+    },
+    {
+      enabled: enableHealth,
+      name: "health",
+      role: "Quality signal",
+      summary: "Aggregated code health from TypeScript, tests, audit, coverage, complexity, and optional external tools.",
+      accent: "#16a34a",
+      links: [
+        ["Manifest", "modules/health.md"],
+        ["Core README", "core/health/README.md"],
+        ["Config", "health.config.json"],
+        ["Skill", "skills/health/SKILL.md"],
+      ],
+      commands: ["keryx health run --changed", "keryx health status", "keryx health explain <file>"],
+    },
+    {
+      enabled: enableTesting,
+      name: "testing",
+      role: "Test intelligence",
+      summary: "Detected test stack, conventions, related-test selection, normalized reports, and strict gates.",
+      accent: "#ea580c",
+      links: [
+        ["Manifest", "modules/testing.md"],
+        ["Core README", "core/testing/README.md"],
+        ["Config", "testing.config.json"],
+        ["Skill", "skills/testing/SKILL.md"],
+      ],
+      commands: ["keryx test analyze", "keryx test run --changed", "keryx test related <file>"],
+    },
+    {
+      enabled: enableMemory,
+      name: "memory",
+      role: "Long-term memory",
+      summary: "Lessons learned, decisions, constraints, known mistakes, historical context, and reusable patterns.",
+      accent: "#475569",
+      links: [
+        ["Manifest", "modules/memory.md"],
+        ["Core README", "core/memory/README.md"],
+        ["Config", "memory.config.json"],
+        ["Skill", "skills/memory/SKILL.md"],
+      ],
+      commands: ["keryx memory search \"topic\"", "keryx memory new decision", "keryx memory check"],
+    },
+    {
+      enabled: enableTasks,
+      name: "tasks",
+      role: "Flow lifecycle",
+      summary: "Agent-first flow packages with frozen acceptance criteria, status gates, and PR completion checks.",
+      accent: "#0f766e",
+      links: [
+        ["Manifest", "modules/tasks.md"],
+        ["Skill", "skills/flow/SKILL.md"],
+        ["Flow README", "flows/README.md"],
+        ["Init skill", "skills/flow/init.md"],
+      ],
+      commands: ["keryx flow list", "keryx flow init --title \"...\"", "keryx flow complete <id>"],
+    },
+    {
+      enabled: enableSecurity,
+      name: "security",
+      role: "Guardrails & audit",
+      summary: "Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts.",
+      accent: "#b91c1c",
+      links: [
+        ["Manifest", "modules/security.md"],
+        ["Core README", "core/security/README.md"],
+        ["Config", "security.config.json"],
+      ],
+      commands: ["keryx security status", "keryx security scan <path>", "keryx security report"],
+    },
+  ];
+
+  const enabledModules = modules.filter((module) => module.enabled);
+  const moduleIcons: Record<string, string> = {
+    gdgraph: "🕸️",
+    gdctx: "📦",
+    gdwiki: "📚",
+    gdskills: "🛠️",
+    health: "💚",
+    testing: "🧪",
+    memory: "🧠",
+    tasks: "🔀",
+  };
+  const cards = enabledModules.map((module) => `
+        <article class="card" style="--c: ${module.accent}" tabindex="0">
+          <div class="card-head">
+            <span class="card-ic">${moduleIcons[module.name] ?? "▪"}</span>
+            <span class="card-name">${module.name}</span>
+            <span class="card-role">${module.role}</span>
+          </div>
+          <p>${module.summary}</p>
+          <div class="card-links">
+            ${module.links.map(([label, href]) => `<a href="${href}">${label}</a>`).join("")}
+          </div>
+          <div class="card-cmds">
+            ${module.commands.map((command) => `<code>${escapeHtml(command)}</code>`).join("")}
+          </div>
+        </article>`).join("\n");
+  const disabled = modules
+    .filter((module) => !module.enabled)
+    .map((module) => `<span>${module.name}</span>`)
+    .join("");
+  const primaryLinks = [
+    ["Agent index", "index.md"],
+    ["README", "README.md"],
+    ["Manifest", "metaproject.json"],
+    enableGdskills ? ["Skills catalog", "skills/catalog.md"] : ["Project rules", "skills/project-rules/README.md"],
+  ];
+  const health = data?.health;
+  const graph = data?.graph;
+  const testing = data?.testing;
+  const wikiPages = data?.wiki?.pages ?? [];
+  const memoryEntries = data?.memory?.entries ?? [];
+  const flows = data?.tasks?.flows ?? [];
+  const flowRows = flows.map((flow) => {
+    const tone = flow.status === "done"
+      ? "good"
+      : flow.status === "blocked"
+        ? "bad"
+        : (flow.status === "in-progress" || flow.status === "implemented" || flow.status === "completing")
+          ? "warn"
+          : "";
+    return `
+            <tr>
+              <td><b>${escapeHtml(flow.id)}</b> ${escapeHtml(flow.title)}</td>
+              <td><span class="pill ${tone}">${escapeHtml(flow.status)}</span></td>
+              <td>${flow.tasksDone}/${flow.tasksTotal}</td>
+              <td>${flow.acConfirmed}/${flow.acTotal}</td>
+              <td>${flow.pr ? `<a href="${escapeHtml(flow.pr)}">PR</a>` : "-"}</td>
+            </tr>`;
+  }).join("");
+  // Embed page markdown so links open in an in-page modal instead of navigating
+  // to a raw .md file (fetch is blocked when the dashboard is opened via file://).
+  const docMap: Record<string, string> = { ...(data?.docs ?? {}) };
+  for (const page of [...wikiPages, ...memoryEntries]) {
+    if (page.content && docMap[page.href] === undefined) {
+      docMap[page.href] = page.content;
+    }
+  }
+  const docsJson = JSON.stringify(docMap).replace(/</g, "\\u003c");
+  const qualityStatus = health?.status ?? (enableHealth ? "missing" : "disabled");
+  const graphStatus = graph ? `${graph.files} files` : (enableGdgraph ? "missing" : "disabled");
+  const healthClass = health ? healthTone(health) : "";
+  const healthScoreTone = health ? healthTone(health) : "";
+  const wikiStatus = wikiPages.length > 0 ? `${wikiPages.length} pages` : (enableGdwiki ? "needs content" : "disabled");
+  const memoryStatus = memoryEntries.length > 0 ? `${memoryEntries.length} entries` : (enableMemory ? "needs content" : "disabled");
+  const healthSources = health?.sources.map((source) => `
+            <tr class="health-row" data-search="${escapeHtml(`${source.source} ${source.status} ${source.findings}`)}">
+              <td>${escapeHtml(source.source)}</td>
+              <td><span class="pill ${sourceTone(source.status, source.required)}">${escapeHtml(source.status)}</span></td>
+              <td>${metricBadge(source.findings, source.findings === 0 ? "good" : "warn")}</td>
+              <td>${source.required ? "yes" : "no"}</td>
+            </tr>`).join("") ?? "";
+  const healthRiskRows = health?.riskByPriority.map((item) => `
+            <tr class="health-row" data-search="${escapeHtml(`${item.priority} ${item.findings} ${item.weight} ${item.risk}`)}">
+              <td>${escapeHtml(item.priority)}</td>
+              <td>${metricBadge(item.findings, item.findings === 0 ? "good" : "warn")}</td>
+              <td>${item.weight}</td>
+              <td>${metricBadge(item.risk, riskTone(item.risk))}</td>
+            </tr>`).join("") ?? "";
+  const healthSourceRows = health?.findingsBySource.map((item) => `
+            <tr class="health-row" data-search="${escapeHtml(`${item.source} ${item.findings}`)}">
+              <td>${escapeHtml(item.source)}</td>
+              <td>${metricBadge(item.findings, item.findings === 0 ? "good" : "warn")}</td>
+            </tr>`).join("") ?? "";
+  const healthWarnings = health?.dataQualityWarnings.map((warning) => `
+            <div class="diag ${escapeHtml(warning.tone)}">${escapeHtml(warning.message)}</div>`).join("") ?? "";
+  const healthPriorityRows = [
+    ["P0", "Blocker", "Failing tests, TypeScript errors, critical/high dependency issues. Gate fails by default.", "Fix before merge/release."],
+    ["P1", "High", "Serious lint/security/coverage signals. Usually not gate-blocking by default, but should be handled quickly.", "Fix in the current workstream."],
+    ["P2", "Medium", "Maintainability and warning-level debt such as complexity over threshold.", "Prioritize by affected scope and churn."],
+    ["P3", "Info", "Advisory signals and low-risk observations.", "Track or batch later."],
+  ].map(([priority, meaning, examples, action]) => `
+            <tr>
+              <td>${priority}</td>
+              <td>${meaning}</td>
+              <td>${examples}</td>
+              <td>${action}</td>
+            </tr>`).join("");
+  const healthActionItems = health ? healthRecommendedActions(health).map((item) => `
+            <div class="fix ${escapeHtml(item.tone)}">
+              <b>${escapeHtml(item.title)}</b>
+              <p>${escapeHtml(item.detail)}</p>
+              <code>${escapeHtml(item.command)}</code>
+            </div>`).join("") : "";
+  const healthScopes = health?.scopes.map((scope) => `
+            <tr class="health-row" data-search="${escapeHtml(`${scope.name} ${scope.kind} ${scope.score} ${scope.findings} ${scope.risk} ${scope.complexity ?? ""}`)}">
+              <td>${escapeHtml(scope.name)}</td>
+              <td>${escapeHtml(scope.kind)}</td>
+              <td>${metricBadge(scope.score, scoreTone(scope.score))}</td>
+              <td>${metricBadge(scope.findings, scope.findings === 0 ? "good" : "warn")}</td>
+              <td>${metricBadge(scope.risk, riskTone(scope.risk))}</td>
+              <td>${metricBadge(scope.complexity ?? "-", complexityTone(scope.complexity))}</td>
+            </tr>`).join("") ?? "";
+  const healthFiles = health?.files.map((file) => `
+            <tr class="health-row" data-search="${escapeHtml(`${file.name} ${file.score} ${file.findings} ${file.risk} ${file.complexity ?? ""}`)}">
+              <td>${escapeHtml(file.name)}</td>
+              <td>${metricBadge(file.score, scoreTone(file.score))}</td>
+              <td>${metricBadge(file.findings, file.findings === 0 ? "good" : "warn")}</td>
+              <td>${metricBadge(file.risk, riskTone(file.risk))}</td>
+              <td>${metricBadge(file.complexity ?? "-", complexityTone(file.complexity))}</td>
+            </tr>`).join("") ?? "";
+  const graphRows = graph?.topModules.map((module) => `
+            <tr>
+              <td>${escapeHtml(module.name)}</td>
+              <td>${module.files}</td>
+              <td>${module.edges}</td>
+            </tr>`).join("") ?? "";
+  const wikiRows = wikiPages.map((page) => `
+            <tr>
+              <td><a href="${page.href}">${escapeHtml(page.title)}</a></td>
+              <td>${escapeHtml(page.group)}</td>
+              <td>${escapeHtml(page.href)}</td>
+            </tr>`).join("");
+  const memoryRows = memoryEntries.map((entry) => `
+            <tr>
+              <td><a href="${entry.href}">${escapeHtml(entry.title)}</a></td>
+              <td>${escapeHtml(entry.group)}</td>
+              <td>${escapeHtml(entry.href)}</td>
+            </tr>`).join("");
+  const healthSummary = health ? healthQualitySummary(health) : "No normalized health report has been collected yet.";
+  const wikiEmpty = `<div class="empty-state">
+            <b>Wiki has no curated pages yet</b>
+            <p>Create architecture, domain, scenario, integration, or decision pages so agents can read product knowledge before scanning code.</p>
+            <div class="action-grid">
+              <code>keryx wiki collect</code>
+              <code>keryx wiki new decision &lt;slug&gt;</code>
+              <code>keryx wiki index</code>
+            </div>
+          </div>`;
+  const memoryEmpty = `<div class="empty-state">
+            <b>Memory has no learned entries yet</b>
+            <p>Ingest lessons from reviews, health reports, and task outcomes to keep recurring mistakes and constraints available as short context.</p>
+            <div class="action-grid">
+              <code>keryx memory new lesson &lt;slug&gt;</code>
+              <code>keryx memory ingest --from-health .metaproject/data/health/artifacts/latest.json</code>
+              <code>keryx memory index</code>
+            </div>
+          </div>`;
+  const attentionItems = buildDashboardAttention({
+    enableGdgraph,
+    enableGdskills,
+    enableGdwiki,
+    enableHealth,
+    enableMemory,
+    enableTesting,
+    graph,
+    health,
+    memoryEntries,
+    testing,
+    wikiPages,
+  });
+  const attentionCards = attentionItems.map((item) => `
+          <article class="attention-card ${item.tone}">
+            <div>
+              <b>${escapeHtml(item.title)}</b>
+              <p>${escapeHtml(item.detail)}</p>
+            </div>
+            <code>${escapeHtml(item.command)}</code>
+          </article>`).join("");
+
+  const scoreValue = typeof health?.score === "number" ? health.score : null;
+  const ringCirc = 289;
+  const ringOffset = scoreValue === null ? String(ringCirc) : (ringCirc * (1 - scoreValue / 100)).toFixed(1);
+  const ringTone = health ? (healthScoreTone || "info") : "muted";
+  const navItems: Array<[string, string]> = [["Overview", "#top"]];
+  navItems.push(["Attention", "#attention"]);
+  if (enabledModules.length > 0) navItems.push(["Modules", "#modules"]);
+  if (enableHealth) navItems.push(["Code Health", "#health"]);
+  if (enableGdgraph) navItems.push(["Graph", "#graph"]);
+  if (enableTesting) navItems.push(["Testing", "#testing"]);
+  if (enableGdwiki) navItems.push(["Knowledge", "#wiki"]);
+  if (enableMemory) navItems.push(["Memory", "#memory"]);
+  if (enableTasks) navItems.push(["Tasks", "#tasks"]);
+
+  return `<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metaproject Dashboard</title>
+  <style>
+    :root {
+      --bg:#0e131b; --panel:#161d29; --panel2:#1b2330; --line:#26303f;
+      --ink:#e7edf5; --muted:#8b98ab; --faint:#5d6b7e;
+      --accent:#6366f1; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+      --good-bg:rgba(52,211,153,.12); --warn-bg:rgba(251,191,36,.12); --bad-bg:rgba(248,113,113,.12); --info-bg:rgba(99,102,241,.12);
+      --radius:14px; --shadow:0 1px 0 rgba(255,255,255,.03), 0 10px 28px -14px rgba(0,0,0,.55);
+    }
+    html[data-theme="light"] {
+      --bg:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f9; --line:#e2e8f2;
+      --ink:#1a2333; --muted:#5c6b82; --faint:#94a3b8;
+      --good:#0f9d63; --warn:#b45309; --bad:#dc2626;
+      --good-bg:#ecfdf5; --warn-bg:#fffbeb; --bad-bg:#fef2f2; --info-bg:#eef2ff;
+      --shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 28px -18px rgba(16,24,40,.28);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin:0; background:var(--bg); color:var(--ink);
+      font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    a { color:inherit; }
+    .sr-only { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0); }
+    .layout { display:grid; grid-template-columns:224px 1fr; min-height:100vh; }
+
+    /* Sidebar */
+    .side { position:sticky; top:0; align-self:start; height:100vh; overflow:auto;
+      background:var(--panel); border-right:1px solid var(--line); padding:20px 14px; display:flex; flex-direction:column; gap:6px; }
+    .brand { display:flex; align-items:center; gap:10px; padding:2px 6px 16px; }
+    .brand .logo { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#8b5cf6); display:grid; place-items:center; color:#fff; font-weight:800; font-size:13px; }
+    .brand b { font-size:14px; letter-spacing:.2px; }
+    .brand span { display:block; font-size:11px; color:var(--faint); font-weight:500; }
+    .nav { display:flex; flex-direction:column; gap:2px; }
+    .nav a { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; color:var(--muted); text-decoration:none; font-weight:500; font-size:13px; }
+    .nav a .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; }
+    .nav a:hover { color:var(--ink); background:var(--panel2); }
+    .nav a:hover .dot { background:var(--accent); }
+    .side-foot { margin-top:auto; padding-top:14px; border-top:1px solid var(--line); font-size:11px; color:var(--faint); }
+    .side-foot code { display:block; color:var(--muted); background:var(--panel2); border:1px solid var(--line); padding:5px 8px; border-radius:7px; margin-top:6px; font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+    /* Main */
+    .main { padding:24px 30px 44px; min-width:0; max-width:1240px; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:20px; }
+    .topbar h1 { margin:0; font-size:22px; letter-spacing:-.2px; }
+    .topbar .sub { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .linkbtn { text-decoration:none; color:var(--muted); border:1px solid var(--line); background:var(--panel); padding:7px 11px; border-radius:9px; font-size:12px; font-weight:600; }
+    .linkbtn:hover { color:var(--ink); border-color:var(--faint); }
+    .toggle { cursor:pointer; }
+
+    /* Hero */
+    .hero { display:grid; grid-template-columns:auto 1fr; gap:20px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow); margin-bottom:6px; }
+    .ring { position:relative; width:112px; height:112px; flex:none; }
+    .ring svg { transform:rotate(-90deg); }
+    .ring .rc { stroke:var(--rc); }
+    .ring.ring-good { --rc:var(--good); } .ring.ring-warn { --rc:var(--warn); } .ring.ring-bad { --rc:var(--bad); } .ring.ring-info { --rc:var(--accent); } .ring.ring-muted { --rc:var(--line); }
+    .ring .val { position:absolute; inset:0; display:grid; place-items:center; text-align:center; }
+    .ring .val b { font-size:28px; line-height:1; font-weight:800; }
+    .ring .val span { font-size:10px; color:var(--muted); letter-spacing:.6px; }
+    .heroinfo { display:flex; flex-direction:column; justify-content:center; gap:12px; min-width:0; }
+    .gate { display:inline-flex; align-items:center; gap:8px; align-self:flex-start; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid var(--line); color:var(--muted); background:var(--panel2); }
+    .gate .g { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+    .gate.good { color:var(--good); background:var(--good-bg); border-color:transparent; } .gate.good .g { background:var(--good); }
+    .gate.warn { color:var(--warn); background:var(--warn-bg); border-color:transparent; } .gate.warn .g { background:var(--warn); }
+    .gate.bad { color:var(--bad); background:var(--bad-bg); border-color:transparent; } .gate.bad .g { background:var(--bad); }
+    .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .kpi { background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px 13px; min-width:0; }
+    .kpi b { display:block; font-size:19px; line-height:1; margin-bottom:4px; font-variant-numeric:tabular-nums; }
+    .kpi span { font-size:11px; color:var(--muted); }
+    .kpi.good b { color:var(--good); } .kpi.warn b { color:var(--warn); } .kpi.bad b { color:var(--bad); }
+
+    /* Attention */
+    .attention-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+    .attention-card { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--faint); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
+    .attention-card.good { border-left-color:var(--good); } .attention-card.warn { border-left-color:var(--warn); } .attention-card.bad { border-left-color:var(--bad); }
+    .attention-card b { display:block; margin-bottom:4px; font-size:13px; }
+    .attention-card p { margin:0; color:var(--muted); font-size:12px; }
+    .attention-card code { display:block; width:100%; overflow:auto; font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:6px 8px; }
+
+    /* Sections */
+    .sec { scroll-margin-top:20px; margin-top:26px; }
+    .sec-h { display:flex; align-items:center; gap:10px; margin:0 2px 14px; }
+    .sec-h h2 { margin:0; font-size:15px; font-weight:700; }
+    .sec-h .count { font-size:11px; color:var(--muted); background:var(--panel2); border:1px solid var(--line); padding:1px 8px; border-radius:999px; }
+    .sec-h .rule { flex:1; height:1px; background:var(--line); }
+
+    /* Cards */
+    .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; position:relative; overflow:hidden; transition:transform .12s ease,border-color .12s ease; outline:none; }
+    .card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--c); }
+    .card:hover, .card:focus-visible { transform:translateY(-2px); border-color:var(--c); }
+    .card-head { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+    .card-ic { width:27px; height:27px; border-radius:8px; display:grid; place-items:center; font-size:15px; background:color-mix(in srgb, var(--c) 18%, transparent); }
+    .card-name { font-size:14px; font-weight:700; }
+    .card-role { margin-left:auto; font-size:10px; color:var(--muted); border:1px solid var(--line); padding:2px 8px; border-radius:999px; }
+    .card p { margin:0 0 12px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .card-links { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+    .card-links a { font-size:11px; color:var(--ink); text-decoration:none; background:var(--panel2); border:1px solid var(--line); padding:4px 8px; border-radius:7px; }
+    .card-links a:hover { border-color:var(--c); }
+    .card-cmds { display:grid; gap:5px; }
+    .card-cmds code { font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:5px 8px; overflow-x:auto; }
+
+    /* Panels + tables */
+    .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; align-items:start; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); min-width:0; }
+    .panel h3 { margin:16px 0 8px; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+    .panel h3:first-of-type { margin-top:4px; }
+    .table-tools { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:10px 0 12px; }
+    .table-tools input { width:min(360px,100%); color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; font:13px/1.4 inherit; outline:none; }
+    .table-tools input:focus { border-color:var(--accent); }
+    .table-tools span { color:var(--muted); font-size:12px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
+    table { width:100%; border-collapse:collapse; min-width:420px; font-size:13px; }
+    th { text-align:left; padding:9px 12px; color:var(--muted); font-weight:600; font-size:11px; letter-spacing:.4px; text-transform:uppercase; background:var(--panel2); border-bottom:1px solid var(--line); white-space:nowrap; }
+    th button { all:unset; cursor:pointer; color:inherit; display:inline-flex; align-items:center; gap:5px; }
+    th button::after { content:"↕"; color:var(--faint); font-size:10px; }
+    td { padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover { background:var(--panel2); }
+    td a { color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line); }
+    td a:hover { border-color:var(--accent); }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; color:var(--muted); background:var(--panel2); white-space:nowrap; }
+    .pill.good { color:var(--good); background:var(--good-bg); } .pill.warn { color:var(--warn); background:var(--warn-bg); } .pill.bad { color:var(--bad); background:var(--bad-bg); }
+    .metric { display:inline-flex; align-items:center; justify-content:center; min-width:34px; padding:2px 8px; border-radius:8px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); background:var(--panel2); border:1px solid var(--line); }
+    .metric.good { color:var(--good); background:var(--good-bg); border-color:transparent; } .metric.warn { color:var(--warn); background:var(--warn-bg); border-color:transparent; } .metric.bad { color:var(--bad); background:var(--bad-bg); border-color:transparent; }
+    .note { display:grid; gap:5px; margin:0 0 14px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); }
+    .note b { font-size:12px; } .note p { margin:0; color:var(--muted); font-size:12px; }
+    .health-explain { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin:0 0 14px; }
+    .health-explain > div { border:1px solid var(--line); border-radius:10px; background:var(--panel2); padding:12px; min-width:0; }
+    .health-explain h3 { margin:0 0 6px; }
+    .health-explain p { margin:0 0 10px; color:var(--muted); font-size:12px; }
+    .table-wrap.compact { margin-top:8px; }
+    .table-wrap.compact table { min-width:320px; font-size:12px; }
+    .diag { border:1px solid var(--line); border-radius:9px; padding:9px 10px; margin:0 0 8px; color:var(--muted); background:var(--panel); font-size:12px; }
+    .diag.good { color:var(--good); background:var(--good-bg); border-color:transparent; }
+    .diag.warn { color:var(--warn); background:var(--warn-bg); border-color:transparent; }
+    .diag.bad { color:var(--bad); background:var(--bad-bg); border-color:transparent; }
+    .fix { display:grid; gap:5px; border:1px solid var(--line); border-left:3px solid var(--faint); border-radius:9px; padding:10px 11px; margin:0 0 8px; background:var(--panel); }
+    .fix.good { border-left-color:var(--good); } .fix.warn { border-left-color:var(--warn); } .fix.bad { border-left-color:var(--bad); }
+    .fix b { font-size:12px; }
+    .fix p { margin:0; color:var(--muted); font-size:12px; }
+    .fix code { display:block; width:100%; overflow:auto; font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:5px 8px; }
+    .empty { color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:16px; background:var(--panel2); font-size:13px; }
+    .empty code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink); }
+    .empty-state { display:grid; gap:10px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:16px; background:var(--panel2); }
+    .empty-state b { color:var(--ink); } .empty-state p { margin:0; font-size:12px; }
+    .action-grid { display:grid; gap:6px; }
+    .action-grid code, .empty-state code { font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:5px 8px; overflow-x:auto; }
+
+    /* Workflow */
+    .workflow { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+    .step { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }
+    .step .n { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:7px; background:var(--info-bg); color:var(--accent); font-weight:800; font-size:12px; margin-bottom:8px; }
+    .step b { display:block; margin-bottom:5px; font-size:13px; }
+    .step p { margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+
+    .disabled { display:flex; gap:8px; flex-wrap:wrap; }
+    .disabled span { color:var(--faint); border:1px dashed var(--line); border-radius:999px; padding:5px 11px; font-size:12px; }
+
+    @media (max-width: 820px) {
+      .layout { grid-template-columns:1fr; }
+      .side { position:static; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; }
+      .brand { padding-bottom:0; }
+      .nav { flex-direction:row; flex-wrap:wrap; }
+      .side-foot { display:none; }
+      .main { padding:20px 18px 40px; }
+      .hero { grid-template-columns:1fr; justify-items:start; }
+      .kpis { grid-template-columns:repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo">gd</div>
+        <div><b>Metaproject</b><span>${enabledModules.length} modules</span></div>
+      </div>
+      <nav class="nav" aria-label="Sections">
+        ${navItems.map(([label, href]) => `<a href="${href}"><span class="dot"></span>${label}</a>`).join("")}
+      </nav>
+      <div class="side-foot">
+        Stale data? Refresh:
+        <code>keryx update</code>
+        <code>keryx health run</code>
+      </div>
+    </aside>
+
+    <main class="main" id="top">
+      <div class="topbar">
+        <div>
+          <h1>Metaproject Dashboard</h1>
+          <p class="sub">Read-only control surface for agent context, health, graph, testing, and knowledge.</p>
+        </div>
+        <div class="toolbar" aria-label="Primary links">
+          ${primaryLinks.map(([label, href]) => `<a class="linkbtn" href="${href}">${label}</a>`).join("")}
+          <button class="linkbtn toggle" type="button" onclick="__gdmToggle()" aria-label="Toggle theme">◐ Theme</button>
+        </div>
+      </div>
+
+      <section class="hero" aria-label="Overview">
+        <div class="ring ring-${ringTone}">
+          <svg width="112" height="112" viewBox="0 0 112 112" role="img" aria-label="Health score ${scoreValue ?? "unavailable"}">
+            <circle cx="56" cy="56" r="46" fill="none" stroke="var(--line)" stroke-width="9"></circle>
+            <circle class="rc" cx="56" cy="56" r="46" fill="none" stroke-width="9" stroke-linecap="round" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle>
+          </svg>
+          <div class="val"><div><b>${health?.score ?? "—"}</b><span>HEALTH</span></div></div>
+        </div>
+        <div class="heroinfo">
+          <span class="gate ${healthClass}"><span class="g"></span>${health ? escapeHtml(health.status) : (enableHealth ? "no report yet" : "health disabled")}${health ? ` gate · ${health.findings} finding(s)` : ""}</span>
+          <div class="kpis">
+            <div class="kpi ${health ? (health.findings === 0 ? "good" : "warn") : ""}"><b>${health?.findings ?? "—"}</b><span>findings</span></div>
+            <div class="kpi"><b>${graph ? graph.files : "—"}</b><span>graph files</span></div>
+            <div class="kpi"><b>${wikiPages.length || "—"}</b><span>wiki pages</span></div>
+            <div class="kpi"><b>${memoryEntries.length || "—"}</b><span>memory entries</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" id="attention">
+        <div class="sec-h"><h2>What needs attention</h2><span class="count">${attentionItems.length} signal${attentionItems.length === 1 ? "" : "s"}</span><span class="rule"></span></div>
+        <div class="attention-grid">
+${attentionCards}
+        </div>
+      </section>
+
+      <section class="sec" id="modules">
+        <div class="sec-h"><h2>Modules</h2><span class="count">${enabledModules.length} enabled</span><span class="rule"></span></div>
+        <div class="cards">
+${cards || "          <p class=\"empty\">No modules enabled.</p>"}
+        </div>
+      </section>
+
+      ${enableTasks ? `<section class="sec" id="tasks">
+        <div class="sec-h"><h2>Tasks</h2><span class="count">${flows.length} flow(s)</span><span class="rule"></span></div>
+        ${flows.length > 0 ? `<div class="panel"><div class="table-wrap"><table>
+          <thead><tr><th>Flow</th><th>Status</th><th>Tasks</th><th>AC</th><th>PR</th></tr></thead>
+          <tbody>${flowRows}</tbody>
+        </table></div></div>` : `<div class="empty">No flows yet. Start one: <code>keryx flow init --title "..."</code>.</div>`}
+      </section>` : ""}
+
+      <section class="sec" id="health">
+        <div class="sec-h"><h2>Code Health</h2><span class="count">${qualityStatus}</span><span class="rule"></span></div>
+        <div class="panel">
+          ${health ? `
+          <div class="note"><b>Score is contextual</b><p>${healthSummary}</p></div>
+          <div class="kpis" style="margin-bottom:14px">
+            <div class="kpi ${healthScoreTone}"><b>${health.score}</b><span>score</span></div>
+            <div class="kpi"><b><span class="pill ${healthClass}">${escapeHtml(health.status)}</span></b><span>gate</span></div>
+            <div class="kpi ${health.findings === 0 ? "good" : "warn"}"><b>${health.findings}</b><span>findings</span></div>
+            <div class="kpi ${health.p0 > 0 ? "bad" : (health.p1 > 0 || health.p2 > 0 ? "warn" : "good")}"><b>${health.p0}/${health.p1}/${health.p2}</b><span>P0 / P1 / P2</span></div>
+            <div class="kpi ${riskTone(health.risk)}"><b>${health.risk}</b><span>risk</span></div>
+            <div class="kpi ${complexityTone(health.complexityMax)}"><b>${health.complexityMax}</b><span>max complexity</span></div>
+            <div class="kpi"><b>${health.loc}</b><span>LOC</span></div>
+            <div class="kpi ${health.findingsWithoutFile > 0 ? "warn" : "good"}"><b>${health.findingsWithoutFile}</b><span>unmapped findings</span></div>
+          </div>
+          <div class="health-explain">
+            <div>
+              <h3>Why this score?</h3>
+              <p>Formula: risk = P0*100 + P1*20 + P2*5 + P3*1. Score = clamp(100 - ((risk + coverage penalty + complexity penalty) * 1000 / max(LOC, 1000)), 0, 100). Gate is stricter than score and can fail on blockers even when module scores look high.</p>
+              <div class="table-wrap compact"><table data-gdm-table="health-risk">
+                <thead><tr><th><button type="button" data-sort-col="0">Priority</button></th><th><button type="button" data-sort-col="1">Findings</button></th><th><button type="button" data-sort-col="2">Weight</button></th><th><button type="button" data-sort-col="3">Risk</button></th></tr></thead>
+                <tbody>${healthRiskRows || `<tr><td colspan="4">No risk rows.</td></tr>`}</tbody>
+              </table></div>
+            </div>
+            <div>
+              <h3>What to fix first</h3>
+              ${healthActionItems || `<div class="fix good"><b>No immediate action</b><p>No blocking or warning-level action was inferred from the latest report.</p><code>keryx health status</code></div>`}
+            </div>
+          </div>
+          <div class="health-explain">
+            <div>
+              <h3>Priority legend</h3>
+              <div class="table-wrap compact"><table>
+                <thead><tr><th>Priority</th><th>Meaning</th><th>Typical signals</th><th>Default action</th></tr></thead>
+                <tbody>${healthPriorityRows}</tbody>
+              </table></div>
+            </div>
+            <div>
+              <h3>Report diagnostics</h3>
+              ${healthWarnings || `<div class="diag good">No report-quality warnings detected.</div>`}
+              <div class="table-wrap compact"><table data-gdm-table="health-source-breakdown">
+                <thead><tr><th><button type="button" data-sort-col="0">Finding source</button></th><th><button type="button" data-sort-col="1">Findings</button></th></tr></thead>
+                <tbody>${healthSourceRows || `<tr><td colspan="2">No finding source rows.</td></tr>`}</tbody>
+              </table></div>
+            </div>
+          </div>
+          <div class="table-tools">
+            <input id="gdmHealthFilter" type="search" placeholder="Filter health tables by file, scope, source, score..." aria-label="Filter health tables">
+            <span>Click table headings to sort visible rows.</span>
+          </div>
+          <h3>Top scopes</h3>
+          <div class="table-wrap"><table data-gdm-table="health-scopes">
+            <thead><tr><th><button type="button" data-sort-col="0">Scope</button></th><th><button type="button" data-sort-col="1">Kind</button></th><th><button type="button" data-sort-col="2">Score</button></th><th><button type="button" data-sort-col="3">Findings</button></th><th><button type="button" data-sort-col="4">Risk</button></th><th><button type="button" data-sort-col="5">Complexity</button></th></tr></thead>
+            <tbody>${healthScopes || `<tr><td colspan="6">No scope metrics.</td></tr>`}</tbody>
+          </table></div>
+          <h3>Top files</h3>
+          <div class="table-wrap"><table data-gdm-table="health-files">
+            <thead><tr><th><button type="button" data-sort-col="0">File</button></th><th><button type="button" data-sort-col="1">Score</button></th><th><button type="button" data-sort-col="2">Findings</button></th><th><button type="button" data-sort-col="3">Risk</button></th><th><button type="button" data-sort-col="4">Complexity</button></th></tr></thead>
+            <tbody>${healthFiles || `<tr><td colspan="5">No file-level metrics in latest report.</td></tr>`}</tbody>
+          </table></div>
+          <h3>Sources</h3>
+          <div class="table-wrap"><table data-gdm-table="health-sources">
+            <thead><tr><th><button type="button" data-sort-col="0">Source</button></th><th><button type="button" data-sort-col="1">Status</button></th><th><button type="button" data-sort-col="2">Findings</button></th><th><button type="button" data-sort-col="3">Required</button></th></tr></thead>
+            <tbody>${healthSources}</tbody>
+          </table></div>` : `<div class="empty">No health report found. Run <code>keryx health run</code>.</div>`}
+        </div>
+      </section>
+
+      <section class="sec" id="graph">
+        <div class="sec-h"><h2>Graph</h2><span class="count">${graphStatus}</span><span class="rule"></span></div>
+        <div class="panel">
+          ${graph ? `
+          <div class="kpis" style="margin-bottom:14px">
+            <div class="kpi"><b>${graph.files}</b><span>files</span></div>
+            <div class="kpi"><b>${graph.assets}</b><span>assets</span></div>
+            <div class="kpi"><b>${graph.edges}</b><span>edges</span></div>
+            <div class="kpi ${graph.unresolved > 0 ? "warn" : "good"}"><b>${graph.unresolved}</b><span>unresolved</span></div>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Module</th><th>Files</th><th>Outgoing edges</th></tr></thead>
+            <tbody>${graphRows || `<tr><td colspan="3">No module graph rows.</td></tr>`}</tbody>
+          </table></div>` : `<div class="empty">No graph storage found. Run <code>keryx gdgraph build</code>.</div>`}
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h2>Testing &amp; Knowledge</h2><span class="rule"></span></div>
+        <div class="grid2">
+          <div class="panel" id="testing">
+            <h3 style="margin-top:0">Testing</h3>
+            ${testing ? `
+            <div class="kpis">
+              <div class="kpi"><b style="font-size:14px">${escapeHtml(testing.status)}</b><span>status</span></div>
+              <div class="kpi"><b style="font-size:14px">${testing.runner ? escapeHtml(testing.runner) : "—"}</b><span>runner</span></div>
+              <div class="kpi"><b>${testing.tests ?? "—"}</b><span>tests</span></div>
+              <div class="kpi ${testing.failures ? "bad" : "good"}"><b>${testing.failures ?? "—"}</b><span>failures</span></div>
+            </div>
+            <div class="card-links" style="margin-top:12px">
+              ${testing.contextHref ? `<a href="${testing.contextHref}">Testing context</a>` : ""}
+              ${testing.reportHref ? `<a href="${testing.reportHref}">Latest report</a>` : ""}
+            </div>` : `<div class="empty">No testing context/report found. Run <code>keryx test analyze</code>.</div>`}
+          </div>
+          <div class="panel" id="wiki">
+            <h3 style="margin-top:0">Wiki <span style="color:var(--faint);font-weight:500;text-transform:none;letter-spacing:0">· ${wikiStatus}</span></h3>
+            ${wikiRows ? `<div class="table-wrap"><table><thead><tr><th>Page</th><th>Group</th><th>Path</th></tr></thead><tbody>${wikiRows}</tbody></table></div>` : wikiEmpty}
+          </div>
+          <div class="panel" id="memory">
+            <h3 style="margin-top:0">Memory <span style="color:var(--faint);font-weight:500;text-transform:none;letter-spacing:0">· ${memoryStatus}</span></h3>
+            ${memoryRows ? `<div class="table-wrap"><table><thead><tr><th>Entry</th><th>Group</th><th>Path</th></tr></thead><tbody>${memoryRows}</tbody></table></div>` : memoryEmpty}
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h2>Agent Workflow</h2><span class="rule"></span></div>
+        <div class="workflow">
+          <div class="step"><span class="n">1</span><b>Route</b><p>Start from index.md and select the module or skill that owns the question.</p></div>
+          <div class="step"><span class="n">2</span><b>Navigate</b><p>Use gdgraph for related files, affected context, cycles, and boundaries.</p></div>
+          <div class="step"><span class="n">3</span><b>Compress</b><p>Use gdctx before loading large search output, diffs, logs, or long files.</p></div>
+          <div class="step"><span class="n">4</span><b>Verify</b><p>Read testing and health reports before claiming quality or gate status.</p></div>
+          <div class="step"><span class="n">5</span><b>Learn</b><p>Write decisions and lessons to wiki, memory, and project skills.</p></div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-h"><h2>Disabled modules</h2><span class="rule"></span></div>
+        <div class="disabled">${disabled || "<span>none</span>"}</div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal" id="gdmModal" hidden>
+    <div class="modal-backdrop" onclick="__gdmCloseDoc()"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Document viewer">
+      <div class="modal-head">
+        <span class="modal-title" id="gdmModalTitle"></span>
+        <div class="modal-actions">
+          <a class="modal-raw" id="gdmModalRaw" href="#" title="Open the raw file">raw ↗</a>
+          <button class="modal-x" type="button" onclick="__gdmCloseDoc()" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="modal-body markdown" id="gdmModalBody"></div>
+    </div>
+  </div>
+  <style>
+    .modal[hidden] { display:none; }
+    .modal { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:24px; }
+    .modal-backdrop { position:absolute; inset:0; background:rgba(4,8,14,.62); }
+    .modal-card { position:relative; width:min(820px,100%); max-height:86vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); overflow:hidden; }
+    .modal-head { display:flex; align-items:center; gap:12px; padding:13px 18px; border-bottom:1px solid var(--line); background:var(--panel2); }
+    .modal-title { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Menlo,monospace; color:var(--muted); }
+    .modal-actions { display:flex; align-items:center; gap:9px; }
+    .modal-raw { font-size:12px; color:var(--muted); text-decoration:none; border:1px solid var(--line); padding:4px 9px; border-radius:8px; }
+    .modal-raw:hover { color:var(--ink); }
+    .modal-x { cursor:pointer; background:none; border:1px solid var(--line); color:var(--muted); width:28px; height:28px; border-radius:8px; font-size:12px; }
+    .modal-x:hover { color:var(--ink); }
+    .modal-body { padding:22px 26px; overflow:auto; }
+    .markdown { font-size:14px; line-height:1.65; color:var(--ink); }
+    .markdown > *:first-child { margin-top:0; }
+    .markdown h1 { font-size:20px; margin:.3em 0 .5em; }
+    .markdown h2 { font-size:16px; margin:1.3em 0 .5em; padding-bottom:.3em; border-bottom:1px solid var(--line); }
+    .markdown h3 { font-size:13px; margin:1.1em 0 .4em; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+    .markdown p { margin:.6em 0; color:var(--muted); }
+    .markdown ul, .markdown ol { margin:.5em 0; padding-left:1.4em; color:var(--muted); }
+    .markdown li { margin:.25em 0; }
+    .markdown a { color:var(--accent); text-decoration:none; }
+    .markdown a:hover { text-decoration:underline; }
+    .markdown code { font-family:ui-monospace,Menlo,monospace; font-size:.88em; background:var(--panel2); border:1px solid var(--line); border-radius:5px; padding:.1em .35em; color:var(--ink); }
+    .markdown pre { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; overflow:auto; margin:.8em 0; }
+    .markdown pre code { background:none; border:0; padding:0; font-size:12px; }
+    .markdown strong { color:var(--ink); }
+    .markdown blockquote { margin:.6em 0; padding:.3em 0 .3em 12px; border-left:3px solid var(--line); color:var(--faint); }
+  </style>
+  <script id="gdm-docs" type="application/json">${docsJson}</script>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var KEY = "gdm-theme";
+      try {
+        var saved = localStorage.getItem(KEY);
+        if (saved) { root.setAttribute("data-theme", saved); }
+      } catch (e) {}
+      window.__gdmToggle = function () {
+        var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem(KEY, next); } catch (e) {}
+      };
+    })();
+    (function () {
+      var healthFilter = document.getElementById("gdmHealthFilter");
+      function filterHealthRows() {
+        var q = (healthFilter && healthFilter.value ? healthFilter.value : "").toLowerCase().trim();
+        document.querySelectorAll("#health tr.health-row").forEach(function (row) {
+          var haystack = (row.getAttribute("data-search") || row.textContent || "").toLowerCase();
+          row.hidden = q.length > 0 && haystack.indexOf(q) === -1;
+        });
+      }
+      if (healthFilter) {
+        healthFilter.addEventListener("input", filterHealthRows);
+      }
+      function cellValue(row, col) {
+        var cell = row.children[col];
+        var text = cell ? (cell.textContent || "").trim() : "";
+        var num = Number(text.replace(/[^0-9.-]/g, ""));
+        return Number.isFinite(num) && /[0-9]/.test(text) ? num : text.toLowerCase();
+      }
+      document.addEventListener("click", function (e) {
+        var target = e.target;
+        var btn = target && target.closest ? target.closest("[data-sort-col]") : null;
+        if (!btn) return;
+        var table = btn.closest("table");
+        var tbody = table && table.querySelector("tbody");
+        if (!tbody) return;
+        var col = Number(btn.getAttribute("data-sort-col") || "0");
+        var dir = btn.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
+        table.querySelectorAll("[data-sort-dir]").forEach(function (item) {
+          item.removeAttribute("data-sort-dir");
+        });
+        btn.setAttribute("data-sort-dir", dir);
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+        rows.sort(function (a, b) {
+          var av = cellValue(a, col);
+          var bv = cellValue(b, col);
+          var cmp = typeof av === "number" && typeof bv === "number"
+            ? av - bv
+            : String(av).localeCompare(String(bv));
+          return dir === "asc" ? cmp : -cmp;
+        });
+        rows.forEach(function (row) {
+          tbody.appendChild(row);
+        });
+        filterHealthRows();
+      });
+    })();
+    (function () {
+      var docs = {};
+      try { docs = JSON.parse(document.getElementById("gdm-docs").textContent || "{}"); } catch (e) {}
+      var BT = String.fromCharCode(96);
+      var fence = BT + BT + BT;
+      var codeRe = new RegExp(BT + "([^" + BT + "]+)" + BT, "g");
+      function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+      function inline(s) {
+        return s
+          .replace(codeRe, function (_, c) { return "<code>" + esc(c) + "</code>"; })
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, t, u) { return "<a href='" + u + "'>" + t + "</a>"; });
+      }
+      function render(md) {
+        var lines = String(md).replace(/\r\n/g, "\n").split("\n");
+        var out = [], inCode = false, list = null;
+        function closeList() { if (list) { out.push("</" + list + ">"); list = null; } }
+        for (var i = 0; i < lines.length; i++) {
+          var ln = lines[i];
+          if (ln.slice(0, 3) === fence) {
+            if (inCode) { out.push("</code></pre>"); inCode = false; }
+            else { closeList(); out.push("<pre><code>"); inCode = true; }
+            continue;
+          }
+          if (inCode) { out.push(esc(ln) + "\n"); continue; }
+          var h = ln.match(/^(#{1,3})\s+(.*)$/);
+          if (h) { closeList(); var n = h[1].length; out.push("<h" + n + ">" + inline(esc(h[2])) + "</h" + n + ">"); continue; }
+          var ul = ln.match(/^\s*[-*]\s+(.*)$/);
+          if (ul) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push("<li>" + inline(esc(ul[1])) + "</li>"); continue; }
+          var ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+          if (ol) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push("<li>" + inline(esc(ol[1])) + "</li>"); continue; }
+          var bq = ln.match(/^>\s?(.*)$/);
+          if (bq) { closeList(); out.push("<blockquote>" + inline(esc(bq[1])) + "</blockquote>"); continue; }
+          if (ln.trim() === "") { closeList(); continue; }
+          closeList(); out.push("<p>" + inline(esc(ln)) + "</p>");
+        }
+        if (inCode) out.push("</code></pre>");
+        closeList();
+        return out.join("");
+      }
+      var modal = document.getElementById("gdmModal");
+      var body = document.getElementById("gdmModalBody");
+      var titleEl = document.getElementById("gdmModalTitle");
+      var rawEl = document.getElementById("gdmModalRaw");
+      window.__gdmCloseDoc = function () { modal.hidden = true; };
+      function openDoc(href) {
+        body.innerHTML = render(docs[href] || "");
+        titleEl.textContent = href;
+        rawEl.setAttribute("href", href);
+        modal.hidden = false;
+        body.scrollTop = 0;
+      }
+      document.addEventListener("click", function (e) {
+        var a = e.target.closest ? e.target.closest("a") : null;
+        if (!a) return;
+        var href = a.getAttribute("href");
+        if (href && Object.prototype.hasOwnProperty.call(docs, href)) { e.preventDefault(); openDoc(href); }
+      });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape") { modal.hidden = true; } });
+    })();
+  </script>
+</body>
+</html>
+`;
+}
+
+type DashboardAttentionItem = {
+  tone: "good" | "warn" | "bad";
+  title: string;
+  detail: string;
+  command: string;
+};
+
+function buildDashboardAttention({
+  enableGdgraph,
+  enableGdskills,
+  enableGdwiki,
+  enableHealth,
+  enableMemory,
+  enableTesting,
+  graph,
+  health,
+  memoryEntries,
+  testing,
+  wikiPages,
+}: {
+  enableGdgraph: boolean;
+  enableGdskills: boolean;
+  enableGdwiki: boolean;
+  enableHealth: boolean;
+  enableMemory: boolean;
+  enableTesting: boolean;
+  graph: MetaprojectDashboardData["graph"] | undefined;
+  health: MetaprojectDashboardData["health"] | undefined;
+  memoryEntries: Array<{ title: string; href: string; group: string; content?: string }>;
+  testing: MetaprojectDashboardData["testing"] | undefined;
+  wikiPages: Array<{ title: string; href: string; group: string; content?: string }>;
+}): DashboardAttentionItem[] {
+  const items: DashboardAttentionItem[] = [];
+
+  if (enableHealth && !health) {
+    items.push({
+      tone: "warn",
+      title: "Code Health report is missing",
+      detail: "Quality gates and file scores are unavailable until a health report is generated.",
+      command: "keryx health run",
+    });
+  } else if (health && (health.status === "fail" || health.p0 > 0)) {
+    items.push({
+      tone: "bad",
+      title: "Code Health gate is failing",
+      detail: `${health.p0} P0 finding(s), ${health.findings} finding(s) total. Resolve blockers before trusting the project score.`,
+      command: "keryx health explain <file>",
+    });
+  } else if (health && (health.status === "warn" || health.findings > 0)) {
+    items.push({
+      tone: "warn",
+      title: "Code Health has active findings",
+      detail: `Score ${health.score} still has ${health.findings} finding(s). Review top files and sources.`,
+      command: "keryx health status",
+    });
+  }
+
+  const missingRequired = health?.sources.filter((source) => source.required && source.status === "missing") ?? [];
+  if (missingRequired.length > 0) {
+    items.push({
+      tone: "bad",
+      title: "Required health source is missing",
+      detail: `Missing: ${missingRequired.map((source) => source.source).join(", ")}.`,
+      command: "keryx health sources",
+    });
+  }
+
+  if (enableGdgraph && !graph) {
+    items.push({
+      tone: "warn",
+      title: "Graph storage is missing",
+      detail: "Project navigation and affected-context queries need a built graph.",
+      command: "keryx gdgraph build",
+    });
+  } else if (graph && graph.unresolved > 0) {
+    items.push({
+      tone: "warn",
+      title: "Graph has unresolved imports",
+      detail: `${graph.unresolved} unresolved edge(s) can reduce affected-context precision.`,
+      command: "keryx gdgraph query orphans",
+    });
+  }
+
+  if (enableTesting && !testing) {
+    items.push({
+      tone: "warn",
+      title: "Testing context is missing",
+      detail: "Agents need the testing context before creating or changing tests.",
+      command: "keryx test analyze",
+    });
+  } else if (testing && (testing.failures ?? 0) > 0) {
+    items.push({
+      tone: "bad",
+      title: "Latest test report has failures",
+      detail: `${testing.failures} failing test(s) in the normalized testing report.`,
+      command: "keryx test report",
+    });
+  }
+
+  if (enableGdwiki && wikiPages.length === 0) {
+    items.push({
+      tone: "warn",
+      title: "Wiki has no curated pages",
+      detail: "Generate draft knowledge pages so agents can use architecture and domain context before broad code reads.",
+      command: "keryx wiki collect",
+    });
+  }
+
+  if (enableMemory && memoryEntries.length === 0) {
+    items.push({
+      tone: "warn",
+      title: "Memory has no accepted lessons",
+      detail: "Long-lived project lessons and decisions are not yet available to agents.",
+      command: "keryx memory ingest --from-health .metaproject/data/health/artifacts/latest.json",
+    });
+  }
+
+  if (!enableGdskills) {
+    items.push({
+      tone: "warn",
+      title: "gdskills is disabled",
+      detail: "Project-local working skills and orchestrators are not installed for agents.",
+      command: "keryx modules enable gdskills",
+    });
+  }
+
+  if (items.length === 0) {
+    items.push({
+      tone: "good",
+      title: "Visible signals look current",
+      detail: "Enabled modules have dashboard data and no blocking attention signals were detected.",
+      command: "keryx status",
+    });
+  }
+
+  return items.slice(0, 8);
+}
+
+function healthRecommendedActions(
+  health: NonNullable<MetaprojectDashboardData["health"]>,
+): Array<{ tone: string; title: string; detail: string; command: string }> {
+  const actions: Array<{ tone: string; title: string; detail: string; command: string }> = [];
+  const topScope = health.scopes[0];
+  const topFile = health.files[0];
+  const tests = health.sources.find((source) => source.source === "tests");
+  const coverage = health.sources.find((source) => source.source === "coverage");
+
+  if (health.p0 > 0) {
+    actions.push({
+      tone: "bad",
+      title: "Fix P0 blockers first",
+      detail: `${health.p0} blocker finding(s) are present. Gate is expected to fail until these are resolved.`,
+      command: topFile ? `keryx health explain ${topFile.name}` : "keryx health run",
+    });
+  } else if (health.p1 > 0) {
+    actions.push({
+      tone: "warn",
+      title: "Clear high-priority P1 findings",
+      detail: `${health.p1} high-priority finding(s) remain. They may not fail the gate by default, but should be handled before expanding scope.`,
+      command: topFile ? `keryx health explain ${topFile.name}` : "keryx health status",
+    });
+  }
+
+  if (health.p2 > 0 && topScope) {
+    actions.push({
+      tone: "warn",
+      title: `Reduce complexity in ${topScope.name}`,
+      detail: `${topScope.findings} finding(s), risk ${topScope.risk}. Start with the top files table and split branch-heavy functions into smaller helpers.`,
+      command: `keryx health explain ${topScope.name}`,
+    });
+  }
+
+  if (topFile) {
+    actions.push({
+      tone: topFile.risk >= 50 ? "bad" : "warn",
+      title: "Inspect the highest-risk file",
+      detail: `${topFile.name} has ${topFile.findings} finding(s), risk ${topFile.risk}, max complexity ${topFile.complexity ?? "-"}.`,
+      command: `keryx health explain ${topFile.name}`,
+    });
+  }
+
+  if (tests && tests.status === "missing") {
+    actions.push({
+      tone: "warn",
+      title: "Connect testing evidence",
+      detail: "The health report did not import or run a compatible testing report, so the score does not prove tests are green.",
+      command: "keryx test run && keryx health run",
+    });
+  }
+
+  if (coverage && coverage.status === "missing") {
+    actions.push({
+      tone: "warn",
+      title: "Connect coverage evidence",
+      detail: "Coverage is missing, so the score does not reflect test coverage risk.",
+      command: "keryx health sources",
+    });
+  }
+
+  return actions.slice(0, 5);
+}
+
+function metricBadge(value: number | string, tone: string): string {
+  return `<span class="metric ${tone}">${escapeHtml(String(value))}</span>`;
+}
+
+function healthTone(health: NonNullable<MetaprojectDashboardData["health"]>): string {
+  if (health.status === "fail" || health.p0 > 0) {
+    return "bad";
+  }
+  if (health.status === "warn" || health.p1 > 0 || health.findings > 0) {
+    return "warn";
+  }
+  return scoreTone(health.score);
+}
+
+function scoreTone(score: number | string | undefined): string {
+  if (typeof score !== "number") {
+    return "";
+  }
+  if (score < 60) {
+    return "bad";
+  }
+  if (score < 90) {
+    return "warn";
+  }
+  return "good";
+}
+
+function riskTone(risk: number | string | undefined): string {
+  if (typeof risk !== "number") {
+    return "";
+  }
+  if (risk >= 50) {
+    return "bad";
+  }
+  if (risk > 0) {
+    return "warn";
+  }
+  return "good";
+}
+
+function complexityTone(complexity: number | string | undefined): string {
+  if (typeof complexity !== "number") {
+    return "";
+  }
+  if (complexity > 20) {
+    return "bad";
+  }
+  if (complexity > 10) {
+    return "warn";
+  }
+  return "good";
+}
+
+function sourceTone(status: string, required: boolean): string {
+  if (status === "available" || status === "skipped") {
+    return status === "available" ? "good" : "";
+  }
+  if (status === "missing" && required) {
+    return "bad";
+  }
+  if (status === "missing") {
+    return "warn";
+  }
+  return "";
+}
+
+function healthQualitySummary(health: NonNullable<MetaprojectDashboardData["health"]>): string {
+  if (health.status === "fail" || health.p0 > 0) {
+    return `Gate is failing: ${health.p0} P0 finding(s), ${health.findings} finding(s) total. Treat the score as blocked until P0 items are resolved.`;
+  }
+  if (health.findings > 0) {
+    return `Score ${health.score} still has ${health.findings} finding(s). The dashboard colors this as warning so high scores do not hide active quality debt.`;
+  }
+  if (health.status === "warn") {
+    return `Gate is warning. Check missing optional sources, regressions, and source rows before trusting the score.`;
+  }
+  return `No active findings in the latest normalized report. Keep coverage and complexity sources connected to avoid a falsely optimistic score.`;
+}
+
+export function renderAgentEntrypoint({ source }: { source: string }): string {
+  return `# ${source.replace(/\.md$/i, "")} Instructions
+
+${renderProjectMetaprojectReferenceBlock({ enableTasks: true })}
+`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function renderMetaprojectGitignoreBlock(): string {
+  return `# Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
+.metaproject/runtime/
+.metaproject/core/**/*.ts
+.metaproject/data/**/storage/
+.metaproject/data/**/raw/
+.metaproject/data/**/queries/
+.metaproject/data/**/summaries/
+.metaproject/data/gdctx/artifacts/
+.metaproject/data/gdwiki/artifacts/
+.metaproject/data/gdwiki/link-check/
+.metaproject/data/health/history/
+.metaproject/data/health/artifacts/latest.md
+.metaproject/data/health/artifacts/latest.json
+.metaproject/data/testing/history/
+.metaproject/data/testing/logs/
+.metaproject/data/testing/artifacts/latest.md
+.metaproject/data/testing/artifacts/latest.json
+.metaproject/data/tasks/runtime/
+.metaproject/data/tasks/logs/
+.metaproject/flows/.flow-init.lock/
+.metaproject/flows/.flow-lock-*/
+# Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
+.metaproject/data/security/raw/
+.metaproject/data/security/raw/**
+.metaproject/data/security/artifacts/latest.md
+.metaproject/data/security/artifacts/latest.json
+.metaproject/reports/
+`;
+}
+
+export function renderProjectRulesReadme(): string {
+  return `# Project Rules
+
+This directory stores repository-level instructions imported from root agent entrypoints such as \`AGENTS.md\` or \`CLAUDE.md\`.
+
+Rules:
+
+- treat files here as high-priority agent-readable mirrors of root instructions;
+- update the root entrypoint first when changing project-wide instructions;
+- rerun \`keryx rules sync\`, \`keryx init\`, or \`keryx update\` to resync imported rule files.
+`;
+}
+
+export function renderImportedAgentRules({
+  source,
+  content,
+}: {
+  source: string;
+  content: string;
+}): string {
+  const body = extractAgentRuleBody(content);
+  const normalizedBody =
+    body.length > 0
+      ? body
+      : `This root entrypoint delegates agent routing to \`.metaproject/index.md\`.
+
+Read \`.metaproject/index.md\` first, then follow the high-priority rules, skills, and module references listed there.`;
+
+  return `---
+type: agent-entrypoint-rule
+priority: high
+source: ${JSON.stringify(source)}
+version: "1.0.0"
+generated_by: keryx
+---
+
+# Imported Rules: ${source}
+
+Source: \`${source}\`
+Priority: \`high\`
+Version: \`1.0.0\`
+
+This file is generated from the repository root agent entrypoint. Edit \`${source}\`, then rerun \`keryx rules sync\`.
+
+---
+
+${normalizedBody}
+`;
+}
+
+function extractAgentRuleBody(content: string): string {
+  const marker = "<!-- keryx:index -->";
+  const endMarker = "<!-- /keryx:index -->";
+  const markerIndex = content.indexOf(marker);
+  if (markerIndex < 0) {
+    return content.trim();
+  }
+  const endMarkerIndex = content.indexOf(endMarker, markerIndex + marker.length);
+  if (endMarkerIndex >= 0) {
+    const before = content.slice(0, markerIndex);
+    const after = content.slice(endMarkerIndex + endMarker.length);
+    return `${before}\n${after}`.trim();
+  }
+  const body = content.slice(0, markerIndex);
+  return body.trim();
+}
+
+export function renderProjectRulesSkillReadme({
+  sources,
+}: {
+  sources: string[];
+}): string {
+  const sourceList =
+    sources.length > 0
+      ? sources.map((source) => `- \`${source}\``).join("\n")
+      : "- No root agent entrypoint was found during init.";
+
+  return `# project-rules Skill
+
+Use this skill before planning, implementing, or reviewing work in this repository.
+
+## Sources
+
+${sourceList}
+
+## Workflow
+
+1. Start from \`.metaproject/index.md\`.
+2. Treat imported files in \`.metaproject/rules/\` as high-priority rules.
+3. Apply those rules before module-specific guidance.
+4. If root instructions changed, rerun \`keryx rules sync\` to refresh this mirror.
+`;
+}
+
+export function renderMetaprojectReadme({
+  enableGdgraph,
+  enableGdctx,
+  enableGdwiki,
+  enableGdskills,
+  enableHealth,
+  enableTesting,
+  enableMemory,
+  enableTasks,
+  enableSecurity = false,
+}: {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity?: boolean;
+}): string {
+  const moduleItems = [
+    enableGdgraph ? "- `gdgraph`: code graph and affected context." : "",
+    enableGdctx
+      ? "- `gdctx`: compact command/search/read output and raw output archive."
+      : "",
+    enableGdwiki
+      ? "- `gdwiki`: local project knowledge base from business logic to implementation."
+      : "",
+    enableGdskills
+      ? "- `gdskills`: project-local bundled working skills, orchestration, review, and project-skill lifecycle."
+      : "",
+    enableHealth
+      ? "- `health`: code quality aggregation, scoring, and quality gate."
+      : "",
+    enableTesting
+      ? "- `testing`: test context, related tests, and normalized test reports."
+      : "",
+    enableMemory
+      ? "- `memory`: long-lived lessons, decisions, constraints, and known mistakes."
+      : "",
+    enableTasks
+      ? "- `tasks`: agent-first flow lifecycle with frozen acceptance criteria and PR gates."
+      : "",
+    enableSecurity
+      ? "- `security`: policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts."
+      : "",
+  ].filter(Boolean);
+  const modules = moduleItems.length > 0
+    ? moduleItems.join("\n")
+    : "- No modules enabled yet.";
+
+  const commands = [
+    "keryx status",
+    ...(enableGdgraph
+      ? ["keryx gdgraph build", 'keryx gdgraph query "module pipelines"']
+      : []),
+    ...(enableGdctx ? ["keryx ctx status", "keryx ctx diff"] : []),
+    ...(enableGdwiki ? ["keryx wiki status", "keryx wiki collect", "keryx wiki index"] : []),
+    ...(enableGdskills
+      ? [
+          "keryx skills status",
+          "keryx skills catalog --profile recommended",
+          "keryx skills install --profile recommended",
+        ]
+      : []),
+    ...(enableHealth ? ["keryx health run", "keryx health gate"] : []),
+    ...(enableTesting ? ["keryx test analyze", "keryx test run --changed"] : []),
+    ...(enableMemory ? ["keryx memory index", 'keryx memory search "project decisions"'] : []),
+    ...(enableTasks ? ["keryx flow list", 'keryx flow init --title "..."'] : []),
+    ...(enableSecurity ? ["keryx security status", "keryx security scan <path>"] : []),
+  ];
+
+  return `# Project Metaproject
+
+This folder contains local Metaproject configuration, tools, generated data, and agent instructions.
+
+## Installed Modules
+
+${modules}
+
+## Common Commands
+
+\`\`\`bash
+${commands.join("\n")}
+\`\`\`
+
+## Editing Policy
+
+- Edit module manifests and skills manually when needed.
+- Do not manually edit generated files under \`data/*/storage\`.
+- Regenerate artifacts with CLI commands.
+`;
+}
+
+export function renderMetaprojectCoreReadme(): string {
+  return `# Metaproject Core
+
+This folder is reserved for local service scripts, module adapters, and generated tool scaffolds installed by \`keryx init\`.
+
+Runtime rule:
+
+- \`core/\` contains executable/service logic.
+- \`data/\` contains generated output for agents.
+- user-authored module guidance belongs in \`modules/\` and \`skills/\`.
+`;
+}
+
+export function renderHooksReadme(): string {
+  return `# Metaproject Hooks
+
+Hooks are local project scripts executed by selected \`keryx\` lifecycle commands.
+
+Git hooks are installed as marked managed blocks:
+
+\`\`\`sh
+# keryx:<hook-id>:begin
+...
+# keryx:<hook-id>:end
+\`\`\`
+
+\`keryx update --hooks\` replaces only those managed blocks. Existing user
+content, Husky wrappers, Lefthook dispatchers, lint-staged calls, and other
+project-owned hook lines are preserved.
+
+## git post-commit gdgraph hook
+
+When enabled during \`keryx init\`, the Git \`post-commit\` hook detects commits that touched files relevant to the graph and prints the explicit refresh command.
+
+Purpose:
+
+- prevent stale graph usage by surfacing the refresh command close to the commit;
+- avoid broad raw file search when graph context is stale;
+- avoid mutating versioned \`.metaproject\` artifacts after the commit is already written.
+
+## git post-commit gdskills hook
+
+When enabled during \`keryx init\`, the Git \`post-commit\` hook runs lightweight project-skill verification after relevant project or Metaproject context changes.
+
+Purpose:
+
+- keep generated project-skills from silently drifting after code/wiki/rule changes;
+- run non-mutating dry-run verification and report failures without changing files;
+- write verification reports only during explicit \`keryx skills verify\` runs or orchestrator-controlled checks;
+- keep the hook local, optional and non-blocking.
+
+## git post-commit health hook
+
+When enabled during \`keryx init\`, the Git \`post-commit\` hook detects relevant source/config changes and prints the explicit Code Health refresh command.
+
+Purpose:
+
+- keep Code Health refresh visible close to the commit that may affect it;
+- avoid writing health reports after commit, which leaves the worktree dirty;
+- avoid heavy sources in hooks: tests, audit, coverage and external providers stay manual or orchestrator-controlled.
+
+## git post-commit testing hook
+
+When enabled during \`keryx init\`, the Git \`post-commit\` hook detects relevant source, test, config or documentation changes and prints the explicit testing refresh command.
+
+Purpose:
+
+- keep test-context staleness visible without mutating versioned files after commit;
+- stay non-blocking and avoid running analyzers or heavy suites on every commit;
+- give agents fresh context before test generation or debugging.
+
+## git post-commit dashboard hook
+
+When any Metaproject post-commit hook is enabled, a lightweight dashboard hook reminds the user to rebuild the dashboard after Metaproject-facing changes.
+
+Purpose:
+
+- keep \`.metaproject/index.md\` and \`.metaproject/keryx-dashboard.html\` aligned through explicit \`keryx update\` or \`keryx dashboard build\`;
+- recover missing \`.metaproject/metaproject.json\` for older initialized projects;
+- avoid mutating service files after commit, especially from stale global CLI installations.
+
+## git pre-push testing hook
+
+When enabled during \`keryx init\`, the Git \`pre-push\` hook runs changed-scope tests and blocks the push on failure.
+
+Purpose:
+
+- catch focused test failures before remote publication;
+- use Testing Module related-test selection instead of always running the whole suite;
+- keep blocking behavior explicit and opt-in.
+
+## post-update.d
+
+Executable files in \`post-update.d/\` run only when \`keryx update --hooks\` is requested.
+
+Rules:
+
+- keep hooks idempotent;
+- keep hooks project-local;
+- do not require network access unless the hook clearly documents it;
+- use generated data under \`.metaproject/data\` for outputs.
+`;
+}
+
+export function renderGdgraphPostCommitHook(): string {
+  return `keryx_gdgraph_post_commit() {
+  # Non-mutating: report graph staleness after graph-relevant commits.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "keryx post-commit: gdgraph may be stale; run 'keryx gdgraph build' when you want to refresh graph artifacts"
+  return 0
+}
+
+keryx_gdgraph_post_commit
+`;
+}
+
+export function renderSecurityPrePushHook(): string {
+  return `keryx_security_pre_push() {
+  # Run the Metaproject Security guard over the changed/committable content before
+  # a push. Blocking is delegated to the CLI, which honors security.config.json
+  # mode: 'advisory' (default) always exits 0 (warn, never block); 'enforced'/'ci'
+  # exit non-zero on a blocking (secret/critical) finding. This hook never
+  # duplicates the mode->action mapping; it only propagates the CLI exit code.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  gdm=""
+  if command -v keryx >/dev/null 2>&1; then
+    gdm="keryx"
+  elif [ -x "$HOME/.local/bin/keryx" ]; then
+    gdm="$HOME/.local/bin/keryx"
+  else
+    echo "keryx pre-push: keryx command not found, skipped security gate" >&2
+    return 0
+  fi
+
+  # Degrade gracefully on version skew: a keryx on PATH that predates the
+  # 'security' command would return "Unknown command" (non-zero) for every file
+  # and block every push. Probe once; if security is unsupported, skip the gate
+  # with a warning instead of blocking.
+  if ! "$gdm" security status >/dev/null 2>&1; then
+    echo "keryx pre-push: installed keryx does not support 'security' (update it); skipped security gate" >&2
+    return 0
+  fi
+
+  # Determine the changed files being pushed. git passes one line per pushed ref
+  # on stdin: "<local ref> <local sha> <remote ref> <remote sha>". Scanning that
+  # range covers EVERY new commit in the push, so a secret introduced in an
+  # earlier commit of a multi-commit first push cannot slip through (the old
+  # HEAD-only heuristic under-scanned a first push). Fall back to the tracked
+  # push/upstream range only when stdin yields nothing usable.
+  changed_files=""
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$local_ref" ] && continue
+    # Skip deleted refs (local sha all-zero): there is nothing to scan.
+    case "$local_sha" in
+      *[!0]*) : ;;
+      *) continue ;;
+    esac
+    case "$remote_sha" in
+      *[!0]*)
+        # Updating an existing remote ref: scan remote..local.
+        range_files="$(git diff --name-only --diff-filter=ACMR "$remote_sha".."$local_sha" 2>/dev/null || true)"
+        ;;
+      *)
+        # New ref: scan all commits unique to this push. Use the merge-base with
+        # any existing remote as the base, falling back to the empty tree when
+        # the branch shares no history with a remote (truly first push).
+        remotes="$(git for-each-ref --format='%(objectname)' refs/remotes 2>/dev/null | tr '\\n' ' ')"
+        base=""
+        if [ -n "$remotes" ]; then
+          base="$(git merge-base "$local_sha" $remotes 2>/dev/null || true)"
+        fi
+        if [ -z "$base" ]; then
+          base="$(git hash-object -t tree /dev/null 2>/dev/null)"
+        fi
+        range_files="$(git diff --name-only --diff-filter=ACMR "$base".."$local_sha" 2>/dev/null || true)"
+        ;;
+    esac
+    if [ -n "$range_files" ]; then
+      changed_files="$changed_files
+$range_files"
+    fi
+  done
+
+  # Fall back to the tracked push/upstream range (then HEAD) when stdin was empty
+  # (e.g. the hook was invoked manually without ref lines).
+  if [ -z "$(printf '%s' "$changed_files" | tr -d '[:space:]')" ]; then
+    range="HEAD"
+    push_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{push}' 2>/dev/null || true)"
+    if [ -n "$push_ref" ]; then
+      range="\${push_ref}..HEAD"
+    else
+      up_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+      if [ -n "$up_ref" ]; then
+        range="\${up_ref}..HEAD"
+      fi
+    fi
+    changed_files="$(git diff --name-only --diff-filter=ACMR "$range" 2>/dev/null || true)"
+    if [ -z "$changed_files" ]; then
+      changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+    fi
+  fi
+
+  # Deduplicate the changed-file list before scanning.
+  changed_files="$(printf '%s\\n' "$changed_files" | sed '/^[[:space:]]*$/d' | sort -u)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  blocked=0
+  old_ifs="$IFS"
+  IFS='
+'
+  for file in $changed_files; do
+    IFS="$old_ifs"
+    if [ -f "$file" ]; then
+      scan_out="$("$gdm" security scan "$file" --source trusted-project 2>&1)"
+      scan_code=$?
+      if [ "$scan_code" -ne 0 ]; then
+        # enforced/ci mode blocked on this file.
+        echo "keryx pre-push: security gate blocked on $file" >&2
+        printf '%s\\n' "$scan_out" >&2
+        blocked=1
+      elif printf '%s\\n' "$scan_out" | grep -Eq 'findings: [1-9]'; then
+        # advisory mode: surface findings but allow the push.
+        echo "keryx pre-push (advisory): security findings in $file; push allowed" >&2
+        printf '%s\\n' "$scan_out" >&2
+      fi
+    fi
+    IFS='
+'
+  done
+  IFS="$old_ifs"
+
+  if [ "$blocked" -ne 0 ]; then
+    echo "keryx pre-push: security gate failed; push blocked. Resolve the findings, or set security mode to 'advisory' to override." >&2
+    return 1
+  fi
+
+  return 0
+}
+
+keryx_security_pre_push || exit $?
+`;
+}
+
+export function renderGdwikiPostCommitHook(): string {
+  return `keryx_gdwiki_post_commit() {
+  # Non-mutating: remind to refresh only the touched wiki drafts after a
+  # source-relevant commit. The refresh is deterministic; enrichment needs a
+  # model, so both stay user-triggered.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "keryx post-commit: wiki drafts may be stale; run 'keryx wiki collect --changed --since HEAD~1', then enrich new drafts with the gdwiki skill on a non-flagship model"
+  return 0
+}
+
+keryx_gdwiki_post_commit
+`;
+}
+
+export function renderMetaprojectDashboardPostCommitHook(): string {
+  return `keryx_dashboard_post_commit() {
+  # Non-mutating: do not rewrite service files after commit.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "keryx post-commit: dashboard/service files may be stale; run 'keryx update --skip-runtime' or 'keryx dashboard build' explicitly"
+  return 0
+}
+
+keryx_dashboard_post_commit
+`;
+}
+
+export function renderGdskillsPostCommitHook(): string {
+  return `keryx_gdskills_post_commit() {
+  # Verify registered project-skills only when a commit touched relevant files.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^docs/|^\\.metaproject/(project-skills|wiki|modules|rules|skills)/|AGENTS\\.md$|CLAUDE\\.md$)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if command -v keryx >/dev/null 2>&1; then
+    keryx skills verify --all --dry-run >/dev/null 2>&1 || {
+      echo "keryx post-commit: gdskills verification failed" >&2
+      return 0
+    }
+    echo "keryx post-commit: gdskills verified"
+    return 0
+  fi
+
+  if [ -x "$HOME/.local/bin/keryx" ]; then
+    "$HOME/.local/bin/keryx" skills verify --all --dry-run >/dev/null 2>&1 || {
+      echo "keryx post-commit: gdskills verification failed" >&2
+      return 0
+    }
+    echo "keryx post-commit: gdskills verified"
+    return 0
+  fi
+
+  echo "keryx post-commit: keryx command not found, skipped gdskills verification" >&2
+  return 0
+}
+
+keryx_gdskills_post_commit
+`;
+}
+
+export function renderHealthPostCommitHook(): string {
+  return `keryx_health_post_commit() {
+  # Non-mutating: report health staleness after relevant commits.
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  changed_files="$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null || true)"
+  if [ -z "$changed_files" ]; then
+    return 0
+  fi
+
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|^\\.metaproject/health\\.config\\.json$)' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "keryx post-commit: health report may be stale; run 'keryx health run --changed --since HEAD~1 --source typescript,complexity' explicitly"
+  return 0
+}
+
+keryx_health_post_commit
+`;
+}
+
+export function renderGdgraphCoreCli(): string {
+  return `#!/usr/bin/env bun
+
+import { buildGraph } from "./build";
+import { getAffected, getCycles, getOrphans, loadGraph } from "./query";
+
+const args = process.argv.slice(2);
+const command = args[0];
+
+if (!command || command === "--help" || command === "-h") {
+  printHelp();
+  process.exit(0);
+}
+
+if (command === "build") {
+  const result = await buildGraph(process.cwd());
+  console.log(\`gdgraph build complete: \${result.nodes} nodes, \${result.edges} edges\`);
+  console.log(\`summary: \${result.summaryPath}\`);
+  process.exit(0);
+}
+
+if (command === "query") {
+  const query = args.slice(1).join(" ").trim();
+  const graph = await loadGraph(process.cwd());
+
+  if (query === "cycles") {
+    const cycles = getCycles(graph);
+    if (cycles.length === 0) {
+      console.log("No cycles found.");
+      process.exit(0);
+    }
+    for (const cycle of cycles) {
+      console.log(cycle.join(" -> "));
+    }
+    process.exit(0);
+  }
+
+  if (query === "orphans") {
+    const orphans = getOrphans(graph);
+    if (orphans.length === 0) {
+      console.log("No orphan modules found.");
+      process.exit(0);
+    }
+    for (const orphan of orphans) {
+      console.log(orphan);
+    }
+    process.exit(0);
+  }
+
+  console.error(\`Unsupported gdgraph query: \${query || "<empty>"}\`);
+  console.error("Supported queries: cycles, orphans");
+  process.exit(1);
+}
+
+if (command === "affected") {
+  const target = args[1];
+  if (!target) {
+    console.error("Usage: keryx gdgraph affected <file>");
+    process.exit(1);
+  }
+
+  const graph = await loadGraph(process.cwd());
+  const affected = getAffected(graph, target);
+
+  console.log(\`# Affected context for \${affected.target}\`);
+  console.log("");
+  console.log("## Dependencies");
+  printList(affected.dependencies);
+  console.log("");
+  console.log("## Dependents");
+  printList(affected.dependents);
+  process.exit(0);
+}
+
+console.error(\`Unknown gdgraph command: \${command}\`);
+printHelp();
+process.exit(1);
+
+function printHelp(): void {
+  console.log(\`keryx gdgraph
+
+Usage:
+  keryx gdgraph build
+  keryx gdgraph query cycles
+  keryx gdgraph query orphans
+  keryx gdgraph affected <file>
+\`);
+}
+
+function printList(items: string[]): void {
+  if (items.length === 0) {
+    console.log("- none");
+    return;
+  }
+
+  for (const item of items) {
+    console.log(\`- \${item}\`);
+  }
+}
+`;
+}
+
+export function renderGdgraphManifest(): string {
+  return `# gdgraph
+
+## Purpose
+
+Builds code graph, symbol graph, dependency map, and affected context.
+
+Current MVP builds a file dependency graph plus imported asset nodes. Generated
+frontend/static outputs are skipped by default.
+
+## Commands
+
+- \`keryx gdgraph build\`
+- \`keryx gdgraph find "<terms>"\` — find files/symbols by concept (seed search)
+- \`keryx gdgraph symbol "<name>" [--impact [--depth N]]\` — definition + callers + callees; \`--impact\` = transitive-caller blast radius (symbol layer)
+- \`keryx gdgraph path "<A>" "<B>"\` — shortest connection between two files/symbols
+- \`keryx gdgraph affected <file-or-symbol>\` — blast radius
+- \`keryx gdgraph query cycles | orphans\`
+- \`keryx gdgraph symbols <enable|disable|status>\` — opt-in tree-sitter symbol layer
+
+## Data
+
+- \`data/gdgraph/artifacts/summary.md\`
+- \`data/gdgraph/artifacts/module-map.json\`
+- \`data/gdgraph/storage/nodes.jsonl\`
+- \`data/gdgraph/storage/edges.jsonl\`
+- \`data/gdgraph/artifacts/summary.md\`
+
+## Skills
+
+- \`skills/gdgraph/\`
+
+## Frontend Defaults
+
+- skips \`storybook-static\`, \`public\`, \`.docusaurus\`, \`.next\`, \`out\`, \`dist\`, \`build\`, \`coverage\`, and \`generated\`;
+- resolves imported CSS, JSON, SVG, handlebars/raw templates, images and fonts as asset nodes;
+- reports source files, asset nodes, import resolution, skipped directories, top modules, and unresolved imports by type.
+`;
+}
+
+export function renderGdgraphCoreReadme(): string {
+  return `# gdgraph Core
+
+Local gdgraph service layer installed by \`keryx init\`.
+
+Files:
+
+- \`cli.ts\` - local runner used by \`keryx gdgraph ...\`
+- \`build.ts\` - builds file dependency graph
+- \`query.ts\` - reads graph storage and answers built-in queries
+- \`types.ts\` - local graph schema
+
+Responsibilities:
+
+- build file dependency graph;
+- resolve local imported assets as graph asset nodes;
+- skip generated/static frontend output by default;
+- write graph storage to \`.metaproject/data/gdgraph/storage\`;
+- write curated artifacts to \`.metaproject/data/gdgraph/artifacts\`;
+- expose service functions for future CLI and MCP commands.
+`;
+}
+
+export function renderGdgraphSkillReadme(): string {
+  return `---
+name: gdgraph
+description: Use by default for project navigation and file discovery before broad raw search, especially when the user asks where something is, what files are related, what might be affected, or needs implementation, review, refactoring, debugging, architecture, dependency, module relationship, import cycle, or orphan-file context.
+---
+
+# gdgraph Skill
+
+Use this skill by default for project navigation and file discovery. The user does not need to explicitly ask for graph usage.
+
+When command output, search results, diff, logs, or large file reads may be long, pair this with \`skills/gdctx/SKILL.md\` so graph narrows the file set and gdctx compresses the output.
+
+Run gdgraph before raw file search when the task involves finding relevant files, understanding project structure, implementation, review, refactoring, debugging, code understanding, impact analysis, architecture, dependencies, or navigation. A "targeted" \`rg\` does not exempt you: any text, symbol, or pattern search over project code is a search step and goes through the routing layer, not a bare \`rg\`/\`grep\`.
+
+Skip gdgraph only when the request is clearly unrelated to project files, asks for a single known file's literal contents, or when gdgraph is unavailable. Skipping gdgraph is NOT permission to run raw \`rg\`: when the graph cannot seed the first hop (unknown symbol, no known file), do the text search with \`keryx ctx rg "<pattern>"\`, then feed the seed file back into \`keryx gdgraph affected <file>\`. Raw \`rg\`/\`grep\` is a last resort only, and only with a stated reason.
+
+## Trigger Examples
+
+- "Добавь обработку ошибки в init."
+- "Проверь этот модуль."
+- "Почему этот импорт ломается?"
+- "Где лучше изменить эту логику?"
+- "Где лежит логика инициализации?"
+- "Какие файлы связаны с модулем gdgraph?"
+- "Найди, где описаны rules/skills."
+- "Что затронет изменение этого файла?"
+- "Где используется этот модуль?"
+- "Как связаны эти части кода?"
+- "Есть ли циклы импортов?"
+- "С чего начать читать этот модуль?"
+- "Проанализируй архитектуру этой области."
+
+## Workflow
+
+1. Check whether \`.metaproject/modules/gdgraph.md\` exists.
+2. If the task requires finding relevant project files or understanding relationships, use graph context before any \`rg\` or reading many files. When you do need a text/symbol search, run it as \`keryx ctx rg\`, not raw \`rg\`.
+3. Do not rebuild the graph on every user question. Prefer existing graph storage and curated artifacts.
+4. Run build only when graph storage is missing, obviously stale, or the user explicitly asks to refresh it:
+
+\`\`\`bash
+keryx gdgraph build
+\`\`\`
+
+5. Choose the graph command:
+
+- Find files/symbols by concept (unknown location — use this instead of a raw \`rg\` for a seed):
+
+\`\`\`bash
+keryx gdgraph find "<terms>"
+\`\`\`
+
+- Known file path or changed file (blast radius). Accepts a symbol name too:
+
+\`\`\`bash
+keryx gdgraph affected <file-or-symbol>
+\`\`\`
+
+- Where is a symbol defined / who calls it (needs the symbol layer). Add
+  \`--impact [--depth N]\` for the transitive-caller blast radius of a symbol:
+
+\`\`\`bash
+keryx gdgraph symbol "<name>"
+keryx gdgraph symbol "<name>" --impact
+\`\`\`
+
+- How are two files/symbols connected:
+
+\`\`\`bash
+keryx gdgraph path "<A>" "<B>"
+\`\`\`
+
+- Dependency cycle / orphan questions:
+
+\`\`\`bash
+keryx gdgraph query cycles
+keryx gdgraph query orphans
+\`\`\`
+
+Note: \`gdgraph query\` does NOT do natural-language search — use \`find\`. The
+symbol layer (\`symbol\`/\`path\` def+call data) is opt-in: \`keryx gdgraph symbols
+enable\` then \`keryx gdgraph build\` (needs the \`web-tree-sitter\` dep + grammars;
+degrades to file-level otherwise).
+
+6. Use graph output to select the smallest relevant file set.
+7. Read those files directly and verify any conclusion against source code.
+8. If gdgraph is unavailable or cannot answer the question, state that graph context is unavailable and continue with targeted search.
+
+## Refresh Policy
+
+Graph refresh should happen through one of these paths:
+
+- user or agent explicitly runs \`keryx gdgraph build\`;
+- Git \`post-commit\` hook refreshes graph after relevant file changes;
+- graph storage is missing and the task needs graph context.
+
+## Always-on orientation (optional)
+
+Graph usage is advisory by default. Unlike a raw \`rg\` (which the gdctx guard can
+deterministically re-route), a broad search or deep read is not reliably a
+violation — so the enforcement analogue here is AVAILABILITY, not blocking:
+
+\`\`\`bash
+keryx orient install-hook [--runtime <id|all>]   # inject graph map + wiki index at turn start
+keryx gdgraph context                            # the graph half of that orientation
+\`\`\`
+
+The injector adds a compact, freshness-aware code-graph map + wiki index to the
+agent's context each turn, so the graph is always in front of you before you
+reach for broad search. Supported where the harness has a context-injection hook
+(claude, codex, cursor); Windsurf/Zed have none — use their rules/memories.
+
+## Reporting
+
+When answering a non-trivial navigation, debugging, review, or investigation task, include a routing audit. It is not optional; an omitted layer must be justified, not silently skipped:
+
+- \`graph_used\`: commands run, or \`unavailable\`/\`not-relevant\` with the reason;
+- \`ctx_used\`: \`keryx ctx\` commands run (search/read/diff), or the reason none were;
+- \`raw_rg_used\`: \`yes\`/\`no\` — if \`yes\`, why the routing layer could not cover it.
+
+Graph output is navigation context, not proof. Verify behavior in actual code before making claims.
+`;
+}
+
+export function renderGdctxManifest(): string {
+  return `# gdctx
+
+## Purpose
+
+Runs common project context commands with token-aware filtering and stores raw output separately.
+
+## Commands
+
+- \`keryx ctx status\`
+- \`keryx ctx diff\`
+- \`keryx ctx rg "<pattern>"\`
+- \`keryx ctx read <file>\`
+- \`keryx ctx run -- <command...>\`
+- \`keryx ctx show latest\`
+- \`keryx ctx install-hook\` / \`keryx ctx uninstall-hook\` (opt-in routing guard)
+
+## Data
+
+- \`data/gdctx/artifacts/latest.md\`
+- \`data/gdctx/raw/\`
+- \`data/gdctx/queries/\`
+
+## Config
+
+- \`gdctx.config.json\`
+
+## Skills
+
+- \`skills/gdctx/\`
+`;
+}
+
+export function renderGdctxConfig(): string {
+  return `${JSON.stringify(
+    {
+      maxOutputLines: 120,
+      maxImportantLines: 60,
+      maxGroupItems: 12,
+      compactHeadLines: 120,
+      compactTailLines: 80,
+      outlineMaxEntries: 160,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+export function renderGdctxCoreReadme(): string {
+  return `# gdctx Core
+
+Local gdctx service layer installed by \`keryx init\`.
+
+Responsibilities:
+
+- run project context commands through \`keryx ctx ...\`;
+- preserve raw stdout/stderr under \`.metaproject/data/gdctx/raw\`;
+- write compact curated summaries under \`.metaproject/data/gdctx/artifacts\`;
+- use gdgraph artifacts for narrowing when graph context is available;
+- expose a service layer for future CLI and MCP commands.
+
+MVP note: executable gdctx scripts are added after the requirements/spec phase. This directory is reserved now so project-local overrides have a stable location.
+`;
+}
+
+export function renderGdctxSkillReadme(): string {
+  return `---
+name: gdctx
+description: Use for commands, search, diff, test logs, lint/build output, and large file reads that can produce long output; prefer compact keryx ctx output before loading raw command output into agent context.
+---
+
+# gdctx Skill
+
+Use this skill by default when a task needs command output, search results, git diff/status, test logs, lint/build output, or large file reads that may produce more context than the agent should load directly. The user does not need to explicitly ask for gdctx usage.
+
+**Search rule (hard):** any text, symbol, or pattern search over project code goes through \`keryx ctx rg "<pattern>"\`, never a bare \`rg\`/\`grep\`. This holds even for a single "targeted" search and even when you skip gdgraph/gdwiki — \`ctx rg\` compresses the output while raw \`rg\` dumps it into context. Raw \`rg\`/\`grep\` is allowed only as a last resort when \`keryx ctx rg\` is unavailable or demonstrably cannot express the query, and the reason must be stated in the routing audit.
+
+## Workflow
+
+1. Check whether \`.metaproject/modules/gdctx.md\` exists.
+2. For potentially long output, prefer \`keryx ctx ...\` over raw shell output by default.
+3. For project navigation or file relationship questions, use gdgraph first when available, then use gdctx for compact command/file output.
+4. Treat gdctx summaries as navigation context. Verify important claims against source files before editing or reporting.
+5. Use raw output only when the compact summary is insufficient.
+
+## Commands
+
+\`\`\`bash
+keryx ctx status
+keryx ctx diff
+keryx ctx rg "<pattern>"
+keryx ctx read <file> --mode outline
+keryx ctx read <file> --mode compact
+keryx ctx run -- <command...>
+keryx ctx show latest
+\`\`\`
+
+## Enforcement (optional)
+
+The search rule above is advisory by default. To make it a hard gate, install the
+routing guard — a pre-shell-execution hook for your agent harness:
+
+\`\`\`bash
+keryx ctx install-hook                       # default: claude
+keryx ctx install-hook --runtime all         # every supported harness
+keryx ctx install-hook --runtime cursor,codex
+keryx ctx uninstall-hook [--runtime <id|all>]
+\`\`\`
+
+Supported harnesses: \`claude\`, \`codex\`, \`cursor\`, \`windsurf\` (verified),
+\`antigravity\`, \`opencode\` (experimental — verify on a live install). Zed has no
+scriptable pre-exec hook yet (use its static tool_permissions).
+
+The guard blocks raw \`rg\`/\`grep\`/\`cat\`/\`head\`/\`tail\`/\`git diff|log|show\` (deny +
+feedback) and points the agent to the \`keryx ctx\` equivalent. It is routing-only:
+any other command passes through, so a generic output-compressing proxy can
+coexist. When a raw command is genuinely required, append an escape marker with a
+reason: \`rg "<pcre>" # keryx:raw <why>\`. The guard fails open on unparseable input.
+
+## Skip When
+
+- The command output is already tiny and exact raw output is more useful (a single-line status, a one-line command whose result you already know is short).
+- The user explicitly asks for literal full file contents.
+- \`keryx ctx\` is unavailable.
+
+Note: "the output is already tiny" is a judgement about a specific known command, not a blanket exemption. A code search whose result size is unknown up front is not tiny by default — route it through \`keryx ctx rg\`.
+
+## Reporting
+
+When gdctx is used, mention the commands run and whether raw output was saved. For non-trivial tasks, report \`ctx_used\` and \`raw_rg_used: yes/no\` as part of the routing audit (see the gdgraph skill's Reporting section), justifying any raw \`rg\`/\`grep\`.
+`;
+}

@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/review-execution-plan.schema.json",
+  "title": "Review Execution Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "targetFingerprint",
+    "scope",
+    "sharedContext",
+    "reviewers",
+    "skippedReviewers",
+    "strictSynthesis",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetFingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "files", "changedLines", "risk"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["diff", "path"]
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "changedLines": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "risk": {
+          "type": "string",
+          "enum": ["low", "normal", "high"]
+        }
+      }
+    },
+    "sharedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestPath", "hash"],
+      "properties": {
+        "manifestPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "reviewers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taskId",
+          "reviewer",
+          "reason",
+          "filesToRead",
+          "contextRefs",
+          "model",
+          "budget",
+          "dependsOn"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "pattern": "^T[0-9]+$"
+          },
+          "reviewer": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "filesToRead": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "contextRefs": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/artifactRef" }
+          },
+          "model": {
+            "$ref": "#/$defs/modelAssignment"
+          },
+          "budget": {
+            "$ref": "#/$defs/taskBudget"
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "skippedReviewers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviewer", "reason"],
+        "properties": {
+          "reviewer": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "strictSynthesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "triggers", "modelClass", "budget"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["auto", "always", "never"]
+        },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "modelClass": {
+          "type": "string",
+          "enum": ["economy", "standard", "strong", "current-session"]
+        },
+        "budget": {
+          "$ref": "#/$defs/taskBudget"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind", "hash", "summary"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["context", "graph", "diff", "wiki", "memory", "health", "testing", "custom"]
+        },
+        "hash": { "type": ["string", "null"] },
+        "summary": { "type": "string" }
+      }
+    },
+    "modelAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "requestedClass", "assignmentStatus"],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["economy", "current", "adaptive", "explicit"]
+        },
+        "requestedClass": {
+          "type": "string",
+          "enum": ["economy", "standard", "strong", "current-session"]
+        },
+        "requestedModel": { "type": ["string", "null"] },
+        "assignmentStatus": {
+          "type": "string",
+          "enum": ["planned", "fallback-current-session", "unsupported"]
+        }
+      }
+    },
+    "taskBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxPromptTokens": { "type": ["integer", "null"], "minimum": 1000 },
+        "maxOutputTokens": { "type": ["integer", "null"], "minimum": 500 },
+        "maxRuntimeMs": { "type": ["integer", "null"], "minimum": 1000 },
+        "maxFindings": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    }
+  }
+}

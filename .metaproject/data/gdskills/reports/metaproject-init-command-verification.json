@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "status": "fresh",
+  "module": "metaproject",
+  "name": "init-command",
+  "target": "src/commands/init.ts",
+  "skillPath": ".metaproject/project-skills/metaproject/init-command",
+  "reportPath": ".metaproject/data/gdskills/reports/metaproject-init-command-verification.json",
+  "verifiedAt": "2026-07-07T09:31:23.484Z",
+  "signals": [
+    {
+      "name": "required:SKILL.md",
+      "status": "pass",
+      "message": "Required package file exists.",
+      "path": ".metaproject/project-skills/metaproject/init-command/SKILL.md"
+    },
+    {
+      "name": "required:skill-changelog.md",
+      "status": "pass",
+      "message": "Required package file exists.",
+      "path": ".metaproject/project-skills/metaproject/init-command/skill-changelog.md"
+    },
+    {
+      "name": "metadata:version",
+      "status": "pass",
+      "message": "Version 0.1.0",
+      "path": ".metaproject/project-skills/metaproject/init-command/SKILL.md"
+    },
+    {
+      "name": "metadata:target",
+      "status": "pass",
+      "message": "Target src/commands/init.ts",
+      "path": ".metaproject/project-skills/metaproject/init-command/SKILL.md"
+    },
+    {
+      "name": "metadata:last-verified",
+      "status": "pass",
+      "message": "Last verified at 2026-07-07T09:18:41.629Z",
+      "path": ".metaproject/project-skills/metaproject/init-command/SKILL.md"
+    },
+    {
+      "name": "registry",
+      "status": "pass",
+      "message": "Skill is registered in metaproject manifest.",
+      "path": ".metaproject/metaproject.json"
+    },
+    {
+      "name": "target",
+      "status": "pass",
+      "message": "Target path exists.",
+      "path": "src/commands/init.ts"
+    },
+    {
+      "name": "evidence:gdgraph",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/gdgraph/artifacts/summary.md, .metaproject/data/gdgraph/artifacts/module-map.json",
+      "path": ".metaproject/data/gdgraph/artifacts/summary.md"
+    },
+    {
+      "name": "evidence:gdctx",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/gdctx/artifacts/latest.md",
+      "path": ".metaproject/data/gdctx/artifacts/latest.md"
+    },
+    {
+      "name": "evidence:gdwiki",
+      "status": "pass",
+      "message": "gdwiki evidence is valid.",
+      "path": ".metaproject/wiki/index.md"
+    },
+    {
+      "name": "evidence:code-health",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/health/artifacts/latest.json, .metaproject/data/health/artifacts/latest.md",
+      "path": ".metaproject/data/health/artifacts/latest.json"
+    },
+    {
+      "name": "evidence:documentation-memory",
+      "status": "pass",
+      "message": "Evidence available: .metaproject/data/memory/artifacts/latest.json, .metaproject/data/memory/artifacts/latest.md",
+      "path": ".metaproject/data/memory/artifacts/latest.json"
+    }
+  ],
+  "recommendations": [
+    "Skill evidence is sufficient for the current first-slice verifier."
+  ],
+  "dryRun": false
+}

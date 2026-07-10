@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/reviewer-task-record.schema.json",
+  "title": "Reviewer Task Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "flowId",
+    "taskId",
+    "reviewer",
+    "status",
+    "contextHash",
+    "policyFingerprint",
+    "eventsPath",
+    "attempts",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "flowId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^T[0-9]+$"
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["todo", "in-progress", "done", "blocked", "failed", "skipped"]
+    },
+    "contextHash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policyFingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acceptedAttempt": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "eventsPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "number",
+          "dispatchId",
+          "status",
+          "model",
+          "budget",
+          "contextHash",
+          "dispatchPath",
+          "metrics",
+          "startedAt"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "dispatchId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["planned", "running", "done", "done-with-concerns", "needs-context", "blocked", "failed", "invalid", "reused"]
+          },
+          "model": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["strategy", "requestedClass", "assignmentStatus"],
+            "properties": {
+              "strategy": { "type": "string" },
+              "requestedClass": { "type": "string" },
+              "requestedModel": { "type": ["string", "null"] },
+              "actualModel": { "type": ["string", "null"] },
+              "assignmentStatus": {
+                "type": "string",
+                "enum": ["assigned", "fallback-current-session", "unsupported", "unknown"]
+              }
+            }
+          },
+          "budget": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "maxPromptTokens": { "type": ["integer", "null"], "minimum": 1000 },
+              "maxOutputTokens": { "type": ["integer", "null"], "minimum": 500 },
+              "maxRuntimeMs": { "type": ["integer", "null"], "minimum": 1000 },
+              "maxFindings": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          },
+          "contextHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dispatchPath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resultPath": {
+            "type": ["string", "null"]
+          },
+          "findingsPath": {
+            "type": ["string", "null"]
+          },
+          "reusedFromAttempt": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "promptTokens": { "type": ["integer", "null"], "minimum": 0 },
+              "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+              "durationMs": { "type": ["integer", "null"], "minimum": 0 }
+            }
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

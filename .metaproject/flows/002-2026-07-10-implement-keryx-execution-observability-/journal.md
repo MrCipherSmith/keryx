@@ -1,0 +1,37 @@
+# Flow Journal
+
+- 2026-07-10T11:40:52.417Z - flow created
+- 2026-07-10T11:49:39.793Z - task-added: T5: Provenance schema, runtime validation, renderers, and event accounting
+- 2026-07-10T11:49:42.175Z - task-added: T6: Immutable testing/health evidence and latest-pointer lifecycle
+- 2026-07-10T11:49:44.690Z - task-added: T7: Worktree hooks, refresh guidance, and baseline/pr classification
+- 2026-07-10T11:49:47.382Z - task-added: T8: Lightweight profile and paired benchmark harness
+- 2026-07-10T11:49:50.374Z - task-added: T9: Run focused/full verification and security/documentation checks
+- 2026-07-10T11:49:53.053Z - task-added: T10: Reconcile requirements package, roadmap, and implementation report
+- 2026-07-10T11:49:59.974Z - task-done: T1: Collect remaining context
+- 2026-07-10T11:50:25.822Z - frozen: 12 criteria; checksum recorded
+- 2026-07-10T11:50:28.080Z - started
+- 2026-07-10T12:11:52.441Z - task-done: T5: Provenance schema, runtime validation, renderers, and event accounting
+- 2026-07-10T12:11:54.297Z - task-done: T6: Immutable testing/health evidence and latest-pointer lifecycle
+- 2026-07-10T12:11:56.348Z - task-done: T7: Worktree hooks, refresh guidance, and baseline/pr classification
+- 2026-07-10T12:11:58.402Z - task-done: T8: Lightweight profile and paired benchmark harness
+- 2026-07-10T12:29:46.183Z - task-done: T2: Implement per plan
+- 2026-07-10T12:29:49.149Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-10T12:31:59.770Z - task-done: T9: Run focused/full verification and security/documentation checks
+- 2026-07-10T12:32:02.148Z - task-done: T10: Reconcile requirements package, roadmap, and implementation report
+- 2026-07-10T12:33:26.988Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-10T16:53:53.954Z - ac-confirmed: AC1: Schema, runtime validation, canonical JSON and Markdown tests pass.
+- 2026-07-10T16:53:56.446Z - ac-confirmed: AC2: Structured event accounting and time reliability tests pass.
+- 2026-07-10T16:53:59.985Z - ac-confirmed: AC3: Retry taxonomy validation tests pass.
+- 2026-07-10T16:54:02.860Z - ac-confirmed: AC4: Immutable testing and health evidence compatibility tests pass.
+- 2026-07-10T16:54:05.397Z - ac-confirmed: AC5: Latest pointer freshness and provenance mismatch tests pass.
+- 2026-07-10T16:54:07.794Z - ac-confirmed: AC6: Linked worktree hook resolution test passes.
+- 2026-07-10T16:54:09.739Z - ac-confirmed: AC7: Guidance and standard capability baseline tests pass.
+- 2026-07-10T16:54:11.926Z - ac-confirmed: AC8: Baseline classification tests pass.
+- 2026-07-10T16:54:14.365Z - ac-confirmed: AC9: Lightweight profile gate tests pass.
+- 2026-07-10T16:54:16.357Z - ac-confirmed: AC10: Top-level opt-in and parent-run ownership are enforced.
+- 2026-07-10T16:54:19.000Z - ac-confirmed: AC11: Paired benchmark harness validation tests pass without speed claim.
+- 2026-07-10T16:54:21.629Z - ac-confirmed: AC12: Security redaction and documentation verification passed.
+- 2026-07-10T16:54:52.143Z - completing: merged commit: 7b78ff14
+- 2026-07-10T16:54:52.205Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-07-10T16:55:13.943Z - completing: merged commit: 7b78ff14
+- 2026-07-10T16:55:13.994Z - done: all gates passed

@@ -1,0 +1,89 @@
+{
+  "protocol": "paired-3-5-v1",
+  "runs": [
+    {
+      "human_interventions": null,
+      "metrics": {
+        "active_time_seconds": null,
+        "context_files_read": null,
+        "retry_count": null,
+        "wall_time_seconds": null
+      },
+      "quality": "unknown",
+      "run_id": "",
+      "task_id": "task-a",
+      "variant": "with-keryx"
+    },
+    {
+      "human_interventions": null,
+      "metrics": {
+        "active_time_seconds": null,
+        "context_files_read": null,
+        "retry_count": null,
+        "wall_time_seconds": null
+      },
+      "quality": "unknown",
+      "run_id": "",
+      "task_id": "task-a",
+      "variant": "without-keryx"
+    },
+    {
+      "human_interventions": null,
+      "metrics": {
+        "active_time_seconds": null,
+        "context_files_read": null,
+        "retry_count": null,
+        "wall_time_seconds": null
+      },
+      "quality": "unknown",
+      "run_id": "",
+      "task_id": "task-b",
+      "variant": "with-keryx"
+    },
+    {
+      "human_interventions": null,
+      "metrics": {
+        "active_time_seconds": null,
+        "context_files_read": null,
+        "retry_count": null,
+        "wall_time_seconds": null
+      },
+      "quality": "unknown",
+      "run_id": "",
+      "task_id": "task-b",
+      "variant": "without-keryx"
+    },
+    {
+      "human_interventions": null,
+      "metrics": {
+        "active_time_seconds": null,
+        "context_files_read": null,
+        "retry_count": null,
+        "wall_time_seconds": null
+      },
+      "quality": "unknown",
+      "run_id": "",
+      "task_id": "task-c",
+      "variant": "with-keryx"
+    },
+    {
+      "human_interventions": null,
+      "metrics": {
+        "active_time_seconds": null,
+        "context_files_read": null,
+        "retry_count": null,
+        "wall_time_seconds": null
+      },
+      "quality": "unknown",
+      "run_id": "",
+      "task_id": "task-c",
+      "variant": "without-keryx"
+    }
+  ],
+  "speed_claim": "not-claimed",
+  "task_ids": [
+    "task-a",
+    "task-b",
+    "task-c"
+  ]
+}

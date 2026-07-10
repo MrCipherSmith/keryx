@@ -1,0 +1,253 @@
+export type Severity = "error" | "warning" | "info";
+export type Priority = "P0" | "P1" | "P2" | "P3";
+
+export type SourceId =
+  | "eslint"
+  | "typescript"
+  | "tests"
+  | "coverage"
+  | "dependencyAudit"
+  | "sonarqube"
+  | "complexity";
+
+export type SourceMode = "auto" | "run" | "import" | "disabled";
+export type SourceStatus =
+  | "available"
+  | "missing"
+  | "configured-but-failed"
+  | "skipped";
+
+export type SourceConfig = { mode: SourceMode; required: boolean };
+
+export type HealthConfig = {
+  schemaVersion: number;
+  ignore: {
+    paths: string[];
+  };
+  sources: Record<string, SourceConfig>;
+  metrics: {
+    coverageTarget: number;
+    coverageSoftFloor: number;
+    complexityThreshold: number;
+    churnWindowDays: number;
+    // D1: files with hotspot score > threshold are counted as "hot". Inert
+    // while `scoring.hotspotWeight` is 0 (the default).
+    hotspotThreshold: number;
+  };
+  scoring: {
+    priorityWeights: Record<Priority, number>;
+    coverageWeight: number;
+    complexityWeight: number;
+    normalizePerLoc: number;
+    // D1: additive hotspot penalty weight. DEFAULT 0 ⇒ the hotspot term is
+    // exactly 0 and the health score stays byte-identical to pre-D1.
+    hotspotWeight: number;
+  };
+  gate: {
+    failOnPriorities: Priority[];
+    failOnRegressionDrop: number;
+    warnOnRegressionDrop: number;
+    failOnMissingRequiredSource: boolean;
+  };
+};
+
+// D1: a single file's git-churn × complexity hotspot record (specification.md
+// §7.1). Additive/nullable in artifacts.
+export type FileHotspot = {
+  file: string;
+  churn: number;
+  complexity: number;
+  score: number;
+};
+
+export type FindingScope = {
+  project: string;
+  module: string | null;
+  file: string | null;
+  entity: string | null;
+  skill: string | null;
+};
+
+export type Finding = {
+  schemaVersion: number;
+  id: string;
+  source: string;
+  severity: Severity;
+  priority: Priority;
+  category: string;
+  message: string;
+  file: string | null;
+  line: number | null;
+  symbol: string | null;
+  scope: FindingScope;
+  suggestedAction: string | null;
+  provenance: {
+    command: string | null;
+    toolVersion: string | null;
+    rawLog: string | null;
+  };
+};
+
+export type RawSourceResult = {
+  source: string;
+  command: string | null;
+  toolVersion: string | null;
+  exitCode: number | null;
+  rawPath: string;
+  content: string;
+  imported: boolean;
+};
+
+export type ScopeKind =
+  | "project"
+  | "module"
+  | "component"
+  | "file"
+  | "skill";
+
+export type ScopeMetrics = {
+  key: string;
+  kind: ScopeKind;
+  name: string;
+  loc: number;
+  findingCounts: {
+    total: number;
+    bySeverity: Record<Severity, number>;
+    byPriority: Record<Priority, number>;
+    bySource: Record<string, number>;
+  };
+  coverage: number | null;
+  churn: number | null;
+  complexity: { max: number; aboveThreshold: number } | null;
+  // D1: aggregate hotspot score (sum of member files' churn×complexity).
+  // Additive/optional/nullable — `null` when no source files contribute a
+  // hotspot, absent from pre-D1 (schemaVersion 1) callers/fixtures.
+  hotspot?: number | null;
+  health_score: number;
+  risk_score: number;
+  trend: "improved" | "stable" | "regressed" | "unknown";
+  regression_score: number;
+};
+
+export type GateStatus = "pass" | "warn" | "fail";
+export type GateResult = { status: GateStatus; reasons: string[] };
+
+export type SourceRunInfo = {
+  source: string;
+  status: SourceStatus;
+  mode: SourceMode;
+  required: boolean;
+  imported: boolean;
+  command: string | null;
+  toolVersion: string | null;
+  findings: number;
+  error?: string;
+};
+
+export type HealthReport = {
+  schemaVersion: number;
+  generatedAt: string;
+  scope: string;
+  strict: boolean;
+  gitRef: string | null;
+  gate: GateResult;
+  sources: SourceRunInfo[];
+  metrics: ScopeMetrics[];
+  findings: Finding[];
+  // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
+  // nullable — omitted from older (schemaVersion 1) reports.
+  hotspots?: FileHotspot[];
+  runId?: string;
+  provenance?: {
+    commit: string | null;
+    branch: string | null;
+    worktree: string | null;
+    sources: Array<{
+      name: string;
+      path: string | null;
+      timestamp: string | null;
+      reliability: "exact" | "estimated" | "unknown";
+    }>;
+  };
+};
+
+export type ScopeSelector =
+  | { kind: "project" }
+  | { kind: "module"; name: string }
+  | { kind: "file"; path: string }
+  | { kind: "changed"; since: string | null };
+
+export type HealthContext = {
+  cwd: string;
+  config: HealthConfig;
+  strict: boolean;
+  scopeSelector: ScopeSelector;
+  changedFiles: string[] | null;
+  sourceFiles: string[];
+  moduleOf: (file: string) => string | null;
+};
+
+export interface SourceAdapter {
+  id: SourceId;
+  detect(ctx: HealthContext): Promise<SourceStatus>;
+  run(ctx: HealthContext): Promise<RawSourceResult>;
+  import(ctx: HealthContext): Promise<RawSourceResult>;
+  parse(raw: RawSourceResult, ctx: HealthContext): Finding[];
+}
+
+export type HealthRunInput = {
+  cwd: string;
+  scope?: ScopeSelector;
+  strict?: boolean;
+  sources?: string[];
+  runId?: string;
+  provenance?: HealthReport["provenance"];
+};
+export type HealthRunResult = {
+  report: HealthReport;
+  markdownPath: string;
+  jsonPath: string;
+};
+
+export type HealthStatusInput = { cwd: string };
+export type HealthStatusResult = {
+  enabled: boolean;
+  lastRunAt: string | null;
+  gate: GateStatus | null;
+  sources: Array<{ source: string; status: SourceStatus }>;
+  projectScore: number | null;
+  regressions: number;
+};
+
+export type HealthGateInput = { cwd: string; strictWarn?: boolean };
+export type HealthGateResult = { status: GateStatus; exitCode: number; reasons: string[] };
+
+export type HealthSourcesInput = { cwd: string };
+export type HealthSourcesResult = {
+  sources: Array<{
+    source: string;
+    mode: SourceMode;
+    required: boolean;
+    status: SourceStatus;
+  }>;
+};
+
+export type HealthExplainInput = { cwd: string; target: string };
+export type HealthExplainResult = {
+  target: string;
+  found: boolean;
+  metrics: ScopeMetrics | null;
+  findings: Finding[];
+};
+
+export type HealthBaselineInput = { cwd: string; scope?: ScopeSelector };
+export type HealthBaselineResult = { updated: string[]; path: string };
+
+export interface CodeHealthService {
+  run(input: HealthRunInput): Promise<HealthRunResult>;
+  status(input: HealthStatusInput): Promise<HealthStatusResult>;
+  gate(input: HealthGateInput): Promise<HealthGateResult>;
+  sources(input: HealthSourcesInput): Promise<HealthSourcesResult>;
+  explain(input: HealthExplainInput): Promise<HealthExplainResult>;
+  updateBaseline(input: HealthBaselineInput): Promise<HealthBaselineResult>;
+}

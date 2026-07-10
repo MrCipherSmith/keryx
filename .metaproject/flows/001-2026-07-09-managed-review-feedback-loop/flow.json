@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 1,
+  "id": "001",
+  "slug": "managed-review-feedback-loop",
+  "title": "Implement Managed Review Feedback Loop from requirements docpack",
+  "status": "done",
+  "createdAt": "2026-07-09T18:54:04.831Z",
+  "updatedAt": "2026-07-09T19:18:55.436Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7b626fb0eed527b8b49c7dcbcfd98ddb6138bfdf5029776d7109c598d424b2de",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-09T19:08:33.395Z",
+      "note": "src/review/managed.test.ts covers explicit flow id and PR URL attach-review matching"
+    },
+    "AC2": {
+      "at": "2026-07-09T19:08:38.300Z",
+      "note": "src/review/managed.test.ts covers review-flow package creation under .metaproject/reviews"
+    },
+    "AC3": {
+      "at": "2026-07-09T19:08:44.577Z",
+      "note": "src/review/managed.test.ts covers ingest report normalization, classifications, decisions, and learning"
+    },
+    "AC4": {
+      "at": "2026-07-09T19:08:50.228Z",
+      "note": "Managed review package writer creates manifest, scope, coverage, report, findings, learning, and decisions artifacts"
+    },
+    "AC5": {
+      "at": "2026-07-09T19:08:55.606Z",
+      "note": "validateManagedReviewManifest loads the docpack schema path and tests reject invalid modes and missing artifact paths"
+    },
+    "AC6": {
+      "at": "2026-07-09T19:08:59.124Z",
+      "note": "coverage.md and manifest coverage record reviewer status and reason; attached package has four reviewers"
+    },
+    "AC7": {
+      "at": "2026-07-09T19:09:03.593Z",
+      "note": "renderLearning always emits Skill Learning candidates or none; tests assert learning.md exists"
+    },
+    "AC8": {
+      "at": "2026-07-09T19:09:07.796Z",
+      "note": "review lightweight command is report-only; test asserts no .metaproject/reviews directory is created"
+    },
+    "AC9": {
+      "at": "2026-07-09T19:09:13.869Z",
+      "note": "src/review/managed.test.ts covers flow matching, artifact creation, schema validation, attach-review, review-flow, ingest, lightweight, and no flow.json mutation"
+    },
+    "AC10": {
+      "at": "2026-07-09T19:09:18.802Z",
+      "note": "Managed review service only reads flow metadata and writes review artifacts; test compares flow.json before and after attach-review"
+    },
+    "AC11": {
+      "at": "2026-07-09T19:09:23.864Z",
+      "note": "bun run check passed 403 tests; test run --changed passed 7; review package 2026-07-09-branch-managed-review-feedback-loop is closed"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/20"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "Confirm managed review CLI surface and runtime boundaries before code",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "Implement managed review data contracts and schema validation",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "Implement related flow matching by explicit flow id, PR URL, issue URL, and branch",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "Implement managed review artifact package creation without direct flow.json mutation",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "Implement attach-review mode under existing flow review artifacts",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T10",
+      "title": "Implement ingest mode for existing review reports and finding classification",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T11",
+      "title": "Implement standalone review-flow mode under .metaproject/reviews",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T12",
+      "title": "Preserve lightweight review mode as report-only behavior",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T13",
+      "title": "Add runtime tests for flow matching, artifact creation, schema validation, and no flow.json writes",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T14",
+      "title": "Run focused tests, full check, and code-verifier before implementation acceptance",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T15",
+      "title": "Run review-orchestrator with managed review coverage and resolve findings",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T16",
+      "title": "Update docs and completion evidence for managed review feedback loop",
+      "kind": "docs",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-09T18:54:04.831Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-09T18:54:46.941Z",
+      "event": "task-added",
+      "detail": "T5: Confirm managed review CLI surface and runtime boundaries before code"
+    },
+    {
+      "at": "2026-07-09T18:54:51.370Z",
+      "event": "task-added",
+      "detail": "T6: Implement managed review data contracts and schema validation"
+    },
+    {
+      "at": "2026-07-09T18:55:01.785Z",
+      "event": "task-added",
+      "detail": "T7: Implement related flow matching by explicit flow id, PR URL, issue URL, and branch"
+    },
+    {
+      "at": "2026-07-09T18:55:01.836Z",
+      "event": "task-added",
+      "detail": "T8: Implement managed review artifact package creation without direct flow.json mutation"
+    },
+    {
+      "at": "2026-07-09T18:55:01.855Z",
+      "event": "task-added",
+      "detail": "T9: Implement attach-review mode under existing flow review artifacts"
+    },
+    {
+      "at": "2026-07-09T18:55:01.868Z",
+      "event": "task-added",
+      "detail": "T10: Implement ingest mode for existing review reports and finding classification"
+    },
+    {
+      "at": "2026-07-09T18:55:01.889Z",
+      "event": "task-added",
+      "detail": "T11: Implement standalone review-flow mode under .metaproject/reviews"
+    },
+    {
+      "at": "2026-07-09T18:55:06.312Z",
+      "event": "task-added",
+      "detail": "T12: Preserve lightweight review mode as report-only behavior"
+    },
+    {
+      "at": "2026-07-09T18:55:10.147Z",
+      "event": "task-added",
+      "detail": "T13: Add runtime tests for flow matching, artifact creation, schema validation, and no flow.json writes"
+    },
+    {
+      "at": "2026-07-09T18:55:14.558Z",
+      "event": "task-added",
+      "detail": "T14: Run focused tests, full check, and code-verifier before implementation acceptance"
+    },
+    {
+      "at": "2026-07-09T18:55:17.511Z",
+      "event": "task-added",
+      "detail": "T15: Run review-orchestrator with managed review coverage and resolve findings"
+    },
+    {
+      "at": "2026-07-09T18:55:22.078Z",
+      "event": "task-added",
+      "detail": "T16: Update docs and completion evidence for managed review feedback loop"
+    },
+    {
+      "at": "2026-07-09T18:56:28.060Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-09T19:00:41.050Z",
+      "event": "task-done",
+      "detail": "T5: Confirm managed review CLI surface and runtime boundaries before code"
+    },
+    {
+      "at": "2026-07-09T19:00:44.280Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-09T19:00:46.900Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-09T19:07:36.893Z",
+      "event": "task-done",
+      "detail": "T6: Implement managed review data contracts and schema validation"
+    },
+    {
+      "at": "2026-07-09T19:07:40.746Z",
+      "event": "task-done",
+      "detail": "T7: Implement related flow matching by explicit flow id, PR URL, issue URL, and branch"
+    },
+    {
+      "at": "2026-07-09T19:07:44.340Z",
+      "event": "task-done",
+      "detail": "T8: Implement managed review artifact package creation without direct flow.json mutation"
+    },
+    {
+      "at": "2026-07-09T19:07:47.562Z",
+      "event": "task-done",
+      "detail": "T9: Implement attach-review mode under existing flow review artifacts"
+    },
+    {
+      "at": "2026-07-09T19:07:51.836Z",
+      "event": "task-done",
+      "detail": "T10: Implement ingest mode for existing review reports and finding classification"
+    },
+    {
+      "at": "2026-07-09T19:07:55.679Z",
+      "event": "task-done",
+      "detail": "T11: Implement standalone review-flow mode under .metaproject/reviews"
+    },
+    {
+      "at": "2026-07-09T19:07:58.630Z",
+      "event": "task-done",
+      "detail": "T12: Preserve lightweight review mode as report-only behavior"
+    },
+    {
+      "at": "2026-07-09T19:08:02.617Z",
+      "event": "task-done",
+      "detail": "T13: Add runtime tests for flow matching, artifact creation, schema validation, and no flow.json writes"
+    },
+    {
+      "at": "2026-07-09T19:08:07.526Z",
+      "event": "task-done",
+      "detail": "T14: Run focused tests, full check, and code-verifier before implementation acceptance"
+    },
+    {
+      "at": "2026-07-09T19:08:12.317Z",
+      "event": "task-done",
+      "detail": "T15: Run review-orchestrator with managed review coverage and resolve findings"
+    },
+    {
+      "at": "2026-07-09T19:08:16.330Z",
+      "event": "task-done",
+      "detail": "T16: Update docs and completion evidence for managed review feedback loop"
+    },
+    {
+      "at": "2026-07-09T19:08:21.163Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-09T19:08:24.213Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-09T19:08:28.425Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-09T19:08:33.395Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/review/managed.test.ts covers explicit flow id and PR URL attach-review matching"
+    },
+    {
+      "at": "2026-07-09T19:08:38.300Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/review/managed.test.ts covers review-flow package creation under .metaproject/reviews"
+    },
+    {
+      "at": "2026-07-09T19:08:44.577Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/review/managed.test.ts covers ingest report normalization, classifications, decisions, and learning"
+    },
+    {
+      "at": "2026-07-09T19:08:50.228Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Managed review package writer creates manifest, scope, coverage, report, findings, learning, and decisions artifacts"
+    },
+    {
+      "at": "2026-07-09T19:08:55.606Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: validateManagedReviewManifest loads the docpack schema path and tests reject invalid modes and missing artifact paths"
+    },
+    {
+      "at": "2026-07-09T19:08:59.124Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: coverage.md and manifest coverage record reviewer status and reason; attached package has four reviewers"
+    },
+    {
+      "at": "2026-07-09T19:09:03.593Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: renderLearning always emits Skill Learning candidates or none; tests assert learning.md exists"
+    },
+    {
+      "at": "2026-07-09T19:09:07.796Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: review lightweight command is report-only; test asserts no .metaproject/reviews directory is created"
+    },
+    {
+      "at": "2026-07-09T19:09:13.869Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/review/managed.test.ts covers flow matching, artifact creation, schema validation, attach-review, review-flow, ingest, lightweight, and no flow.json mutation"
+    },
+    {
+      "at": "2026-07-09T19:09:18.803Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Managed review service only reads flow metadata and writes review artifacts; test compares flow.json before and after attach-review"
+    },
+    {
+      "at": "2026-07-09T19:09:23.864Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: bun run check passed 403 tests; test run --changed passed 7; review package 2026-07-09-branch-managed-review-feedback-loop is closed"
+    },
+    {
+      "at": "2026-07-09T19:18:50.459Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/20 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-07-09T19:18:54.723Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-09T19:18:55.436Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "cases": [
+    { "id": "s01", "input": "AKIAIOSFODNN7EXAMPLE", "expected": "positive" },
+    { "id": "s02", "input": "ghp_1234567890abcdefABCDEF1234567890abcd", "expected": "positive" },
+    { "id": "s03", "input": "password = 'hunter2secretvalue'", "expected": "positive" },
+    { "id": "s04", "input": "just a normal sentence about the weather", "expected": "negative" },
+    { "id": "s05", "input": "const total = price * quantity;", "expected": "negative" },
+    { "id": "s06", "input": "README describing the build steps", "expected": "negative" }
+  ]
+}

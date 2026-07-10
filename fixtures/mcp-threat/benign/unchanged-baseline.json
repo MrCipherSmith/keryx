@@ -1,0 +1,26 @@
+{
+  "manifest": {
+    "tools": [
+      {
+        "name": "add",
+        "description": "Add two numbers and return the sum.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "number",
+              "description": "First addend."
+            },
+            "b": {
+              "type": "number",
+              "description": "Second addend."
+            }
+          }
+        }
+      }
+    ]
+  },
+  "baseline": {
+    "add": "8861ebab21012789be7f1884cb5d872eb8a14223e578adcf31e9dfcdc5216153"
+  }
+}

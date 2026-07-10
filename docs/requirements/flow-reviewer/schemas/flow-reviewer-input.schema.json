@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/flow-reviewer-input.schema.json",
+  "title": "Flow Reviewer Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "target",
+    "reviewerSelection",
+    "modelPolicy",
+    "contextPolicy",
+    "budget",
+    "strict"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["pr", "issue", "branch", "commit-range", "path"]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base": {
+          "type": ["string", "null"]
+        },
+        "head": {
+          "type": ["string", "null"]
+        },
+        "repository": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "relatedFlowId": {
+      "type": ["string", "null"]
+    },
+    "resumeFlowId": {
+      "type": ["string", "null"]
+    },
+    "reviewerSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "include", "exclude"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["auto", "explicit", "all"]
+        },
+        "include": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "modelPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "preferEconomy", "fallback"],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["economy", "current", "adaptive", "explicit"]
+        },
+        "preferEconomy": {
+          "type": "boolean"
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["current-session", "fail"]
+        },
+        "reviewerOverrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "contextPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "reuseByHash", "includeWiki", "includeMemory", "includeHealth", "includeTesting"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "light", "full"]
+        },
+        "reuseByHash": {
+          "type": "boolean"
+        },
+        "includeWiki": {
+          "type": "string",
+          "enum": ["auto", "always", "never"]
+        },
+        "includeMemory": {
+          "type": "string",
+          "enum": ["auto", "always", "never"]
+        },
+        "includeHealth": {
+          "type": "string",
+          "enum": ["auto", "always", "never"]
+        },
+        "includeTesting": {
+          "type": "string",
+          "enum": ["auto", "always", "never"]
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concurrency", "retryReservePercent"],
+      "properties": {
+        "totalPromptTokens": {
+          "type": ["integer", "null"],
+          "minimum": 1000
+        },
+        "totalOutputTokens": {
+          "type": ["integer", "null"],
+          "minimum": 500
+        },
+        "perReviewerPromptTokens": {
+          "type": ["integer", "null"],
+          "minimum": 1000
+        },
+        "perReviewerOutputTokens": {
+          "type": ["integer", "null"],
+          "minimum": 500
+        },
+        "diffMaxChars": {
+          "type": ["integer", "null"],
+          "minimum": 1000
+        },
+        "fileMaxChars": {
+          "type": ["integer", "null"],
+          "minimum": 1000
+        },
+        "maxFindingsPerReviewer": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "retryReservePercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      }
+    },
+    "strict": {
+      "type": "string",
+      "enum": ["auto", "always", "never"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "reviewerSelection": {
+            "type": "object",
+            "properties": {
+              "mode": { "const": "explicit" }
+            },
+            "required": ["mode"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewerSelection": {
+            "type": "object",
+            "properties": {
+              "include": { "type": "array", "minItems": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "modelPolicy": {
+            "type": "object",
+            "properties": {
+              "strategy": { "const": "explicit" }
+            },
+            "required": ["strategy"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "modelPolicy": {
+            "type": "object",
+            "required": ["reviewerOverrides"],
+            "properties": {
+              "reviewerOverrides": { "type": "object", "minProperties": 1 }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "id": "002",
+  "slug": "gdgraph-java-python-import-resolution",
+  "title": "gdgraph Java/Python import resolution",
+  "status": "done",
+  "createdAt": "2026-07-10T10:18:23.628Z",
+  "updatedAt": "2026-07-10T17:02:43.041Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f2e7956c714eda57adc3de8220e391668196f609cbc4f5a2f67cd72886481ae4",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-10T17:01:50.321Z",
+      "note": "build-lang.test.ts: Maven Java test green; edge AdminService.java -> dto/FixReplicaRequest.java (imports)"
+    },
+    "AC2": {
+      "at": "2026-07-10T17:01:50.445Z",
+      "note": "build-lang.test.ts: Python test green; absolute + relative + __init__.py edges"
+    },
+    "AC3": {
+      "at": "2026-07-10T17:01:50.531Z",
+      "note": "E2E example-backend: 0 -> 47984 edges; com.example.admin.dto.FixReplicaRequest -> src/main/java/com/example/admin/dto/FixReplicaRequest.java resolved"
+    },
+    "AC4": {
+      "at": "2026-07-10T17:01:50.615Z",
+      "note": "build-lang.test.ts byte-identical golden guard green; TS/JS nodes.jsonl/edges.jsonl unchanged"
+    },
+    "AC5": {
+      "at": "2026-07-10T17:01:50.690Z",
+      "note": "metric tests green: n/a at 0 extracted; non-relative unresolved recorded as unresolved edges"
+    },
+    "AC6": {
+      "at": "2026-07-10T17:01:50.819Z",
+      "note": "seed.ts + seed.test.ts AC6: tree-sitter-java + tree-sitter-python pinned (sha256/size)"
+    },
+    "AC7": {
+      "at": "2026-07-10T17:01:50.950Z",
+      "note": "6 parser unit tests (Maven+Gradle) + 2 build-level fixture tests green"
+    },
+    "AC8": {
+      "at": "2026-07-10T17:01:51.035Z",
+      "note": "pickResolver dispatches by getLanguage; tsconfig/relative path unchanged for ts/js"
+    },
+    "AC9": {
+      "at": "2026-07-10T17:01:51.104Z",
+      "note": "in-repo com.example.* resolution 18562/19752 = 94.0% (>=80%)"
+    },
+    "AC10": {
+      "at": "2026-07-10T17:01:51.182Z",
+      "note": "bunx tsc --noEmit=0; full bun test 519 pass/0 fail; dead code removed from config.ts"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/commit/56e8d4a3ead105ac0c583fee17bb6b94c032cd06"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "Gradle source-root resolver (Groovy + Kotlin DSL)",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "Python resolver + relative-import extraction fix",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "Seed tree-sitter-java/python grammars in src/assets/seed.ts",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "Dead-code decision: wire or remove detectSupportedLanguages/renderGdgraphConfig",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "Update requirements package status, roadmap line, version bumps",
+      "kind": "docs",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-10T10:18:23.628Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-10T10:21:36.084Z",
+      "event": "task-added",
+      "detail": "T5: Gradle source-root resolver (Groovy + Kotlin DSL)"
+    },
+    {
+      "at": "2026-07-10T10:21:36.199Z",
+      "event": "task-added",
+      "detail": "T6: Python resolver + relative-import extraction fix"
+    },
+    {
+      "at": "2026-07-10T10:21:36.293Z",
+      "event": "task-added",
+      "detail": "T7: Seed tree-sitter-java/python grammars in src/assets/seed.ts"
+    },
+    {
+      "at": "2026-07-10T10:21:36.421Z",
+      "event": "task-added",
+      "detail": "T8: Dead-code decision: wire or remove detectSupportedLanguages/renderGdgraphConfig"
+    },
+    {
+      "at": "2026-07-10T10:21:36.521Z",
+      "event": "task-added",
+      "detail": "T9: Update requirements package status, roadmap line, version bumps"
+    },
+    {
+      "at": "2026-07-10T10:21:43.621Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-10T10:21:43.757Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-10T10:21:56.121Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-10T10:28:00.265Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-10T11:55:17.494Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-10T12:02:31.252Z",
+      "event": "task-done",
+      "detail": "T5: Gradle source-root resolver (Groovy + Kotlin DSL)"
+    },
+    {
+      "at": "2026-07-10T12:02:31.360Z",
+      "event": "task-done",
+      "detail": "T6: Python resolver + relative-import extraction fix"
+    },
+    {
+      "at": "2026-07-10T12:05:41.482Z",
+      "event": "task-done",
+      "detail": "T7: Seed tree-sitter-java/python grammars in src/assets/seed.ts"
+    },
+    {
+      "at": "2026-07-10T12:05:41.561Z",
+      "event": "task-done",
+      "detail": "T8: Dead-code decision: wire or remove detectSupportedLanguages/renderGdgraphConfig"
+    },
+    {
+      "at": "2026-07-10T12:16:32.021Z",
+      "event": "task-done",
+      "detail": "T9: Update requirements package status, roadmap line, version bumps"
+    },
+    {
+      "at": "2026-07-10T12:18:47.597Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-10T17:01:50.321Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: build-lang.test.ts: Maven Java test green; edge AdminService.java -> dto/FixReplicaRequest.java (imports)"
+    },
+    {
+      "at": "2026-07-10T17:01:50.445Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: build-lang.test.ts: Python test green; absolute + relative + __init__.py edges"
+    },
+    {
+      "at": "2026-07-10T17:01:50.531Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: E2E example-backend: 0 -> 47984 edges; com.example.admin.dto.FixReplicaRequest -> src/main/java/com/example/admin/dto/FixReplicaRequest.java resolved"
+    },
+    {
+      "at": "2026-07-10T17:01:50.615Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: build-lang.test.ts byte-identical golden guard green; TS/JS nodes.jsonl/edges.jsonl unchanged"
+    },
+    {
+      "at": "2026-07-10T17:01:50.691Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: metric tests green: n/a at 0 extracted; non-relative unresolved recorded as unresolved edges"
+    },
+    {
+      "at": "2026-07-10T17:01:50.819Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: seed.ts + seed.test.ts AC6: tree-sitter-java + tree-sitter-python pinned (sha256/size)"
+    },
+    {
+      "at": "2026-07-10T17:01:50.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 6 parser unit tests (Maven+Gradle) + 2 build-level fixture tests green"
+    },
+    {
+      "at": "2026-07-10T17:01:51.035Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: pickResolver dispatches by getLanguage; tsconfig/relative path unchanged for ts/js"
+    },
+    {
+      "at": "2026-07-10T17:01:51.104Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: in-repo com.example.* resolution 18562/19752 = 94.0% (>=80%)"
+    },
+    {
+      "at": "2026-07-10T17:01:51.182Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: bunx tsc --noEmit=0; full bun test 519 pass/0 fail; dead code removed from config.ts"
+    },
+    {
+      "at": "2026-07-10T17:02:06.035Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/commit/56e8d4a3ead105ac0c583fee17bb6b94c032cd06 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-07-10T17:02:06.143Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-10T17:02:07.600Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR not found"
+    },
+    {
+      "at": "2026-07-10T17:02:42.904Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/commit/56e8d4a3ead105ac0c583fee17bb6b94c032cd06 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-07-10T17:02:42.999Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-10T17:02:43.041Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-07-09-branch-managed-review-feedback-loop",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "branch",
+    "ref": "feature/managed-review-feedback-loop"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop/reviews/2026-07-09-branch-managed-review-feedback-loop/scope.md",
+    "coverage": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop/reviews/2026-07-09-branch-managed-review-feedback-loop/coverage.md",
+    "report": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop/reviews/2026-07-09-branch-managed-review-feedback-loop/report.md",
+    "findings": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop/reviews/2026-07-09-branch-managed-review-feedback-loop/findings.json",
+    "learning": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop/reviews/2026-07-09-branch-managed-review-feedback-loop/learning.md",
+    "decisions": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop/reviews/2026-07-09-branch-managed-review-feedback-loop/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-flow-graph",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-strict",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-07-09T19:06:32.428Z",
+  "updatedAt": "2026-07-09T19:06:41.693Z",
+  "flow": {
+    "id": "001",
+    "path": ".metaproject/flows/001-2026-07-09-managed-review-feedback-loop"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "note": "B3 acceptance corpus (F-1). core.ts is imported by a/b/c/d (highest fan-in) and imports leaf.ts, so core + leaf dominate the personalized-PageRank centrality; util.ts is mid (2 importers); the leaf importers a/b/c/d carry only restart mass. tokenBudget is intentionally small to force omission.",
+  "tokenBudget": 40,
+  "nodes": [
+    { "id": "src/core.ts", "kind": "file", "path": "src/core.ts", "language": "typescript" },
+    { "id": "src/leaf.ts", "kind": "file", "path": "src/leaf.ts", "language": "typescript" },
+    { "id": "src/util.ts", "kind": "file", "path": "src/util.ts", "language": "typescript" },
+    { "id": "src/a.ts", "kind": "file", "path": "src/a.ts", "language": "typescript" },
+    { "id": "src/b.ts", "kind": "file", "path": "src/b.ts", "language": "typescript" },
+    { "id": "src/c.ts", "kind": "file", "path": "src/c.ts", "language": "typescript" },
+    { "id": "src/d.ts", "kind": "file", "path": "src/d.ts", "language": "typescript" }
+  ],
+  "edges": [
+    { "id": "edge:1", "from": "src/a.ts", "to": "src/core.ts", "kind": "imports", "specifier": "./core" },
+    { "id": "edge:2", "from": "src/b.ts", "to": "src/core.ts", "kind": "imports", "specifier": "./core" },
+    { "id": "edge:3", "from": "src/c.ts", "to": "src/core.ts", "kind": "imports", "specifier": "./core" },
+    { "id": "edge:4", "from": "src/d.ts", "to": "src/core.ts", "kind": "imports", "specifier": "./core" },
+    { "id": "edge:5", "from": "src/a.ts", "to": "src/util.ts", "kind": "imports", "specifier": "./util" },
+    { "id": "edge:6", "from": "src/b.ts", "to": "src/util.ts", "kind": "imports", "specifier": "./util" },
+    { "id": "edge:7", "from": "src/core.ts", "to": "src/leaf.ts", "kind": "imports", "specifier": "./leaf" }
+  ]
+}

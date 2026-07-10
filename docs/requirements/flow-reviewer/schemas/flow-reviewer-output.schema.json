@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/flow-reviewer-output.schema.json",
+  "title": "Flow Reviewer Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "flowId",
+    "status",
+    "targetFingerprint",
+    "coverage",
+    "artifacts",
+    "findings",
+    "metrics",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "flowId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["in-progress", "blocked", "failed", "done"]
+    },
+    "targetFingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected", "run", "reused", "skipped", "failed", "retried"],
+      "properties": {
+        "selected": { "type": "array", "items": { "type": "string" } },
+        "run": { "type": "array", "items": { "type": "string" } },
+        "reused": { "type": "array", "items": { "type": "string" } },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reviewer", "reason"],
+            "properties": {
+              "reviewer": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "failed": { "type": "array", "items": { "type": "string" } },
+        "retried": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executionPlan", "contextManifest", "coverage", "report", "findings", "decisions", "learning"],
+      "properties": {
+        "executionPlan": { "type": "string" },
+        "contextManifest": { "type": "string" },
+        "coverage": { "type": "string" },
+        "report": { "type": "string" },
+        "findings": { "type": "string" },
+        "decisions": { "type": "string" },
+        "learning": { "type": "string" }
+      }
+    },
+    "findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocker", "major", "minor", "info", "unresolvedBlocking"],
+      "properties": {
+        "blocker": { "type": "integer", "minimum": 0 },
+        "major": { "type": "integer", "minimum": 0 },
+        "minor": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 },
+        "unresolvedBlocking": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["plannedPromptTokens", "actualPromptTokens", "plannedOutputTokens", "actualOutputTokens", "durationMs"],
+      "properties": {
+        "plannedPromptTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "actualPromptTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "plannedOutputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "actualOutputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "durationMs": { "type": ["integer", "null"], "minimum": 0 },
+        "cacheHits": { "type": "integer", "minimum": 0 },
+        "attempts": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "remainingDecisions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "completedAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

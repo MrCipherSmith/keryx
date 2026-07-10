@@ -1,0 +1,10 @@
+{
+  "cases": [
+    { "id": "e01", "input": "contact us at support@example.com today", "expected": "positive" },
+    { "id": "e02", "input": "jane.doe+news@sub.domain.co.uk", "expected": "positive" },
+    { "id": "e03", "input": "admin@localhost.internal", "expected": "positive" },
+    { "id": "e04", "input": "no address here, just prose", "expected": "negative" },
+    { "id": "e05", "input": "the at sign @ alone is not an email", "expected": "negative" },
+    { "id": "e06", "input": "version 1.2.3 released", "expected": "negative" }
+  ]
+}

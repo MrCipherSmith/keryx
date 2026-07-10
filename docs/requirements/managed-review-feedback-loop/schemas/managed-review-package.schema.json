@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/managed-review-package.schema.json",
+  "title": "Managed Review Package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "reviewId",
+    "mode",
+    "status",
+    "target",
+    "artifacts",
+    "coverage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "reviewId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["attach-review", "review-flow", "ingest"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "reviewed", "decided", "learned", "closed"]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["pr", "issue", "branch", "path", "report"]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issueUrl": {
+          "type": "string"
+        },
+        "prUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "coverage",
+        "report",
+        "findings",
+        "learning",
+        "decisions"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string"
+        },
+        "coverage": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "findings": {
+          "type": "string"
+        },
+        "learning": {
+          "type": "string"
+        },
+        "decisions": {
+          "type": "string"
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviewer", "status", "reason"],
+        "properties": {
+          "reviewer": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["run", "skipped", "failed", "needs_context"]
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  }
+}

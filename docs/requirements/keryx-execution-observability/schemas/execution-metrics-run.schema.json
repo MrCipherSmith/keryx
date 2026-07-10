@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/execution-metrics-run.schema.json",
+  "title": "Keryx Execution Metrics Run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "schema_version",
+    "run_mode",
+    "skill",
+    "started_at",
+    "finished_at",
+    "provenance",
+    "metrics",
+    "retries",
+    "final_status",
+    "artifact_paths"
+  ],
+  "properties": {
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "schema_version": { "type": "string" },
+    "run_mode": { "type": "string", "enum": ["user-direct", "orchestrator", "subagent"] },
+    "skill": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "parent_run_id": { "type": ["string", "null"] },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "branch", "worktree"],
+      "properties": {
+        "commit": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "worktree": { "type": ["string", "null"] },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "path", "timestamp", "reliability"],
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": ["string", "null"] },
+              "timestamp": { "type": ["string", "null"], "format": "date-time" },
+              "reliability": { "$ref": "#/$defs/reliability" }
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wall_time_seconds": { "$ref": "#/$defs/metric" },
+        "active_time_seconds": { "$ref": "#/$defs/metric" },
+        "paused_time_seconds": { "$ref": "#/$defs/metric" },
+        "keryx_commands": { "$ref": "#/$defs/metric" },
+        "shell_commands": { "$ref": "#/$defs/metric" },
+        "tool_calls": { "$ref": "#/$defs/metric" },
+        "context_files_read": { "$ref": "#/$defs/metric" },
+        "files_modified": { "$ref": "#/$defs/metric" },
+        "subagents": { "$ref": "#/$defs/metric" },
+        "retry_count": { "$ref": "#/$defs/metric" },
+        "keryx_overhead_seconds": { "$ref": "#/$defs/metric" }
+      }
+    },
+    "retries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "reason", "reliability"],
+        "properties": {
+          "type": { "type": "string", "enum": ["task", "keryx", "environment", "expected-tdd", "external", "unknown"] },
+          "reason": { "type": "string" },
+          "reliability": { "$ref": "#/$defs/reliability" },
+          "source": { "type": "string" },
+          "affected_final_status": { "type": "boolean" }
+        }
+      }
+    },
+    "final_status": { "type": "string", "enum": ["done", "partial", "blocked"] },
+    "artifact_paths": { "type": "array", "items": { "type": "string" } },
+    "execution_profile": { "type": "string", "enum": ["full", "lightweight"] },
+    "skipped_phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase", "reason"],
+        "properties": {
+          "phase": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "reliability": { "type": "string", "enum": ["exact", "estimated", "unknown"] },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "reliability", "source"],
+      "properties": {
+        "value": { "type": ["number", "string", "null"] },
+        "reliability": { "$ref": "#/$defs/reliability" },
+        "source": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

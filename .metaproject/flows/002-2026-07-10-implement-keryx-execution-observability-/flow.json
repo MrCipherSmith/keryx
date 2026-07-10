@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 1,
+  "id": "002",
+  "slug": "implement-keryx-execution-observability-",
+  "title": "Implement Keryx Execution Observability standard capability",
+  "status": "done",
+  "createdAt": "2026-07-10T11:40:52.417Z",
+  "updatedAt": "2026-07-10T16:55:13.994Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:37d56d8c46cca6d340d74f126e4af3a1a688d0a1bff42c6c9d94a4c1db1f857a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-10T16:53:53.954Z",
+      "note": "Schema, runtime validation, canonical JSON and Markdown tests pass."
+    },
+    "AC2": {
+      "at": "2026-07-10T16:53:56.446Z",
+      "note": "Structured event accounting and time reliability tests pass."
+    },
+    "AC3": {
+      "at": "2026-07-10T16:53:59.985Z",
+      "note": "Retry taxonomy validation tests pass."
+    },
+    "AC4": {
+      "at": "2026-07-10T16:54:02.860Z",
+      "note": "Immutable testing and health evidence compatibility tests pass."
+    },
+    "AC5": {
+      "at": "2026-07-10T16:54:05.397Z",
+      "note": "Latest pointer freshness and provenance mismatch tests pass."
+    },
+    "AC6": {
+      "at": "2026-07-10T16:54:07.794Z",
+      "note": "Linked worktree hook resolution test passes."
+    },
+    "AC7": {
+      "at": "2026-07-10T16:54:09.739Z",
+      "note": "Guidance and standard capability baseline tests pass."
+    },
+    "AC8": {
+      "at": "2026-07-10T16:54:11.926Z",
+      "note": "Baseline classification tests pass."
+    },
+    "AC9": {
+      "at": "2026-07-10T16:54:14.365Z",
+      "note": "Lightweight profile gate tests pass."
+    },
+    "AC10": {
+      "at": "2026-07-10T16:54:16.357Z",
+      "note": "Top-level opt-in and parent-run ownership are enforced."
+    },
+    "AC11": {
+      "at": "2026-07-10T16:54:19.000Z",
+      "note": "Paired benchmark harness validation tests pass without speed claim."
+    },
+    "AC12": {
+      "at": "2026-07-10T16:54:21.629Z",
+      "note": "Security redaction and documentation verification passed."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done"
+    },
+    {
+      "id": "T5",
+      "title": "Provenance schema, runtime validation, renderers, and event accounting",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T6",
+      "title": "Immutable testing/health evidence and latest-pointer lifecycle",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T7",
+      "title": "Worktree hooks, refresh guidance, and baseline/pr classification",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T8",
+      "title": "Lightweight profile and paired benchmark harness",
+      "kind": "implement",
+      "status": "done"
+    },
+    {
+      "id": "T9",
+      "title": "Run focused/full verification and security/documentation checks",
+      "kind": "test",
+      "status": "done"
+    },
+    {
+      "id": "T10",
+      "title": "Reconcile requirements package, roadmap, and implementation report",
+      "kind": "docs",
+      "status": "done"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-10T11:40:52.417Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-10T11:49:39.793Z",
+      "event": "task-added",
+      "detail": "T5: Provenance schema, runtime validation, renderers, and event accounting"
+    },
+    {
+      "at": "2026-07-10T11:49:42.175Z",
+      "event": "task-added",
+      "detail": "T6: Immutable testing/health evidence and latest-pointer lifecycle"
+    },
+    {
+      "at": "2026-07-10T11:49:44.690Z",
+      "event": "task-added",
+      "detail": "T7: Worktree hooks, refresh guidance, and baseline/pr classification"
+    },
+    {
+      "at": "2026-07-10T11:49:47.382Z",
+      "event": "task-added",
+      "detail": "T8: Lightweight profile and paired benchmark harness"
+    },
+    {
+      "at": "2026-07-10T11:49:50.374Z",
+      "event": "task-added",
+      "detail": "T9: Run focused/full verification and security/documentation checks"
+    },
+    {
+      "at": "2026-07-10T11:49:53.053Z",
+      "event": "task-added",
+      "detail": "T10: Reconcile requirements package, roadmap, and implementation report"
+    },
+    {
+      "at": "2026-07-10T11:49:59.974Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-10T11:50:25.822Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-10T11:50:28.080Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-10T12:11:52.441Z",
+      "event": "task-done",
+      "detail": "T5: Provenance schema, runtime validation, renderers, and event accounting"
+    },
+    {
+      "at": "2026-07-10T12:11:54.297Z",
+      "event": "task-done",
+      "detail": "T6: Immutable testing/health evidence and latest-pointer lifecycle"
+    },
+    {
+      "at": "2026-07-10T12:11:56.348Z",
+      "event": "task-done",
+      "detail": "T7: Worktree hooks, refresh guidance, and baseline/pr classification"
+    },
+    {
+      "at": "2026-07-10T12:11:58.402Z",
+      "event": "task-done",
+      "detail": "T8: Lightweight profile and paired benchmark harness"
+    },
+    {
+      "at": "2026-07-10T12:29:46.183Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-10T12:29:49.149Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-10T12:31:59.770Z",
+      "event": "task-done",
+      "detail": "T9: Run focused/full verification and security/documentation checks"
+    },
+    {
+      "at": "2026-07-10T12:32:02.148Z",
+      "event": "task-done",
+      "detail": "T10: Reconcile requirements package, roadmap, and implementation report"
+    },
+    {
+      "at": "2026-07-10T12:33:26.988Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-10T16:53:53.954Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Schema, runtime validation, canonical JSON and Markdown tests pass."
+    },
+    {
+      "at": "2026-07-10T16:53:56.446Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Structured event accounting and time reliability tests pass."
+    },
+    {
+      "at": "2026-07-10T16:53:59.985Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Retry taxonomy validation tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:02.860Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Immutable testing and health evidence compatibility tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:05.397Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Latest pointer freshness and provenance mismatch tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:07.794Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Linked worktree hook resolution test passes."
+    },
+    {
+      "at": "2026-07-10T16:54:09.739Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Guidance and standard capability baseline tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:11.926Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Baseline classification tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:14.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Lightweight profile gate tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:16.357Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Top-level opt-in and parent-run ownership are enforced."
+    },
+    {
+      "at": "2026-07-10T16:54:19.000Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Paired benchmark harness validation tests pass without speed claim."
+    },
+    {
+      "at": "2026-07-10T16:54:21.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Security redaction and documentation verification passed."
+    },
+    {
+      "at": "2026-07-10T16:54:52.143Z",
+      "event": "completing",
+      "detail": "merged commit: 7b78ff14"
+    },
+    {
+      "at": "2026-07-10T16:54:52.205Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-10T16:55:13.943Z",
+      "event": "completing",
+      "detail": "merged commit: 7b78ff14"
+    },
+    {
+      "at": "2026-07-10T16:55:13.994Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "merged": {
+    "commit": "7b78ff14",
+    "ref": "origin/main",
+    "at": "2026-07-10T16:55:13.993Z"
+  }
+}

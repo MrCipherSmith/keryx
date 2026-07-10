@@ -1,0 +1,5 @@
+{
+  "treesitter": {
+    "languages": ["typescript", "tsx", "javascript", "java", "python"]
+  }
+}
