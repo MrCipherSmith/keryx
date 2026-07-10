@@ -258,8 +258,15 @@ pages. Do NOT try to enrich all at once — work in priority batches, incrementa
 5. Set \`Status: accepted\` and bump \`Version\` (e.g. to \`1.0.0\`). This marks the
    page human-owned; \`keryx wiki collect --force\` will never overwrite it.
 6. Ground every claim in code you read - write "appears to" rather than
-   inventing. Where useful, link related pages with markdown links (feeds the
-   \`keryx wiki backlinks\` graph).
+   inventing. When you link related pages, link ONLY to pages that ACTUALLY
+   exist - never guess a slug. Verify the target first
+   (\`ls .metaproject/wiki/components\` or the wiki index); a module's page slug
+   is its path slugified (\`src/lineage\` -> \`src-lineage.md\`, NOT
+   \`lineage-graph.md\`). Do not invent \`Related Wiki\` entries or link to
+   non-wiki files (e.g. \`CLAUDE.md\`). The graph-derived \`## Reference\` /
+   \`Related Code\` links are already correct - reuse those. Broken links from
+   guessed slugs are the #1 enrichment defect; run \`keryx wiki check-links\` and
+   fix any you introduced.
 7. As orchestrator you do NOT read code or write prose yourself — only subagents
    do (one per page, cheap model). When the batch is done, review a sample
    (prose accurate, real symbol names, \`## Reference\` untouched), then run
