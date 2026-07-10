@@ -1,16 +1,26 @@
-# keryx
+<p align="center">
+  <img src="docs/assets/keryx-logo.png" alt="keryx" width="440">
+</p>
 
-**One project-local brain for your AI agents and your team.**
+<h1 align="center">keryx</h1>
 
-[![CI](https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml/badge.svg)](https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](package.json)
+<p align="center"><strong>One project-local brain for your AI agents and your team.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml"><img src="https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version"></a>
+</p>
 
 `keryx` is a CLI that installs a small `.metaproject/` workspace into any codebase, giving AI agents and developers one shared, versioned source of context: a code graph, an architecture wiki, normalized health and test reports, long-term memory, and agent skills. Instead of context scattered across scratchpads, CI logs, and IDE rule files that never agree, everything lives in one git-diffable place that both humans and agents read from.
 
 The core is deterministic, local, and offline — with zero runtime dependencies. Every model-backed or precision feature is strictly opt-in, so a fresh install behaves identically whether or not you enable them.
 
 > **Model assets are optional.** Features like semantic memory search, ML-based security detection, and tree-sitter parsing use downloadable models/grammars that are **not bundled and not required**. When an asset is absent, keryx automatically falls back to its deterministic implementation — nothing to configure, nothing breaks.
+
+<p align="center">
+  <img src="docs/assets/keryx-hero.png" alt="keryx — orchestrate AI workflows" width="760">
+</p>
 
 ## Quick Start
 
