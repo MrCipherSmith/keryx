@@ -1,8 +1,8 @@
 # Module src/capability
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
@@ -10,19 +10,36 @@ Status: draft
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+`src/capability` is the project-wide opt-in capability seam: a uniform substrate that lets every keryx block (A–E) wire optional, dependency- or asset-backed features into the CLI without coupling that logic to command code or breaking deterministic fallback paths. It owns the four-gate resolution pipeline (`resolveCapability`), the process-scoped degradation warning mechanism, the `metaproject.json` manifest read/write side for capability entries, and the descriptor registry that `init`/`update` commands consume. The module deliberately imports only shared libs and the asset resolver, keeping itself acyclic and free of any optional dependency at the top level.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The module is structured in three layers. The innermost layer is `warn-once.ts`, a dependency-free process-scoped `Set` that ensures each degradation warning is emitted to stderr exactly once per CLI invocation, regardless of how many call sites trigger the same unavailable capability. The middle layer is `seam.ts`, which defines the public interfaces (`CapabilitySpec`, `CapabilityAdapter`, `CapabilityLoadContext`) and implements `resolveCapability` — a strict four-gate pipeline: the capability must be listed as `{ enabled: true }` in `metaproject.json` (gate 1); any declared `optionalDependency` must be lazily importable via `await import()` (gate 2); any declared asset must resolve and pass SHA-256 verification through the asset resolver (gate 3); and the built adapter's `isAvailable()` must return true (gate 4). Every gate failure maps to `null` and, if the capability was enabled, emits a warn-once degradation notice. `runCapabilityOrFallback` wraps the call-site pattern so even a throwing `run()` degrades gracefully. The outer layer is `wiring.ts` and `registry.ts`, which handle the write side: `wiring.ts` provides pure functions for parsing `--<flag>` / `--no-<flag>` CLI args, deep-merging config defaults, and upserting enriched capability entries into a manifest object; `registry.ts` connects these to the `init` and `update` command entry points and maintains the shipped (currently empty) `CAPABILITY_REGISTRY`. The empty registry means Block 0 ships no user-facing capability today, but the full substrate is in place for blocks A–E to register descriptors and gain uniform CLI wiring automatically.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+**Floor vs. ceiling** — A capability entry in `metaproject.json` is a "floor" when it appears as a bare string (advertised but not opt-in) or a "ceiling" when it is an object with `{ enabled: true/false }`. `resolveCapability` only activates a ceiling; floors are never resolved. Ceilings default to OFF.
+
+**CapabilityDescriptor** — The static registration record that a block provides: an `id` (namespaced `module.feature`), a CLI `flag` stem, the owning `module` key, an optional `optionalDependency` module specifier, an optional `asset` id, and an optional `config` path with defaults. Descriptors live in `registry.ts`.
+
+**CapabilitySpec** — The runtime counterpart to `CapabilityDescriptor`; it carries the `load` factory function that constructs a `CapabilityAdapter` from a resolved context. A spec is passed directly to `resolveCapability` at a command call site.
+
+**CapabilityAdapter** — The interface a resolved capability exposes: `id`, `isAvailable()`, and `run(input)`. Returned by `resolveCapability` only after all four gates pass; `null` otherwise.
+
+**CapabilityLoadContext** — The bundle passed to `spec.load()`: the lazily-imported optional-dependency module (or `undefined`) and the resolved+verified asset path (or `null`). Insulates adapters from the resolution mechanics.
+
+**warn-once** — A process-scoped deduplication guard ensuring that a degradation warning for a given capability id reaches stderr at most once per CLI process, preventing log spam when multiple modules hit the same unavailable capability.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+**1. Runtime capability resolution (seam.ts → warn-once.ts → assets)**
+A command calls `resolveCapability(cwd, spec)` in `seam.ts`. Gate 1 reads `metaproject.json` via `isCapabilityEnabled` and returns `null` immediately if the entry is absent or `enabled: false` — no imports, no warnings. Gate 2 lazily runs `await import(spec.optionalDependency)` inside a try/catch; failure calls `warnCapabilityDegraded` in `warn-once.ts` and returns `null`. Gate 3 loads the assets lock, builds a registry, and calls `resolveAsset`; a missing or checksum-failing asset also triggers `warnCapabilityDegraded`. Gate 4 runs `adapter.isAvailable()`, catching throws. Only when all four gates pass is the adapter returned to the caller, which then calls `runCapabilityOrFallback` to execute `adapter.run()` with a deterministic fallback for any throw.
+
+**2. Capability opt-in at `keryx init` (registry.ts → wiring.ts)**
+The `init` command passes raw CLI args to `registerCapabilitiesFromArgs` in `registry.ts`. That function calls `parseCapabilitySelections` in `wiring.ts`, which walks the `CAPABILITY_REGISTRY` and emits a `CapabilitySelection` for each descriptor whose `--<flag>` or `--no-<flag>` appears in args (`--no-` wins ties). `applyCapabilitySelections` then calls `reconcileManifestCapability` for each selection, upserting the enriched manifest entry into the owning module's `capabilities[]` array in `metaproject.json`. If the descriptor carries a `config` path, `renderCapabilityConfig` writes the module config file (deep-merged over defaults). The manifest is rewritten atomically only when something changed.
+
+**3. Capability reconciliation at `keryx update` (registry.ts → wiring.ts)**
+`reconcileCapabilitiesOnUpdate` walks the registry, reads the current enabled state of each descriptor from the manifest (preserving operator intent via `capabilityCurrentlyEnabled`), and calls `reconcileManifestCapability` to ensure every registered capability has an up-to-date enriched entry. If a descriptor declares a `config` path and the file does not yet exist on disk, `loadCapabilityConfig` materialises it by deep-merging the defaults with any existing on-disk content. Because the shipped registry is currently empty, both `init` and `update` are no-ops today, and their output remains byte-identical to the pre-capability baseline.
 
 ---
 
@@ -75,8 +92,20 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked; when enriching, add new links only to pages you have verified.
+
 - [Wiki Index](../index.md)
+- [Module src/lib](src-lib.md)
+- [Module src/commands](src-commands.md)
+- [Module src/assets](src-assets.md)
+- [Module src/gdgraph](src-gdgraph.md)
+- [Module src/memory/embedding](src-memory-embedding.md)
+- [Module src/memory](src-memory.md)
+- [Module src/security/detect](src-security-detect.md)
+- [Module src/security/detect/injection](src-security-detect-injection.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-09T21:28:28.047Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.0.0 - Prose sections enriched by gdwiki agent; Status set to accepted.
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

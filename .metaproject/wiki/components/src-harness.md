@@ -1,8 +1,8 @@
 # Module src/harness
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
@@ -10,19 +10,35 @@ Status: draft
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+`src/harness` is a fixture-corpora acceptance harness: a shared, detector-agnostic runner that proves quality against labeled data rather than asserted prose. It loads a committed `cases.json` file from any named corpus directory, runs a caller-supplied `DetectorFn` over each labeled case, and computes a deterministic `CorpusReport` of precision, recall, and false-negative rate. A thin gate layer (`gate.ts`) converts that report into a CI pass/fail signal by comparing the false-negative rate against a configurable threshold.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+`corpus.ts` owns the full runner logic. `loadCorpusCases` reads and normalises a `cases.json` file from a given directory — it accepts either a bare JSON array or a `{ cases: [...] }` envelope, drops malformed entries, and sorts survivors by `id` to guarantee a stable, re-runnable output (`F-2`). `runCorpus` calls `loadCorpusCases`, iterates every case through the caller-supplied `DetectorFn` (which may be sync or async), accumulates true/false positive/negative counts, and derives `fnRate`, `precision`, and `recall` from those counts, guarding against division by zero throughout.
+
+`gate.ts` is intentionally minimal: `gateCorpus` receives a finished `CorpusReport` and a `maxFnRate` threshold and returns a `GateResult` of `"pass"` or `"fail"` with a human-readable reason string. The gate owns no I/O and no detection logic — it is a pure decision boundary on top of the report.
+
+This two-layer split means any detection block anywhere in the codebase can plug into the same harness by pointing `runCorpus` at its corpus directory and passing its detector function, with no per-block harness code required.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **Corpus**: a named directory of labeled test cases committed alongside fixtures. Each corpus is identified by its directory name (returned as `CorpusReport.corpus`). The module ships two seed corpora (`seed-secrets`, `seed-emails`) and Block D adds `churn-complexity` and `change-impacted-test`.
+- **CorpusCase**: a single labeled data point with an `id`, a raw `input` string, and an `expected` label of `"positive"` or `"negative"`.
+- **DetectorFn**: the interface that every detection block must satisfy — a function from a raw input string to a boolean (sync or async). The harness is agnostic to what the detector actually does.
+- **CorpusReport**: the deterministic output of `runCorpus` — counts of true/false positives and negatives plus derived rates (`fnRate`, `precision`, `recall`). Determinism is enforced by sorting cases by `id` before execution.
+- **GateResult**: the CI signal from `gateCorpus` — `"pass"` or `"fail"` with a list of human-readable `reasons`. A `fail` result is intended to produce a non-zero exit code in CI.
+- **False-negative rate (fnRate)**: the primary gate metric. A regression in recall (missing a positive) is treated as more dangerous than a false alarm, so the gate threshold is expressed exclusively in terms of `fnRate`.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+**1. Seed-corpus acceptance run (corpus.test.ts)**
+A test calls `runCorpus(path.join(FIXTURES, "seed-secrets"), secretDetector)`. `corpus.ts` reads `fixtures/seed-secrets/cases.json`, normalises and sorts the six labeled cases, runs each through the regex-based `secretDetector`, and returns a `CorpusReport` with `total=6`, `fnRate=0`, `precision=1`, `recall=1`. The same call is repeated in a second test to assert that `JSON.stringify` of both results is identical — proving the determinism guarantee.
+
+**2. CI gate evaluation (corpus.test.ts → gate.ts)**
+After `runCorpus` returns a report, the test calls `gateCorpus(report, { maxFnRate: 0.1 })`. `gate.ts` compares `report.fnRate` against `0.1`; because the seed detector is perfect, `reasons` is empty and `status` is `"pass"`. A second call with a deliberately lossy detector produces `fnRate ≈ 0.667`, which exceeds the threshold, so `gate.ts` appends a reason string and returns `status: "fail"`.
+
+**3. Block D capability acceptance (block-d-corpora.test.ts)**
+A more complex consumer builds a real detector for hotspot ranking (`rankHotspots` from `src/health/metrics`) and passes it as a `DetectorFn` to `runCorpus` against the `fixtures/churn-complexity` corpus. The harness runs without any block-specific code — the caller provides the detector and the corpus directory; `corpus.ts` handles loading and scoring. The resulting report is then fed into `gateCorpus` with `maxFnRate: 0`, confirming zero false negatives as the hard acceptance criterion (AC17).
 
 ---
 
@@ -65,8 +81,17 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked; when enriching, add new links only to pages you have verified.
+
 - [Wiki Index](../index.md)
+- [Module src/health/metrics](src-health-metrics.md)
+- [Module src/health](src-health.md)
+- [Module src/testing](src-testing.md)
+- [Module src/lib](src-lib.md)
+- [Module src/security/detect](src-security-detect.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-09T21:28:28.047Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.0.0 - Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows grounded in corpus.ts and gate.ts.
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

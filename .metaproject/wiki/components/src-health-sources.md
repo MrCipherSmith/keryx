@@ -1,8 +1,8 @@
 # Module src/health/sources
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
@@ -10,19 +10,35 @@ Status: draft
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+`src/health/sources` is the data-collection layer of the health subsystem. It owns a set of tool adapters — one per external quality tool (ESLint, TypeScript, dependency audit, test runner, SonarQube) — each of which can detect whether the tool is present, invoke it, optionally import a pre-existing report, and parse the raw output into normalized `Finding` objects. The module's sole public surface is the `FINDING_ADAPTERS` array, which the parent `src/health` module iterates to gather findings during a health run, and the `NoImportError` sentinel used to signal that a given adapter does not support offline import.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The module is organized around a single abstraction: the `SourceAdapter` interface (typed in `src/health/types`). Every adapter file (`eslint.ts`, `typescript.ts`, `dependency-audit.ts`, `tests.ts`, `sonarqube.ts`) exports one object that implements this interface and is collected into the `FINDING_ADAPTERS` array in `index.ts`.
+
+Each adapter follows a three-phase lifecycle. In the **detect** phase it inspects the project to determine whether the tool is usable (`available`), present but unconfigured (`skipped`), or unreachable (`missing`). In the **run** phase it shells out to the tool binary — resolved via `resolveBin` in `helpers.ts`, which prefers a local `node_modules/.bin` installation over a global one — and returns a `RawSourceResult` carrying the tool's raw output, exit code, invoked command, and version string. In the optional **import** phase (adapters that support it, such as ESLint) the adapter can load an already-generated report file instead of running the tool live; adapters that do not support import throw `NoImportError` to signal this to the caller.
+
+The **parse** phase is where raw tool output is converted into `Finding` objects. All adapters delegate the actual object construction to `makeFinding` in `helpers.ts`, which assigns a deterministic `id` (concatenating source, slugified rule key, normalized file path, and line number), populates a `scope` struct that includes the module derived from the file path, and records `provenance` (command, tool version, raw log path). `NoImportError` is also defined in `helpers.ts` and re-exported from `index.ts`.
+
+The `tests` adapter is slightly more complex than the others: it can consume output from the testing module's `loadCompatibleTestingReport` service when a compatible cached report exists, allowing the health run to reuse an existing test result rather than re-running tests. This is the only cross-module import in the sources layer.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **`SourceAdapter`** — the contract each tool adapter implements: `detect`, `run`, `import`, and `parse` methods operating on a `HealthContext`.
+- **`HealthContext`** — provided by the parent health module; carries the working directory (`cwd`), source file list, and scope selector that adapters use for detection and scoped test-report lookup.
+- **`RawSourceResult`** — the unprocessed output of a tool invocation: raw text content, exit code, command string, tool version, and an `imported` flag distinguishing live runs from file imports.
+- **`Finding`** — the normalized output of `parse`; carries severity, priority, category, a deterministic `id`, source attribution, file/line location, and a `provenance` block linking back to the raw run.
+- **`NoImportError`** — a sentinel error class thrown by adapters that have no offline import format; callers use it to distinguish "import not supported" from other failures.
+- **`resolveBin`** — a helper that resolves a tool binary first from the project's local `node_modules/.bin`, then from the system `PATH` via `Bun.which`.
+- **`makeFinding`** — the canonical `Finding` factory; normalizes file paths, derives a stable `id`, and populates the `scope` and `provenance` fields consistently across all adapters.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+**Live health run (e.g. ESLint):** The health orchestrator iterates `FINDING_ADAPTERS`. For the ESLint adapter it calls `detect`, which checks for a config file and a resolvable binary; if `available`, it calls `run`, which shells out to `eslint . --format json` and captures stdout. It then calls `parse`, which iterates the JSON array of file results and calls `makeFinding` once per message, mapping ESLint severity 2 to `"error"` / `"P1"` and severity 1 to `"warning"` / `"P2"`.
+
+**Offline import (ESLint report file):** When the caller invokes `import` instead of `run`, the ESLint adapter reads `eslint-report.json` from the project root and returns it as a `RawSourceResult` with `imported: true`. The `parse` step is identical — the same JSON-to-`Finding` mapping applies regardless of whether output was live or imported.
+
+**Test adapter with cached report:** During `detect`, the tests adapter calls `compatibleReportForHealth`, which delegates to the testing module's `loadCompatibleTestingReport` based on the `scopeSelector` kind (`changed` or `project`). If a compatible report is found, the adapter returns `"available"` and its `import` method returns the report as a `RawSourceResult`. The `parse` method then takes a different branch: it deserializes the `TestingReport` and maps each `failure` entry to a `Finding` via `makeFinding`, with `priority: "P0"` and `category: "test"`. If `run` is called instead (no cached report), it shells out to `bun test` and parses the text output line-by-line for `(fail)` markers.
 
 ---
 
@@ -66,8 +82,15 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked; when enriching, add new links only to pages you have verified.
+
 - [Wiki Index](../index.md)
+- [Module src/health](src-health.md)
+- [Module src/testing](src-testing.md)
+- [Module src/health/metrics](src-health-metrics.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-09T21:28:28.047Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.0.0 - Prose sections enriched by gdwiki enrich workflow (Overview, How it works, Key concepts, Main flows). Status set to accepted.
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

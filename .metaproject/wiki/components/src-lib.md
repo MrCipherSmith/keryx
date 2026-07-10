@@ -1,8 +1,8 @@
 # Module src/lib
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
@@ -10,19 +10,28 @@ Status: draft
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+`src/lib` is the zero-dependency shared utilities layer for keryx. It provides the primitives that all other modules (`src/commands`, `src/gdskills`, `src/security`, `src/health`, `src/memory`, `src/mcp`) build on: safe filesystem operations, JSON I/O, CLI argument parsing, terminal output formatting, and large code-generation templates. Every function in this module is a leaf node — no module in the codebase depends on fewer things, making it the stable foundation the rest of the system rests on.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The module is composed of six focused files with no internal cross-dependencies. The filesystem layer (`fs.ts`) provides safe, crash-consistent writes via an atomic rename strategy (write-to-temp then rename), a directory-based advisory file lock with stale-lock recovery, and path-safety predicates. The JSON layer (`json.ts`) wraps Node's `readFile`/`JSON.parse` with meaningful error messages and a fallback variant that returns a caller-supplied default when the file is missing or malformed. The argument-parsing layer (`args.ts`) wraps Node's built-in `parseArgs` to give commands a declarative boolean-flag API with automatic short-flag aliasing for `--help` and `--yes`. The UI layer (`ui.ts`) produces ANSI-colored terminal output that automatically degrades to plain text for piped/redirected streams, controlled by the `NO_COLOR`/`FORCE_COLOR` environment variables; it exports both low-level style primitives and high-level layout helpers (`banner`, `heading`, `statusLine`, `nextSteps`, `helpOptions`). The test-cwd module (`test-cwd.ts`) solves a Bun-specific concurrency hazard: because Bun runs test files concurrently in a single process, `process.chdir` calls from separate test files would race; the module serializes all `chdir` critical sections through a promise chain so each section holds the working directory exclusively. The templates file (`templates.ts`) is the heaviest piece: it contains the render functions that generate the `.metaproject/index.md` agent-entrypoint file and the full HTML metaproject dashboard, parameterized by which modules are enabled.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **Atomic write** — `writeFileAtomic` writes to a uniquely named temp file then renames it into place, ensuring readers never observe a partial write.
+- **Directory lock** — `withFileLock` uses `mkdir` as an atomic lock-acquisition primitive (the OS guarantees at-most-one success), with built-in stale-lock expiry and a polling retry loop.
+- **Path safety** — `isPathInside` uses `path.resolve` + `path.relative` to determine containment without string manipulation, preventing path-traversal bugs.
+- **Color degradation** — `colorEnabled()` checks `NO_COLOR`, then `FORCE_COLOR`, then `stdout.isTTY`; all style helpers call it on every invocation so the output mode is always current.
+- **Cwd mutex** — `test-cwd.ts` maintains a module-level promise chain that acts as a process-wide mutex for the working directory; tests enqueue `chdir` sections onto this chain rather than calling `chdir` directly.
+- **Metaproject rendering** — `templates.ts` contains `renderIndexMarkdown` and `renderMetaprojectDashboardHtml`, which assemble the agent-readable index and the HTML dashboard respectively from module-enablement flags and live data snapshots.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+**Safe file write** — a command calls `writeFileAtomic(path, content)`. `fs.ts` creates the parent directory with `mkdir({ recursive: true })`, writes to a temp path (incorporating PID, timestamp, and UUID for uniqueness), then atomically renames it to the final path. If the write fails, the temp file is silently removed.
+
+**JSON config load with fallback** — a module calls `readJsonFileOr(configPath, defaultValue)` at startup. `json.ts` delegates to `readJsonFile`, which reads and parses the file. If the file is absent or contains invalid JSON, the error is caught and `defaultValue` is returned, letting the caller continue with safe defaults without extra error handling.
+
+**Metaproject index regeneration** — the `keryx index refresh` command calls `renderIndexMarkdown` in `templates.ts` with the set of enabled module flags and rule sources. The function assembles module rows, skill references, intent router table, agent workflow steps, and data references into the final Markdown string, which is then written to `.metaproject/index.md` via `writeFileAtomic` from `fs.ts`.
 
 ---
 
@@ -43,7 +52,7 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/lib/fs.ts` - imported by 73, imports 0
+- `src/lib/fs.ts` - imported by 75, imports 0
 - `src/lib/json.ts` - imported by 21, imports 0
 - `src/lib/args.ts` - imported by 16, imports 0
 - `src/lib/ui.ts` - imported by 12, imports 0
@@ -70,8 +79,18 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked; when enriching, add new links only to pages you have verified.
+
 - [Wiki Index](../index.md)
+- [Module src/testing](src-testing.md)
+- [Module src/commands](src-commands.md)
+- [Module src/gdskills](src-gdskills.md)
+- [Module src/security](src-security.md)
+- [Module src/health](src-health.md)
+- [Module src/memory](src-memory.md)
+- [Module src/mcp](src-mcp.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-09T21:28:28.047Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

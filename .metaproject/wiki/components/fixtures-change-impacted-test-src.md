@@ -1,8 +1,8 @@
 # Module fixtures/change-impacted-test/src
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
@@ -10,19 +10,36 @@ Status: draft
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+This module is a **test fixture**, not production code. It provides a minimal sample project used by keryx's own test suite to verify the coverage-map-based Test Impact Analysis (TIA) detector. The fixture lives under `fixtures/change-impacted-test/` and is deliberately constructed so that a static (name-based) test selector over-selects tests, while a coverage-map-based selector picks exactly the right one — proving that coverage-map precision exceeds static precision in a controlled, labeled scenario.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The fixture contains two tiny TypeScript source files (`alpha.ts` exports `alpha(n) = n + 1`; `beta.ts` exports `beta(n) = n * 2`) and four test-shaped files (`alpha.test.ts`, `alpha.extra.test.ts`, `beta.test.ts`, `gamma.test.ts`). Alongside the source tree, the fixture ships three JSON data files consumed by tests:
+
+- `coverage-map.json` — a pre-committed coverage map that records which source files each test file actually exercised at runtime. Crucially, `alpha.extra.test.ts` is recorded as covering `beta.ts` only, not `alpha.ts`.
+- `cases.json` — a labeled corpus that classifies each test file as `positive` (truly impacted by a change to `alpha.ts`) or `negative` (not impacted).
+- `expected.json` — precomputed expected values: the ground-truth impacted set, what static and coverage-map selection each return, and their precision scores.
+
+Keryx test files load these artifacts from `FIXTURE_DIR` (an absolute path resolved at import time) rather than from any live project, keeping the tests deterministic and hermetic.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **Test Impact Analysis (TIA)**: the problem of selecting only the tests that are genuinely affected by a set of changed source files, rather than running the whole suite.
+- **Static / naming selection**: a heuristic that selects test files whose names share a prefix with a changed source file. It is fast but imprecise; it over-selects `alpha.extra.test.ts` because that file's name starts with `alpha.` even though it exercises `beta.ts`.
+- **Coverage-map selection**: selects tests by looking up each changed file in a pre-built map that records which source files each test actually covered at runtime. Because the map says `alpha.extra.test.ts` covered only `beta.ts`, a change to `alpha.ts` does not select it.
+- **False positive / false negative**: the fixture is designed so that coverage-map selection yields zero false negatives (no truly impacted test is missed) and perfect precision (no unimpacted test is selected), while static selection has 0.5 precision.
+- **Map-absent fallback (AC9)**: `gamma.test.ts` corresponds to a source file (`gamma.ts`) that is absent from the coverage map. The fixture exercises the rule that when the changed file has no coverage entry, the selector falls back to the naming heuristic and unions in the name-matched test.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+**Flow 1 — Unit precision comparison (AC8, `coverage-map.test.ts`).**
+The test loads `coverage-map.json` from the fixture directory via `loadCoverageMap`, then calls `selectByCoverageMap(["src/alpha.ts"], map)` to get coverage-driven selection and `staticChangedSelection(change, testFiles)` for the naming baseline. It asserts that coverage-map selection returns only `["src/alpha.ts"]` (precision = 1.0) while static selection also picks `alpha.extra.test.ts` (precision = 0.5), matching the values pre-encoded in `expected.json`.
+
+**Flow 2 — Map-absent file fallback (AC9, `coverage-map.test.ts`).**
+The test checks that `gamma.ts` is absent from the coverage map via `coveredFilesInMap`, then runs `staticChangedSelection(["src/gamma.ts"], testFiles)` and asserts it returns `["src/gamma.test.ts"]`. This validates that the absence-to-naming-fallback path works correctly.
+
+**Flow 3 — Corpus gate (AC17, `block-d-corpora.test.ts`).**
+The test plugs the fixture into the Block 0 acceptance harness (`runCorpus` / `gateCorpus`). It loads the coverage map, calls `selectByCoverageMap(["src/alpha.ts"], map)`, then runs `runCorpus(TIA_DIR, input => selected.has(input))` which evaluates the labeled cases in `cases.json`. The test asserts `fnRate === 0`, `precision === 1`, `recall === 1`, and that `gateCorpus` returns `"pass"` — making this the named Block-D acceptance gate for the TIA capability.
 
 ---
 
@@ -52,8 +69,13 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked; when enriching, add new links only to pages you have verified.
+
 - [Wiki Index](../index.md)
+
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-09T21:28:28.047Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 1.0.0 - Prose sections enriched from code reads: Overview, How it works, Key concepts, Main flows. Status set to accepted.
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

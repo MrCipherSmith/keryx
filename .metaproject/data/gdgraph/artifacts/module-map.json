@@ -72,6 +72,7 @@
     "src/commands/skills.ts",
     "src/commands/standard.ts",
     "src/commands/status.ts",
+    "src/commands/sync.ts",
     "src/commands/test.ts",
     "src/commands/update.test.ts",
     "src/commands/update.ts",
@@ -316,6 +317,13 @@
     "src/standard/standard.test.ts",
     "src/standard/types.ts",
     "src/standard/validate.ts"
+  ],
+  "sync": [
+    "src/sync/diff.test.ts",
+    "src/sync/diff.ts",
+    "src/sync/hooks.test.ts",
+    "src/sync/hooks.ts",
+    "src/sync/provenance.ts"
   ],
   "testing": [
     "src/testing/block-d-no-network.test.ts",
