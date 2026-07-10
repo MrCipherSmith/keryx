@@ -3,8 +3,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { GraphData, GraphEdge, GraphNode } from "./types";
 
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"];
-const SOURCE_RESOLUTION_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".d.ts"];
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".java", ".py"];
+const SOURCE_RESOLUTION_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".d.ts", ".java", ".py"];
 const ASSET_EXTENSIONS = [
   ".css",
   ".scss",
@@ -520,10 +520,17 @@ function buildModuleMap(graph: GraphData): Record<string, string[]> {
   return modules;
 }
 
-function getLanguage(file: string): "typescript" | "javascript" {
-  return file.endsWith(".ts") || file.endsWith(".tsx")
-    ? "typescript"
-    : "javascript";
+function getLanguage(file: string): "typescript" | "javascript" | "java" | "python" {
+  if (file.endsWith(".ts") || file.endsWith(".tsx")) {
+    return "typescript";
+  }
+  if (file.endsWith(".java")) {
+    return "java";
+  }
+  if (file.endsWith(".py")) {
+    return "python";
+  }
+  return "javascript";
 }
 
 function groupBy<T>(items: T[], getKey: (item: T) => string): Record<string, T[]> {

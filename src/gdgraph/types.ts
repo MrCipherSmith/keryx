@@ -2,7 +2,7 @@ export type GraphNode = {
   id: string;
   kind: "file" | "asset";
   path: string;
-  language: "typescript" | "javascript" | "asset";
+  language: "typescript" | "javascript" | "java" | "python" | "asset";
 };
 
 export type GraphEdge = {
