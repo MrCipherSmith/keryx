@@ -30,6 +30,10 @@ const IGNORED_DIRS = new Set([
 ]);
 
 const TEST_FILE_RE = /(^|\/)(__tests__\/.*|.*\.(test|spec)\.[cm]?[tj]sx?$|e2e\/.*\.[cm]?[tj]sx?$|tests\/.*\.[cm]?[tj]sx?$)/;
+// A JS/TS source file - the only kind of change that could plausibly have a
+// related test. Docs, generated JSON artifacts, images, etc. never can, so a
+// changed-scope selection that finds no tests for them is not a failure.
+const SOURCE_FILE_RE = /\.[cm]?[tj]sx?$/;
 const CONFIG_FILE_RE = /(^|\/)(bunfig\.toml|vitest\.config\.[cm]?[tj]s|jest\.config\.[cm]?[tj]s|playwright\.config\.[cm]?[tj]s|cypress\.config\.[cm]?[tj]s|tsconfig.*\.json)$/;
 const CI_FILE_RE = /(^|\/)(\.github\/workflows\/.*\.ya?ml|\.gitlab-ci\.yml)$/;
 const INSTRUCTION_FILE_RE = /(^|\/)(AGENTS\.md|agents\.md|CLAUDE\.md|claude\.md|docs\/.*\.md|\.metaproject\/rules\/.*\.md|\.metaproject\/wiki\/.*\.md)$/;
@@ -188,7 +192,13 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
     counts.failed = Math.max(counts.failed, 1);
     counts.total = Math.max(counts.total, counts.passed + counts.failed);
   }
-  if (input.strict && input.changed && !command && selectedTests.fallback !== "none") {
+  // Only enforce "no related tests" when a changed file is actually source code.
+  // A docs-only / artifacts-only push (e.g. wiki enrichment) has nothing to test
+  // and must not be blocked by the strict gate.
+  const changedTestableSource = selectedTests.changedFiles.some(
+    (file) => SOURCE_FILE_RE.test(file) && !TEST_FILE_RE.test(file),
+  );
+  if (input.strict && input.changed && !command && selectedTests.fallback !== "none" && changedTestableSource) {
     status = "fail";
     exitCode = 1;
     failures.push({
