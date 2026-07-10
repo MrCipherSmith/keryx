@@ -42,6 +42,7 @@ export type FlowState = {
   acChecksum: string | null;
   acConfirmed: Record<string, { at: string; note?: string | undefined }>;
   pr: { url: string | null };
+  merged?: { commit: string; ref: "origin/main"; at: string } | undefined;
   tasks: FlowTask[];
   history: FlowHistoryEvent[];
 };
@@ -76,7 +77,7 @@ export interface TrackerAdapter {
 // --- Gates (D6) ---
 
 export type GateOutcome = {
-  name: "acceptance-criteria" | "pull-request" | "health" | "security";
+  name: "acceptance-criteria" | "pull-request" | "main-merge" | "health" | "security";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -91,6 +92,10 @@ export type FlowServiceDeps = {
   securityGate?: (
     cwd: string,
   ) => Promise<{ status: "pass" | "fail" | "skipped"; detail: string } | null>;
+  mainMergeGate?: (
+    cwd: string,
+    commit: string,
+  ) => Promise<{ status: "pass" | "fail"; detail: string }>;
   now: () => Date;
 };
 
@@ -150,6 +155,7 @@ export interface FlowService {
     cwd: string;
     id: string;
     comment?: boolean | undefined;
+    mergedCommit?: string | undefined;
   }): Promise<FlowCompleteResult>;
   block(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   unblock(input: { cwd: string; id: string }): Promise<FlowState>;

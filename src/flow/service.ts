@@ -296,10 +296,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async complete({ cwd, id, comment }): Promise<FlowCompleteResult> {
+    async complete({ cwd, id, comment, mergedCommit }): Promise<FlowCompleteResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
-      let flow = await transition(cwd, dir, await readFlow(cwd, dir), "completing", "completing");
+      let flow = await readFlow(cwd, dir);
+      if (mergedCommit && flow.status === "in-progress") {
+        await assertAcIntact(cwd, dir, flow);
+        flow.status = "completing";
+        flow = await save(cwd, dir, flow, "completing", `merged commit: ${mergedCommit}`);
+      } else {
+        flow = await transition(cwd, dir, flow, "completing", "completing");
+      }
 
       const gates: GateOutcome[] = [];
 
@@ -325,8 +332,14 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         });
       }
 
-      // Gate 2: pull request.
-      if (!flow.pr.url) {
+      // Gate 2: pull request, or an explicit proof that the implementation
+      // commit is already contained in origin/main (direct-merge handoff).
+      if (mergedCommit) {
+        const merge = deps.mainMergeGate
+          ? await deps.mainMergeGate(cwd, mergedCommit)
+          : await verifyCommitOnMain(cwd, mergedCommit);
+        gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
+      } else if (!flow.pr.url) {
         gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
       } else if (deps.tracker && (await deps.tracker.detect())) {
         const pr = await deps.tracker.prStatus(flow.pr.url);
@@ -386,6 +399,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       let commented = false;
 
       if (passed) {
+        if (mergedCommit) {
+          flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
+        }
         flow = await transition(cwd, dir, flow, "done", "done", "all gates passed");
         issueComment = buildIssueComment(flow, gates);
         if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
@@ -465,7 +481,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             });
           }
         }
-        if (flow.status === "done" && !flow.pr.url) {
+        if (flow.status === "done" && !flow.pr.url && !flow.merged) {
           issues.push({ flow: dir, kind: "state", message: "done without a recorded PR" });
         }
       }
@@ -486,8 +502,27 @@ function buildIssueComment(flow: FlowState, gates: GateOutcome[]): string {
     `Flow ${flow.id} (${flow.title}) is complete.`,
     "",
     `- Draft PR: ${flow.pr.url ?? "n/a"}`,
+    ...(flow.merged ? [`- Main merge: ${flow.merged.commit} contained in ${flow.merged.ref}`] : []),
     `- Tasks: ${done.length}/${flow.tasks.length} done`,
     `- Acceptance criteria: ${Object.keys(flow.acConfirmed).length} confirmed`,
     `- Gates: ${gateLine}`,
   ].join("\n");
+}
+
+async function verifyCommitOnMain(
+  cwd: string,
+  commit: string,
+): Promise<{ status: "pass" | "fail"; detail: string }> {
+  if (!/^[0-9a-f]{7,64}$/i.test(commit)) {
+    return { status: "fail", detail: "merged commit must be a hexadecimal Git commit id" };
+  }
+  const process = Bun.spawn(["git", "merge-base", "--is-ancestor", commit, "origin/main"], {
+    cwd,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  const exitCode = await process.exited;
+  return exitCode === 0
+    ? { status: "pass", detail: `${commit} is contained in origin/main` }
+    : { status: "fail", detail: `${commit} is not contained in origin/main` };
 }

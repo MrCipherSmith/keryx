@@ -19,3 +19,19 @@
 - 2026-07-10T12:31:59.770Z - task-done: T9: Run focused/full verification and security/documentation checks
 - 2026-07-10T12:32:02.148Z - task-done: T10: Reconcile requirements package, roadmap, and implementation report
 - 2026-07-10T12:33:26.988Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-10T16:53:53.954Z - ac-confirmed: AC1: Schema, runtime validation, canonical JSON and Markdown tests pass.
+- 2026-07-10T16:53:56.446Z - ac-confirmed: AC2: Structured event accounting and time reliability tests pass.
+- 2026-07-10T16:53:59.985Z - ac-confirmed: AC3: Retry taxonomy validation tests pass.
+- 2026-07-10T16:54:02.860Z - ac-confirmed: AC4: Immutable testing and health evidence compatibility tests pass.
+- 2026-07-10T16:54:05.397Z - ac-confirmed: AC5: Latest pointer freshness and provenance mismatch tests pass.
+- 2026-07-10T16:54:07.794Z - ac-confirmed: AC6: Linked worktree hook resolution test passes.
+- 2026-07-10T16:54:09.739Z - ac-confirmed: AC7: Guidance and standard capability baseline tests pass.
+- 2026-07-10T16:54:11.926Z - ac-confirmed: AC8: Baseline classification tests pass.
+- 2026-07-10T16:54:14.365Z - ac-confirmed: AC9: Lightweight profile gate tests pass.
+- 2026-07-10T16:54:16.357Z - ac-confirmed: AC10: Top-level opt-in and parent-run ownership are enforced.
+- 2026-07-10T16:54:19.000Z - ac-confirmed: AC11: Paired benchmark harness validation tests pass without speed claim.
+- 2026-07-10T16:54:21.629Z - ac-confirmed: AC12: Security redaction and documentation verification passed.
+- 2026-07-10T16:54:52.143Z - completing: merged commit: 7b78ff14
+- 2026-07-10T16:54:52.205Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-07-10T16:55:13.943Z - completing: merged commit: 7b78ff14
+- 2026-07-10T16:55:13.994Z - done: all gates passed

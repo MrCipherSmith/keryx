@@ -188,6 +188,34 @@ test("failed gates return the flow to in-progress with fix notes", async () => {
   expect(result.flow.history.some((event) => event.event === "completion-failed")).toBe(true);
 });
 
+test("merged completion closes a flow without a PR when main contains the commit", async () => {
+  await fresh();
+  const service = createFlowService(
+    makeDeps({
+      tracker: null,
+      mainMergeGate: async (_cwd, commit) =>
+        commit === "7b78ff14"
+          ? { status: "pass", detail: "7b78ff14 is contained in origin/main" }
+          : { status: "fail", detail: `${commit} is not contained in origin/main` },
+    }),
+  );
+
+  const { flow } = await service.init({ cwd: ROOT, title: "Merged handoff" });
+  const dir = "001-2026-07-07-merged-handoff";
+  await writeAc(dir, ["Implementation is present on main"]);
+  await service.freeze({ cwd: ROOT, id: flow.id });
+  await service.start({ cwd: ROOT, id: flow.id });
+  await service.acConfirm({ cwd: ROOT, id: flow.id, criterion: "AC1" });
+
+  const result = await service.complete({ cwd: ROOT, id: flow.id, mergedCommit: "7b78ff14" });
+
+  expect(result.passed).toBe(true);
+  expect(result.flow.status).toBe("done");
+  expect(result.flow.merged?.commit).toBe("7b78ff14");
+  expect(result.flow.merged?.ref).toBe("origin/main");
+  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass"]);
+});
+
 test("block stores the previous status and unblock restores it", async () => {
   await fresh();
   const service = createFlowService(makeDeps({ tracker: null }));

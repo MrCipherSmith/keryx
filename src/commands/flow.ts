@@ -241,6 +241,7 @@ async function runComplete(args: string[]): Promise<void> {
     cwd: process.cwd(),
     id,
     comment: args.includes("--comment"),
+    mergedCommit: optionValue(args, "--merged"),
   });
 
   heading(
@@ -320,7 +321,7 @@ function printHelp(): void {
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"]',
     'keryx flow ac update <id> --reason "<why>"',
     "keryx flow implemented <id> --pr <url>",
-    "keryx flow complete <id> [--comment]",
+    "keryx flow complete <id> [--comment] [--merged <commit>]",
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
     "keryx flow check",
   ]);

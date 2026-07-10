@@ -3,15 +3,64 @@
   "id": "002",
   "slug": "implement-keryx-execution-observability-",
   "title": "Implement Keryx Execution Observability standard capability",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-10T11:40:52.417Z",
-  "updatedAt": "2026-07-10T12:33:26.988Z",
+  "updatedAt": "2026-07-10T16:55:13.994Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:37d56d8c46cca6d340d74f126e4af3a1a688d0a1bff42c6c9d94a4c1db1f857a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-10T16:53:53.954Z",
+      "note": "Schema, runtime validation, canonical JSON and Markdown tests pass."
+    },
+    "AC2": {
+      "at": "2026-07-10T16:53:56.446Z",
+      "note": "Structured event accounting and time reliability tests pass."
+    },
+    "AC3": {
+      "at": "2026-07-10T16:53:59.985Z",
+      "note": "Retry taxonomy validation tests pass."
+    },
+    "AC4": {
+      "at": "2026-07-10T16:54:02.860Z",
+      "note": "Immutable testing and health evidence compatibility tests pass."
+    },
+    "AC5": {
+      "at": "2026-07-10T16:54:05.397Z",
+      "note": "Latest pointer freshness and provenance mismatch tests pass."
+    },
+    "AC6": {
+      "at": "2026-07-10T16:54:07.794Z",
+      "note": "Linked worktree hook resolution test passes."
+    },
+    "AC7": {
+      "at": "2026-07-10T16:54:09.739Z",
+      "note": "Guidance and standard capability baseline tests pass."
+    },
+    "AC8": {
+      "at": "2026-07-10T16:54:11.926Z",
+      "note": "Baseline classification tests pass."
+    },
+    "AC9": {
+      "at": "2026-07-10T16:54:14.365Z",
+      "note": "Lightweight profile gate tests pass."
+    },
+    "AC10": {
+      "at": "2026-07-10T16:54:16.357Z",
+      "note": "Top-level opt-in and parent-run ownership are enforced."
+    },
+    "AC11": {
+      "at": "2026-07-10T16:54:19.000Z",
+      "note": "Paired benchmark harness validation tests pass without speed claim."
+    },
+    "AC12": {
+      "at": "2026-07-10T16:54:21.629Z",
+      "note": "Security redaction and documentation verification passed."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -170,6 +219,91 @@
       "at": "2026-07-10T12:33:26.988Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-10T16:53:53.954Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Schema, runtime validation, canonical JSON and Markdown tests pass."
+    },
+    {
+      "at": "2026-07-10T16:53:56.446Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Structured event accounting and time reliability tests pass."
+    },
+    {
+      "at": "2026-07-10T16:53:59.985Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Retry taxonomy validation tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:02.860Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Immutable testing and health evidence compatibility tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:05.397Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Latest pointer freshness and provenance mismatch tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:07.794Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Linked worktree hook resolution test passes."
+    },
+    {
+      "at": "2026-07-10T16:54:09.739Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Guidance and standard capability baseline tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:11.926Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Baseline classification tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:14.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Lightweight profile gate tests pass."
+    },
+    {
+      "at": "2026-07-10T16:54:16.357Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Top-level opt-in and parent-run ownership are enforced."
+    },
+    {
+      "at": "2026-07-10T16:54:19.000Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Paired benchmark harness validation tests pass without speed claim."
+    },
+    {
+      "at": "2026-07-10T16:54:21.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Security redaction and documentation verification passed."
+    },
+    {
+      "at": "2026-07-10T16:54:52.143Z",
+      "event": "completing",
+      "detail": "merged commit: 7b78ff14"
+    },
+    {
+      "at": "2026-07-10T16:54:52.205Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-10T16:55:13.943Z",
+      "event": "completing",
+      "detail": "merged commit: 7b78ff14"
+    },
+    {
+      "at": "2026-07-10T16:55:13.994Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "7b78ff14",
+    "ref": "origin/main",
+    "at": "2026-07-10T16:55:13.993Z"
+  }
 }
