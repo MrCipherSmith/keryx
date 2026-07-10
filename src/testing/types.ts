@@ -56,6 +56,18 @@ export type TestingReport = {
   relatedFiles: string[];
   relatedSkills: string[];
   rawLogPath: string | null;
+  runId?: string;
+  provenance?: {
+    commit: string | null;
+    branch: string | null;
+    worktree: string | null;
+    sources: Array<{
+      name: string;
+      path: string | null;
+      timestamp: string | null;
+      reliability: "exact" | "estimated" | "unknown";
+    }>;
+  };
 };
 
 export type TestingRunInput = {
@@ -65,6 +77,8 @@ export type TestingRunInput = {
   scope?: string | null;
   kind?: string | null;
   strict?: boolean;
+  runId?: string;
+  provenance?: TestingReport["provenance"];
 };
 
 // D2: coverage-map source. `import` parses an existing report without running

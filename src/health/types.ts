@@ -157,6 +157,18 @@ export type HealthReport = {
   // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
   // nullable — omitted from older (schemaVersion 1) reports.
   hotspots?: FileHotspot[];
+  runId?: string;
+  provenance?: {
+    commit: string | null;
+    branch: string | null;
+    worktree: string | null;
+    sources: Array<{
+      name: string;
+      path: string | null;
+      timestamp: string | null;
+      reliability: "exact" | "estimated" | "unknown";
+    }>;
+  };
 };
 
 export type ScopeSelector =
@@ -188,6 +200,8 @@ export type HealthRunInput = {
   scope?: ScopeSelector;
   strict?: boolean;
   sources?: string[];
+  runId?: string;
+  provenance?: HealthReport["provenance"];
 };
 export type HealthRunResult = {
   report: HealthReport;

@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -69,7 +69,31 @@ test("runTesting writes normalized report", async () => {
   expect(latest?.status).toBe("pass");
 });
 
-test("strict changed run fails when a changed source file has no related tests", async () => {
+test("runTesting writes immutable provenance-aware evidence when a run id is supplied", async () => {
+  const root = path.join(tmpdir(), "keryx-testing-provenance-run");
+  await reset(root);
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(path.join(root, "src", "ok.test.ts"), "test('ok', () => {});\n");
+
+  await runTesting({ cwd: root, runId: "run-testing-provenance" });
+
+  const record = JSON.parse(await readFile(
+    path.join(root, ".metaproject", "data", "testing", "artifacts", "runs", "run-testing-provenance.json"),
+    "utf8",
+  ));
+  const latest = JSON.parse(await readFile(
+    path.join(root, ".metaproject", "data", "testing", "artifacts", "latest.json"),
+    "utf8",
+  ));
+  expect(record.runId).toBe("run-testing-provenance");
+  expect(record.provenance).toBeDefined();
+  expect(latest.run_id).toBe("run-testing-provenance");
+  expect(latest.record).toContain("runs/run-testing-provenance.json");
+});
+
+test("strict changed run fails when no related tests are selected", async () => {
   const root = path.join(tmpdir(), "keryx-testing-strict-empty");
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));

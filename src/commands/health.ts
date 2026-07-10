@@ -55,11 +55,13 @@ export async function healthCommand(args: string[]): Promise<void> {
 async function runRun(args: string[]): Promise<void> {
   const scope = parseScope(args);
   const sourcesArg = optionValue(args, "--source");
+  const runId = optionValue(args, "--run-id");
   const result = await getService().run({
     cwd: process.cwd(),
     strict: args.includes("--strict"),
     ...(scope ? { scope } : {}),
     ...(sourcesArg ? { sources: sourcesArg.split(",").map((s) => s.trim()) } : {}),
+    ...(runId ? { runId } : {}),
   });
 
   const project = result.report.metrics.find((m) => m.key === "project");
@@ -228,7 +230,7 @@ function printHelp(): void {
   console.log(`keryx health
 
 Usage:
-  keryx health run [--strict] [--scope project|module:<name>|file:<path>] [--changed [--since <ref>]] [--source eslint,typescript]
+  keryx health run [--strict] [--scope project|module:<name>|file:<path>] [--changed [--since <ref>]] [--source eslint,typescript] [--run-id <id>]
   keryx health status
   keryx health gate [--strict-warn]
   keryx health sources

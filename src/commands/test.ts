@@ -71,6 +71,7 @@ async function runAnalyze(): Promise<void> {
 }
 
 async function runRun(args: string[]): Promise<void> {
+  const runId = optionValue(args, "--run-id");
   const result = await runTesting({
     cwd: process.cwd(),
     changed: args.includes("--changed"),
@@ -78,6 +79,7 @@ async function runRun(args: string[]): Promise<void> {
     scope: optionValue(args, "--scope") ?? null,
     kind: optionValue(args, "--kind") ?? null,
     strict: args.includes("--strict") || args.includes("--gate"),
+    ...(runId ? { runId } : {}),
   });
   console.log(`# Test Report: ${result.report.status.toUpperCase()}`);
   console.log("");
@@ -263,7 +265,7 @@ function printHelp(): void {
 Usage:
   keryx test init
   keryx test analyze
-  keryx test run [--changed] [--strict] [--since <ref>] [--scope <path>] [--kind unit|integration|e2e|smoke]
+  keryx test run [--changed] [--strict] [--since <ref>] [--scope <path>] [--kind unit|integration|e2e|smoke] [--run-id <id>]
   keryx test status
   keryx test context
   keryx test explain <file-or-scope>

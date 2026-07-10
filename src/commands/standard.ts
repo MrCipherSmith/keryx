@@ -16,6 +16,8 @@ import {
 import { STANDARD_VERSION } from "../standard/profiles";
 import { emitLlms, validateLlms } from "../standard/emit-llms";
 import type { Issue, ValidationResult } from "../standard/types";
+import { classifyBaselineStatuses, type BaselineStatus } from "../standard/baseline";
+import { optionValue } from "../lib/args";
 
 // Thin handler for `keryx standard <validate|doctor|capabilities>`.
 // Renders service results with lib/ui and owns process.exitCode.
@@ -39,6 +41,9 @@ export async function standardCommand(
       return;
     case "capabilities":
       await handleCapabilities(projectRoot);
+      return;
+    case "baseline":
+      await handleBaseline(args.slice(1));
       return;
     case "emit":
       await handleEmit(projectRoot, args.slice(1));
@@ -122,6 +127,19 @@ async function handleCapabilities(projectRoot: string): Promise<void> {
   }
 }
 
+async function handleBaseline(args: string[]): Promise<void> {
+  const baseline = optionValue(args, "--baseline") as BaselineStatus | undefined;
+  const pr = optionValue(args, "--pr") as BaselineStatus | undefined;
+  if (!baseline || !pr || !["pass", "fail", "unknown"].includes(baseline) || !["pass", "fail", "unknown"].includes(pr)) {
+    console.error("Usage: keryx standard baseline --baseline pass|fail|unknown --pr pass|fail|unknown");
+    process.exitCode = 1;
+    return;
+  }
+  const result = classifyBaselineStatuses(baseline, pr);
+  console.log(JSON.stringify(result, null, 2));
+  process.exitCode = result.classification === "baseline-red" ? 0 : result.prIntroducedFailure ? 1 : 0;
+}
+
 // `standard emit llms` — generate the deterministic llms.txt (spec §10.1).
 async function handleEmit(projectRoot: string, args: string[]): Promise<void> {
   const kind = args[0];
@@ -186,6 +204,7 @@ export function printStandardHelp(): void {
     "keryx standard validate",
     "keryx standard doctor",
     "keryx standard capabilities",
+    "keryx standard baseline --baseline pass|fail|unknown --pr pass|fail|unknown",
     "keryx standard emit llms [--stdout]",
   ]);
   heading("Commands");
@@ -193,6 +212,7 @@ export function printStandardHelp(): void {
     ["validate", "Check the workspace against the standard; exits non-zero on failure."],
     ["doctor", "Print actionable diagnostics with fix hints; exits non-zero on unresolved issues."],
     ["capabilities", "Print the standard version, active profiles, and enabled modules."],
+    ["baseline", "Classify PR validation against the independently measured main baseline."],
     ["emit llms", "Generate a deterministic llms.txt from the manifest + artifact index."],
   ] as const) {
     console.log(`  ${style.cyan(name.padEnd(13))} ${style.dim(desc)}`);

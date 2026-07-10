@@ -50,7 +50,21 @@ export const MODULE_SCHEMA: JsonSchema = {
     },
     capabilities: {
       type: "array",
-      items: { type: "string" },
+      items: {
+        anyOf: [
+          { type: "string" },
+          {
+            type: "object",
+            required: ["id"],
+            properties: {
+              id: { type: "string", minLength: 1 },
+              enabled: { type: "boolean" },
+              kind: { type: "string" },
+            },
+            additionalProperties: true,
+          },
+        ],
+      },
       uniqueItems: true,
     },
     hooks: {

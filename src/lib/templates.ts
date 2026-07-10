@@ -307,8 +307,9 @@ ${dataRefs}
 ## Refresh
 
 \`\`\`bash
-keryx index refresh
+# Use only supported refresh commands:
 ${enableGdgraph ? "keryx gdgraph build" : ""}
+${enableGdwiki ? "keryx wiki index" : ""}
 ${enableTesting ? "keryx test analyze" : ""}
 ${enableMemory ? "keryx memory index" : ""}
 \`\`\`

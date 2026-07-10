@@ -1,12 +1,14 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { isPathInside, pathExists } from "../lib/fs";
 import { loadHealthConfig } from "./config";
 import { runHealth } from "./run";
 import { writeBaseline } from "./baseline";
 import { getCoverage } from "./metrics/coverage";
 import { FINDING_ADAPTERS } from "./sources";
 import { dataRoot, listSourceFiles, moduleOfFile } from "./util";
+import { collectGitProvenance } from "../metrics/provenance";
+import { readArtifactPointer } from "../metrics/lifecycle";
 import type {
   CodeHealthService,
   HealthBaselineInput,
@@ -30,7 +32,19 @@ async function readLatest(cwd: string): Promise<HealthReport | null> {
     return null;
   }
   try {
-    return JSON.parse(await readFile(file, "utf8")) as HealthReport;
+    const latest = JSON.parse(await readFile(file, "utf8")) as HealthReport & { record?: string };
+    if (typeof latest.record === "string") {
+      const pointer = await readArtifactPointer(
+        path.join(dataRoot(cwd), "artifacts"),
+        await collectGitProvenance(cwd),
+      );
+      if (pointer.status !== "fresh") return null;
+      const recordFile = path.join(dataRoot(cwd), "artifacts", latest.record);
+      if (!isPathInside(path.join(dataRoot(cwd), "artifacts"), recordFile)) return null;
+      if (!(await pathExists(recordFile))) return null;
+      return JSON.parse(await readFile(recordFile, "utf8")) as HealthReport;
+    }
+    return latest;
   } catch {
     return null;
   }

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { moduleCommands } from "./module-commands";
 import { pathExists } from "../lib/fs";
+import { resolveGitHooksRoot } from "../lib/git-hooks";
 import { seedAssetsLock } from "../assets/seed";
 import { choice, confirm } from "../lib/prompt";
 import {
@@ -1245,12 +1246,11 @@ async function installManagedHook(
   blockId: string,
   content: string,
 ): Promise<void> {
-  const gitRoot = path.join(projectRoot, ".git");
-  if (!(await pathExists(gitRoot))) {
+  const hooksRoot = await resolveGitHooksRoot(projectRoot);
+  if (!hooksRoot) {
     return;
   }
 
-  const hooksRoot = path.join(gitRoot, "hooks");
   await mkdir(hooksRoot, { recursive: true });
 
   const hookPath = path.join(hooksRoot, hookName);
@@ -1279,7 +1279,11 @@ async function removeManagedHook(
   hookName: "post-commit" | "pre-push",
   blockId: string,
 ): Promise<void> {
-  const hookPath = path.join(projectRoot, ".git", "hooks", hookName);
+  const hooksRoot = await resolveGitHooksRoot(projectRoot);
+  if (!hooksRoot) {
+    return;
+  }
+  const hookPath = path.join(hooksRoot, hookName);
   if (!(await pathExists(hookPath))) {
     return;
   }
@@ -1299,7 +1303,11 @@ async function removeManagedHook(
 
 // True when the git pre-push hook still carries the managed security block.
 async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
-  const hookPath = path.join(projectRoot, ".git", "hooks", "pre-push");
+  const hooksRoot = await resolveGitHooksRoot(projectRoot);
+  if (!hooksRoot) {
+    return false;
+  }
+  const hookPath = path.join(hooksRoot, "pre-push");
   if (!(await pathExists(hookPath))) {
     return false;
   }

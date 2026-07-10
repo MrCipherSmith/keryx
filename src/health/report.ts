@@ -28,6 +28,8 @@ Generated: ${report.generatedAt}
 Scope: ${report.scope}${report.strict ? " (strict)" : ""}
 Git: ${report.gitRef ?? "n/a"}
 Schema: ${report.schemaVersion}
+Run: ${report.runId ?? "legacy"}
+Worktree: ${report.provenance?.worktree ?? "unknown"}
 
 ## Gate Reasons
 

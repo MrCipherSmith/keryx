@@ -21,6 +21,7 @@ import { modulesCommand } from "./commands/modules";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
+import { metricsCommand } from "./commands/metrics";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -106,6 +107,11 @@ export async function main(): Promise<void> {
 
   if (command === "health") {
     await healthCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "metrics") {
+    await metricsCommand(args.slice(1));
     return;
   }
 
@@ -196,6 +202,7 @@ Usage:
   keryx skills sync --runtime codex|claude --target <dir>
   keryx skill-verify-skill <skill-or-target>
   keryx skills contracts validate <file> --schema subagent-result
+  keryx metrics status|collect|validate|latest|show|plan|benchmark
   keryx test analyze
   keryx test run [--changed]
   keryx test status
@@ -211,6 +218,7 @@ Usage:
   keryx standard validate
   keryx standard doctor
   keryx standard capabilities
+  keryx standard baseline --baseline <status> --pr <status>
   keryx standard emit llms [--stdout]
   keryx security status
   keryx security scan <path> [--json]

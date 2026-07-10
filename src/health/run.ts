@@ -1,5 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathExists, writeFileAtomic } from "../lib/fs";
+import { collectGitProvenance } from "../metrics/provenance";
 import { loadHealthConfig } from "./config";
 import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
@@ -155,6 +157,12 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     metrics,
     findings,
     hotspots,
+    ...(input.runId
+      ? {
+          runId: input.runId,
+          provenance: input.provenance ?? await collectGitProvenance(cwd),
+        }
+      : {}),
   };
 
   const paths = await writeOutputs(cwd, report, config, stamp);
@@ -215,9 +223,6 @@ async function runAdapter(
           if (adapter.id === "tests") {
             return { info: { ...base, status: "missing" }, findings: [] };
           }
-          if (ctx.strict) {
-            return { info: { ...base, status: "missing" }, findings: [] };
-          }
           raw = await adapter.run(ctx);
         } else {
           throw error;
@@ -267,7 +272,26 @@ async function writeOutputs(
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
 
   await writeFile(markdown, renderReportMarkdown(report, config), "utf8");
-  await writeFile(json, serialized, "utf8");
+  if (report.runId) {
+    const runJson = path.join(artifacts, "runs", `${report.runId}.json`);
+    const runMarkdown = path.join(artifacts, "runs", `${report.runId}.md`);
+    if (await pathExists(runJson)) throw new Error(`immutable health run already exists: ${report.runId}`);
+    await writeFileAtomic(runJson, serialized);
+    await writeFileAtomic(runMarkdown, renderReportMarkdown(report, config));
+    await writeFileAtomic(
+      json,
+      `${JSON.stringify({
+        run_id: report.runId,
+        commit: report.provenance?.commit ?? null,
+        branch: report.provenance?.branch ?? null,
+        worktree: report.provenance?.worktree ?? null,
+        generated_at: report.generatedAt,
+        record: path.posix.join("runs", `${report.runId}.json`),
+      }, null, 2)}\n`,
+    );
+  } else {
+    await writeFile(json, serialized, "utf8");
+  }
   await writeFile(historyJson, serialized, "utf8");
 
   return {

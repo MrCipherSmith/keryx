@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { resolveGitHooksRoot } from "../lib/git-hooks";
 
 // Install merge/checkout git hooks that run `keryx sync` — so a `git pull`
 // (post-merge) or branch switch / `fetch`+checkout (post-checkout) reports what
@@ -36,11 +37,10 @@ ${fn} "$@"`;
 }
 
 async function writeManagedHook(projectRoot: string, hookName: string): Promise<boolean> {
-  const gitRoot = path.join(projectRoot, ".git");
-  if (!(await pathExists(gitRoot))) {
+  const hooksRoot = await resolveGitHooksRoot(projectRoot);
+  if (!hooksRoot) {
     return false;
   }
-  const hooksRoot = path.join(gitRoot, "hooks");
   await mkdir(hooksRoot, { recursive: true });
   const hookPath = path.join(hooksRoot, hookName);
 
@@ -58,7 +58,11 @@ async function writeManagedHook(projectRoot: string, hookName: string): Promise<
 }
 
 async function stripManagedHook(projectRoot: string, hookName: string): Promise<boolean> {
-  const hookPath = path.join(projectRoot, ".git", "hooks", hookName);
+  const hooksRoot = await resolveGitHooksRoot(projectRoot);
+  if (!hooksRoot) {
+    return false;
+  }
+  const hookPath = path.join(hooksRoot, hookName);
   if (!(await pathExists(hookPath))) {
     return false;
   }

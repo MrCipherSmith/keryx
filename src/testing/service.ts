@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { isPathInside, pathExists, writeFileAtomic } from "../lib/fs";
+import { collectGitProvenance } from "../metrics/provenance";
+import { readArtifactPointer } from "../metrics/lifecycle";
 import { guardOutput, redactRaw, formatGuardWarning } from "../security/guard";
 import { isTestingCapabilityEnabled } from "./capability";
 import { loadCoverageMap, selectByCoverageMap, coveredFilesInMap } from "./coverage-map";
@@ -234,6 +236,12 @@ export async function runTesting(input: TestingRunInput): Promise<TestingRunResu
     relatedFiles: Array.from(new Set([...selectedTests.changedFiles, ...selectedTests.selectedTests])).sort(),
     relatedSkills: [],
     rawLogPath,
+    ...(input.runId
+      ? {
+          runId: input.runId,
+          provenance: input.provenance ?? await collectGitProvenance(cwd),
+        }
+      : {}),
   };
 
   const paths = await writeReport(cwd, report);
@@ -266,7 +274,19 @@ export async function loadTestingReport(cwd: string): Promise<TestingReport | nu
     return null;
   }
   try {
-    return JSON.parse(await readFile(file, "utf8")) as TestingReport;
+    const latest = JSON.parse(await readFile(file, "utf8")) as TestingReport & { record?: string };
+    if (typeof latest.record === "string") {
+      const pointer = await readArtifactPointer(
+        path.join(testingDataRoot(cwd), "artifacts"),
+        await collectGitProvenance(cwd),
+      );
+      if (pointer.status !== "fresh") return null;
+      const recordFile = path.join(testingDataRoot(cwd), "artifacts", latest.record);
+      if (!isPathInside(path.join(testingDataRoot(cwd), "artifacts"), recordFile)) return null;
+      if (!(await pathExists(recordFile))) return null;
+      return JSON.parse(await readFile(recordFile, "utf8")) as TestingReport;
+    }
+    return latest;
   } catch {
     return null;
   }
@@ -324,7 +344,26 @@ async function writeReport(
   const json = path.join(artifacts, "latest.json");
   const markdown = path.join(artifacts, "latest.md");
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
-  await writeFile(json, serialized, "utf8");
+  if (report.runId) {
+    const runJson = path.join(artifacts, "runs", `${report.runId}.json`);
+    const runMarkdown = path.join(artifacts, "runs", `${report.runId}.md`);
+    if (await pathExists(runJson)) throw new Error(`immutable testing run already exists: ${report.runId}`);
+    await writeFileAtomic(runJson, serialized);
+    await writeFileAtomic(runMarkdown, renderReportMarkdown(report));
+    await writeFileAtomic(
+      json,
+      `${JSON.stringify({
+        run_id: report.runId,
+        commit: report.provenance?.commit ?? null,
+        branch: report.provenance?.branch ?? null,
+        worktree: report.provenance?.worktree ?? null,
+        generated_at: report.generatedAt,
+        record: path.posix.join("runs", `${report.runId}.json`),
+      }, null, 2)}\n`,
+    );
+  } else {
+    await writeFile(json, serialized, "utf8");
+  }
   await writeFile(markdown, renderReportMarkdown(report), "utf8");
   await writeFile(path.join(history, `${stamp}.json`), serialized, "utf8");
   return {

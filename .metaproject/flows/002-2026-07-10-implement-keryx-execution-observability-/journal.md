@@ -1,0 +1,21 @@
+# Flow Journal
+
+- 2026-07-10T11:40:52.417Z - flow created
+- 2026-07-10T11:49:39.793Z - task-added: T5: Provenance schema, runtime validation, renderers, and event accounting
+- 2026-07-10T11:49:42.175Z - task-added: T6: Immutable testing/health evidence and latest-pointer lifecycle
+- 2026-07-10T11:49:44.690Z - task-added: T7: Worktree hooks, refresh guidance, and baseline/pr classification
+- 2026-07-10T11:49:47.382Z - task-added: T8: Lightweight profile and paired benchmark harness
+- 2026-07-10T11:49:50.374Z - task-added: T9: Run focused/full verification and security/documentation checks
+- 2026-07-10T11:49:53.053Z - task-added: T10: Reconcile requirements package, roadmap, and implementation report
+- 2026-07-10T11:49:59.974Z - task-done: T1: Collect remaining context
+- 2026-07-10T11:50:25.822Z - frozen: 12 criteria; checksum recorded
+- 2026-07-10T11:50:28.080Z - started
+- 2026-07-10T12:11:52.441Z - task-done: T5: Provenance schema, runtime validation, renderers, and event accounting
+- 2026-07-10T12:11:54.297Z - task-done: T6: Immutable testing/health evidence and latest-pointer lifecycle
+- 2026-07-10T12:11:56.348Z - task-done: T7: Worktree hooks, refresh guidance, and baseline/pr classification
+- 2026-07-10T12:11:58.402Z - task-done: T8: Lightweight profile and paired benchmark harness
+- 2026-07-10T12:29:46.183Z - task-done: T2: Implement per plan
+- 2026-07-10T12:29:49.149Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-10T12:31:59.770Z - task-done: T9: Run focused/full verification and security/documentation checks
+- 2026-07-10T12:32:02.148Z - task-done: T10: Reconcile requirements package, roadmap, and implementation report
+- 2026-07-10T12:33:26.988Z - task-done: T4: Self-review and prepare draft PR

@@ -1,0 +1,7580 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-10T12:31:51.108Z",
+  "scope": "changed:HEAD",
+  "strict": true,
+  "gitRef": "34409f6",
+  "gate": {
+    "status": "warn",
+    "reasons": [
+      "WARN: health regression 6 vs baseline"
+    ]
+  },
+  "sources": [
+    {
+      "source": "eslint",
+      "mode": "auto",
+      "required": true,
+      "imported": false,
+      "command": null,
+      "toolVersion": null,
+      "findings": 0,
+      "status": "skipped"
+    },
+    {
+      "source": "typescript",
+      "mode": "auto",
+      "required": true,
+      "imported": false,
+      "command": "/private/tmp/keryx-execution-observability/node_modules/.bin/tsc --noEmit --pretty false",
+      "toolVersion": "Version 5.9.3",
+      "findings": 0,
+      "status": "available"
+    },
+    {
+      "source": "tests",
+      "mode": "auto",
+      "required": false,
+      "imported": true,
+      "command": "/Users/tsaitler.aleksandr/.bun/bin/bun run test src/cli.test.ts src/commands/ctx.test.ts src/commands/dashboard.test.ts src/commands/init-mcp-offer.test.ts src/commands/init.test.ts src/commands/mcp-install.test.ts src/commands/metrics.test.ts src/commands/module-commands.test.ts src/commands/rules.test.ts src/commands/security-hooks-init.test.ts src/commands/skills-route.test.ts src/commands/update.test.ts src/health/provenance.test.ts src/lib/git-hooks.test.ts src/lib/templates.test.ts src/mcp/client-config.test.ts src/metrics/service.test.ts src/standard/baseline.test.ts src/testing/service.test.ts",
+      "toolVersion": "bun-script",
+      "findings": 0,
+      "status": "available"
+    },
+    {
+      "source": "dependencyAudit",
+      "mode": "auto",
+      "required": false,
+      "imported": false,
+      "command": "/Users/tsaitler.aleksandr/.bun/bin/bun audit --json",
+      "toolVersion": "1.3.14",
+      "findings": 0,
+      "status": "available"
+    },
+    {
+      "source": "sonarqube",
+      "mode": "disabled",
+      "required": false,
+      "imported": false,
+      "command": null,
+      "toolVersion": null,
+      "findings": 0,
+      "status": "skipped"
+    },
+    {
+      "source": "coverage",
+      "status": "missing",
+      "mode": "import",
+      "required": false,
+      "imported": true,
+      "command": null,
+      "toolVersion": null,
+      "findings": 0
+    },
+    {
+      "source": "complexity",
+      "status": "available",
+      "mode": "auto",
+      "required": false,
+      "imported": false,
+      "command": "builtin: cyclomatic (token-based)",
+      "toolVersion": null,
+      "findings": 71
+    }
+  ],
+  "metrics": [
+    {
+      "key": "project",
+      "kind": "project",
+      "name": "project",
+      "loc": 53176,
+      "findingCounts": {
+        "total": 71,
+        "bySeverity": {
+          "error": 0,
+          "warning": 71,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 71,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 71
+        }
+      },
+      "coverage": null,
+      "churn": 52622,
+      "complexity": {
+        "max": 125,
+        "aboveThreshold": 104
+      },
+      "hotspot": 3400361,
+      "health_score": 89,
+      "risk_score": 355,
+      "trend": "regressed",
+      "regression_score": 6
+    },
+    {
+      "key": "module:fixtures",
+      "kind": "module",
+      "name": "fixtures",
+      "loc": 98,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 87,
+      "complexity": {
+        "max": 6,
+        "aboveThreshold": 0
+      },
+      "hotspot": 310,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src",
+      "kind": "module",
+      "name": "src",
+      "loc": 314,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 304,
+      "complexity": {
+        "max": 31,
+        "aboveThreshold": 1
+      },
+      "hotspot": 9211,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "regressed",
+      "regression_score": 5
+    },
+    {
+      "key": "module:src/agents",
+      "kind": "module",
+      "name": "src/agents",
+      "loc": 342,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 378,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 12205,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/assets",
+      "kind": "module",
+      "name": "src/assets",
+      "loc": 787,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 781,
+      "complexity": {
+        "max": 18,
+        "aboveThreshold": 2
+      },
+      "hotspot": 11572,
+      "health_score": 86,
+      "risk_score": 10,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/capability",
+      "kind": "module",
+      "name": "src/capability",
+      "loc": 1360,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 1354,
+      "complexity": {
+        "max": 10,
+        "aboveThreshold": 0
+      },
+      "hotspot": 28289,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/commands",
+      "kind": "module",
+      "name": "src/commands",
+      "loc": 11282,
+      "findingCounts": {
+        "total": 18,
+        "bySeverity": {
+          "error": 0,
+          "warning": 18,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 18,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 18
+        }
+      },
+      "coverage": null,
+      "churn": 11121,
+      "complexity": {
+        "max": 125,
+        "aboveThreshold": 35
+      },
+      "hotspot": 1421573,
+      "health_score": 86,
+      "risk_score": 90,
+      "trend": "regressed",
+      "regression_score": 8
+    },
+    {
+      "key": "module:src/ctx",
+      "kind": "module",
+      "name": "src/ctx",
+      "loc": 1634,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 2271,
+      "complexity": {
+        "max": 16,
+        "aboveThreshold": 2
+      },
+      "hotspot": 68066,
+      "health_score": 91,
+      "risk_score": 10,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/flow",
+      "kind": "module",
+      "name": "src/flow",
+      "loc": 1766,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1754,
+      "complexity": {
+        "max": 25,
+        "aboveThreshold": 3
+      },
+      "hotspot": 66438,
+      "health_score": 94,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/gdgraph",
+      "kind": "module",
+      "name": "src/gdgraph",
+      "loc": 3870,
+      "findingCounts": {
+        "total": 8,
+        "bySeverity": {
+          "error": 0,
+          "warning": 8,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 8,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 8
+        }
+      },
+      "coverage": null,
+      "churn": 3883,
+      "complexity": {
+        "max": 39,
+        "aboveThreshold": 8
+      },
+      "hotspot": 102609,
+      "health_score": 86,
+      "risk_score": 40,
+      "trend": "regressed",
+      "regression_score": 14
+    },
+    {
+      "key": "module:src/gdskills",
+      "kind": "module",
+      "name": "src/gdskills",
+      "loc": 3637,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 3627,
+      "complexity": {
+        "max": 26,
+        "aboveThreshold": 3
+      },
+      "hotspot": 179139,
+      "health_score": 96,
+      "risk_score": 10,
+      "trend": "stable",
+      "regression_score": 1
+    },
+    {
+      "key": "module:src/harness",
+      "kind": "module",
+      "name": "src/harness",
+      "loc": 253,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 249,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2905,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/health",
+      "kind": "module",
+      "name": "src/health",
+      "loc": 4110,
+      "findingCounts": {
+        "total": 8,
+        "bySeverity": {
+          "error": 0,
+          "warning": 8,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 8,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 8
+        }
+      },
+      "coverage": null,
+      "churn": 3977,
+      "complexity": {
+        "max": 22,
+        "aboveThreshold": 10
+      },
+      "hotspot": 95654,
+      "health_score": 85,
+      "risk_score": 40,
+      "trend": "regressed",
+      "regression_score": 8
+    },
+    {
+      "key": "module:src/lib",
+      "kind": "module",
+      "name": "src/lib",
+      "loc": 3324,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 3340,
+      "complexity": {
+        "max": 55,
+        "aboveThreshold": 4
+      },
+      "hotspot": 544399,
+      "health_score": 96,
+      "risk_score": 5,
+      "trend": "stable",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/mcp",
+      "kind": "module",
+      "name": "src/mcp",
+      "loc": 2550,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 2535,
+      "complexity": {
+        "max": 20,
+        "aboveThreshold": 2
+      },
+      "hotspot": 87070,
+      "health_score": 95,
+      "risk_score": 10,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/memory",
+      "kind": "module",
+      "name": "src/memory",
+      "loc": 3740,
+      "findingCounts": {
+        "total": 6,
+        "bySeverity": {
+          "error": 0,
+          "warning": 6,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 6,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 6
+        }
+      },
+      "coverage": null,
+      "churn": 3714,
+      "complexity": {
+        "max": 17,
+        "aboveThreshold": 6
+      },
+      "hotspot": 83414,
+      "health_score": 89,
+      "risk_score": 30,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/metrics",
+      "kind": "module",
+      "name": "src/metrics",
+      "loc": 903,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 0,
+      "complexity": {
+        "max": 19,
+        "aboveThreshold": 2
+      },
+      "hotspot": 0,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/review",
+      "kind": "module",
+      "name": "src/review",
+      "loc": 756,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 753,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 30681,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/rules",
+      "kind": "module",
+      "name": "src/rules",
+      "loc": 427,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 629,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 2
+      },
+      "hotspot": 23755,
+      "health_score": 86,
+      "risk_score": 10,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/security",
+      "kind": "module",
+      "name": "src/security",
+      "loc": 5708,
+      "findingCounts": {
+        "total": 7,
+        "bySeverity": {
+          "error": 0,
+          "warning": 7,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 7,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 7
+        }
+      },
+      "coverage": null,
+      "churn": 5676,
+      "complexity": {
+        "max": 30,
+        "aboveThreshold": 9
+      },
+      "hotspot": 135130,
+      "health_score": 91,
+      "risk_score": 35,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/standard",
+      "kind": "module",
+      "name": "src/standard",
+      "loc": 1327,
+      "findingCounts": {
+        "total": 3,
+        "bySeverity": {
+          "error": 0,
+          "warning": 3,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 3,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 3
+        }
+      },
+      "coverage": null,
+      "churn": 1235,
+      "complexity": {
+        "max": 33,
+        "aboveThreshold": 4
+      },
+      "hotspot": 46870,
+      "health_score": 83,
+      "risk_score": 15,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/sync",
+      "kind": "module",
+      "name": "src/sync",
+      "loc": 343,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 334,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4872,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/testing",
+      "kind": "module",
+      "name": "src/testing",
+      "loc": 2342,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 2260,
+      "complexity": {
+        "max": 22,
+        "aboveThreshold": 4
+      },
+      "hotspot": 152923,
+      "health_score": 92,
+      "risk_score": 10,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "module:src/wiki",
+      "kind": "module",
+      "name": "src/wiki",
+      "loc": 2303,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 2360,
+      "complexity": {
+        "max": 37,
+        "aboveThreshold": 3
+      },
+      "hotspot": 293276,
+      "health_score": 95,
+      "risk_score": 5,
+      "trend": "regressed",
+      "regression_score": 5
+    },
+    {
+      "key": "component:fixtures/change-impacted-test/src",
+      "kind": "component",
+      "name": "fixtures/change-impacted-test/src",
+      "loc": 25,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 19,
+      "complexity": {
+        "max": 1,
+        "aboveThreshold": 0
+      },
+      "hotspot": 6,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:fixtures/churn-complexity/src",
+      "kind": "component",
+      "name": "fixtures/churn-complexity/src",
+      "loc": 54,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 50,
+      "complexity": {
+        "max": 6,
+        "aboveThreshold": 0
+      },
+      "hotspot": 250,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:fixtures/symbol-graph",
+      "kind": "component",
+      "name": "fixtures/symbol-graph",
+      "loc": 19,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 18,
+      "complexity": {
+        "max": 1,
+        "aboveThreshold": 0
+      },
+      "hotspot": 54,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/flow/tracker",
+      "kind": "component",
+      "name": "src/flow/tracker",
+      "loc": 119,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 117,
+      "complexity": {
+        "max": 3,
+        "aboveThreshold": 0
+      },
+      "hotspot": 1125,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/gdgraph/treesitter",
+      "kind": "component",
+      "name": "src/gdgraph/treesitter",
+      "loc": 1122,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1149,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 46792,
+      "health_score": 94,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/health/metrics",
+      "kind": "component",
+      "name": "src/health/metrics",
+      "loc": 804,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 796,
+      "complexity": {
+        "max": 17,
+        "aboveThreshold": 2
+      },
+      "hotspot": 29078,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/health/sources",
+      "kind": "component",
+      "name": "src/health/sources",
+      "loc": 744,
+      "findingCounts": {
+        "total": 3,
+        "bySeverity": {
+          "error": 0,
+          "warning": 3,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 3,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 3
+        }
+      },
+      "coverage": null,
+      "churn": 736,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 3
+      },
+      "hotspot": 16219,
+      "health_score": 79,
+      "risk_score": 15,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/mcp/transport",
+      "kind": "component",
+      "name": "src/mcp/transport",
+      "loc": 69,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 67,
+      "complexity": {
+        "max": 1,
+        "aboveThreshold": 0
+      },
+      "hotspot": 161,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/memory/embedding",
+      "kind": "component",
+      "name": "src/memory/embedding",
+      "loc": 695,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 692,
+      "complexity": {
+        "max": 8,
+        "aboveThreshold": 0
+      },
+      "hotspot": 18721,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/security/agent-hooks",
+      "kind": "component",
+      "name": "src/security/agent-hooks",
+      "loc": 345,
+      "findingCounts": {
+        "total": 0,
+        "bySeverity": {
+          "error": 0,
+          "warning": 0,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "bySource": {}
+      },
+      "coverage": null,
+      "churn": 343,
+      "complexity": {
+        "max": 8,
+        "aboveThreshold": 0
+      },
+      "hotspot": 10438,
+      "health_score": 100,
+      "risk_score": 0,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/security/detect",
+      "kind": "component",
+      "name": "src/security/detect",
+      "loc": 1607,
+      "findingCounts": {
+        "total": 2,
+        "bySeverity": {
+          "error": 0,
+          "warning": 2,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 2,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 2
+        }
+      },
+      "coverage": null,
+      "churn": 1599,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 4
+      },
+      "hotspot": 34398,
+      "health_score": 89,
+      "risk_score": 10,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/security/detect/injection",
+      "kind": "component",
+      "name": "src/security/detect/injection",
+      "loc": 304,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 302,
+      "complexity": {
+        "max": 12,
+        "aboveThreshold": 1
+      },
+      "hotspot": 6612,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/security/detect/pii",
+      "kind": "component",
+      "name": "src/security/detect/pii",
+      "loc": 240,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 238,
+      "complexity": {
+        "max": 18,
+        "aboveThreshold": 1
+      },
+      "hotspot": 6052,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "component:src/security/eval",
+      "kind": "component",
+      "name": "src/security/eval",
+      "loc": 347,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 345,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 12024,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/agents/bootstrap.ts",
+      "kind": "file",
+      "name": "src/agents/bootstrap.ts",
+      "loc": 252,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 289,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 11849,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/assets/command.ts",
+      "kind": "file",
+      "name": "src/assets/command.ts",
+      "loc": 96,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 95,
+      "complexity": {
+        "max": 18,
+        "aboveThreshold": 1
+      },
+      "hotspot": 1710,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/assets/lock.ts",
+      "kind": "file",
+      "name": "src/assets/lock.ts",
+      "loc": 147,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 146,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4526,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/cli.ts",
+      "kind": "file",
+      "name": "src/cli.ts",
+      "loc": 268,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 259,
+      "complexity": {
+        "max": 31,
+        "aboveThreshold": 1
+      },
+      "hotspot": 8806,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/agents.ts",
+      "kind": "file",
+      "name": "src/commands/agents.ts",
+      "loc": 134,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 133,
+      "complexity": {
+        "max": 25,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4256,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/ctx.ts",
+      "kind": "file",
+      "name": "src/commands/ctx.ts",
+      "loc": 794,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 861,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 85239,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/flow.ts",
+      "kind": "file",
+      "name": "src/commands/flow.ts",
+      "loc": 328,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 327,
+      "complexity": {
+        "max": 17,
+        "aboveThreshold": 2
+      },
+      "hotspot": 22890,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/gdgraph.ts",
+      "kind": "file",
+      "name": "src/commands/gdgraph.ts",
+      "loc": 615,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 652,
+      "complexity": {
+        "max": 24,
+        "aboveThreshold": 3
+      },
+      "hotspot": 90628,
+      "health_score": 89,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/health.ts",
+      "kind": "file",
+      "name": "src/commands/health.ts",
+      "loc": 242,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 239,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 12189,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/init.ts",
+      "kind": "file",
+      "name": "src/commands/init.ts",
+      "loc": 1700,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1691,
+      "complexity": {
+        "max": 125,
+        "aboveThreshold": 2
+      },
+      "hotspot": 375402,
+      "health_score": 95,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/mcp.ts",
+      "kind": "file",
+      "name": "src/commands/mcp.ts",
+      "loc": 173,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 172,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 5332,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/memory.ts",
+      "kind": "file",
+      "name": "src/commands/memory.ts",
+      "loc": 287,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 286,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 2
+      },
+      "hotspot": 17160,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/metrics.ts",
+      "kind": "file",
+      "name": "src/commands/metrics.ts",
+      "loc": 204,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 0,
+      "complexity": {
+        "max": 38,
+        "aboveThreshold": 2
+      },
+      "hotspot": 0,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/modules.ts",
+      "kind": "file",
+      "name": "src/commands/modules.ts",
+      "loc": 160,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 159,
+      "complexity": {
+        "max": 26,
+        "aboveThreshold": 1
+      },
+      "hotspot": 5247,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/review.ts",
+      "kind": "file",
+      "name": "src/commands/review.ts",
+      "loc": 123,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 122,
+      "complexity": {
+        "max": 12,
+        "aboveThreshold": 1
+      },
+      "hotspot": 3050,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/rules.ts",
+      "kind": "file",
+      "name": "src/commands/rules.ts",
+      "loc": 173,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 172,
+      "complexity": {
+        "max": 12,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4128,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/security.ts",
+      "kind": "file",
+      "name": "src/commands/security.ts",
+      "loc": 671,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 670,
+      "complexity": {
+        "max": 16,
+        "aboveThreshold": 2
+      },
+      "hotspot": 84420,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/skills.ts",
+      "kind": "file",
+      "name": "src/commands/skills.ts",
+      "loc": 1298,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1297,
+      "complexity": {
+        "max": 18,
+        "aboveThreshold": 6
+      },
+      "hotspot": 249024,
+      "health_score": 87,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/sync.ts",
+      "kind": "file",
+      "name": "src/commands/sync.ts",
+      "loc": 126,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 125,
+      "complexity": {
+        "max": 21,
+        "aboveThreshold": 1
+      },
+      "hotspot": 3375,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/test.ts",
+      "kind": "file",
+      "name": "src/commands/test.ts",
+      "loc": 278,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 275,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 2
+      },
+      "hotspot": 15675,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/update.ts",
+      "kind": "file",
+      "name": "src/commands/update.ts",
+      "loc": 1582,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1573,
+      "complexity": {
+        "max": 32,
+        "aboveThreshold": 4
+      },
+      "hotspot": 388531,
+      "health_score": 92,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/commands/wiki.ts",
+      "kind": "file",
+      "name": "src/commands/wiki.ts",
+      "loc": 286,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 311,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 2
+      },
+      "hotspot": 17105,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/ctx/hook-classify.ts",
+      "kind": "file",
+      "name": "src/ctx/hook-classify.ts",
+      "loc": 117,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 116,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2668,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/ctx/orient.ts",
+      "kind": "file",
+      "name": "src/ctx/orient.ts",
+      "loc": 156,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 155,
+      "complexity": {
+        "max": 16,
+        "aboveThreshold": 1
+      },
+      "hotspot": 5270,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/flow/service.ts",
+      "kind": "file",
+      "name": "src/flow/service.ts",
+      "loc": 494,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 493,
+      "complexity": {
+        "max": 25,
+        "aboveThreshold": 3
+      },
+      "hotspot": 52751,
+      "health_score": 89,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/affected.ts",
+      "kind": "file",
+      "name": "src/gdgraph/affected.ts",
+      "loc": 143,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 142,
+      "complexity": {
+        "max": 20,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4260,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/build.ts",
+      "kind": "file",
+      "name": "src/gdgraph/build.ts",
+      "loc": 554,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 553,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 16037,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/find.ts",
+      "kind": "file",
+      "name": "src/gdgraph/find.ts",
+      "loc": 108,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 111,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2442,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/pagerank.ts",
+      "kind": "file",
+      "name": "src/gdgraph/pagerank.ts",
+      "loc": 130,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 129,
+      "complexity": {
+        "max": 39,
+        "aboveThreshold": 1
+      },
+      "hotspot": 5031,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/path.ts",
+      "kind": "file",
+      "name": "src/gdgraph/path.ts",
+      "loc": 113,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 112,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 3696,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/repomap.ts",
+      "kind": "file",
+      "name": "src/gdgraph/repomap.ts",
+      "loc": 194,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 193,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 6948,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/symbol.ts",
+      "kind": "file",
+      "name": "src/gdgraph/symbol.ts",
+      "loc": 124,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 123,
+      "complexity": {
+        "max": 16,
+        "aboveThreshold": 1
+      },
+      "hotspot": 3567,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdgraph/treesitter/adapter.ts",
+      "kind": "file",
+      "name": "src/gdgraph/treesitter/adapter.ts",
+      "loc": 214,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 247,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 10621,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdskills/contracts.ts",
+      "kind": "file",
+      "name": "src/gdskills/contracts.ts",
+      "loc": 292,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 291,
+      "complexity": {
+        "max": 26,
+        "aboveThreshold": 1
+      },
+      "hotspot": 15714,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/gdskills/verify.ts",
+      "kind": "file",
+      "name": "src/gdskills/verify.ts",
+      "loc": 419,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 418,
+      "complexity": {
+        "max": 25,
+        "aboveThreshold": 2
+      },
+      "hotspot": 33858,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/harness/corpus.ts",
+      "kind": "file",
+      "name": "src/harness/corpus.ts",
+      "loc": 114,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 113,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2373,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/gate.ts",
+      "kind": "file",
+      "name": "src/health/gate.ts",
+      "loc": 79,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 78,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 1326,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/metrics/complexity.ts",
+      "kind": "file",
+      "name": "src/health/metrics/complexity.ts",
+      "loc": 269,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 268,
+      "complexity": {
+        "max": 17,
+        "aboveThreshold": 2
+      },
+      "hotspot": 23584,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/run.ts",
+      "kind": "file",
+      "name": "src/health/run.ts",
+      "loc": 341,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 316,
+      "complexity": {
+        "max": 22,
+        "aboveThreshold": 1
+      },
+      "hotspot": 13272,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/scopes.ts",
+      "kind": "file",
+      "name": "src/health/scopes.ts",
+      "loc": 241,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 240,
+      "complexity": {
+        "max": 20,
+        "aboveThreshold": 1
+      },
+      "hotspot": 8400,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/service.ts",
+      "kind": "file",
+      "name": "src/health/service.ts",
+      "loc": 196,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 181,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 2
+      },
+      "hotspot": 7964,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/sources/dependency-audit.ts",
+      "kind": "file",
+      "name": "src/health/sources/dependency-audit.ts",
+      "loc": 118,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 117,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2808,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/sources/eslint.ts",
+      "kind": "file",
+      "name": "src/health/sources/eslint.ts",
+      "loc": 118,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 117,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2340,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/health/sources/sonarqube.ts",
+      "kind": "file",
+      "name": "src/health/sources/sonarqube.ts",
+      "loc": 123,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 122,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 3782,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/lib/templates.ts",
+      "kind": "file",
+      "name": "src/lib/templates.ts",
+      "loc": 2594,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 2700,
+      "complexity": {
+        "max": 55,
+        "aboveThreshold": 4
+      },
+      "hotspot": 537300,
+      "health_score": 95,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/mcp/client-config.ts",
+      "kind": "file",
+      "name": "src/mcp/client-config.ts",
+      "loc": 523,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 522,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 37062,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/mcp/config.ts",
+      "kind": "file",
+      "name": "src/mcp/config.ts",
+      "loc": 111,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 110,
+      "complexity": {
+        "max": 20,
+        "aboveThreshold": 1
+      },
+      "hotspot": 3080,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/memory/check.ts",
+      "kind": "file",
+      "name": "src/memory/check.ts",
+      "loc": 76,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 75,
+      "complexity": {
+        "max": 17,
+        "aboveThreshold": 1
+      },
+      "hotspot": 1350,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/memory/config.ts",
+      "kind": "file",
+      "name": "src/memory/config.ts",
+      "loc": 80,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 81,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 1296,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/memory/dedup.ts",
+      "kind": "file",
+      "name": "src/memory/dedup.ts",
+      "loc": 112,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 111,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 2775,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/memory/ingest.ts",
+      "kind": "file",
+      "name": "src/memory/ingest.ts",
+      "loc": 301,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 300,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 12300,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/memory/search.ts",
+      "kind": "file",
+      "name": "src/memory/search.ts",
+      "loc": 266,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 265,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 15900,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/memory/store.ts",
+      "kind": "file",
+      "name": "src/memory/store.ts",
+      "loc": 203,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 202,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 8888,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/metrics/events.ts",
+      "kind": "file",
+      "name": "src/metrics/events.ts",
+      "loc": 140,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 0,
+      "complexity": {
+        "max": 19,
+        "aboveThreshold": 2
+      },
+      "hotspot": 0,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/review/managed.ts",
+      "kind": "file",
+      "name": "src/review/managed.ts",
+      "loc": 437,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 436,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 26596,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/rules/agent-entrypoints.ts",
+      "kind": "file",
+      "name": "src/rules/agent-entrypoints.ts",
+      "loc": 185,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 388,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 14356,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/rules/distill.ts",
+      "kind": "file",
+      "name": "src/rules/distill.ts",
+      "loc": 242,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 241,
+      "complexity": {
+        "max": 11,
+        "aboveThreshold": 1
+      },
+      "hotspot": 9399,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/config.ts",
+      "kind": "file",
+      "name": "src/security/config.ts",
+      "loc": 212,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 211,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 1
+      },
+      "hotspot": 9917,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/detect/injection/adapter.ts",
+      "kind": "file",
+      "name": "src/security/detect/injection/adapter.ts",
+      "loc": 150,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 149,
+      "complexity": {
+        "max": 12,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4470,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/detect/mcp.ts",
+      "kind": "file",
+      "name": "src/security/detect/mcp.ts",
+      "loc": 301,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 300,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 2
+      },
+      "hotspot": 12900,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/detect/pii.ts",
+      "kind": "file",
+      "name": "src/security/detect/pii.ts",
+      "loc": 221,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 220,
+      "complexity": {
+        "max": 13,
+        "aboveThreshold": 2
+      },
+      "hotspot": 11440,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/detect/pii/ner-adapter.ts",
+      "kind": "file",
+      "name": "src/security/detect/pii/ner-adapter.ts",
+      "loc": 137,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 136,
+      "complexity": {
+        "max": 18,
+        "aboveThreshold": 1
+      },
+      "hotspot": 5032,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/eval/harness.ts",
+      "kind": "file",
+      "name": "src/security/eval/harness.ts",
+      "loc": 238,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 237,
+      "complexity": {
+        "max": 15,
+        "aboveThreshold": 1
+      },
+      "hotspot": 11376,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/security/schemas.ts",
+      "kind": "file",
+      "name": "src/security/schemas.ts",
+      "loc": 424,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 423,
+      "complexity": {
+        "max": 30,
+        "aboveThreshold": 1
+      },
+      "hotspot": 19458,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/standard/emit-llms.ts",
+      "kind": "file",
+      "name": "src/standard/emit-llms.ts",
+      "loc": 139,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 138,
+      "complexity": {
+        "max": 16,
+        "aboveThreshold": 1
+      },
+      "hotspot": 4140,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/standard/profiles.ts",
+      "kind": "file",
+      "name": "src/standard/profiles.ts",
+      "loc": 158,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 157,
+      "complexity": {
+        "max": 12,
+        "aboveThreshold": 1
+      },
+      "hotspot": 5024,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/standard/validate.ts",
+      "kind": "file",
+      "name": "src/standard/validate.ts",
+      "loc": 406,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 405,
+      "complexity": {
+        "max": 33,
+        "aboveThreshold": 2
+      },
+      "hotspot": 34425,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/sync/diff.ts",
+      "kind": "file",
+      "name": "src/sync/diff.ts",
+      "loc": 71,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 70,
+      "complexity": {
+        "max": 14,
+        "aboveThreshold": 1
+      },
+      "hotspot": 1400,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/testing/capability.ts",
+      "kind": "file",
+      "name": "src/testing/capability.ts",
+      "loc": 43,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 42,
+      "complexity": {
+        "max": 12,
+        "aboveThreshold": 1
+      },
+      "hotspot": 504,
+      "health_score": 93,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/testing/service.ts",
+      "kind": "file",
+      "name": "src/testing/service.ts",
+      "loc": 905,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 865,
+      "complexity": {
+        "max": 22,
+        "aboveThreshold": 3
+      },
+      "hotspot": 125425,
+      "health_score": 89,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "file:src/wiki/service.ts",
+      "kind": "file",
+      "name": "src/wiki/service.ts",
+      "loc": 1261,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1282,
+      "complexity": {
+        "max": 37,
+        "aboveThreshold": 3
+      },
+      "hotspot": 287168,
+      "health_score": 91,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "skill:gdgraph/module",
+      "kind": "skill",
+      "name": "gdgraph/module",
+      "loc": 3870,
+      "findingCounts": {
+        "total": 8,
+        "bySeverity": {
+          "error": 0,
+          "warning": 8,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 8,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 8
+        }
+      },
+      "coverage": null,
+      "churn": 3883,
+      "complexity": {
+        "max": 39,
+        "aboveThreshold": 8
+      },
+      "hotspot": 102609,
+      "health_score": 86,
+      "risk_score": 40,
+      "trend": "unknown",
+      "regression_score": 0
+    },
+    {
+      "key": "skill:metaproject/init-command",
+      "kind": "skill",
+      "name": "metaproject/init-command",
+      "loc": 1700,
+      "findingCounts": {
+        "total": 1,
+        "bySeverity": {
+          "error": 0,
+          "warning": 1,
+          "info": 0
+        },
+        "byPriority": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "bySource": {
+          "complexity": 1
+        }
+      },
+      "coverage": null,
+      "churn": 1691,
+      "complexity": {
+        "max": 125,
+        "aboveThreshold": 2
+      },
+      "hotspot": 375402,
+      "health_score": 95,
+      "risk_score": 5,
+      "trend": "unknown",
+      "regression_score": 0
+    }
+  ],
+  "findings": [
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-agents-bootstrap-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/agents/bootstrap.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/agents",
+        "file": "src/agents/bootstrap.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-assets-command-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 18)",
+      "file": "src/assets/command.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/assets",
+        "file": "src/assets/command.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-assets-lock-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/assets/lock.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/assets",
+        "file": "src/assets/lock.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-cli-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 31)",
+      "file": "src/cli.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src",
+        "file": "src/cli.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-agents-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 25)",
+      "file": "src/commands/agents.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/agents.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-ctx-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/commands/ctx.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/ctx.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-flow-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 17)",
+      "file": "src/commands/flow.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/flow.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-gdgraph-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "3 function(s) exceed cyclomatic complexity 10 (max 24)",
+      "file": "src/commands/gdgraph.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/gdgraph.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-health-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/commands/health.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/health.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-init-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 125)",
+      "file": "src/commands/init.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/init.ts",
+        "entity": null,
+        "skill": "metaproject/init-command"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-mcp-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/commands/mcp.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/mcp.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-memory-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/commands/memory.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/memory.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-metrics-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 38)",
+      "file": "src/commands/metrics.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/metrics.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-modules-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 26)",
+      "file": "src/commands/modules.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/modules.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-review-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 12)",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/review.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-rules-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 12)",
+      "file": "src/commands/rules.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/rules.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-security-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 16)",
+      "file": "src/commands/security.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/security.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-skills-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "6 function(s) exceed cyclomatic complexity 10 (max 18)",
+      "file": "src/commands/skills.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/skills.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-sync-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 21)",
+      "file": "src/commands/sync.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/sync.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-test-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/commands/test.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/test.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-update-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "4 function(s) exceed cyclomatic complexity 10 (max 32)",
+      "file": "src/commands/update.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/update.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-commands-wiki-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/commands/wiki.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/commands",
+        "file": "src/commands/wiki.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-ctx-hook-classify-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/ctx/hook-classify.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/ctx",
+        "file": "src/ctx/hook-classify.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-ctx-orient-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 16)",
+      "file": "src/ctx/orient.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/ctx",
+        "file": "src/ctx/orient.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-flow-service-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "3 function(s) exceed cyclomatic complexity 10 (max 25)",
+      "file": "src/flow/service.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/flow",
+        "file": "src/flow/service.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-affected-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 20)",
+      "file": "src/gdgraph/affected.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/affected.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-build-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/gdgraph/build.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/build.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-find-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/gdgraph/find.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/find.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-pagerank-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 39)",
+      "file": "src/gdgraph/pagerank.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/pagerank.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-path-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/gdgraph/path.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/path.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-repomap-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/gdgraph/repomap.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/repomap.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-symbol-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 16)",
+      "file": "src/gdgraph/symbol.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/symbol.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdgraph-treesitter-adapter-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/gdgraph/treesitter/adapter.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdgraph",
+        "file": "src/gdgraph/treesitter/adapter.ts",
+        "entity": null,
+        "skill": "gdgraph/module"
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdskills-contracts-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 26)",
+      "file": "src/gdskills/contracts.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdskills",
+        "file": "src/gdskills/contracts.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-gdskills-verify-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 25)",
+      "file": "src/gdskills/verify.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/gdskills",
+        "file": "src/gdskills/verify.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-harness-corpus-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/harness/corpus.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/harness",
+        "file": "src/harness/corpus.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-gate-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/health/gate.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/gate.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-metrics-complexity-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 17)",
+      "file": "src/health/metrics/complexity.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/metrics/complexity.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-run-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 22)",
+      "file": "src/health/run.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/run.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-scopes-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 20)",
+      "file": "src/health/scopes.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/scopes.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-service-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/health/service.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/service.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-sources-dependency-audit-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/health/sources/dependency-audit.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/sources/dependency-audit.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-sources-eslint-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/health/sources/eslint.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/sources/eslint.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-health-sources-sonarqube-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/health/sources/sonarqube.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/health",
+        "file": "src/health/sources/sonarqube.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-lib-templates-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "4 function(s) exceed cyclomatic complexity 10 (max 55)",
+      "file": "src/lib/templates.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/lib",
+        "file": "src/lib/templates.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-mcp-client-config-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/mcp/client-config.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/mcp",
+        "file": "src/mcp/client-config.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-mcp-config-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 20)",
+      "file": "src/mcp/config.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/mcp",
+        "file": "src/mcp/config.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-memory-check-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 17)",
+      "file": "src/memory/check.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/memory",
+        "file": "src/memory/check.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-memory-config-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/memory/config.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/memory",
+        "file": "src/memory/config.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-memory-dedup-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/memory/dedup.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/memory",
+        "file": "src/memory/dedup.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-memory-ingest-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/memory/ingest.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/memory",
+        "file": "src/memory/ingest.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-memory-search-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/memory/search.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/memory",
+        "file": "src/memory/search.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-memory-store-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/memory/store.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/memory",
+        "file": "src/memory/store.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-metrics-events-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 19)",
+      "file": "src/metrics/events.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/metrics",
+        "file": "src/metrics/events.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-review-managed-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/review",
+        "file": "src/review/managed.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-rules-agent-entrypoints-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/rules/agent-entrypoints.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/rules",
+        "file": "src/rules/agent-entrypoints.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-rules-distill-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 11)",
+      "file": "src/rules/distill.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/rules",
+        "file": "src/rules/distill.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-config-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/security/config.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/config.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-detect-injection-adapter-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 12)",
+      "file": "src/security/detect/injection/adapter.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/detect/injection/adapter.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-detect-mcp-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/security/detect/mcp.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/detect/mcp.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-detect-pii-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 13)",
+      "file": "src/security/detect/pii.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/detect/pii.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-detect-pii-ner-adapter-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 18)",
+      "file": "src/security/detect/pii/ner-adapter.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/detect/pii/ner-adapter.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-eval-harness-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 15)",
+      "file": "src/security/eval/harness.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/eval/harness.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-security-schemas-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 30)",
+      "file": "src/security/schemas.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/security",
+        "file": "src/security/schemas.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-standard-emit-llms-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 16)",
+      "file": "src/standard/emit-llms.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/standard",
+        "file": "src/standard/emit-llms.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-standard-profiles-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 12)",
+      "file": "src/standard/profiles.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/standard",
+        "file": "src/standard/profiles.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-standard-validate-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "2 function(s) exceed cyclomatic complexity 10 (max 33)",
+      "file": "src/standard/validate.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/standard",
+        "file": "src/standard/validate.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-sync-diff-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 14)",
+      "file": "src/sync/diff.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/sync",
+        "file": "src/sync/diff.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-testing-capability-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "1 function(s) exceed cyclomatic complexity 10 (max 12)",
+      "file": "src/testing/capability.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/testing",
+        "file": "src/testing/capability.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-testing-service-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "3 function(s) exceed cyclomatic complexity 10 (max 22)",
+      "file": "src/testing/service.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/testing",
+        "file": "src/testing/service.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "health-complexity-complexity-threshold-src-wiki-service-ts-0",
+      "source": "complexity",
+      "severity": "warning",
+      "priority": "P2",
+      "category": "complexity",
+      "message": "3 function(s) exceed cyclomatic complexity 10 (max 37)",
+      "file": "src/wiki/service.ts",
+      "line": null,
+      "symbol": null,
+      "scope": {
+        "project": "current",
+        "module": "src/wiki",
+        "file": "src/wiki/service.ts",
+        "entity": null,
+        "skill": null
+      },
+      "suggestedAction": "Refactor the most complex functions to reduce branching and nesting.",
+      "provenance": {
+        "command": "builtin: cyclomatic (token-based)",
+        "toolVersion": null,
+        "rawLog": null
+      }
+    }
+  ],
+  "hotspots": [
+    {
+      "file": "src/lib/templates.ts",
+      "churn": 2700,
+      "complexity": 199,
+      "score": 537300
+    },
+    {
+      "file": "src/commands/update.ts",
+      "churn": 1573,
+      "complexity": 247,
+      "score": 388531
+    },
+    {
+      "file": "src/commands/init.ts",
+      "churn": 1691,
+      "complexity": 222,
+      "score": 375402
+    },
+    {
+      "file": "src/wiki/service.ts",
+      "churn": 1282,
+      "complexity": 224,
+      "score": 287168
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "churn": 1297,
+      "complexity": 192,
+      "score": 249024
+    },
+    {
+      "file": "src/testing/service.ts",
+      "churn": 865,
+      "complexity": 145,
+      "score": 125425
+    },
+    {
+      "file": "src/commands/gdgraph.ts",
+      "churn": 652,
+      "complexity": 139,
+      "score": 90628
+    },
+    {
+      "file": "src/commands/ctx.ts",
+      "churn": 861,
+      "complexity": 99,
+      "score": 85239
+    },
+    {
+      "file": "src/commands/security.ts",
+      "churn": 670,
+      "complexity": 126,
+      "score": 84420
+    },
+    {
+      "file": "src/gdskills/learn.ts",
+      "churn": 569,
+      "complexity": 102,
+      "score": 58038
+    },
+    {
+      "file": "src/flow/service.ts",
+      "churn": 493,
+      "complexity": 107,
+      "score": 52751
+    },
+    {
+      "file": "src/mcp/client-config.ts",
+      "churn": 522,
+      "complexity": 71,
+      "score": 37062
+    },
+    {
+      "file": "src/gdskills/project-skills.ts",
+      "churn": 602,
+      "complexity": 61,
+      "score": 36722
+    },
+    {
+      "file": "src/ctx/runtimes.ts",
+      "churn": 432,
+      "complexity": 80,
+      "score": 34560
+    },
+    {
+      "file": "src/standard/validate.ts",
+      "churn": 405,
+      "complexity": 85,
+      "score": 34425
+    },
+    {
+      "file": "src/gdskills/verify.ts",
+      "churn": 418,
+      "complexity": 81,
+      "score": 33858
+    },
+    {
+      "file": "src/gdgraph/treesitter/extract.ts",
+      "churn": 341,
+      "complexity": 80,
+      "score": 27280
+    },
+    {
+      "file": "src/review/managed.ts",
+      "churn": 436,
+      "complexity": 61,
+      "score": 26596
+    },
+    {
+      "file": "src/health/metrics/complexity.ts",
+      "churn": 268,
+      "complexity": 88,
+      "score": 23584
+    },
+    {
+      "file": "src/commands/flow.ts",
+      "churn": 327,
+      "complexity": 70,
+      "score": 22890
+    },
+    {
+      "file": "src/security/schemas.ts",
+      "churn": 423,
+      "complexity": 46,
+      "score": 19458
+    },
+    {
+      "file": "src/commands/memory.ts",
+      "churn": 286,
+      "complexity": 60,
+      "score": 17160
+    },
+    {
+      "file": "src/commands/wiki.ts",
+      "churn": 311,
+      "complexity": 55,
+      "score": 17105
+    },
+    {
+      "file": "src/gdgraph/build.ts",
+      "churn": 553,
+      "complexity": 29,
+      "score": 16037
+    },
+    {
+      "file": "src/memory/search.ts",
+      "churn": 265,
+      "complexity": 60,
+      "score": 15900
+    },
+    {
+      "file": "src/gdskills/contracts.ts",
+      "churn": 291,
+      "complexity": 54,
+      "score": 15714
+    },
+    {
+      "file": "src/commands/test.ts",
+      "churn": 275,
+      "complexity": 57,
+      "score": 15675
+    },
+    {
+      "file": "src/testing/coverage-map.ts",
+      "churn": 273,
+      "complexity": 54,
+      "score": 14742
+    },
+    {
+      "file": "src/rules/agent-entrypoints.ts",
+      "churn": 388,
+      "complexity": 37,
+      "score": 14356
+    },
+    {
+      "file": "src/health/run.ts",
+      "churn": 316,
+      "complexity": 42,
+      "score": 13272
+    },
+    {
+      "file": "src/security/detect/mcp.ts",
+      "churn": 300,
+      "complexity": 43,
+      "score": 12900
+    },
+    {
+      "file": "src/mcp/mcp.test.ts",
+      "churn": 337,
+      "complexity": 37,
+      "score": 12469
+    },
+    {
+      "file": "src/memory/ingest.ts",
+      "churn": 300,
+      "complexity": 41,
+      "score": 12300
+    },
+    {
+      "file": "src/commands/health.ts",
+      "churn": 239,
+      "complexity": 51,
+      "score": 12189
+    },
+    {
+      "file": "src/agents/bootstrap.ts",
+      "churn": 289,
+      "complexity": 41,
+      "score": 11849
+    },
+    {
+      "file": "src/security/detect/pii.ts",
+      "churn": 220,
+      "complexity": 52,
+      "score": 11440
+    },
+    {
+      "file": "src/security/eval/harness.ts",
+      "churn": 237,
+      "complexity": 48,
+      "score": 11376
+    },
+    {
+      "file": "src/gdskills/catalog.ts",
+      "churn": 611,
+      "complexity": 18,
+      "score": 10998
+    },
+    {
+      "file": "src/gdgraph/treesitter/adapter.ts",
+      "churn": 247,
+      "complexity": 43,
+      "score": 10621
+    },
+    {
+      "file": "src/commands/security-hooks-init.test.ts",
+      "churn": 337,
+      "complexity": 31,
+      "score": 10447
+    },
+    {
+      "file": "src/security/config.ts",
+      "churn": 211,
+      "complexity": 47,
+      "score": 9917
+    },
+    {
+      "file": "src/rules/distill.ts",
+      "churn": 241,
+      "complexity": 39,
+      "score": 9399
+    },
+    {
+      "file": "src/mcp/tools.ts",
+      "churn": 272,
+      "complexity": 34,
+      "score": 9248
+    },
+    {
+      "file": "src/security/agent-hooks/runtimes.ts",
+      "churn": 219,
+      "complexity": 42,
+      "score": 9198
+    },
+    {
+      "file": "src/memory/store.ts",
+      "churn": 202,
+      "complexity": 44,
+      "score": 8888
+    },
+    {
+      "file": "src/cli.ts",
+      "churn": 259,
+      "complexity": 34,
+      "score": 8806
+    },
+    {
+      "file": "src/commands/standard.ts",
+      "churn": 200,
+      "complexity": 43,
+      "score": 8600
+    },
+    {
+      "file": "src/health/scopes.ts",
+      "churn": 240,
+      "complexity": 35,
+      "score": 8400
+    },
+    {
+      "file": "src/health/service.ts",
+      "churn": 181,
+      "complexity": 44,
+      "score": 7964
+    },
+    {
+      "file": "src/memory/embedding/embedding.test.ts",
+      "churn": 345,
+      "complexity": 22,
+      "score": 7590
+    },
+    {
+      "file": "src/commands/update.test.ts",
+      "churn": 419,
+      "complexity": 18,
+      "score": 7542
+    },
+    {
+      "file": "src/capability/wiring.ts",
+      "churn": 198,
+      "complexity": 38,
+      "score": 7524
+    },
+    {
+      "file": "src/mcp/resources.ts",
+      "churn": 218,
+      "complexity": 34,
+      "score": 7412
+    },
+    {
+      "file": "src/memory/service.ts",
+      "churn": 265,
+      "complexity": 27,
+      "score": 7155
+    },
+    {
+      "file": "src/mcp/client-config.test.ts",
+      "churn": 286,
+      "complexity": 25,
+      "score": 7150
+    },
+    {
+      "file": "src/ctx/orient-runtimes.ts",
+      "churn": 194,
+      "complexity": 36,
+      "score": 6984
+    },
+    {
+      "file": "src/gdgraph/repomap.ts",
+      "churn": 193,
+      "complexity": 36,
+      "score": 6948
+    },
+    {
+      "file": "src/health/util.ts",
+      "churn": 154,
+      "complexity": 41,
+      "score": 6314
+    },
+    {
+      "file": "src/security/guard.ts",
+      "churn": 216,
+      "complexity": 29,
+      "score": 6264
+    },
+    {
+      "file": "src/memory/embedding/index.ts",
+      "churn": 187,
+      "complexity": 33,
+      "score": 6171
+    },
+    {
+      "file": "src/gdskills/export-plugin.ts",
+      "churn": 199,
+      "complexity": 31,
+      "score": 6169
+    },
+    {
+      "file": "src/gdskills/install.ts",
+      "churn": 221,
+      "complexity": 25,
+      "score": 5525
+    },
+    {
+      "file": "src/commands/mcp.ts",
+      "churn": 172,
+      "complexity": 31,
+      "score": 5332
+    },
+    {
+      "file": "src/ctx/orient.ts",
+      "churn": 155,
+      "complexity": 34,
+      "score": 5270
+    },
+    {
+      "file": "src/memory/supersede.ts",
+      "churn": 175,
+      "complexity": 30,
+      "score": 5250
+    },
+    {
+      "file": "src/commands/modules.ts",
+      "churn": 159,
+      "complexity": 33,
+      "score": 5247
+    },
+    {
+      "file": "src/gdskills/export.ts",
+      "churn": 179,
+      "complexity": 29,
+      "score": 5191
+    },
+    {
+      "file": "src/security/detect/pii/ner-adapter.ts",
+      "churn": 136,
+      "complexity": 37,
+      "score": 5032
+    },
+    {
+      "file": "src/gdgraph/pagerank.ts",
+      "churn": 129,
+      "complexity": 39,
+      "score": 5031
+    },
+    {
+      "file": "src/standard/profiles.ts",
+      "churn": 157,
+      "complexity": 32,
+      "score": 5024
+    },
+    {
+      "file": "src/memory/embedding/adapter.ts",
+      "churn": 160,
+      "complexity": 31,
+      "score": 4960
+    },
+    {
+      "file": "src/security/resolve.ts",
+      "churn": 189,
+      "complexity": 26,
+      "score": 4914
+    },
+    {
+      "file": "src/health/sources/tests.ts",
+      "churn": 169,
+      "complexity": 29,
+      "score": 4901
+    },
+    {
+      "file": "src/assets/lock.ts",
+      "churn": 146,
+      "complexity": 31,
+      "score": 4526
+    },
+    {
+      "file": "src/security/detect/injection/adapter.ts",
+      "churn": 149,
+      "complexity": 30,
+      "score": 4470
+    },
+    {
+      "file": "src/ctx/hook.ts",
+      "churn": 400,
+      "complexity": 11,
+      "score": 4400
+    },
+    {
+      "file": "src/capability/registry.ts",
+      "churn": 161,
+      "complexity": 27,
+      "score": 4347
+    },
+    {
+      "file": "src/gdskills/sync.ts",
+      "churn": 155,
+      "complexity": 28,
+      "score": 4340
+    },
+    {
+      "file": "src/gdgraph/affected.ts",
+      "churn": 142,
+      "complexity": 30,
+      "score": 4260
+    },
+    {
+      "file": "src/commands/agents.ts",
+      "churn": 133,
+      "complexity": 32,
+      "score": 4256
+    },
+    {
+      "file": "src/commands/orient.ts",
+      "churn": 140,
+      "complexity": 30,
+      "score": 4200
+    },
+    {
+      "file": "src/standard/emit-llms.ts",
+      "churn": 138,
+      "complexity": 30,
+      "score": 4140
+    },
+    {
+      "file": "src/commands/rules.ts",
+      "churn": 172,
+      "complexity": 24,
+      "score": 4128
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "churn": 215,
+      "complexity": 19,
+      "score": 4085
+    },
+    {
+      "file": "src/flow/service.test.ts",
+      "churn": 204,
+      "complexity": 19,
+      "score": 3876
+    },
+    {
+      "file": "src/ctx/hook-install.ts",
+      "churn": 322,
+      "complexity": 12,
+      "score": 3864
+    },
+    {
+      "file": "src/capability/seam.ts",
+      "churn": 172,
+      "complexity": 22,
+      "score": 3784
+    },
+    {
+      "file": "src/health/sources/sonarqube.ts",
+      "churn": 122,
+      "complexity": 31,
+      "score": 3782
+    },
+    {
+      "file": "src/testing/selection.ts",
+      "churn": 114,
+      "complexity": 33,
+      "score": 3762
+    },
+    {
+      "file": "src/security/security.test.ts",
+      "churn": 235,
+      "complexity": 16,
+      "score": 3760
+    },
+    {
+      "file": "src/capability/seam.test.ts",
+      "churn": 168,
+      "complexity": 22,
+      "score": 3696
+    },
+    {
+      "file": "src/gdgraph/path.ts",
+      "churn": 112,
+      "complexity": 33,
+      "score": 3696
+    },
+    {
+      "file": "src/testing/coverage-map.test.ts",
+      "churn": 231,
+      "complexity": 16,
+      "score": 3696
+    },
+    {
+      "file": "src/capability/no-optional-imports.test.ts",
+      "churn": 142,
+      "complexity": 26,
+      "score": 3692
+    },
+    {
+      "file": "src/flow/store.ts",
+      "churn": 134,
+      "complexity": 27,
+      "score": 3618
+    },
+    {
+      "file": "src/gdgraph/symbol.ts",
+      "churn": 123,
+      "complexity": 29,
+      "score": 3567
+    },
+    {
+      "file": "src/security/guard.test.ts",
+      "churn": 219,
+      "complexity": 16,
+      "score": 3504
+    },
+    {
+      "file": "src/security/service.ts",
+      "churn": 191,
+      "complexity": 18,
+      "score": 3438
+    },
+    {
+      "file": "src/commands/sync.ts",
+      "churn": 125,
+      "complexity": 27,
+      "score": 3375
+    },
+    {
+      "file": "src/security/redact.ts",
+      "churn": 152,
+      "complexity": 22,
+      "score": 3344
+    },
+    {
+      "file": "src/gdgraph/query.ts",
+      "churn": 138,
+      "complexity": 24,
+      "score": 3312
+    },
+    {
+      "file": "src/security/detect/index.ts",
+      "churn": 144,
+      "complexity": 23,
+      "score": 3312
+    },
+    {
+      "file": "src/health/metrics/hotspot.test.ts",
+      "churn": 204,
+      "complexity": 16,
+      "score": 3264
+    },
+    {
+      "file": "src/wiki/ask.ts",
+      "churn": 166,
+      "complexity": 19,
+      "score": 3154
+    },
+    {
+      "file": "src/health/report.ts",
+      "churn": 157,
+      "complexity": 20,
+      "score": 3140
+    },
+    {
+      "file": "src/ctx/hook-install.test.ts",
+      "churn": 195,
+      "complexity": 16,
+      "score": 3120
+    },
+    {
+      "file": "src/mcp/config.ts",
+      "churn": 110,
+      "complexity": 28,
+      "score": 3080
+    },
+    {
+      "file": "src/commands/review.ts",
+      "churn": 122,
+      "complexity": 25,
+      "score": 3050
+    },
+    {
+      "file": "src/gdgraph/treesitter/adapter.test.ts",
+      "churn": 179,
+      "complexity": 17,
+      "score": 3043
+    },
+    {
+      "file": "src/flow/templates.ts",
+      "churn": 271,
+      "complexity": 11,
+      "score": 2981
+    },
+    {
+      "file": "src/ctx/runtimes.test.ts",
+      "churn": 139,
+      "complexity": 21,
+      "score": 2919
+    },
+    {
+      "file": "src/security/report.ts",
+      "churn": 153,
+      "complexity": 19,
+      "score": 2907
+    },
+    {
+      "file": "src/health/sources/dependency-audit.ts",
+      "churn": 117,
+      "complexity": 24,
+      "score": 2808
+    },
+    {
+      "file": "src/memory/dedup.ts",
+      "churn": 111,
+      "complexity": 25,
+      "score": 2775
+    },
+    {
+      "file": "src/gdgraph/treesitter/extract.test.ts",
+      "churn": 196,
+      "complexity": 14,
+      "score": 2744
+    },
+    {
+      "file": "src/ctx/hook-classify.ts",
+      "churn": 116,
+      "complexity": 23,
+      "score": 2668
+    },
+    {
+      "file": "src/mcp/discovery.ts",
+      "churn": 119,
+      "complexity": 21,
+      "score": 2499
+    },
+    {
+      "file": "src/gdgraph/find.ts",
+      "churn": 111,
+      "complexity": 22,
+      "score": 2442
+    },
+    {
+      "file": "src/mcp/dispatch.ts",
+      "churn": 116,
+      "complexity": 21,
+      "score": 2436
+    },
+    {
+      "file": "src/harness/corpus.ts",
+      "churn": 113,
+      "complexity": 21,
+      "score": 2373
+    },
+    {
+      "file": "src/lib/fs.ts",
+      "churn": 87,
+      "complexity": 27,
+      "score": 2349
+    },
+    {
+      "file": "src/health/sources/eslint.ts",
+      "churn": 117,
+      "complexity": 20,
+      "score": 2340
+    },
+    {
+      "file": "src/gdgraph/treesitter/grammars.ts",
+      "churn": 97,
+      "complexity": 24,
+      "score": 2328
+    },
+    {
+      "file": "src/security/agent-hooks.test.ts",
+      "churn": 146,
+      "complexity": 15,
+      "score": 2190
+    },
+    {
+      "file": "src/assets/resolver.test.ts",
+      "churn": 154,
+      "complexity": 14,
+      "score": 2156
+    },
+    {
+      "file": "src/security/detect/injection/adapter.test.ts",
+      "churn": 153,
+      "complexity": 14,
+      "score": 2142
+    },
+    {
+      "file": "src/security/self-protect.ts",
+      "churn": 142,
+      "complexity": 15,
+      "score": 2130
+    },
+    {
+      "file": "src/mcp/boundary.test.ts",
+      "churn": 100,
+      "complexity": 21,
+      "score": 2100
+    },
+    {
+      "file": "src/capability/wiring.test.ts",
+      "churn": 173,
+      "complexity": 12,
+      "score": 2076
+    },
+    {
+      "file": "src/mcp/server.ts",
+      "churn": 159,
+      "complexity": 13,
+      "score": 2067
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "churn": 147,
+      "complexity": 14,
+      "score": 2058
+    },
+    {
+      "file": "src/security/detect/exfil.ts",
+      "churn": 153,
+      "complexity": 13,
+      "score": 1989
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "churn": 130,
+      "complexity": 15,
+      "score": 1950
+    },
+    {
+      "file": "src/memory/relevant.ts",
+      "churn": 94,
+      "complexity": 20,
+      "score": 1880
+    },
+    {
+      "file": "src/lib/ui.ts",
+      "churn": 98,
+      "complexity": 19,
+      "score": 1862
+    },
+    {
+      "file": "src/gdgraph/fallback.test.ts",
+      "churn": 153,
+      "complexity": 12,
+      "score": 1836
+    },
+    {
+      "file": "src/testing/templates.ts",
+      "churn": 224,
+      "complexity": 8,
+      "score": 1792
+    },
+    {
+      "file": "src/assets/command.ts",
+      "churn": 95,
+      "complexity": 18,
+      "score": 1710
+    },
+    {
+      "file": "src/health/scoring.ts",
+      "churn": 106,
+      "complexity": 16,
+      "score": 1696
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "churn": 126,
+      "complexity": 13,
+      "score": 1638
+    },
+    {
+      "file": "src/sync/hooks.ts",
+      "churn": 90,
+      "complexity": 18,
+      "score": 1620
+    },
+    {
+      "file": "src/gdgraph/affected.test.ts",
+      "churn": 100,
+      "complexity": 16,
+      "score": 1600
+    },
+    {
+      "file": "src/ctx/hook.test.ts",
+      "churn": 93,
+      "complexity": 17,
+      "score": 1581
+    },
+    {
+      "file": "src/wiki/templates.ts",
+      "churn": 315,
+      "complexity": 5,
+      "score": 1575
+    },
+    {
+      "file": "src/security/detect/mcp.test.ts",
+      "churn": 119,
+      "complexity": 13,
+      "score": 1547
+    },
+    {
+      "file": "src/gdgraph/config.ts",
+      "churn": 113,
+      "complexity": 13,
+      "score": 1469
+    },
+    {
+      "file": "src/health/baseline.ts",
+      "churn": 81,
+      "complexity": 18,
+      "score": 1458
+    },
+    {
+      "file": "src/health/history.ts",
+      "churn": 112,
+      "complexity": 13,
+      "score": 1456
+    },
+    {
+      "file": "src/ctx/orient.test.ts",
+      "churn": 120,
+      "complexity": 12,
+      "score": 1440
+    },
+    {
+      "file": "src/sync/diff.ts",
+      "churn": 70,
+      "complexity": 20,
+      "score": 1400
+    },
+    {
+      "file": "src/lib/security-pre-push.test.ts",
+      "churn": 172,
+      "complexity": 8,
+      "score": 1376
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "churn": 85,
+      "complexity": 16,
+      "score": 1360
+    },
+    {
+      "file": "src/memory/check.ts",
+      "churn": 75,
+      "complexity": 18,
+      "score": 1350
+    },
+    {
+      "file": "src/health/gate.ts",
+      "churn": 78,
+      "complexity": 17,
+      "score": 1326
+    },
+    {
+      "file": "src/memory/config.ts",
+      "churn": 81,
+      "complexity": 16,
+      "score": 1296
+    },
+    {
+      "file": "src/commands/rules.test.ts",
+      "churn": 259,
+      "complexity": 5,
+      "score": 1295
+    },
+    {
+      "file": "src/capability/golden-rule.test.ts",
+      "churn": 105,
+      "complexity": 12,
+      "score": 1260
+    },
+    {
+      "file": "src/ctx/orient-runtimes.test.ts",
+      "churn": 105,
+      "complexity": 12,
+      "score": 1260
+    },
+    {
+      "file": "src/memory/templates.ts",
+      "churn": 210,
+      "complexity": 6,
+      "score": 1260
+    },
+    {
+      "file": "src/security/agent-hooks/runtimes.test.ts",
+      "churn": 124,
+      "complexity": 10,
+      "score": 1240
+    },
+    {
+      "file": "src/memory/reflect.ts",
+      "churn": 112,
+      "complexity": 11,
+      "score": 1232
+    },
+    {
+      "file": "src/health/skills.ts",
+      "churn": 80,
+      "complexity": 15,
+      "score": 1200
+    },
+    {
+      "file": "src/health/sources/typescript.ts",
+      "churn": 74,
+      "complexity": 16,
+      "score": 1184
+    },
+    {
+      "file": "src/commands/dashboard.ts",
+      "churn": 81,
+      "complexity": 14,
+      "score": 1134
+    },
+    {
+      "file": "src/memory/types.ts",
+      "churn": 278,
+      "complexity": 4,
+      "score": 1112
+    },
+    {
+      "file": "src/assets/resolver.ts",
+      "churn": 85,
+      "complexity": 13,
+      "score": 1105
+    },
+    {
+      "file": "src/health/gate.test.ts",
+      "churn": 100,
+      "complexity": 11,
+      "score": 1100
+    },
+    {
+      "file": "src/sync/provenance.ts",
+      "churn": 73,
+      "complexity": 15,
+      "score": 1095
+    },
+    {
+      "file": "src/flow/tracker/github.ts",
+      "churn": 99,
+      "complexity": 11,
+      "score": 1089
+    },
+    {
+      "file": "src/gdskills/install.test.ts",
+      "churn": 99,
+      "complexity": 11,
+      "score": 1089
+    },
+    {
+      "file": "src/health/sources/helpers.ts",
+      "churn": 77,
+      "complexity": 14,
+      "score": 1078
+    },
+    {
+      "file": "src/health/config.ts",
+      "churn": 94,
+      "complexity": 11,
+      "score": 1034
+    },
+    {
+      "file": "src/security/detect/pii/ner-adapter.test.ts",
+      "churn": 102,
+      "complexity": 10,
+      "score": 1020
+    },
+    {
+      "file": "src/security/detect/exfil.test.ts",
+      "churn": 101,
+      "complexity": 10,
+      "score": 1010
+    },
+    {
+      "file": "src/capability/reference.test.ts",
+      "churn": 126,
+      "complexity": 8,
+      "score": 1008
+    },
+    {
+      "file": "src/gdgraph/repomap.test.ts",
+      "churn": 110,
+      "complexity": 9,
+      "score": 990
+    },
+    {
+      "file": "src/testing/security-seam.test.ts",
+      "churn": 110,
+      "complexity": 9,
+      "score": 990
+    },
+    {
+      "file": "src/flow/security-gate.test.ts",
+      "churn": 96,
+      "complexity": 10,
+      "score": 960
+    },
+    {
+      "file": "src/gdskills/resolve.ts",
+      "churn": 66,
+      "complexity": 14,
+      "score": 924
+    },
+    {
+      "file": "src/security/detect/egress.ts",
+      "churn": 213,
+      "complexity": 4,
+      "score": 852
+    },
+    {
+      "file": "src/gdgraph/find.test.ts",
+      "churn": 82,
+      "complexity": 10,
+      "score": 820
+    },
+    {
+      "file": "src/gdgraph/symbol.test.ts",
+      "churn": 91,
+      "complexity": 9,
+      "score": 819
+    },
+    {
+      "file": "src/testing/block-d-no-network.test.ts",
+      "churn": 88,
+      "complexity": 9,
+      "score": 792
+    },
+    {
+      "file": "src/assets/seed.ts",
+      "churn": 86,
+      "complexity": 9,
+      "score": 774
+    },
+    {
+      "file": "src/health/parsers.test.ts",
+      "churn": 107,
+      "complexity": 7,
+      "score": 749
+    },
+    {
+      "file": "src/mcp/wiki-ask.test.ts",
+      "churn": 118,
+      "complexity": 6,
+      "score": 708
+    },
+    {
+      "file": "src/commands/init-mcp-offer.test.ts",
+      "churn": 77,
+      "complexity": 9,
+      "score": 693
+    },
+    {
+      "file": "src/gdgraph/symbols-capability.ts",
+      "churn": 49,
+      "complexity": 14,
+      "score": 686
+    },
+    {
+      "file": "src/health/metrics/complexity.test.ts",
+      "churn": 75,
+      "complexity": 9,
+      "score": 675
+    },
+    {
+      "file": "src/security/eval/harness.test.ts",
+      "churn": 108,
+      "complexity": 6,
+      "score": 648
+    },
+    {
+      "file": "src/testing/smoke.test.ts",
+      "churn": 92,
+      "complexity": 7,
+      "score": 644
+    },
+    {
+      "file": "src/capability/reference.ts",
+      "churn": 62,
+      "complexity": 10,
+      "score": 620
+    },
+    {
+      "file": "src/security/detect/entropy.ts",
+      "churn": 62,
+      "complexity": 10,
+      "score": 620
+    },
+    {
+      "file": "src/wiki/ask.test.ts",
+      "churn": 74,
+      "complexity": 8,
+      "score": 592
+    },
+    {
+      "file": "src/testing/service.test.ts",
+      "churn": 96,
+      "complexity": 6,
+      "score": 576
+    },
+    {
+      "file": "src/sync/hooks.test.ts",
+      "churn": 63,
+      "complexity": 9,
+      "score": 567
+    },
+    {
+      "file": "src/security/incidents.ts",
+      "churn": 51,
+      "complexity": 11,
+      "score": 561
+    },
+    {
+      "file": "src/memory/security-seam.test.ts",
+      "churn": 79,
+      "complexity": 7,
+      "score": 553
+    },
+    {
+      "file": "src/mcp/no-network.test.ts",
+      "churn": 78,
+      "complexity": 7,
+      "score": 546
+    },
+    {
+      "file": "src/standard/capabilities.ts",
+      "churn": 49,
+      "complexity": 11,
+      "score": 539
+    },
+    {
+      "file": "src/memory/temporal.fixture.test.ts",
+      "churn": 76,
+      "complexity": 7,
+      "score": 532
+    },
+    {
+      "file": "src/assets/pull.ts",
+      "churn": 73,
+      "complexity": 7,
+      "score": 511
+    },
+    {
+      "file": "src/gdgraph/treesitter/no-treesitter-import.test.ts",
+      "churn": 51,
+      "complexity": 10,
+      "score": 510
+    },
+    {
+      "file": "src/gdgraph/path.test.ts",
+      "churn": 56,
+      "complexity": 9,
+      "score": 504
+    },
+    {
+      "file": "src/security/golden-rule-e.test.ts",
+      "churn": 72,
+      "complexity": 7,
+      "score": 504
+    },
+    {
+      "file": "src/testing/capability.ts",
+      "churn": 42,
+      "complexity": 12,
+      "score": 504
+    },
+    {
+      "file": "src/memory/typing.test.ts",
+      "churn": 71,
+      "complexity": 7,
+      "score": 497
+    },
+    {
+      "file": "src/health/metrics/hotspot.ts",
+      "churn": 54,
+      "complexity": 9,
+      "score": 486
+    },
+    {
+      "file": "src/assets/command.test.ts",
+      "churn": 80,
+      "complexity": 6,
+      "score": 480
+    },
+    {
+      "file": "src/gdgraph/build.test.ts",
+      "churn": 119,
+      "complexity": 4,
+      "score": 476
+    },
+    {
+      "file": "src/gdgraph/service.ts",
+      "churn": 51,
+      "complexity": 9,
+      "score": 459
+    },
+    {
+      "file": "src/memory/supersede.test.ts",
+      "churn": 111,
+      "complexity": 4,
+      "score": 444
+    },
+    {
+      "file": "src/health/metrics/churn.ts",
+      "churn": 43,
+      "complexity": 10,
+      "score": 430
+    },
+    {
+      "file": "src/lib/prompt.ts",
+      "churn": 53,
+      "complexity": 8,
+      "score": 424
+    },
+    {
+      "file": "src/memory/text.ts",
+      "churn": 37,
+      "complexity": 11,
+      "score": 407
+    },
+    {
+      "file": "src/cli.test.ts",
+      "churn": 45,
+      "complexity": 9,
+      "score": 405
+    },
+    {
+      "file": "src/flow/context-inject.test.ts",
+      "churn": 81,
+      "complexity": 5,
+      "score": 405
+    },
+    {
+      "file": "src/memory/search.test.ts",
+      "churn": 81,
+      "complexity": 5,
+      "score": 405
+    },
+    {
+      "file": "src/standard/service.ts",
+      "churn": 57,
+      "complexity": 7,
+      "score": 399
+    },
+    {
+      "file": "src/memory/dedup.test.ts",
+      "churn": 66,
+      "complexity": 6,
+      "score": 396
+    },
+    {
+      "file": "src/security/types.ts",
+      "churn": 192,
+      "complexity": 2,
+      "score": 384
+    },
+    {
+      "file": "src/security/templates.ts",
+      "churn": 127,
+      "complexity": 3,
+      "score": 381
+    },
+    {
+      "file": "src/memory/no-network.test.ts",
+      "churn": 63,
+      "complexity": 6,
+      "score": 378
+    },
+    {
+      "file": "src/wiki/security-seam.test.ts",
+      "churn": 73,
+      "complexity": 5,
+      "score": 365
+    },
+    {
+      "file": "src/agents/bootstrap.test.ts",
+      "churn": 89,
+      "complexity": 4,
+      "score": 356
+    },
+    {
+      "file": "src/security/detect/structured-pii.test.ts",
+      "churn": 71,
+      "complexity": 5,
+      "score": 355
+    },
+    {
+      "file": "src/health/metrics/coverage.ts",
+      "churn": 49,
+      "complexity": 7,
+      "score": 343
+    },
+    {
+      "file": "src/commands/status.ts",
+      "churn": 48,
+      "complexity": 7,
+      "score": 336
+    },
+    {
+      "file": "src/wiki/backlinks.test.ts",
+      "churn": 54,
+      "complexity": 6,
+      "score": 324
+    },
+    {
+      "file": "src/health/history.test.ts",
+      "churn": 46,
+      "complexity": 7,
+      "score": 322
+    },
+    {
+      "file": "src/flow/types.ts",
+      "churn": 157,
+      "complexity": 2,
+      "score": 314
+    },
+    {
+      "file": "src/lib/test-cwd.ts",
+      "churn": 52,
+      "complexity": 6,
+      "score": 312
+    },
+    {
+      "file": "src/assets/seed.test.ts",
+      "churn": 62,
+      "complexity": 5,
+      "score": 310
+    },
+    {
+      "file": "src/harness/corpus.test.ts",
+      "churn": 62,
+      "complexity": 5,
+      "score": 310
+    },
+    {
+      "file": "src/health/scoring.test.ts",
+      "churn": 50,
+      "complexity": 6,
+      "score": 300
+    },
+    {
+      "file": "src/standard/emit-llms.test.ts",
+      "churn": 57,
+      "complexity": 5,
+      "score": 285
+    },
+    {
+      "file": "src/capability/warn-once.ts",
+      "churn": 47,
+      "complexity": 6,
+      "score": 282
+    },
+    {
+      "file": "src/health/templates.ts",
+      "churn": 93,
+      "complexity": 3,
+      "score": 279
+    },
+    {
+      "file": "src/gdskills/verify.test.ts",
+      "churn": 90,
+      "complexity": 3,
+      "score": 270
+    },
+    {
+      "file": "src/gdgraph/treesitter/resolve-calls.test.ts",
+      "churn": 38,
+      "complexity": 7,
+      "score": 266
+    },
+    {
+      "file": "src/memory/inject.ts",
+      "churn": 50,
+      "complexity": 5,
+      "score": 250
+    },
+    {
+      "file": "src/lib/ui.test.ts",
+      "churn": 40,
+      "complexity": 6,
+      "score": 240
+    },
+    {
+      "file": "src/gdgraph/enrich.ts",
+      "churn": 79,
+      "complexity": 3,
+      "score": 237
+    },
+    {
+      "file": "src/gdgraph/service.test.ts",
+      "churn": 59,
+      "complexity": 4,
+      "score": 236
+    },
+    {
+      "file": "src/gdskills/export-plugin.test.ts",
+      "churn": 58,
+      "complexity": 4,
+      "score": 232
+    },
+    {
+      "file": "src/security/detect/injection.ts",
+      "churn": 57,
+      "complexity": 4,
+      "score": 228
+    },
+    {
+      "file": "src/lib/agent-entrypoint-blocks.ts",
+      "churn": 70,
+      "complexity": 3,
+      "score": 210
+    },
+    {
+      "file": "src/lib/args.ts",
+      "churn": 34,
+      "complexity": 6,
+      "score": 204
+    },
+    {
+      "file": "src/commands/dashboard.test.ts",
+      "churn": 97,
+      "complexity": 2,
+      "score": 194
+    },
+    {
+      "file": "src/sync/diff.test.ts",
+      "churn": 38,
+      "complexity": 5,
+      "score": 190
+    },
+    {
+      "file": "src/gdgraph/config.test.ts",
+      "churn": 47,
+      "complexity": 4,
+      "score": 188
+    },
+    {
+      "file": "src/flow/machine.ts",
+      "churn": 31,
+      "complexity": 6,
+      "score": 186
+    },
+    {
+      "file": "src/commands/module-commands.test.ts",
+      "churn": 46,
+      "complexity": 4,
+      "score": 184
+    },
+    {
+      "file": "src/health/metrics/complexity-findings.ts",
+      "churn": 45,
+      "complexity": 4,
+      "score": 180
+    },
+    {
+      "file": "src/commands/ctx.test.ts",
+      "churn": 41,
+      "complexity": 4,
+      "score": 164
+    },
+    {
+      "file": "src/gdgraph/symbols-capability.test.ts",
+      "churn": 41,
+      "complexity": 4,
+      "score": 164
+    },
+    {
+      "file": "src/memory/reflect.test.ts",
+      "churn": 50,
+      "complexity": 3,
+      "score": 150
+    },
+    {
+      "file": "src/security/detect/entropy.test.ts",
+      "churn": 29,
+      "complexity": 5,
+      "score": 145
+    },
+    {
+      "file": "src/flow/context.ts",
+      "churn": 144,
+      "complexity": 1,
+      "score": 144
+    },
+    {
+      "file": "src/mcp/transport/http-sse.ts",
+      "churn": 47,
+      "complexity": 3,
+      "score": 141
+    },
+    {
+      "file": "src/harness/block-d-corpora.test.ts",
+      "churn": 44,
+      "complexity": 3,
+      "score": 132
+    },
+    {
+      "file": "src/mcp/redact-seam.ts",
+      "churn": 33,
+      "complexity": 4,
+      "score": 132
+    },
+    {
+      "file": "src/health/sources/sonarqube.test.ts",
+      "churn": 42,
+      "complexity": 3,
+      "score": 126
+    },
+    {
+      "file": "src/memory/store.test.ts",
+      "churn": 62,
+      "complexity": 2,
+      "score": 124
+    },
+    {
+      "file": "fixtures/churn-complexity/src/complex-stable.ts",
+      "churn": 20,
+      "complexity": 6,
+      "score": 120
+    },
+    {
+      "file": "fixtures/churn-complexity/src/hot.ts",
+      "churn": 20,
+      "complexity": 6,
+      "score": 120
+    },
+    {
+      "file": "src/health/metrics/complexity-findings.test.ts",
+      "churn": 58,
+      "complexity": 2,
+      "score": 116
+    },
+    {
+      "file": "src/health/source-analysis.ts",
+      "churn": 37,
+      "complexity": 3,
+      "score": 111
+    },
+    {
+      "file": "src/memory/relevant.test.ts",
+      "churn": 51,
+      "complexity": 2,
+      "score": 102
+    },
+    {
+      "file": "src/wiki/service.test.ts",
+      "churn": 98,
+      "complexity": 1,
+      "score": 98
+    },
+    {
+      "file": "src/health/skills.test.ts",
+      "churn": 31,
+      "complexity": 3,
+      "score": 93
+    },
+    {
+      "file": "src/harness/gate.ts",
+      "churn": 30,
+      "complexity": 3,
+      "score": 90
+    },
+    {
+      "file": "src/lib/json.ts",
+      "churn": 18,
+      "complexity": 5,
+      "score": 90
+    },
+    {
+      "file": "src/health/skill-loop.test.ts",
+      "churn": 83,
+      "complexity": 1,
+      "score": 83
+    },
+    {
+      "file": "src/flow/machine.test.ts",
+      "churn": 26,
+      "complexity": 3,
+      "score": 78
+    },
+    {
+      "file": "src/commands/init.test.ts",
+      "churn": 35,
+      "complexity": 2,
+      "score": 70
+    },
+    {
+      "file": "src/gdskills/learn.test.ts",
+      "churn": 69,
+      "complexity": 1,
+      "score": 69
+    },
+    {
+      "file": "src/commands/module-commands.ts",
+      "churn": 65,
+      "complexity": 1,
+      "score": 65
+    },
+    {
+      "file": "src/memory/ingest.test.ts",
+      "churn": 57,
+      "complexity": 1,
+      "score": 57
+    },
+    {
+      "file": "fixtures/symbol-graph/source.ts",
+      "churn": 18,
+      "complexity": 3,
+      "score": 54
+    },
+    {
+      "file": "src/gdgraph/staleness.ts",
+      "churn": 20,
+      "complexity": 2,
+      "score": 40
+    },
+    {
+      "file": "src/flow/tracker/github.test.ts",
+      "churn": 18,
+      "complexity": 2,
+      "score": 36
+    },
+    {
+      "file": "src/health/scopes.test.ts",
+      "churn": 35,
+      "complexity": 1,
+      "score": 35
+    },
+    {
+      "file": "src/lib/args.test.ts",
+      "churn": 16,
+      "complexity": 2,
+      "score": 32
+    },
+    {
+      "file": "src/health/scopes-component.test.ts",
+      "churn": 25,
+      "complexity": 1,
+      "score": 25
+    },
+    {
+      "file": "src/mcp/transport/stdio.ts",
+      "churn": 20,
+      "complexity": 1,
+      "score": 20
+    },
+    {
+      "file": "fixtures/churn-complexity/src/churny-simple.ts",
+      "churn": 5,
+      "complexity": 1,
+      "score": 5
+    },
+    {
+      "file": "fixtures/churn-complexity/src/cold.ts",
+      "churn": 5,
+      "complexity": 1,
+      "score": 5
+    },
+    {
+      "file": "fixtures/change-impacted-test/src/alpha.ts",
+      "churn": 3,
+      "complexity": 1,
+      "score": 3
+    },
+    {
+      "file": "fixtures/change-impacted-test/src/beta.ts",
+      "churn": 3,
+      "complexity": 1,
+      "score": 3
+    },
+    {
+      "file": "fixtures/change-impacted-test/src/alpha.extra.test.ts",
+      "churn": 5,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "fixtures/change-impacted-test/src/alpha.test.ts",
+      "churn": 3,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "fixtures/change-impacted-test/src/beta.test.ts",
+      "churn": 2,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "fixtures/change-impacted-test/src/gamma.test.ts",
+      "churn": 3,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/commands/metrics.test.ts",
+      "churn": 0,
+      "complexity": 1,
+      "score": 0
+    },
+    {
+      "file": "src/commands/metrics.ts",
+      "churn": 0,
+      "complexity": 51,
+      "score": 0
+    },
+    {
+      "file": "src/gdgraph/types.ts",
+      "churn": 63,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/health/provenance.test.ts",
+      "churn": 0,
+      "complexity": 2,
+      "score": 0
+    },
+    {
+      "file": "src/health/sources/index.ts",
+      "churn": 18,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/health/types.ts",
+      "churn": 239,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/lib/git-hooks.test.ts",
+      "churn": 0,
+      "complexity": 3,
+      "score": 0
+    },
+    {
+      "file": "src/lib/git-hooks.ts",
+      "churn": 0,
+      "complexity": 8,
+      "score": 0
+    },
+    {
+      "file": "src/lib/templates.test.ts",
+      "churn": 0,
+      "complexity": 1,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/benchmark.ts",
+      "churn": 0,
+      "complexity": 12,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/collector.ts",
+      "churn": 0,
+      "complexity": 9,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/compare.ts",
+      "churn": 0,
+      "complexity": 3,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/events.ts",
+      "churn": 0,
+      "complexity": 42,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/index.ts",
+      "churn": 0,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/lifecycle.ts",
+      "churn": 0,
+      "complexity": 11,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/lightweight.ts",
+      "churn": 0,
+      "complexity": 2,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/provenance.ts",
+      "churn": 0,
+      "complexity": 7,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/record.ts",
+      "churn": 0,
+      "complexity": 17,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/schema.ts",
+      "churn": 0,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/service.test.ts",
+      "churn": 0,
+      "complexity": 10,
+      "score": 0
+    },
+    {
+      "file": "src/metrics/types.ts",
+      "churn": 0,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/review/types.ts",
+      "churn": 102,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/security/detect/secrets.ts",
+      "churn": 130,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/standard/baseline.test.ts",
+      "churn": 0,
+      "complexity": 3,
+      "score": 0
+    },
+    {
+      "file": "src/standard/baseline.ts",
+      "churn": 0,
+      "complexity": 9,
+      "score": 0
+    },
+    {
+      "file": "src/standard/schemas.ts",
+      "churn": 140,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/standard/types.ts",
+      "churn": 85,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/testing/types.ts",
+      "churn": 125,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/wiki/backlinks.ts",
+      "churn": 104,
+      "complexity": 0,
+      "score": 0
+    },
+    {
+      "file": "src/wiki/types.ts",
+      "churn": 194,
+      "complexity": 0,
+      "score": 0
+    }
+  ],
+  "runId": "run-002-health-final-2",
+  "provenance": {
+    "commit": "34409f6000202a1992bb0c56b11d41d0b3784302",
+    "branch": "feature/keryx-execution-observability",
+    "worktree": "/private/tmp/keryx-execution-observability",
+    "sources": [
+      {
+        "name": "git",
+        "path": ".git",
+        "timestamp": "2026-07-10T12:31:51.157Z",
+        "reliability": "exact"
+      }
+    ]
+  }
+}
