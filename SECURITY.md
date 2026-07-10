@@ -50,6 +50,6 @@ repository — for example command injection, path traversal, unsafe file writes
 or bypasses of the built-in `security` module's guarantees.
 
 Out of scope: vulnerabilities in optional dependencies that are not enabled by
-default (`web-tree-sitter`, `@modelcontextprotocol/sdk`, `@xenova/transformers`)
-should be reported upstream, though we welcome a heads-up if they affect `keryx`
-users.
+default (`web-tree-sitter`, `@modelcontextprotocol/sdk`, or an explicitly
+configured third-party model adapter) should be reported upstream, though we
+welcome a heads-up if they affect `keryx` users.

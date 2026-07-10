@@ -144,8 +144,8 @@ keryx status             # 6. print which modules are enabled
 
 Notes on each:
 
-- **`gdgraph build`** writes `data/gdgraph/storage/{nodes,edges}.jsonl` plus a summary and module map. Query it with `keryx gdgraph query cycles`, `... query orphans`, or `keryx gdgraph affected <file>`.
-- **`wiki collect`** reads the graph, latest health report, and testing context (all optional) and emits draft architecture/component wiki pages. Run it *after* `gdgraph build` / `health run` to get the richest drafts.
+- **`gdgraph build`** writes `data/gdgraph/storage/{nodes,edges}.jsonl` plus a summary and module map. Use `gdgraph find` for concepts, `affected` for blast radius, `path` for relationships, and the optional `symbol --impact` surface when tree-sitter symbols are enabled.
+- **`wiki collect`** reads the graph, latest health report, and testing context (all optional), emits a hierarchical full-coverage draft scaffold, updates backlinks, and reports how many component pages still need prose enrichment. Run it *after* `gdgraph build` / `health run` to get the richest drafts.
 - **`health run`** scores code quality from tsc, tests, audit, complexity, coverage, and lint signals. Add `--changed` to scope to changed files.
 - **`test analyze`** inspects your existing test stack and writes testing context; `keryx test run --changed` runs the project's own test runner scoped to changes.
 - **`dashboard build`** rebuilds `.metaproject/keryx-dashboard.html` from current service files and data snapshots. Use `keryx dashboard open` (or bare `keryx dash`) to build and open it. The dashboard reads data only — it never runs analyzers or writes under `data/`.
@@ -158,6 +158,19 @@ keryx memory search "decision"   # long-term typed project memory
 keryx flow init --title "..."    # agent-first task lifecycle (the `tasks` module)
 keryx security status            # policy-based scanning, redaction, guardrails, audit
 ```
+
+Optional integrations improve agent startup and review traceability:
+
+```bash
+keryx orient install-hook --runtime codex
+keryx ctx install-hook --runtime codex
+keryx review start --target branch --ref feature/example
+```
+
+The orientation hook injects a bounded graph + wiki map at turn start. The gdctx
+routing guard keeps broad raw shell/search output out of the agent context.
+Managed review packages preserve coverage, findings, decisions, and learning
+candidates for standalone or flow-attached reviews.
 
 The `security` module is enabled by default, so `init` asks whether to enable it (and, on a git repo, whether to install a pre-push guard and project-local `.claude/settings.json` agent hooks). Once the workspace exists, check its state with `keryx security status` and scan a path for secrets/policy findings with `keryx security scan <path>`. Disable the module entirely with `keryx init --no-security`.
 
@@ -220,5 +233,5 @@ Serving requires the optional `@modelcontextprotocol/sdk`; `install` only probes
 
 ## Where things live
 
-- **Workspace layout, the `.metaproject/` contract, and the init/update lifecycle:** see `docs/docs/workspace-and-lifecycle.md`.
-- **Every command, subcommand, and flag:** see `docs/docs/cli-reference.md`.
+- **Workspace layout, the `.metaproject/` contract, and the init/update lifecycle:** see [workspace-and-lifecycle.md](./workspace-and-lifecycle.md).
+- **Every command, subcommand, and flag:** see [cli-reference.md](./cli-reference.md).

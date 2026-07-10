@@ -22,7 +22,9 @@
     "src/assets/lock.ts",
     "src/assets/pull.ts",
     "src/assets/resolver.test.ts",
-    "src/assets/resolver.ts"
+    "src/assets/resolver.ts",
+    "src/assets/seed.test.ts",
+    "src/assets/seed.ts"
   ],
   "capability": [
     "src/capability/golden-rule.test.ts",
@@ -44,6 +46,7 @@
   ],
   "commands": [
     "src/commands/agents.ts",
+    "src/commands/ctx.test.ts",
     "src/commands/ctx.ts",
     "src/commands/dashboard.test.ts",
     "src/commands/dashboard.ts",
@@ -59,6 +62,7 @@
     "src/commands/module-commands.test.ts",
     "src/commands/module-commands.ts",
     "src/commands/modules.ts",
+    "src/commands/orient.ts",
     "src/commands/review.ts",
     "src/commands/rules.test.ts",
     "src/commands/rules.ts",
@@ -72,6 +76,19 @@
     "src/commands/update.test.ts",
     "src/commands/update.ts",
     "src/commands/wiki.ts"
+  ],
+  "ctx": [
+    "src/ctx/hook-classify.ts",
+    "src/ctx/hook-install.test.ts",
+    "src/ctx/hook-install.ts",
+    "src/ctx/hook.test.ts",
+    "src/ctx/hook.ts",
+    "src/ctx/orient-runtimes.test.ts",
+    "src/ctx/orient-runtimes.ts",
+    "src/ctx/orient.test.ts",
+    "src/ctx/orient.ts",
+    "src/ctx/runtimes.test.ts",
+    "src/ctx/runtimes.ts"
   ],
   "flow": [
     "src/flow/context-inject.test.ts",
@@ -96,18 +113,28 @@
     "src/gdgraph/config.ts",
     "src/gdgraph/enrich.ts",
     "src/gdgraph/fallback.test.ts",
+    "src/gdgraph/find.test.ts",
+    "src/gdgraph/find.ts",
     "src/gdgraph/pagerank.ts",
+    "src/gdgraph/path.test.ts",
+    "src/gdgraph/path.ts",
     "src/gdgraph/query.ts",
     "src/gdgraph/repomap.test.ts",
     "src/gdgraph/repomap.ts",
     "src/gdgraph/service.test.ts",
     "src/gdgraph/service.ts",
+    "src/gdgraph/staleness.ts",
+    "src/gdgraph/symbol.test.ts",
+    "src/gdgraph/symbol.ts",
+    "src/gdgraph/symbols-capability.test.ts",
+    "src/gdgraph/symbols-capability.ts",
     "src/gdgraph/treesitter/adapter.test.ts",
     "src/gdgraph/treesitter/adapter.ts",
     "src/gdgraph/treesitter/extract.test.ts",
     "src/gdgraph/treesitter/extract.ts",
     "src/gdgraph/treesitter/grammars.ts",
     "src/gdgraph/treesitter/no-treesitter-import.test.ts",
+    "src/gdgraph/treesitter/resolve-calls.test.ts",
     "src/gdgraph/types.ts"
   ],
   "gdskills": [
@@ -248,6 +275,7 @@
     "src/security/agent-hooks/runtimes.ts",
     "src/security/config.ts",
     "src/security/detect/egress.ts",
+    "src/security/detect/entropy.test.ts",
     "src/security/detect/entropy.ts",
     "src/security/detect/exfil.test.ts",
     "src/security/detect/exfil.ts",
@@ -305,6 +333,8 @@
   "wiki": [
     "src/wiki/ask.test.ts",
     "src/wiki/ask.ts",
+    "src/wiki/backlinks.test.ts",
+    "src/wiki/backlinks.ts",
     "src/wiki/security-seam.test.ts",
     "src/wiki/service.test.ts",
     "src/wiki/service.ts",

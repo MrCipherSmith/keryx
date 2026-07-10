@@ -1,13 +1,13 @@
 # Requirements Roadmap
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
-This roadmap tracks planned Metaproject requirements packages. It does not claim
-that listed capabilities are implemented.
+This roadmap tracks Metaproject requirements packages and their implementation
+state. Runtime claims must be backed by source, tests, or a verification report.
 
 ## Packages
 
 | Package | Status | Summary |
 |---|---|---|
-| [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | draft | Make review-orchestrator Task Manager-aware so PR reviews can attach to flows, persist review artifacts, and feed skill learning. |
+| [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Managed reviews can run standalone, attach to flows, ingest reports, persist coverage/findings/decisions/learning artifacts, and complete only when the package is structurally complete. |

@@ -1,5 +1,5 @@
 # Testing Recommendations
 
-generatedAt: 2026-07-07T09:16:39.033Z
+generatedAt: 2026-07-09T21:29:25.307Z
 
-- No CI test workflow detected. Add CI gate separately from local Metaproject hooks.
+- none

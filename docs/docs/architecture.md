@@ -53,21 +53,26 @@ Two invariants define the system and recur across every module:
 | **shared-lib** | `src/lib/` | — | Bottom-layer toolkit: args, fs, json, prompt, ui, and the `templates.ts` code-gen that renders the whole `.metaproject/` scaffold. |
 | **rules** | `src/rules/` | `rules` | Sync/distill root `AGENTS.md`/`CLAUDE.md` into high-priority workspace rules and inject the managed Metaproject routing block. |
 | **agents** | `src/agents/`, `src/commands/agents.ts` | `agents bootstrap` | Install/uninstall/status a managed routing block in **global** per-runtime agent entrypoints (`~/…/CLAUDE.md`/`AGENTS.md`) via `agents bootstrap status\|install\|uninstall --runtime claude\|opencode\|zcode\|codex\|antigravity\|all` — the global counterpart to `rules`' repo-root injection. |
-| **gdgraph** | `src/gdgraph/` | `gdgraph` | Build a regex-based intra-project import/dependency graph; query cycles, orphans, and affected files (`build`/`query`/`affected`); render a PageRank-ranked, token-budgeted `repomap`; delegate `assets` resolution for the tree-sitter ceiling. |
-| **gdctx** | `src/commands/ctx.ts` | `ctx` | Token-saving wrapper: run git/rg/shell/read, persist raw output, print a compacted Markdown summary. |
-| **gdwiki** | `src/wiki/` | `wiki` | File-based project knowledge base; hand-authored pages plus auto-collected drafts from sibling modules' data. |
+| **gdgraph** | `src/gdgraph/` | `gdgraph` | Build the deterministic file graph and optional tree-sitter symbol/call graph; find files or symbols, inspect callers and impact, compute paths/affected sets, query cycles/orphans, and render a bounded repomap. |
+| **gdctx** | `src/commands/ctx.ts`, `src/ctx/` | `ctx` | Token-saving command/search/read wrapper plus merge-safe routing guards for supported agent runtimes. |
+| **gdwiki** | `src/wiki/` | `wiki` | File-based project knowledge base with hierarchical full-coverage collection, link validation, code/wiki backlinks, bounded context, and grounded retrieval. |
 | **gdskills** | `src/gdskills/` | `skills` | Manage bundled and project agent skills: install, route, verify, learn, export/sync to runtimes; owns JSON interop contracts. |
 | **health** | `src/health/` | `health` | Aggregate code-quality signals into per-scope scores, compare to baseline, and evaluate a pass/warn/fail gate; rank churn×complexity hotspots (`rankHotspots`) which feed the opt-in D1 hotspot scoring penalty. |
 | **testing** | `src/testing/` | `test` | Detect the test stack, run the project's existing runner (optionally changed-scoped), normalize results into a report. |
 | **memory** | `src/memory/` | `memory` | Long-term typed project memory (lessons/decisions/constraints); deterministic search, dedup, ingest, reflect. |
 | **flow** | `src/flow/` | `flow` (manifest id `tasks`) | Agent-first work lifecycle: scaffold a "flow" package, drive a status state machine, enforce completion gates. |
+| **review** | `src/review/`, `src/commands/review.ts` | `review` | Managed review packages: standalone, flow-attached, or report-ingested review state with explicit coverage, findings, decisions, learning handoff, and completion validation. |
 | **security** | `src/security/` | `security` | Agent input/output + artifact security: deterministic secret/PII/injection/egress detectors, policy resolution, redaction, and a pass/needs-approval/fail gate (`status`/`scan`/`check-input`/`check-output`/`redact`/`report`/`policy`); MCP-manifest scanning (`scan-mcp`); merge-safe agent security-hook install (`hooks`); labeled-corpus FN-rate evaluation (`eval`, optionally `--with-model`); incident log (`incidents`); plus a config-checksum self-protect tamper guard. |
+| **orientation** | `src/ctx/orient.ts`, `src/ctx/orient-runtimes.ts`, `src/commands/orient.ts` | `orient` | Build a bounded graph + wiki startup context and install/remove compatible turn-start hooks for Claude, Codex, and Cursor. |
 | **capability** | `src/capability/` | — (substrate) | The opt-in seam every feature layer instantiates: `resolveCapability(cwd, spec)` gates on manifest + optional dep + verified asset, returns an adapter or `null`. Never throws. |
 | **assets** | `src/assets/` | `assets` (per module) | Local-only, sha256-verified asset resolution (`resolveAsset`); `pullAsset` is the sole network path (verify-or-refuse); `assets.lock.json` pins provenance; `assets list\|verify\|pull`. |
 | **harness** | `src/harness/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
 | **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry, read-only `metaproject://` Resources, single redaction choke point. |
 
-_The 12 core modules (`cli-core` + `shared-lib` + 10 feature modules) — plus the small `agents` global-bootstrap command-module — are joined by the roadmap-2026 additions: three cross-cutting **opt-in substrates** (`capability`, `assets`, `harness`) plus the `mcp` protocol surface. See "Capability System — opt-in layers" below._
+The product modules are joined by cross-cutting command surfaces (`agents`,
+`orient`, and `review`), three opt-in substrates (`capability`, `assets`, and
+`harness`), and the MCP protocol adapter. See "Capability System — opt-in
+layers" below.
 
 ## Capability System — opt-in layers
 
@@ -94,7 +99,13 @@ The shipped `CAPABILITY_REGISTRY` is intentionally **empty** — the base tool o
 
 ### Dependency policy
 
-`package.json` `dependencies` stays `{}`. The opt-in runtimes — `web-tree-sitter`, `@modelcontextprotocol/sdk`, `@xenova/transformers` — live **only** under `optionalDependencies` and are imported lazily inside their adapter (or the seam) only. A static test (`capability/no-optional-imports.test.ts`, plus `mcp/`'s own import-boundary guard) fails on any top-level import of an optional runtime, so a fresh `install` with `--omit=optional` yields a fully working deterministic tool.
+`package.json` `dependencies` stays `{}`. The shipped opt-in runtimes are
+`web-tree-sitter` and `@modelcontextprotocol/sdk`; both live only under
+`optionalDependencies` and are loaded lazily on their explicit feature paths.
+The former `@xenova/transformers` runtime is no longer shipped. Memory and
+security retain deterministic fallbacks and can use an explicitly configured
+compatible adapter without adding a default runtime dependency. Static import
+boundary tests keep optional packages out of the deterministic startup path.
 
 ### Asset Resolver (`src/assets/`)
 
@@ -119,7 +130,7 @@ A thin, **stdio-first** Model Context Protocol adapter that exposes existing cap
 Each feature module keeps its deterministic algorithm as the default+fallback and adds a Capability-Seam-mediated ceiling:
 
 - **gdgraph** — tree-sitter symbol graph (`src/gdgraph/treesitter/`, `web-tree-sitter`) over the default regex import graph. The **repomap/PageRank god-node surface** (`src/gdgraph/pagerank.ts`, `src/gdgraph/repomap.ts`) rides on top: a pure, deterministic personalized-PageRank centrality ranks the most-depended files (the "god nodes") and renders a token-budgeted `repomap.md`; it ranks symbols when the tree-sitter ceiling resolves and falls back to file-level ranking on the regex floor.
-- **memory** — embedding-based semantic recall (`src/memory/embedding/`, `@xenova/transformers`) over the default token/trigram Jaccard search. On the deterministic floor, memory also carries a **bitemporal/temporal model** (`src/memory/types.ts` `validFrom`/`validTo`/`recordedAt` event- vs ingestion-time fields; `src/memory/supersede.ts`): a non-destructive `supersede` write closes an old entry's valid-window and status while keeping both Markdown files on disk, so history stays git-diffable and queryable `asOf` a date.
+- **memory** — optional embedding-based semantic recall through an explicitly configured transformer-compatible adapter over the default token/trigram Jaccard search; no embedding runtime is shipped. On the deterministic floor, memory also carries a **bitemporal/temporal model** (`src/memory/types.ts` `validFrom`/`validTo`/`recordedAt` event- vs ingestion-time fields; `src/memory/supersede.ts`): a non-destructive `supersede` write closes an old entry's valid-window and status while keeping both Markdown files on disk, so history stays git-diffable and queryable `asOf` a date.
 - **security** — Prompt Guard 2 injection detection and NER-based PII (`src/security/detect/injection/`, `.../pii/ner-adapter.ts`) over the default pattern detectors — the original `security.backends` idiom, now expressed through the shared seam.
 - **testing** — a coverage-map capability (`src/testing/coverage-map.ts`, `src/testing/capability.ts`) over the default heuristic report.
 

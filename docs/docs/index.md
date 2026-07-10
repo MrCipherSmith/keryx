@@ -2,10 +2,15 @@
 
 Auto-generated developer documentation for the **keryx** CLI (reverse-engineered from source).
 
+This index describes the current `main` implementation. Product intent and
+future work remain under `docs/requirements/`; release-readiness audits live
+under `docs/report/`.
+
 ## Contents
 
 - [README.md](./README.md) — Entry point: project overview, quick start, documentation map, and modules at a glance.
 - [onboarding.md](./onboarding.md) — Install, first-run walkthrough, the typical build loop, and TTY/CI behavior.
+- [complete-setup-and-agent-workflows.md](./complete-setup-and-agent-workflows.md) — Complete global installation, project configuration, commands, operational scripts, and agent prompts.
 - [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.

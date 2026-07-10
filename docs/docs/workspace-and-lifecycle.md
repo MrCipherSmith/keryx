@@ -35,6 +35,7 @@ project knowledge.
 ├── wiki/                       # knowledge-base pages (source of truth)
 ├── memory/                     # typed memory entries — Markdown, source of truth
 ├── flows/<NNN>-<date>-<slug>/  # flow (task) packages; flow.json is CLI-owned state
+├── reviews/<date>-<target>/     # standalone managed review packages
 ├── modules/                    # per-module manifests + READMEs
 ├── hooks/                      # hooks readme + post-update.d/ (executables run by `update --hooks`)
 ├── jobs/                       # orchestration job folders (gdskills)
@@ -79,7 +80,9 @@ once by `init` or by module `new`/`create` commands, then owned by the human. Th
 tooling guards them: `writeTextIfMissing` seeds and never clobbers; gdwiki only
 overwrites still-unmodified generated drafts; gdskills `learn` never mutates a
 `SKILL.md` without an explicit `apply`; flow's `flow.json` is the CLI's exclusive
-writer with an AC-checksum tamper check.
+writer with an AC-checksum tamper check. Managed review manifests are likewise
+service-owned; standalone packages live under `reviews/`, while attached packages
+live under a flow's `reviews/` subtree.
 
 ### Versioned vs gitignored
 
@@ -359,3 +362,17 @@ merge is **merge-safe**: a `_keryxManaged: "security-agent-hooks"` sentinel
 keeps re-install idempotent and preserves every pre-existing key and user hook.
 Advisory by default. It is recorded in the manifest at `security.hooks.agent` and,
 like the git hooks, refreshed by `update` only when already recorded.
+
+### Orientation and routing hooks
+
+Two additional opt-in integrations are installed explicitly rather than by
+`init` defaults:
+
+- `keryx orient install-hook --runtime <id>` injects a bounded graph + wiki map
+  at turn start for Claude, Codex, or Cursor.
+- `keryx ctx install-hook --runtime <id>` installs the gdctx routing guard, which
+  blocks broad raw shell/search reads and recommends the bounded `ctx` command.
+
+Both installers are merge-safe, idempotent, and reversible through their matching
+`uninstall-hook` commands. They modify only managed config entries or sentinel
+blocks and preserve surrounding user settings.

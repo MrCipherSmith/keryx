@@ -109,27 +109,33 @@ and module id `gdwiki` vs CLI verb `wiki`.
 
 ## gdgraph
 
-**Purpose.** `gdgraph` builds a lightweight intra-project import/dependency graph by
-scanning the filesystem and parsing import specifiers with regexes. It persists the
-graph as JSONL plus human-readable artifacts, then answers structural queries over
-the persisted graph — dependency cycles, orphan modules, and the
-dependencies/dependents of a given file.
+**Purpose.** `gdgraph` builds a deterministic intra-project file graph and can
+optionally enrich it with tree-sitter symbols and resolved call edges. Persisted
+JSONL and Markdown artifacts support concept search, exact symbol inspection,
+call-aware impact, shortest paths, affected sets, cycles, orphans, and bounded
+repository maps.
 
 **CLI surface.** Entry point `gdgraphCommand(args)`:
 - `build` — builds the graph for `process.cwd()`, writes artifacts, prints node/edge counts.
 - `query cycles` — prints each cycle as `a -> b -> a`, or "No cycles found."
 - `query orphans` — prints orphan module paths, or "No orphan modules found."
-- `affected <file> [--depth N] [--ranked] [--json]` — prints a Markdown block with `## Dependencies` and `## Dependents`; `--depth N` walks the transitive N-hop dependent closure (default `1` = today's direct set), `--ranked` appends a blast-radius ranking, `--json` emits the structured result.
+- `find "<terms>"` — ranks matching files and available symbols.
+- `symbol "<name>" [--impact] [--depth N]` — definitions, callers, callees,
+  documented-in wiki pages, and optional transitive caller impact.
+- `symbols <enable|disable|status>` — explicitly control or inspect the optional
+  tree-sitter capability.
+- `path "<A>" "<B>"` — shortest path between file or symbol endpoints.
+- `affected <file-or-symbol> [--depth N] [--ranked] [--json]` — direct or
+  transitive dependencies/dependents with optional ranking or structured output.
 - `repomap [--budget N] [--seed <path>...] [--changed]` — writes a PageRank-ranked, token-budgeted `artifacts/repomap.md`.
+- `context` — emits the graph portion of the bounded orientation block.
 - `assets list | verify [<id>] | pull <id>` — manage the optional tree-sitter grammar assets.
 - `--help`/`-h`/no args — usage.
 
-Only `cycles` and `orphans` are valid `query` targets (anything else errors, exit
-1). Unless `KERYX_GDGRAPH_LOCAL=1`, the command first tries to delegate `build`,
-`query`, and flag-less `affected` to a project-local
-`.metaproject/core/gdgraph/cli.ts`, letting a project pin its own gdgraph version;
-if that file is absent (or the newer `repomap`/`assets`/flagged-`affected` surfaces
-are used) the built-in implementation runs.
+Only `cycles` and `orphans` are valid `query` targets. Natural-language queries
+receive actionable guidance to use `gdgraph find`, `ctx rg`, and `affected`.
+Loose symbol queries that match multiple distinct names stop for disambiguation
+instead of unioning unrelated callers and impact.
 
 **Key files.**
 - `src/commands/gdgraph.ts` — dispatcher, local-runner delegation, help, output.
@@ -205,6 +211,8 @@ agent. Each run records bytes-in vs bytes-out and whether output was truncated.
 | `read` | `keryx ctx read <file> [--mode outline\|compact\|full]` (default `compact`) |
 | `run` | `keryx ctx run -- <command...>` — runs an arbitrary command after `--` |
 | `show` | `keryx ctx show [latest\|<name>] [--raw]` — prints a saved artifact |
+| `install-hook` | `keryx ctx install-hook [--runtime <id\|all>]` — install the opt-in routing guard |
+| `uninstall-hook` | remove only the managed routing guard for selected runtimes |
 | `--help`/`-h`/(none) | help |
 
 **Key files.** Single-file module `src/commands/ctx.ts` (~637 lines): `ctxCommand`
@@ -219,7 +227,10 @@ churn, flags risky files (lockfiles, `tsconfig`, `.github/`, `scripts/`,
 **run** emits command/exit-code/byte-counts plus compacted output (head + omitted
 marker + tail with important lines injected); **read** dispatches on mode — `full`
 (whole file), `compact` (head + omitted + tail), or `outline` (a regex/line-scan
-structural extract of imports, exports, declarations, TODOs — no AST). Config
+structural extract of imports, exports, declarations, TODOs — no AST). The
+optional routing guard classifies shell commands before execution, blocks broad
+raw `rg`/`grep`/`cat`/git-diff reads, and points the agent to a bounded `ctx`
+equivalent; runtime-specific installers are merge-safe and reversible. Config
 (`CtxConfig`) tunes line/group caps and head/tail sizes. `truncated` is set whenever
 the summary is smaller than the raw input (the normal case). Despite older spec
 claims, **there is no gdgraph integration**; the only cross-module awareness is
@@ -253,11 +264,13 @@ deterministic draft pages from sibling modules' generated data.
 |---|---|---|
 | `wiki status` | enabled?, root, page counts per type, last index/link-check state | 0 |
 | `wiki new <type> <slug> --title "<t>" [--force]` | scaffold a page from template; validates type+slug | 1 on missing args |
-| `wiki collect [--force] [--limit <n>]` | auto-generate draft pages from gdgraph/health/testing data, then reindex | 0 |
+| `wiki collect [--force] [--changed [--since <ref>]] [--limit <n>]` | generate hierarchical full-coverage drafts from gdgraph/health/testing data, reindex, and report the prose-enrichment work front | 0 |
 | `wiki index` | rebuild the managed index block in `index.md` | 0 |
 | `wiki check-links` | resolve internal Markdown links, write report | **1 if broken** |
 | `wiki validate` | metadata + link + index-staleness checks (superset of check-links) | **1 if issues** |
 | `wiki ask "<q>" [--k <n>] [--rerank]` | deterministic Q&A over wiki pages + current memory, returns cited answer | 0 |
+| `wiki context` | emit the wiki-index portion of the bounded orientation block | 0 |
+| `wiki backlinks <wiki-page-or-code-file>` | show knowledge backlinks and, for code files, graph dependents | 0 |
 
 Eight fixed page types (`WIKI_PAGE_TYPES`), each mapping to a folder: `architecture`,
 `domain-model`, `business-rule`, `user-scenario`, `component`, `service`,
@@ -552,7 +565,8 @@ There are **11 entry types** (`MEMORY_TYPES`), of which `lesson`, `decision`,
 primitives), `ingest.ts` (ADD-or-UPDATE), `reflect.ts` (consolidation), `relevant.ts`
 (cross-module lookup), `supersede.ts` (non-destructive replacement), `inject.ts`
 (procedural-memory prompt injection), `embedding/` (opt-in embedding index over
-`@xenova/transformers`), `check.ts`, `config.ts`, `templates.ts`.
+a configured transformer-compatible adapter), `check.ts`, `config.ts`, and
+`templates.ts`.
 
 **How it works.** **Markdown-as-database:** `parseEntry` extracts a structured
 record from `# Title`, `Key: value` header fields, and `##` sections.
@@ -577,8 +591,8 @@ and parse exactly as before. **Memory typing** maps every type to a knowledge cl
 via `MEMORY_CLASS_MAP` (`semantic`/`episodic`/`procedural`, total and defaulting to
 `semantic`); `inject.ts` splices accepted, current, `procedural`-class memory into
 task-implementer / flow prompts (`typing.injectClasses` defaults to `["procedural"]`).
-An optional **embedding index** (`src/memory/embedding/` over `@xenova/transformers`,
-resolved through the Capability Seam + Asset Resolver) is a **derived, disposable**
+An optional **embedding index** (`src/memory/embedding/`, resolved through the
+Capability Seam + Asset Resolver) is a **derived, disposable**
 content-hash-keyed vector cache under `data/memory/embeddings/` that reranks the
 lexical candidate pool; it never mutates the Markdown store, and lexical search stays
 the default and the fallback on any unavailability or error.
@@ -589,9 +603,10 @@ source of truth, one subfolder per type) and `dataRoot` =
 `artifacts/latest.json`, and — only when the embedding capability is active — the
 derived, disposable `embeddings/`). Config `.metaproject/memory.config.json`.
 
-**Dependencies / integrations.** Node builtins + `lib/fs`, `lib/json`, `lib/args`;
-the embedding runtime (`@xenova/transformers`) is an **optional** dependency imported
-lazily only by the embedding adapter (default off). **Consumed by gdskills** via
+**Dependencies / integrations.** Node builtins + `lib/fs`, `lib/json`, `lib/args`.
+No embedding runtime is shipped; the default search path is deterministic and an
+explicitly configured compatible adapter is loaded only on the opt-in semantic
+path. **Consumed by gdskills** via
 `relevantAcceptedMemory` (the memory→skills
 learning signal, `skills learn --from-memory`); `init`/`update` scaffold config/index/
 skill files via `templates.ts`. `allowAutoAccept` is defined in config but never
@@ -670,10 +685,47 @@ when it is absent.
 
 ---
 
+## review
+
+**Purpose.** The review module turns review output into a durable, validated
+package. It supports standalone review flows, reviews attached to an existing
+Task Manager flow, and ingestion of a pre-existing report. Each package records
+target identity, reviewer coverage, findings, decisions, learning candidates,
+and lifecycle status.
+
+**CLI surface.** `reviewCommand` provides:
+
+| Subcommand | Behavior |
+|---|---|
+| `attach --flow <id> --target <kind> --ref <ref>` | create a package linked to an existing flow |
+| `start --target <kind> --ref <ref>` | create a standalone managed review package |
+| `ingest --report <path> [--flow <id>] --ref <ref>` | seed a package from a report |
+| `status <review-id-or-path>` | print lifecycle, target, flow, and coverage state |
+| `complete <review-id-or-path>` | validate required artifacts and mark complete |
+| `lightweight` | report-only mode; persist no managed review artifacts |
+
+**Key files.** `src/commands/review.ts` handles parsing and output;
+`src/review/managed.ts` owns package creation, validation, lookup, and completion;
+`src/review/types.ts` defines modes, targets, manifest shape, coverage entries,
+and findings.
+
+**How it works.** `attach-review`, `review-flow`, and `ingest` modes converge on a
+single manifest-driven package format. Completion is structural: the service
+refuses to complete a package when mandatory coverage, decisions, findings,
+learning, report, or scope artifacts are absent. Flow attachment preserves the
+implementation lifecycle while keeping review state independently auditable.
+
+**Data & artifacts.** Attached packages live under the owning flow's `reviews/`
+tree. Standalone packages live under `.metaproject/reviews/<review-id>/`.
+The public contract is documented under
+`docs/requirements/managed-review-feedback-loop/`.
+
+---
+
 ## security
 
-**Purpose.** `security` is the newest module (bringing the total to **9**) — the
-**agent input/output and artifact security layer**. It scans content for secrets,
+**Purpose.** `security` is the **agent input/output and artifact security layer**.
+It scans content for secrets,
 PII, prompt-injection, and data-exfiltration (egress) signals, resolves those into
 a policy decision (allow → warn → redact → require-approval → block), and evaluates
 a pass/needs-approval/fail gate that can block a controlled write or CI run. It is
@@ -975,6 +1027,28 @@ under `$HOME` only. It does not read or write the project `.metaproject/` worksp
 
 **Dependencies / integrations.** Node builtins + `lib/args`, `lib/fs`, `lib/ui`.
 Standalone: no cross-module imports.
+
+---
+
+## orientation
+
+**Purpose.** Orientation provides a bounded startup context so an agent sees the
+current graph map, wiki index, and freshness state before broad navigation. It is
+an opt-in presentation/integration layer, not a new source of project knowledge.
+
+**CLI surface.** `keryx orient [<runtime>]` emits formatted context;
+`orient install-hook --runtime <id|all>` and `uninstall-hook` manage compatible
+turn-start hooks. Hook installation is supported for Claude, Codex, and Cursor;
+Windsurf and Zed are reported as unsupported because they lack a compatible
+context-injection hook.
+
+**Key files.** `src/ctx/orient.ts` builds the graph and wiki halves;
+`src/ctx/orient-runtimes.ts` owns runtime-specific locations, merge/strip logic,
+formatting, and validation; `src/commands/orient.ts` is the CLI adapter.
+
+**How it works.** Orientation reads existing graph/wiki artifacts only, bounds
+the output, and formats it for the selected runtime. Installers modify only their
+managed sentinel/config entry and preserve surrounding user configuration.
 
 ---
 

@@ -1,6 +1,16 @@
 # Plan — Activate the gdgraph symbol layer (`symbol` / `path` / symbol-aware queries)
 
-Status: proposed · Owner: TBD · Level: 2 (follows the file-level `find` + `rg`/entropy fixes)
+Status: implemented · Completed: 2026-07-10 · Historical plan retained for release audit
+
+## Implementation outcome
+
+The activation and query surfaces described by this plan are implemented on
+`main`: explicit `symbols enable|disable|status`, deterministic grammar pins,
+package-side symbol enrichment, `symbol`, `path`, symbol-aware `find` and
+`affected`, transitive caller impact, disambiguation, cross-file call resolution,
+wiki backlinks, and graceful file-graph fallback. The plan is no longer an active
+work queue and can be archived or removed after the next release if the changelog
+and current-behavior documentation remain the canonical record.
 
 ## Goal
 

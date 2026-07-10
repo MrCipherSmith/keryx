@@ -3,6 +3,45 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+
+- Symbol-aware graph navigation with `gdgraph find`, `symbol`, `path`,
+  symbol-aware `affected`, and transitive caller impact via `symbol --impact`.
+- Deterministically pinned tree-sitter grammar assets and explicit symbol-layer
+  enable/disable/status commands.
+- Hierarchical wiki collection with full module coverage, code-to-wiki backlinks,
+  symbol-kind annotations, and an explicit draft-enrichment work front.
+- Turn-start graph + wiki orientation hooks for Claude, Codex, and Cursor.
+- Multi-runtime gdctx routing guards for Claude, Codex, Cursor, Windsurf,
+  OpenCode, and other supported harnesses.
+- Managed review packages for standalone reviews, flow-attached reviews, report
+  ingestion, coverage tracking, decisions, and learning handoff.
+
+### Changed
+
+- Graph symbol resolution now disambiguates loose names and resolves cross-file
+  calls before computing callers and impact.
+- Agent bootstrap rules enforce the Metaproject hard gate before project work.
+- Model-backed features remain opt-in, while deterministic fallbacks and asset
+  availability are surfaced more clearly.
+- The shipped `@xenova/transformers` runtime was removed, reducing the optional
+  dependency footprint by roughly 230 MB; compatible transformer-style adapters
+  can still be configured explicitly.
+
+### Fixed
+
+- Natural-language graph queries now redirect to the correct `find`, `ctx rg`,
+  and `affected` workflow instead of silently producing low-value output.
+- Wiki/code relationships and symbol caller graphs no longer under-report common
+  cross-file references.
+
+### Documentation
+
+- Refreshed public, developer, CLI, architecture, module, onboarding, workspace,
+  and release-readiness documentation for the post-`v0.1.0` feature set.
+
 ## [0.1.0] — 2026-07-08
 
 First tagged release. `keryx` installs a deterministic, local, offline,
@@ -67,3 +106,4 @@ runtime dependencies, no sockets).
 - Serialized `process.chdir` in tests — no cross-file cwd races.
 
 [0.1.0]: https://github.com/MrCipherSmith/keryx/releases/tag/v0.1.0
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.1.0...HEAD

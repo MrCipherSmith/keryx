@@ -3,8 +3,8 @@
 Complete reference for the `keryx` command-line interface. `keryx`
 manages a per-project `.metaproject/` workspace: it scaffolds the workspace,
 keeps managed "service" files in sync (never touching your `data/` artifacts),
-and exposes feature commands for the dependency graph, wiki, skills, code health,
-testing, memory, an agent-first work-flow lifecycle, and agent-security scanning.
+and exposes feature commands for graph/wiki context, skills, code health, testing,
+memory, agent orientation, managed work and review lifecycles, and security.
 
 ## Global usage
 
@@ -27,6 +27,7 @@ code `1`.
 |---|---|
 | `init` | Initialize `.metaproject/` in the current project. |
 | `status` | Show local Metaproject status. |
+| `modules` | View, enable, or disable workspace modules. |
 | `update` | Refresh managed service files without touching data artifacts. |
 | `dashboard` / `dash` | Build or open the project admin dashboard. |
 | `gdgraph` | Build and query the code dependency graph. |
@@ -38,8 +39,11 @@ code `1`.
 | `test` | Analyze testing context and normalize test reports. |
 | `memory` | Store and search long-term project memory. |
 | `flow` | Agent-first work lifecycle (Task Manager). |
+| `review` | Create and complete durable managed review packages. |
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
+| `agents` | Manage the optional global Metaproject bootstrap for agent runtimes. |
+| `orient` | Emit or install bounded graph + wiki startup context. |
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
 | `mcp` | Expose read-only Metaproject services over the Model Context Protocol (opt-in, off by default). |
 
@@ -204,17 +208,21 @@ Requires an initialized workspace; an unknown subcommand exits `1`.
 
 ## gdgraph
 
-Build a lightweight intra-project import/dependency graph (regex-based) and query
-it. Delegates the legacy `build`/`query`/flag-less `affected` subcommands to a
-project-local `.metaproject/core/gdgraph/cli.ts` if present (unless
-`KERYX_GDGRAPH_LOCAL=1`); the newer `repomap`/`assets` surfaces and the
-`affected` flags run in the package runner.
+Build a deterministic intra-project import/dependency graph and optionally enrich
+it with tree-sitter symbols and resolved call edges. Structural queries operate
+from persisted graph artifacts and degrade to the file graph when the symbol
+layer is disabled or unavailable.
 
 ```
 keryx gdgraph build
 keryx gdgraph query <cycles|orphans>
-keryx gdgraph affected <file> [--depth N] [--ranked] [--json]
+keryx gdgraph find "<terms>"
+keryx gdgraph symbol "<name>" [--impact] [--depth N]
+keryx gdgraph symbols <enable|disable|status>
+keryx gdgraph path "<A>" "<B>"
+keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
 keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
+keryx gdgraph context
 keryx gdgraph assets list | verify [<id>] | pull <id>
 ```
 
@@ -223,8 +231,13 @@ keryx gdgraph assets list | verify [<id>] | pull <id>
 | `build` | — | Scan the tree, build the graph, write JSONL storage + `summary.md`/`module-map.json`, print node/edge counts. |
 | `query cycles` | — | Print dependency cycles (`a -> b -> a`), or "No cycles found." |
 | `query orphans` | — | Print modules with no resolved inbound or outbound edges. |
-| `affected <file>` | `--depth <N>`, `--ranked`, `--json` | Print `## Dependencies` and `## Dependents` for the target file. Default (or `--depth 1`) output is byte-for-byte unchanged; a higher `--depth` walks the transitive closure. `--ranked` appends a `## Blast Radius (ranked)` section (by hop + fan-in); `--json` emits the full result object. |
+| `find "<terms>"` | — | Rank file paths and available symbols by concept/name match. Directs content searches to `ctx rg`. |
+| `symbol "<name>"` | `--impact`, `--depth <N>` | Print exact definitions, callers, callees, and wiki pages that document the defining files. Loose matches across different symbol names require disambiguation. `--impact` adds transitive callers (default depth `3`). |
+| `symbols` | `enable`, `disable`, or `status` | Toggle the tree-sitter capability in the manifest or report capability/symbol/call counts. Enabling is explicit and never downloads assets implicitly. |
+| `path "<A>" "<B>"` | — | Resolve file or symbol endpoints and print the shortest path across import and call edges. |
+| `affected <file-or-symbol>` | `--depth <N>`, `--ranked`, `--json` | Resolve a file or symbol, print dependencies/dependents, and optionally walk/rank the transitive blast radius. |
 | `repomap` | `--budget <N>`, `--seed <path>...`, `--changed` | Write a token-budgeted repo map artifact. `--budget` caps the token estimate, `--seed` biases toward one or more paths (repeatable), and `--changed` seeds from locally changed files (`git diff --name-only HEAD`). |
+| `context` | — | Emit the bounded graph half of the turn-start orientation block. |
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json`: `list` shows resolved/missing state, `verify` checks checksums (exit `1` on mismatch), `pull` fetches and verifies one asset (the only networked verb). |
 
 Only the exact queries `cycles` and `orphans` are accepted; anything else exits
@@ -245,6 +258,8 @@ keryx ctx rg "<pattern>" [path]
 keryx ctx read <file> [--mode outline|compact|full]
 keryx ctx run -- <command...>
 keryx ctx show [latest|<name>] [--raw]
+keryx ctx install-hook [--runtime <id|all>]
+keryx ctx uninstall-hook [--runtime <id|all>]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -255,6 +270,8 @@ keryx ctx show [latest|<name>] [--raw]
 | `read` | `<file>`, `--mode outline\|compact\|full` | Read and summarize a file. Default mode `compact`. |
 | `run` | `-- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. |
 | `show` | `[latest\|<name>]`, `--raw` | Print a saved artifact summary (`.md`), or the raw `.log` with `--raw`. |
+| `install-hook` | `--runtime <id\|all>` | Install an opt-in routing guard that blocks broad raw search/read/diff commands and points the agent to the bounded `ctx` equivalent. |
+| `uninstall-hook` | `--runtime <id\|all>` | Remove only the managed routing-guard integration for the selected runtime(s). |
 
 ---
 
@@ -267,22 +284,26 @@ more), including auto-collected drafts from other modules' data.
 ```
 keryx wiki status
 keryx wiki new <type> <slug> --title "<title>" [--force]
-keryx wiki collect [--force] [--limit <n>] [--changed]
+keryx wiki collect [--force] [--changed [--since <ref>]] [--limit <n>]
 keryx wiki index
 keryx wiki check-links
 keryx wiki validate
 keryx wiki ask "<question>" [--k <n>] [--rerank]
+keryx wiki context
+keryx wiki backlinks <wiki-page-or-code-file>
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
 | `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
-| `collect` | `--force`, `--limit <n>`, `--changed` | Auto-generate draft pages from gdgraph/health/testing data, then rebuild the index. `--limit` defaults to 12; `--changed` restricts collection to recently changed inputs for incremental, hook-friendly runs. |
+| `collect` | `--force`, `--changed`, `--since <ref>`, `--limit <n>` | Generate a hierarchical, full-coverage draft scaffold from graph/health/testing data, rebuild the index, and report the remaining draft-enrichment work front. `--changed` can scope collection to changes since a ref. |
 | `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
+| `context` | — | Emit the bounded wiki-index half of the turn-start orientation block. |
+| `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 
 Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
 `component`, `service`, `integration`, `decision`.
@@ -538,7 +559,7 @@ An unknown subcommand prints an error and exits `1`.
 
 ## standard
 
-Validate the workspace against the [Metaproject Standard](../requirements/metaproject-standard/specification.md)
+Validate the workspace against the built-in Metaproject Standard
 v0.1 and report its declared capabilities. The checks and schemas are bundled
 into the CLI (`src/standard/`), so no network or `docs/` access is needed at
 runtime.
@@ -595,6 +616,60 @@ Runtime ids: `claude` (`~/.claude/CLAUDE.md`), `opencode`
 (`~/.config/opencode/AGENTS.md`), `zcode` (`~/.zcode/AGENTS.md`), `codex`
 (`~/.codex/AGENTS.md`), `antigravity`
 (`~/.config/antigravity/AGENTS.md`; alias `antigravuty`), or `all`.
+
+---
+
+## orient
+
+Emit or install a compact turn-start orientation block containing the current
+graph map, wiki index, and freshness information. Orientation is separate from
+the gdctx routing guard: orientation supplies context, while the routing guard
+controls which shell/search commands an agent may run directly.
+
+```text
+keryx orient [<runtime>]
+keryx orient install-hook [--runtime <id|all>]
+keryx orient uninstall-hook [--runtime <id|all>]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| default emit | optional runtime id | Build the bounded graph + wiki orientation and format it for the selected runtime (`claude` by default). |
+| `install-hook` | `--runtime <id\|all>` | Merge-safely install the runtime's turn-start/prompt hook. Supported hook runtimes are `claude`, `codex`, and `cursor`. |
+| `uninstall-hook` | `--runtime <id\|all>` | Remove only the managed orientation integration. |
+
+Windsurf and Zed do not expose a compatible context-injection hook; use their
+rules or memories instead. Unknown runtimes exit `1` without modifying config.
+
+---
+
+## review
+
+Create and manage durable review packages. Managed reviews preserve target
+identity, reviewer coverage, findings, decisions, learning candidates, and an
+optional flow relationship instead of leaving review state only in chat output.
+
+```text
+keryx review attach --flow <id> --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
+keryx review start --target <kind> --ref <ref> [--reviewers a,b] [--report <path>]
+keryx review ingest --report <path> [--flow <id>] --ref <ref>
+keryx review status <review-id-or-path>
+keryx review complete <review-id-or-path>
+keryx review lightweight
+```
+
+| Subcommand | Description |
+|---|---|
+| `attach` | Create a managed package linked to an existing Task Manager flow. |
+| `start` | Create a standalone managed review package. |
+| `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
+| `status` | Print mode, status, target, flow link, and coverage count. |
+| `complete` | Validate the package and mark it complete only when required artifacts exist. |
+| `lightweight` | Confirm report-only mode; creates no managed artifacts. |
+
+Target kinds are validated by the runtime. Review packages are stored under the
+linked flow when attached, or in the managed standalone review location selected
+by the review service.
 
 ---
 
