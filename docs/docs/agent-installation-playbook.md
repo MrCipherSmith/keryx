@@ -122,6 +122,7 @@ Feature: Autonomous keryx installation and project configuration
     And the agent runs `keryx wiki check-links`
     And the agent runs `keryx wiki validate`
     And the agent runs `keryx dashboard build`
+    And the agent runs `keryx sync install-hooks`
     And the agent runs `keryx standard validate`
     And the agent runs `keryx security policy validate`
     And the agent runs `keryx flow check`
@@ -153,15 +154,15 @@ Feature: Autonomous keryx installation and project configuration
     When the agent verifies the current working-tree state
     Then the agent runs `keryx update --skip-runtime`
     And the agent reads the refreshed `.metaproject/index.md`
-    And the agent runs `keryx gdgraph build`
-    And the agent runs `keryx test analyze`
-    And the agent runs `keryx wiki collect --changed`
+    And the agent runs `keryx sync` to report derived-layer drift since each layer was built
+    And the agent runs `keryx sync --apply` to rebuild stale graph/wiki/memory incrementally and prune orphan wiki drafts for removed modules
     And the agent runs `keryx wiki index`
     And the agent runs `keryx wiki check-links`
     And the agent runs `keryx wiki validate`
     And the agent runs `keryx dashboard build`
     And the agent runs `keryx standard validate`
     Then the agent reports changed managed files separately from pre-existing user files
+    But the agent must not delete accepted or human-edited wiki pages when pruning
 
   Scenario Outline: Configure one agent runtime
     Given RUNTIME is "<runtime>"
@@ -238,9 +239,9 @@ Feature: Autonomous keryx installation and project configuration
     And the agent runs `keryx modules status`
     And the agent applies only idempotent repair commands suggested by diagnostics
     And the agent runs `keryx update --skip-runtime`
-    And the agent rebuilds only the stale graph, test, wiki, health, or dashboard artifacts
+    And the agent runs `keryx sync --apply` to rebuild only the stale graph/wiki/memory layers and prune orphan wiki drafts
     And the agent reruns the complete installation validation scenario
-    But the agent must not delete `.metaproject`, user-authored wiki pages, memory, flows, or project skills
+    But the agent must not delete `.metaproject`, accepted or user-authored wiki pages, memory, flows, or project skills
 
   Scenario: Preserve repository safety boundaries
     Given the setup creates or changes files
@@ -303,6 +304,7 @@ integrations:
   orientation: installed | skipped | failed
   gdctx_guard: installed | skipped | failed
   security_hook: installed | skipped | failed
+  sync_hooks: installed | skipped | failed
   mcp: installed | disabled | skipped | failed
   symbols: enabled | disabled | fallback | failed
   testing_tia: enabled | disabled | fallback | failed
