@@ -27,15 +27,6 @@ with no human gates.
 
 ---
 
-## Execution metrics (opt-in)
-
-When a USER runs this orchestrator directly (not as a dispatched subagent), at
-the start ask "Collect execution statistics for this run? (yes/no)" per
-`.metaproject/rules/core/execution-metrics.md`. If yes, append the
-`## Execution Metrics` section at the end and save it under the run's artifact
-dir (`.metaproject/data/gdwiki/metrics/` or the docs output dir). Never ask or
-emit it when dispatched as a subagent.
-
 ## Iron Laws
 
 | # | Law |

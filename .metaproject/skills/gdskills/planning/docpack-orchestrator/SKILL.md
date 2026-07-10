@@ -16,6 +16,18 @@ license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
+<!-- keryx:execution-metrics:begin -->
+## Execution Metrics (user-direct opt-in)
+
+When this skill is invoked directly by a user, before task work:
+
+1. Read `.metaproject/rules/core/execution-metrics.md`.
+2. Ask exactly: **Collect execution statistics for this run? (yes / no)**
+3. Wait for the answer. If yes, follow the rule's reporting and persistence contract; if no, continue normally.
+
+When dispatched as a subagent, do not ask and do not emit a separate report. The top-level caller owns metrics.
+<!-- keryx:execution-metrics:end -->
+
 # docpack-orchestrator
 
 Top-level orchestrator for Metaproject requirements packages under
@@ -23,14 +35,6 @@ Top-level orchestrator for Metaproject requirements packages under
 
 Use `autodoc-orchestrator` instead when the goal is to reverse-engineer the
 current codebase and produce architecture/onboarding/developer documentation.
-
-## Execution metrics (opt-in)
-
-When a USER runs this orchestrator directly (not as a dispatched subagent), at
-the start ask "Collect execution statistics for this run? (yes/no)" per
-`.metaproject/rules/core/execution-metrics.md`. If yes, append the
-`## Execution Metrics` section at the end and save it under the docpack output
-dir. Never ask or emit it when dispatched as a subagent.
 
 ## Iron Laws
 

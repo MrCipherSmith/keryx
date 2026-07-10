@@ -552,6 +552,7 @@ Resolution order:
 
 ## Agent Shortcuts
 
+- For every skill invoked directly by a user, read \`.metaproject/rules/core/execution-metrics.md\`, ask its one opt-in question before task work, and wait. Dispatched subagents never ask or emit a separate metrics report; the top-level caller owns it.
 - User says \`создай скил для <path>\`, \`создай скилл для <file>\`, or \`create a skill for <target>\`: load \`gdskills/core/entity-skill-creator/SKILL.md\` and run the create-route-inspect-verify-status CLI flow yourself.
 - User asks which project skill applies to a file/task: run \`keryx skills route <query-or-target>\` before reading broad files.
 - User asks whether a project skill is still valid: run \`keryx skills verify <skill-or-target>\`.

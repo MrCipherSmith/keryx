@@ -41,6 +41,18 @@ license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
+<!-- keryx:execution-metrics:begin -->
+## Execution Metrics (user-direct opt-in)
+
+When this skill is invoked directly by a user, before task work:
+
+1. Read `.metaproject/rules/core/execution-metrics.md`.
+2. Ask exactly: **Collect execution statistics for this run? (yes / no)**
+3. Wait for the answer. If yes, follow the rule's reporting and persistence contract; if no, continue normally.
+
+When dispatched as a subagent, do not ask and do not emit a separate report. The top-level caller owns metrics.
+<!-- keryx:execution-metrics:end -->
+
 # Review Orchestrator
 
 Entry point for the entire review domain. This skill is a thin router: it detects scope,

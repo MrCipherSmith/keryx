@@ -130,14 +130,6 @@ Required rules:
 - `.metaproject/rules/core/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
 - `.metaproject/rules/core/implementation-doc-mandate.mdc`
-- `.metaproject/rules/core/execution-metrics.md`
-
-Execution metrics (opt-in): when a USER runs this orchestrator directly, at the
-start ask "Collect execution statistics for this run? (yes/no)" per
-`rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics`
-section at the end and save it under the flow dir (`<flow-dir>/metrics/`). Never
-ask or emit it when dispatched as a subagent.
-
 Write or update:
 
 - `description.md` - problem, expected outcome, out of scope;

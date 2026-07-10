@@ -18,6 +18,18 @@ license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
+<!-- keryx:execution-metrics:begin -->
+## Execution Metrics (user-direct opt-in)
+
+When this skill is invoked directly by a user, before task work:
+
+1. Read `.metaproject/rules/core/execution-metrics.md`.
+2. Ask exactly: **Collect execution statistics for this run? (yes / no)**
+3. Wait for the answer. If yes, follow the rule's reporting and persistence contract; if no, continue normally.
+
+When dispatched as a subagent, do not ask and do not emit a separate report. The top-level caller owns metrics.
+<!-- keryx:execution-metrics:end -->
+
 # Flow Orchestrator
 
 ## Purpose
@@ -130,14 +142,6 @@ Required rules:
 - `.metaproject/rules/core/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
 - `.metaproject/rules/core/implementation-doc-mandate.mdc`
-- `.metaproject/rules/core/execution-metrics.md`
-
-Execution metrics (opt-in): when a USER runs this orchestrator directly, at the
-start ask "Collect execution statistics for this run? (yes/no)" per
-`rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics`
-section at the end and save it under the flow dir (`<flow-dir>/metrics/`). Never
-ask or emit it when dispatched as a subagent.
-
 Write or update:
 
 - `description.md` - problem, expected outcome, out of scope;

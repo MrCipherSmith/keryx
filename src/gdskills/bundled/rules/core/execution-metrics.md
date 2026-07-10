@@ -31,10 +31,15 @@ metric would require extra work, mark it `unknown` instead.
 
 ## Persistence (artifact-producing skills)
 
-Skills that create artifacts (flow-*, autodoc-*, job-*, docpack-*, documenters,
-gdwiki enrichment, or anything that writes files) MUST also save the report:
+Skills whose main task creates or changes artifacts (flow-*, autodoc-*, job-*,
+docpack-*, documenters, gdwiki enrichment, or anything that writes files) MUST
+also save the report. The metrics file itself does not make an otherwise
+read-only run artifact-producing. Dispatched subagents never save a separate
+report because the top-level caller owns it.
 
 - Flows → `<flow-dir>/metrics/run-<ISO-timestamp>.md`
+- Jobs, documentation packages, or skills with a declared output root →
+  `<artifact-root>/metrics/run-<ISO-timestamp>.md`
 - Otherwise → `.metaproject/data/<primary-module>/metrics/run-<ISO-timestamp>.md`
 
 Create the directory. Use a filesystem-safe timestamp (colons → `-`). Print the
@@ -60,6 +65,7 @@ past reports.
 | run_mode | user-direct / orchestrator | self | how this skill was invoked |
 | skill | ... | self | skill name + version |
 | model_used | ... | self/cli | model id if known |
+| cost_total | ... | cli/unknown | exact only if runtime exposes it |
 | started_at | ... | system/self | ISO timestamp if known |
 | finished_at | ... | system/self | ISO timestamp if known |
 | wall_time_minutes | ... | measured/estimated | total elapsed time |
@@ -83,12 +89,14 @@ past reports.
 | wiki_used | yes/no | observed | .metaproject/wiki or keryx wiki usage |
 | health_used | yes/no | observed | keryx health usage |
 | artifacts_written | ... | counted | files/pages this run created or updated |
+| metrics_artifact | ... | counted/unknown | persisted report path when required |
 | blockers_or_retries | ... | counted | failed commands, retries, missing deps |
 | final_status | done / partial / blocked | self | final outcome |
 
 After the table, add:
 
-1. **Commands Run** — every command actually executed (verbatim, in order).
+1. **Commands Run** — every command actually executed (verbatim, in order),
+   redacting secret values while retaining command structure.
 2. **Artifacts Changed** — every file created/modified (paths).
 3. **Comparison Notes** — 3–5 bullets on what likely affected speed / quality /
    amount of context (e.g. graph freshness, batch size, model tier, cache).
