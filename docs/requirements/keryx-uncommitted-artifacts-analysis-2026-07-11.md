@@ -39,9 +39,13 @@ published feature branches.
 | `feature/keryx-execution-observability` | Observability runtime and Version 0.2.0 requirements | `d887458` |
 | `feature/keryx-change-report` | Verification/change report | `b20d90c` |
 
-All four branches are published to the `MrCipherSmith/keryx` remote. This
-analysis branch contains only this report and is intentionally separate from
-those feature branches.
+The harness, metrics, observability, and analysis branches are published to
+the `MrCipherSmith/keryx` remote. This analysis branch contains only this
+report and is intentionally separate from those feature branches.
+
+After this report was prepared, the superseded
+`feature/keryx-change-report` branch was deleted locally and remotely. Its
+report commit remains reachable through `feature/keryx-uncommitted-analysis`.
 
 ## Decision
 
