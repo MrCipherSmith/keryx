@@ -174,6 +174,11 @@ export function renderIndexMarkdown({
 
   const workflowItems = [
     "Read this file first.",
+    ...(enableGdskills
+      ? [
+          "Whenever any skill is invoked directly by a user—including module skills, generated project skills, bundled skills, and orchestrators—read `.metaproject/rules/core/execution-metrics.md`, ask its single opt-in question, and wait before routing, context collection, commands, or other task work. When dispatched as a subagent, never ask or emit a separate metrics report; the top-level caller owns it.",
+        ]
+      : []),
     "Treat the user's request as a natural-language intent; do not require the user to remember internal module, skill, MCP tool, or CLI names.",
     "Check enabled modules.",
     "Load relevant rules from `rules/`.",

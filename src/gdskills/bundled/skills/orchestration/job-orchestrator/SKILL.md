@@ -39,8 +39,6 @@ Proceed directly with your assigned task.
 
 Dynamic orchestrator that builds execution plans based on user intent. Unlike a fixed pipeline, the orchestrator adapts its workflow to what the user actually needs — from "just analyze this issue" to "implement, review, and create a PR". It dispatches sub-agents (`issue-analyzer`, `context-collector`, `task-implementer`, review skills) and persists all work via `job-documenter`.
 
-**Execution metrics (opt-in):** when a USER runs this orchestrator directly (not as a dispatched subagent), at the start ask "Collect execution statistics for this run? (yes/no)" per `.metaproject/rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics` section at the end and save it under the job dir (`jobs/<job>/metrics/`). Never ask or emit it when dispatched as a subagent.
-
 **Key design principle** (from Anthropic's "Building Effective Agents"):
 > "The key difference from parallelization is its flexibility — subtasks aren't pre-defined, but determined by the orchestrator based on the specific input."
 

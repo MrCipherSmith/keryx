@@ -27,6 +27,18 @@ license: "MIT"
 compatibility: "cursor,codex,zed,opencode,claude"
 ---
 
+<!-- keryx:execution-metrics:begin -->
+## Execution Metrics (user-direct opt-in)
+
+When this skill is invoked directly by a user, before task work:
+
+1. Read `.metaproject/rules/core/execution-metrics.md`.
+2. Ask exactly: **Collect execution statistics for this run? (yes / no)**
+3. Wait for the answer. If yes, follow the rule's reporting and persistence contract; if no, continue normally.
+
+When dispatched as a subagent, do not ask and do not emit a separate report. The top-level caller owns metrics.
+<!-- keryx:execution-metrics:end -->
+
 <SUBAGENT-STOP>
 If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
 This skill is for orchestrators and interactive session-level routing only.
@@ -38,8 +50,6 @@ Proceed directly with your assigned task.
 ## Purpose
 
 Dynamic orchestrator that builds execution plans based on user intent. Unlike a fixed pipeline, the orchestrator adapts its workflow to what the user actually needs — from "just analyze this issue" to "implement, review, and create a PR". It dispatches sub-agents (`issue-analyzer`, `context-collector`, `task-implementer`, review skills) and persists all work via `job-documenter`.
-
-**Execution metrics (opt-in):** when a USER runs this orchestrator directly (not as a dispatched subagent), at the start ask "Collect execution statistics for this run? (yes/no)" per `.metaproject/rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics` section at the end and save it under the job dir (`jobs/<job>/metrics/`). Never ask or emit it when dispatched as a subagent.
 
 **Key design principle** (from Anthropic's "Building Effective Agents"):
 > "The key difference from parallelization is its flexibility — subtasks aren't pre-defined, but determined by the orchestrator based on the specific input."

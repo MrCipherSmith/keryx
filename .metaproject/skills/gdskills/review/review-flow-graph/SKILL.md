@@ -13,6 +13,18 @@ metadata:
 license: "MIT"
 ---
 
+<!-- keryx:execution-metrics:begin -->
+## Execution Metrics (user-direct opt-in)
+
+When this skill is invoked directly by a user, before task work:
+
+1. Read `.metaproject/rules/core/execution-metrics.md`.
+2. Ask exactly: **Collect execution statistics for this run? (yes / no)**
+3. Wait for the answer. If yes, follow the rule's reporting and persistence contract; if no, continue normally.
+
+When dispatched as a subagent, do not ask and do not emit a separate report. The top-level caller owns metrics.
+<!-- keryx:execution-metrics:end -->
+
 # Review — Flow Graph Abstractions
 
 Reviewer for reusable ReactFlow/graph integration layers. Use it when a repository has a shared

@@ -24,14 +24,6 @@ Top-level orchestrator for Metaproject requirements packages under
 Use `autodoc-orchestrator` instead when the goal is to reverse-engineer the
 current codebase and produce architecture/onboarding/developer documentation.
 
-## Execution metrics (opt-in)
-
-When a USER runs this orchestrator directly (not as a dispatched subagent), at
-the start ask "Collect execution statistics for this run? (yes/no)" per
-`.metaproject/rules/core/execution-metrics.md`. If yes, append the
-`## Execution Metrics` section at the end and save it under the docpack output
-dir. Never ask or emit it when dispatched as a subagent.
-
 ## Iron Laws
 
 | # | Law |

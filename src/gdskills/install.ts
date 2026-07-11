@@ -10,6 +10,7 @@ import {
   renderGdskillsCatalog,
   renderGdskillsManifest,
 } from "./catalog";
+import { ensureExecutionMetricsOptIn } from "./execution-metrics";
 
 export type InstallGdskillsResult = {
   profile: GdskillsProfile;
@@ -50,13 +51,15 @@ export async function installGdskills(
 
   for (const skillEntry of skills) {
     const skillDir = path.join(skillsRoot, skillEntry.category, skillEntry.name);
+    const skillPath = path.join(skillDir, "SKILL.md");
     await mkdir(skillDir, { recursive: true });
     const bundledSkillPath = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
     if (existsSync(bundledSkillPath)) {
       await cp(bundledSkillPath, skillDir, { recursive: true, force: true });
     } else {
-      await writeFile(path.join(skillDir, "SKILL.md"), renderBundledSkill(skillEntry), "utf8");
+      await writeFile(skillPath, renderBundledSkill(skillEntry), "utf8");
     }
+    await writeFile(skillPath, ensureExecutionMetricsOptIn(await readFile(skillPath, "utf8")), "utf8");
   }
 
   await installBundledSharedSkills(skillsRoot);

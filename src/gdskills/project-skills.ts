@@ -2,6 +2,7 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { ensureExecutionMetricsOptIn } from "./execution-metrics";
 
 export type ProjectSkillFormat = "auto" | "single" | "package";
 
@@ -134,13 +135,13 @@ async function writeProjectSkillPackage({
   const skillPath = path.join(packageRoot, "SKILL.md");
   await writeFileAtomic(
     skillPath,
-    renderProjectSkill({
+    ensureExecutionMetricsOptIn(renderProjectSkill({
       moduleName,
       skillName,
       target,
       evidence,
       packageFormat,
-    }),
+    })),
   );
 
   const changelogPath = path.join(packageRoot, "skill-changelog.md");

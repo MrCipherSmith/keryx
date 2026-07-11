@@ -29,6 +29,21 @@ test("installs real bundled gdskills, contracts, shared assets, and rules", asyn
     );
     expect(reviewOrchestrator).toContain("\"$schema\"");
 
+    const installedSkillFiles = (await listFiles(result.skillsRoot))
+      .filter((filePath) => path.basename(filePath) === "SKILL.md");
+    expect(installedSkillFiles).toHaveLength(result.installedSkills);
+    for (const skillPath of installedSkillFiles) {
+      expect(await readFile(skillPath, "utf8")).toContain(".metaproject/rules/core/execution-metrics.md");
+    }
+    expect(await readFile(
+      path.join(metaprojectRoot, "skills", "gdskills", "review", "review-orchestrator", "SKILL.md"),
+      "utf8",
+    )).toContain("Collect execution statistics for this run?");
+    expect(await readFile(
+      path.join(metaprojectRoot, "skills", "gdskills", "planning", "prd-creator", "SKILL.md"),
+      "utf8",
+    )).toContain(".metaproject/rules/core/execution-metrics.md");
+
     const flowOrchestrator = await readFile(
       path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md"),
       "utf8",
@@ -55,6 +70,12 @@ test("installs real bundled gdskills, contracts, shared assets, and rules", asyn
       path.join(metaprojectRoot, "rules", "core", "git-rules.mdc"),
       "utf8",
     )).toContain("Git");
+    const executionMetricsRule = await readFile(
+      path.join(metaprojectRoot, "rules", "core", "execution-metrics.md"),
+      "utf8",
+    );
+    expect(executionMetricsRule).toContain("cost_total");
+    expect(executionMetricsRule).toContain("<artifact-root>/metrics");
     await access(path.join(metaprojectRoot, "jobs"));
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -83,6 +104,26 @@ test("bundled gdskills do not embed developer-specific absolute paths", async ()
 
   expect(violations).toEqual([]);
 });
+
+for (const profile of ["minimal", "full"] as const) {
+  test(`installs the execution metrics gate for every ${profile} skill`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), `keryx-gdskills-${profile}-`));
+    try {
+      const result = await installGdskills(path.join(root, ".metaproject"), profile);
+      const installedSkillFiles = (await listFiles(result.skillsRoot))
+        .filter((filePath) => path.basename(filePath) === "SKILL.md");
+
+      expect(installedSkillFiles).toHaveLength(result.installedSkills);
+      for (const skillPath of installedSkillFiles) {
+        const skill = await readFile(skillPath, "utf8");
+        expect(skill).toContain("keryx:execution-metrics:begin");
+        expect(skill).toContain(".metaproject/rules/core/execution-metrics.md");
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
 
 async function listFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });

@@ -3,6 +3,18 @@ name: metaproject-router
 description: Use when choose which Metaproject module, working skill, or project-skill should be used for a user request.
 ---
 
+<!-- keryx:execution-metrics:begin -->
+## Execution Metrics (user-direct opt-in)
+
+When this skill is invoked directly by a user, before task work:
+
+1. Read `.metaproject/rules/core/execution-metrics.md`.
+2. Ask exactly: **Collect execution statistics for this run? (yes / no)**
+3. Wait for the answer. If yes, follow the rule's reporting and persistence contract; if no, continue normally.
+
+When dispatched as a subagent, do not ask and do not emit a separate report. The top-level caller owns metrics.
+<!-- keryx:execution-metrics:end -->
+
 # metaproject-router
 
 ## Purpose
@@ -20,7 +32,7 @@ Choose which Metaproject module, working skill, or project-skill should be used 
 ## Workflow
 
 1. Read `.metaproject/index.md` first.
-2. Treat the user's natural-language request as an intent; do not require exact Metaproject command, skill, or MCP tool names.
+2. Treat the user's natural-language request as an intent; do not require exact keryx command, skill, or MCP tool names.
 3. Classify the user request as navigation, understanding, implementation, review, planning, documentation, quality, testing, security, memory, or workflow.
 4. Prefer available MCP tools/resources for the selected Metaproject capability; otherwise use the corresponding project-local skill and `keryx` CLI command.
 5. Use the Intent Router in `.metaproject/index.md` to map user intent to capability before reading broad source files.
