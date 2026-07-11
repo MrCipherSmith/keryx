@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/tool-definition.schema.json",
+  "title": "Keryx Harness Tool Definition",
+  "description": "Registered tool definition. Release 0 permits only a deterministic read-only tool; mutation, shell, network, child-agent and extension tools are deferred.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "toolId", "version", "inputSchema", "outputSchema", "risk", "capabilities", "limits", "replay"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "toolId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "description": { "type": "string", "minLength": 1 },
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "risk": { "enum": ["read", "write", "shell", "network", "credential", "delegate", "destructive"] },
+    "capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "limits": { "type": "object", "additionalProperties": false, "required": ["timeoutMs", "maxOutputBytes", "concurrencyKey"], "properties": { "timeoutMs": { "type": "integer", "minimum": 1 }, "maxOutputBytes": { "type": "integer", "minimum": 1 }, "concurrencyKey": { "type": "string", "minLength": 1 } } },
+    "replay": { "type": "object", "additionalProperties": false, "required": ["deterministic", "recordedResultSupported"], "properties": { "deterministic": { "type": "boolean" }, "recordedResultSupported": { "type": "boolean" } } }
+  }
+}

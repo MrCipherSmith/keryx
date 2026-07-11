@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-run-input.schema.json",
+  "title": "Keryx Harness Run Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "request", "projectRoot", "role", "policy", "budget"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "request": { "type": "string", "minLength": 1, "maxLength": 100000 },
+    "projectRoot": { "type": "string", "minLength": 1 },
+    "flowId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "enum": ["plan", "build", "review", "verify", "research", "orchestrator"] },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "policy": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paths": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "base": { "type": "string" },
+        "head": { "type": "string" },
+        "query": { "type": "string" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxSeconds", "maxToolCalls", "maxRetries"],
+      "properties": {
+        "maxSeconds": { "type": "integer", "minimum": 1 },
+        "maxPromptTokens": { "type": "integer", "minimum": 0 },
+        "maxCompletionTokens": { "type": "integer", "minimum": 0 },
+        "maxToolCalls": { "type": "integer", "minimum": 0 },
+        "maxRetries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "transport": { "type": "string", "enum": ["cli", "rpc", "json", "test"] },
+    "nonInteractive": { "type": "boolean" }
+  }
+}

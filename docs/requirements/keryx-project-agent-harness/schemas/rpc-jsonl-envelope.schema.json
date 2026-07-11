@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/rpc-jsonl-envelope.schema.json",
+  "title": "Keryx Harness RPC JSONL Envelope",
+  "description": "CLI/RPC parity envelope. Transport framing does not replace canonical durable contracts; request/response correlation and transport sequencing require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "messageId", "correlationId", "kind", "payload"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "messageId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "correlationId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "kind": { "enum": ["request", "event", "response", "error"] },
+    "payload": { "type": "object" },
+    "sequence": { "type": "integer", "minimum": 0 }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/model-response.schema.json",
+  "title": "Keryx Harness Model Response",
+  "description": "Attempt-scoped normalized provider response. Stream ordering and accepted-tool-call state require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "responseId", "requestId", "attemptId", "causal", "finishReason", "events"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "responseId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "requestId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "attemptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "finishReason": { "type": "string", "enum": ["stop", "tool_calls", "length", "cancelled", "unknown"] },
+    "events": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["sequence", "kind"], "properties": { "sequence": { "type": "integer", "minimum": 0 }, "kind": { "enum": ["text_delta", "tool_call_delta", "usage", "unknown_extension"] }, "payloadHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" } } } },
+    "providerRequestId": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/approval-request.schema.json",
+  "title": "Keryx Harness Approval Request",
+  "description": "Single-use approval proposal bound to the exact action, tool schema, policy and provenance. Fingerprint recomputation and actor authorization require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "approvalId", "toolCallId", "causal", "binding", "toolId", "toolVersion", "inputHash", "requestedAt", "expiresAt", "status"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "approvalId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "toolCallId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "binding": { "$ref": "harness-envelope.schema.json#/$defs/policyBinding" },
+    "toolId": { "type": "string", "minLength": 1 },
+    "toolVersion": { "type": "string", "minLength": 1 },
+    "inputHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "requestedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "expiresAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "status": { "const": "pending" },
+    "justification": { "type": "string", "minLength": 1 }
+  }
+}

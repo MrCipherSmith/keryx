@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/replay-mismatch.schema.json",
+  "title": "Keryx Harness Replay Mismatch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mismatchId", "fixtureId", "kind", "expectedHash", "actualHash", "detectedAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "mismatchId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "fixtureId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "kind": { "enum": ["schema", "event-order", "state", "tool-result", "provider-transcript", "policy", "unexpected-side-effect"] },
+    "expectedHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "actualHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "detectedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "detail": { "type": "string", "minLength": 1 }
+  }
+}

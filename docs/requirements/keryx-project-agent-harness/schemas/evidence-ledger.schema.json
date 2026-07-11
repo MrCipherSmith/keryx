@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/evidence-ledger.schema.json",
+  "title": "Keryx Harness Evidence Ledger",
+  "description": "Append-only evidence-ledger manifest. Entry order and non-removal of records require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "ledgerId", "sessionId", "appendCursor", "records"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "ledgerId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sessionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "appendCursor": { "type": "integer", "minimum": 0 },
+    "records": { "type": "array", "items": { "$ref": "evidence-record.schema.json" } },
+    "ledgerHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" }
+  }
+}

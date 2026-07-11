@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/session-manifest.schema.json",
+  "title": "Keryx Harness Session Manifest",
+  "description": "Local session manifest is authoritative. Entry existence, immutable ancestors, and append cursor correctness require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sessionId", "runId", "createdAt", "appendCursor", "currentLeafEntryId", "policyFingerprint", "contextManifestHash"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "sessionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "runId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "parentSessionId": { "type": ["string", "null"], "minLength": 1 },
+    "createdAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "appendCursor": { "type": "integer", "minimum": 0 },
+    "currentLeafEntryId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "policyFingerprint": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "contextManifestHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "branchIds": { "type": "array", "items": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "uniqueItems": true },
+    "evidenceLedgerId": { "$ref": "harness-envelope.schema.json#/$defs/id" }
+  }
+}

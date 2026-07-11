@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/model-error.schema.json",
+  "title": "Keryx Harness Model Error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "errorId", "requestId", "attemptId", "causal", "classification", "retryable", "occurredAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "errorId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "requestId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "attemptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "classification": { "enum": ["authentication", "invalid_request", "rate_limit", "overloaded", "context_overflow", "unavailable", "cancelled", "unknown"] },
+    "retryable": { "type": "boolean" },
+    "occurredAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "retryAfterMs": { "type": "integer", "minimum": 0 }
+  },
+  "allOf": [
+    { "if": { "properties": { "classification": { "enum": ["authentication", "invalid_request", "context_overflow"] } }, "required": ["classification"] }, "then": { "properties": { "retryable": { "const": false } } } }
+  ]
+}

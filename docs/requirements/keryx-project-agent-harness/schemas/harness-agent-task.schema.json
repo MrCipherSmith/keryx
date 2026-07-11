@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-agent-task.schema.json",
+  "title": "Keryx Harness Agent Task",
+  "deprecated": true,
+  "description": "DEPRECATED: not a canonical child-task contract and must not be used for new persistence or transport. Use the canonical gdskills subagent-dispatch/subagent-result contracts plus harness-child-contract-extension.schema.json. STATUS-first text is adapter framing only and is converted to canonical subagent-result before validation/persistence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskId", "runId", "objective", "role", "status", "acceptanceCriteria", "contextRefs", "constraints", "budget"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "taskId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "parentRunId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1, "maxLength": 10000 },
+    "role": { "type": "string", "enum": ["plan", "build", "review", "verify", "research", "orchestrator"] },
+    "status": { "type": "string", "enum": ["todo", "in-progress", "waiting-approval", "blocked", "done", "failed", "skipped"] },
+    "acceptanceCriteria": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "contextRefs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "filesToRead": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "constraints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "allowedActions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxSeconds", "maxToolCalls", "maxRetries"],
+      "properties": {
+        "maxSeconds": { "type": "integer", "minimum": 1 },
+        "maxPromptTokens": { "type": "integer", "minimum": 0 },
+        "maxCompletionTokens": { "type": "integer", "minimum": 0 },
+        "maxToolCalls": { "type": "integer", "minimum": 0 },
+        "maxRetries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "outputContract": { "type": "string", "minLength": 1 },
+    "attempt": { "type": "integer", "minimum": 1 }
+  }
+}

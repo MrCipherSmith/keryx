@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/branch-metadata.schema.json",
+  "title": "Keryx Harness Branch Metadata",
+  "description": "Append-only session-tree branch metadata. Ancestor immutability, fork reachability and no-merge policy require semantic validation; merge is excluded from v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "branchId", "sessionId", "forkEntryId", "leafEntryId", "immutableAncestorIds", "createdAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "branchId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sessionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "forkEntryId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "leafEntryId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "immutableAncestorIds": { "$ref": "harness-envelope.schema.json#/$defs/nonEmptyStringArray" },
+    "createdAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "label": { "type": "string", "minLength": 1 }
+  }
+}

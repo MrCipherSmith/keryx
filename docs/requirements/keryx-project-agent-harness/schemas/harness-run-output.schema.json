@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-run-output.schema.json",
+  "title": "Keryx Harness Run Output",
+  "description": "Terminal completion is valid only when durable gate evidence exists. Cross-record evidence existence and Task Manager disposition ownership require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "status", "startedAt", "finishedAt", "gate", "artifacts", "metrics", "unresolvedBlockerIds"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "runId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "flowId": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["completed", "failed", "blocked", "cancelled", "paused", "in-progress"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": ["string", "null"], "format": "date-time" },
+    "summary": { "type": "string", "maxLength": 20000 },
+    "gate": { "$ref": "completion-gate-result.schema.json" },
+    "artifacts": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolCalls", "modelRequests", "retries"],
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "toolCalls": { "type": "integer", "minimum": 0 },
+        "modelRequests": { "type": "integer", "minimum": 0 },
+        "retries": { "type": "integer", "minimum": 0 },
+        "inputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "wallSeconds": { "type": ["number", "null"], "minimum": 0 },
+        "reliability": { "type": "string", "enum": ["exact", "estimated", "unknown"] }
+      }
+    },
+    "unresolvedRisks": { "type": "array", "items": { "type": "string" } },
+    "unresolvedBlockerIds": { "type": "array", "items": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "uniqueItems": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "finishedAt": { "type": "string", "format": "date-time" },
+          "gate": { "allOf": [{ "$ref": "completion-gate-result.schema.json" }, { "properties": { "status": { "const": "pass" } }, "required": ["status"] }] },
+          "artifacts": { "minItems": 1 },
+          "unresolvedBlockerIds": { "maxItems": 0 }
+        }
+      }
+    }
+  ]
+}

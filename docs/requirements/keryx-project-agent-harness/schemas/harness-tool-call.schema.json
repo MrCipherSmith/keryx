@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-tool-call.schema.json",
+  "title": "Keryx Harness Tool Call",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "toolCallId", "toolName", "input", "runId", "sessionId", "risk"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "toolCallId": { "type": "string", "minLength": 1 },
+    "toolName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "toolVersion": { "type": "string", "minLength": 1 },
+    "input": { "type": "object" },
+    "runId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "minLength": 1 },
+    "risk": { "type": "string", "enum": ["read", "write", "shell", "network", "credential", "delegate", "destructive"] },
+    "projectRoot": { "type": "string", "minLength": 1 },
+    "timeoutMs": { "type": "integer", "minimum": 1 },
+    "replayable": { "type": "boolean" },
+    "origin": { "type": "string", "enum": ["model", "user", "orchestrator", "replay", "system"] }
+  }
+}

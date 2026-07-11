@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/policy-profile.schema.json",
+  "title": "Keryx Harness Policy Profile",
+  "description": "Security profile and fail-closed boundary contract. Runtime containment availability and network-broker enforcement require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profileId", "profileVersion", "fingerprint", "trustMode", "defaults", "requiredControls"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "profileId": { "enum": ["read-only-review", "monitored-trusted-local", "unattended-untrusted"] },
+    "profileVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "fingerprint": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "trustMode": { "enum": ["read-only", "trusted-local", "untrusted"] },
+    "defaults": { "type": "object", "additionalProperties": false, "required": ["read", "write", "shell", "network", "delegate"], "properties": { "read": { "enum": ["allow", "ask", "deny"] }, "write": { "enum": ["allow", "ask", "deny"] }, "shell": { "enum": ["allow", "ask", "deny"] }, "network": { "enum": ["allow", "ask", "deny"] }, "delegate": { "enum": ["allow", "ask", "deny"] } } },
+    "requiredControls": { "type": "object", "additionalProperties": false, "required": ["isolation", "redactionFailure", "networkBrokerFailure"], "properties": { "isolation": { "enum": ["not-required", "required-fail-closed"] }, "redactionFailure": { "const": "deny" }, "networkBrokerFailure": { "const": "deny" } } }
+  },
+  "allOf": [
+    { "if": { "properties": { "profileId": { "const": "read-only-review" } }, "required": ["profileId"] }, "then": { "properties": { "trustMode": { "const": "read-only" }, "defaults": { "properties": { "write": { "const": "deny" }, "shell": { "const": "deny" }, "network": { "const": "deny" }, "delegate": { "const": "deny" } } } } } },
+    { "if": { "properties": { "profileId": { "const": "unattended-untrusted" } }, "required": ["profileId"] }, "then": { "properties": { "requiredControls": { "properties": { "isolation": { "const": "required-fail-closed" } } } } } }
+  ]
+}

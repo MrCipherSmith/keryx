@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/approval-result.schema.json",
+  "title": "Keryx Harness Approval Result",
+  "description": "Single-use approval outcome. Expiry comparison, matching request binding and one-time consumption require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "approvalResultId", "approvalId", "binding", "decision", "actorId", "decidedAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "approvalResultId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "approvalId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "binding": { "$ref": "harness-envelope.schema.json#/$defs/policyBinding" },
+    "decision": { "enum": ["approved", "rejected", "expired", "invalidated"] },
+    "actorId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "decidedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "consumedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "reason": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    { "if": { "properties": { "decision": { "const": "approved" } }, "required": ["decision"] }, "then": { "required": ["consumedAt"] } },
+    { "if": { "properties": { "decision": { "enum": ["rejected", "expired", "invalidated"] } }, "required": ["decision"] }, "then": { "required": ["reason"] } }
+  ]
+}

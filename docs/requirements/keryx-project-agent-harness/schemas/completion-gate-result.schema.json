@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/completion-gate-result.schema.json",
+  "title": "Keryx Harness Completion Gate Result",
+  "description": "Typed evidence artifact consumed by Task Manager; it never changes managed-flow completion itself. Evidence reference reachability and requirement-to-check mapping require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "gateId", "runId", "status", "checks", "evaluatedAt", "evidenceRefs"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "gateId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "runId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "status": { "enum": ["pass", "fail", "blocked", "unknown"] },
+    "checks": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["checkId", "status", "blocking", "evidenceRefs"], "properties": { "checkId": { "type": "string", "minLength": 1 }, "status": { "enum": ["pass", "fail", "skipped", "unknown"] }, "blocking": { "type": "boolean" }, "evidenceRefs": { "type": "array", "items": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "uniqueItems": true }, "detail": { "type": "string" } } } },
+    "evaluatedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "evidenceRefs": { "$ref": "harness-envelope.schema.json#/$defs/nonEmptyStringArray" },
+    "unresolvedBlockerIds": { "type": "array", "items": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "uniqueItems": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "checks": { "items": { "properties": { "status": { "const": "pass" } } } },
+          "unresolvedBlockerIds": { "maxItems": 0 }
+        }
+      }
+    }
+  ]
+}

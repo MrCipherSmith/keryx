@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/tool-result.schema.json",
+  "title": "Keryx Harness Tool Result",
+  "description": "Persisted bounded result. Result redaction, output hashing, and receipt linkage require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "toolResultId", "executionId", "toolCallId", "causal", "status", "outputHash", "redaction", "createdAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "toolResultId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "executionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "toolCallId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "status": { "enum": ["succeeded", "failed", "cancelled", "policy-denied", "replayed"] },
+    "outputHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "errorCode": { "type": "string", "minLength": 1 },
+    "receiptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "redaction": { "enum": ["not-needed", "applied", "failed-safe"] },
+    "createdAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "evidenceRefs": { "type": "array", "items": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "uniqueItems": true }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] }, "then": { "required": ["errorCode"] } },
+    { "if": { "properties": { "status": { "const": "replayed" } }, "required": ["status"] }, "then": { "required": ["receiptId"] } }
+  ]
+}

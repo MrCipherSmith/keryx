@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-config.schema.json",
+  "title": "Keryx Harness Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "enabled", "defaultRole", "policyProfile", "limits"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "enabled": { "type": "boolean" },
+    "defaultRole": { "type": "string", "minLength": 1 },
+    "defaultProvider": { "type": "string", "minLength": 1 },
+    "defaultModel": { "type": "string", "minLength": 1 },
+    "policyProfile": { "type": "string", "minLength": 1 },
+    "persistSessions": { "type": "boolean" },
+    "rolesRoot": { "type": "string", "minLength": 1 },
+    "policiesRoot": { "type": "string", "minLength": 1 },
+    "dataRoot": { "type": "string", "minLength": 1 },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxRunSeconds", "maxConcurrentChildren", "maxToolOutputBytes", "maxRetries"],
+      "properties": {
+        "maxRunSeconds": { "type": "integer", "minimum": 1 },
+        "maxConcurrentChildren": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "maxToolOutputBytes": { "type": "integer", "minimum": 1024 },
+        "maxModelOutputTokens": { "type": "integer", "minimum": 1 },
+        "maxRetries": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "totalBudgetTokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "allowedHosts"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowedHosts": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    }
+  }
+}

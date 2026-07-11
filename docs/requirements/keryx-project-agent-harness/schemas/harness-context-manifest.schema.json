@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-context-manifest.schema.json",
+  "title": "Keryx Harness Context Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contextHash", "projectRoot", "createdAt", "scope", "sources", "limits"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "contextHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "projectRoot": { "type": "string", "minLength": 1 },
+    "worktree": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "freshness": { "type": "string", "enum": ["fresh", "stale", "partial", "unknown"] },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "scopeHash"],
+      "properties": {
+        "paths": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "scopeHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "base": { "type": "string" },
+        "head": { "type": "string" }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path", "hash", "reliability", "trustedAsPolicy"],
+        "properties": {
+          "kind": { "type": "string" },
+          "path": { "type": "string", "minLength": 1 },
+          "hash": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string" },
+          "reliability": { "type": "string", "enum": ["exact", "estimated", "unknown"] },
+          "trustedAsPolicy": { "type": "boolean" },
+          "redaction": { "type": "string", "enum": ["not-needed", "applied", "failed-safe"] }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxBytes", "maxTokens"],
+      "properties": {
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "maxTokens": { "type": "integer", "minimum": 1 },
+        "actualBytes": { "type": "integer", "minimum": 0 },
+        "estimatedTokens": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

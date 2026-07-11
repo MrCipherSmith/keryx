@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/compaction-entry.schema.json",
+  "title": "Keryx Harness Compaction Entry",
+  "description": "Typed derived compaction entry. Compaction never deletes evidence or source history; source coverage and preservation require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "compactionId", "sessionId", "sourceEntryIds", "derivedEntryId", "summaryHash", "evidenceLedgerCursor", "createdAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "compactionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sessionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sourceEntryIds": { "$ref": "harness-envelope.schema.json#/$defs/nonEmptyStringArray" },
+    "derivedEntryId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "summaryHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "evidenceLedgerCursor": { "type": "integer", "minimum": 0 },
+    "createdAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" }
+  }
+}

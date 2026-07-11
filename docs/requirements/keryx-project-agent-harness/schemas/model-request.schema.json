@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/model-request.schema.json",
+  "title": "Keryx Harness Model Request",
+  "description": "Attempt-scoped normalized provider request. The local durable request is authoritative; providers must not be used as a continuation store.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requestId", "attemptId", "causal", "providerId", "modelId", "contextManifestHash", "messages", "toolRegistryHash"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "requestId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "attemptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "providerId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "modelId": { "type": "string", "minLength": 1 },
+    "contextManifestHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "messages": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["role", "contentHash"], "properties": { "role": { "enum": ["system", "user", "assistant", "tool"] }, "contentHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" } } } },
+    "toolRegistryHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "cancellationId": { "$ref": "harness-envelope.schema.json#/$defs/id" }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/session-entry.schema.json",
+  "title": "Keryx Harness Session Entry",
+  "description": "Append-only discriminated session entry. Parent existence, append order, and non-removal of historical evidence require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "entryId", "sequence", "timestamp", "causal", "entry"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "entryId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestamp": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "entry": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["type", "text"], "properties": { "type": { "enum": ["user_message", "assistant_message"] }, "text": { "type": "string" }, "provenance": { "$ref": "harness-envelope.schema.json#/$defs/provenance" } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "modelAttemptId", "artifactRef"], "properties": { "type": { "enum": ["model_request", "model_response", "model_error"] }, "modelAttemptId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "toolCallId"], "properties": { "type": { "enum": ["tool_call", "tool_result", "policy_decision", "approval_request", "approval_result"] }, "toolCallId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "artifactRef"], "properties": { "type": { "enum": ["checkpoint", "compaction", "branch_metadata", "evidence_link", "run_pause", "run_resume", "run_end"] }, "artifactRef": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" } } }
+      ]
+    }
+  }
+}

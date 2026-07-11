@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/fake-provider-transcript.schema.json",
+  "title": "Keryx Harness Fake Provider Transcript",
+  "description": "Deterministic offline provider transcript. Event ordering, request matching and deterministic clock/ID values require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "transcriptId", "providerId", "providerRevision", "requestHash", "events"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "transcriptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "providerId": { "const": "fake-provider" },
+    "providerRevision": { "type": "string", "minLength": 1 },
+    "requestHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "events": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["sequence", "kind"], "properties": { "sequence": { "type": "integer", "minimum": 0 }, "kind": { "enum": ["text_delta", "tool_call", "finish", "error"] }, "payload": { "type": "object" } } } }
+  }
+}

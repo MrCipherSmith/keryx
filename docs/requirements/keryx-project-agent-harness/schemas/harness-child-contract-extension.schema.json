@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-child-contract-extension.schema.json",
+  "title": "Keryx Harness Canonical Child Contract Extension",
+  "description": "Extension metadata for the canonical gdskills subagent-dispatch and subagent-result contracts. It is not a replacement task/result wire contract. STATUS-first prose is adapter framing and must be converted to canonical subagent-result before persistence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "canonicalContract", "canonicalContractVersion", "parentRunId", "sessionId", "attempt", "branchId", "contextManifestHash", "policyFingerprint", "budgetReservation", "durableResultArtifact"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "canonicalContract": { "enum": ["subagent-dispatch", "subagent-result"] },
+    "canonicalContractVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "parentRunId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sessionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "attempt": { "type": "object", "additionalProperties": false, "required": ["attemptId", "number"], "properties": { "attemptId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "number": { "type": "integer", "minimum": 1 } } },
+    "branchId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "contextManifestHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "policyFingerprint": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "budgetReservation": { "type": "object", "additionalProperties": false, "required": ["reservationId", "maxRuntimeMs"], "properties": { "reservationId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "maxRuntimeMs": { "type": "integer", "minimum": 1 }, "maxToolCalls": { "type": "integer", "minimum": 0 } } },
+    "durableResultArtifact": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" }
+  }
+}

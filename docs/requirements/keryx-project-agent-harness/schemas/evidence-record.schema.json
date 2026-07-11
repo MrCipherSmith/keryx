@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/evidence-record.schema.json",
+  "title": "Keryx Harness Evidence Record",
+  "description": "Immutable evidence record linked to causal execution and provenance. Artifact reachability and hash integrity require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evidenceId", "causal", "kind", "artifact", "provenance", "recordedAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "evidenceId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "kind": { "enum": ["context", "tool-result", "receipt", "test", "health", "security", "review", "completion-gate", "custom"] },
+    "artifact": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" },
+    "provenance": { "$ref": "harness-envelope.schema.json#/$defs/provenance" },
+    "recordedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" }
+  }
+}

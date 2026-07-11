@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-policy-decision.schema.json",
+  "title": "Keryx Harness Policy Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "decisionId", "toolCallId", "decision", "policyProfile", "timestamp", "matchedRules"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "decisionId": { "type": "string", "minLength": 1 },
+    "toolCallId": { "type": "string", "minLength": 1 },
+    "decision": { "type": "string", "enum": ["allow", "ask", "deny"] },
+    "policyProfile": { "type": "string", "minLength": 1 },
+    "policyFingerprint": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "actionFingerprint": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "provenanceId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "role": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "matchedRules": { "type": "array", "items": { "type": "string" } },
+    "reason": { "type": "string", "maxLength": 2000 },
+    "approvalId": { "type": "string", "minLength": 1 },
+    "hardDeny": { "type": "boolean" },
+    "override": { "type": "boolean", "const": false },
+    "redaction": { "type": "string", "enum": ["not-needed", "applied", "failed-safe"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "decision": { "const": "ask" } }, "required": ["decision"] }, "then": { "required": ["approvalId", "policyFingerprint", "actionFingerprint", "provenanceId"] } },
+    { "if": { "properties": { "hardDeny": { "const": true } }, "required": ["hardDeny"] }, "then": { "properties": { "decision": { "const": "deny" }, "override": { "const": false } } } }
+  ]
+}

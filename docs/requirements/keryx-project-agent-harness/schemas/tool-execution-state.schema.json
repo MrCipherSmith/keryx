@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/tool-execution-state.schema.json",
+  "title": "Keryx Harness Tool Execution State",
+  "description": "Write-ahead tool state. State transition legality, receipt persistence before acknowledgement, and idempotency-key uniqueness require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "executionId", "toolCallId", "causal", "toolRegistryHash", "inputHash", "idempotencyKey", "state", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "executionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "toolCallId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "causal": { "$ref": "harness-envelope.schema.json#/$defs/causalIds" },
+    "toolRegistryHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "inputHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "idempotencyKey": { "type": "string", "minLength": 16 },
+    "state": { "enum": ["prepared", "executing", "succeeded", "failed", "cancelled", "outcome-unknown", "reconciled"] },
+    "updatedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "preparedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "startedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "finishedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "receiptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "toolResultId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "reconciliation": { "type": "object", "additionalProperties": false, "required": ["outcome", "evidenceRefs"], "properties": { "outcome": { "enum": ["effect-confirmed", "effect-absent", "indeterminate"] }, "evidenceRefs": { "$ref": "harness-envelope.schema.json#/$defs/nonEmptyStringArray" } } }
+  },
+  "allOf": [
+    { "if": { "properties": { "state": { "const": "prepared" } }, "required": ["state"] }, "then": { "required": ["preparedAt"] } },
+    { "if": { "properties": { "state": { "const": "executing" } }, "required": ["state"] }, "then": { "required": ["preparedAt", "startedAt"] } },
+    { "if": { "properties": { "state": { "enum": ["succeeded", "failed", "cancelled"] } }, "required": ["state"] }, "then": { "required": ["finishedAt", "toolResultId"] } },
+    { "if": { "properties": { "state": { "const": "outcome-unknown" } }, "required": ["state"] }, "then": { "required": ["startedAt", "finishedAt"] } },
+    { "if": { "properties": { "state": { "const": "reconciled" } }, "required": ["state"] }, "then": { "required": ["reconciliation", "finishedAt"] } }
+  ]
+}

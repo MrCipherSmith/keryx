@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/fixtures/fixture-index.schema.json",
+  "schemaVersion": 1,
+  "status": "planned",
+  "families": [
+    { "family": "envelope-config-run", "positive": "runtime.valid.json", "negative": "runtime.invalid.json", "mutation": "runtime.budget-exhausted.json", "migration": "runtime.v0.json" },
+    { "family": "context-session-evidence", "positive": "session.valid.json", "negative": "session.invalid.json", "mutation": "session.torn-tail.json", "migration": "session.v0.json" },
+    { "family": "provider-model", "positive": "provider.valid.json", "negative": "provider.invalid.json", "mutation": "provider.partial-stream.json", "migration": "provider.v0.json" },
+    { "family": "tools-recovery-replay", "positive": "tool.valid.json", "negative": "tool.invalid.json", "mutation": "tool.outcome-unknown.json", "migration": "tool.v0.json" },
+    { "family": "policy-approval-gate", "positive": "policy.valid.json", "negative": "policy.invalid.json", "mutation": "policy.stale-approval.json", "migration": "policy.v0.json" },
+    { "family": "child-adapter-rpc", "positive": "child.valid.json", "negative": "child.invalid.json", "mutation": "child.transport-mismatch.json", "migration": "child.v0.json" }
+  ]
+}

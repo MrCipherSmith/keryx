@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/harness-event.schema.json",
+  "title": "Keryx Harness Event",
+  "description": "Durable event envelope. Causal reference existence, sequence monotonicity, append-only persistence, and redaction safety require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "eventId", "runId", "sessionId", "correlationId", "sequence", "eventType", "timestamp", "source", "reliability", "payload"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "eventId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "parentRunId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "correlationId": { "type": "string", "minLength": 1 },
+    "dispatchId": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "parentEventId": { "type": ["string", "null"] },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "run_started", "run_paused", "run_resumed", "run_finished",
+        "model_start", "model_event", "model_end", "model_error",
+        "tool_call", "policy_decision", "approval_request", "approval_result",
+        "tool_result", "artifact_written", "evidence_link", "checkpoint",
+        "compaction", "branch_summary", "retry", "error", "child_started",
+        "child_finished", "gate_started", "gate_finished"
+      ]
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "enum": ["harness", "provider", "tool", "policy", "transport", "flow", "security", "testing", "health"] },
+    "reliability": { "type": "string", "enum": ["exact", "estimated", "unknown"] },
+    "payload": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "runStatus"], "properties": { "kind": { "const": "run" }, "runStatus": { "type": "string", "enum": ["started", "paused", "resumed", "finished"] } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "modelAttemptId"], "properties": { "kind": { "const": "model" }, "modelAttemptId": { "type": "string", "minLength": 1 }, "finishReason": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "toolCallId"], "properties": { "kind": { "const": "tool" }, "toolCallId": { "type": "string", "minLength": 1 }, "receiptId": { "type": "string", "minLength": 1 } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "artifactId"], "properties": { "kind": { "const": "artifact" }, "artifactId": { "type": "string", "minLength": 1 } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "errorCode"], "properties": { "kind": { "const": "error" }, "errorCode": { "type": "string", "minLength": 1 } } }
+      ]
+    },
+    "redaction": { "type": "string", "enum": ["not-needed", "applied", "failed-safe"] },
+    "artifactRefs": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  }
+}

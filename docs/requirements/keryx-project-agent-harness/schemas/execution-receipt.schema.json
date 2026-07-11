@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/execution-receipt.schema.json",
+  "title": "Keryx Harness Execution Receipt",
+  "description": "Receipt records an observed or reconciled side-effect boundary. Receipt and external-effect correspondence require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "receiptId", "executionId", "idempotencyKey", "inputHash", "observedAt", "outcome", "evidenceRefs"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "receiptId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "executionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "idempotencyKey": { "type": "string", "minLength": 16 },
+    "inputHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "observedAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "outcome": { "enum": ["effect-confirmed", "effect-absent", "indeterminate", "not-applicable"] },
+    "evidenceRefs": { "$ref": "harness-envelope.schema.json#/$defs/nonEmptyStringArray" },
+    "externalReference": { "type": "string", "minLength": 1 }
+  }
+}

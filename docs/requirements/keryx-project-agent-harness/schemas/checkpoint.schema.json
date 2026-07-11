@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/checkpoint.schema.json",
+  "title": "Keryx Harness Checkpoint",
+  "description": "Checkpoint is a typed derived recovery view; it must never replace session history or evidence. Snapshot reconstruction requires semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "checkpointId", "sessionId", "atEntryId", "stateHash", "createdAt", "evidenceLedgerCursor"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "checkpointId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "sessionId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "atEntryId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "stateHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "createdAt": { "$ref": "harness-envelope.schema.json#/$defs/timestamp" },
+    "evidenceLedgerCursor": { "type": "integer", "minimum": 0 },
+    "artifact": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" }
+  }
+}

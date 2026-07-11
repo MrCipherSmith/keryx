@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/harness/replay-fixture.schema.json",
+  "title": "Keryx Harness Replay Fixture",
+  "description": "Recorded replay fixture. validate-log and simulate-recorded-results are side-effect free by contract; actual no-side-effect execution and file-system isolation require semantic validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "fixtureId", "mode", "sessionManifestHash", "eventLogHash", "toolRegistryHash", "transcriptHash", "expectedStateHash", "noSideEffects"],
+  "properties": {
+    "schemaVersion": { "$ref": "harness-envelope.schema.json#/$defs/schemaVersion" },
+    "fixtureId": { "$ref": "harness-envelope.schema.json#/$defs/id" },
+    "mode": { "enum": ["validate-log", "simulate-recorded-results", "isolated-re-execute"] },
+    "sessionManifestHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "eventLogHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "toolRegistryHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "transcriptHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "expectedStateHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
+    "noSideEffects": { "type": "boolean" },
+    "isolationProfile": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    { "if": { "properties": { "mode": { "enum": ["validate-log", "simulate-recorded-results"] } }, "required": ["mode"] }, "then": { "properties": { "noSideEffects": { "const": true } } } },
+    { "if": { "properties": { "mode": { "const": "isolated-re-execute" } }, "required": ["mode"] }, "then": { "required": ["isolationProfile"] } }
+  ]
+}
