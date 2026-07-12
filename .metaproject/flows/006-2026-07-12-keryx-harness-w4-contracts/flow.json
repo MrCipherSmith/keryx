@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 2,
+  "id": "006",
+  "slug": "keryx-harness-w4-contracts",
+  "title": "W4 contracts: registry inventory + deterministic validator (src/contracts) + fixture matrices (C-01..C-03)",
+  "status": "in-progress",
+  "createdAt": "2026-07-12T16:04:10.818Z",
+  "updatedAt": "2026-07-12T16:35:05.052Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:20501fd95acd8cf43f09be9f773b074b4791056a3a1bba32b73ed9356ce87a99",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-12T16:35:04.838Z",
+      "note": "contract-inventory.md: all 34 *.schema.json + registry, verbatim $id/owner/persistence/migration policy (from schema-version-registry.json); zero gaps (verified: every schema file mentioned)."
+    },
+    "AC2": {
+      "at": "2026-07-12T16:35:04.897Z",
+      "note": "src/contracts deterministic validator covers full used-keyword set incl const/allOf/oneOf/if-then/uniqueItems/min-max Items/maxLength/format:date-time + cross-file & local $ref/$defs; keyword-coverage used(22) subset supported(24); no external lib (deps={}); T8 enforcement proof: every keyword rejects invalid input."
+    },
+    "AC3": {
+      "at": "2026-07-12T16:35:04.950Z",
+      "note": "src/contracts/fixtures.test.ts: 6 matrices (positive/negative/keyword-coverage/mutation/migration/fixture-hash), 79 tests, deterministic; RED before C-02, GREEN after."
+    },
+    "AC4": {
+      "at": "2026-07-12T16:35:05.001Z",
+      "note": "tsc --noEmit clean; full bun test 633 pass/0 fail (554 baseline + 79 new); package.json dependencies={} unchanged (no new prod dep)."
+    },
+    "AC5": {
+      "at": "2026-07-12T16:35:05.052Z",
+      "note": "frozen requirements pkg + ADR-0001..0004 untouched (git empty); new code only src/contracts/; new doc contract-inventory.md; src/harness/ reserved/empty. T8 review CLEAN."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "C-01: contract-inventory.md — 35 schemas + registry with $id/owner/persistence/migration policy (no gaps)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "C-03: RED fixture matrices in src/contracts (positive/negative/mutation/migration/fixture-hash)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "C-02: deterministic validator in src/contracts covering full used-keyword set + coverage proof (no external dep)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "W4 verification: code-verifier (tsc + bun test >=554) + used-subset-supported + no-new-dep + frozen-pkg untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-12T16:04:10.818Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-12T16:04:10.889Z",
+      "event": "task-added",
+      "detail": "T5: C-01: contract-inventory.md — 35 schemas + registry with $id/owner/persistence/migration policy (no gaps)"
+    },
+    {
+      "at": "2026-07-12T16:04:10.941Z",
+      "event": "task-added",
+      "detail": "T6: C-03: RED fixture matrices in src/contracts (positive/negative/mutation/migration/fixture-hash)"
+    },
+    {
+      "at": "2026-07-12T16:04:10.994Z",
+      "event": "task-added",
+      "detail": "T7: C-02: deterministic validator in src/contracts covering full used-keyword set + coverage proof (no external dep)"
+    },
+    {
+      "at": "2026-07-12T16:04:11.047Z",
+      "event": "task-added",
+      "detail": "T8: W4 verification: code-verifier (tsc + bun test >=554) + used-subset-supported + no-new-dep + frozen-pkg untouched"
+    },
+    {
+      "at": "2026-07-12T16:06:20.034Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-12T16:06:20.094Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-12T16:06:20.148Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-12T16:17:17.113Z",
+      "event": "task-done",
+      "detail": "T5: C-01: contract-inventory.md — 35 schemas + registry with $id/owner/persistence/migration policy (no gaps)"
+    },
+    {
+      "at": "2026-07-12T16:17:17.169Z",
+      "event": "task-done",
+      "detail": "T6: C-03: RED fixture matrices in src/contracts (positive/negative/mutation/migration/fixture-hash)"
+    },
+    {
+      "at": "2026-07-12T16:26:17.111Z",
+      "event": "task-done",
+      "detail": "T7: C-02: deterministic validator in src/contracts covering full used-keyword set + coverage proof (no external dep)"
+    },
+    {
+      "at": "2026-07-12T16:31:41.332Z",
+      "event": "task-done",
+      "detail": "T8: W4 verification: code-verifier (tsc + bun test >=554) + used-subset-supported + no-new-dep + frozen-pkg untouched"
+    },
+    {
+      "at": "2026-07-12T16:31:41.391Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-12T16:31:41.445Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-12T16:31:41.498Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-12T16:35:04.838Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: contract-inventory.md: all 34 *.schema.json + registry, verbatim $id/owner/persistence/migration policy (from schema-version-registry.json); zero gaps (verified: every schema file mentioned)."
+    },
+    {
+      "at": "2026-07-12T16:35:04.897Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/contracts deterministic validator covers full used-keyword set incl const/allOf/oneOf/if-then/uniqueItems/min-max Items/maxLength/format:date-time + cross-file & local $ref/$defs; keyword-coverage used(22) subset supported(24); no external lib (deps={}); T8 enforcement proof: every keyword rejects invalid input."
+    },
+    {
+      "at": "2026-07-12T16:35:04.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/contracts/fixtures.test.ts: 6 matrices (positive/negative/keyword-coverage/mutation/migration/fixture-hash), 79 tests, deterministic; RED before C-02, GREEN after."
+    },
+    {
+      "at": "2026-07-12T16:35:05.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc --noEmit clean; full bun test 633 pass/0 fail (554 baseline + 79 new); package.json dependencies={} unchanged (no new prod dep)."
+    },
+    {
+      "at": "2026-07-12T16:35:05.052Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: frozen requirements pkg + ADR-0001..0004 untouched (git empty); new code only src/contracts/; new doc contract-inventory.md; src/harness/ reserved/empty. T8 review CLEAN."
+    }
+  ]
+}
