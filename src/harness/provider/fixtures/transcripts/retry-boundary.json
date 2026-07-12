@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-retry-boundary",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "0000000000000000000000000000000000000000000000000000000000000002",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "text_delta",
+      "payload": {
+        "text": "Processing request"
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "error",
+      "payload": {
+        "kind": "overloaded",
+        "message": "Provider temporarily overloaded, please retry",
+        "retryable": true,
+        "retryAfterSeconds": 5
+      }
+    }
+  ]
+}

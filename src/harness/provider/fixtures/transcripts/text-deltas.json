@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-text-deltas",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "text_delta",
+      "payload": {
+        "text": "The quick brown fox"
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "text_delta",
+      "payload": {
+        "text": " jumps over the "
+      }
+    },
+    {
+      "sequence": 2,
+      "kind": "text_delta",
+      "payload": {
+        "text": "lazy dog."
+      }
+    },
+    {
+      "sequence": 3,
+      "kind": "finish",
+      "payload": {}
+    }
+  ]
+}

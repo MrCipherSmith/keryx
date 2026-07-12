@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-unknown-extension",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "text_delta",
+      "payload": {
+        "text": "Response with extension",
+        "provider": {
+          "trace_id": "trace-12345-abcde",
+          "region": "us-west-2"
+        }
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "finish",
+      "payload": {
+        "provider": {
+          "request_id": "req-67890-fghij"
+        }
+      }
+    }
+  ]
+}

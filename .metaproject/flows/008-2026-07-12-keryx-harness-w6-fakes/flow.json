@@ -1,0 +1,311 @@
+{
+  "schemaVersion": 2,
+  "id": "008",
+  "slug": "keryx-harness-w6-fakes",
+  "title": "W6 fakes: deterministic fake-provider transcripts (F-01) + registered read-only fake tool (F-02)",
+  "status": "in-progress",
+  "createdAt": "2026-07-12T21:49:39.000Z",
+  "updatedAt": "2026-07-12T22:34:07.034Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d0217145d0aacb0abd1bc82bc3da23fb78ee84cdfecdefebeb2a50a63e2849ad",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-12T22:34:06.813Z",
+      "note": "8 transcript fixtures src/harness/provider/fixtures/transcripts/ (deltas/malformed/unknown/error/cancel/usage/retry+tool_call); all valid vs fake-provider-transcript.schema (verified 8/8); providerId fake-provider, sha256 requestHash."
+    },
+    "AC2": {
+      "at": "2026-07-12T22:34:06.871Z",
+      "note": "FakeProvider over ProviderPort replays raw->normalized offline+deterministic (re-run identical); malformed->provider_error+partial trail; unknown->unknownExtensions; no Date.now/random/network/SDK (node:crypto canonical hash). T10 proof."
+    },
+    "AC3": {
+      "at": "2026-07-12T22:34:06.924Z",
+      "note": "FakeReadOnlyTool + FakeToolExecutor over tool port; ToolResult outputHash=recordedOutputHash(input) stable & instance-independent; gated by validateToolCall (unregistered/invalid REJECT); read-only, no net/fs/mutation."
+    },
+    "AC4": {
+      "at": "2026-07-12T22:34:06.979Z",
+      "note": "fakes import only W5 ports + node:crypto; W5 source + src/contracts untouched; deps={}; no SDK."
+    },
+    "AC5": {
+      "at": "2026-07-12T22:34:07.033Z",
+      "note": "tsc --noEmit clean; full bun test 703/0 (677 baseline + 26 new); new code under src/harness/; frozen requirements pkg + src/eval + src/contracts + ADRs untouched (git empty). T10 CLEAN."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "F-01 fixtures: deterministic fake-provider transcripts (deltas/malformed/unknown/error/cancel/usage/retry), schema-valid",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "F-01 RED: tests replaying transcripts -> expected NormalizedEvent snapshots (offline/deterministic)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "F-01 impl: FakeProvider over ProviderPort (raw transcript -> normalized events); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "F-02 RED: tests for registered read-only fake tool + hash-bound results",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "F-02 impl: FakeReadOnlyTool over tool-port + hash-bound ToolResult; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "W6 verification: code-verifier (tsc + bun test >=677) + offline/determinism + no-net/mutation + no-new-dep + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-12T21:49:39.000Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-12T21:49:39.068Z",
+      "event": "task-added",
+      "detail": "T5: F-01 fixtures: deterministic fake-provider transcripts (deltas/malformed/unknown/error/cancel/usage/retry), schema-valid"
+    },
+    {
+      "at": "2026-07-12T21:49:39.122Z",
+      "event": "task-added",
+      "detail": "T6: F-01 RED: tests replaying transcripts -> expected NormalizedEvent snapshots (offline/deterministic)"
+    },
+    {
+      "at": "2026-07-12T21:49:39.178Z",
+      "event": "task-added",
+      "detail": "T7: F-01 impl: FakeProvider over ProviderPort (raw transcript -> normalized events); GREEN"
+    },
+    {
+      "at": "2026-07-12T21:49:39.234Z",
+      "event": "task-added",
+      "detail": "T8: F-02 RED: tests for registered read-only fake tool + hash-bound results"
+    },
+    {
+      "at": "2026-07-12T21:49:39.289Z",
+      "event": "task-added",
+      "detail": "T9: F-02 impl: FakeReadOnlyTool over tool-port + hash-bound ToolResult; GREEN"
+    },
+    {
+      "at": "2026-07-12T21:49:39.345Z",
+      "event": "task-added",
+      "detail": "T10: W6 verification: code-verifier (tsc + bun test >=677) + offline/determinism + no-net/mutation + no-new-dep + frozen untouched"
+    },
+    {
+      "at": "2026-07-12T21:51:40.714Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-12T21:51:40.763Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-12T21:51:40.812Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-12T21:57:01.262Z",
+      "event": "task-done",
+      "detail": "T5: F-01 fixtures: deterministic fake-provider transcripts (deltas/malformed/unknown/error/cancel/usage/retry), schema-valid"
+    },
+    {
+      "at": "2026-07-12T22:05:47.693Z",
+      "event": "task-done",
+      "detail": "T6: F-01 RED: tests replaying transcripts -> expected NormalizedEvent snapshots (offline/deterministic)"
+    },
+    {
+      "at": "2026-07-12T22:11:45.655Z",
+      "event": "task-done",
+      "detail": "T7: F-01 impl: FakeProvider over ProviderPort (raw transcript -> normalized events); GREEN"
+    },
+    {
+      "at": "2026-07-12T22:16:51.422Z",
+      "event": "task-done",
+      "detail": "T8: F-02 RED: tests for registered read-only fake tool + hash-bound results"
+    },
+    {
+      "at": "2026-07-12T22:20:54.353Z",
+      "event": "task-done",
+      "detail": "T9: F-02 impl: FakeReadOnlyTool over tool-port + hash-bound ToolResult; GREEN"
+    },
+    {
+      "at": "2026-07-12T22:24:58.990Z",
+      "event": "task-done",
+      "detail": "T10: W6 verification: code-verifier (tsc + bun test >=677) + offline/determinism + no-net/mutation + no-new-dep + frozen untouched"
+    },
+    {
+      "at": "2026-07-12T22:24:59.053Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-12T22:24:59.104Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-12T22:24:59.156Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-12T22:34:06.813Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 8 transcript fixtures src/harness/provider/fixtures/transcripts/ (deltas/malformed/unknown/error/cancel/usage/retry+tool_call); all valid vs fake-provider-transcript.schema (verified 8/8); providerId fake-provider, sha256 requestHash."
+    },
+    {
+      "at": "2026-07-12T22:34:06.871Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: FakeProvider over ProviderPort replays raw->normalized offline+deterministic (re-run identical); malformed->provider_error+partial trail; unknown->unknownExtensions; no Date.now/random/network/SDK (node:crypto canonical hash). T10 proof."
+    },
+    {
+      "at": "2026-07-12T22:34:06.924Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: FakeReadOnlyTool + FakeToolExecutor over tool port; ToolResult outputHash=recordedOutputHash(input) stable & instance-independent; gated by validateToolCall (unregistered/invalid REJECT); read-only, no net/fs/mutation."
+    },
+    {
+      "at": "2026-07-12T22:34:06.979Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: fakes import only W5 ports + node:crypto; W5 source + src/contracts untouched; deps={}; no SDK."
+    },
+    {
+      "at": "2026-07-12T22:34:07.034Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsc --noEmit clean; full bun test 703/0 (677 baseline + 26 new); new code under src/harness/; frozen requirements pkg + src/eval + src/contracts + ADRs untouched (git empty). T10 CLEAN."
+    }
+  ]
+}

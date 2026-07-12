@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-provider-error",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "text_delta",
+      "payload": {
+        "text": "Partial response before error"
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "error",
+      "payload": {
+        "kind": "rate_limit",
+        "message": "Rate limit exceeded: 100 requests per minute",
+        "retryable": true
+      }
+    }
+  ]
+}

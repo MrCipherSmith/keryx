@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-malformed-event",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "tool_call",
+      "payload": {
+        "toolName": "file_write",
+        "toolCallId": "call-002",
+        "input": "this is not valid JSON for a tool call"
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "finish",
+      "payload": {}
+    }
+  ]
+}

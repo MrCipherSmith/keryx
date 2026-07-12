@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-tool-call",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "tool_call",
+      "payload": {
+        "toolName": "file_read",
+        "toolCallId": "call-001",
+        "input": {
+          "path": "/tmp/example.txt"
+        }
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "finish",
+      "payload": {}
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "transcriptId": "transcript-finish-usage",
+  "providerId": "fake-provider",
+  "providerRevision": "fake-1.0.0",
+  "requestHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "events": [
+    {
+      "sequence": 0,
+      "kind": "text_delta",
+      "payload": {
+        "text": "Response content here."
+      }
+    },
+    {
+      "sequence": 1,
+      "kind": "finish",
+      "payload": {
+        "usage": {
+          "input_tokens": 42,
+          "output_tokens": 18,
+          "total_tokens": 60
+        }
+      }
+    }
+  ]
+}
