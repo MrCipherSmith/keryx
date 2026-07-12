@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/context-error/1.0.0",
+  "title": "Context Error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "code", "message", "budgetDimension", "budget", "requiredSourceIds"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "code": { "const": "context_overflow" },
+    "message": { "type": "string", "minLength": 1 },
+    "budgetDimension": { "enum": ["bytes", "estimated_tokens", "items"] },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit", "required"],
+      "properties": { "limit": { "type": "integer", "minimum": 0 }, "required": { "type": "integer", "minimum": 0 } }
+    },
+    "requiredSourceIds": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+  }
+}

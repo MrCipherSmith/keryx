@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/context-candidate/1.0.0",
+  "title": "Context Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "sourceKind", "sourceRef", "contentHash", "status", "trust", "freshness", "score", "selected"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "sourceKind": { "enum": ["graph", "wiki", "memory", "skill", "rule", "flow", "quality", "testing", "review", "external"] },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "contentHash": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "status": { "enum": ["accepted", "draft", "conflict", "deprecated", "superseded", "generated", "stale"] },
+    "trust": { "enum": ["mandatory", "trusted", "reviewed", "untrusted"] },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observedAt", "validity"],
+      "properties": {
+        "observedAt": { "type": "string", "format": "date-time" },
+        "sourceUpdatedAt": { "type": ["string", "null"], "format": "date-time" },
+        "validity": { "enum": ["current", "historical", "stale", "unknown"] }
+      }
+    },
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "components"],
+      "properties": {
+        "total": { "type": "number" },
+        "components": { "type": "object", "additionalProperties": { "type": "number" } }
+      }
+    },
+    "selected": { "type": "boolean" },
+    "reason": { "type": "string" },
+    "estimatedTokens": { "type": "integer", "minimum": 0 }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/context-assembly-manifest/1.0.0",
+  "title": "Context Assembly Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "assemblyId", "query", "createdAt", "projectRef", "projectRevision", "configHash", "budget", "candidates", "selectedItemCount", "budgetStatus", "traceRef", "policyGate"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "assemblyId": { "type": "string", "minLength": 1 },
+    "query": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "projectRef": { "type": "string", "minLength": 1 },
+    "projectRevision": { "type": "string", "minLength": 1 },
+    "configHash": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxBytes", "maxEstimatedTokens", "maxItems", "usedBytes", "usedEstimatedTokens"],
+      "properties": {
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "maxEstimatedTokens": { "type": "integer", "minimum": 1 },
+        "maxItems": { "type": "integer", "minimum": 1 },
+        "usedBytes": { "type": "integer", "minimum": 0 },
+        "usedEstimatedTokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "candidates": { "type": "array", "items": { "$ref": "context-candidate.schema.json" } },
+    "selectedItemCount": { "type": "integer", "minimum": 0 },
+    "budgetStatus": { "const": "within-limits" },
+    "traceRef": { "type": "string", "minLength": 1 },
+    "policyGate": { "enum": ["pass", "needs-approval", "fail"] }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/retrieval-trace/1.0.0",
+  "title": "Retrieval Trace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "assemblyId", "createdAt", "projectRevision", "configHash", "sources", "selectedIds", "dropped", "policy"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "assemblyId": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "projectRevision": { "type": "string", "minLength": 1 },
+    "configHash": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "sources": { "type": "array", "items": { "type": "object", "required": ["kind", "status"], "properties": { "kind": { "type": "string" }, "status": { "enum": ["used", "unavailable", "stale", "skipped"] }, "detail": { "type": "string" } } } },
+    "selectedIds": { "type": "array", "items": { "type": "string" } },
+    "dropped": { "type": "array", "items": { "type": "object", "required": ["id", "reason"], "properties": { "id": { "type": "string" }, "reason": { "type": "string" } } } },
+    "policy": { "type": "object", "required": ["decision"], "properties": { "decision": { "enum": ["pass", "needs-approval", "fail"] }, "redactions": { "type": "integer", "minimum": 0 } } }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/external-adapter/1.0.0",
+  "title": "External Context Adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "enabled", "mode", "namespace", "retention", "provenance", "network"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "enabled": { "type": "boolean" },
+    "mode": { "enum": ["read-only", "approved-writeback"] },
+    "namespace": { "type": "string", "minLength": 1 },
+    "retention": { "enum": ["session", "derived", "source-governed"] },
+    "provenance": { "enum": ["required", "unavailable"] },
+    "network": { "type": "boolean" },
+    "capabilityId": { "type": ["string", "null"] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "enabled": { "const": true }, "network": { "const": true } },
+        "required": ["enabled", "network"]
+      },
+      "then": {
+        "properties": { "capabilityId": { "type": "string", "minLength": 1 } },
+        "required": ["capabilityId"]
+      }
+    }
+  ]
+}
