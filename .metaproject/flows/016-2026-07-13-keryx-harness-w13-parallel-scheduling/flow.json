@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "id": "016",
+  "slug": "keryx-harness-w13-parallel-scheduling",
+  "title": "keryx harness W13 parallel scheduling",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T05:35:47.607Z",
+  "updatedAt": "2026-07-13T05:53:54.563Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8d01bf9b1d28da0102ce047a4350377b2e3761292fe881d85c85467ab9d8b35a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T05:53:54.370Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T05:53:54.418Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T05:53:54.465Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T05:53:54.514Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T05:53:54.563Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "PA-01 RED: planWaves bounded waves + dependency order + aggregate budget fail-closed + cancellation + loop detection + determinism",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "PA-01 impl: src/harness/parallel/scheduler.ts (+budget.ts) composing inheritBudget; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "W13 review (highload): concurrency+budget ceilings enforced + loop/cancel negatives + D-02(no flow.json) + reuse-only + determinism + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T05:35:47.607Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T05:38:34.103Z",
+      "event": "task-added",
+      "detail": "T5: PA-01 RED: planWaves bounded waves + dependency order + aggregate budget fail-closed + cancellation + loop detection + determinism"
+    },
+    {
+      "at": "2026-07-13T05:38:34.154Z",
+      "event": "task-added",
+      "detail": "T6: PA-01 impl: src/harness/parallel/scheduler.ts (+budget.ts) composing inheritBudget; GREEN"
+    },
+    {
+      "at": "2026-07-13T05:38:34.202Z",
+      "event": "task-added",
+      "detail": "T7: W13 review (highload): concurrency+budget ceilings enforced + loop/cancel negatives + D-02(no flow.json) + reuse-only + determinism + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T05:38:34.253Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T05:38:34.300Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T05:38:34.349Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T05:47:37.951Z",
+      "event": "task-done",
+      "detail": "T5: PA-01 RED: planWaves bounded waves + dependency order + aggregate budget fail-closed + cancellation + loop detection + determinism"
+    },
+    {
+      "at": "2026-07-13T05:47:38.000Z",
+      "event": "task-done",
+      "detail": "T6: PA-01 impl: src/harness/parallel/scheduler.ts (+budget.ts) composing inheritBudget; GREEN"
+    },
+    {
+      "at": "2026-07-13T05:53:54.175Z",
+      "event": "task-done",
+      "detail": "T7: W13 review (highload): concurrency+budget ceilings enforced + loop/cancel negatives + D-02(no flow.json) + reuse-only + determinism + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T05:53:54.224Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T05:53:54.273Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T05:53:54.321Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T05:53:54.370Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T05:53:54.418Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T05:53:54.465Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T05:53:54.514Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T05:53:54.563Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}
