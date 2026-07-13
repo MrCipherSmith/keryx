@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 2,
+  "id": "019",
+  "slug": "keryx-harness-release1-boundary",
+  "title": "keryx harness Release 1 boundary evidence",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T07:32:58.589Z",
+  "updatedAt": "2026-07-13T08:13:15.111Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:35a07ef64870d00f7721c573357daef00cf7130ecb90302fc5262a82afd3426b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T08:13:14.912Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T08:13:14.961Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T08:13:15.013Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T08:13:15.062Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T08:13:15.111Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "H-01 provider negatives (test-only offline): consolidated red-team over W14 Anthropic adapter — timeout/rate-limit/malformed/truncation/egress-deny/cancel/auth fail-closed",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "E-01 release1 evidence-matrix: capability->source/test/commit for W8-W15+W14 + research-ledger + migration-notes; docs-only",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "E-02 release1 review-package: independent multi-lens review (S-01..S-12) + GO/NO-GO verdict; read-only",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "E-03 release1 handoff (gated on E-02 clean): roadmap/package promotion + DAG/frozen-AC/gates/constraints + deferred @release-2 list",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Final verify: docs consistent/traceable + NO runtime code changed by E-docs + H-01 green offline + full suite + deps {} + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T07:32:58.589Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T07:36:03.049Z",
+      "event": "task-added",
+      "detail": "T5: H-01 provider negatives (test-only offline): consolidated red-team over W14 Anthropic adapter — timeout/rate-limit/malformed/truncation/egress-deny/cancel/auth fail-closed"
+    },
+    {
+      "at": "2026-07-13T07:36:03.100Z",
+      "event": "task-added",
+      "detail": "T6: E-01 release1 evidence-matrix: capability->source/test/commit for W8-W15+W14 + research-ledger + migration-notes; docs-only"
+    },
+    {
+      "at": "2026-07-13T07:36:03.150Z",
+      "event": "task-added",
+      "detail": "T7: E-02 release1 review-package: independent multi-lens review (S-01..S-12) + GO/NO-GO verdict; read-only"
+    },
+    {
+      "at": "2026-07-13T07:36:03.198Z",
+      "event": "task-added",
+      "detail": "T8: E-03 release1 handoff (gated on E-02 clean): roadmap/package promotion + DAG/frozen-AC/gates/constraints + deferred @release-2 list"
+    },
+    {
+      "at": "2026-07-13T07:36:03.247Z",
+      "event": "task-added",
+      "detail": "T9: Final verify: docs consistent/traceable + NO runtime code changed by E-docs + H-01 green offline + full suite + deps {} + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T07:36:03.297Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T07:36:03.345Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T07:36:03.393Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T07:49:53.261Z",
+      "event": "ac-updated",
+      "detail": "H-01 provider red-team suite (T5) surfaced two REAL fail-closed gaps in the W14 adapter (stalled-body abort throws uncaught instead of yielding cancelled; zero-byte 200 body silently yields zero events). User approved fixing them in-flow. AC1/AC5 amended to permit a minimal additive fail-closed fix to anthropic-provider.ts (guarded body read + empty-body terminal error) and flip the [FINDING] tests to assert fail-closed."
+    },
+    {
+      "at": "2026-07-13T07:53:35.661Z",
+      "event": "task-done",
+      "detail": "T5: H-01 provider negatives (test-only offline): consolidated red-team over W14 Anthropic adapter — timeout/rate-limit/malformed/truncation/egress-deny/cancel/auth fail-closed"
+    },
+    {
+      "at": "2026-07-13T07:58:56.680Z",
+      "event": "task-done",
+      "detail": "T6: E-01 release1 evidence-matrix: capability->source/test/commit for W8-W15+W14 + research-ledger + migration-notes; docs-only"
+    },
+    {
+      "at": "2026-07-13T08:06:35.955Z",
+      "event": "task-done",
+      "detail": "T7: E-02 release1 review-package: independent multi-lens review (S-01..S-12) + GO/NO-GO verdict; read-only"
+    },
+    {
+      "at": "2026-07-13T08:10:32.448Z",
+      "event": "task-done",
+      "detail": "T8: E-03 release1 handoff (gated on E-02 clean): roadmap/package promotion + DAG/frozen-AC/gates/constraints + deferred @release-2 list"
+    },
+    {
+      "at": "2026-07-13T08:13:14.707Z",
+      "event": "task-done",
+      "detail": "T9: Final verify: docs consistent/traceable + NO runtime code changed by E-docs + H-01 green offline + full suite + deps {} + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T08:13:14.761Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T08:13:14.812Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T08:13:14.862Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T08:13:14.912Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T08:13:14.961Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T08:13:15.013Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T08:13:15.062Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T08:13:15.111Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}

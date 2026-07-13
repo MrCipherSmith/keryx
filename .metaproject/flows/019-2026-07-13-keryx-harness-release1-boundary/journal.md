@@ -1,0 +1,25 @@
+# Flow Journal
+
+- 2026-07-13T07:32:58.589Z - flow created
+- 2026-07-13T07:36:03.049Z - task-added: T5: H-01 provider negatives (test-only offline): consolidated red-team over W14 Anthropic adapter — timeout/rate-limit/malformed/truncation/egress-deny/cancel/auth fail-closed
+- 2026-07-13T07:36:03.100Z - task-added: T6: E-01 release1 evidence-matrix: capability->source/test/commit for W8-W15+W14 + research-ledger + migration-notes; docs-only
+- 2026-07-13T07:36:03.150Z - task-added: T7: E-02 release1 review-package: independent multi-lens review (S-01..S-12) + GO/NO-GO verdict; read-only
+- 2026-07-13T07:36:03.198Z - task-added: T8: E-03 release1 handoff (gated on E-02 clean): roadmap/package promotion + DAG/frozen-AC/gates/constraints + deferred @release-2 list
+- 2026-07-13T07:36:03.247Z - task-added: T9: Final verify: docs consistent/traceable + NO runtime code changed by E-docs + H-01 green offline + full suite + deps {} + frozen untouched
+- 2026-07-13T07:36:03.297Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T07:36:03.345Z - started
+- 2026-07-13T07:36:03.393Z - task-done: T1: Collect remaining context
+- 2026-07-13T07:49:53.261Z - ac-updated: H-01 provider red-team suite (T5) surfaced two REAL fail-closed gaps in the W14 adapter (stalled-body abort throws uncaught instead of yielding cancelled; zero-byte 200 body silently yields zero events). User approved fixing them in-flow. AC1/AC5 amended to permit a minimal additive fail-closed fix to anthropic-provider.ts (guarded body read + empty-body terminal error) and flip the [FINDING] tests to assert fail-closed.
+- 2026-07-13T07:53:35.661Z - task-done: T5: H-01 provider negatives (test-only offline): consolidated red-team over W14 Anthropic adapter — timeout/rate-limit/malformed/truncation/egress-deny/cancel/auth fail-closed
+- 2026-07-13T07:58:56.680Z - task-done: T6: E-01 release1 evidence-matrix: capability->source/test/commit for W8-W15+W14 + research-ledger + migration-notes; docs-only
+- 2026-07-13T08:06:35.955Z - task-done: T7: E-02 release1 review-package: independent multi-lens review (S-01..S-12) + GO/NO-GO verdict; read-only
+- 2026-07-13T08:10:32.448Z - task-done: T8: E-03 release1 handoff (gated on E-02 clean): roadmap/package promotion + DAG/frozen-AC/gates/constraints + deferred @release-2 list
+- 2026-07-13T08:13:14.707Z - task-done: T9: Final verify: docs consistent/traceable + NO runtime code changed by E-docs + H-01 green offline + full suite + deps {} + frozen untouched
+- 2026-07-13T08:13:14.761Z - task-done: T2: Implement per plan
+- 2026-07-13T08:13:14.812Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T08:13:14.862Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T08:13:14.912Z - ac-confirmed: AC1
+- 2026-07-13T08:13:14.961Z - ac-confirmed: AC2
+- 2026-07-13T08:13:15.013Z - ac-confirmed: AC3
+- 2026-07-13T08:13:15.062Z - ac-confirmed: AC4
+- 2026-07-13T08:13:15.111Z - ac-confirmed: AC5

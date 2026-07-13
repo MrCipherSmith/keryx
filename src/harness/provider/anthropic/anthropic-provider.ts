@@ -313,7 +313,48 @@ export class AnthropicProvider implements ProviderPort {
     }
 
     // Happy path: read the SSE body (offline, fully in-memory) and normalize.
-    const bodyText = await response.text();
+    //
+    // Fail-closed body read (H-01 T5): `fetch()` has already resolved (headers
+    // received), but the body can still stall until a deadline abort fires the
+    // SHARED `opts.signal` mid-read — the abort-triggered rejection from
+    // `response.text()` must yield the SAME terminal `cancelled` error the
+    // fetch()-level abort path yields, never escape as an uncaught exception out
+    // of this generator. Any OTHER read-time failure (a torn/errored body stream)
+    // fails closed as `malformed`, matching the truncated-stream taxonomy below.
+    // No model_end on either path.
+    let bodyText: string;
+    try {
+      bodyText = await response.text();
+    } catch (cause) {
+      const aborted =
+        opts.signal?.aborted === true ||
+        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+      if (aborted) {
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
+      }
+      yield errorEvent({
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact(`Anthropic SSE body read failed: ${String(cause)}`),
+      });
+      return;
+    }
+
+    // Zero-byte / empty body (H-01 T5): a 200 with no SSE bytes parses to zero
+    // records and never sets `sawStart`, so neither the torn nor truncated
+    // `malformed` branch below fires and the generator would otherwise yield
+    // NOTHING — indistinguishable from a legitimate no-output attempt. Fail
+    // closed with a terminal `malformed` error (no model_end) instead.
+    if (bodyText.length === 0) {
+      yield errorEvent({
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("empty response body"),
+      });
+      return;
+    }
+
     const parser = new AnthropicSSEParser();
     const records = parser.push(bodyText);
     const torn = parser.flush();
