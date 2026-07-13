@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 2,
+  "id": "017",
+  "slug": "keryx-harness-w15-hardening",
+  "title": "keryx harness W15 security recovery hardening",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T06:02:01.179Z",
+  "updatedAt": "2026-07-13T06:43:42.532Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:05e4e4b652c43e83546e99d4abe4f67cf676a69945db5ecd1899cbdeee792b7d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T06:43:42.333Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T06:43:42.381Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T06:43:42.431Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T06:43:42.481Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T06:43:42.532Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "H-01 security RED: SSRF encodings + NaN-date fail-open + unregistered-extension + budget-reconcile (missing/unhardened) + regression-lock",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "H-01 impl: additive guard.ts SSRF + approval.ts NaN fail-closed + extension/registry.ts + budget/reconcile.ts; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "H-01 recovery/replay/migration/perf suites (test-only): W8 crash/torn-write + W7 effect-free replay + schemaVersion migration determinism + SLO bounds",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "H-02 docs: deferred extension capability contract (later scope, not enabled); cite @release-2 extension scenarios; no frozen-ADR edit",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "W15 review (security): guards fail-closed adversarial + no regression/high-severity + deferred families marked + reuse-only + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T06:02:01.179Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T06:05:19.866Z",
+      "event": "task-added",
+      "detail": "T5: H-01 security RED: SSRF encodings + NaN-date fail-open + unregistered-extension + budget-reconcile (missing/unhardened) + regression-lock"
+    },
+    {
+      "at": "2026-07-13T06:05:19.918Z",
+      "event": "task-added",
+      "detail": "T6: H-01 impl: additive guard.ts SSRF + approval.ts NaN fail-closed + extension/registry.ts + budget/reconcile.ts; GREEN"
+    },
+    {
+      "at": "2026-07-13T06:05:19.965Z",
+      "event": "task-added",
+      "detail": "T7: H-01 recovery/replay/migration/perf suites (test-only): W8 crash/torn-write + W7 effect-free replay + schemaVersion migration determinism + SLO bounds"
+    },
+    {
+      "at": "2026-07-13T06:05:20.013Z",
+      "event": "task-added",
+      "detail": "T8: H-02 docs: deferred extension capability contract (later scope, not enabled); cite @release-2 extension scenarios; no frozen-ADR edit"
+    },
+    {
+      "at": "2026-07-13T06:05:20.061Z",
+      "event": "task-added",
+      "detail": "T9: W15 review (security): guards fail-closed adversarial + no regression/high-severity + deferred families marked + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T06:05:20.113Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T06:05:20.162Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T06:05:20.211Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T06:18:47.663Z",
+      "event": "task-done",
+      "detail": "T5: H-01 security RED: SSRF encodings + NaN-date fail-open + unregistered-extension + budget-reconcile (missing/unhardened) + regression-lock"
+    },
+    {
+      "at": "2026-07-13T06:18:47.713Z",
+      "event": "task-done",
+      "detail": "T6: H-01 impl: additive guard.ts SSRF + approval.ts NaN fail-closed + extension/registry.ts + budget/reconcile.ts; GREEN"
+    },
+    {
+      "at": "2026-07-13T06:29:02.253Z",
+      "event": "task-done",
+      "detail": "T7: H-01 recovery/replay/migration/perf suites (test-only): W8 crash/torn-write + W7 effect-free replay + schemaVersion migration determinism + SLO bounds"
+    },
+    {
+      "at": "2026-07-13T06:29:02.303Z",
+      "event": "task-done",
+      "detail": "T8: H-02 docs: deferred extension capability contract (later scope, not enabled); cite @release-2 extension scenarios; no frozen-ADR edit"
+    },
+    {
+      "at": "2026-07-13T06:43:42.138Z",
+      "event": "task-done",
+      "detail": "T9: W15 review (security): guards fail-closed adversarial + no regression/high-severity + deferred families marked + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T06:43:42.188Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T06:43:42.236Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T06:43:42.285Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T06:43:42.333Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T06:43:42.381Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T06:43:42.431Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T06:43:42.481Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T06:43:42.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}

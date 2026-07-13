@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-07-13T06:02:01.179Z - flow created
+- 2026-07-13T06:05:19.866Z - task-added: T5: H-01 security RED: SSRF encodings + NaN-date fail-open + unregistered-extension + budget-reconcile (missing/unhardened) + regression-lock
+- 2026-07-13T06:05:19.918Z - task-added: T6: H-01 impl: additive guard.ts SSRF + approval.ts NaN fail-closed + extension/registry.ts + budget/reconcile.ts; GREEN
+- 2026-07-13T06:05:19.965Z - task-added: T7: H-01 recovery/replay/migration/perf suites (test-only): W8 crash/torn-write + W7 effect-free replay + schemaVersion migration determinism + SLO bounds
+- 2026-07-13T06:05:20.013Z - task-added: T8: H-02 docs: deferred extension capability contract (later scope, not enabled); cite @release-2 extension scenarios; no frozen-ADR edit
+- 2026-07-13T06:05:20.061Z - task-added: T9: W15 review (security): guards fail-closed adversarial + no regression/high-severity + deferred families marked + reuse-only + frozen untouched
+- 2026-07-13T06:05:20.113Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T06:05:20.162Z - started
+- 2026-07-13T06:05:20.211Z - task-done: T1: Collect remaining context
+- 2026-07-13T06:18:47.663Z - task-done: T5: H-01 security RED: SSRF encodings + NaN-date fail-open + unregistered-extension + budget-reconcile (missing/unhardened) + regression-lock
+- 2026-07-13T06:18:47.713Z - task-done: T6: H-01 impl: additive guard.ts SSRF + approval.ts NaN fail-closed + extension/registry.ts + budget/reconcile.ts; GREEN
+- 2026-07-13T06:29:02.253Z - task-done: T7: H-01 recovery/replay/migration/perf suites (test-only): W8 crash/torn-write + W7 effect-free replay + schemaVersion migration determinism + SLO bounds
+- 2026-07-13T06:29:02.303Z - task-done: T8: H-02 docs: deferred extension capability contract (later scope, not enabled); cite @release-2 extension scenarios; no frozen-ADR edit
+- 2026-07-13T06:43:42.138Z - task-done: T9: W15 review (security): guards fail-closed adversarial + no regression/high-severity + deferred families marked + reuse-only + frozen untouched
+- 2026-07-13T06:43:42.188Z - task-done: T2: Implement per plan
+- 2026-07-13T06:43:42.236Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T06:43:42.285Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T06:43:42.333Z - ac-confirmed: AC1
+- 2026-07-13T06:43:42.381Z - ac-confirmed: AC2
+- 2026-07-13T06:43:42.431Z - ac-confirmed: AC3
+- 2026-07-13T06:43:42.481Z - ac-confirmed: AC4
+- 2026-07-13T06:43:42.532Z - ac-confirmed: AC5

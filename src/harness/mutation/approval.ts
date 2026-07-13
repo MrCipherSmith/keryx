@@ -136,7 +136,14 @@ export function checkApproval(input: ApprovalCheckInput): ApprovalCheck {
   if (request.inputHash !== currentFingerprint) return invalid("stale");
 
   // (g) Expired: the approval window has elapsed (inclusive at expiresAt).
-  if (Date.parse(now) >= Date.parse(request.expiresAt)) return invalid("expired");
+  //     Fail-closed on an unparseable `now` OR `expiresAt`: `Date.parse` yields
+  //     NaN, and `NaN >= NaN` is `false`, which would otherwise silently
+  //     fall through to `{ kind: "valid" }` (a fail-OPEN). Treat NaN as
+  //     expired (AC2). Parseable timestamps behave exactly as before.
+  const nowMs = Date.parse(now);
+  const expiresMs = Date.parse(request.expiresAt);
+  if (Number.isNaN(nowMs) || Number.isNaN(expiresMs)) return invalid("expired");
+  if (nowMs >= expiresMs) return invalid("expired");
 
   // (h) Headless: an approval-gated action never executes unattended.
   if (interactive === false) return invalid("headless");
