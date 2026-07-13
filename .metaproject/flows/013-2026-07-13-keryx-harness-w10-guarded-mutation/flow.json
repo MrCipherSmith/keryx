@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 2,
+  "id": "013",
+  "slug": "keryx-harness-w10-guarded-mutation",
+  "title": "W10 guarded mutation + approval (M-01/M-02): action-fingerprints + single-use approvals + path/argv/env rules + fail-closed + monitored trusted-local mutation",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T02:29:46.470Z",
+  "updatedAt": "2026-07-13T03:06:11.272Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1659810a3e40c933091854a0abaf1b6e8af736479d64a847468ff998eef8f8ad",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T03:06:11.049Z",
+      "note": "M-01: canonical action-fingerprint (sha256 path/argv/allowlisted-env); checkApproval FAIL-CLOSED (valid ONLY approved+fingerprint-match+not-expired+not-consumed+interactive; single-use/stale/expired/denied/headless→invalid). approval-request/result schema-valid. 38 tests. T9 fail-closed proof."
+    },
+    "AC2": {
+      "at": "2026-07-13T03:06:11.109Z",
+      "note": "M-01 guardAction: path-traversal/symlink-escape/shell-injection/private-egress/credential denied; read-within-root allowed; each rule non-vacuous (covering deny+allow tests). SC_R15_*."
+    },
+    "AC3": {
+      "at": "2026-07-13T03:06:11.163Z",
+      "note": "M-01 fail-closed scan: scanAvailable=false -> deny FIRST (never silent-allow). SC_R15_FAIL_CLOSED_ISOLATION."
+    },
+    "AC4": {
+      "at": "2026-07-13T03:06:11.217Z",
+      "note": "M-02 execute: trusted-local+valid approval -> monitored mutation via FAKE adapter + schema-valid execution-receipt+evidence; unattended-untrusted blocked without isolation; indeterminate -> needs-reconciliation -> W8 recoverFrom blocked-unknown-outcome; adapter never called on blocked path. NO real fs. 17 tests."
+    },
+    "AC5": {
+      "at": "2026-07-13T03:06:11.272Z",
+      "note": "tsc clean; full bun test 899/0 (844+55); W3/W8/W5/W6 + src/contracts reused unmodified; deps={}; deterministic no-real-fs; new code under src/harness/mutation/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN core (2 hardening concerns -> W15)."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "M-01 RED: action-fingerprint + approval lifecycle (single-use/stale/headless/expired) + path/symlink/shell/redirect/credential deny + fail-closed scan",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "M-01 impl: src/harness/mutation/{fingerprint,approval,guard}.ts (compose W3 policy); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "M-02 RED: guarded trusted-local mutation -> receipt+evidence; unattended-untrusted blocked without isolation; unknown-side-effect reconciliation",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "M-02 impl: src/harness/mutation/execute.ts (fake mutation adapter + execution-receipt + reconcile via W8); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "W10 verification (SECURITY): code-verifier + M-01/M-02 coverage + fail-closed invariants + determinism + no-real-fs + reuse-only + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T02:29:46.470Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T02:29:46.547Z",
+      "event": "task-added",
+      "detail": "T5: M-01 RED: action-fingerprint + approval lifecycle (single-use/stale/headless/expired) + path/symlink/shell/redirect/credential deny + fail-closed scan"
+    },
+    {
+      "at": "2026-07-13T02:29:46.610Z",
+      "event": "task-added",
+      "detail": "T6: M-01 impl: src/harness/mutation/{fingerprint,approval,guard}.ts (compose W3 policy); GREEN"
+    },
+    {
+      "at": "2026-07-13T02:29:46.663Z",
+      "event": "task-added",
+      "detail": "T7: M-02 RED: guarded trusted-local mutation -> receipt+evidence; unattended-untrusted blocked without isolation; unknown-side-effect reconciliation"
+    },
+    {
+      "at": "2026-07-13T02:29:46.716Z",
+      "event": "task-added",
+      "detail": "T8: M-02 impl: src/harness/mutation/execute.ts (fake mutation adapter + execution-receipt + reconcile via W8); GREEN"
+    },
+    {
+      "at": "2026-07-13T02:29:46.767Z",
+      "event": "task-added",
+      "detail": "T9: W10 verification (SECURITY): code-verifier + M-01/M-02 coverage + fail-closed invariants + determinism + no-real-fs + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T02:32:16.747Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T02:32:16.803Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T02:32:16.854Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T02:43:17.534Z",
+      "event": "task-done",
+      "detail": "T5: M-01 RED: action-fingerprint + approval lifecycle (single-use/stale/headless/expired) + path/symlink/shell/redirect/credential deny + fail-closed scan"
+    },
+    {
+      "at": "2026-07-13T02:49:42.505Z",
+      "event": "task-done",
+      "detail": "T6: M-01 impl: src/harness/mutation/{fingerprint,approval,guard}.ts (compose W3 policy); GREEN"
+    },
+    {
+      "at": "2026-07-13T02:56:04.380Z",
+      "event": "task-done",
+      "detail": "T7: M-02 RED: guarded trusted-local mutation -> receipt+evidence; unattended-untrusted blocked without isolation; unknown-side-effect reconciliation"
+    },
+    {
+      "at": "2026-07-13T03:00:00.890Z",
+      "event": "task-done",
+      "detail": "T8: M-02 impl: src/harness/mutation/execute.ts (fake mutation adapter + execution-receipt + reconcile via W8); GREEN"
+    },
+    {
+      "at": "2026-07-13T03:04:29.548Z",
+      "event": "task-done",
+      "detail": "T9: W10 verification (SECURITY): code-verifier + M-01/M-02 coverage + fail-closed invariants + determinism + no-real-fs + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T03:04:29.603Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T03:04:29.654Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T03:04:29.705Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T03:06:11.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: M-01: canonical action-fingerprint (sha256 path/argv/allowlisted-env); checkApproval FAIL-CLOSED (valid ONLY approved+fingerprint-match+not-expired+not-consumed+interactive; single-use/stale/expired/denied/headless→invalid). approval-request/result schema-valid. 38 tests. T9 fail-closed proof."
+    },
+    {
+      "at": "2026-07-13T03:06:11.109Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: M-01 guardAction: path-traversal/symlink-escape/shell-injection/private-egress/credential denied; read-within-root allowed; each rule non-vacuous (covering deny+allow tests). SC_R15_*."
+    },
+    {
+      "at": "2026-07-13T03:06:11.163Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: M-01 fail-closed scan: scanAvailable=false -> deny FIRST (never silent-allow). SC_R15_FAIL_CLOSED_ISOLATION."
+    },
+    {
+      "at": "2026-07-13T03:06:11.217Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: M-02 execute: trusted-local+valid approval -> monitored mutation via FAKE adapter + schema-valid execution-receipt+evidence; unattended-untrusted blocked without isolation; indeterminate -> needs-reconciliation -> W8 recoverFrom blocked-unknown-outcome; adapter never called on blocked path. NO real fs. 17 tests."
+    },
+    {
+      "at": "2026-07-13T03:06:11.272Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsc clean; full bun test 899/0 (844+55); W3/W8/W5/W6 + src/contracts reused unmodified; deps={}; deterministic no-real-fs; new code under src/harness/mutation/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN core (2 hardening concerns -> W15)."
+    }
+  ]
+}
