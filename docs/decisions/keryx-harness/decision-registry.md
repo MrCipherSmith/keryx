@@ -1,9 +1,12 @@
-# Decision Registry — Keryx Harness W1 Decisions
+# Decision Registry — Keryx Harness Package Index
 
-**Version**: 0.1.0  
-**Frozen**: 2026-07-12  
-**Flow**: 003 (W1 decisions)  
-**Index of**: D-01, D-02, D-03, D-04  
+**Version**: 0.2.0
+**Frozen**: 2026-07-12 (D-01…D-04); extended 2026-07-13 (W2–W16 artifact index)
+**Flow**: 003 (W1 decisions); extended by flow 010 (W16 E-01)
+**Index of**: D-01, D-02, D-03, D-04 (W1 decisions) plus the full W2–W16
+artifact package (TM-01, EV-01, contract-inventory, research-ledger, and the
+E-01 evidence matrix). This file is the single package index for
+`docs/decisions/keryx-harness/`.
 
 ---
 
@@ -117,6 +120,40 @@ All decisions reference and cite (never modify) the frozen requirements package:
 
 ---
 
+## W2–W16 Package Index (extended 2026-07-13, flow 010 / W16 E-01)
+
+This section extends the registry beyond the W1 decisions (D-01…D-04 above,
+unchanged) to index every subsequent wave's documentation artifact under
+`docs/decisions/keryx-harness/`, so this file is a complete package index.
+
+| Wave | Task(s) | Artifact | Commit | Summary |
+|---|---|---|---|---|
+| W1 | D-01…D-04 | [ADR-0001](./ADR-0001-d01-release0-boundary.md), [ADR-0002](./ADR-0002-d02-single-coordinator-ownership.md), [ADR-0003](./ADR-0003-d03-security-profiles-containment.md), [ADR-0004](./ADR-0004-d04-provider-branch-child.md) | `690b376` | Release 0 boundary, single-coordinator ownership, security profiles, provider/branch/child framing. |
+| W1 | D-04 | [research-ledger.md](./research-ledger.md) | `690b376` | RL-01…RL-06 frozen provenance; OPEN-1…OPEN-4 deferred questions. |
+| W2 | TM-01…TM-03 | [TM-01-task-manager-evolution.md](./TM-01-task-manager-evolution.md) | `99952a5` | Additive Task Manager task/run-link fields; schemaVersion 1→2 read-time migration; backward-compatibility matrix. |
+| W3 | EV-01 | [EV-01-corpus-relocation.md](./EV-01-corpus-relocation.md) | `39a884b` | Fixture-corpus evaluator relocation `src/harness/` → `src/eval/`; resolves ADR-0001 OPEN-4. |
+| W4 | C-01…C-03 | [contract-inventory.md](./contract-inventory.md) | `2b92515` | Registry of every durable/public payload schema; validator keyword-coverage and fixture-matrix evidence. |
+| W5 | P-01, P-02 | (no standalone doc artifact; evidence in flow 007 journal and E-01 matrix) | `d5fa7c0` | Provider-neutral and tool ports. |
+| W6 | F-01, F-02 | (no standalone doc artifact; evidence in flow 008 journal and E-01 matrix) | `3b06260` | Deterministic fake provider and fake read-only tool. |
+| W7 | R0-01…R0-03 | (no standalone doc artifact; evidence in flow 009 journal and E-01 matrix) | `ca57c56` | Release 0 offline read-only vertical slice: startup, session, policy, completion, run/CLI/RPC/replay. |
+| W16 | E-01 | [E-01-release0-evidence-matrix.md](./E-01-release0-evidence-matrix.md) | (this task; docs only, uncommitted at authoring time) | Capability/evidence matrix mapping every Release 0 capability to status/source/test/commit; migration notes; 2 deferred scenarios marked. |
+
+W8–W15 (durable resume, branching, guarded mutation, flow integration, child
+agents, parallel scheduling, real provider adapters, hardening) are Release
+1/2+ scope and have not started; no artifact exists yet for those waves.
+
+**Release 0 roadmap note (2026-07-13, flow 010 / W16 E-03):** E-02
+([E-02-release0-review-package.md](./E-02-release0-review-package.md))
+completed with verdict **no BLOCKER/P0/P1, GO**. E-03
+([flow-orchestrator-handoff.md](./flow-orchestrator-handoff.md)) is the
+resulting Release 0 implementation handoff — DAG/wave status, frozen AC
+proposal, gates, constraints, and out-of-scope/deferred (now three scenarios,
+per E-02 finding F-1 disclosed in the updated
+[E-01 matrix](./E-01-release0-evidence-matrix.md)). All three W16 tasks
+(E-01, E-02, E-03) are now complete.
+
+---
+
 ## Workflow
 
 1. **D-01**: ✓ SIGNED and delivered (this flow task T5).
@@ -127,6 +164,6 @@ All decisions reference and cite (never modify) the frozen requirements package:
 
 ---
 
-**Last updated**: 2026-07-12  
-**Updated by**: Flow 003 orchestrator (post D-02/D-03/D-04 + T9 review)  
-**Status**: All four W1 decisions SIGNED (D-01…D-04); T9 consistency/contradiction review passed (AC1–AC5 satisfied, frozen requirements package unmodified)
+**Last updated**: 2026-07-13
+**Updated by**: Flow 003 orchestrator (post D-02/D-03/D-04 + T9 review); extended by flow 010 documentation worker (T5 / W16 E-01)
+**Status**: All four W1 decisions SIGNED (D-01…D-04); T9 consistency/contradiction review passed (AC1–AC5 satisfied, frozen requirements package unmodified). Package index extended to W2–W16 artifacts (TM-01, EV-01, contract-inventory, research-ledger, E-01 evidence matrix); D-01…D-04 rows unchanged.

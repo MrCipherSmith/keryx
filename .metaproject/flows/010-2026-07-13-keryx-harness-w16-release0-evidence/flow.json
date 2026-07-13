@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 2,
+  "id": "010",
+  "slug": "keryx-harness-w16-release0-evidence",
+  "title": "W16 Release 0 release-evidence (E-01..E-03): evidence-matrix + managed review package + handoff",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T00:39:51.387Z",
+  "updatedAt": "2026-07-13T01:11:28.260Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0a97c14c716be0fe623e7f4be7ab586609e541846f08bf35f78e51e7baebbd56",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T01:11:28.097Z",
+      "note": "E-01-release0-evidence-matrix.md: 18 rows capability->status/source/test/commit (paths+commits T8-verified 30/30, 7/7); research-ledger + decision-registry updated; migration notes; 3 deferred marked; frozen requirements untouched."
+    },
+    "AC2": {
+      "at": "2026-07-13T01:11:28.153Z",
+      "note": "E-02-release0-review-package.md: 7-lens normalized review (arch/contract/logic/security/testing-replay/perf/Gherkin), severity-ranked, explicit verdict NO BLOCKER/P0/P1 (GO); per-wave reviews untouched."
+    },
+    "AC3": {
+      "at": "2026-07-13T01:11:28.205Z",
+      "note": "flow-orchestrator-handoff.md: DAG+wave status, frozen AC proposal, gates, constraints, out-of-scope/deferred(3), next=W8; created under met gate (E-02 no BLOCKER/P0/P1)."
+    },
+    "AC4": {
+      "at": "2026-07-13T01:11:28.260Z",
+      "note": "docs-only: no src/**/test change; bun test 797/0; tsc clean; deps={}; frozen requirements + ADR-0001..0004 untouched (git empty); all matrix rows resolve. T8 CLEAN."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "E-01: capability/evidence matrix + research-ledger update + migration-notes + package-index (implemented/planned/deferred + source+test+commit)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "E-02: independent 7-lens review of R0 slice -> normalized managed review package with severity (BLOCKER/P0/P1/P2/P3)",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "E-03: promote roadmap/package + flow-orchestrator-handoff.md (DAG/AC/gates/constraints/out-of-scope/deferred) ONLY if no BLOCKER/P0/P1",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "W16 verification: docs-only (src unchanged) + bun test 797/0 + tsc clean + deps{} + frozen untouched + matrix/handoff accuracy",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T00:39:51.387Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T00:39:51.458Z",
+      "event": "task-added",
+      "detail": "T5: E-01: capability/evidence matrix + research-ledger update + migration-notes + package-index (implemented/planned/deferred + source+test+commit)"
+    },
+    {
+      "at": "2026-07-13T00:39:51.509Z",
+      "event": "task-added",
+      "detail": "T6: E-02: independent 7-lens review of R0 slice -> normalized managed review package with severity (BLOCKER/P0/P1/P2/P3)"
+    },
+    {
+      "at": "2026-07-13T00:39:51.560Z",
+      "event": "task-added",
+      "detail": "T7: E-03: promote roadmap/package + flow-orchestrator-handoff.md (DAG/AC/gates/constraints/out-of-scope/deferred) ONLY if no BLOCKER/P0/P1"
+    },
+    {
+      "at": "2026-07-13T00:39:51.613Z",
+      "event": "task-added",
+      "detail": "T8: W16 verification: docs-only (src unchanged) + bun test 797/0 + tsc clean + deps{} + frozen untouched + matrix/handoff accuracy"
+    },
+    {
+      "at": "2026-07-13T00:41:39.590Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T00:41:39.644Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T00:41:39.695Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T00:48:11.479Z",
+      "event": "task-done",
+      "detail": "T5: E-01: capability/evidence matrix + research-ledger update + migration-notes + package-index (implemented/planned/deferred + source+test+commit)"
+    },
+    {
+      "at": "2026-07-13T00:58:19.636Z",
+      "event": "task-done",
+      "detail": "T6: E-02: independent 7-lens review of R0 slice -> normalized managed review package with severity (BLOCKER/P0/P1/P2/P3)"
+    },
+    {
+      "at": "2026-07-13T01:02:26.697Z",
+      "event": "task-done",
+      "detail": "T7: E-03: promote roadmap/package + flow-orchestrator-handoff.md (DAG/AC/gates/constraints/out-of-scope/deferred) ONLY if no BLOCKER/P0/P1"
+    },
+    {
+      "at": "2026-07-13T01:05:01.982Z",
+      "event": "task-done",
+      "detail": "T8: W16 verification: docs-only (src unchanged) + bun test 797/0 + tsc clean + deps{} + frozen untouched + matrix/handoff accuracy"
+    },
+    {
+      "at": "2026-07-13T01:05:02.038Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T01:05:02.091Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T01:05:02.144Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T01:11:28.097Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: E-01-release0-evidence-matrix.md: 18 rows capability->status/source/test/commit (paths+commits T8-verified 30/30, 7/7); research-ledger + decision-registry updated; migration notes; 3 deferred marked; frozen requirements untouched."
+    },
+    {
+      "at": "2026-07-13T01:11:28.153Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: E-02-release0-review-package.md: 7-lens normalized review (arch/contract/logic/security/testing-replay/perf/Gherkin), severity-ranked, explicit verdict NO BLOCKER/P0/P1 (GO); per-wave reviews untouched."
+    },
+    {
+      "at": "2026-07-13T01:11:28.205Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: flow-orchestrator-handoff.md: DAG+wave status, frozen AC proposal, gates, constraints, out-of-scope/deferred(3), next=W8; created under met gate (E-02 no BLOCKER/P0/P1)."
+    },
+    {
+      "at": "2026-07-13T01:11:28.260Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: docs-only: no src/**/test change; bun test 797/0; tsc clean; deps={}; frozen requirements + ADR-0001..0004 untouched (git empty); all matrix rows resolve. T8 CLEAN."
+    }
+  ]
+}

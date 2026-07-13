@@ -78,7 +78,7 @@
 | Фаза | Волна | Таски | Осн. модель | Статус | Ветка/PR | Дата | Заметки |
 |---|---|---|---|---|---|---|---|
 | 14 | W14 Real providers | RP-01 | Opus | ⬜ | — | — | реальные SDK-адаптеры |
-| 16 | W16 Docs/evidence | E-01…E-03 | Sonnet | ⬜ | — | — | запускать на КАЖДОЙ границе релиза |
+| 16 | W16 Docs/evidence | E-01…E-03 | Sonnet | ✅ (R0) | `feature/keryx-harness-impl` | 2026-07-13 | **Release 0 evidence** (граница R0). flow 010; docs+reviews only (без рантайм-кода). E-01 [evidence-matrix](../decisions/keryx-harness/E-01-release0-evidence-matrix.md) (18 rows capability→source/test/commit) + research-ledger + decision-registry + migration-notes; E-02 [7-lens review](../decisions/keryx-harness/E-02-release0-review-package.md) → **NO BLOCKER/P0/P1, GO**; E-03 [flow-orchestrator-handoff](../decisions/keryx-harness/flow-orchestrator-handoff.md) (DAG/AC/gates/constraints/deferred, next=W8). AC1–AC4 ✅; T8 verify CLEAN (30/30 paths, 7/7 commits; frozen+ADR untouched). `bun test` 797/0, `tsc` clean, deps `{}`. **Deferred (3):** SC_R12_TRANSIENT_RETRY→W8, SC_R16_BUDGET_RESERVATION→follow-up, SC_R18_UNREGISTERED_EXTENSION_DENIED→H-02/W15. Модели: E-01/E-03 Sonnet, E-02/verify Opus. **Запускать снова на след. границе (после W15).** |
 
 ---
 

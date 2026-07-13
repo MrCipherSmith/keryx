@@ -65,7 +65,44 @@ worker may resolve it while freezing D-04.
 
 ---
 
-**Last updated**: 2026-07-12
-**Updated by**: Flow 003 documentation worker (T8 / D-04)
+## Release 0 Reconciliation (W16 E-01)
+
+This section reconciles the deferred-questions table (OPEN-1…OPEN-4) against
+the actual outcomes of W1–W7 (the implemented Release 0 vertical slice), and
+records the two acceptance scenarios that surfaced as uncovered during W7 and
+remain OPEN pending a covering task. See
+[E-01-release0-evidence-matrix.md](./E-01-release0-evidence-matrix.md) for the
+full capability/evidence matrix this reconciliation is drawn from.
+
+### OPEN-1…OPEN-4 status after W1–W7
+
+| Ledger ID | Bound to | W1–W7 outcome |
+|---|---|---|
+| **OPEN-1** (concrete first real provider and credential shape) | W14 RP-01 (Release 2+) | **Still OPEN.** W1–W7 delivered only the provider-neutral port (`src/harness/provider/provider-port.ts`, W5) and a deterministic fake provider (`src/harness/provider/fake-provider.ts`, W6). No real provider adapter exists yet; OPEN-1 remains bound to future W14. |
+| **OPEN-2** (per-role budget values beneath the global ceilings) | W2 (TM-01) / W5 (P-01) | **Partially resolved.** TM-01 (W2) specifies an optional `budget` field on the Task Manager task/run-link model (`src/flow/types.ts`), and the W5 provider/tool ports carry budget-shaped fields at the port level. Concrete per-role budget *values* (as opposed to the field shape) are not yet fixed — this is why `SC_R16_BUDGET_RESERVATION` (planned/reserved/consumed/remaining reconciliation) surfaced as deferred in W7; see the Deferred Scenarios table below. OPEN-2 is downgraded from fully OPEN to "field shape frozen, value policy still OPEN." |
+| **OPEN-3** (artifact retention windows per class under team vs solo policy) | W11 FI-01 (Release 1) | **Still OPEN.** W1–W7 did not touch retention windows; this remains correctly bound to the future W11 Flow Integration task. |
+| **OPEN-4** (compatibility migration for moving the corpus harness to `src/eval/`) | W3 EV-01 | **RESOLVED.** W3 (commit `39a884b`) performed a direct `git mv` rename (not a staged alias), documented in [EV-01-corpus-relocation.md](./EV-01-corpus-relocation.md). Byte-identical move (`git diff -M --stat` = 0 ins/0 del); one external importer repointed; frozen requirements package and ADR-0001 left untouched. |
+
+### Newly surfaced deferred scenarios (from W7 T15 review)
+
+These are not `OPEN-N` questions from D-04 — they are `@release-0`-tagged
+acceptance scenarios in `acceptance.feature` that the W7 Release 0 vertical
+slice (task R0-03) did not cover, discovered during the T15 independent
+review recorded in
+`.metaproject/flows/009-2026-07-12-keryx-harness-w7-release0-slice/journal.md`.
+Recorded here per the E-01 acceptance criterion requiring the 2 deferred
+scenarios to be explicit.
+
+| Scenario | Acceptance tag | Deferred to | Reason |
+|---|---|---|---|
+| Retry one transient provider error within budget | `SC_R12_TRANSIENT_RETRY` | W8 (durable resume, RS-01/RS-02) | `runOffline` performs no retry loop; overlaps immutable-attempt/resume semantics not yet implemented. |
+| Reserve and reconcile a run budget (planned/reserved/consumed/remaining) | `SC_R16_BUDGET_RESERVATION` | Follow-up (no wave yet assigned) | W7's frozen AC4 scoped `R16` coverage to metric *reliability* only; the budget-reservation reconciliation itself needs a dedicated covering task before Release 0 is declared complete against the full acceptance suite. |
+
+---
+
+**Last updated**: 2026-07-13
+**Updated by**: Flow 010 documentation worker (T5 / E-01)
 **Status**: Seeded with D-04 provenance (RL-01…RL-06) and deferred questions
-(OPEN-1…OPEN-4); awaiting later-wave appends.
+(OPEN-1…OPEN-4); Release 0 reconciliation appended (W16 E-01) — OPEN-4
+resolved, OPEN-2 partially resolved (field shape only), OPEN-1/OPEN-3 still
+OPEN, 2 newly surfaced deferred scenarios recorded.
