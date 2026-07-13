@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 2,
+  "id": "021",
+  "slug": "keryx-interactive-shell",
+  "title": "keryx interactive shell (bare keryx REPL)",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T10:32:53.652Z",
+  "updatedAt": "2026-07-13T10:57:42.865Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a7ab35ac84cc85461a17c5934c83ccd3af886cd9cbdeb593358f1ac3e46d3962",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T10:57:42.659Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T10:57:42.710Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T10:57:42.762Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T10:57:42.814Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T10:57:42.865Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED: runShell core (streaming, multi-turn history, slash cmds, EOF/exit, provider_error) + cli bare->shell dispatch + harness-run no-args usage",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: src/commands/shell.ts (runShell + shellCommand) + cli.ts bare->shell + printHelp + harness.ts no-args guard; stdlib readline no dep; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "review: injectable core (no real TTY) + multi-turn + slash/exit + provider_error non-fatal + offline + reuse-only + deps {} + no regression + D-02",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "live smoke: piped input into bare keryx against Ollama -> real streamed multi-turn reply + clean exit; --help lists harness+shell; harness run no-args usage",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T10:32:53.652Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T10:36:06.048Z",
+      "event": "task-added",
+      "detail": "T5: RED: runShell core (streaming, multi-turn history, slash cmds, EOF/exit, provider_error) + cli bare->shell dispatch + harness-run no-args usage"
+    },
+    {
+      "at": "2026-07-13T10:36:06.099Z",
+      "event": "task-added",
+      "detail": "T6: impl: src/commands/shell.ts (runShell + shellCommand) + cli.ts bare->shell + printHelp + harness.ts no-args guard; stdlib readline no dep; GREEN"
+    },
+    {
+      "at": "2026-07-13T10:36:06.149Z",
+      "event": "task-added",
+      "detail": "T7: review: injectable core (no real TTY) + multi-turn + slash/exit + provider_error non-fatal + offline + reuse-only + deps {} + no regression + D-02"
+    },
+    {
+      "at": "2026-07-13T10:36:06.199Z",
+      "event": "task-added",
+      "detail": "T8: live smoke: piped input into bare keryx against Ollama -> real streamed multi-turn reply + clean exit; --help lists harness+shell; harness run no-args usage"
+    },
+    {
+      "at": "2026-07-13T10:36:06.251Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T10:36:06.302Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T10:36:06.353Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T10:50:52.223Z",
+      "event": "task-done",
+      "detail": "T5: RED: runShell core (streaming, multi-turn history, slash cmds, EOF/exit, provider_error) + cli bare->shell dispatch + harness-run no-args usage"
+    },
+    {
+      "at": "2026-07-13T10:50:52.274Z",
+      "event": "task-done",
+      "detail": "T6: impl: src/commands/shell.ts (runShell + shellCommand) + cli.ts bare->shell + printHelp + harness.ts no-args guard; stdlib readline no dep; GREEN"
+    },
+    {
+      "at": "2026-07-13T10:57:06.757Z",
+      "event": "task-done",
+      "detail": "T7: review: injectable core (no real TTY) + multi-turn + slash/exit + provider_error non-fatal + offline + reuse-only + deps {} + no regression + D-02"
+    },
+    {
+      "at": "2026-07-13T10:57:42.448Z",
+      "event": "task-done",
+      "detail": "T8: live smoke: piped input into bare keryx against Ollama -> real streamed multi-turn reply + clean exit; --help lists harness+shell; harness run no-args usage"
+    },
+    {
+      "at": "2026-07-13T10:57:42.505Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T10:57:42.557Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T10:57:42.608Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T10:57:42.659Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T10:57:42.711Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T10:57:42.762Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T10:57:42.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T10:57:42.865Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}

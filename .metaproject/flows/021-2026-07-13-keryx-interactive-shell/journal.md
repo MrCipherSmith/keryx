@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-07-13T10:32:53.652Z - flow created
+- 2026-07-13T10:36:06.048Z - task-added: T5: RED: runShell core (streaming, multi-turn history, slash cmds, EOF/exit, provider_error) + cli bare->shell dispatch + harness-run no-args usage
+- 2026-07-13T10:36:06.099Z - task-added: T6: impl: src/commands/shell.ts (runShell + shellCommand) + cli.ts bare->shell + printHelp + harness.ts no-args guard; stdlib readline no dep; GREEN
+- 2026-07-13T10:36:06.149Z - task-added: T7: review: injectable core (no real TTY) + multi-turn + slash/exit + provider_error non-fatal + offline + reuse-only + deps {} + no regression + D-02
+- 2026-07-13T10:36:06.199Z - task-added: T8: live smoke: piped input into bare keryx against Ollama -> real streamed multi-turn reply + clean exit; --help lists harness+shell; harness run no-args usage
+- 2026-07-13T10:36:06.251Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T10:36:06.302Z - started
+- 2026-07-13T10:36:06.353Z - task-done: T1: Collect remaining context
+- 2026-07-13T10:50:52.223Z - task-done: T5: RED: runShell core (streaming, multi-turn history, slash cmds, EOF/exit, provider_error) + cli bare->shell dispatch + harness-run no-args usage
+- 2026-07-13T10:50:52.274Z - task-done: T6: impl: src/commands/shell.ts (runShell + shellCommand) + cli.ts bare->shell + printHelp + harness.ts no-args guard; stdlib readline no dep; GREEN
+- 2026-07-13T10:57:06.757Z - task-done: T7: review: injectable core (no real TTY) + multi-turn + slash/exit + provider_error non-fatal + offline + reuse-only + deps {} + no regression + D-02
+- 2026-07-13T10:57:42.448Z - task-done: T8: live smoke: piped input into bare keryx against Ollama -> real streamed multi-turn reply + clean exit; --help lists harness+shell; harness run no-args usage
+- 2026-07-13T10:57:42.505Z - task-done: T2: Implement per plan
+- 2026-07-13T10:57:42.557Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T10:57:42.608Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T10:57:42.659Z - ac-confirmed: AC1
+- 2026-07-13T10:57:42.711Z - ac-confirmed: AC2
+- 2026-07-13T10:57:42.762Z - ac-confirmed: AC3
+- 2026-07-13T10:57:42.814Z - ac-confirmed: AC4
+- 2026-07-13T10:57:42.865Z - ac-confirmed: AC5

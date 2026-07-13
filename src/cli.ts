@@ -18,6 +18,7 @@ import { securityCommand } from "./commands/security";
 import { mcpCommand } from "./commands/mcp";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
+import { shellCommand } from "./commands/shell";
 import { modulesCommand } from "./commands/modules";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
@@ -31,8 +32,13 @@ export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
 
-  if (!command || command === "--help" || command === "-h") {
+  if (command === "--help" || command === "-h" || command === "help") {
     printHelp();
+    return;
+  }
+
+  if (!command) {
+    await shellCommand(args);
     return;
   }
 
@@ -166,6 +172,11 @@ export async function main(): Promise<void> {
     return;
   }
 
+  if (command === "shell") {
+    await shellCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -175,6 +186,9 @@ function printHelp(): void {
   console.log(`keryx ${VERSION}
 
 Usage:
+  keryx                                        Start the interactive shell (REPL)
+  keryx shell [--provider <p>] [--model <m>] [--base-url <url>]
+  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
   keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   keryx status
   keryx modules [status | enable <name> | disable <name>]
@@ -242,6 +256,8 @@ Usage:
   keryx --version
 
 Commands:
+  shell     Start the interactive keryx shell (also runs when keryx is called with no command)
+  harness   Run a single provider turn (harness run) and print structured events
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status
   modules   View and toggle Metaproject modules (interactive)

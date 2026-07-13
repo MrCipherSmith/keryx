@@ -128,6 +128,16 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   }
 
   const { provider, model, baseUrl, prompt } = parseArgs(args);
+
+  // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
+  // prompt prints the usage line and returns BEFORE building input or running
+  // runOffline — never a blocked/failed structured run result.
+  const validProviders = new Set(["fake", "anthropic", "ollama"]);
+  if (!validProviders.has(provider) || prompt.length === 0) {
+    console.log('Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"');
+    return;
+  }
+
   const env = deps?.env ?? process.env;
   const clock = deps?.clock ?? (() => new Date().toISOString());
   let idCounter = 0;

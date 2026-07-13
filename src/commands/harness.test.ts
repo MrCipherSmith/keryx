@@ -158,6 +158,63 @@ describe("AC4 — keryx harness run --provider anthropic with no ANTHROPIC_API_K
   });
 });
 
+describe("AC4 (flow 021, T5) — `keryx harness run` UX fix: empty/missing --provider or prompt prints usage, no run", () => {
+  test('"run" with no other args (no --provider, no prompt) prints usage and never runs runOffline', async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(["run"], fixedDeps({ fetch: fetchMock, env: {} }));
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).toContain("Usage: keryx harness run");
+    // Must NOT have fallen through to a structured (blocked/failed) run result.
+    expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
+  });
+
+  test('"run" with an empty --provider prints usage and never runs runOffline', async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "", "--model", "fixture-model", "hello there"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).toContain("Usage: keryx harness run");
+    expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
+  });
+
+  test('"run" with an empty prompt prints usage and never runs runOffline', async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).toContain("Usage: keryx harness run");
+    expect(/"status"\s*:\s*"(blocked|failed)"/.test(combined)).toBe(false);
+  });
+});
+
 describe("AC4 — src/cli.ts registers the harness command (source-text audit)", () => {
   test("the root CLI dispatch mentions the harness command", () => {
     const cliSource = readFileSync(path.join(import.meta.dir, "..", "cli.ts"), "utf8");
