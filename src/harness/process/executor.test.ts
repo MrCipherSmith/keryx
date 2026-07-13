@@ -73,8 +73,10 @@
 //    still spawns (a not-yet-started process cannot be group-killed), and the
 //    scripted `ProcessObservation.kind === "cancelled"` is what the fake
 //    reports the adapter observed (including that it performed a group-kill).
-//    `input.cancelled` is asserted to have been forwarded onto every recorded
-//    `spawn` call in the determinism/plumbing test below.
+//    `input.cancelled` is NOT forwarded onto `adapter.spawn` — cancellation is
+//    handled inside `runContainedProcess` (it reclassifies a clean observation
+//    to `cancelled` when `input.cancelled === true`); `spawn` receives only the
+//    approved `ContainedCommand`.
 //
 // Deterministic: `deps.clock`/`deps.idSeq` are fixed via `makeDeps()` (mirrors
 // `execute.test.ts`/`guard.test.ts`/`isolation.test.ts`). NO real fs/network:
@@ -539,6 +541,78 @@ describe("runContainedProcess — no-orphan: process-group kill (not leader-only
     withFetchGuard(() => runContainedProcess(baseInput({ adapter, cancelled: true }), makeDeps()));
     expect(adapter.groupKillCount).toBe(1);
     expect(adapter.leaderKillCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (b2) exitCode surfaced on the `completed` outcome (review-hardening fix #2)
+// ---------------------------------------------------------------------------
+// RED today: `ContainedProcessOutcome`'s `completed` variant carries only
+// `{kind:"completed", receipt, evidenceRefs}` — the observation's `exitCode` is
+// never copied onto the outcome, so a caller that needs the real exit status
+// (e.g. to distinguish a command's own `exit 2` from a clean `exit 0`) has no
+// way to read it without reaching into adapter internals. This pins the fix:
+// `outcome.exitCode` must equal the observation's `exitCode` on every
+// `completed` outcome, including a non-zero in-bounds exit (still
+// containment-`completed`, not a new outcome kind).
+describe("runContainedProcess — completed outcome surfaces the real exitCode (review-hardening fix #2)", () => {
+  test("a clean-exit observation carrying exitCode:0 surfaces exitCode:0 on the OUTCOME itself", () => {
+    const adapter = new FakeProcessAdapter({ ...cleanObservation, exitCode: 0 });
+    const outcome: ContainedProcessOutcome = withFetchGuard(() =>
+      runContainedProcess(baseInput({ adapter }), makeDeps()),
+    );
+
+    expect(outcome.kind).toBe("completed");
+    if (outcome.kind !== "completed") throw new Error("expected a completed outcome");
+    expect((outcome as unknown as { exitCode?: number }).exitCode).toBe(0);
+  });
+
+  test("a clean-exit observation carrying a non-zero in-bounds exitCode:2 is still `completed`, with exitCode:2 recoverable from the outcome", () => {
+    const nonZeroCleanObservation: ProcessObservation = { ...cleanObservation, exitCode: 2 };
+    const adapter = new FakeProcessAdapter(nonZeroCleanObservation);
+    const outcome: ContainedProcessOutcome = withFetchGuard(() =>
+      runContainedProcess(baseInput({ adapter }), makeDeps()),
+    );
+
+    // Containment semantics: a non-zero command exit is still a confirmed,
+    // in-bounds clean exit — NOT reclassified as `blocked`/`output-overflow`/etc.
+    expect(outcome.kind).toBe("completed");
+    if (outcome.kind !== "completed") throw new Error("expected a completed outcome");
+    expect((outcome as unknown as { exitCode?: number }).exitCode).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (h2) Mutation-proof branch pins (review-hardening fix #4)
+// ---------------------------------------------------------------------------
+// These pin two executor branches that are reachable today but were previously
+// UNPINNED by any test (a mutation deleting either clause would still pass the
+// suite as it stood). They may already PASS against the current impl — that is
+// expected and desired; they lock the behavior rather than drive new code.
+describe("runContainedProcess — mutation-proof branch pins (review-hardening fix #4)", () => {
+  test("(4a) a CLEAN observation + input.cancelled:true is reclassified to `cancelled` (NOT `completed`) — pins the `|| input.cancelled === true` clause", () => {
+    const adapter = new FakeProcessAdapter(cleanObservation); // kind: "clean-exit", NOT "cancelled"
+    const outcome: ContainedProcessOutcome = withFetchGuard(() =>
+      runContainedProcess(baseInput({ adapter, cancelled: true }), makeDeps()),
+    );
+
+    // If the `|| input.cancelled === true` disjunct were removed, a clean
+    // observation would fall through to `completed` here — this assertion
+    // fails under that mutation.
+    expect(outcome.kind).toBe("cancelled");
+    expect(outcome.kind).not.toBe("completed");
+  });
+
+  test("(4b) a CLEAN observation whose outputBytes exceeds the run's OWN outputLimitBytes is reclassified to `output-overflow` — pins the executor's finer-limit reclassification", () => {
+    const adapter = new FakeProcessAdapter(cleanObservation); // kind: "clean-exit", outputBytes: 128
+    const outcome: ContainedProcessOutcome = withFetchGuard(() =>
+      runContainedProcess(baseInput({ adapter, outputLimitBytes: 64 }), makeDeps()),
+    );
+
+    // The observation kind is "clean-exit", not "output-overflow" — only the
+    // executor's own outputBytes > outputLimitBytes comparison can produce this.
+    expect(outcome.kind).toBe("output-overflow");
+    expect(outcome.kind).not.toBe("completed");
   });
 });
 

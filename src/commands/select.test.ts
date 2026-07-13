@@ -207,6 +207,62 @@ describe("AC1 — detectProviders: ollama /api/tags, env-gated anthropic, always
   });
 });
 
+describe("SSRF guard on the ollama probe baseUrl (review-hardening fix #1)", () => {
+  // RED today: `probeOllamaModels` issues `deps.fetch` unconditionally, with no
+  // check against `isPrivateEgressHost`/`isLoopbackHost` (`src/harness/mutation/
+  // guard.ts`). The fix must consult that guard BEFORE fetching, and OMIT ollama
+  // (fail-soft, `detectProviders` still never throws) without ever dialing a
+  // private/metadata host — LOOPBACK must remain unblocked (Ollama's own default
+  // is loopback).
+  test("a metadata-service baseUrl (169.254.169.254) omits ollama AND issues NO fetch to that host", async () => {
+    const { fetch: fetchFn, urls } = capturingFetch(FIXTURE_BODY);
+    const deps: DetectProvidersDeps = { fetch: fetchFn, env: {}, baseUrl: "http://169.254.169.254" };
+
+    const detected = await detectProviders(deps);
+
+    expect(detected.find((d) => d.name === "ollama")).toBeUndefined();
+    expect(urls).toEqual([]);
+  });
+
+  test("a private RFC1918 baseUrl (10.0.0.5) omits ollama AND issues NO fetch to that host", async () => {
+    const { fetch: fetchFn, urls } = capturingFetch(FIXTURE_BODY);
+    const deps: DetectProvidersDeps = { fetch: fetchFn, env: {}, baseUrl: "http://10.0.0.5:11434" };
+
+    const detected = await detectProviders(deps);
+
+    expect(detected.find((d) => d.name === "ollama")).toBeUndefined();
+    expect(urls).toEqual([]);
+  });
+
+  test("a loopback baseUrl (localhost) is NOT over-blocked: ollama is still probed and present", async () => {
+    const { fetch: fetchFn, urls } = capturingFetch(FIXTURE_BODY);
+    const deps: DetectProvidersDeps = { fetch: fetchFn, env: {}, baseUrl: "http://localhost:11434" };
+
+    const detected = await detectProviders(deps);
+
+    expect(urls).toEqual(["http://localhost:11434/api/tags"]);
+    const ollama = must(
+      detected.find((d) => d.name === "ollama"),
+      "expected an ollama entry — loopback must not be over-blocked by the SSRF guard",
+    );
+    expect(ollama.models).toEqual(["llama3.1:latest"]);
+  });
+
+  test("a loopback baseUrl (127.0.0.1) is NOT over-blocked: ollama is still probed and present", async () => {
+    const { fetch: fetchFn, urls } = capturingFetch(FIXTURE_BODY);
+    const deps: DetectProvidersDeps = { fetch: fetchFn, env: {}, baseUrl: "http://127.0.0.1:11434" };
+
+    const detected = await detectProviders(deps);
+
+    expect(urls).toEqual(["http://127.0.0.1:11434/api/tags"]);
+    const ollama = must(
+      detected.find((d) => d.name === "ollama"),
+      "expected an ollama entry — loopback must not be over-blocked by the SSRF guard",
+    );
+    expect(ollama.models).toEqual(["llama3.1:latest"]);
+  });
+});
+
 describe("AC2 — pickProviderModel: numbered picker, invalid-input safe, no hardcoded default", () => {
   const SAMPLE_DETECTED: DetectedProvider[] = [
     { name: "ollama", models: ["llama3.1:latest"], baseUrl: "http://localhost:11434" },

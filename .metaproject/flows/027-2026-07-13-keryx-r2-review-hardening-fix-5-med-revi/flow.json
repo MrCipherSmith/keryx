@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "id": "027",
+  "slug": "keryx-r2-review-hardening-fix-5-med-revi",
+  "title": "keryx R2 review hardening — fix 5 MED review findings (SSRF-detect, exit-code, signal-class, 2 test gaps, dispatch DRY)",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T19:47:44.197Z",
+  "updatedAt": "2026-07-13T20:13:03.525Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6387059e4bee47a73c171e5dc38854b0ce31399a3a119ff7050dba4d5361336f",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T20:13:03.320Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T20:13:03.371Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T20:13:03.423Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T20:13:03.474Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T20:13:03.525Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED: SSRF-detect guard + executor exitCode-surfaced + pure signal-classifier + 2 executor-branch pins + dispatchExtension dedup-parity",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: 5 MED fixes (select.ts guard, executor exitCode, real-adapter pure classifier, buildExt dedup) + 2 doc corrections; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "review (security): SSRF closed + no new fail-open + bound-hits non-success + crash≠deadline + adapter gated/not-in-CI + mutation-proof tests + reuse-only + deps {} + D-02 + secrets-safe + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T19:47:44.197Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T19:51:31.848Z",
+      "event": "task-added",
+      "detail": "T5: RED: SSRF-detect guard + executor exitCode-surfaced + pure signal-classifier + 2 executor-branch pins + dispatchExtension dedup-parity"
+    },
+    {
+      "at": "2026-07-13T19:51:31.902Z",
+      "event": "task-added",
+      "detail": "T6: impl: 5 MED fixes (select.ts guard, executor exitCode, real-adapter pure classifier, buildExt dedup) + 2 doc corrections; GREEN"
+    },
+    {
+      "at": "2026-07-13T19:51:31.952Z",
+      "event": "task-added",
+      "detail": "T7: review (security): SSRF closed + no new fail-open + bound-hits non-success + crash≠deadline + adapter gated/not-in-CI + mutation-proof tests + reuse-only + deps {} + D-02 + secrets-safe + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T19:51:32.003Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T19:51:32.054Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T19:51:32.105Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T20:06:45.985Z",
+      "event": "task-done",
+      "detail": "T5: RED: SSRF-detect guard + executor exitCode-surfaced + pure signal-classifier + 2 executor-branch pins + dispatchExtension dedup-parity"
+    },
+    {
+      "at": "2026-07-13T20:06:46.037Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T20:06:46.090Z",
+      "event": "task-done",
+      "detail": "T6: impl: 5 MED fixes (select.ts guard, executor exitCode, real-adapter pure classifier, buildExt dedup) + 2 doc corrections; GREEN"
+    },
+    {
+      "at": "2026-07-13T20:06:46.141Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T20:12:04.107Z",
+      "event": "task-done",
+      "detail": "T7: review (security): SSRF closed + no new fail-open + bound-hits non-success + crash≠deadline + adapter gated/not-in-CI + mutation-proof tests + reuse-only + deps {} + D-02 + secrets-safe + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T20:12:04.162Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T20:13:03.320Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T20:13:03.371Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T20:13:03.423Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T20:13:03.474Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T20:13:03.525Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}
