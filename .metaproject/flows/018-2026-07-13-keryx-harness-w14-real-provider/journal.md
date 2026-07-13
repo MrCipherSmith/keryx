@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-07-13T06:51:58.967Z - flow created
+- 2026-07-13T06:55:10.633Z - task-added: T5: RP-01 RED: Anthropic adapter offline transcript-replay — normalization + storage-off descriptor + capability-gate + egress-guard + provider negatives fail-closed
+- 2026-07-13T06:55:10.687Z - task-added: T6: RP-01 impl: anthropic-provider.ts (ProviderPort) + sse.ts + normalize.ts + recorded fixtures; thin fetch, no SDK, deps stays {}; GREEN
+- 2026-07-13T06:55:10.736Z - task-added: T7: W14 review (provider/contract/security): ProviderPort conformance + storage-off + egress-guard + capability-gate + negatives fail-closed + offline determinism + deps {} + reuse-only + frozen untouched
+- 2026-07-13T06:55:10.788Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T06:55:10.841Z - started
+- 2026-07-13T06:55:10.893Z - task-done: T1: Collect remaining context
+- 2026-07-13T07:09:48.267Z - ac-updated: AC1/AC2 reworded to the correct bridging shape: frozen harness-event.schema.json is the DURABLE envelope (assertEventValid rejects a bare NormalizedEvent — W6 FakeProvider precedent), and provider-descriptor.schema.json is the durable descriptor (validated via a descriptorDocument() bridge), not the W5 in-memory ProviderDescription. Substance (ProviderPort conformance, exact normalization, storage-off const:false, credential redaction, no SDK leak) unchanged.
+- 2026-07-13T07:10:04.886Z - task-done: T5: RP-01 RED: Anthropic adapter offline transcript-replay — normalization + storage-off descriptor + capability-gate + egress-guard + provider negatives fail-closed
+- 2026-07-13T07:19:52.004Z - task-done: T6: RP-01 impl: anthropic-provider.ts (ProviderPort) + sse.ts + normalize.ts + recorded fixtures; thin fetch, no SDK, deps stays {}; GREEN
+- 2026-07-13T07:25:24.551Z - ac-updated: AC2 reworded to ratify the T7 review finding: credential redaction uses a deterministic exact-match scrub of the known apiKey (equivalent-or-stronger than the W7 heuristic for a known secret), and now requires a test proving an echoed key in a provider error body is stripped. Substance (credential never leaks/persists) unchanged.
+- 2026-07-13T07:28:07.948Z - task-done: T7: W14 review (provider/contract/security): ProviderPort conformance + storage-off + egress-guard + capability-gate + negatives fail-closed + offline determinism + deps {} + reuse-only + frozen untouched
+- 2026-07-13T07:28:07.996Z - task-done: T2: Implement per plan
+- 2026-07-13T07:28:08.046Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T07:28:08.094Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T07:28:08.143Z - ac-confirmed: AC1
+- 2026-07-13T07:28:08.191Z - ac-confirmed: AC2
+- 2026-07-13T07:28:08.240Z - ac-confirmed: AC3
+- 2026-07-13T07:28:08.289Z - ac-confirmed: AC4
+- 2026-07-13T07:28:08.337Z - ac-confirmed: AC5

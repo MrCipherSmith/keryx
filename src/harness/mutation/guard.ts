@@ -236,6 +236,17 @@ function isPrivateEgressToken(token: string): boolean {
   return false;
 }
 
+/**
+ * Additive public export of the private-egress predicate, for reuse by network
+ * adapters that must fail-closed on private/loopback/link-local/metadata hosts
+ * (RP-01 Anthropic egress guard). Delegates verbatim to the existing
+ * {@link isPrivateEgressToken}; this adds NO behavior change to `guardAction`
+ * and re-uses the same SSRF-decoding logic rather than reimplementing it.
+ */
+export function isPrivateEgressHost(host: string): boolean {
+  return isPrivateEgressToken(host);
+}
+
 /** Case-insensitive markers of a direct credential/secret file. */
 const CREDENTIAL_PATH_TOKENS = [".env", "credentials", ".ssh/", "id_rsa", ".pem"] as const;
 

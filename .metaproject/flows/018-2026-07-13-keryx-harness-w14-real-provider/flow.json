@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 2,
+  "id": "018",
+  "slug": "keryx-harness-w14-real-provider",
+  "title": "keryx harness W14 real provider adapter",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T06:51:58.967Z",
+  "updatedAt": "2026-07-13T07:28:08.337Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b917964e97deb243a5de9d1f5e82364f8b680fb85f8239492f70255b1065b5e5",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T07:28:08.143Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T07:28:08.191Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T07:28:08.240Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T07:28:08.289Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T07:28:08.337Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RP-01 RED: Anthropic adapter offline transcript-replay — normalization + storage-off descriptor + capability-gate + egress-guard + provider negatives fail-closed",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "RP-01 impl: anthropic-provider.ts (ProviderPort) + sse.ts + normalize.ts + recorded fixtures; thin fetch, no SDK, deps stays {}; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "W14 review (provider/contract/security): ProviderPort conformance + storage-off + egress-guard + capability-gate + negatives fail-closed + offline determinism + deps {} + reuse-only + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T06:51:58.967Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T06:55:10.633Z",
+      "event": "task-added",
+      "detail": "T5: RP-01 RED: Anthropic adapter offline transcript-replay — normalization + storage-off descriptor + capability-gate + egress-guard + provider negatives fail-closed"
+    },
+    {
+      "at": "2026-07-13T06:55:10.687Z",
+      "event": "task-added",
+      "detail": "T6: RP-01 impl: anthropic-provider.ts (ProviderPort) + sse.ts + normalize.ts + recorded fixtures; thin fetch, no SDK, deps stays {}; GREEN"
+    },
+    {
+      "at": "2026-07-13T06:55:10.736Z",
+      "event": "task-added",
+      "detail": "T7: W14 review (provider/contract/security): ProviderPort conformance + storage-off + egress-guard + capability-gate + negatives fail-closed + offline determinism + deps {} + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T06:55:10.788Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T06:55:10.841Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T06:55:10.893Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T07:09:48.267Z",
+      "event": "ac-updated",
+      "detail": "AC1/AC2 reworded to the correct bridging shape: frozen harness-event.schema.json is the DURABLE envelope (assertEventValid rejects a bare NormalizedEvent — W6 FakeProvider precedent), and provider-descriptor.schema.json is the durable descriptor (validated via a descriptorDocument() bridge), not the W5 in-memory ProviderDescription. Substance (ProviderPort conformance, exact normalization, storage-off const:false, credential redaction, no SDK leak) unchanged."
+    },
+    {
+      "at": "2026-07-13T07:10:04.886Z",
+      "event": "task-done",
+      "detail": "T5: RP-01 RED: Anthropic adapter offline transcript-replay — normalization + storage-off descriptor + capability-gate + egress-guard + provider negatives fail-closed"
+    },
+    {
+      "at": "2026-07-13T07:19:52.004Z",
+      "event": "task-done",
+      "detail": "T6: RP-01 impl: anthropic-provider.ts (ProviderPort) + sse.ts + normalize.ts + recorded fixtures; thin fetch, no SDK, deps stays {}; GREEN"
+    },
+    {
+      "at": "2026-07-13T07:25:24.551Z",
+      "event": "ac-updated",
+      "detail": "AC2 reworded to ratify the T7 review finding: credential redaction uses a deterministic exact-match scrub of the known apiKey (equivalent-or-stronger than the W7 heuristic for a known secret), and now requires a test proving an echoed key in a provider error body is stripped. Substance (credential never leaks/persists) unchanged."
+    },
+    {
+      "at": "2026-07-13T07:28:07.948Z",
+      "event": "task-done",
+      "detail": "T7: W14 review (provider/contract/security): ProviderPort conformance + storage-off + egress-guard + capability-gate + negatives fail-closed + offline determinism + deps {} + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T07:28:07.996Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T07:28:08.046Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T07:28:08.094Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T07:28:08.143Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T07:28:08.191Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T07:28:08.240Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T07:28:08.289Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T07:28:08.337Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}
