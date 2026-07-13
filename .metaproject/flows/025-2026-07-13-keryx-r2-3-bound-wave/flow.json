@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "id": "025",
+  "slug": "keryx-r2-3-bound-wave",
+  "title": "keryx Release 2 R2-3 bound-parallel-wave over registered extensions",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T16:42:53.636Z",
+  "updatedAt": "2026-07-13T17:20:47.330Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5c49774f0ee4f3bb22d10cf2345ec389428db7cbb300e43d794bc3fe5dc5f1df",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T17:20:47.131Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T17:20:47.180Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T17:20:47.229Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T17:20:47.280Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T17:20:47.330Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED: planExtensionWave — concurrency ceiling (3 ready/max2) + aggregate budget fail-closed + registered-only + per-task dispatch + per-attempt evidence isolation + cycle/degenerate deny",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: src/harness/extension/bound-wave.ts (compose W13 planWaves + R2-1 dispatchExtension + W12 inheritBudget + W7 evidence + W8 immutable); additive-only; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "review (highload/security): concurrency+budget ceilings + registered-only fail-closed + per-attempt evidence isolation + D-02 + reuse-only + determinism + deps {} + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T16:42:53.636Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T16:46:29.465Z",
+      "event": "task-added",
+      "detail": "T5: RED: planExtensionWave — concurrency ceiling (3 ready/max2) + aggregate budget fail-closed + registered-only + per-task dispatch + per-attempt evidence isolation + cycle/degenerate deny"
+    },
+    {
+      "at": "2026-07-13T16:46:29.518Z",
+      "event": "task-added",
+      "detail": "T6: impl: src/harness/extension/bound-wave.ts (compose W13 planWaves + R2-1 dispatchExtension + W12 inheritBudget + W7 evidence + W8 immutable); additive-only; GREEN"
+    },
+    {
+      "at": "2026-07-13T16:46:29.568Z",
+      "event": "task-added",
+      "detail": "T7: review (highload/security): concurrency+budget ceilings + registered-only fail-closed + per-attempt evidence isolation + D-02 + reuse-only + determinism + deps {} + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T16:48:44.793Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T17:05:18.654Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T17:05:18.710Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T17:16:16.036Z",
+      "event": "task-done",
+      "detail": "T5: RED: planExtensionWave — concurrency ceiling (3 ready/max2) + aggregate budget fail-closed + registered-only + per-task dispatch + per-attempt evidence isolation + cycle/degenerate deny"
+    },
+    {
+      "at": "2026-07-13T17:16:16.087Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T17:16:16.140Z",
+      "event": "task-done",
+      "detail": "T6: impl: src/harness/extension/bound-wave.ts (compose W13 planWaves + R2-1 dispatchExtension + W12 inheritBudget + W7 evidence + W8 immutable); additive-only; GREEN"
+    },
+    {
+      "at": "2026-07-13T17:16:16.192Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T17:20:18.130Z",
+      "event": "task-done",
+      "detail": "T7: review (highload/security): concurrency+budget ceilings + registered-only fail-closed + per-attempt evidence isolation + D-02 + reuse-only + determinism + deps {} + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T17:20:18.183Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T17:20:47.131Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T17:20:47.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T17:20:47.229Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T17:20:47.280Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T17:20:47.330Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}
