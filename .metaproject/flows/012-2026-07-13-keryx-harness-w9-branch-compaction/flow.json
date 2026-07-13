@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 2,
+  "id": "012",
+  "slug": "keryx-harness-w9-branch-compaction",
+  "title": "W9 branching + compaction (B-01/B-02): append-only branch metadata + no-merge-v1 + typed compaction + evidence-preservation",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T01:53:48.587Z",
+  "updatedAt": "2026-07-13T02:24:54.656Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:4b668953619077d8ab9eea29d0a706d7ab3cda490ae4a7519104306213bac52d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T02:24:54.444Z",
+      "note": "B-01 branch.ts: append-only branch-metadata (schema-valid); fork forkEntryId/leafEntryId/immutableAncestorIds (inclusive, via parentEventId); ancestry preserved+immutable (deep-frozen, mutation throws); forkBranch pure; atomic switch = pointer reassignment, no history mutation. 13 tests. SC_R06_BRANCH_TREE."
+    },
+    "AC2": {
+      "at": "2026-07-13T02:24:54.500Z",
+      "note": "no-merge-v1: mergeBranches always {kind:rejected}, mutates nothing. negative covered."
+    },
+    "AC3": {
+      "at": "2026-07-13T02:24:54.551Z",
+      "note": "B-02 compaction.ts: typed compaction-entry (schema-valid) + provenance (sourceEntryIds->derivedEntryId, summaryHash=sha256(summary)); evidence-preservation (source history/evidence NOT deleted, PURE append-only derived; untrusted summary NOT promoted); rebuild bounded context (SC_R07); assertEvidencePreserved throws EvidenceDeletionError. 14 tests. SC_R06_TYPED_COMPACTION/SC_R07."
+    },
+    "AC4": {
+      "at": "2026-07-13T02:24:54.603Z",
+      "note": "deterministic/offline: no Date.now/random/network/real-fs in branch runtime; content-addressed sha256; clock/id injected; reuse W7 session (branch/compaction payloads) + W8 store."
+    },
+    "AC5": {
+      "at": "2026-07-13T02:24:54.656Z",
+      "note": "tsc clean; full bun test 844/0 (817+27); W7/W8/W5/W6 + src/contracts unmodified; deps={}; new code under src/harness/branch/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN (4 invariants upheld)."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "B-01 RED: branch metadata/fork/leaf/immutable-ancestors/atomic-switch/no-merge-v1 tests (SC_R06_BRANCH_TREE)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "B-01 impl: src/harness/branch/branch.ts (append-only branch metadata + no-merge-v1); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "B-02 RED: typed compaction/provenance/evidence-preservation/rebuild tests (SC_R06_TYPED_COMPACTION/SC_R07)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "B-02 impl: src/harness/branch/compaction.ts (typed compaction-entry + evidence-preservation + rebuild); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "W9 verification: code-verifier + B-01/B-02 coverage + invariants (no-merge-v1, no-evidence-deletion, no-untrusted-promotion) + determinism + reuse-only + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T01:53:48.587Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T01:53:48.659Z",
+      "event": "task-added",
+      "detail": "T5: B-01 RED: branch metadata/fork/leaf/immutable-ancestors/atomic-switch/no-merge-v1 tests (SC_R06_BRANCH_TREE)"
+    },
+    {
+      "at": "2026-07-13T01:53:48.713Z",
+      "event": "task-added",
+      "detail": "T6: B-01 impl: src/harness/branch/branch.ts (append-only branch metadata + no-merge-v1); GREEN"
+    },
+    {
+      "at": "2026-07-13T01:53:48.765Z",
+      "event": "task-added",
+      "detail": "T7: B-02 RED: typed compaction/provenance/evidence-preservation/rebuild tests (SC_R06_TYPED_COMPACTION/SC_R07)"
+    },
+    {
+      "at": "2026-07-13T01:53:48.816Z",
+      "event": "task-added",
+      "detail": "T8: B-02 impl: src/harness/branch/compaction.ts (typed compaction-entry + evidence-preservation + rebuild); GREEN"
+    },
+    {
+      "at": "2026-07-13T01:53:48.867Z",
+      "event": "task-added",
+      "detail": "T9: W9 verification: code-verifier + B-01/B-02 coverage + invariants (no-merge-v1, no-evidence-deletion, no-untrusted-promotion) + determinism + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T01:55:49.255Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T01:55:49.308Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T01:55:49.358Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T02:02:48.194Z",
+      "event": "task-done",
+      "detail": "T5: B-01 RED: branch metadata/fork/leaf/immutable-ancestors/atomic-switch/no-merge-v1 tests (SC_R06_BRANCH_TREE)"
+    },
+    {
+      "at": "2026-07-13T02:10:36.131Z",
+      "event": "task-done",
+      "detail": "T6: B-01 impl: src/harness/branch/branch.ts (append-only branch metadata + no-merge-v1); GREEN"
+    },
+    {
+      "at": "2026-07-13T02:16:30.809Z",
+      "event": "task-done",
+      "detail": "T7: B-02 RED: typed compaction/provenance/evidence-preservation/rebuild tests (SC_R06_TYPED_COMPACTION/SC_R07)"
+    },
+    {
+      "at": "2026-07-13T02:20:23.351Z",
+      "event": "task-done",
+      "detail": "T8: B-02 impl: src/harness/branch/compaction.ts (typed compaction-entry + evidence-preservation + rebuild); GREEN"
+    },
+    {
+      "at": "2026-07-13T02:23:08.836Z",
+      "event": "task-done",
+      "detail": "T9: W9 verification: code-verifier + B-01/B-02 coverage + invariants (no-merge-v1, no-evidence-deletion, no-untrusted-promotion) + determinism + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T02:23:08.890Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T02:23:08.943Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T02:23:08.994Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T02:24:54.444Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: B-01 branch.ts: append-only branch-metadata (schema-valid); fork forkEntryId/leafEntryId/immutableAncestorIds (inclusive, via parentEventId); ancestry preserved+immutable (deep-frozen, mutation throws); forkBranch pure; atomic switch = pointer reassignment, no history mutation. 13 tests. SC_R06_BRANCH_TREE."
+    },
+    {
+      "at": "2026-07-13T02:24:54.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: no-merge-v1: mergeBranches always {kind:rejected}, mutates nothing. negative covered."
+    },
+    {
+      "at": "2026-07-13T02:24:54.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: B-02 compaction.ts: typed compaction-entry (schema-valid) + provenance (sourceEntryIds->derivedEntryId, summaryHash=sha256(summary)); evidence-preservation (source history/evidence NOT deleted, PURE append-only derived; untrusted summary NOT promoted); rebuild bounded context (SC_R07); assertEvidencePreserved throws EvidenceDeletionError. 14 tests. SC_R06_TYPED_COMPACTION/SC_R07."
+    },
+    {
+      "at": "2026-07-13T02:24:54.603Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: deterministic/offline: no Date.now/random/network/real-fs in branch runtime; content-addressed sha256; clock/id injected; reuse W7 session (branch/compaction payloads) + W8 store."
+    },
+    {
+      "at": "2026-07-13T02:24:54.656Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsc clean; full bun test 844/0 (817+27); W7/W8/W5/W6 + src/contracts unmodified; deps={}; new code under src/harness/branch/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN (4 invariants upheld)."
+    }
+  ]
+}
