@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "id": "024",
+  "slug": "keryx-r2-2-ext-provenance",
+  "title": "keryx Release 2 R2-2 registered-extension provenance",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T16:10:25.694Z",
+  "updatedAt": "2026-07-13T16:27:40.444Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:883517dfffe44ec3d74d4783f23da346f64bb1fe60f9ee74f562500b9de874a8",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T16:27:40.243Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T16:27:40.293Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T16:27:40.343Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T16:27:40.393Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T16:27:40.444Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED: registerExtensionWithProvenance (record: manifest+grant+capabilities==grant+derived Provenance; deny propagates) + evaluateRegisteredExtensionCapability (in-grant ok; out-of-grant deny/ask)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: src/harness/extension/provenance.ts (compose W15 registry + R2-1 evaluateExtensionGrant + W12 childProvenance + W7 Provenance + W10 approval); additive-only; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "review (security/contract): authority-not-widened + provenance integrity + escalation fail-closed adversarial + D-02 + reuse-only + determinism + deps {} + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T16:10:25.694Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T16:13:37.130Z",
+      "event": "task-added",
+      "detail": "T5: RED: registerExtensionWithProvenance (record: manifest+grant+capabilities==grant+derived Provenance; deny propagates) + evaluateRegisteredExtensionCapability (in-grant ok; out-of-grant deny/ask)"
+    },
+    {
+      "at": "2026-07-13T16:13:37.184Z",
+      "event": "task-added",
+      "detail": "T6: impl: src/harness/extension/provenance.ts (compose W15 registry + R2-1 evaluateExtensionGrant + W12 childProvenance + W7 Provenance + W10 approval); additive-only; GREEN"
+    },
+    {
+      "at": "2026-07-13T16:13:37.235Z",
+      "event": "task-added",
+      "detail": "T7: review (security/contract): authority-not-widened + provenance integrity + escalation fail-closed adversarial + D-02 + reuse-only + determinism + deps {} + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T16:14:57.242Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T16:14:57.295Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T16:14:57.346Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T16:24:13.280Z",
+      "event": "task-done",
+      "detail": "T5: RED: registerExtensionWithProvenance (record: manifest+grant+capabilities==grant+derived Provenance; deny propagates) + evaluateRegisteredExtensionCapability (in-grant ok; out-of-grant deny/ask)"
+    },
+    {
+      "at": "2026-07-13T16:24:13.334Z",
+      "event": "task-done",
+      "detail": "T6: impl: src/harness/extension/provenance.ts (compose W15 registry + R2-1 evaluateExtensionGrant + W12 childProvenance + W7 Provenance + W10 approval); additive-only; GREEN"
+    },
+    {
+      "at": "2026-07-13T16:27:40.038Z",
+      "event": "task-done",
+      "detail": "T7: review (security/contract): authority-not-widened + provenance integrity + escalation fail-closed adversarial + D-02 + reuse-only + determinism + deps {} + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T16:27:40.090Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T16:27:40.142Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T16:27:40.193Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T16:27:40.243Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T16:27:40.293Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T16:27:40.343Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T16:27:40.393Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T16:27:40.444Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}
