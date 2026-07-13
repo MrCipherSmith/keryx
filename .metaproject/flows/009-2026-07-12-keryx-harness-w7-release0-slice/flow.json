@@ -1,0 +1,445 @@
+{
+  "schemaVersion": 2,
+  "id": "009",
+  "slug": "keryx-harness-w7-release0-slice",
+  "title": "W7 Release 0 read-only vertical slice (R0-01..R0-03): startup/session/policy/completion/run+cli+replay",
+  "status": "in-progress",
+  "createdAt": "2026-07-12T22:42:37.740Z",
+  "updatedAt": "2026-07-13T00:34:36.569Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1a44b9037dbb9e66c7296501d4d4af68efb0e5cfa2995a474b4a4f68be4194bc",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T00:34:36.305Z",
+      "note": "S1: config/startup/context-manifest; enabled offline start (harness+fake), disabled byte-identical no-load, missing precondition -> typed environment_blocked, bounded manifest+fingerprints. 18 tests. SC_R01/R02/R14."
+    },
+    "AC2": {
+      "at": "2026-07-13T00:34:36.362Z",
+      "note": "S2: append-only session-manifest/entry, reconstructable tree+currentLeaf, resume no-dup, deterministic migration. 14 tests. SC_R06."
+    },
+    "AC3": {
+      "at": "2026-07-13T00:34:36.415Z",
+      "note": "S3: deterministic allow/ask/deny; hard-deny unoverridable; headless-ask fail-closed; stale-approval invalidated; role no-escalate; flow-file-edit denied; stale/untrusted context != policy. 28 tests. SC_R05/R07/R08/R09."
+    },
+    "AC4": {
+      "at": "2026-07-13T00:34:36.467Z",
+      "note": "S4: completion only on required evidence+gates; evidence-free/undisposed-blocker rejected; redaction-before-persistence (preview+hash+category+provenance, scan-fail blocks); metrics not fabricated; completion-gate-result + evidence-linked output. 21 tests. SC_R10/R11."
+    },
+    "AC5": {
+      "at": "2026-07-13T00:34:36.517Z",
+      "note": "S5: runOffline assembles full flow; tool malformed/timeout/overflow bounded typed; budget/loop -> typed unresolvedRisks; CLI/JSONL-RPC semantic parity + transport-cannot-change-policy; effect-free replay + typed replay-mismatch. 13 tests. SC_R04/R12/R13. (SC_R16_BUDGET_RESERVATION + SC_R12_TRANSIENT_RETRY deferred - outside AC scope.)"
+    },
+    "AC6": {
+      "at": "2026-07-13T00:34:36.569Z",
+      "note": "tsc clean; full bun test 797/0 (703 baseline + 94); W4/W5/W6 reused unmodified; all durable payloads schema-validated; deps={}; no SDK/network/fs-mutation; new code under src/harness/; frozen pkg+src/eval+src/contracts+ADRs untouched. T15 CLEAN on boundaries."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "S1 R0-01 RED: startup/disabled-floor/offline/context-manifest tests (SC_R01/R02/R14)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "S1 R0-01 impl: config/startup + environment_blocked + context-manifest; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "S2 session RED: append-only session/resume-no-dup/schema-migration tests (SC_R06)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "S2 session impl: append-only session-manifest/entry + resume + migration; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "S3 policy RED: allow/ask/deny + hard-deny/headless-ask/stale-approval/role/transport-invariant + context-trust (SC_R05/R07/R08/R09)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "S3 policy impl: deterministic policy engine + context-trust; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "S4 completion RED: completion-gate/evidence/redaction/metrics tests (SC_R10/R11)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "S4 completion impl: completion-gate + evidence records + redaction; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "S5 run+transport+replay RED: run-loop assembly + tool-limits + budget/loop + CLI/JSONL-RPC parity + effect-free replay (SC_R04/R12/R13)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "S5 run+transport+replay impl: run loop over fakes + CLI/RPC parity + offline replay; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "W7 verification: code-verifier + Release-0 acceptance coverage + boundaries + no-new-dep + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-12T22:42:37.740Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-12T22:42:37.808Z",
+      "event": "task-added",
+      "detail": "T5: S1 R0-01 RED: startup/disabled-floor/offline/context-manifest tests (SC_R01/R02/R14)"
+    },
+    {
+      "at": "2026-07-12T22:42:37.861Z",
+      "event": "task-added",
+      "detail": "T6: S1 R0-01 impl: config/startup + environment_blocked + context-manifest; GREEN"
+    },
+    {
+      "at": "2026-07-12T22:42:37.912Z",
+      "event": "task-added",
+      "detail": "T7: S2 session RED: append-only session/resume-no-dup/schema-migration tests (SC_R06)"
+    },
+    {
+      "at": "2026-07-12T22:42:37.964Z",
+      "event": "task-added",
+      "detail": "T8: S2 session impl: append-only session-manifest/entry + resume + migration; GREEN"
+    },
+    {
+      "at": "2026-07-12T22:42:38.015Z",
+      "event": "task-added",
+      "detail": "T9: S3 policy RED: allow/ask/deny + hard-deny/headless-ask/stale-approval/role/transport-invariant + context-trust (SC_R05/R07/R08/R09)"
+    },
+    {
+      "at": "2026-07-12T22:42:38.065Z",
+      "event": "task-added",
+      "detail": "T10: S3 policy impl: deterministic policy engine + context-trust; GREEN"
+    },
+    {
+      "at": "2026-07-12T22:42:38.115Z",
+      "event": "task-added",
+      "detail": "T11: S4 completion RED: completion-gate/evidence/redaction/metrics tests (SC_R10/R11)"
+    },
+    {
+      "at": "2026-07-12T22:42:38.166Z",
+      "event": "task-added",
+      "detail": "T12: S4 completion impl: completion-gate + evidence records + redaction; GREEN"
+    },
+    {
+      "at": "2026-07-12T22:42:38.219Z",
+      "event": "task-added",
+      "detail": "T13: S5 run+transport+replay RED: run-loop assembly + tool-limits + budget/loop + CLI/JSONL-RPC parity + effect-free replay (SC_R04/R12/R13)"
+    },
+    {
+      "at": "2026-07-12T22:42:38.274Z",
+      "event": "task-added",
+      "detail": "T14: S5 run+transport+replay impl: run loop over fakes + CLI/RPC parity + offline replay; GREEN"
+    },
+    {
+      "at": "2026-07-12T22:42:38.325Z",
+      "event": "task-added",
+      "detail": "T15: W7 verification: code-verifier + Release-0 acceptance coverage + boundaries + no-new-dep + frozen untouched"
+    },
+    {
+      "at": "2026-07-12T22:45:18.480Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-12T22:45:18.535Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-12T22:45:18.586Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-12T22:57:40.754Z",
+      "event": "task-done",
+      "detail": "T5: S1 R0-01 RED: startup/disabled-floor/offline/context-manifest tests (SC_R01/R02/R14)"
+    },
+    {
+      "at": "2026-07-12T23:03:47.371Z",
+      "event": "task-done",
+      "detail": "T6: S1 R0-01 impl: config/startup + environment_blocked + context-manifest; GREEN"
+    },
+    {
+      "at": "2026-07-12T23:13:10.094Z",
+      "event": "task-done",
+      "detail": "T7: S2 session RED: append-only session/resume-no-dup/schema-migration tests (SC_R06)"
+    },
+    {
+      "at": "2026-07-12T23:22:50.610Z",
+      "event": "task-done",
+      "detail": "T8: S2 session impl: append-only session-manifest/entry + resume + migration; GREEN"
+    },
+    {
+      "at": "2026-07-12T23:30:52.843Z",
+      "event": "task-done",
+      "detail": "T9: S3 policy RED: allow/ask/deny + hard-deny/headless-ask/stale-approval/role/transport-invariant + context-trust (SC_R05/R07/R08/R09)"
+    },
+    {
+      "at": "2026-07-12T23:37:11.135Z",
+      "event": "task-done",
+      "detail": "T10: S3 policy impl: deterministic policy engine + context-trust; GREEN"
+    },
+    {
+      "at": "2026-07-12T23:48:51.428Z",
+      "event": "task-done",
+      "detail": "T11: S4 completion RED: completion-gate/evidence/redaction/metrics tests (SC_R10/R11)"
+    },
+    {
+      "at": "2026-07-12T23:56:35.440Z",
+      "event": "task-done",
+      "detail": "T12: S4 completion impl: completion-gate + evidence records + redaction; GREEN"
+    },
+    {
+      "at": "2026-07-13T00:11:34.608Z",
+      "event": "task-done",
+      "detail": "T13: S5 run+transport+replay RED: run-loop assembly + tool-limits + budget/loop + CLI/JSONL-RPC parity + effect-free replay (SC_R04/R12/R13)"
+    },
+    {
+      "at": "2026-07-13T00:23:12.600Z",
+      "event": "task-done",
+      "detail": "T14: S5 run+transport+replay impl: run loop over fakes + CLI/RPC parity + offline replay; GREEN"
+    },
+    {
+      "at": "2026-07-13T00:32:24.408Z",
+      "event": "task-done",
+      "detail": "T15: W7 verification: code-verifier + Release-0 acceptance coverage + boundaries + no-new-dep + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T00:32:24.461Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T00:32:24.512Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T00:32:24.563Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T00:34:36.305Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: S1: config/startup/context-manifest; enabled offline start (harness+fake), disabled byte-identical no-load, missing precondition -> typed environment_blocked, bounded manifest+fingerprints. 18 tests. SC_R01/R02/R14."
+    },
+    {
+      "at": "2026-07-13T00:34:36.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: S2: append-only session-manifest/entry, reconstructable tree+currentLeaf, resume no-dup, deterministic migration. 14 tests. SC_R06."
+    },
+    {
+      "at": "2026-07-13T00:34:36.416Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: S3: deterministic allow/ask/deny; hard-deny unoverridable; headless-ask fail-closed; stale-approval invalidated; role no-escalate; flow-file-edit denied; stale/untrusted context != policy. 28 tests. SC_R05/R07/R08/R09."
+    },
+    {
+      "at": "2026-07-13T00:34:36.467Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: S4: completion only on required evidence+gates; evidence-free/undisposed-blocker rejected; redaction-before-persistence (preview+hash+category+provenance, scan-fail blocks); metrics not fabricated; completion-gate-result + evidence-linked output. 21 tests. SC_R10/R11."
+    },
+    {
+      "at": "2026-07-13T00:34:36.517Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: S5: runOffline assembles full flow; tool malformed/timeout/overflow bounded typed; budget/loop -> typed unresolvedRisks; CLI/JSONL-RPC semantic parity + transport-cannot-change-policy; effect-free replay + typed replay-mismatch. 13 tests. SC_R04/R12/R13. (SC_R16_BUDGET_RESERVATION + SC_R12_TRANSIENT_RETRY deferred - outside AC scope.)"
+    },
+    {
+      "at": "2026-07-13T00:34:36.569Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: tsc clean; full bun test 797/0 (703 baseline + 94); W4/W5/W6 reused unmodified; all durable payloads schema-validated; deps={}; no SDK/network/fs-mutation; new code under src/harness/; frozen pkg+src/eval+src/contracts+ADRs untouched. T15 CLEAN on boundaries."
+    }
+  ]
+}
