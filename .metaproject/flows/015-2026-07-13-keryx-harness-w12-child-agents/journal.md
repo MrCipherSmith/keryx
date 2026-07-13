@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-07-13T04:18:53.829Z - flow created
+- 2026-07-13T04:22:27.178Z - task-added: T5: CA-01 RED: canonical child adapter + extension metadata; STATUS->canonical before persist; round-trip; transport parity; schema-validate
+- 2026-07-13T04:22:27.234Z - task-added: T6: CA-01 impl: src/harness/child/contract.ts (build/parse extension + STATUS->canonical + transport parity); GREEN
+- 2026-07-13T04:22:27.286Z - task-added: T7: CA-02 RED: child isolation + budget/policy inheritance fail-closed + provenance + NEEDS_CONTEXT/blocked/failed->evidence + parent-owns-completion + immutable-attempts
+- 2026-07-13T04:22:27.338Z - task-added: T8: CA-02 impl: src/harness/child/{isolation,spawn}.ts; GREEN
+- 2026-07-13T04:22:27.391Z - task-added: T9: W12 review: verifier + D-02(child no flow.json) + fail-closed inheritance + parent-owns-completion + immutable + determinism + reuse-only + frozen untouched
+- 2026-07-13T04:22:33.546Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T04:22:33.600Z - started
+- 2026-07-13T04:22:33.652Z - task-done: T1: Collect remaining context
+- 2026-07-13T04:33:49.280Z - task-done: T5: CA-01 RED: canonical child adapter + extension metadata; STATUS->canonical before persist; round-trip; transport parity; schema-validate
+- 2026-07-13T04:33:49.331Z - task-done: T6: CA-01 impl: src/harness/child/contract.ts (build/parse extension + STATUS->canonical + transport parity); GREEN
+- 2026-07-13T05:00:10.901Z - task-done: T7: CA-02 RED: child isolation + budget/policy inheritance fail-closed + provenance + NEEDS_CONTEXT/blocked/failed->evidence + parent-owns-completion + immutable-attempts
+- 2026-07-13T05:00:10.950Z - task-done: T8: CA-02 impl: src/harness/child/{isolation,spawn}.ts; GREEN
+- 2026-07-13T05:07:38.248Z - task-done: T9: W12 review: verifier + D-02(child no flow.json) + fail-closed inheritance + parent-owns-completion + immutable + determinism + reuse-only + frozen untouched
+- 2026-07-13T05:07:38.300Z - task-done: T2: Implement per plan
+- 2026-07-13T05:07:38.352Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T05:07:38.401Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T05:07:38.450Z - ac-confirmed: AC1
+- 2026-07-13T05:07:38.498Z - ac-confirmed: AC2
+- 2026-07-13T05:07:38.547Z - ac-confirmed: AC3
+- 2026-07-13T05:07:38.596Z - ac-confirmed: AC4
+- 2026-07-13T05:07:38.644Z - ac-confirmed: AC5

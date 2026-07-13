@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 2,
+  "id": "015",
+  "slug": "keryx-harness-w12-child-agents",
+  "title": "keryx harness W12 child agents",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T04:18:53.829Z",
+  "updatedAt": "2026-07-13T05:07:38.644Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:05b002004c5f4938fb2e0e6b5ce98a9aa63c1ece7ce94354831ddb71005b8613",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T05:07:38.449Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T05:07:38.498Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T05:07:38.547Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T05:07:38.596Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T05:07:38.644Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "CA-01 RED: canonical child adapter + extension metadata; STATUS->canonical before persist; round-trip; transport parity; schema-validate",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "CA-01 impl: src/harness/child/contract.ts (build/parse extension + STATUS->canonical + transport parity); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "CA-02 RED: child isolation + budget/policy inheritance fail-closed + provenance + NEEDS_CONTEXT/blocked/failed->evidence + parent-owns-completion + immutable-attempts",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "CA-02 impl: src/harness/child/{isolation,spawn}.ts; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "W12 review: verifier + D-02(child no flow.json) + fail-closed inheritance + parent-owns-completion + immutable + determinism + reuse-only + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T04:18:53.829Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T04:22:27.178Z",
+      "event": "task-added",
+      "detail": "T5: CA-01 RED: canonical child adapter + extension metadata; STATUS->canonical before persist; round-trip; transport parity; schema-validate"
+    },
+    {
+      "at": "2026-07-13T04:22:27.234Z",
+      "event": "task-added",
+      "detail": "T6: CA-01 impl: src/harness/child/contract.ts (build/parse extension + STATUS->canonical + transport parity); GREEN"
+    },
+    {
+      "at": "2026-07-13T04:22:27.286Z",
+      "event": "task-added",
+      "detail": "T7: CA-02 RED: child isolation + budget/policy inheritance fail-closed + provenance + NEEDS_CONTEXT/blocked/failed->evidence + parent-owns-completion + immutable-attempts"
+    },
+    {
+      "at": "2026-07-13T04:22:27.338Z",
+      "event": "task-added",
+      "detail": "T8: CA-02 impl: src/harness/child/{isolation,spawn}.ts; GREEN"
+    },
+    {
+      "at": "2026-07-13T04:22:27.391Z",
+      "event": "task-added",
+      "detail": "T9: W12 review: verifier + D-02(child no flow.json) + fail-closed inheritance + parent-owns-completion + immutable + determinism + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T04:22:33.546Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T04:22:33.600Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T04:22:33.652Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T04:33:49.280Z",
+      "event": "task-done",
+      "detail": "T5: CA-01 RED: canonical child adapter + extension metadata; STATUS->canonical before persist; round-trip; transport parity; schema-validate"
+    },
+    {
+      "at": "2026-07-13T04:33:49.331Z",
+      "event": "task-done",
+      "detail": "T6: CA-01 impl: src/harness/child/contract.ts (build/parse extension + STATUS->canonical + transport parity); GREEN"
+    },
+    {
+      "at": "2026-07-13T05:00:10.901Z",
+      "event": "task-done",
+      "detail": "T7: CA-02 RED: child isolation + budget/policy inheritance fail-closed + provenance + NEEDS_CONTEXT/blocked/failed->evidence + parent-owns-completion + immutable-attempts"
+    },
+    {
+      "at": "2026-07-13T05:00:10.950Z",
+      "event": "task-done",
+      "detail": "T8: CA-02 impl: src/harness/child/{isolation,spawn}.ts; GREEN"
+    },
+    {
+      "at": "2026-07-13T05:07:38.248Z",
+      "event": "task-done",
+      "detail": "T9: W12 review: verifier + D-02(child no flow.json) + fail-closed inheritance + parent-owns-completion + immutable + determinism + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T05:07:38.300Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T05:07:38.352Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T05:07:38.401Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T05:07:38.450Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T05:07:38.498Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T05:07:38.547Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T05:07:38.596Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T05:07:38.644Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}
