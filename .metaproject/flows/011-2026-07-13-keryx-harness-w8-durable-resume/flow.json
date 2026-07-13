@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 2,
+  "id": "011",
+  "slug": "keryx-harness-w8-durable-resume",
+  "title": "W8 durable resume (RS-01/RS-02): reconstruct leaf + immutable attempts + fingerprints + crash/torn-write/cancellation recovery",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T01:17:26.519Z",
+  "updatedAt": "2026-07-13T01:49:49.098Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8b5f10f6e40b0e1b0f3134ab13d2c2292731344c807410e55f8be139132bbc7c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T01:49:48.707Z",
+      "note": "RS-01 src/harness/resume/{fingerprint,store,resume}: leaf reconstructed by worktree/toolchain fingerprints (match->continue, mismatch->stale new immutable attempt); prior immutable; evidence never duplicated (W7 dedup); approval+evidence survive resume (SC_R05/SC_R11). 11 tests."
+    },
+    "AC2": {
+      "at": "2026-07-13T01:49:48.763Z",
+      "note": "runWithResume: retryable provider_error -> new attempt within maxAttempts/reservation, bounded (no infinite loop), no dup evidence. CLOSES SC_R12_TRANSIENT_RETRY (2 live tests, T9-confirmed)."
+    },
+    "AC3": {
+      "at": "2026-07-13T01:49:48.830Z",
+      "note": "RS-02 recovery.ts pure recoverFrom: crash-pre->safe-reexecute; crash-post+effect-confirmed->reconciled(no-dup); crash-post+indeterminate/missing->blocked-unknown-outcome; torn-write->last schema-valid entry; cancellation->cancelled-resumable; isolated-replay->replay-deferred (SC_R17). payloads schema-valid. 9 tests."
+    },
+    "AC4": {
+      "at": "2026-07-13T01:49:48.942Z",
+      "note": "deterministic/offline: no Date.now/random/network/real-fs in resume runtime; InMemorySessionStore; recovery effect-free (recoverFrom appends nothing, no fetch)."
+    },
+    "AC5": {
+      "at": "2026-07-13T01:49:49.098Z",
+      "note": "tsc clean; full bun test 817/0 (797+20); W7 run.ts/session + W5/W6 + src/contracts unmodified (run.ts pure wrapper); deps={}; new code under src/harness/resume/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RS-01 RED: resume/fingerprint/immutable-attempt/approval-resume/evidence-survives + transient-retry tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "RS-01 impl: src/harness/resume/{store,fingerprint,resume} + run-loop transient-retry; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "RS-02 RED: failpoint matrix (crash-pre/post-effect, torn-write, cancellation, reconcile, outcome-unknown, SC_R17 deferred)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "RS-02 impl: src/harness/resume/recovery (execution-receipt reconciliation, outcome-unknown gating); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "W8 verification: code-verifier + RS-01/RS-02 coverage + SC_R12_TRANSIENT_RETRY closed + determinism/offline + no-dep + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T01:17:26.519Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T01:17:26.590Z",
+      "event": "task-added",
+      "detail": "T5: RS-01 RED: resume/fingerprint/immutable-attempt/approval-resume/evidence-survives + transient-retry tests"
+    },
+    {
+      "at": "2026-07-13T01:17:26.640Z",
+      "event": "task-added",
+      "detail": "T6: RS-01 impl: src/harness/resume/{store,fingerprint,resume} + run-loop transient-retry; GREEN"
+    },
+    {
+      "at": "2026-07-13T01:17:26.691Z",
+      "event": "task-added",
+      "detail": "T7: RS-02 RED: failpoint matrix (crash-pre/post-effect, torn-write, cancellation, reconcile, outcome-unknown, SC_R17 deferred)"
+    },
+    {
+      "at": "2026-07-13T01:17:26.743Z",
+      "event": "task-added",
+      "detail": "T8: RS-02 impl: src/harness/resume/recovery (execution-receipt reconciliation, outcome-unknown gating); GREEN"
+    },
+    {
+      "at": "2026-07-13T01:17:26.794Z",
+      "event": "task-added",
+      "detail": "T9: W8 verification: code-verifier + RS-01/RS-02 coverage + SC_R12_TRANSIENT_RETRY closed + determinism/offline + no-dep + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T01:19:37.490Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T01:19:37.546Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T01:19:37.597Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T01:28:43.328Z",
+      "event": "task-done",
+      "detail": "T5: RS-01 RED: resume/fingerprint/immutable-attempt/approval-resume/evidence-survives + transient-retry tests"
+    },
+    {
+      "at": "2026-07-13T01:34:51.624Z",
+      "event": "task-done",
+      "detail": "T6: RS-01 impl: src/harness/resume/{store,fingerprint,resume} + run-loop transient-retry; GREEN"
+    },
+    {
+      "at": "2026-07-13T01:41:48.658Z",
+      "event": "task-done",
+      "detail": "T7: RS-02 RED: failpoint matrix (crash-pre/post-effect, torn-write, cancellation, reconcile, outcome-unknown, SC_R17 deferred)"
+    },
+    {
+      "at": "2026-07-13T01:45:33.080Z",
+      "event": "task-done",
+      "detail": "T8: RS-02 impl: src/harness/resume/recovery (execution-receipt reconciliation, outcome-unknown gating); GREEN"
+    },
+    {
+      "at": "2026-07-13T01:48:22.733Z",
+      "event": "task-done",
+      "detail": "T9: W8 verification: code-verifier + RS-01/RS-02 coverage + SC_R12_TRANSIENT_RETRY closed + determinism/offline + no-dep + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T01:48:22.788Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T01:48:22.840Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T01:48:22.891Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T01:49:48.707Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: RS-01 src/harness/resume/{fingerprint,store,resume}: leaf reconstructed by worktree/toolchain fingerprints (match->continue, mismatch->stale new immutable attempt); prior immutable; evidence never duplicated (W7 dedup); approval+evidence survive resume (SC_R05/SC_R11). 11 tests."
+    },
+    {
+      "at": "2026-07-13T01:49:48.763Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: runWithResume: retryable provider_error -> new attempt within maxAttempts/reservation, bounded (no infinite loop), no dup evidence. CLOSES SC_R12_TRANSIENT_RETRY (2 live tests, T9-confirmed)."
+    },
+    {
+      "at": "2026-07-13T01:49:48.831Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: RS-02 recovery.ts pure recoverFrom: crash-pre->safe-reexecute; crash-post+effect-confirmed->reconciled(no-dup); crash-post+indeterminate/missing->blocked-unknown-outcome; torn-write->last schema-valid entry; cancellation->cancelled-resumable; isolated-replay->replay-deferred (SC_R17). payloads schema-valid. 9 tests."
+    },
+    {
+      "at": "2026-07-13T01:49:48.942Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: deterministic/offline: no Date.now/random/network/real-fs in resume runtime; InMemorySessionStore; recovery effect-free (recoverFrom appends nothing, no fetch)."
+    },
+    {
+      "at": "2026-07-13T01:49:49.098Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsc clean; full bun test 817/0 (797+20); W7 run.ts/session + W5/W6 + src/contracts unmodified (run.ts pure wrapper); deps={}; new code under src/harness/resume/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN."
+    }
+  ]
+}
