@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-07-13T19:47:44.197Z - flow created
+- 2026-07-13T19:51:31.848Z - task-added: T5: RED: SSRF-detect guard + executor exitCode-surfaced + pure signal-classifier + 2 executor-branch pins + dispatchExtension dedup-parity
+- 2026-07-13T19:51:31.902Z - task-added: T6: impl: 5 MED fixes (select.ts guard, executor exitCode, real-adapter pure classifier, buildExt dedup) + 2 doc corrections; GREEN
+- 2026-07-13T19:51:31.952Z - task-added: T7: review (security): SSRF closed + no new fail-open + bound-hits non-success + crash≠deadline + adapter gated/not-in-CI + mutation-proof tests + reuse-only + deps {} + D-02 + secrets-safe + frozen untouched
+- 2026-07-13T19:51:32.003Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T19:51:32.054Z - started
+- 2026-07-13T19:51:32.105Z - task-done: T1: Collect remaining context
+- 2026-07-13T20:06:45.985Z - task-done: T5: RED: SSRF-detect guard + executor exitCode-surfaced + pure signal-classifier + 2 executor-branch pins + dispatchExtension dedup-parity
+- 2026-07-13T20:06:46.037Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T20:06:46.090Z - task-done: T6: impl: 5 MED fixes (select.ts guard, executor exitCode, real-adapter pure classifier, buildExt dedup) + 2 doc corrections; GREEN
+- 2026-07-13T20:06:46.141Z - task-done: T2: Implement per plan
+- 2026-07-13T20:12:04.107Z - task-done: T7: review (security): SSRF closed + no new fail-open + bound-hits non-success + crash≠deadline + adapter gated/not-in-CI + mutation-proof tests + reuse-only + deps {} + D-02 + secrets-safe + frozen untouched
+- 2026-07-13T20:12:04.162Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T20:13:03.320Z - ac-confirmed: AC1
+- 2026-07-13T20:13:03.371Z - ac-confirmed: AC2
+- 2026-07-13T20:13:03.423Z - ac-confirmed: AC3
+- 2026-07-13T20:13:03.474Z - ac-confirmed: AC4
+- 2026-07-13T20:13:03.525Z - ac-confirmed: AC5
+- 2026-07-13T20:14:01.119Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/30 (warning: PR is not a draft)
+- 2026-07-13T20:14:29.029Z - completing
+- 2026-07-13T20:14:30.870Z - done: all gates passed

@@ -135,44 +135,33 @@ export function dispatchExtension(
     provenance: { created_at: createdAt, created_by: input.registration.extensionId },
   };
 
-  // Frozen extension metadata for the DISPATCH variant.
-  const extension = buildChildDispatchExtension({
-    canonicalContract: "subagent-dispatch",
-    canonicalContractVersion: input.canonicalContractVersion,
-    parentRunId: input.parentRunId,
-    sessionId: input.sessionId,
-    attempt: input.attempt,
-    branchId: input.branchId,
-    contextManifestHash: input.contextManifestHash,
-    policyFingerprint: input.policyFingerprint,
-    budgetReservation: input.reservedBudget,
-    durableResultArtifact: {
-      artifactId: input.resultArtifact.artifactId,
-      kind: input.resultArtifact.kind,
-      hash: input.resultArtifact.hash,
-      path: input.resultArtifact.path,
-    },
-  });
+  // The dispatch- and result-variant extensions differ ONLY in
+  // `canonicalContract` (review-hardening fix #5): build both from one local
+  // helper closing over the shared input so the two variants can never drift.
+  const buildExt = (canonicalContract: "subagent-dispatch" | "subagent-result"): ChildContractExtension =>
+    buildChildDispatchExtension({
+      canonicalContract,
+      canonicalContractVersion: input.canonicalContractVersion,
+      parentRunId: input.parentRunId,
+      sessionId: input.sessionId,
+      attempt: input.attempt,
+      branchId: input.branchId,
+      contextManifestHash: input.contextManifestHash,
+      policyFingerprint: input.policyFingerprint,
+      budgetReservation: input.reservedBudget,
+      durableResultArtifact: {
+        artifactId: input.resultArtifact.artifactId,
+        kind: input.resultArtifact.kind,
+        hash: input.resultArtifact.hash,
+        path: input.resultArtifact.path,
+      },
+    });
 
+  // Frozen extension metadata for the DISPATCH variant.
+  const extension = buildExt("subagent-dispatch");
   // The RESULT-variant extension the parser closes over: same correlation, but
   // `canonicalContract:"subagent-result"` for the eventual normalized reply.
-  const resultExtension = buildChildDispatchExtension({
-    canonicalContract: "subagent-result",
-    canonicalContractVersion: input.canonicalContractVersion,
-    parentRunId: input.parentRunId,
-    sessionId: input.sessionId,
-    attempt: input.attempt,
-    branchId: input.branchId,
-    contextManifestHash: input.contextManifestHash,
-    policyFingerprint: input.policyFingerprint,
-    budgetReservation: input.reservedBudget,
-    durableResultArtifact: {
-      artifactId: input.resultArtifact.artifactId,
-      kind: input.resultArtifact.kind,
-      hash: input.resultArtifact.hash,
-      path: input.resultArtifact.path,
-    },
-  });
+  const resultExtension = buildExt("subagent-result");
 
   const parseResult = (raw: string | ParsedChildResult): ParsedChildResult =>
     parseChildResult(raw, {

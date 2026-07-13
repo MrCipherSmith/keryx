@@ -29,6 +29,12 @@
 //   - the REAL exit status is reported as `exitCode` (never fabricated), so a
 //     non-zero exit is recorded faithfully.
 //
+// OBSERVED HASH. `observedHash` is a sha-256 over the COMMAND IDENTITY
+// (`path` + argv), NOT over the child's output. This is deliberate for
+// secret-safety: captured stdout/stderr may echo credentials or argv/env
+// values, so it is never hashed or logged; the stable command identity is what
+// anchors the evidence record instead.
+//
 // DESIGN CONSTRAINT (disclosed, not hidden). A synchronous adapter cannot both
 // (a) spawn `detached` and group-kill via `process.kill(-pid)` AND (b) reap the
 // child to read its real exit/output — an earlier detached+poll attempt left the
@@ -71,9 +77,86 @@ function sha256Hex(input: string): string {
 }
 
 /** Byte length of a `spawnSync` stdout/stderr buffer (Buffer or string or null). */
-function byteLength(chunk: string | Buffer | null): number {
-  if (chunk === null) return 0;
+function byteLength(chunk: string | Buffer | null | undefined): number {
+  if (chunk === null || chunk === undefined) return 0;
   return typeof chunk === "string" ? Buffer.byteLength(chunk, "utf8") : chunk.length;
+}
+
+/** The subset of Node's `SpawnSyncReturns` the pure classifier consumes. */
+export interface ProcessResultLike {
+  status: number | null;
+  signal: string | null;
+  error?: NodeJS.ErrnoException;
+  stdout?: string | Buffer | null;
+  stderr?: string | Buffer | null;
+  pid?: number;
+}
+
+/** Context for {@link classifyProcessResult}: the command-identity hash + whether OUR deadline fired. */
+export interface ClassifyProcessContext {
+  observedHash: string;
+  deadlineHit?: boolean;
+}
+
+/**
+ * Pure classifier mapping a `spawnSync`-shaped result into a
+ * {@link ProcessObservation} (review-hardening fix #3). Extracted from
+ * `RealProcessAdapter.spawn` so the rules can be unit-tested WITHOUT constructing
+ * the (gated) adapter and WITHOUT spawning anything real — it has NO import-time
+ * side effect, constructs no adapter, and spawns nothing.
+ *
+ * Rules (fixing the prior bug where ANY non-null `signal` -> deadline-exceeded):
+ *   - `error.code === "ENOBUFS"`                       -> output-overflow.
+ *   - `error.code === "ETIMEDOUT"` OR (a signal AND
+ *     `ctx.deadlineHit === true`)                      -> deadline-exceeded
+ *     (OUR own deadline fired and killed the child).
+ *   - a signal but NOT our deadline                    -> spawn-error naming the
+ *     signal (a crash / external kill — NEVER deadline-exceeded, NEVER a
+ *     clean-exit-equivalent).
+ *   - any other error, or no pid                       -> spawn-error (errno code).
+ *   - else clean                                       -> clean-exit, with
+ *     `exitCode` === `status` when non-null (never fabricated).
+ */
+export function classifyProcessResult(
+  result: ProcessResultLike,
+  ctx: ClassifyProcessContext,
+): ProcessObservation {
+  const { observedHash } = ctx;
+  const err = result.error;
+
+  // Output past the adapter's hard cap aborted the child — a bounded overflow.
+  if (err?.code === "ENOBUFS") {
+    return { kind: "output-overflow", terminationMode: "leader-only", observedHash };
+  }
+
+  // Deadline breach: `spawnSync` reported ETIMEDOUT, OR a signal fired AND it was
+  // OUR own deadline that killed the child. Leader-only (see DESIGN CONSTRAINT).
+  if (err?.code === "ETIMEDOUT" || (result.signal !== null && ctx.deadlineHit === true)) {
+    return { kind: "deadline-exceeded", terminationMode: "leader-only", observedHash };
+  }
+
+  // A signal that was NOT our deadline — a crash or external kill. Reported as a
+  // distinct non-success observation naming the signal, never deadline-exceeded.
+  if (result.signal !== null) {
+    return { kind: "spawn-error", observedHash, errorMessage: `terminated by signal ${result.signal}` };
+  }
+
+  // Any other error (e.g. ENOENT), or no pid — no effect boundary was crossed.
+  // Report only the errno CODE — never a message that could echo argv/env.
+  if (err !== undefined || result.pid === undefined) {
+    return { kind: "spawn-error", observedHash, errorMessage: err?.code ?? "spawn produced no pid" };
+  }
+
+  // Clean termination within all bounds — report the REAL exit status and the
+  // REAL captured output size (the executor compares it to `outputLimitBytes`).
+  const observation: ProcessObservation = {
+    kind: "clean-exit",
+    outputBytes: byteLength(result.stdout) + byteLength(result.stderr),
+    terminationMode: "none",
+    observedHash,
+  };
+  if (result.status !== null) observation.exitCode = result.status;
+  return observation;
 }
 
 /**
@@ -99,6 +182,7 @@ export class RealProcessAdapter implements ProcessAdapter {
   }
 
   spawn(command: ContainedCommand): ProcessObservation {
+    const startedAt = Date.now();
     // `argv[0]` is the program name by convention; the real args follow it.
     const result = spawnSync(command.path, command.argv.slice(1), {
       cwd: command.cwd,
@@ -108,36 +192,25 @@ export class RealProcessAdapter implements ProcessAdapter {
       maxBuffer: this.maxOutputBytes,
     });
 
+    // `observedHash` is over the COMMAND IDENTITY (path + argv), never output —
+    // deliberate for secret-safety (see the OBSERVED HASH header note).
     const observedHash = sha256Hex(`${command.path}\n${command.argv.join(" ")}`);
     const err = result.error as NodeJS.ErrnoException | undefined;
+    // OUR deadline fired when spawnSync reported ETIMEDOUT, or elapsed wall-clock
+    // reached the configured timeout. Passed into the PURE classifier so it can
+    // tell our own deadline kill apart from an external/crash signal.
+    const deadlineHit = err?.code === "ETIMEDOUT" || Date.now() - startedAt >= this.timeoutMs;
 
-    // Output past the adapter's hard cap aborted the child — a bounded overflow.
-    if (err?.code === "ENOBUFS") {
-      return { kind: "output-overflow", terminationMode: "leader-only", observedHash };
-    }
-
-    // Deadline breach: `spawnSync` killed the child (`ETIMEDOUT`, or a kill
-    // signal on the result). The direct child is killed and reaped (leader-only;
-    // see the DESIGN CONSTRAINT header).
-    if (err?.code === "ETIMEDOUT" || result.signal !== null) {
-      return { kind: "deadline-exceeded", terminationMode: "leader-only", observedHash };
-    }
-
-    // Any other error (e.g. ENOENT) means no effect boundary was crossed. Report
-    // only the errno CODE — never a message that could echo argv/env.
-    if (err !== undefined || result.pid === undefined) {
-      return { kind: "spawn-error", observedHash, errorMessage: err?.code ?? "spawn produced no pid" };
-    }
-
-    // Clean termination within all bounds — report the REAL exit status and the
-    // REAL captured output size (the executor compares it to `outputLimitBytes`).
-    const observation: ProcessObservation = {
-      kind: "clean-exit",
-      outputBytes: byteLength(result.stdout) + byteLength(result.stderr),
-      terminationMode: "none",
-      observedHash,
-    };
-    if (result.status !== null) observation.exitCode = result.status;
-    return observation;
+    return classifyProcessResult(
+      {
+        status: result.status,
+        signal: result.signal,
+        ...(err !== undefined ? { error: err } : {}),
+        stdout: result.stdout,
+        stderr: result.stderr,
+        ...(result.pid !== undefined ? { pid: result.pid } : {}),
+      },
+      { observedHash, deadlineHit },
+    );
   }
 }

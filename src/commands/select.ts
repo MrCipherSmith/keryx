@@ -18,6 +18,7 @@
 // network, no real TTY/stdin. See `.metaproject/flows/
 // 022-2026-07-13-keryx-r2-4-tui/acceptance-criteria.md` (AC1-AC2).
 
+import { isLoopbackHost, isPrivateEgressHost } from "../harness/mutation/guard";
 import type { ShellIO } from "./shell";
 
 /** A provider detected as usable, with its selectable chat `models`. */
@@ -65,6 +66,25 @@ function isEmbeddingModel(model: OllamaTagModel): boolean {
  * then omits ollama entirely rather than surfacing an error.
  */
 async function probeOllamaModels(deps: DetectProvidersDeps, baseUrl: string): Promise<string[] | undefined> {
+  // SSRF guard (review-hardening fix #1): before dialing, resolve the host and
+  // fail-SOFT (omit ollama, issue NO fetch) on any private/link-local/metadata
+  // destination — while keeping LOOPBACK (Ollama's own default) unblocked. Reuses
+  // the same `isPrivateEgressHost`/`isLoopbackHost` predicates as the
+  // `OllamaProvider` chat path, so metadata/private are always denied there and
+  // here. NOTE: loopback is allowed UNCONDITIONALLY for the probe (enumerating a
+  // local Ollama's model names via GET /api/tags is the feature's default
+  // purpose and sends no user data), whereas the chat path gates loopback behind
+  // an explicit `grant.allowLoopback` opt-in — a deliberate difference, not a
+  // widening of the private/metadata denial.
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch {
+    host = baseUrl;
+  }
+  if (isPrivateEgressHost(host) && !isLoopbackHost(host)) {
+    return undefined;
+  }
   let response: Response;
   try {
     response = await deps.fetch(`${baseUrl}/api/tags`);

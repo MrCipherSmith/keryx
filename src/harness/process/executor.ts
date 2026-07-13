@@ -102,7 +102,7 @@ export interface ProcessAdapter {
  *                         reason, NO receipt (mirrors `executeGuardedMutation`).
  */
 export type ContainedProcessOutcome =
-  | { kind: "completed"; receipt: ExecutionReceipt; evidenceRefs: string[] }
+  | { kind: "completed"; receipt: ExecutionReceipt; evidenceRefs: string[]; exitCode?: number }
   | { kind: "timeout"; receipt: ExecutionReceipt }
   | { kind: "output-overflow"; receipt: ExecutionReceipt }
   | { kind: "cancelled"; receipt: ExecutionReceipt }
@@ -308,7 +308,16 @@ export function runContainedProcess(
 
   if (observation.kind === "clean-exit") {
     const receipt = buildReceipt(command, allowlist, CONFIRMED_OUTCOME, observation, evidence, deps);
-    return { kind: "completed", receipt, evidenceRefs: [evidence.evidenceId] };
+    // Surface the observation's real exitCode onto the outcome (review-hardening
+    // fix #2). Conditional spread for `exactOptionalPropertyTypes`: only include
+    // `exitCode` when the observation carries one. The classification is
+    // UNCHANGED — a non-zero in-bounds exit is still `completed` (containment).
+    return {
+      kind: "completed",
+      receipt,
+      evidenceRefs: [evidence.evidenceId],
+      ...(observation.exitCode !== undefined ? { exitCode: observation.exitCode } : {}),
+    };
   }
 
   // Unknown/ambiguous observation — fail closed, never report completed.

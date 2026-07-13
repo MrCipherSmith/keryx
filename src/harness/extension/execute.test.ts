@@ -312,6 +312,21 @@ describe("AC1 — dispatchExtension produces a schema-valid canonical dispatch b
     expect(validation.valid).toBe(true);
   });
 
+  test("the dispatch and result extension variants are identical except canonicalContract (review-hardening fix #5, regression guard)", () => {
+    const result = dispatchExtension(makeDispatchInput(), makeDispatchDeps());
+    if (!result.ok) throw new Error("expected ok");
+
+    const raw = "STATUS: DONE\n\n## Completed\n- dedup parity check\n";
+    const parsed = result.parseResult(raw);
+
+    expect(result.extension.canonicalContract).toBe("subagent-dispatch");
+    expect(parsed.extension.canonicalContract).toBe("subagent-result");
+
+    const { canonicalContract: _dispatchContract, ...dispatchRest } = result.extension;
+    const { canonicalContract: _resultContract, ...resultRest } = parsed.extension;
+    expect(dispatchRest).toEqual(resultRest);
+  });
+
   test("deterministic: identical input + fresh matching deps twice yields deep-equal dispatch and extension", () => {
     const first = dispatchExtension(makeDispatchInput(), makeDispatchDeps());
     const second = dispatchExtension(makeDispatchInput(), makeDispatchDeps());
