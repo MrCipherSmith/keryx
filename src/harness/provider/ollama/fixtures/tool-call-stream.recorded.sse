@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-759","object":"chat.completion.chunk","created":1783931786,"model":"llama3.1:latest","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":"","tool_calls":[{"id":"call_co2o5jvx","index":0,"type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"Paris\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-759","object":"chat.completion.chunk","created":1783931786,"model":"llama3.1:latest","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":"tool_calls"}]}
+
+data: {"id":"chatcmpl-759","object":"chat.completion.chunk","created":1783931786,"model":"llama3.1:latest","system_fingerprint":"fp_ollama","choices":[],"usage":{"prompt_tokens":161,"completion_tokens":17,"total_tokens":178}}
+
+data: [DONE]
+

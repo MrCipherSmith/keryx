@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-07-13T08:32:14.726Z - flow created
+- 2026-07-13T08:35:59.053Z - task-added: T5: RED: Ollama adapter offline transcript (normalization+negatives+storage-off) + egress opt-in (isLoopbackHost, loopback-only) + CLI offline (fake)
+- 2026-07-13T08:35:59.108Z - task-added: T6: impl: ollama-provider.ts + normalize.ts + additive isLoopbackHost + opt-in branch + src/commands/harness.ts + cli.ts registration; thin fetch no SDK deps {}; GREEN
+- 2026-07-13T08:35:59.160Z - task-added: T7: security review: egress opt-in narrow (loopback-only, metadata/LAN denied, per-grant) + adapter conformance + negatives fail-closed + offline + deps {} + reuse-only + frozen untouched
+- 2026-07-13T08:35:59.220Z - task-added: T8: live smoke: keryx harness run --provider ollama --model llama3.1:latest against local server; capture end-to-end; manual not-CI
+- 2026-07-13T08:35:59.278Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T08:35:59.331Z - started
+- 2026-07-13T08:35:59.382Z - task-done: T1: Collect remaining context
+- 2026-07-13T08:59:45.699Z - task-done: T5: RED: Ollama adapter offline transcript (normalization+negatives+storage-off) + egress opt-in (isLoopbackHost, loopback-only) + CLI offline (fake)
+- 2026-07-13T08:59:45.752Z - task-done: T6: impl: ollama-provider.ts + normalize.ts + additive isLoopbackHost + opt-in branch + src/commands/harness.ts + cli.ts registration; thin fetch no SDK deps {}; GREEN
+- 2026-07-13T09:04:52.944Z - task-done: T7: security review: egress opt-in narrow (loopback-only, metadata/LAN denied, per-grant) + adapter conformance + negatives fail-closed + offline + deps {} + reuse-only + frozen untouched
+- 2026-07-13T09:05:37.276Z - task-done: T8: live smoke: keryx harness run --provider ollama --model llama3.1:latest against local server; capture end-to-end; manual not-CI
+- 2026-07-13T09:05:37.331Z - task-done: T2: Implement per plan
+- 2026-07-13T09:05:37.384Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T09:05:37.437Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T09:05:37.490Z - ac-confirmed: AC1
+- 2026-07-13T09:05:37.543Z - ac-confirmed: AC2
+- 2026-07-13T09:05:37.602Z - ac-confirmed: AC3
+- 2026-07-13T09:05:37.656Z - ac-confirmed: AC4
+- 2026-07-13T09:05:37.711Z - ac-confirmed: AC5

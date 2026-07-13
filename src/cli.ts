@@ -17,6 +17,7 @@ import { standardCommand } from "./commands/standard";
 import { securityCommand } from "./commands/security";
 import { mcpCommand } from "./commands/mcp";
 import { statusCommand } from "./commands/status";
+import { harnessCommand } from "./commands/harness";
 import { modulesCommand } from "./commands/modules";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
@@ -157,6 +158,11 @@ export async function main(): Promise<void> {
 
   if (command === "mcp") {
     await mcpCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "harness") {
+    await harnessCommand(args.slice(1));
     return;
   }
 

@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 2,
+  "id": "020",
+  "slug": "keryx-harness-ollama-cli",
+  "title": "keryx harness Ollama provider + CLI run command",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T08:32:14.726Z",
+  "updatedAt": "2026-07-13T09:05:37.711Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ce2c870fcf903983ba62bd2966f6003bc67baecc3b8efb453929e8cf5cfbf22a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T09:05:37.490Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T09:05:37.543Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T09:05:37.602Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T09:05:37.656Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T09:05:37.711Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED: Ollama adapter offline transcript (normalization+negatives+storage-off) + egress opt-in (isLoopbackHost, loopback-only) + CLI offline (fake)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: ollama-provider.ts + normalize.ts + additive isLoopbackHost + opt-in branch + src/commands/harness.ts + cli.ts registration; thin fetch no SDK deps {}; GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "security review: egress opt-in narrow (loopback-only, metadata/LAN denied, per-grant) + adapter conformance + negatives fail-closed + offline + deps {} + reuse-only + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "live smoke: keryx harness run --provider ollama --model llama3.1:latest against local server; capture end-to-end; manual not-CI",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T08:32:14.726Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T08:35:59.053Z",
+      "event": "task-added",
+      "detail": "T5: RED: Ollama adapter offline transcript (normalization+negatives+storage-off) + egress opt-in (isLoopbackHost, loopback-only) + CLI offline (fake)"
+    },
+    {
+      "at": "2026-07-13T08:35:59.108Z",
+      "event": "task-added",
+      "detail": "T6: impl: ollama-provider.ts + normalize.ts + additive isLoopbackHost + opt-in branch + src/commands/harness.ts + cli.ts registration; thin fetch no SDK deps {}; GREEN"
+    },
+    {
+      "at": "2026-07-13T08:35:59.160Z",
+      "event": "task-added",
+      "detail": "T7: security review: egress opt-in narrow (loopback-only, metadata/LAN denied, per-grant) + adapter conformance + negatives fail-closed + offline + deps {} + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T08:35:59.220Z",
+      "event": "task-added",
+      "detail": "T8: live smoke: keryx harness run --provider ollama --model llama3.1:latest against local server; capture end-to-end; manual not-CI"
+    },
+    {
+      "at": "2026-07-13T08:35:59.278Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T08:35:59.331Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T08:35:59.382Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T08:59:45.699Z",
+      "event": "task-done",
+      "detail": "T5: RED: Ollama adapter offline transcript (normalization+negatives+storage-off) + egress opt-in (isLoopbackHost, loopback-only) + CLI offline (fake)"
+    },
+    {
+      "at": "2026-07-13T08:59:45.752Z",
+      "event": "task-done",
+      "detail": "T6: impl: ollama-provider.ts + normalize.ts + additive isLoopbackHost + opt-in branch + src/commands/harness.ts + cli.ts registration; thin fetch no SDK deps {}; GREEN"
+    },
+    {
+      "at": "2026-07-13T09:04:52.944Z",
+      "event": "task-done",
+      "detail": "T7: security review: egress opt-in narrow (loopback-only, metadata/LAN denied, per-grant) + adapter conformance + negatives fail-closed + offline + deps {} + reuse-only + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T09:05:37.276Z",
+      "event": "task-done",
+      "detail": "T8: live smoke: keryx harness run --provider ollama --model llama3.1:latest against local server; capture end-to-end; manual not-CI"
+    },
+    {
+      "at": "2026-07-13T09:05:37.331Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T09:05:37.384Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T09:05:37.437Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T09:05:37.490Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T09:05:37.543Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T09:05:37.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T09:05:37.656Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T09:05:37.711Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}

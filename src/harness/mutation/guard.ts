@@ -247,6 +247,33 @@ export function isPrivateEgressHost(host: string): boolean {
   return isPrivateEgressToken(host);
 }
 
+/**
+ * Additive sibling to {@link isPrivateEgressHost}: TRUE only when `host` names a
+ * LOOPBACK destination — `127.0.0.0/8` (incl. short forms like `127.1`),
+ * IPv6 `::1` / `[::1]`, case-insensitive `localhost`, and the encoded loopback
+ * forms the existing decoder already recognizes (decimal `2130706433`, hex
+ * `0x7f000001`). FALSE for metadata/link-local (`169.254.*`), RFC1918
+ * (`10.*`/`172.16-31.*`/`192.168.*`), and public hosts. This narrows — it never
+ * widens — the SSRF guard: it REUSES {@link decodeEncodedIPv4} /
+ * {@link extractHostCandidates} and only accepts a decoded first octet of 127.
+ * Adds NO behavior change to `guardAction` / `isPrivateEgressHost`. Pure lexical.
+ */
+export function isLoopbackHost(host: string): boolean {
+  if (typeof host !== "string" || host.length === 0) return false;
+  const normalized = host.trim();
+  // Case-insensitive `localhost` (exact host, not a substring like `notlocalhost`).
+  if (/^localhost$/i.test(normalized)) return true;
+  // IPv6 loopback `::1`, bare or bracketed `[::1]`.
+  const unbracketed = normalized.replace(/^\[/, "").replace(/\]$/, "");
+  if (/^::1$/i.test(unbracketed)) return true;
+  // Encoded / dotted / short-form IPv4 loopback: decode and require octet0 === 127.
+  for (const candidate of extractHostCandidates(normalized)) {
+    const octets = decodeEncodedIPv4(candidate);
+    if (octets !== null && octets[0] === 127) return true;
+  }
+  return false;
+}
+
 /** Case-insensitive markers of a direct credential/secret file. */
 const CREDENTIAL_PATH_TOKENS = [".env", "credentials", ".ssh/", "id_rsa", ".pem"] as const;
 
