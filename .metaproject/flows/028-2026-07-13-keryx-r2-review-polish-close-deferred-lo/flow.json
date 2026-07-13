@@ -3,9 +3,9 @@
   "id": "028",
   "slug": "keryx-r2-review-polish-close-deferred-lo",
   "title": "keryx R2 review polish — close deferred LOW/INFO (tool-call fail-closed, evidence causal-ids, provider-factory, DRY, provenance-test, bound-wave disposition, evidenceRefs, smoke-guard)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T21:01:43.038Z",
-  "updatedAt": "2026-07-13T21:40:20.774Z",
+  "updatedAt": "2026-07-13T21:41:42.836Z",
   "source": {
     "type": "description",
     "ref": null
@@ -29,7 +29,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/31"
   },
   "tasks": [
     {
@@ -231,6 +231,20 @@
       "at": "2026-07-13T21:40:20.774Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-13T21:41:14.159Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/31 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-13T21:41:40.787Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-13T21:41:42.836Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
