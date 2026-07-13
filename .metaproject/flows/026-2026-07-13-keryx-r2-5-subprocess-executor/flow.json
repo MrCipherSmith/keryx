@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "id": "026",
+  "slug": "keryx-release-2-r2-5-real-subprocess-exe",
+  "title": "keryx Release 2 R2-5 real-subprocess executor (SC_R04 live enforcement, closes F-1)",
+  "status": "in-progress",
+  "createdAt": "2026-07-13T18:17:02.756Z",
+  "updatedAt": "2026-07-13T18:57:49.410Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0c9275c0945711982fea155e402d0407e7487fa3f6f8aee0f250d2816c273a4d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T18:57:49.202Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T18:57:49.257Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T18:57:49.309Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T18:57:49.360Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T18:57:49.410Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED: runContainedProcess — happy/timeout/overflow/cancel + unapproved-argv-env-never-spawns + budget-breach + no-orphan-groupkill + determinism + CI-skipped live smoke",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: src/harness/process/{executor,fake-process-adapter,real-process-adapter}.ts (compose W10 guard/fingerprint/receipt + W12 inheritBudget + W7 evidence; real adapter behind allowRealSubprocess); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "review (highload/security): allowlist fail-closed (never spawns) + bound-hit non-success + budget breach + no-orphan + real-adapter gated/not-in-CI + D-02 + reuse-only + determinism + deps {} + secrets-not-logged + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T18:17:02.756Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T18:21:05.972Z",
+      "event": "task-added",
+      "detail": "T5: RED: runContainedProcess — happy/timeout/overflow/cancel + unapproved-argv-env-never-spawns + budget-breach + no-orphan-groupkill + determinism + CI-skipped live smoke"
+    },
+    {
+      "at": "2026-07-13T18:21:06.026Z",
+      "event": "task-added",
+      "detail": "T6: impl: src/harness/process/{executor,fake-process-adapter,real-process-adapter}.ts (compose W10 guard/fingerprint/receipt + W12 inheritBudget + W7 evidence; real adapter behind allowRealSubprocess); GREEN"
+    },
+    {
+      "at": "2026-07-13T18:21:06.079Z",
+      "event": "task-added",
+      "detail": "T7: review (highload/security): allowlist fail-closed (never spawns) + bound-hit non-success + budget breach + no-orphan + real-adapter gated/not-in-CI + D-02 + reuse-only + determinism + deps {} + secrets-not-logged + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T18:21:06.136Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T18:21:43.344Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T18:21:43.399Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T18:42:47.126Z",
+      "event": "task-done",
+      "detail": "T5: RED: runContainedProcess — happy/timeout/overflow/cancel + unapproved-argv-env-never-spawns + budget-breach + no-orphan-groupkill + determinism + CI-skipped live smoke"
+    },
+    {
+      "at": "2026-07-13T18:42:47.175Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T18:42:47.227Z",
+      "event": "task-done",
+      "detail": "T6: impl: src/harness/process/{executor,fake-process-adapter,real-process-adapter}.ts (compose W10 guard/fingerprint/receipt + W12 inheritBudget + W7 evidence; real adapter behind allowRealSubprocess); GREEN"
+    },
+    {
+      "at": "2026-07-13T18:42:47.277Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T18:57:02.720Z",
+      "event": "task-done",
+      "detail": "T7: review (highload/security): allowlist fail-closed (never spawns) + bound-hit non-success + budget breach + no-orphan + real-adapter gated/not-in-CI + D-02 + reuse-only + determinism + deps {} + secrets-not-logged + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T18:57:02.771Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T18:57:49.202Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T18:57:49.257Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T18:57:49.309Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T18:57:49.360Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T18:57:49.410Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    }
+  ]
+}

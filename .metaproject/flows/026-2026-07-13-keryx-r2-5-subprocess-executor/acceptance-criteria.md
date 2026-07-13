@@ -1,0 +1,17 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+## Criteria
+
+- AC1: Contained execution + runtime controls (SC_R04_SHELL_CONTAINMENT runtime half) — `src/harness/process/executor.ts` `runContainedProcess` runs an approved command through a `ProcessAdapter` in the approved cwd and enforces the four runtime controls: an approved argv+env command that exits cleanly in-bounds returns `{kind:"completed"}` with a schema-valid `ExecutionReceipt` (reused W8/W10 shape) and non-empty evidenceRefs; a command exceeding its reserved deadline returns `{kind:"timeout"}` after killing the process-group; output beyond the byte/token limit returns a bounded `{kind:"output-overflow"}` (no unbounded-retry signal); an external cancellation returns `{kind:"cancelled"}` after killing the process-group. The command runs in the approved cwd.
+- AC2: Every bound hit is a recorded NON-success (fail-closed) — a timeout, output-overflow, or cancellation is NEVER reported as `completed`/success; each terminal non-success carries a receipt/evidence (mirroring Release 0 `SC_R04_TOOL_TIMEOUT` "does not report successful completion" / `SC_R04_TOOL_OUTPUT_OVERFLOW" bounded, no unbounded retry loop). An ambiguous/spawn-error observation likewise never yields a false `completed`.
+- AC3: Allowlist + budget fail-closed, adapter never spawns on denial (the security core) — only an approved argv + environment allowlist runs (reused W10 `actionFingerprint`/`guardAction`); an unapproved argv, a non-allowlisted env var, or an injection attempt returns `{kind:"blocked"}` and the `ProcessAdapter.spawn` boundary is NEVER invoked (spawn spy count = 0); a reserved runtime exceeding the parent remaining is denied via the reused W12 `inheritBudget` (adapter never spawned). Killing targets the whole process-group (no orphan).
+- AC4: Offline determinism + real adapter gated, never in CI + D-02 — the entire offline test suite exercises ONLY the deterministic fake `ProcessAdapter` (no real spawn); the thin real `node:child_process` adapter (`spawn({detached:true, cwd})` + `process.kill(-pid)`) is constructed ONLY behind an explicit `allowRealSubprocess` capability grant and its live smoke is env-flag-gated and excluded from CI; `runContainedProcess` is deterministic (injected id/clock, no `Date.now`/`Math.random`); the executor NEVER writes flow.json (no `writeFlow`/flow.json reachable from `src/harness/process/`; the parent owns completion via the W11 ManagedFlowPort); secrets (env values) are never logged or persisted; W10 `guardAction`/`actionFingerprint`/`executeGuardedMutation`, W8 `ExecutionReceipt`, W12 `inheritBudget`, and W7 evidence are REUSED (composition/additive-only — no rewrite).
+- AC5: No regression / scope / deps — `tsc --noEmit` is clean and the full `bun test` suite is ≥ the pre-change baseline of 1254 pass with the new offline tests green and 0 fail (the live smoke is skipped by default); no new production dependency (`dependencies` `{}`), no framework (`node:child_process` is stdlib), no network; new runtime code lives under `src/harness/process/` (with additive-only edits to prior modules if strictly needed); the frozen requirements package, canonical contract schemas, `src/eval/`, `src/contracts/`, and ADR-0001…0004 are NOT modified. R2-1…R2-4 are out of scope.
