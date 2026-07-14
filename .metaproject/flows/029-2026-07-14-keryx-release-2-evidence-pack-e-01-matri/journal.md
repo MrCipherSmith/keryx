@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-07-14T08:30:06.844Z - flow created
+- 2026-07-14T08:32:51.863Z - task-added: T5: E-01 Release 2 evidence-matrix (scenarios→source/test/commit; F-1 closed + H deferred; invariants; AC traceability)
+- 2026-07-14T08:32:51.916Z - task-added: T6: E-02 Release 2 review-package (verdict + gate-evidence verified + 7-lens verdicts + findings 5MED#30/7LOW#31/H-deferred + coverage)
+- 2026-07-14T08:32:51.967Z - task-added: T7: E-03 Release 2 handoff (achieved + built + DAG + gates + constraints + future-options + open-items F-1-closed/H-doc)
+- 2026-07-14T08:32:52.019Z - task-added: T8: consistency review — every citation real, cross-doc consistent, no contradiction vs frozen/ADR/code, docs-only
+- 2026-07-14T08:32:52.071Z - frozen: 5 criteria; checksum recorded
+- 2026-07-14T08:32:52.122Z - started
+- 2026-07-14T08:32:52.172Z - task-done: T1: Collect remaining context
+- 2026-07-14T08:52:44.202Z - task-done: T5: E-01 Release 2 evidence-matrix (scenarios→source/test/commit; F-1 closed + H deferred; invariants; AC traceability)
+- 2026-07-14T08:52:44.254Z - task-done: T6: E-02 Release 2 review-package (verdict + gate-evidence verified + 7-lens verdicts + findings 5MED#30/7LOW#31/H-deferred + coverage)
+- 2026-07-14T08:52:44.305Z - task-done: T7: E-03 Release 2 handoff (achieved + built + DAG + gates + constraints + future-options + open-items F-1-closed/H-doc)
+- 2026-07-14T08:52:44.357Z - task-done: T2: Implement per plan
+- 2026-07-14T08:52:44.407Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-14T08:52:44.457Z - task-done: T8: consistency review — every citation real, cross-doc consistent, no contradiction vs frozen/ADR/code, docs-only
+- 2026-07-14T08:52:44.507Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-14T08:52:44.560Z - ac-confirmed: AC1
+- 2026-07-14T08:52:44.611Z - ac-confirmed: AC2
+- 2026-07-14T08:52:44.662Z - ac-confirmed: AC3
+- 2026-07-14T08:52:44.715Z - ac-confirmed: AC4
+- 2026-07-14T08:52:44.766Z - ac-confirmed: AC5
