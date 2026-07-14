@@ -3,9 +3,9 @@
   "id": "030",
   "slug": "keryx-harness-cli-wiring-expose-r2-surfa",
   "title": "keryx harness CLI wiring — expose R2 surfaces live: harness exec (R2-5 subprocess) + extension (R2-1) + wave (R2-3)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-14T09:27:51.450Z",
-  "updatedAt": "2026-07-14T10:03:41.179Z",
+  "updatedAt": "2026-07-14T10:05:23.950Z",
   "source": {
     "type": "description",
     "ref": null
@@ -29,7 +29,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/33"
   },
   "tasks": [
     {
@@ -226,6 +226,20 @@
       "at": "2026-07-14T10:03:41.179Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-14T10:04:51.919Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/33 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-14T10:05:21.864Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-14T10:05:23.950Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
