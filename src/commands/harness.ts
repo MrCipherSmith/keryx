@@ -18,9 +18,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import type { HarnessConfig } from "../harness/config";
-import { AnthropicProvider } from "../harness/provider/anthropic/anthropic-provider";
-import { FakeProvider } from "../harness/provider/fake-provider";
-import { OllamaProvider } from "../harness/provider/ollama/ollama-provider";
+import { makeProvider } from "../harness/provider/make-provider";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import type { PolicyProfile } from "../harness/policy/types";
 import { type RunDeps, type RunResult, runOffline } from "../harness/run/run";
@@ -50,6 +48,10 @@ interface ParsedArgs {
   baseUrl?: string;
   prompt: string;
 }
+
+/** The single usage line, printed on an unknown subcommand or invalid args. */
+const USAGE =
+  'Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"';
 
 function sha256Hex(input: string): string {
   // Small stable fingerprint for the read-only profile — node built-in only.
@@ -123,7 +125,7 @@ function toStructured(result: RunResult): StructuredResult {
 export async function harnessCommand(args: string[], deps?: HarnessCommandDeps): Promise<void> {
   const subcommand = args[0];
   if (subcommand !== "run") {
-    console.log('Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"');
+    console.log(USAGE);
     return;
   }
 
@@ -134,7 +136,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // runOffline — never a blocked/failed structured run result.
   const validProviders = new Set(["fake", "anthropic", "ollama"]);
   if (!validProviders.has(provider) || prompt.length === 0) {
-    console.log('Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"');
+    console.log(USAGE);
     return;
   }
 
@@ -144,8 +146,10 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   const idSeq = deps?.idSeq ?? (() => `${randomUUID()}-${idCounter++}`);
   const fetchImpl = deps?.fetch ?? globalThis.fetch;
 
-  // Select the provider (fail-closed BEFORE any network for anthropic w/o key).
-  let providerPort: ProviderPort;
+  // Fail-closed BEFORE any construction/network: the anthropic provider aborts
+  // the whole command (prints + returns) when no credential is present — this
+  // command-level abort is distinct from the shell's fake fallback, so it stays
+  // here rather than in the shared factory.
   if (provider === "anthropic") {
     const apiKey = env.ANTHROPIC_API_KEY;
     if (apiKey === undefined || apiKey.length === 0) {
@@ -154,17 +158,17 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
       );
       return;
     }
-    providerPort = new AnthropicProvider({ fetch: fetchImpl, grant: { network: true, apiKey } });
-  } else if (provider === "ollama") {
-    providerPort = new OllamaProvider({
-      fetch: fetchImpl,
-      grant: { network: true, allowLoopback: true, ...(baseUrl !== undefined ? { baseUrl } : {}) },
-    });
-  } else {
-    // Default / "fake": the offline W6 replay provider (no transcripts wired in
-    // the CLI, so a missing-fixture match surfaces as a caught structured result).
-    providerPort = new FakeProvider([]);
   }
+
+  // Construction delegated to the shared factory (review-polish item B). "fake"
+  // and any unrecognized name yield the offline W6 replay provider (no
+  // transcripts wired in the CLI, so a missing-fixture match surfaces as a
+  // caught structured result).
+  const providerPort: ProviderPort = makeProvider(provider, model, {
+    fetch: fetchImpl,
+    env,
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
+  });
 
   const input: HarnessRunInput = {
     schemaVersion: 1,

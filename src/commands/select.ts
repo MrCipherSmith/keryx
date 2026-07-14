@@ -195,8 +195,8 @@ export async function pickProviderModel(
     io.write(`  ${i + 1}. ${provider.name}\n`);
   }
 
-  let chosenProvider: DetectedProvider | undefined;
-  while (chosenProvider === undefined) {
+  let chosenProvider: DetectedProvider;
+  while (true) {
     const line = await nextLine();
     if (line === undefined) {
       return fallback();
@@ -206,7 +206,13 @@ export async function pickProviderModel(
       io.write("Invalid choice — enter the number of a listed provider.\n");
       continue;
     }
-    chosenProvider = detected[index];
+    const provider = detected[index];
+    if (provider === undefined) {
+      io.write("Invalid choice — enter the number of a listed provider.\n");
+      continue;
+    }
+    chosenProvider = provider;
+    break;
   }
 
   // Stage 2 — model menu for the chosen provider.

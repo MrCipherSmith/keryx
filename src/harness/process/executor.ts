@@ -102,7 +102,13 @@ export interface ProcessAdapter {
  *                         reason, NO receipt (mirrors `executeGuardedMutation`).
  */
 export type ContainedProcessOutcome =
-  | { kind: "completed"; receipt: ExecutionReceipt; evidenceRefs: string[]; exitCode?: number }
+  | {
+      kind: "completed";
+      receipt: ExecutionReceipt;
+      evidenceRefs: string[];
+      evidence: EvidenceRecord;
+      exitCode?: number;
+    }
   | { kind: "timeout"; receipt: ExecutionReceipt }
   | { kind: "output-overflow"; receipt: ExecutionReceipt }
   | { kind: "cancelled"; receipt: ExecutionReceipt }
@@ -130,6 +136,17 @@ export interface RunContainedProcessInput {
   outputLimitBytes: number;
   cancelled?: boolean;
   adapter: ProcessAdapter;
+  /**
+   * Optional caller-known causal identifiers (review-polish item A). When
+   * present, `buildEvidence` stamps them onto `EvidenceRecord.causal.runId`/
+   * `sessionId`/`correlationId` INSTEAD OF minting fresh `deps.idSeq()` values,
+   * so the built evidence correlates back to the run/session it belongs to. When
+   * absent, the current `deps.idSeq()` fallback is used (existing callers
+   * unaffected).
+   */
+  runId?: string;
+  sessionId?: string;
+  correlationId?: string;
 }
 
 /**
@@ -161,14 +178,22 @@ function toActionSpec(command: ContainedCommand): ActionSpec {
  * adapter's observed-effect hash (mirrors `childResultToEvidence`'s shape). No
  * `command.env` value ever reaches the record.
  */
-function buildEvidence(observation: ProcessObservation, deps: RunContainedProcessDeps): EvidenceRecord {
+function buildEvidence(
+  observation: ProcessObservation,
+  input: RunContainedProcessInput,
+  deps: RunContainedProcessDeps,
+): EvidenceRecord {
   return {
     schemaVersion: 1,
     evidenceId: deps.idSeq(),
     causal: {
-      runId: deps.idSeq(),
-      sessionId: deps.idSeq(),
-      correlationId: deps.idSeq(),
+      // Reuse caller-known causal ids when supplied (review-polish item A),
+      // otherwise fall back to the injected id source (existing callers). An
+      // empty string is treated as absent so `causal.*` never violates the
+      // schema's non-empty `id` constraint.
+      runId: input.runId || deps.idSeq(),
+      sessionId: input.sessionId || deps.idSeq(),
+      correlationId: input.correlationId || deps.idSeq(),
     },
     kind: "receipt",
     artifact: {
@@ -280,7 +305,7 @@ export function runContainedProcess(
     return blocked(`Contained spawn failed: ${observation.errorMessage ?? "unknown spawn error"}`);
   }
 
-  const evidence = buildEvidence(observation, deps);
+  const evidence = buildEvidence(observation, input, deps);
 
   if (observation.kind === "deadline-exceeded") {
     return {
@@ -312,10 +337,14 @@ export function runContainedProcess(
     // fix #2). Conditional spread for `exactOptionalPropertyTypes`: only include
     // `exitCode` when the observation carries one. The classification is
     // UNCHANGED — a non-zero in-bounds exit is still `completed` (containment).
+    // `evidenceRefs` uses the SAME `evidence:`-prefixed encoding as the receipt's
+    // own `evidenceRefs` (review-polish item F), and the built evidence record is
+    // surfaced on the outcome so its causal ids are inspectable (item A).
     return {
       kind: "completed",
       receipt,
-      evidenceRefs: [evidence.evidenceId],
+      evidenceRefs: [`evidence:${evidence.evidenceId}`],
+      evidence,
       ...(observation.exitCode !== undefined ? { exitCode: observation.exitCode } : {}),
     };
   }

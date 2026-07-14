@@ -74,13 +74,25 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG)(
   },
 );
 
-// Always-running guard (never skipped): documents and verifies that without
-// the explicit opt-in flag, this file spawns NOTHING. This is the assertion
-// T7 (and CI) can rely on without needing to special-case bun's own
-// skip-reporting output.
-test("without KERYX_ALLOW_REAL_SUBPROCESS=1, the real-adapter smoke suite is inert (0 real spawns)", () => {
-  expect(REAL_SUBPROCESS_FLAG).toBe(process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1");
-  if (process.env.KERYX_ALLOW_REAL_SUBPROCESS !== "1") {
-    expect(REAL_SUBPROCESS_FLAG).toBe(false);
+// Always-running guard (never skipped): PROVES (rather than asserts
+// tautologically) that without the explicit opt-in flag no real adapter can
+// ever be constructed — an OBSERVABLE capability-gate check, not a
+// self-comparison. (Review-polish item G, flow 028/T5: the prior version of
+// this guard compared `REAL_SUBPROCESS_FLAG` — itself defined as
+// `process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1"` — against that exact same
+// expression, so it always passed regardless of `RealProcessAdapter`'s actual
+// behavior.) This dynamically imports `./real-process-adapter` (safe: by the
+// time T6 lands, the module exists and importing it performs no spawn at
+// import time — see that module's own header) and asserts the constructor's
+// capability gate actually throws with no allow flag, proving zero real
+// adapters are reachable. This is the assertion T7 (and CI) can rely on
+// without needing to special-case bun's own skip-reporting output.
+test("without KERYX_ALLOW_REAL_SUBPROCESS=1, RealProcessAdapter refuses to construct (capability gate proves inertness)", async () => {
+  if (process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1") {
+    // Explicit opt-in local/live run: the capability gate is intentionally
+    // OPEN in this case, so the "must refuse" guard below does not apply.
+    return;
   }
+  const { RealProcessAdapter } = await import("./real-process-adapter");
+  expect(() => new RealProcessAdapter({})).toThrow();
 });

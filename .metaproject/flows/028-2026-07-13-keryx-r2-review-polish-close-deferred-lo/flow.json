@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 2,
+  "id": "028",
+  "slug": "keryx-r2-review-polish-close-deferred-lo",
+  "title": "keryx R2 review polish — close deferred LOW/INFO (tool-call fail-closed, evidence causal-ids, provider-factory, DRY, provenance-test, bound-wave disposition, evidenceRefs, smoke-guard)",
+  "status": "done",
+  "createdAt": "2026-07-13T21:01:43.038Z",
+  "updatedAt": "2026-07-13T21:41:42.836Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e1307745f9236d55a1fc1380b820bd703034350ffa9095b625ecc41d27510d9b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-13T21:40:20.570Z"
+    },
+    "AC2": {
+      "at": "2026-07-13T21:40:20.622Z"
+    },
+    "AC3": {
+      "at": "2026-07-13T21:40:20.673Z"
+    },
+    "AC4": {
+      "at": "2026-07-13T21:40:20.723Z"
+    },
+    "AC5": {
+      "at": "2026-07-13T21:40:20.774Z"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/31"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "RED/lock: H tool-call deny + A evidence causal-ids + B makeProvider factory + D provenance default-root + E planning-disposition + F evidenceRefs + G observable smoke-guard",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "impl: 8 deferred fixes (H deny fail-closed, A causal-ids, B factory, C DRY, D test, E disposition, F encoding, G guard); GREEN",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "review (security): H genuinely fail-closed (no fail-open, W12/W13 no regression) + A joinable evidence + B/C behavior-preserving + E not-completion + reuse-only + deps {} + D-02 + frozen untouched",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-13T21:01:43.038Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-13T21:05:10.096Z",
+      "event": "task-added",
+      "detail": "T5: RED/lock: H tool-call deny + A evidence causal-ids + B makeProvider factory + D provenance default-root + E planning-disposition + F evidenceRefs + G observable smoke-guard"
+    },
+    {
+      "at": "2026-07-13T21:05:10.152Z",
+      "event": "task-added",
+      "detail": "T6: impl: 8 deferred fixes (H deny fail-closed, A causal-ids, B factory, C DRY, D test, E disposition, F encoding, G guard); GREEN"
+    },
+    {
+      "at": "2026-07-13T21:05:10.203Z",
+      "event": "task-added",
+      "detail": "T7: review (security): H genuinely fail-closed (no fail-open, W12/W13 no regression) + A joinable evidence + B/C behavior-preserving + E not-completion + reuse-only + deps {} + D-02 + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T21:05:10.256Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-13T21:05:10.307Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-13T21:05:10.359Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-13T21:32:23.171Z",
+      "event": "ac-updated",
+      "detail": "H (cap-less child under capped parent) deferred: impl revealed inheritBudget is a SHARED primitive the R2-5 executor relies on (a subprocess makes 0 tool calls, so a cap-less budget under a capped parent is legitimate, not unlimited); a blanket deny breaks that consumer. Proper tool-call bounding is a runtime-enforcement concern. Deny recommendation invalidated by evidence."
+    },
+    {
+      "at": "2026-07-13T21:32:35.824Z",
+      "event": "task-done",
+      "detail": "T5: RED/lock: H tool-call deny + A evidence causal-ids + B makeProvider factory + D provenance default-root + E planning-disposition + F evidenceRefs + G observable smoke-guard"
+    },
+    {
+      "at": "2026-07-13T21:32:35.875Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-13T21:32:35.924Z",
+      "event": "task-done",
+      "detail": "T6: impl: 8 deferred fixes (H deny fail-closed, A causal-ids, B factory, C DRY, D test, E disposition, F encoding, G guard); GREEN"
+    },
+    {
+      "at": "2026-07-13T21:32:35.981Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-13T21:39:39.933Z",
+      "event": "task-done",
+      "detail": "T7: review (security): H genuinely fail-closed (no fail-open, W12/W13 no regression) + A joinable evidence + B/C behavior-preserving + E not-completion + reuse-only + deps {} + D-02 + frozen untouched"
+    },
+    {
+      "at": "2026-07-13T21:39:39.985Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-13T21:40:20.570Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-13T21:40:20.622Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-13T21:40:20.673Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-13T21:40:20.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-13T21:40:20.774Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-07-13T21:41:14.159Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/31 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-13T21:41:40.787Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-13T21:41:42.836Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

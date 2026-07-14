@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-07-13T21:01:43.038Z - flow created
+- 2026-07-13T21:05:10.096Z - task-added: T5: RED/lock: H tool-call deny + A evidence causal-ids + B makeProvider factory + D provenance default-root + E planning-disposition + F evidenceRefs + G observable smoke-guard
+- 2026-07-13T21:05:10.152Z - task-added: T6: impl: 8 deferred fixes (H deny fail-closed, A causal-ids, B factory, C DRY, D test, E disposition, F encoding, G guard); GREEN
+- 2026-07-13T21:05:10.203Z - task-added: T7: review (security): H genuinely fail-closed (no fail-open, W12/W13 no regression) + A joinable evidence + B/C behavior-preserving + E not-completion + reuse-only + deps {} + D-02 + frozen untouched
+- 2026-07-13T21:05:10.256Z - frozen: 5 criteria; checksum recorded
+- 2026-07-13T21:05:10.307Z - started
+- 2026-07-13T21:05:10.359Z - task-done: T1: Collect remaining context
+- 2026-07-13T21:32:23.171Z - ac-updated: H (cap-less child under capped parent) deferred: impl revealed inheritBudget is a SHARED primitive the R2-5 executor relies on (a subprocess makes 0 tool calls, so a cap-less budget under a capped parent is legitimate, not unlimited); a blanket deny breaks that consumer. Proper tool-call bounding is a runtime-enforcement concern. Deny recommendation invalidated by evidence.
+- 2026-07-13T21:32:35.824Z - task-done: T5: RED/lock: H tool-call deny + A evidence causal-ids + B makeProvider factory + D provenance default-root + E planning-disposition + F evidenceRefs + G observable smoke-guard
+- 2026-07-13T21:32:35.875Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-13T21:32:35.924Z - task-done: T6: impl: 8 deferred fixes (H deny fail-closed, A causal-ids, B factory, C DRY, D test, E disposition, F encoding, G guard); GREEN
+- 2026-07-13T21:32:35.981Z - task-done: T2: Implement per plan
+- 2026-07-13T21:39:39.933Z - task-done: T7: review (security): H genuinely fail-closed (no fail-open, W12/W13 no regression) + A joinable evidence + B/C behavior-preserving + E not-completion + reuse-only + deps {} + D-02 + frozen untouched
+- 2026-07-13T21:39:39.985Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-13T21:40:20.570Z - ac-confirmed: AC1
+- 2026-07-13T21:40:20.622Z - ac-confirmed: AC2
+- 2026-07-13T21:40:20.673Z - ac-confirmed: AC3
+- 2026-07-13T21:40:20.723Z - ac-confirmed: AC4
+- 2026-07-13T21:40:20.774Z - ac-confirmed: AC5
+- 2026-07-13T21:41:14.159Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/31 (warning: PR is not a draft)
+- 2026-07-13T21:41:40.787Z - completing
+- 2026-07-13T21:41:42.836Z - done: all gates passed

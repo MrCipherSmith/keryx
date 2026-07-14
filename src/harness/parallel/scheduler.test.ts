@@ -223,6 +223,38 @@ describe("AC2 — planWaves: aggregate budget ceiling composed from inheritBudge
 });
 
 // ============================================================================
+// 3b. Fail-closed tool-call cap composition (review-polish item H, flow 028/T5)
+// ============================================================================
+//
+// `planWaves` folds `../child/isolation`'s `inheritBudget` across scheduled
+// tasks (see the module header). Review item H (cap-less child under a capped
+// parent) was DEFERRED, not implemented as a deny — `inheritBudget` is shared
+// and a cap-less child legitimately means "0 tool-call sub-budget" (see the
+// "H (deferred)" block in `../child/isolation.test.ts`). This test LOCKS the
+// current, correct behavior: `planWaves` schedules a runtime-only (cap-less)
+// task under a capped `parentRemaining`.
+describe("H (deferred) — planWaves schedules a cap-less (0-tool-call) child under a capped parentRemaining", () => {
+  test("a single cap-less task (budgetRequest omitting maxToolCalls) under a maxToolCalls-capped parentRemaining is scheduled (runtime-only child; tool-call bounding is a runtime concern)", () => {
+    const tasks: ChildTask[] = [
+      {
+        taskId: "solo-no-cap",
+        dependsOn: [],
+        budgetRequest: { reservationId: "res-solo-no-cap", maxRuntimeMs: 10_000 },
+      },
+    ];
+    const config: PlanWavesConfig = {
+      maxConcurrency: 1,
+      parentRemaining: { maxRuntimeMs: 100_000, maxToolCalls: 10 },
+    };
+
+    const result = planWaves(tasks, config);
+
+    expectOk(result);
+    expect(result.waves[0]?.taskIds).toEqual(["solo-no-cap"]);
+  });
+});
+
+// ============================================================================
 // 4. Cancellation (AC3)
 // ============================================================================
 

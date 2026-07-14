@@ -366,6 +366,43 @@ describe("planExtensionWave: each attempt has its own distinct, immutable Eviden
 });
 
 // ============================================================================
+// (f2) Planning disposition must not fabricate a completed status
+// (review-polish item E, flow 028/T5)
+// ============================================================================
+//
+// RED today: `buildAttemptResult` hardcodes `status: "DONE"` for every planned
+// attempt, so `attemptEvidence[i].artifact.kind` is unconditionally
+// `"child-result:DONE"` — even though `planExtensionWave` only SCHEDULES the
+// attempt; the parent owns status/completion (D-02), and a child/plan-time
+// attempt has not actually run yet. `"DONE"` is a canonical, TERMINAL
+// disposition (`CanonicalSubagentStatus` in `../child/contract.ts`) and must
+// not be fabricated at planning time.
+//
+// NOTE for T6: `CanonicalSubagentStatus` is a FROZEN enum with exactly
+// `DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED | FAILED` — every value
+// is itself a terminal disposition; there is no neutral
+// "scheduled"/"pending"/"planned" value in it. Do NOT extend that frozen enum
+// to manufacture one. If no existing value is an honest fit, T6 must STOP and
+// report rather than force-fit or widen the enum (e.g. reconsider whether
+// `planExtensionWave` should be building a canonical disposition via
+// `childResultToEvidence` at plan time at all).
+describe("E — planExtensionWave's per-attempt disposition is not a fabricated completion status", () => {
+  test("each planned attempt's attemptEvidence[i].artifact.kind is NOT 'child-result:DONE' (planning must not fabricate a completed disposition)", () => {
+    const tasks = [makeTask({ taskId: "e-status-1" }), makeTask({ taskId: "e-status-2" })];
+    const config: PlanWavesConfig = { maxConcurrency: 2, parentRemaining: { maxRuntimeMs: 100_000 } };
+
+    const result = planExtensionWave(makeInput(tasks, config), makeWaveDeps());
+
+    expectOk(result);
+    const allEvidence = result.waves.flatMap((wave) => wave.attemptEvidence);
+    expect(allEvidence.length).toBeGreaterThan(0);
+    for (const record of allEvidence) {
+      expect(record.artifact.kind).not.toBe("child-result:DONE");
+    }
+  });
+});
+
+// ============================================================================
 // (g) Cycle / degenerate concurrency (propagated from planWaves)
 // ============================================================================
 

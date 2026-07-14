@@ -20,9 +20,7 @@
 
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
-import { AnthropicProvider } from "../harness/provider/anthropic/anthropic-provider";
-import { FakeProvider } from "../harness/provider/fake-provider";
-import { OllamaProvider } from "../harness/provider/ollama/ollama-provider";
+import { makeProvider } from "../harness/provider/make-provider";
 import type {
   NormalizedMessage,
   NormalizedRequest,
@@ -103,6 +101,18 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   // Create once at start; recreated on `/model` / `/provider` switches below.
   let provider = makeActive();
 
+  /**
+   * Apply a `{provider, model, baseUrl?}` selection from the interactive picker
+   * (shared by the `/models` and no-arg `/provider` commands): update the active
+   * selection and recreate the provider. Behavior-preserving extraction.
+   */
+  const applySelection = (picked: { provider: string; model: string; baseUrl?: string }): void => {
+    providerName = picked.provider;
+    modelName = picked.model;
+    baseUrl = picked.baseUrl;
+    provider = makeActive();
+  };
+
   for await (const line of io.lines) {
     // Slash commands FIRST — a slash line NEVER reaches `provider.stream`.
     if (line.startsWith("/")) {
@@ -134,10 +144,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           continue;
         }
         const picked = await deps.selectProviderModel(io, { onlyProvider: providerName });
-        providerName = picked.provider;
-        modelName = picked.model;
-        baseUrl = picked.baseUrl;
-        provider = makeActive();
+        applySelection(picked);
         continue;
       }
       if (command === "/provider") {
@@ -153,10 +160,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         }
         // Pass an empty opts object (no `onlyProvider`) → full re-selection.
         const picked = await deps.selectProviderModel(io, {});
-        providerName = picked.provider;
-        modelName = picked.model;
-        baseUrl = picked.baseUrl;
-        provider = makeActive();
+        applySelection(picked);
         continue;
       }
       if (command === "/connect") {
@@ -229,26 +233,26 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   }
 }
 
-/** Build the `makeProvider` factory mirroring `harness.ts`'s provider selection. */
+/**
+ * Build the `makeProvider` factory mirroring `harness.ts`'s provider selection.
+ * Construction is delegated to the shared `makeProvider` factory (review-polish
+ * item B); the shell adds ONLY its own UX note when anthropic is selected
+ * without a credential (before falling back to the offline provider).
+ */
 function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"] {
-  return (name: string, _model: string, baseUrl?: string): ProviderPort => {
+  return (name: string, model: string, baseUrl?: string): ProviderPort => {
     if (name === "anthropic") {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (apiKey === undefined || apiKey.length === 0) {
         write(
           "ANTHROPIC_API_KEY is not set: the anthropic provider needs a credential; using an offline no-op provider for this session.\n",
         );
-        return new FakeProvider([]);
       }
-      return new AnthropicProvider({ fetch: globalThis.fetch, grant: { network: true, apiKey } });
     }
-    if (name === "ollama") {
-      return new OllamaProvider({
-        fetch: globalThis.fetch,
-        grant: { network: true, allowLoopback: true, ...(baseUrl !== undefined ? { baseUrl } : {}) },
-      });
-    }
-    return new FakeProvider([]);
+    return makeProvider(name, model, {
+      fetch: globalThis.fetch,
+      ...(baseUrl !== undefined ? { baseUrl } : {}),
+    });
   };
 }
 

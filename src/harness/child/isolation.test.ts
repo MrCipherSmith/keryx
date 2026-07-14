@@ -279,6 +279,85 @@ describe("AC3 — inheritBudget: fail-closed budget inheritance", () => {
 });
 
 // ============================================================================
+// 2b. Fail-closed tool-call cap inheritance (review-polish item H, flow 028/T5)
+// ============================================================================
+//
+// Today `inheritBudget` grants a child request that OMITS `maxToolCalls` on
+// `maxRuntimeMs` alone, EVEN WHEN the parent itself carries a live
+// `maxToolCalls` ceiling (see the "child request omitting maxToolCalls..."
+// test in section 2 above, which currently pins that as `ok:true` — the
+// PRE-EXISTING/documented behavior). Review item H requires the OPPOSITE for
+// that same shape: a parent WITH a tool-call cap must DENY a child reservation
+// that carries no cap of its own, because an uncapped child could exhaust
+// tool-call budget the capped parent can never subsequently enforce against
+// it — fail-closed, not an implicit "runtime alone" grant.
+//
+// DISCOVERED CONFLICT (for T6/review to reconcile, not resolved by this
+// dispatch): the new "parent WITH maxToolCalls + child omitting -> DENY" test
+// below is the structural mirror of the pre-existing "child request omitting
+// maxToolCalls is judged on maxRuntimeMs alone..." test in section 2, which
+// asserts `ok:true` for the identical shape (parent carries `maxToolCalls`,
+// child omits it). Once `inheritBudget` is changed to satisfy H, that older
+// test will itself start failing — the two assertions cannot both stay green
+// under one implementation. T6 must update/remove the older assertion as part
+// of closing H; this is flagged here rather than silently edited, since this
+// dispatch is RED/lock-tests-only and must not resolve the conflict itself.
+// Review finding H (cap-less child under a capped parent) was DEFERRED, not
+// implemented as a deny. `inheritBudget` is a SHARED primitive: the R2-5
+// contained-process executor calls `inheritBudget(cappedParent, runtimeOnlyBudget)`
+// for a subprocess that makes ZERO tool calls, so a child OMITTING `maxToolCalls`
+// legitimately means "no tool-call sub-budget" (consumes 0 of the parent's pool),
+// NOT "unlimited tool calls". A blanket budget-inheritance-level deny would break
+// that working consumer. Bounding a child that genuinely makes unbounded tool
+// calls is a RUNTIME-enforcement concern (outside this primitive), so H is left as
+// a documented known-limitation. These tests LOCK the current, correct behavior.
+describe("H (deferred) — inheritBudget tool-call semantics: cap-less child is a 0-cost, not unlimited, tool-call reservation", () => {
+  test("parent WITH maxToolCalls + child request OMITTING maxToolCalls is GRANTED (cap-less = 0 tool-call sub-budget; runtime-only children like the subprocess executor rely on this)", () => {
+    const parentRemaining: ParentRemainingBudget = { maxRuntimeMs: 60_000, maxToolCalls: 10 };
+    const childRequest: BudgetReservation = { reservationId: "res-h-no-cap", maxRuntimeMs: 10_000 };
+
+    const result = inheritBudget(parentRemaining, childRequest);
+
+    expect(result.ok).toBe(true);
+  });
+
+  test("parent WITHOUT maxToolCalls + child request OMITTING maxToolCalls is still GRANTED (unchanged — lock)", () => {
+    const parentRemaining: ParentRemainingBudget = { maxRuntimeMs: 60_000 };
+    const childRequest: BudgetReservation = {
+      reservationId: "res-h-no-cap-uncapped-parent",
+      maxRuntimeMs: 10_000,
+    };
+
+    const result = inheritBudget(parentRemaining, childRequest);
+    expect(result.ok).toBe(true);
+  });
+
+  test("child WITH maxToolCalls <= parent's remaining is still GRANTED (unchanged — lock)", () => {
+    const parentRemaining: ParentRemainingBudget = { maxRuntimeMs: 60_000, maxToolCalls: 10 };
+    const childRequest: BudgetReservation = {
+      reservationId: "res-h-capped-ok",
+      maxRuntimeMs: 10_000,
+      maxToolCalls: 5,
+    };
+
+    const result = inheritBudget(parentRemaining, childRequest);
+    expect(result.ok).toBe(true);
+  });
+
+  test("child requesting maxToolCalls > parent's remaining is still DENIED (unchanged — lock)", () => {
+    const parentRemaining: ParentRemainingBudget = { maxRuntimeMs: 60_000, maxToolCalls: 10 };
+    const childRequest: BudgetReservation = {
+      reservationId: "res-h-capped-over",
+      maxRuntimeMs: 10_000,
+      maxToolCalls: 11,
+    };
+
+    const result = inheritBudget(parentRemaining, childRequest);
+    expect(result.ok).toBe(false);
+  });
+});
+
+// ============================================================================
 // 3. Policy inheritance fail-closed (AC3, KEY negative)
 // ============================================================================
 

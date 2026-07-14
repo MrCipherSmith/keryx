@@ -258,6 +258,24 @@ describe("AC1 — registerExtensionWithProvenance: a fail-closed registration pr
   });
 });
 
+describe("D (review-polish) — registerExtensionWithProvenance default registration-provenance root", () => {
+  test("omitting deps.registrationProvenance still derives a 'derived' record taint-linked to the default registry root", () => {
+    const input = makeInput();
+    // Deliberately OMIT `registrationProvenance` from deps (not just the
+    // fixture default) to exercise the module's own fallback root.
+    const { registrationProvenance: _unused, ...depsWithoutRoot } = makeRegisterDeps();
+
+    const result = registerExtensionWithProvenance(input, depsWithoutRoot);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok:true for a well-formed registration");
+    expect(result.record.provenance.trustLevel).toBe("derived");
+    // Taint-linked to the module's own deterministic default root — mirrors
+    // `DEFAULT_REGISTRATION_PROVENANCE.provenanceId` in `provenance.ts`.
+    expect(result.record.provenance.taintIds).toContain("harness-extension-registry-root");
+  });
+});
+
 describe("AC1/AC5 — registerExtensionWithProvenance: determinism", () => {
   test("identical input + identical (fresh, equivalently-seeded) injected deps twice yields a deep-equal record", () => {
     const input = makeInput();

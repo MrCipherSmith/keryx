@@ -9,8 +9,11 @@
 //     dispatch; fails closed on `registration.ok === false`.
 //   - W12 `BudgetReservation`/`ParentRemainingBudget` (`../child/isolation`) —
 //     the budget vocabulary `planWaves` folds.
-//   - W7/W12 `childResultToEvidence` (`../child/spawn`) + `EvidenceRecord`
-//     (`../evidence/types`) — the per-attempt, isolated evidence shape.
+//   - W7 `EvidenceRecord` (`../evidence/types`) — the per-attempt, isolated
+//     evidence shape. NOTE: planning-time evidence is built LOCALLY (see
+//     `buildPlannedAttemptEvidence`) rather than via W12 `childResultToEvidence`,
+//     because a planned (not-yet-run) attempt has no canonical, TERMINAL
+//     `CanonicalSubagentStatus` disposition to stamp — see review-polish item E.
 //
 // Fail-closed and deterministic: the ONLY non-determinism is the injected
 // `deps.idSeq`/`deps.clock` (no `Date.now`/`Math.random`/network/fs/real
@@ -18,9 +21,13 @@
 // completion. Optional fields are set via conditional spread to respect
 // `exactOptionalPropertyTypes`.
 import type { BudgetReservation } from "../child/isolation";
-import type { CanonicalSubagentResult } from "../child/contract";
-import { childResultToEvidence } from "../child/spawn";
-import type { EvidenceRecord } from "../evidence/types";
+import type { ChildContractExtension } from "../child/contract";
+import type {
+  EvidenceArtifactRef,
+  EvidenceCausalIds,
+  EvidenceProvenance,
+  EvidenceRecord,
+} from "../evidence/types";
 import type { checkApproval } from "../mutation/approval";
 import { planWaves } from "../parallel/scheduler";
 import type { ChildTask, PlanWavesConfig } from "../parallel/scheduler";
@@ -84,30 +91,54 @@ export type PlanExtensionWaveResult =
   | { ok: false; reason: string };
 
 /**
- * Build a minimal, canonical `subagent-result` for the per-attempt evidence
- * record. The evidence path only reads `status` (onto `artifact.kind`); the
- * remaining fields are present so the object stays schema-shaped. Fresh per
- * call — never shared/aliased across attempts.
+ * Build a distinct, immutable per-attempt {@link EvidenceRecord} for a PLANNED
+ * (not-yet-run) extension dispatch (review-polish item E).
+ *
+ * This does NOT reuse W12 `childResultToEvidence`, whose `artifact.kind` is
+ * `child-result:${status}` — that would require a canonical, TERMINAL
+ * `CanonicalSubagentStatus` (DONE/…/FAILED) that a merely-scheduled attempt does
+ * not have (the parent owns status/completion, D-02). Instead the artifact kind
+ * signals a planned dispatch (`"extension-dispatch-planned"`), never a completed
+ * disposition. Isolation is preserved: a fresh record per attempt (distinct
+ * `evidenceId` from `deps.idSeq()`), correlated to the attempt via
+ * `causal.attemptId`, never aliased or mutated across attempts. The frozen
+ * enum is left untouched.
  */
-function buildAttemptResult(
-  input: PlanExtensionWaveInput,
-  dispatchId: string,
-  createdAt: string,
-): CanonicalSubagentResult {
+function buildPlannedAttemptEvidence(
+  extension: ChildContractExtension,
+  deps: PlanExtensionWaveDeps,
+): EvidenceRecord {
+  const causal: EvidenceCausalIds = {
+    runId: extension.parentRunId,
+    sessionId: extension.sessionId,
+    correlationId: deps.idSeq(),
+    attemptId: extension.attempt.attemptId,
+    branchId: extension.branchId,
+  };
+
+  const artifact: EvidenceArtifactRef = {
+    artifactId: extension.durableResultArtifact.artifactId,
+    kind: "extension-dispatch-planned",
+    hash: extension.durableResultArtifact.hash,
+    ...(extension.durableResultArtifact.path !== undefined
+      ? { path: extension.durableResultArtifact.path }
+      : {}),
+  };
+
+  const provenance: EvidenceProvenance = {
+    provenanceId: deps.idSeq(),
+    trustLevel: "derived",
+    sourceKind: "extension-wave-plan",
+  };
+
   return {
-    contract_version: input.canonicalContractVersion,
-    run_id: input.parentRunId,
-    dispatch_id: dispatchId,
-    status: "DONE",
-    summary: "Bound extension wave attempt scheduled.",
-    acceptance: [],
-    artifacts: [],
-    changed_files: [],
-    findings: [],
-    questions: [],
-    errors: [],
-    metrics: {},
-    timestamp_utc: createdAt,
+    schemaVersion: 1,
+    evidenceId: deps.idSeq(),
+    causal,
+    kind: "custom",
+    artifact,
+    provenance,
+    recordedAt: deps.clock(),
   };
 }
 
@@ -210,17 +241,10 @@ export function planExtensionWave(
         return { ok: false, reason: dispatchResult.reason };
       }
 
-      // (4) Per-attempt, isolated evidence via the REUSED childResultToEvidence.
-      // Fresh canonical + fresh record per attempt — never shared/mutated.
-      const attemptResult = buildAttemptResult(
-        input,
-        dispatchResult.dispatch.dispatch_id,
-        deps.clock(),
-      );
-      const evidence = childResultToEvidence(
-        { canonical: attemptResult, extension: dispatchResult.extension },
-        dispatchDeps,
-      );
+      // (4) Per-attempt, isolated PLANNING-TIME evidence (item E): a fresh record
+      // per attempt whose artifact kind signals a planned dispatch, never a
+      // fabricated terminal `child-result:DONE` disposition. Never shared/mutated.
+      const evidence = buildPlannedAttemptEvidence(dispatchResult.extension, deps);
 
       taskIds.push(task.taskId);
       dispatches.push(dispatchResult.dispatch);

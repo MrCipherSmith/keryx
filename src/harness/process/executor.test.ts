@@ -617,6 +617,89 @@ describe("runContainedProcess — mutation-proof branch pins (review-hardening f
 });
 
 // ---------------------------------------------------------------------------
+// (j) Evidence causal ids reuse caller-supplied run/session/correlation ids
+// (review-polish item A, flow 028/T5).
+//
+// RED today: `RunContainedProcessInput` carries no `runId`/`sessionId`/
+// `correlationId` fields, and `buildEvidence` always mints FRESH ids from
+// `deps.idSeq()` for `causal.runId`/`sessionId`/`correlationId` regardless of
+// any caller-known identifiers — so a caller can never correlate the built
+// evidence back to the run/session/correlation it actually belongs to.
+//
+// PINNED NAMES for T6: add OPTIONAL `runId?: string`, `sessionId?: string`,
+// `correlationId?: string` directly on `RunContainedProcessInput`; when
+// present, `buildEvidence` must thread them onto `EvidenceRecord.causal.runId`/
+// `sessionId`/`correlationId` INSTEAD OF minting fresh `deps.idSeq()` values
+// for those three fields (idSeq is still used for `evidenceId`/`artifactId`/
+// `provenanceId`, which have no caller-known equivalent).
+//
+// This test also assumes the built `EvidenceRecord` becomes reachable off the
+// `completed` outcome (as an `evidence` field, mirroring how `exitCode` was
+// surfaced onto the outcome by the review-hardening fix #2 tests above) so the
+// causal ids are inspectable from the public API; if T6 chooses a different
+// way to expose them, the causal-id-reuse CONTRACT itself (not this exact
+// access path) is what must hold.
+// ---------------------------------------------------------------------------
+describe("runContainedProcess — evidence causal ids reuse caller-supplied ids (review-polish item A)", () => {
+  test("runId/sessionId/correlationId supplied on the input equal the built evidence's causal ids, not fresh idSeq values", () => {
+    const adapter = new FakeProcessAdapter(cleanObservation);
+    const inputWithCausalIds = {
+      ...baseInput({ adapter }),
+      runId: "run-external-1",
+      sessionId: "session-external-1",
+      correlationId: "corr-external-1",
+    } as unknown as RunContainedProcessInput;
+
+    const outcome: ContainedProcessOutcome = withFetchGuard(() =>
+      runContainedProcess(inputWithCausalIds, makeDeps()),
+    );
+
+    expect(outcome.kind).toBe("completed");
+    const evidence = (
+      outcome as unknown as {
+        evidence?: { causal: { runId: string; sessionId: string; correlationId: string } };
+      }
+    ).evidence;
+
+    expect(evidence).toBeDefined();
+    expect(evidence?.causal.runId).toBe("run-external-1");
+    expect(evidence?.causal.sessionId).toBe("session-external-1");
+    expect(evidence?.causal.correlationId).toBe("corr-external-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (k) outcome.evidenceRefs use the SAME prefixed encoding as receipt.evidenceRefs
+// (review-polish item F, flow 028/T5).
+//
+// RED today: `outcome.evidenceRefs` is `[evidence.evidenceId]` — a BARE id —
+// while `receipt.evidenceRefs` prefixes its evidence entry as
+// `evidence:${evidence.evidenceId}`. A caller reading `outcome.evidenceRefs`
+// alone cannot tell which encoding convention a given string follows, unlike
+// the receipt's own self-describing convention.
+// ---------------------------------------------------------------------------
+describe("runContainedProcess — outcome.evidenceRefs match the receipt's prefixed encoding (review-polish item F)", () => {
+  test("a completed outcome's evidenceRefs entries are prefixed 'evidence:' like the receipt's, not a bare evidenceId", () => {
+    const adapter = new FakeProcessAdapter(cleanObservation);
+    const outcome: ContainedProcessOutcome = withFetchGuard(() =>
+      runContainedProcess(baseInput({ adapter }), makeDeps()),
+    );
+
+    expect(outcome.kind).toBe("completed");
+    if (outcome.kind !== "completed") throw new Error("expected a completed outcome");
+
+    expect(outcome.evidenceRefs.length).toBeGreaterThan(0);
+    for (const ref of outcome.evidenceRefs) {
+      expect(ref.startsWith("evidence:")).toBe(true);
+    }
+    const receiptEvidenceRef = outcome.receipt.evidenceRefs.find((ref) => ref.startsWith("evidence:"));
+    expect(receiptEvidenceRef).toBeDefined();
+    if (receiptEvidenceRef === undefined) throw new Error("expected the receipt to carry an evidence: ref");
+    expect(outcome.evidenceRefs).toContain(receiptEvidenceRef);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (i) Determinism
 // ---------------------------------------------------------------------------
 describe("runContainedProcess — determinism (no Date.now/Math.random)", () => {
