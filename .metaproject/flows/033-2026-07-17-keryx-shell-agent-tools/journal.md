@@ -53,3 +53,5 @@
 - 2026-07-17T13:05:37.679Z - ac-confirmed: AC2: agent.test.ts: scripted tool_call fed back as role tool (real cwd) + tools advertised; text-only finish; unknown-tool error
 - 2026-07-17T13:05:37.755Z - ac-confirmed: AC3: agent.test.ts: buildAgentSystemInstruction embeds orient when present, falls back on empty/undefined without throwing
 - 2026-07-17T13:05:37.841Z - ac-confirmed: AC4: --agent flag + runAgentRepl; chat runShell tests unchanged/green; deps still {}; startup smoke shows agent mode + /help + /exit
+- 2026-07-17T13:07:07.915Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/40
+- 2026-07-17T13:07:08.025Z - task-done: T4: Self-review and prepare draft PR

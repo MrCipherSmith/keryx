@@ -3,9 +3,9 @@
   "id": "033",
   "slug": "keryx-shell-agent-tools",
   "title": "keryx shell agent mode (Flow A / SA-01) — interactive tool-using driver + read-only builtin tools + orient context",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-07-17T12:50:26.703Z",
-  "updatedAt": "2026-07-17T13:05:37.841Z",
+  "updatedAt": "2026-07-17T13:07:08.025Z",
   "source": {
     "type": "description",
     "ref": null
@@ -30,7 +30,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/40"
   },
   "tasks": [
     {
@@ -82,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -90,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -156,6 +157,16 @@
       "at": "2026-07-17T13:05:37.841Z",
       "event": "ac-confirmed",
       "detail": "AC4: --agent flag + runAgentRepl; chat runShell tests unchanged/green; deps still {}; startup smoke shows agent mode + /help + /exit"
+    },
+    {
+      "at": "2026-07-17T13:07:07.915Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/40"
+    },
+    {
+      "at": "2026-07-17T13:07:08.025Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
