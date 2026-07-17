@@ -3,9 +3,9 @@
   "id": "031",
   "slug": "keryx-shell-rich-inline-ui",
   "title": "keryx shell rich-inline rendering — styled roles, markdown, streaming spinner (hand-rolled ANSI, no new deps)",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-07-17T11:08:05.757Z",
-  "updatedAt": "2026-07-17T11:37:29.013Z",
+  "updatedAt": "2026-07-17T12:26:57.099Z",
   "source": {
     "type": "description",
     "ref": null
@@ -161,6 +161,20 @@
       "at": "2026-07-17T11:37:29.013Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T12:26:57.057Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-17T12:26:57.099Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "ce78644",
+    "ref": "origin/main",
+    "at": "2026-07-17T12:26:57.098Z"
+  }
 }
