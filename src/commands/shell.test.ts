@@ -602,3 +602,100 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     expect(output).not.toMatch(/sk-[a-zA-Z0-9]/);
   });
 });
+
+// --- flow 031: optional rich-rendering hooks (onTurnStart / onTurnEnd /
+// onSystem). The core stays deterministic; the hooks are additive and MUST be
+// byte-identical no-ops when absent. See
+// `.metaproject/flows/031-2026-07-17-keryx-shell-rich-inline-ui/
+// acceptance-criteria.md` (AC1).
+describe("flow 031 — additive ShellIO rich-rendering hooks", () => {
+  test("onTurnStart precedes streaming, onTurnEnd carries the full reply, onSystem gets system text (not write)", async () => {
+    const turn = textTranscript("t1", ["Hel", "lo"]);
+    const { provider } = capturingFakeProvider([turn]);
+
+    const events: string[] = [];
+    const tokens: string[] = [];
+    const systemText: string[] = [];
+    const io: ShellIO = {
+      lines: linesFrom("/help", "hi", "/exit"),
+      write: (s: string) => {
+        tokens.push(s);
+        events.push("write");
+      },
+      onTurnStart: () => events.push("turnStart"),
+      onTurnEnd: (full: string) => events.push(`turnEnd:${full}`),
+      onSystem: (t: string) => systemText.push(t),
+    };
+    const deps: ShellDeps = {
+      makeProvider: () => provider,
+      clock: fixedClock(),
+      idSeq: fixedIdSeq(),
+      initial: { provider: "fake", model: "fixture-model" },
+    };
+
+    await runShell(io, deps);
+
+    // `/help` is routed to onSystem, never to write.
+    expect(systemText.join("")).toMatch(/Commands:/);
+    expect(tokens.join("")).not.toMatch(/Commands:/);
+    // onTurnStart fires before the first streamed token; onTurnEnd carries the
+    // full accumulated reply; tokens still stream through write.
+    const startIdx = events.indexOf("turnStart");
+    const firstWriteIdx = events.indexOf("write");
+    expect(startIdx).toBeGreaterThanOrEqual(0);
+    expect(startIdx).toBeLessThan(firstWriteIdx);
+    expect(events).toContain("turnEnd:Hello");
+    expect(tokens.join("")).toContain("Hello");
+  });
+
+  test("without the optional hooks, output is byte-identical (system + tokens + separator all via write)", async () => {
+    const turn = textTranscript("t1", ["Hel", "lo"]);
+    const { provider } = capturingFakeProvider([turn]);
+
+    const writes: string[] = [];
+    const io: ShellIO = {
+      lines: linesFrom("hi", "/exit"),
+      write: (s: string) => writes.push(s),
+    };
+    const deps: ShellDeps = {
+      makeProvider: () => provider,
+      clock: fixedClock(),
+      idSeq: fixedIdSeq(),
+      initial: { provider: "fake", model: "fixture-model" },
+    };
+
+    await runShell(io, deps);
+
+    // One turn: streamed tokens then the blank-line separator — exactly the
+    // pre-flow-031 behavior, with no hook-driven output injected.
+    expect(writes.join("")).toBe("Hello\n\n");
+  });
+
+  test("onSystem receives a streamed provider_error line when supplied", async () => {
+    const errored = errorTranscript("e1", {
+      kind: "provider_unavailable",
+      retryable: false,
+      message: "boom",
+    });
+    const { provider } = capturingFakeProvider([errored]);
+
+    const tokens: string[] = [];
+    const systemText: string[] = [];
+    const io: ShellIO = {
+      lines: linesFrom("hi", "/exit"),
+      write: (s: string) => tokens.push(s),
+      onSystem: (t: string) => systemText.push(t),
+    };
+    const deps: ShellDeps = {
+      makeProvider: () => provider,
+      clock: fixedClock(),
+      idSeq: fixedIdSeq(),
+      initial: { provider: "fake", model: "fixture-model" },
+    };
+
+    await runShell(io, deps);
+
+    expect(systemText.join("")).toMatch(/\[error\].*boom/);
+    expect(tokens.join("")).not.toMatch(/\[error\]/);
+  });
+});
