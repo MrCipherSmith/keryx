@@ -26,8 +26,11 @@ import type {
   NormalizedRequest,
   ProviderPort,
 } from "../harness/provider/types";
+import { buildOrientation } from "../ctx/orient";
+import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import { formatStatusBar, scrollRegion } from "../lib/statusbar";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
+import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
 import { detectProviders, pickProviderModel } from "./select";
 
 /** Async line source + write sink; no real stdio is reached by `runShell`. */
@@ -348,6 +351,8 @@ interface RichIo {
   exitBar: () => void;
   /** Redraw the bar with the current cwd/selection (no-op when inactive). */
   redrawBar: () => void;
+  /** Print the colored input prompt marker (used between agent-mode turns). */
+  printPrompt: () => void;
 }
 
 /**
@@ -503,13 +508,79 @@ function createRichIo(lines: AsyncIterable<string>, getStatus?: StatusSource): R
   };
 
   const io: ShellIO = { lines, write, onTurnStart, onTurnEnd, onSystem: emitSystem };
-  return { io, emitSystem, printHeader, enterBar, exitBar, redrawBar };
+  return { io, emitSystem, printHeader, enterBar, exitBar, redrawBar, printPrompt };
+}
+
+/** One-line summary of a tool result for the agent-mode transcript. */
+function summarizeToolOutput(text: string): string {
+  const firstLine = text.split("\n")[0] ?? "";
+  const clipped = firstLine.length > 100 ? `${firstLine.slice(0, 100)}…` : firstLine;
+  return text.includes("\n") ? `${clipped} …` : clipped;
+}
+
+/**
+ * Agent-mode REPL (NOT unit-tested): reads lines and drives the `runAgentTurn`
+ * driver, rendering assistant text, tool calls (`⚙ name(input)`), and dim tool
+ * result summaries. Reuses the rich prompt + status bar. `runShell`'s chat core
+ * is untouched.
+ */
+async function runAgentRepl(
+  lines: AsyncIterable<string>,
+  rich: { printPrompt: () => void; redrawBar: () => void },
+  deps: AgentDeps,
+): Promise<void> {
+  const out = (s: string): void => {
+    process.stdout.write(s);
+  };
+  const agentIo: AgentIO = {
+    write: out,
+    onToolCall: (name, input) => {
+      const shownInput = input.length > 80 ? `${input.slice(0, 80)}…` : input;
+      out(`\n${style.cyan(`⚙ ${name}`)} ${style.dim(shownInput)}\n`);
+    },
+    onToolResult: (name, result) => {
+      const marker = result.isError ? style.red("  ✗ ") : style.gray("  ↳ ");
+      out(`${marker}${style.dim(summarizeToolOutput(result.output))}\n`);
+    },
+    onSystem: (text) => {
+      out(colorEnabled() ? (text.includes("[error]") ? style.red(text) : style.dim(text)) : text);
+    },
+  };
+
+  const history: NormalizedMessage[] = [];
+  rich.printPrompt();
+  for await (const line of lines) {
+    if (line.startsWith("/")) {
+      const command = line.trim().split(/\s+/)[0] ?? "";
+      if (command === "/exit" || command === "/quit") {
+        return;
+      }
+      if (command === "/help") {
+        agentIo.onSystem?.(
+          "Agent mode — describe a task; the agent uses read-only tools (get_cwd, list_dir, read_file) on the real project. /exit to leave.\n",
+        );
+      } else {
+        agentIo.onSystem?.(`Unknown command: ${command}. Type /help.\n`);
+      }
+      rich.printPrompt();
+      continue;
+    }
+    if (line.trim().length === 0) {
+      rich.printPrompt();
+      continue;
+    }
+    out(`\n${roleLabel("assistant")}\n`);
+    await runAgentTurn(agentIo, deps, history, line);
+    out("\n\n");
+    rich.redrawBar();
+    rich.printPrompt();
+  }
 }
 
 /**
  * Thin TTY wrapper (NOT unit-tested): parses `--provider` / `--model` /
- * `--base-url`, wires a real `node:readline` stdin line source + a rich
- * `process.stdout` renderer, and runs the deterministic core.
+ * `--base-url` / `--agent`, wires a real `node:readline` stdin line source + a
+ * rich `process.stdout` renderer, and runs the deterministic core.
  *
  * When `--provider` is ABSENT, it first detects the available providers and
  * runs the interactive numbered picker (replacing any hardcoded default). When
@@ -520,6 +591,7 @@ export async function shellCommand(args: string[]): Promise<void> {
   let providerArg: string | undefined;
   let modelArg: string | undefined;
   let baseUrl: string | undefined;
+  let agentMode = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -528,6 +600,8 @@ export async function shellCommand(args: string[]): Promise<void> {
       modelArg = args[++i] ?? modelArg;
     } else if (arg === "--base-url") {
       baseUrl = args[++i];
+    } else if (arg === "--agent") {
+      agentMode = true;
     }
   }
 
@@ -541,7 +615,7 @@ export async function shellCommand(args: string[]): Promise<void> {
   // (the core calls makeProvider on init and on every /model /provider switch).
   let currentProvider = "";
   let currentModel = "";
-  const { io, emitSystem, printHeader, enterBar, exitBar, redrawBar } = createRichIo(
+  const { io, emitSystem, printHeader, enterBar, exitBar, redrawBar, printPrompt } = createRichIo(
     sharedLines,
     () => ({ provider: currentProvider, model: currentModel }),
   );
@@ -599,10 +673,31 @@ export async function shellCommand(args: string[]): Promise<void> {
       selectProviderModel: realSelectProviderModel(baseUrl),
     };
 
-    printHeader("keryx shell", `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}`);
+    const modeLabel = agentMode ? " · agent" : "";
+    printHeader("keryx shell", `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel}`);
     enterBar();
 
-    await runShell(io, deps);
+    if (agentMode) {
+      // Agent mode: give the model read-only hands + metaproject orientation.
+      const agentProvider = baseFactory(provider, model, baseUrl);
+      let orient = "";
+      try {
+        orient = await buildOrientation(process.cwd());
+      } catch {
+        orient = ""; // orientation is best-effort; the builder falls back
+      }
+      const agentDeps: AgentDeps = {
+        provider: agentProvider,
+        providerId: provider,
+        modelId: model,
+        tools: builtinReadOnlyTools(process.cwd()),
+        systemInstruction: buildAgentSystemInstruction(orient),
+        idSeq: () => randomUUID(),
+      };
+      await runAgentRepl(sharedLines, { printPrompt, redrawBar }, agentDeps);
+    } else {
+      await runShell(io, deps);
+    }
   } finally {
     exitBar();
     rl.close();
