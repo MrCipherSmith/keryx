@@ -532,17 +532,48 @@ async function runAgentRepl(
   const out = (s: string): void => {
     process.stdout.write(s);
   };
+  const clearLine = `\r${String.fromCharCode(27)}[2K`;
+  const spinnable = colorEnabled() && Boolean(process.stdout.isTTY);
+  let spinner: ReturnType<typeof setInterval> | undefined;
+  let frame = 0;
+  const startSpinner = (): void => {
+    if (!spinnable || spinner !== undefined) {
+      return;
+    }
+    frame = 0;
+    spinner = setInterval(() => {
+      const glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "";
+      out(`${clearLine}${style.dim(`${glyph} thinking…`)}`);
+      frame += 1;
+    }, 80);
+  };
+  const stopSpinner = (): void => {
+    if (spinner !== undefined) {
+      clearInterval(spinner);
+      spinner = undefined;
+      out(clearLine);
+    }
+  };
+
   const agentIo: AgentIO = {
-    write: out,
+    write: (s) => {
+      if (s.length > 0) {
+        stopSpinner(); // first token of a round: drop the spinner
+      }
+      out(s);
+    },
     onToolCall: (name, input) => {
+      stopSpinner();
       const shownInput = input.length > 80 ? `${input.slice(0, 80)}…` : input;
       out(`\n${style.cyan(`⚙ ${name}`)} ${style.dim(shownInput)}\n`);
     },
     onToolResult: (name, result) => {
       const marker = result.isError ? style.red("  ✗ ") : style.gray("  ↳ ");
       out(`${marker}${style.dim(summarizeToolOutput(result.output))}\n`);
+      startSpinner(); // a tool finished; wait for the model's next round
     },
     onSystem: (text) => {
+      stopSpinner();
       out(colorEnabled() ? (text.includes("[error]") ? style.red(text) : style.dim(text)) : text);
     },
   };
@@ -570,7 +601,12 @@ async function runAgentRepl(
       continue;
     }
     out(`\n${roleLabel("assistant")}\n`);
-    await runAgentTurn(agentIo, deps, history, line);
+    startSpinner();
+    try {
+      await runAgentTurn(agentIo, deps, history, line);
+    } finally {
+      stopSpinner();
+    }
     out("\n\n");
     rich.redrawBar();
     rich.printPrompt();
