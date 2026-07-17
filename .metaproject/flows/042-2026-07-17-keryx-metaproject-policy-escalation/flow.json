@@ -3,17 +3,34 @@
   "id": "042",
   "slug": "keryx-metaproject-policy-escalation",
   "title": "keryx metaproject policy escalation primitive (MP-6 deep) — composable non-weakening blast-radius escalation over decide(), zero frozen-code changes",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-17T23:17:26.608Z",
-  "updatedAt": "2026-07-17T23:20:39.111Z",
+  "updatedAt": "2026-07-17T23:21:49.694Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:5df988397757a2528ebb368feca77cc0904d9234920efbc7c231ccbe9fe5140c",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T23:21:15.360Z",
+      "note": "escalation.ts escalateForBlastRadius + MetaprojectPolicyContext"
+    },
+    "AC2": {
+      "at": "2026-07-17T23:21:15.490Z",
+      "note": "non-weakening property test: ask/deny unchanged all inputs; allow only->{allow,ask}"
+    },
+    "AC3": {
+      "at": "2026-07-17T23:21:15.634Z",
+      "note": "metaprojectBlastRadius: count from graphAffected; 0 on structured/thrown error (fake-port tests)"
+    },
+    "AC4": {
+      "at": "2026-07-17T23:21:15.848Z",
+      "note": "tsc clean; bun test 1431/0 (baseline 1424); deps {}; git status empty for engine.ts/types.ts/run.ts (frozen untouched)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/58"
   },
   "tasks": [
     {
@@ -110,6 +127,45 @@
       "at": "2026-07-17T23:20:39.111Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T23:21:15.218Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/58"
+    },
+    {
+      "at": "2026-07-17T23:21:15.360Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: escalation.ts escalateForBlastRadius + MetaprojectPolicyContext"
+    },
+    {
+      "at": "2026-07-17T23:21:15.490Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: non-weakening property test: ask/deny unchanged all inputs; allow only->{allow,ask}"
+    },
+    {
+      "at": "2026-07-17T23:21:15.634Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: metaprojectBlastRadius: count from graphAffected; 0 on structured/thrown error (fake-port tests)"
+    },
+    {
+      "at": "2026-07-17T23:21:15.848Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1431/0 (baseline 1424); deps {}; git status empty for engine.ts/types.ts/run.ts (frozen untouched)"
+    },
+    {
+      "at": "2026-07-17T23:21:49.635Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-17T23:21:49.694Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "6d1d26dd553c4843a7786e1001b36f42d11ae6b7",
+    "ref": "origin/main",
+    "at": "2026-07-17T23:21:49.693Z"
+  }
 }
