@@ -3,9 +3,9 @@
   "id": "034",
   "slug": "keryx-shell-ui-fixes",
   "title": "keryx shell UI fixes — remove header/prompt gap (scroll-region cursor) + breathing room",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-17T19:07:38.321Z",
-  "updatedAt": "2026-07-17T19:11:39.448Z",
+  "updatedAt": "2026-07-17T19:12:40.112Z",
   "source": {
     "type": "description",
     "ref": null
@@ -78,7 +78,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -86,7 +86,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -132,6 +133,26 @@
       "at": "2026-07-17T19:11:39.448Z",
       "event": "ac-confirmed",
       "detail": "AC3: tsc clean; bun test 1381 pass/0 fail (= baseline); chat+agent logic unchanged; deps {}. Visual no-gap is a deterministic terminal-control fix; live TTY confirmation is the smoke."
+    },
+    {
+      "at": "2026-07-17T19:11:54.471Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T19:12:40.049Z",
+      "event": "completing",
+      "detail": "merged commit: 1b24732e0693c877274f442f07065e5b3d7648a0"
+    },
+    {
+      "at": "2026-07-17T19:12:40.112Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "1b24732e0693c877274f442f07065e5b3d7648a0",
+    "ref": "origin/main",
+    "at": "2026-07-17T19:12:40.112Z"
+  }
 }
