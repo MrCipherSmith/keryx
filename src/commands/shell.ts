@@ -30,6 +30,8 @@ import { buildOrientation } from "../ctx/orient";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import { makeKeryxRunner, builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
+import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { formatStatusBar, scrollRegion } from "../lib/statusbar";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
@@ -532,6 +534,7 @@ async function runAgentRepl(
   lines: AsyncIterable<string>,
   rich: { printPrompt: () => void; redrawBar: () => void },
   deps: AgentDeps,
+  metaprojectPort: MetaprojectPort,
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -584,6 +587,12 @@ async function runAgentRepl(
         }
       } catch {
         // show the raw input if it is not JSON
+      }
+      // MP-6: advisory metaproject context (blast radius + related memory) before
+      // the prompt. Best-effort — never blocks or changes the default-deny gate.
+      const context = await buildApprovalContext(metaprojectPort, command);
+      if (context.length > 0) {
+        out(`\n${style.dim(context)}`);
       }
       out(`\n${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`);
       const answer = (await readLine()) ?? "";
@@ -770,7 +779,7 @@ export async function shellCommand(args: string[]): Promise<void> {
         systemInstruction: buildAgentSystemInstruction(orient),
         idSeq: () => randomUUID(),
       };
-      await runAgentRepl(sharedLines, { printPrompt, redrawBar }, agentDeps);
+      await runAgentRepl(sharedLines, { printPrompt, redrawBar }, agentDeps, metaprojectPort);
     } else {
       await runShell(io, deps);
     }
