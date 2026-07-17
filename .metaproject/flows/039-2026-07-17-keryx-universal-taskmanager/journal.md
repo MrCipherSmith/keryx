@@ -17,3 +17,12 @@
 - 2026-07-17T22:47:39.154Z - task-done: T2: Implement per plan
 - 2026-07-17T22:47:39.297Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-17T22:47:39.402Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-17T22:48:18.832Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/52
+- 2026-07-17T22:48:35.553Z - ac-confirmed: AC1: schema.ts flowStateSchema validates every on-disk flow.json (4 v1 + 35 v2), 0 failures; negatives rejected — schema.test.ts
+- 2026-07-17T22:48:35.953Z - ac-confirmed: AC2: keryx flow schema [--out] emits schema; docpack regenerated + consistency test (runtime deep-equals docpack)
+- 2026-07-17T22:48:36.248Z - ac-confirmed: AC3: flow check validates raw flow.json vs schema (read-only, D-02); gateToDisposition exported + decision-table test
+- 2026-07-17T22:48:36.401Z - ac-confirmed: AC4: independent verify: tsc clean, bun test 1418 pass/0 fail (baseline 1411), deps {}, FlowState/state-machine unchanged, no flow.json writes
+- 2026-07-17T22:49:11.910Z - completing
+- 2026-07-17T22:49:11.960Z - completion-failed: main-merge: 040bc36e2915f3681e8adc8e058dc9fdd7d9b23e is not contained in origin/main
+- 2026-07-17T22:49:59.102Z - completing: merged commit: 4c1ee5e538ac1b66f7f6bd495dbc4d421f745e9c
+- 2026-07-17T22:49:59.130Z - done: all gates passed

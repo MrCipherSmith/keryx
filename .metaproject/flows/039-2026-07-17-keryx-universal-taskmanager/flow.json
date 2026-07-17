@@ -3,17 +3,34 @@
   "id": "039",
   "slug": "keryx-universal-taskmanager",
   "title": "keryx universal Task Manager surface (Phase 3 / MP-4) — runtime flow-state JSON Schema + keryx flow schema export + flow check validation + exported gate->disposition table",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-17T22:29:24.832Z",
-  "updatedAt": "2026-07-17T22:47:39.402Z",
+  "updatedAt": "2026-07-17T22:49:59.130Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:eaffa8b79b820dab8ea741f2c84c8b346b4ded268d6fccab87327d9973ee6213",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T22:48:35.552Z",
+      "note": "schema.ts flowStateSchema validates every on-disk flow.json (4 v1 + 35 v2), 0 failures; negatives rejected — schema.test.ts"
+    },
+    "AC2": {
+      "at": "2026-07-17T22:48:35.953Z",
+      "note": "keryx flow schema [--out] emits schema; docpack regenerated + consistency test (runtime deep-equals docpack)"
+    },
+    "AC3": {
+      "at": "2026-07-17T22:48:36.248Z",
+      "note": "flow check validates raw flow.json vs schema (read-only, D-02); gateToDisposition exported + decision-table test"
+    },
+    "AC4": {
+      "at": "2026-07-17T22:48:36.401Z",
+      "note": "independent verify: tsc clean, bun test 1418 pass/0 fail (baseline 1411), deps {}, FlowState/state-machine unchanged, no flow.json writes"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/52"
   },
   "tasks": [
     {
@@ -110,6 +127,55 @@
       "at": "2026-07-17T22:47:39.402Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T22:48:18.832Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/52"
+    },
+    {
+      "at": "2026-07-17T22:48:35.553Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: schema.ts flowStateSchema validates every on-disk flow.json (4 v1 + 35 v2), 0 failures; negatives rejected — schema.test.ts"
+    },
+    {
+      "at": "2026-07-17T22:48:35.953Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: keryx flow schema [--out] emits schema; docpack regenerated + consistency test (runtime deep-equals docpack)"
+    },
+    {
+      "at": "2026-07-17T22:48:36.248Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: flow check validates raw flow.json vs schema (read-only, D-02); gateToDisposition exported + decision-table test"
+    },
+    {
+      "at": "2026-07-17T22:48:36.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: independent verify: tsc clean, bun test 1418 pass/0 fail (baseline 1411), deps {}, FlowState/state-machine unchanged, no flow.json writes"
+    },
+    {
+      "at": "2026-07-17T22:49:11.910Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-17T22:49:11.960Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 040bc36e2915f3681e8adc8e058dc9fdd7d9b23e is not contained in origin/main"
+    },
+    {
+      "at": "2026-07-17T22:49:59.102Z",
+      "event": "completing",
+      "detail": "merged commit: 4c1ee5e538ac1b66f7f6bd495dbc4d421f745e9c"
+    },
+    {
+      "at": "2026-07-17T22:49:59.130Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "4c1ee5e538ac1b66f7f6bd495dbc4d421f745e9c",
+    "ref": "origin/main",
+    "at": "2026-07-17T22:49:59.129Z"
+  }
 }
