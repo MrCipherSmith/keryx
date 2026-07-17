@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 2,
+  "id": "033",
+  "slug": "keryx-shell-agent-tools",
+  "title": "keryx shell agent mode (Flow A / SA-01) — interactive tool-using driver + read-only builtin tools + orient context",
+  "status": "implemented",
+  "createdAt": "2026-07-17T12:50:26.703Z",
+  "updatedAt": "2026-07-17T13:07:08.025Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b2558fe427dbd01f88a6fae0916c97c949a67239e7d801b2eb8e5f61f658febd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T13:05:37.599Z",
+      "note": "interactive-tools.test.ts: 8 tests — risk=read, confineToRoot inside/escape, get_cwd/list_dir/read_file happy+escape+missing"
+    },
+    "AC2": {
+      "at": "2026-07-17T13:05:37.679Z",
+      "note": "agent.test.ts: scripted tool_call fed back as role tool (real cwd) + tools advertised; text-only finish; unknown-tool error"
+    },
+    "AC3": {
+      "at": "2026-07-17T13:05:37.755Z",
+      "note": "agent.test.ts: buildAgentSystemInstruction embeds orient when present, falls back on empty/undefined without throwing"
+    },
+    "AC4": {
+      "at": "2026-07-17T13:05:37.841Z",
+      "note": "--agent flag + runAgentRepl; chat runShell tests unchanged/green; deps still {}; startup smoke shows agent mode + /help + /exit"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/40"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-17T12:50:26.703Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-17T12:53:19.800Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-17T12:53:19.988Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-17T12:53:20.143Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-17T12:54:33.441Z",
+      "event": "ac-updated",
+      "detail": "probe"
+    },
+    {
+      "at": "2026-07-17T12:55:36.032Z",
+      "event": "ac-updated",
+      "detail": "Discovered durable ToolExecutorPort returns hashed receipts (not content) + policy decide is heavy; Flow A uses a lightweight content-returning interactive tool layer + read-risk gate, deferring full executor/policy/receipts to a later SA-01 flow"
+    },
+    {
+      "at": "2026-07-17T13:01:39.975Z",
+      "event": "ac-updated",
+      "detail": "Scope mid-session /agent toggle out of Flow A (chat-core reuse in one loop is costly); --agent startup flag only. Orient context wired via ctx/orient buildOrientation"
+    },
+    {
+      "at": "2026-07-17T13:05:37.414Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-17T13:05:37.512Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-17T13:05:37.599Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: interactive-tools.test.ts: 8 tests — risk=read, confineToRoot inside/escape, get_cwd/list_dir/read_file happy+escape+missing"
+    },
+    {
+      "at": "2026-07-17T13:05:37.679Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: agent.test.ts: scripted tool_call fed back as role tool (real cwd) + tools advertised; text-only finish; unknown-tool error"
+    },
+    {
+      "at": "2026-07-17T13:05:37.755Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: agent.test.ts: buildAgentSystemInstruction embeds orient when present, falls back on empty/undefined without throwing"
+    },
+    {
+      "at": "2026-07-17T13:05:37.841Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: --agent flag + runAgentRepl; chat runShell tests unchanged/green; deps still {}; startup smoke shows agent mode + /help + /exit"
+    },
+    {
+      "at": "2026-07-17T13:07:07.915Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/40"
+    },
+    {
+      "at": "2026-07-17T13:07:08.025Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
