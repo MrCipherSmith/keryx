@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "metaproject-operation.schema.json",
+  "title": "MetaprojectOperation",
+  "description": "The single source-of-truth descriptor for a metaproject operation, projected into the harness ToolRegistry, the agent InteractiveTool set, and the MCP server (MP-3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "module", "risk", "inputSchema", "outputSchema"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Stable operation name exposed to the model (e.g. graph_affected)."
+    },
+    "module": {
+      "type": "string",
+      "enum": ["gdgraph", "gdctx", "gdwiki", "memory", "health", "testing", "flow"],
+      "description": "Owning metaproject module (facade backing the operation)."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human/model-facing summary of what the operation does."
+    },
+    "risk": {
+      "type": "string",
+      "enum": ["read", "write", "shell", "network", "credential", "delegate", "destructive"],
+      "description": "Risk class consumed by the policy/approval gate. Metaproject reads are 'read'."
+    },
+    "inputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the operation input (validated before invoke)."
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the structured operation result (may $ref a sibling schema)."
+    },
+    "backing": {
+      "type": "string",
+      "enum": ["in-process", "artifact", "cli-fallback"],
+      "description": "How the reference adapter serves the operation (MP-2)."
+    }
+  }
+}

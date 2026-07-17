@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "graph-affected-result.schema.json",
+  "title": "GraphAffectedResult",
+  "description": "Structured result of MetaprojectPort.graphAffected — transitive dependents (blast radius) of a target file/symbol, from createGdgraphService().affected / computeAffected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["target", "affected"],
+  "properties": {
+    "target": {
+      "type": "string",
+      "description": "The file or symbol whose dependents were computed."
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Max hop depth traversed (default when omitted is adapter-defined)."
+    },
+    "ranked": {
+      "type": "boolean",
+      "description": "Whether entries are ranked (hop asc, then fanIn desc, then path asc)."
+    },
+    "affected": {
+      "type": "array",
+      "description": "Dependent nodes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "hop"],
+        "properties": {
+          "id": { "type": "string", "description": "Node id (file path or symbol id)." },
+          "path": { "type": "string", "description": "File path when the node is a file." },
+          "hop": { "type": "integer", "minimum": 1, "description": "Distance in dependency hops from the target." },
+          "fanIn": { "type": "integer", "minimum": 0, "description": "Incoming edge count (used for ranking)." }
+        }
+      }
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "True when the result was capped by an output bound."
+    }
+  }
+}

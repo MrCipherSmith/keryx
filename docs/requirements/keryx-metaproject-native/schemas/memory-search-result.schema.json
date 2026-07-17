@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "memory-search-result.schema.json",
+  "title": "MemorySearchResult",
+  "description": "Structured result of MetaprojectPort.memorySearch — deterministic ranked project-memory hits from createMemoryService().search.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["query", "hits"],
+  "properties": {
+    "query": { "type": "string", "description": "The search query." },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Applied filters (all optional).",
+      "properties": {
+        "module": { "type": "string" },
+        "entity": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "superseded", "deprecated"] },
+        "class": { "type": "string", "enum": ["semantic", "episodic", "procedural"] },
+        "asOf": { "type": "string", "description": "YYYY-MM-DD point-in-time filter." }
+      }
+    },
+    "hits": {
+      "type": "array",
+      "description": "Ranked memory entries.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "title", "score"],
+        "properties": {
+          "path": { "type": "string", "description": "Memory entry file path under .metaproject/memory/." },
+          "title": { "type": "string" },
+          "type": { "type": "string", "description": "Memory type (lesson, decision, constraint, known-mistake, …)." },
+          "status": { "type": "string", "enum": ["active", "superseded", "deprecated"] },
+          "score": { "type": "number", "description": "Deterministic rank score (higher = more relevant)." },
+          "excerpt": { "type": "string", "description": "Bounded snippet of the entry body." }
+        }
+      }
+    }
+  }
+}
