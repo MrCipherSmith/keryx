@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 2,
+  "id": "035",
+  "slug": "keryx-agent-metaproject-tools",
+  "title": "keryx agent metaproject tools (Flow B / SA-01) — search_code / graph_affected / memory_search via constrained keryx subprocess",
+  "status": "in-progress",
+  "createdAt": "2026-07-17T19:18:20.014Z",
+  "updatedAt": "2026-07-17T19:28:19.236Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f28d2853d4e8bbdb70f4d37ac021fd50d54e9f37df93d18c47fc74ce7161b4cc",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T19:28:18.752Z",
+      "note": "metaproject-tools.test.ts: 3 tools risk=read + schemas; argv mapping asserted per tool"
+    },
+    "AC2": {
+      "at": "2026-07-17T19:28:18.895Z",
+      "note": "injectable run tested (fake); default makeKeryxRunner uses Bun.spawn argv array (no shell string), cwd=root, bounded, errors→isError"
+    },
+    "AC3": {
+      "at": "2026-07-17T19:28:19.079Z",
+      "note": "agent registry = builtinReadOnlyTools + builtinMetaprojectTools; risk read auto-allowed by flow-033 gate; chat core unchanged"
+    },
+    "AC4": {
+      "at": "2026-07-17T19:28:19.236Z",
+      "note": "tsc clean; bun test 1387 pass/0 fail (baseline 1381); offline via fake run; deps {}. Live agent-uses-tools smoke pending tool-capable model; merge authorized by user"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-17T19:18:20.014Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-17T19:19:01.091Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-17T19:19:01.468Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-17T19:19:01.683Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-17T19:28:01.930Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-17T19:28:17.943Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-17T19:28:18.752Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: metaproject-tools.test.ts: 3 tools risk=read + schemas; argv mapping asserted per tool"
+    },
+    {
+      "at": "2026-07-17T19:28:18.895Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: injectable run tested (fake); default makeKeryxRunner uses Bun.spawn argv array (no shell string), cwd=root, bounded, errors→isError"
+    },
+    {
+      "at": "2026-07-17T19:28:19.079Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: agent registry = builtinReadOnlyTools + builtinMetaprojectTools; risk read auto-allowed by flow-033 gate; chat core unchanged"
+    },
+    {
+      "at": "2026-07-17T19:28:19.236Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1387 pass/0 fail (baseline 1381); offline via fake run; deps {}. Live agent-uses-tools smoke pending tool-capable model; merge authorized by user"
+    }
+  ]
+}

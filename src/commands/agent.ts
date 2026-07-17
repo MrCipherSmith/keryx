@@ -49,10 +49,11 @@ const DEFAULT_MAX_TOOL_CALLS = 8;
  */
 export function buildAgentSystemInstruction(orient?: string): string {
   const base =
-    "You are the keryx interactive agent. You have read-only tools (get_cwd, " +
-    "list_dir, read_file) to inspect the real project. ALWAYS use a tool to obtain " +
-    "facts about the filesystem instead of guessing; never fabricate paths or file " +
-    "contents. Answer concisely.";
+    "You are the keryx interactive agent. You have read-only tools to inspect the " +
+    "real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
+    "graph_affected, memory_search (keryx metaproject: compact code search, code-graph " +
+    "blast radius, and project memory). ALWAYS use a tool to obtain facts instead of " +
+    "guessing; never fabricate paths, file contents, or search results. Answer concisely.";
   const trimmed = orient?.trim() ?? "";
   if (trimmed.length === 0) {
     return base;

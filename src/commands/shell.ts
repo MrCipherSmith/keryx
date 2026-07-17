@@ -28,6 +28,7 @@ import type {
 } from "../harness/provider/types";
 import { buildOrientation } from "../ctx/orient";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+import { builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
 import { formatStatusBar, scrollRegion } from "../lib/statusbar";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
@@ -589,7 +590,7 @@ async function runAgentRepl(
       }
       if (command === "/help") {
         agentIo.onSystem?.(
-          "Agent mode — describe a task; the agent uses read-only tools (get_cwd, list_dir, read_file) on the real project. /exit to leave.\n",
+          "Agent mode — describe a task; the agent uses read-only tools (get_cwd, list_dir, read_file, search_code, graph_affected, memory_search) on the real project. /exit to leave.\n",
         );
       } else {
         agentIo.onSystem?.(`Unknown command: ${command}. Type /help.\n`);
@@ -727,7 +728,7 @@ export async function shellCommand(args: string[]): Promise<void> {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: builtinReadOnlyTools(process.cwd()),
+        tools: [...builtinReadOnlyTools(process.cwd()), ...builtinMetaprojectTools(process.cwd())],
         systemInstruction: buildAgentSystemInstruction(orient),
         idSeq: () => randomUUID(),
       };
