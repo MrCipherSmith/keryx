@@ -43,3 +43,5 @@
 - 2026-07-17T11:48:42.624Z - ac-confirmed: AC1: formatStatusBar tests: NO_COLOR plain+home-collapse, overflow truncation width<=columns, FORCE_COLOR ANSI (statusbar.test.ts)
 - 2026-07-17T11:48:42.712Z - ac-confirmed: AC2: scrollRegion tests: enter [1;23r, drawAt [24;1H+[2K, exit [r+[?25h (statusbar.test.ts)
 - 2026-07-17T11:48:42.822Z - ac-confirmed: AC4: safe degradation verified: non-TTY smoke emits 0 scroll-region escapes; deps still {}. Ctrl-C/exit terminal-restore pending user real-TTY smoke
+- 2026-07-17T11:49:54.232Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/35
+- 2026-07-17T11:49:54.340Z - task-done: T4: Self-review and prepare draft PR

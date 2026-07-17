@@ -3,9 +3,9 @@
   "id": "032",
   "slug": "keryx-shell-status-bar",
   "title": "keryx shell persistent status bar — pinned cwd/provider/model/keys via ANSI scroll-region (hand-rolled, no new deps)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-07-17T11:40:16.287Z",
-  "updatedAt": "2026-07-17T11:48:42.822Z",
+  "updatedAt": "2026-07-17T11:49:54.340Z",
   "source": {
     "type": "description",
     "ref": null
@@ -26,7 +26,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/35"
   },
   "tasks": [
     {
@@ -78,7 +78,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -86,7 +86,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -132,6 +133,16 @@
       "at": "2026-07-17T11:48:42.822Z",
       "event": "ac-confirmed",
       "detail": "AC4: safe degradation verified: non-TTY smoke emits 0 scroll-region escapes; deps still {}. Ctrl-C/exit terminal-restore pending user real-TTY smoke"
+    },
+    {
+      "at": "2026-07-17T11:49:54.232Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/35"
+    },
+    {
+      "at": "2026-07-17T11:49:54.340Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
