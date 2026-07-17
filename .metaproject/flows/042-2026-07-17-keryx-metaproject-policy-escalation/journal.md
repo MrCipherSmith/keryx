@@ -15,3 +15,10 @@
 - 2026-07-17T23:20:38.287Z - task-done: T2: Implement per plan
 - 2026-07-17T23:20:38.698Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-17T23:20:39.111Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-17T23:21:15.218Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/58
+- 2026-07-17T23:21:15.360Z - ac-confirmed: AC1: escalation.ts escalateForBlastRadius + MetaprojectPolicyContext
+- 2026-07-17T23:21:15.490Z - ac-confirmed: AC2: non-weakening property test: ask/deny unchanged all inputs; allow only->{allow,ask}
+- 2026-07-17T23:21:15.634Z - ac-confirmed: AC3: metaprojectBlastRadius: count from graphAffected; 0 on structured/thrown error (fake-port tests)
+- 2026-07-17T23:21:15.848Z - ac-confirmed: AC4: tsc clean; bun test 1431/0 (baseline 1424); deps {}; git status empty for engine.ts/types.ts/run.ts (frozen untouched)
+- 2026-07-17T23:21:49.635Z - completing
+- 2026-07-17T23:21:49.694Z - done: all gates passed
