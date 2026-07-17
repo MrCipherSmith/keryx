@@ -52,3 +52,5 @@
 - 2026-07-17T11:26:46.720Z - ac-confirmed: AC4: additive edits only (shell.ts/ui.ts/tests); deps still {}; tsc clean; reuse of select.ts/providers unchanged
 - 2026-07-17T11:35:26.402Z - ac-confirmed: AC3: live TTY render confirmed via user screenshot: cyan headings, • bullets, bold, dimmed fenced code block, blockquote from 'bun src/cli.ts shell'
 - 2026-07-17T11:35:26.492Z - ac-confirmed: AC5: tsc clean; bun test 1364 pass/0 fail (baseline 1355); live render shown in real terminal; piped non-TTY path plain (no corruption)
+- 2026-07-17T11:37:28.859Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/34
+- 2026-07-17T11:37:29.013Z - task-done: T4: Self-review and prepare draft PR
