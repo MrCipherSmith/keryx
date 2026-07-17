@@ -26,6 +26,7 @@ import type {
   NormalizedRequest,
   ProviderPort,
 } from "../harness/provider/types";
+import { formatStatusBar, scrollRegion } from "../lib/statusbar";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
 import { detectProviders, pickProviderModel } from "./select";
 
@@ -330,11 +331,23 @@ function countRows(text: string, columns: number): number {
   return rows;
 }
 
-/** The rich TTY renderer wired into `ShellIO`'s optional hooks (flow 031). */
+/** Minimum terminal height to enable the pinned status bar (flow 032). */
+const MIN_BAR_ROWS = 4;
+
+/** Live provider/model source for the status bar (flow 032). */
+type StatusSource = () => { provider: string; model: string };
+
+/** The rich TTY renderer wired into `ShellIO`'s optional hooks (flow 031/032). */
 interface RichIo {
   io: ShellIO;
   emitSystem: (text: string) => void;
   printHeader: (title: string, subtitle: string) => void;
+  /** Enter the pinned-status-bar scroll region (no-op unless TTY + color). */
+  enterBar: () => void;
+  /** Reset the scroll region + cursor and remove signal handlers (idempotent). */
+  exitBar: () => void;
+  /** Redraw the bar with the current cwd/selection (no-op when inactive). */
+  redrawBar: () => void;
 }
 
 /**
@@ -345,7 +358,7 @@ interface RichIo {
  * stays timer/`Date.now`/`Math.random`-free) and degrades to plain, uncorrupted
  * output when `NO_COLOR` is set or the sink is not a TTY.
  */
-function createRichIo(lines: AsyncIterable<string>): RichIo {
+function createRichIo(lines: AsyncIterable<string>, getStatus?: StatusSource): RichIo {
   const stdout = process.stdout;
   const rich = colorEnabled() && Boolean(stdout.isTTY);
   const out = (s: string): void => {
@@ -356,6 +369,61 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   let frame = 0;
   let awaitingFirstToken = false;
   let raw = "";
+
+  // --- flow 032: pinned status bar via a reserved-bottom-row scroll region ---
+  const barSupported = rich && getStatus !== undefined;
+  let barEntered = false;
+  const termRows = (): number => stdout.rows ?? 24;
+  const termCols = (): number => stdout.columns ?? 80;
+
+  const drawBar = (): void => {
+    if (!barEntered || getStatus === undefined) {
+      return;
+    }
+    const rows = termRows();
+    const { provider, model } = getStatus();
+    const bar = formatStatusBar({ cwd: process.cwd(), provider, model, columns: termCols() });
+    out(scrollRegion(rows).drawAt(rows, bar));
+  };
+  const onResize = (): void => {
+    if (!barEntered) {
+      return;
+    }
+    out(scrollRegion(termRows()).enter); // re-arm the region for the new size
+    drawBar();
+  };
+  const onExitReset = (): void => {
+    out(scrollRegion(termRows()).exit);
+  };
+  const exitBar = (): void => {
+    if (!barEntered) {
+      return;
+    }
+    barEntered = false;
+    process.off("SIGWINCH", onResize);
+    process.off("SIGINT", onSigint);
+    process.off("exit", onExitReset);
+    out(scrollRegion(termRows()).exit);
+  };
+  // Ctrl-C: restore the terminal before exiting so it is never left broken.
+  const onSigint = (): void => {
+    exitBar();
+    process.exit(130);
+  };
+  const enterBar = (): void => {
+    if (!barSupported || barEntered || termRows() < MIN_BAR_ROWS) {
+      return;
+    }
+    barEntered = true;
+    out(scrollRegion(termRows()).enter);
+    drawBar();
+    process.on("SIGWINCH", onResize);
+    process.once("SIGINT", onSigint);
+    process.once("exit", onExitReset);
+  };
+  const redrawBar = (): void => {
+    drawBar();
+  };
 
   const stopSpinner = (): void => {
     if (spinner !== undefined) {
@@ -391,6 +459,7 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
     out(s);
     if (s === "\n\n") {
       printPrompt(); // re-prompt before the next input line
+      redrawBar(); // keep the pinned bar fresh after each turn
     }
   };
 
@@ -434,7 +503,7 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   };
 
   const io: ShellIO = { lines, write, onTurnStart, onTurnEnd, onSystem: emitSystem };
-  return { io, emitSystem, printHeader };
+  return { io, emitSystem, printHeader, enterBar, exitBar, redrawBar };
 }
 
 /**
@@ -467,7 +536,15 @@ export async function shellCommand(args: string[]): Promise<void> {
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();
   const sharedLines: AsyncIterable<string> = { [Symbol.asyncIterator]: () => lineIterator };
-  const { io, emitSystem, printHeader } = createRichIo(sharedLines);
+
+  // Live selection for the status bar; kept current by the tracking factory below
+  // (the core calls makeProvider on init and on every /model /provider switch).
+  let currentProvider = "";
+  let currentModel = "";
+  const { io, emitSystem, printHeader, enterBar, exitBar, redrawBar } = createRichIo(
+    sharedLines,
+    () => ({ provider: currentProvider, model: currentModel }),
+  );
 
   let provider: string;
   let model: string;
@@ -501,8 +578,21 @@ export async function shellCommand(args: string[]): Promise<void> {
       }
     }
 
+    currentProvider = provider;
+    currentModel = model;
+
+    // Track the live selection (and refresh the bar) on every provider creation:
+    // the core calls this on init and after each /model / /provider switch.
+    const baseFactory = realMakeProvider(emitSystem);
+    const trackingFactory: ShellDeps["makeProvider"] = (name, providerModel, providerBaseUrl) => {
+      currentProvider = name;
+      currentModel = providerModel;
+      redrawBar();
+      return baseFactory(name, providerModel, providerBaseUrl);
+    };
+
     const deps: ShellDeps = {
-      makeProvider: realMakeProvider(emitSystem),
+      makeProvider: trackingFactory,
       clock: () => new Date().toISOString(),
       idSeq: () => randomUUID(),
       initial: baseUrl === undefined ? { provider, model } : { provider, model, baseUrl },
@@ -510,9 +600,11 @@ export async function shellCommand(args: string[]): Promise<void> {
     };
 
     printHeader("keryx shell", `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}`);
+    enterBar();
 
     await runShell(io, deps);
   } finally {
+    exitBar();
     rl.close();
   }
 }
