@@ -3,9 +3,9 @@
   "id": "032",
   "slug": "keryx-shell-status-bar",
   "title": "keryx shell persistent status bar — pinned cwd/provider/model/keys via ANSI scroll-region (hand-rolled, no new deps)",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-07-17T11:40:16.287Z",
-  "updatedAt": "2026-07-17T11:49:54.340Z",
+  "updatedAt": "2026-07-17T12:28:56.384Z",
   "source": {
     "type": "description",
     "ref": null
@@ -23,6 +23,14 @@
     "AC4": {
       "at": "2026-07-17T11:48:42.822Z",
       "note": "safe degradation verified: non-TTY smoke emits 0 scroll-region escapes; deps still {}. Ctrl-C/exit terminal-restore pending user real-TTY smoke"
+    },
+    "AC3": {
+      "at": "2026-07-17T12:28:56.068Z",
+      "note": "user-confirmed live TTY smoke: bar pinned bottom, stream above, /model updates, resize redraws"
+    },
+    "AC5": {
+      "at": "2026-07-17T12:28:56.163Z",
+      "note": "user-confirmed live TTY: terminal restored after /exit and Ctrl-C; tsc clean; bun test 1369 pass/0 fail on main"
     }
   },
   "pr": {
@@ -143,6 +151,30 @@
       "at": "2026-07-17T11:49:54.340Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T12:28:56.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: user-confirmed live TTY smoke: bar pinned bottom, stream above, /model updates, resize redraws"
+    },
+    {
+      "at": "2026-07-17T12:28:56.163Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: user-confirmed live TTY: terminal restored after /exit and Ctrl-C; tsc clean; bun test 1369 pass/0 fail on main"
+    },
+    {
+      "at": "2026-07-17T12:28:56.294Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-17T12:28:56.384Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "29c2e14",
+    "ref": "origin/main",
+    "at": "2026-07-17T12:28:56.384Z"
+  }
 }

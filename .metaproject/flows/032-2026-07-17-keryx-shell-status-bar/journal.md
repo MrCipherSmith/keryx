@@ -45,3 +45,7 @@
 - 2026-07-17T11:48:42.822Z - ac-confirmed: AC4: safe degradation verified: non-TTY smoke emits 0 scroll-region escapes; deps still {}. Ctrl-C/exit terminal-restore pending user real-TTY smoke
 - 2026-07-17T11:49:54.232Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/35
 - 2026-07-17T11:49:54.340Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-17T12:28:56.068Z - ac-confirmed: AC3: user-confirmed live TTY smoke: bar pinned bottom, stream above, /model updates, resize redraws
+- 2026-07-17T12:28:56.163Z - ac-confirmed: AC5: user-confirmed live TTY: terminal restored after /exit and Ctrl-C; tsc clean; bun test 1369 pass/0 fail on main
+- 2026-07-17T12:28:56.294Z - completing
+- 2026-07-17T12:28:56.384Z - done: all gates passed

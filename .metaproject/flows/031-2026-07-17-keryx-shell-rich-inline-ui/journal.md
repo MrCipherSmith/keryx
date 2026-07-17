@@ -54,3 +54,5 @@
 - 2026-07-17T11:35:26.492Z - ac-confirmed: AC5: tsc clean; bun test 1364 pass/0 fail (baseline 1355); live render shown in real terminal; piped non-TTY path plain (no corruption)
 - 2026-07-17T11:37:28.859Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/34
 - 2026-07-17T11:37:29.013Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-17T12:26:57.057Z - completing
+- 2026-07-17T12:26:57.099Z - done: all gates passed
