@@ -21,8 +21,11 @@ The core is deterministic, local, and offline — with zero runtime dependencies
 ## Quick Start
 
 ```bash
-# Install the CLI globally
+# Install the CLI globally (curl)
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh | bash -s -- --global
+
+# ...or with bun (no curl needed — bun is already a requirement)
+bun -e 'await Bun.spawn(["bash","-s","--","--global"],{stdin:await fetch("https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh"),stdout:"inherit",stderr:"inherit"}).exited'
 
 # Initialize the workspace in your project
 cd path/to/your-project
