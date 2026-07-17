@@ -1,19 +1,35 @@
 // Metaproject read-only tools for interactive agent mode (flow 035 / SA-01 Flow B).
 //
 // These give the agent keryx's differentiator — code search, graph blast-radius,
-// and project memory — by running FIXED keryx read-only subcommands as a
-// subprocess with an ARGV ARRAY (never a shell string, so a pattern/file/query
-// argument can never inject a command). The command (`keryx`) and subcommand are
-// fixed; the model supplies only arguments. Risk is `read` (constrained-read),
-// auto-allowed by the flow-033 gate. The runner is injectable so tests are
-// deterministic (no real subprocess).
+// project memory, whole-graph queries, and wiki pages. Since flow 038 the tools
+// are a THIN PROJECTION of the single metaproject-operation descriptor source
+// (metaproject-operations.ts): when a `port` is provided the agent sources its
+// tools from `toInteractiveTools(METAPROJECT_OPERATIONS, port)`, so adding an
+// operation once surfaces it here and in the harness registry.
+//
+// The subprocess fallback is preserved: when NO `port` is given the tools run
+// FIXED keryx read-only subcommands as a subprocess with an ARGV ARRAY (never a
+// shell string, so a pattern/file/query argument can never inject a command). And
+// even with a port, `search_code` — which has no in-process backing — degrades to
+// the subprocess runner rather than surfacing the port's "unavailable" result.
 
+import {
+  METAPROJECT_OPERATIONS,
+  formatAffected,
+  formatMemory,
+  toInteractiveTools,
+} from "../metaproject-operations";
 import type {
   GraphAffectedResult,
   MemorySearchResult,
   MetaprojectPort,
+  SearchCodeResult,
 } from "../metaproject-port";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
+
+// Re-export the formatters for backward compatibility with existing importers.
+export { formatAffected, formatMemory };
+export type { GraphAffectedResult, MemorySearchResult };
 
 /** Runs `keryx <args>` and returns the captured output (or an error result). */
 export type KeryxRunner = (args: string[]) => Promise<InteractiveToolResult>;
@@ -63,52 +79,53 @@ function requireString(
   return { value };
 }
 
-/** Render a structured `graphAffected` result as readable text for the model. */
-function formatAffected(result: GraphAffectedResult): InteractiveToolResult {
-  if (result.error !== undefined) {
-    return { output: `graph_affected failed: ${result.error}`, isError: true };
-  }
-  if (result.affected.length === 0) {
-    return { output: `No dependents found for ${result.target}.`, isError: false };
-  }
-  const header = `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
-  const lines = result.affected.map((node) => {
-    const fanIn = node.fanIn !== undefined ? `, fanIn ${node.fanIn}` : "";
-    return `  - ${node.path ?? node.id} (hop ${node.hop}${fanIn})`;
-  });
-  return { output: [header, ...lines].join("\n"), isError: false };
-}
-
-/** Render a structured `memorySearch` result as readable text for the model. */
-function formatMemory(result: MemorySearchResult): InteractiveToolResult {
-  if (result.error !== undefined) {
-    return { output: `memory_search failed: ${result.error}`, isError: true };
-  }
-  if (result.hits.length === 0) {
-    return { output: `No memory entries matched "${result.query}".`, isError: false };
-  }
-  const header = `Memory hits for "${result.query}" (${result.hits.length}):`;
-  const lines = result.hits.map((hit) => {
-    const meta = [hit.type, hit.status].filter((v) => v !== undefined && v.length > 0).join("/");
-    const suffix = meta.length > 0 ? ` [${meta}]` : "";
-    const excerpt = hit.excerpt !== undefined && hit.excerpt.length > 0 ? ` — ${hit.excerpt}` : "";
-    return `  - ${hit.title} (${hit.path}, score ${hit.score.toFixed(3)})${suffix}${excerpt}`;
-  });
-  return { output: [header, ...lines].join("\n"), isError: false };
+/**
+ * Wrap `port` so `searchCode` degrades to the subprocess `run`ner when the port
+ * has no in-process backing (an `isError` result). The port is still CONSULTED
+ * first (preserving the flow-037 behavior/tests); only a failed port result falls
+ * back to `keryx ctx rg <pattern> [path]`. All other methods pass through.
+ */
+function withSearchFallback(port: MetaprojectPort, run: KeryxRunner): MetaprojectPort {
+  return {
+    ...port,
+    async searchCode(input): Promise<SearchCodeResult> {
+      const result = await port.searchCode(input);
+      if (!result.isError) {
+        return result;
+      }
+      const args = ["ctx", "rg", input.pattern];
+      if (input.path !== undefined) {
+        args.push(input.path);
+      }
+      const fallback = await run(args);
+      return {
+        pattern: input.pattern,
+        ...(input.path !== undefined ? { path: input.path } : {}),
+        output: fallback.output,
+        isError: fallback.isError,
+      };
+    },
+  };
 }
 
 /**
- * The three read-only metaproject tools, bound to `root`. `run` defaults to a real
- * keryx subprocess runner and is injectable for deterministic tests. When `port`
- * is provided, `search_code` / `graph_affected` / `memory_search` call the port
- * IN-PROCESS and format its structured result to readable text; when omitted, they
- * keep the existing subprocess-runner behavior (backward compatible).
+ * The read-only metaproject tools, bound to `root`. `run` defaults to a real keryx
+ * subprocess runner and is injectable for deterministic tests. When `port` is
+ * provided, the tools are the single-source descriptor projection
+ * (`toInteractiveTools(METAPROJECT_OPERATIONS, port)`), with `search_code`
+ * degrading to the subprocess runner when the port has no in-process backing.
+ * When `port` is omitted, the original three subprocess-backed tools are returned
+ * unchanged (backward compatible).
  */
 export function builtinMetaprojectTools(
   root: string,
   run: KeryxRunner = makeKeryxRunner(root),
   port?: MetaprojectPort,
 ): InteractiveTool[] {
+  if (port !== undefined) {
+    return toInteractiveTools(METAPROJECT_OPERATIONS, withSearchFallback(port, run));
+  }
+
   const searchCode: InteractiveTool = {
     definition: {
       name: "search_code",
@@ -128,14 +145,6 @@ export function builtinMetaprojectTools(
         return pattern.error;
       }
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
-      if (port !== undefined) {
-        const result = await port.searchCode({ pattern: pattern.value, ...(path !== undefined ? { path } : {}) });
-        // searchCode has no in-process backing; fall back to the subprocess runner
-        // so search_code keeps working under a port that only serves graph/memory.
-        if (!result.isError) {
-          return { output: result.output, isError: false };
-        }
-      }
       const args = ["ctx", "rg", pattern.value];
       if (path !== undefined) {
         args.push(path);
@@ -162,9 +171,6 @@ export function builtinMetaprojectTools(
       if ("error" in file) {
         return file.error;
       }
-      if (port !== undefined) {
-        return formatAffected(await port.graphAffected({ target: file.value }));
-      }
       return run(["gdgraph", "affected", file.value]);
     },
   };
@@ -186,9 +192,6 @@ export function builtinMetaprojectTools(
       const query = requireString(input, "query", "memory_search");
       if ("error" in query) {
         return query.error;
-      }
-      if (port !== undefined) {
-        return formatMemory(await port.memorySearch({ query: query.value }));
       }
       return run(["memory", "search", query.value]);
     },
