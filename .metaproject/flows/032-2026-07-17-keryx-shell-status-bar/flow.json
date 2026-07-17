@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "id": "032",
+  "slug": "keryx-shell-status-bar",
+  "title": "keryx shell persistent status bar — pinned cwd/provider/model/keys via ANSI scroll-region (hand-rolled, no new deps)",
+  "status": "implemented",
+  "createdAt": "2026-07-17T11:40:16.287Z",
+  "updatedAt": "2026-07-17T11:49:54.340Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f8da1389db3d0ec873772fe12661503f03226298ef21cd12dbadefcdaac91f82",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T11:48:42.624Z",
+      "note": "formatStatusBar tests: NO_COLOR plain+home-collapse, overflow truncation width<=columns, FORCE_COLOR ANSI (statusbar.test.ts)"
+    },
+    "AC2": {
+      "at": "2026-07-17T11:48:42.712Z",
+      "note": "scrollRegion tests: enter [1;23r, drawAt [24;1H+[2K, exit [r+[?25h (statusbar.test.ts)"
+    },
+    "AC4": {
+      "at": "2026-07-17T11:48:42.822Z",
+      "note": "safe degradation verified: non-TTY smoke emits 0 scroll-region escapes; deps still {}. Ctrl-C/exit terminal-restore pending user real-TTY smoke"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/35"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-17T11:40:16.287Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-17T11:42:12.199Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-17T11:42:12.283Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-17T11:42:12.374Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-17T11:48:42.322Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-17T11:48:42.538Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-17T11:48:42.624Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: formatStatusBar tests: NO_COLOR plain+home-collapse, overflow truncation width<=columns, FORCE_COLOR ANSI (statusbar.test.ts)"
+    },
+    {
+      "at": "2026-07-17T11:48:42.712Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: scrollRegion tests: enter [1;23r, drawAt [24;1H+[2K, exit [r+[?25h (statusbar.test.ts)"
+    },
+    {
+      "at": "2026-07-17T11:48:42.822Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: safe degradation verified: non-TTY smoke emits 0 scroll-region escapes; deps still {}. Ctrl-C/exit terminal-restore pending user real-TTY smoke"
+    },
+    {
+      "at": "2026-07-17T11:49:54.232Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/35"
+    },
+    {
+      "at": "2026-07-17T11:49:54.340Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

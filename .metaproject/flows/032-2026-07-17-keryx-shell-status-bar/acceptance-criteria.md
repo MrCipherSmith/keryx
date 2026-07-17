@@ -1,0 +1,17 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+## Criteria
+
+- AC1: Pure status-bar formatter — `src/lib/statusbar.ts` exports `formatStatusBar({ cwd, provider, model, columns })` returning the one-line bar: it collapses a leading `$HOME` to `~`, joins `cwd`, `provider/model`, and a `/help` hint with a separator, and fits within `columns` (middle-truncating the cwd with an ellipsis when the line would overflow — the result's visible width never exceeds `columns`). It is deterministic and pure (no IO / `Date.now` / `Math.random`); when `colorEnabled()` is false it returns plain text with no ANSI escape codes. Unit tests in `src/lib/statusbar.test.ts` cover home-collapse, an overflowing cwd (truncated, width ≤ columns), and the NO_COLOR plain path.
+- AC2: Pure scroll-region CSI builders — `src/lib/statusbar.ts` exports scroll-region helpers (e.g. `scrollRegion(rows)`) producing the control strings to (a) ENTER a reserved-bottom-row region (DECSTBM set to `1..rows-1`), (b) DRAW at the reserved row (save cursor → move to `rows` → clear line → write → restore cursor), and (c) EXIT/reset (DECSTBM reset `ESC[r`, show cursor). Pure `→ string`; unit-tested to contain the exact CSI sequences, and that the EXIT builder emits a region RESET. No terminal IO in these helpers.
+- AC3: Pinned bar wired into the flow-031 TTY wrapper — when `colorEnabled()` AND `stdout.isTTY` AND the terminal has at least the minimum rows, `shellCommand`/`createRichIo` enters the scroll-region, draws the bar (cwd + current `provider/model` + hint), redraws it after each turn and after a `/model` or `/provider` switch (reflecting the LIVE selection), and redraws on `SIGWINCH` (recomputed size). The deterministic `runShell` core and its `ShellIO` hooks are UNCHANGED (the bar is built entirely in the wrapper); no scroll-region escapes are emitted from the core.
+- AC4: Robust lifecycle / safe degradation — on every exit path (`/exit`, EOF, `SIGINT`, or a thrown error) the wrapper resets the scroll region (`ESC[r`), restores/shows the cursor, and removes its `SIGWINCH`/`SIGINT` listeners, so the terminal is never left in a broken state (try/finally + signal handling). When `NO_COLOR` is set, the sink is not a TTY, or the terminal is below the minimum height, NO scroll-region/DECSTBM escapes are emitted at all and the shell behaves exactly as flow 031 (plain). No new production dependency — `dependencies` REMAINS `{}` (hand-rolled ANSI only; no Ink/OpenTUI/blessed).
+- AC5: No regression / offline / deterministic — `tsc --noEmit` is clean and the full `bun test` suite is ≥ the pre-change baseline of 1364 pass / 3 skip / 0 fail with the new `statusbar` tests green and 0 fail; the entire automated suite runs OFFLINE and deterministic (pure helpers only; no real TTY, signals, or network in tests). A live manual smoke in a real TTY (`bun src/cli.ts shell`) shows the bar pinned to the bottom while a reply streams above it, updating on `/model` and on window resize, and the terminal fully restored after `/exit` and after `Ctrl-C` — recorded in the flow journal; not a CI gate. The frozen requirements package, canonical schemas, ADRs, `src/eval/`, and `src/contracts/` are NOT modified.
