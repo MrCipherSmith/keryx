@@ -28,7 +28,8 @@ import type {
 } from "../harness/provider/types";
 import { buildOrientation } from "../ctx/orient";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
-import { builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
+import { makeKeryxRunner, builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
+import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { formatStatusBar, scrollRegion } from "../lib/statusbar";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
@@ -754,13 +755,16 @@ export async function shellCommand(args: string[]): Promise<void> {
       } catch {
         orient = ""; // orientation is best-effort; the builder falls back
       }
+      // In-process metaproject access (flow 037): the adapter serves graph +
+      // memory in-process; search_code still falls back to the subprocess runner.
+      const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
         tools: [
           ...builtinReadOnlyTools(process.cwd()),
-          ...builtinMetaprojectTools(process.cwd()),
+          ...builtinMetaprojectTools(process.cwd(), makeKeryxRunner(process.cwd()), metaprojectPort),
           shellExecTool(process.cwd()),
         ],
         systemInstruction: buildAgentSystemInstruction(orient),

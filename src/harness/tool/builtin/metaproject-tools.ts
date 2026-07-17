@@ -8,6 +8,11 @@
 // auto-allowed by the flow-033 gate. The runner is injectable so tests are
 // deterministic (no real subprocess).
 
+import type {
+  GraphAffectedResult,
+  MemorySearchResult,
+  MetaprojectPort,
+} from "../metaproject-port";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 
 /** Runs `keryx <args>` and returns the captured output (or an error result). */
@@ -58,11 +63,52 @@ function requireString(
   return { value };
 }
 
+/** Render a structured `graphAffected` result as readable text for the model. */
+function formatAffected(result: GraphAffectedResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `graph_affected failed: ${result.error}`, isError: true };
+  }
+  if (result.affected.length === 0) {
+    return { output: `No dependents found for ${result.target}.`, isError: false };
+  }
+  const header = `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
+  const lines = result.affected.map((node) => {
+    const fanIn = node.fanIn !== undefined ? `, fanIn ${node.fanIn}` : "";
+    return `  - ${node.path ?? node.id} (hop ${node.hop}${fanIn})`;
+  });
+  return { output: [header, ...lines].join("\n"), isError: false };
+}
+
+/** Render a structured `memorySearch` result as readable text for the model. */
+function formatMemory(result: MemorySearchResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `memory_search failed: ${result.error}`, isError: true };
+  }
+  if (result.hits.length === 0) {
+    return { output: `No memory entries matched "${result.query}".`, isError: false };
+  }
+  const header = `Memory hits for "${result.query}" (${result.hits.length}):`;
+  const lines = result.hits.map((hit) => {
+    const meta = [hit.type, hit.status].filter((v) => v !== undefined && v.length > 0).join("/");
+    const suffix = meta.length > 0 ? ` [${meta}]` : "";
+    const excerpt = hit.excerpt !== undefined && hit.excerpt.length > 0 ? ` — ${hit.excerpt}` : "";
+    return `  - ${hit.title} (${hit.path}, score ${hit.score.toFixed(3)})${suffix}${excerpt}`;
+  });
+  return { output: [header, ...lines].join("\n"), isError: false };
+}
+
 /**
  * The three read-only metaproject tools, bound to `root`. `run` defaults to a real
- * keryx subprocess runner and is injectable for deterministic tests.
+ * keryx subprocess runner and is injectable for deterministic tests. When `port`
+ * is provided, `search_code` / `graph_affected` / `memory_search` call the port
+ * IN-PROCESS and format its structured result to readable text; when omitted, they
+ * keep the existing subprocess-runner behavior (backward compatible).
  */
-export function builtinMetaprojectTools(root: string, run: KeryxRunner = makeKeryxRunner(root)): InteractiveTool[] {
+export function builtinMetaprojectTools(
+  root: string,
+  run: KeryxRunner = makeKeryxRunner(root),
+  port?: MetaprojectPort,
+): InteractiveTool[] {
   const searchCode: InteractiveTool = {
     definition: {
       name: "search_code",
@@ -81,9 +127,18 @@ export function builtinMetaprojectTools(root: string, run: KeryxRunner = makeKer
       if ("error" in pattern) {
         return pattern.error;
       }
+      const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
+      if (port !== undefined) {
+        const result = await port.searchCode({ pattern: pattern.value, ...(path !== undefined ? { path } : {}) });
+        // searchCode has no in-process backing; fall back to the subprocess runner
+        // so search_code keeps working under a port that only serves graph/memory.
+        if (!result.isError) {
+          return { output: result.output, isError: false };
+        }
+      }
       const args = ["ctx", "rg", pattern.value];
-      if (typeof input.path === "string" && input.path.length > 0) {
-        args.push(input.path);
+      if (path !== undefined) {
+        args.push(path);
       }
       return run(args);
     },
@@ -104,7 +159,13 @@ export function builtinMetaprojectTools(root: string, run: KeryxRunner = makeKer
     },
     invoke: async (input) => {
       const file = requireString(input, "file", "graph_affected");
-      return "error" in file ? file.error : run(["gdgraph", "affected", file.value]);
+      if ("error" in file) {
+        return file.error;
+      }
+      if (port !== undefined) {
+        return formatAffected(await port.graphAffected({ target: file.value }));
+      }
+      return run(["gdgraph", "affected", file.value]);
     },
   };
 
@@ -123,7 +184,13 @@ export function builtinMetaprojectTools(root: string, run: KeryxRunner = makeKer
     },
     invoke: async (input) => {
       const query = requireString(input, "query", "memory_search");
-      return "error" in query ? query.error : run(["memory", "search", query.value]);
+      if ("error" in query) {
+        return query.error;
+      }
+      if (port !== undefined) {
+        return formatMemory(await port.memorySearch({ query: query.value }));
+      }
+      return run(["memory", "search", query.value]);
     },
   };
 
