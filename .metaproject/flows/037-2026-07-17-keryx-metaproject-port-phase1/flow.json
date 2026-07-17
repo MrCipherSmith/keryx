@@ -3,17 +3,34 @@
   "id": "037",
   "slug": "keryx-metaproject-port-phase1",
   "title": "keryx MetaprojectPort Phase 1 — typed in-process metaproject port + reference adapter + agent tools native (keryx-metaproject-native MP-1/MP-2)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-17T21:45:46.673Z",
-  "updatedAt": "2026-07-17T21:58:45.948Z",
+  "updatedAt": "2026-07-17T22:01:41.844Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:fbf87b7bd91d262d532c60c7d439b4b7dfd51f4f85408b259c813f59bc11bd74",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T22:00:57.873Z",
+      "note": "metaproject-port.ts: MetaprojectPort interface + result types aligned to docpack schemas"
+    },
+    "AC2": {
+      "at": "2026-07-17T22:00:57.988Z",
+      "note": "metaproject-adapter.ts: in-process gdgraph/memory delegation, injectable factories, root-confined readWiki, deterministic, no-throw; adapter.test.ts fakes green"
+    },
+    "AC3": {
+      "at": "2026-07-17T22:00:58.398Z",
+      "note": "builtinMetaprojectTools(root,run?,port?) uses port in-process else subprocess; shell.ts injects adapter; port-injection tests green"
+    },
+    "AC4": {
+      "at": "2026-07-17T22:00:58.502Z",
+      "note": "independent verify: tsc clean, bun test 1403 pass/0 fail (baseline 1394), offline/deterministic, deps {}, subprocess fallback + chat core unchanged; live smoke deferred (not a gate)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/48"
   },
   "tasks": [
     {
@@ -110,6 +127,45 @@
       "at": "2026-07-17T21:58:45.948Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T22:00:57.873Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: metaproject-port.ts: MetaprojectPort interface + result types aligned to docpack schemas"
+    },
+    {
+      "at": "2026-07-17T22:00:57.988Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: metaproject-adapter.ts: in-process gdgraph/memory delegation, injectable factories, root-confined readWiki, deterministic, no-throw; adapter.test.ts fakes green"
+    },
+    {
+      "at": "2026-07-17T22:00:58.398Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: builtinMetaprojectTools(root,run?,port?) uses port in-process else subprocess; shell.ts injects adapter; port-injection tests green"
+    },
+    {
+      "at": "2026-07-17T22:00:58.502Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: independent verify: tsc clean, bun test 1403 pass/0 fail (baseline 1394), offline/deterministic, deps {}, subprocess fallback + chat core unchanged; live smoke deferred (not a gate)"
+    },
+    {
+      "at": "2026-07-17T22:01:21.982Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/48"
+    },
+    {
+      "at": "2026-07-17T22:01:41.810Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-17T22:01:41.844Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "2ba1231f6ff2726f2a4af96bfaef59abea38c81a",
+    "ref": "origin/main",
+    "at": "2026-07-17T22:01:41.844Z"
+  }
 }

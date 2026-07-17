@@ -14,3 +14,10 @@
 - AC1–AC3 satisfied; AC4 automated portion satisfied (live smoke deferred — not a CI gate).
 - 2026-07-17T21:58:45.830Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-17T21:58:45.948Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-17T22:00:57.873Z - ac-confirmed: AC1: metaproject-port.ts: MetaprojectPort interface + result types aligned to docpack schemas
+- 2026-07-17T22:00:57.988Z - ac-confirmed: AC2: metaproject-adapter.ts: in-process gdgraph/memory delegation, injectable factories, root-confined readWiki, deterministic, no-throw; adapter.test.ts fakes green
+- 2026-07-17T22:00:58.398Z - ac-confirmed: AC3: builtinMetaprojectTools(root,run?,port?) uses port in-process else subprocess; shell.ts injects adapter; port-injection tests green
+- 2026-07-17T22:00:58.502Z - ac-confirmed: AC4: independent verify: tsc clean, bun test 1403 pass/0 fail (baseline 1394), offline/deterministic, deps {}, subprocess fallback + chat core unchanged; live smoke deferred (not a gate)
+- 2026-07-17T22:01:21.982Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/48
+- 2026-07-17T22:01:41.810Z - completing
+- 2026-07-17T22:01:41.844Z - done: all gates passed
