@@ -75,6 +75,59 @@ export function note(message: string): void {
   console.log(`  ${style.dim(message)}`);
 }
 
+// Inline markdown spans: `code` then **bold**. Code is rendered first so its
+// content is never re-scanned for bold markers. Pure + deterministic.
+function renderInline(text: string): string {
+  const withCode = text.replace(/`([^`]+)`/g, (_match, code: string) => style.gray(code));
+  return withCode.replace(/\*\*([^*]+)\*\*/g, (_match, bold: string) => style.bold(bold));
+}
+
+// Lightweight markdown → styled terminal text: ATX headings (`#`..`######`),
+// **bold**, `inline code`, fenced ``` code blocks, and -/* bullet lists. Pure,
+// deterministic (no IO / clock / randomness). When color is disabled (NO_COLOR
+// or a non-TTY sink) the input is returned unchanged — already plain,
+// structurally faithful text with no escape codes.
+export function renderMarkdown(md: string): string {
+  if (!colorEnabled()) {
+    return md;
+  }
+  const out: string[] = [];
+  let inCode = false;
+  for (const line of md.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      inCode = !inCode; // drop the fence line itself
+      continue;
+    }
+    if (inCode) {
+      out.push(style.gray(line));
+      continue;
+    }
+    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    if (heading !== null) {
+      out.push(style.bold(style.cyan(heading[1] ?? "")));
+      continue;
+    }
+    const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
+    if (bullet !== null) {
+      out.push(`${bullet[1] ?? ""}${style.cyan(symbols.bullet)} ${renderInline(bullet[2] ?? "")}`);
+      continue;
+    }
+    out.push(renderInline(line));
+  }
+  return out.join("\n");
+}
+
+// A styled conversational role marker for the inline chat header/prompt.
+export function roleLabel(role: string): string {
+  if (role === "assistant") {
+    return style.gray("assistant");
+  }
+  if (role === "you" || role === "user") {
+    return style.cyan("you");
+  }
+  return style.dim(role);
+}
+
 export type HelpOption = { flag: string; desc: string };
 
 // Bold command name plus a dim one-line summary; the header for `--help` output.

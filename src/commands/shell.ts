@@ -26,12 +26,30 @@ import type {
   NormalizedRequest,
   ProviderPort,
 } from "../harness/provider/types";
+import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
 import { detectProviders, pickProviderModel } from "./select";
 
 /** Async line source + write sink; no real stdio is reached by `runShell`. */
 export interface ShellIO {
   lines: AsyncIterable<string>;
   write: (s: string) => void;
+  /**
+   * OPTIONAL rich-rendering hooks (flow 031). They let a TTY wrapper tell
+   * assistant token deltas (still `write`) apart from system text and see turn
+   * boundaries, so it can render a spinner + markdown. When a hook is ABSENT the
+   * core's behavior is byte-identical to before: every non-token write falls
+   * back to `write` and the turn callbacks are no-ops.
+   *
+   * - `onTurnStart` fires once just before a model turn streams (after the user
+   *   line is recorded), e.g. to show an "assistant …" label + spinner.
+   * - `onTurnEnd` fires after a turn that produced assistant content, carrying
+   *   the FULL accumulated reply for a markdown re-render.
+   * - `onSystem` receives every NON-token line the core emits (errors, `/help`,
+   *   `/connect`, unknown-command, "not available" notices).
+   */
+  onTurnStart?: () => void;
+  onTurnEnd?: (full: string) => void;
+  onSystem?: (text: string) => void;
 }
 
 /** Injected dependencies keeping `runShell` deterministic + offline. */
@@ -93,6 +111,16 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let baseUrl = deps.initial.baseUrl;
   const parentRunId = deps.idSeq();
 
+  // Every NON-token line goes through `onSystem` when a rich wrapper supplies it,
+  // else falls back to `write` (byte-identical to the pre-flow-031 behavior).
+  const system = (text: string): void => {
+    if (io.onSystem !== undefined) {
+      io.onSystem(text);
+    } else {
+      io.write(text);
+    }
+  };
+
   const makeActive = (): ProviderPort =>
     baseUrl === undefined
       ? deps.makeProvider(providerName, modelName)
@@ -124,7 +152,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         return;
       }
       if (command === "/help") {
-        io.write(HELP_TEXT);
+        system(HELP_TEXT);
         continue;
       }
       if (command === "/clear") {
@@ -140,7 +168,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       }
       if (command === "/models") {
         if (deps.selectProviderModel === undefined) {
-          io.write("Interactive model selection is not available in this session.\n");
+          system("Interactive model selection is not available in this session.\n");
           continue;
         }
         const picked = await deps.selectProviderModel(io, { onlyProvider: providerName });
@@ -155,7 +183,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           continue;
         }
         if (deps.selectProviderModel === undefined) {
-          io.write("Interactive provider selection is not available in this session.\n");
+          system("Interactive provider selection is not available in this session.\n");
           continue;
         }
         // Pass an empty opts object (no `onlyProvider`) → full re-selection.
@@ -164,10 +192,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         continue;
       }
       if (command === "/connect") {
-        io.write(CONNECT_GUIDANCE);
+        system(CONNECT_GUIDANCE);
         continue;
       }
-      io.write(`Unknown command: ${command}. Type /help for commands.\n`);
+      system(`Unknown command: ${command}. Type /help for commands.\n`);
       continue;
     }
 
@@ -192,6 +220,9 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
 
     let accumulated = "";
     let errored = false;
+    // Signal the start of a streamed reply so a rich wrapper can show a role
+    // label + spinner; a no-op (no output) when no wrapper is attached.
+    io.onTurnStart?.();
     try {
       for await (const event of provider.stream(request, { attemptId: deps.idSeq() })) {
         if (event.kind === "text_delta") {
@@ -200,7 +231,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           accumulated += text;
         } else if (event.kind === "provider_error") {
           const detail = event.error?.message ?? event.error?.kind ?? "provider error";
-          io.write(`\n[error] ${detail}\n`);
+          system(`\n[error] ${detail}\n`);
           errored = true;
           break;
         } else if (event.kind === "model_end") {
@@ -210,8 +241,14 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     } catch (cause) {
       // A reused adapter emits `provider_error` events rather than throwing, but
       // guard against an unexpected throw so one bad turn never ends the session.
-      io.write(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
+      system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
       errored = true;
+    }
+
+    // Hand the FULL accumulated reply to a rich wrapper for a markdown re-render
+    // (any turn that streamed content, errored or not). No-op when unattached.
+    if (accumulated.length > 0) {
+      io.onTurnEnd?.(accumulated);
     }
 
     if (!errored) {
@@ -271,10 +308,139 @@ function realSelectProviderModel(baseUrl: string | undefined): NonNullable<Shell
   };
 }
 
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const PROMPT_MARK = "❯ ";
+
+/** Terminal rows `text` occupies starting at column 0 for the given width. */
+function countRows(text: string, columns: number): number {
+  let rows = 1;
+  let col = 0;
+  for (const ch of text) {
+    if (ch === "\n") {
+      rows += 1;
+      col = 0;
+    } else {
+      col += 1;
+      if (col >= columns) {
+        rows += 1;
+        col = 0;
+      }
+    }
+  }
+  return rows;
+}
+
+/** The rich TTY renderer wired into `ShellIO`'s optional hooks (flow 031). */
+interface RichIo {
+  io: ShellIO;
+  emitSystem: (text: string) => void;
+  printHeader: (title: string, subtitle: string) => void;
+}
+
+/**
+ * Build the rich-inline renderer (NOT unit-tested): a `ShellIO` whose optional
+ * hooks drive a role label + spinner, live token streaming, and a post-turn
+ * markdown re-render, plus styled system notices and a colored prompt marker.
+ * All styling is confined here (the spinner timer included — the `runShell` core
+ * stays timer/`Date.now`/`Math.random`-free) and degrades to plain, uncorrupted
+ * output when `NO_COLOR` is set or the sink is not a TTY.
+ */
+function createRichIo(lines: AsyncIterable<string>): RichIo {
+  const stdout = process.stdout;
+  const rich = colorEnabled() && Boolean(stdout.isTTY);
+  const out = (s: string): void => {
+    stdout.write(s);
+  };
+
+  let spinner: ReturnType<typeof setInterval> | undefined;
+  let frame = 0;
+  let awaitingFirstToken = false;
+  let raw = "";
+
+  const stopSpinner = (): void => {
+    if (spinner !== undefined) {
+      clearInterval(spinner);
+      spinner = undefined;
+      out("\r[2K"); // erase the spinner line
+    }
+  };
+
+  const emitSystem = (text: string): void => {
+    stopSpinner();
+    if (!rich) {
+      out(text);
+      return;
+    }
+    out(text.includes("[error]") ? style.red(text) : style.dim(text));
+  };
+
+  const printPrompt = (): void => {
+    out(rich ? style.cyan(PROMPT_MARK) : PROMPT_MARK);
+  };
+
+  const write = (s: string): void => {
+    if (awaitingFirstToken && s.length > 0) {
+      stopSpinner(); // first token lands: drop the spinner, start streaming
+      awaitingFirstToken = false;
+    }
+    // Accumulate the raw stream for the post-turn re-render. The "\n\n" turn
+    // separator arrives AFTER onTurnEnd, so it is never part of `raw`.
+    if (!awaitingFirstToken && s !== "\n\n") {
+      raw += s;
+    }
+    out(s);
+    if (s === "\n\n") {
+      printPrompt(); // re-prompt before the next input line
+    }
+  };
+
+  const onTurnStart = (): void => {
+    raw = "";
+    if (!rich) {
+      return;
+    }
+    out(`\n${roleLabel("assistant")}\n`);
+    awaitingFirstToken = true;
+    frame = 0;
+    spinner = setInterval(() => {
+      const glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "";
+      out(`\r[2K${style.dim(`${glyph} thinking…`)}`);
+      frame += 1;
+    }, 80);
+  };
+
+  const onTurnEnd = (full: string): void => {
+    stopSpinner();
+    if (!rich) {
+      return;
+    }
+    const rendered = renderMarkdown(full);
+    if (rendered === full || raw.length === 0) {
+      return; // nothing to restyle: leave the streamed raw text in place
+    }
+    const columns = stdout.columns ?? 80;
+    const rows = countRows(raw, columns);
+    if (rows > 1) {
+      out(`[${rows - 1}A`); // up to the first row of the streamed block
+    }
+    out("\r[0J"); // column 0, clear downward, then reprint rendered
+    out(rendered);
+  };
+
+  const printHeader = (title: string, subtitle: string): void => {
+    banner(title, subtitle);
+    note("Type a message, or /help for commands.");
+    printPrompt();
+  };
+
+  const io: ShellIO = { lines, write, onTurnStart, onTurnEnd, onSystem: emitSystem };
+  return { io, emitSystem, printHeader };
+}
+
 /**
  * Thin TTY wrapper (NOT unit-tested): parses `--provider` / `--model` /
- * `--base-url`, wires a real `node:readline` stdin line source + a
- * `process.stdout` sink, and runs the deterministic core.
+ * `--base-url`, wires a real `node:readline` stdin line source + a rich
+ * `process.stdout` renderer, and runs the deterministic core.
  *
  * When `--provider` is ABSENT, it first detects the available providers and
  * runs the interactive numbered picker (replacing any hardcoded default). When
@@ -296,15 +462,12 @@ export async function shellCommand(args: string[]): Promise<void> {
     }
   }
 
-  const write = (s: string): void => {
-    process.stdout.write(s);
-  };
   const rl = readline.createInterface({ input: process.stdin });
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();
   const sharedLines: AsyncIterable<string> = { [Symbol.asyncIterator]: () => lineIterator };
-  const io: ShellIO = { lines: sharedLines, write };
+  const { io, emitSystem, printHeader } = createRichIo(sharedLines);
 
   let provider: string;
   let model: string;
@@ -339,15 +502,14 @@ export async function shellCommand(args: string[]): Promise<void> {
     }
 
     const deps: ShellDeps = {
-      makeProvider: realMakeProvider(write),
+      makeProvider: realMakeProvider(emitSystem),
       clock: () => new Date().toISOString(),
       idSeq: () => randomUUID(),
       initial: baseUrl === undefined ? { provider, model } : { provider, model, baseUrl },
       selectProviderModel: realSelectProviderModel(baseUrl),
     };
 
-    write(`keryx shell — ${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}\n`);
-    write("Type a message, or /help for commands.\n");
+    printHeader("keryx shell", `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}`);
 
     await runShell(io, deps);
   } finally {

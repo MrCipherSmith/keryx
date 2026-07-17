@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "id": "031",
+  "slug": "keryx-shell-rich-inline-ui",
+  "title": "keryx shell rich-inline rendering — styled roles, markdown, streaming spinner (hand-rolled ANSI, no new deps)",
+  "status": "implemented",
+  "createdAt": "2026-07-17T11:08:05.757Z",
+  "updatedAt": "2026-07-17T11:37:29.013Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:984e60dd4648703f4dec4b252252cb05c44a947fec85b865cf7ea0a4daf78cdd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-17T11:26:46.506Z",
+      "note": "byte-identical hook-less regression + hook-order tests green (shell.test.ts flow-031 block)"
+    },
+    "AC2": {
+      "at": "2026-07-17T11:26:46.600Z",
+      "note": "renderMarkdown pure tests: FORCE_COLOR heading/bold/code/list/fence + NO_COLOR passthrough (ui.test.ts)"
+    },
+    "AC4": {
+      "at": "2026-07-17T11:26:46.719Z",
+      "note": "additive edits only (shell.ts/ui.ts/tests); deps still {}; tsc clean; reuse of select.ts/providers unchanged"
+    },
+    "AC3": {
+      "at": "2026-07-17T11:35:26.402Z",
+      "note": "live TTY render confirmed via user screenshot: cyan headings, • bullets, bold, dimmed fenced code block, blockquote from 'bun src/cli.ts shell'"
+    },
+    "AC5": {
+      "at": "2026-07-17T11:35:26.492Z",
+      "note": "tsc clean; bun test 1364 pass/0 fail (baseline 1355); live render shown in real terminal; piped non-TTY path plain (no corruption)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/34"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-17T11:08:05.757Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-17T11:11:29.522Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-17T11:11:29.609Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-17T11:11:29.692Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-17T11:26:46.317Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-17T11:26:46.418Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-17T11:26:46.506Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: byte-identical hook-less regression + hook-order tests green (shell.test.ts flow-031 block)"
+    },
+    {
+      "at": "2026-07-17T11:26:46.600Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: renderMarkdown pure tests: FORCE_COLOR heading/bold/code/list/fence + NO_COLOR passthrough (ui.test.ts)"
+    },
+    {
+      "at": "2026-07-17T11:26:46.720Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: additive edits only (shell.ts/ui.ts/tests); deps still {}; tsc clean; reuse of select.ts/providers unchanged"
+    },
+    {
+      "at": "2026-07-17T11:35:26.402Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: live TTY render confirmed via user screenshot: cyan headings, • bullets, bold, dimmed fenced code block, blockquote from 'bun src/cli.ts shell'"
+    },
+    {
+      "at": "2026-07-17T11:35:26.492Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsc clean; bun test 1364 pass/0 fail (baseline 1355); live render shown in real terminal; piped non-TTY path plain (no corruption)"
+    },
+    {
+      "at": "2026-07-17T11:37:28.859Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/34"
+    },
+    {
+      "at": "2026-07-17T11:37:29.013Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
