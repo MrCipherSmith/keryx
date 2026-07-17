@@ -33,3 +33,6 @@
 - 2026-07-17T19:28:18.895Z - ac-confirmed: AC2: injectable run tested (fake); default makeKeryxRunner uses Bun.spawn argv array (no shell string), cwd=root, bounded, errors→isError
 - 2026-07-17T19:28:19.079Z - ac-confirmed: AC3: agent registry = builtinReadOnlyTools + builtinMetaprojectTools; risk read auto-allowed by flow-033 gate; chat core unchanged
 - 2026-07-17T19:28:19.236Z - ac-confirmed: AC4: tsc clean; bun test 1387 pass/0 fail (baseline 1381); offline via fake run; deps {}. Live agent-uses-tools smoke pending tool-capable model; merge authorized by user
+- 2026-07-17T19:28:37.247Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-17T19:29:27.228Z - completing: merged commit: db08ed9
+- 2026-07-17T19:29:27.331Z - done: all gates passed

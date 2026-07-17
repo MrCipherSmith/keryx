@@ -3,9 +3,9 @@
   "id": "035",
   "slug": "keryx-agent-metaproject-tools",
   "title": "keryx agent metaproject tools (Flow B / SA-01) — search_code / graph_affected / memory_search via constrained keryx subprocess",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-17T19:18:20.014Z",
-  "updatedAt": "2026-07-17T19:28:19.236Z",
+  "updatedAt": "2026-07-17T19:29:27.331Z",
   "source": {
     "type": "description",
     "ref": null
@@ -82,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -90,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -141,6 +142,26 @@
       "at": "2026-07-17T19:28:19.236Z",
       "event": "ac-confirmed",
       "detail": "AC4: tsc clean; bun test 1387 pass/0 fail (baseline 1381); offline via fake run; deps {}. Live agent-uses-tools smoke pending tool-capable model; merge authorized by user"
+    },
+    {
+      "at": "2026-07-17T19:28:37.247Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-17T19:29:27.228Z",
+      "event": "completing",
+      "detail": "merged commit: db08ed9"
+    },
+    {
+      "at": "2026-07-17T19:29:27.331Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "db08ed9",
+    "ref": "origin/main",
+    "at": "2026-07-17T19:29:27.330Z"
+  }
 }
