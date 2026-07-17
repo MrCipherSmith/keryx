@@ -19,6 +19,7 @@ import { createFlowService } from "../flow/service";
 import { runValidate } from "../standard/service";
 import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
+import { toMcpTools } from "./metaproject-tools";
 
 // A minimal JSON-Schema fragment advertised in `tools/list`.
 export type JsonSchema = Record<string, unknown>;
@@ -70,7 +71,13 @@ function readOnlyFlowService(): ReturnType<typeof createFlowService> {
 }
 
 export function buildToolRegistry(): ToolEntry[] {
+  // Unified metaproject read tools, projected from the single METAPROJECT_OPERATIONS
+  // source (flow 038) via `toMcpTools` (flow 040). These are additive and read-only
+  // (M-10): the historical hardcoded adapters below expose the same underlying
+  // reads under their own legacy names/shapes and are preserved for test + shape
+  // stability (see the flow 040 journal). No name collides with a legacy adapter.
   return [
+    ...toMcpTools(),
     {
       name: "gdgraph.affected",
       module: "gdgraph",

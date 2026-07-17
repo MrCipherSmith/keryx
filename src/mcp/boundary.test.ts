@@ -29,6 +29,12 @@ async function tsFiles(dir: string): Promise<string[]> {
 // The ONLY cross-module specifiers `src/mcp/` is allowed to import statically.
 // Each is a service facade, a pure query/type module, `lib/*`, or the security
 // `guard` seam (redactRaw). Anything else is an internal-boundary violation.
+//
+// The `../harness/tool/metaproject-*` trio is permitted (flow 040): the single
+// metaproject operation source is projected into MCP tools via `toMcpTools`. These
+// are pure — the port is a types-only interface, the operations file is pure
+// descriptors + projections, and the reference adapter composes ONLY the service
+// facades already allow-listed above. No module internals cross the boundary.
 const ALLOWED_EXTERNAL = new Set([
   "../gdgraph/query",
   "../gdgraph/types",
@@ -41,6 +47,9 @@ const ALLOWED_EXTERNAL = new Set([
   "../wiki/service",
   "../flow/service",
   "../standard/service",
+  "../harness/tool/metaproject-operations",
+  "../harness/tool/metaproject-port",
+  "../harness/tool/metaproject-adapter",
 ]);
 
 function importSpecifiers(content: string): string[] {
