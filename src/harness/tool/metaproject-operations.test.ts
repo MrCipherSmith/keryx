@@ -32,11 +32,14 @@ const EXPECTED_NAMES = [
   "graph_affected",
   "graph_path",
   "graph_query",
+  "graph_symbol",
   "health_status",
   "memory_search",
   "read_wiki",
+  "repomap",
   "search_code",
   "test_related",
+  "wiki_ask",
 ];
 
 interface PortCalls {
@@ -263,4 +266,61 @@ test("toToolDefinitions and MCP-shape names include the new operations", () => {
   expect(ids).toContain("metaproject:graph_path");
   expect(ids).toContain("metaproject:test_related");
   expect(ids).toContain("metaproject:health_status");
+});
+
+// --- flow 044: batch-2 operations (graph_symbol / repomap / wiki_ask) ---------
+
+test("batch-2 operations return 'unavailable' when the optional port method is absent", async () => {
+  const { port } = recordingPort(); // has no graphSymbol/repomap/wikiAsk
+  for (const name of ["graph_symbol", "repomap", "wiki_ask"]) {
+    const result = await op(name).invoke(port, { name: "foo", question: "why", budget: 100 });
+    expect(result.isError).toBe(true);
+    expect(result.output).toMatch(/not available/);
+  }
+});
+
+test("batch-2 operations format the structured port result when the method is present", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    graphSymbol: async ({ name }) => ({
+      name,
+      definitions: [
+        { id: "src/a.ts#foo", name: "foo", kind: "function", path: "src/a.ts", startLine: 3, container: null },
+      ],
+      callers: ["bar (src/b.ts:9)"],
+      callees: ["baz (src/c.ts:1)"],
+    }),
+    repomap: async ({ budget }) => ({
+      budget: budget ?? 1000,
+      files: [{ path: "src/a.ts", score: 0.1234, symbols: ["function foo()"] }],
+      tokens: 42,
+      omitted: 2,
+    }),
+    wikiAsk: async ({ question }) => ({
+      question,
+      citations: [{ path: "wiki/arch.md", title: "Arch", excerpt: "e", score: 0.5, source: "wiki" }],
+      answer: "# Answer\n\nBased on the project's own wiki.",
+    }),
+  };
+
+  const symbolResult = await op("graph_symbol").invoke(port, { name: "foo" });
+  expect(symbolResult.isError).toBe(false);
+  expect(symbolResult.output).toContain("foo (function) at src/a.ts:3");
+  expect(symbolResult.output).toContain("bar (src/b.ts:9)");
+
+  const repomapResult = await op("repomap").invoke(port, { budget: 500 });
+  expect(repomapResult.isError).toBe(false);
+  expect(repomapResult.output).toContain("src/a.ts");
+  expect(repomapResult.output).toContain("2 omitted");
+
+  const wikiResult = await op("wiki_ask").invoke(port, { question: "why offline" });
+  expect(wikiResult.isError).toBe(false);
+  expect(wikiResult.output).toContain("# Answer");
+});
+
+test("toToolDefinitions includes the batch-2 operation toolIds", () => {
+  const ids = toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId);
+  expect(ids).toContain("metaproject:graph_symbol");
+  expect(ids).toContain("metaproject:repomap");
+  expect(ids).toContain("metaproject:wiki_ask");
 });

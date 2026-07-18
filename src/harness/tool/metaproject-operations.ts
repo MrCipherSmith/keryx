@@ -20,10 +20,13 @@ import type {
   GraphAffectedResult,
   GraphPathResult,
   GraphQueryResult,
+  GraphSymbolResult,
   HealthStatusResult,
   MemorySearchResult,
   MetaprojectPort,
+  RepomapResult,
   TestRelatedResult,
+  WikiAskResult,
   WikiPageResult,
 } from "./metaproject-port";
 import type { ToolDefinition } from "./types";
@@ -240,6 +243,51 @@ export function formatHealth(result: HealthStatusResult): InteractiveToolResult 
   return { output: `Code health — ${parts.join(", ")}.`, isError: false };
 }
 
+/** Render a `graphSymbol` result as readable text. */
+export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `graph_symbol failed: ${result.error}`, isError: true };
+  }
+  if (result.definitions.length === 0) {
+    return { output: `No symbol definition found for ${result.name}.`, isError: false };
+  }
+  const defs = result.definitions.map(
+    (def) => `  - ${def.name} (${def.kind}) at ${def.path}:${def.startLine}`,
+  );
+  const lines = [`Symbol ${result.name} (${result.definitions.length} definition(s)):`, ...defs];
+  if (result.callers.length > 0) {
+    lines.push(`Callers (${result.callers.length}):`, ...result.callers.map((c) => `  - ${c}`));
+  }
+  if (result.callees.length > 0) {
+    lines.push(`Callees (${result.callees.length}):`, ...result.callees.map((c) => `  - ${c}`));
+  }
+  return { output: lines.join("\n"), isError: false };
+}
+
+/** Render a `repomap` result as readable text. */
+export function formatRepomap(result: RepomapResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `repomap failed: ${result.error}`, isError: true };
+  }
+  if (result.files.length === 0) {
+    return { output: "Repomap is empty (no ranked files).", isError: false };
+  }
+  const header = `Repomap (${result.files.length} file(s), ~${result.tokens} tokens, ${result.omitted} omitted):`;
+  const lines = result.files.map((file) => {
+    const symbols = file.symbols.length > 0 ? ` — ${file.symbols.join(", ")}` : "";
+    return `  - ${file.path} (score ${file.score.toFixed(4)})${symbols}`;
+  });
+  return { output: [header, ...lines].join("\n"), isError: false };
+}
+
+/** Render a `wikiAsk` result as readable text. */
+export function formatWikiAsk(result: WikiAskResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `wiki_ask failed: ${result.error}`, isError: true };
+  }
+  return { output: result.answer.length > 0 ? result.answer : "(no answer)", isError: false };
+}
+
 const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -274,6 +322,41 @@ const HEALTH_OUTPUT_SCHEMA: Record<string, unknown> = {
     error: { type: "string" },
   },
   required: ["enabled", "lastRunAt", "gate", "sources", "projectScore", "regressions"],
+};
+
+const SYMBOL_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    definitions: { type: "array" },
+    callers: { type: "array", items: { type: "string" } },
+    callees: { type: "array", items: { type: "string" } },
+    error: { type: "string" },
+  },
+  required: ["name", "definitions", "callers", "callees"],
+};
+
+const REPOMAP_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    budget: { type: "number" },
+    files: { type: "array" },
+    tokens: { type: "integer" },
+    omitted: { type: "integer" },
+    error: { type: "string" },
+  },
+  required: ["budget", "files", "tokens", "omitted"],
+};
+
+const WIKI_ASK_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    question: { type: "string" },
+    citations: { type: "array" },
+    answer: { type: "string" },
+    error: { type: "string" },
+  },
+  required: ["question", "citations", "answer"],
 };
 
 export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
@@ -452,6 +535,74 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return { output: "health_status is not available in this session.", isError: true };
       }
       return formatHealth(await port.healthStatus());
+    },
+  },
+  {
+    name: "graph_symbol",
+    risk: "read",
+    module: "gdgraph",
+    description:
+      "Look up where a symbol is defined plus its callers/callees over the code-graph symbol layer (`keryx gdgraph symbol`). Input: { name: string }.",
+    inputSchema: {
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+      additionalProperties: false,
+    },
+    outputSchema: SYMBOL_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.graphSymbol === undefined) {
+        return { output: "graph_symbol is not available in this session.", isError: true };
+      }
+      const name = requireString(input, "name", "graph_symbol");
+      if ("error" in name) {
+        return name.error;
+      }
+      return formatSymbol(await port.graphSymbol({ name: name.value }));
+    },
+  },
+  {
+    name: "repomap",
+    risk: "read",
+    module: "gdgraph",
+    description:
+      "Produce a ranked, token-budgeted repo map (top files + symbols by PageRank, `keryx gdgraph repomap`). Input: { budget?: number } token budget.",
+    inputSchema: {
+      type: "object",
+      properties: { budget: { type: "integer", minimum: 1 } },
+      additionalProperties: false,
+    },
+    outputSchema: REPOMAP_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.repomap === undefined) {
+        return { output: "repomap is not available in this session.", isError: true };
+      }
+      const budget = typeof input.budget === "number" && input.budget > 0 ? input.budget : undefined;
+      return formatRepomap(await port.repomap(budget !== undefined ? { budget } : {}));
+    },
+  },
+  {
+    name: "wiki_ask",
+    risk: "read",
+    module: "gdwiki",
+    description:
+      "Ask a question answered deterministically from the project's own wiki + memory with citations (`keryx wiki ask`). Input: { question: string }.",
+    inputSchema: {
+      type: "object",
+      properties: { question: { type: "string" } },
+      required: ["question"],
+      additionalProperties: false,
+    },
+    outputSchema: WIKI_ASK_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.wikiAsk === undefined) {
+        return { output: "wiki_ask is not available in this session.", isError: true };
+      }
+      const question = requireString(input, "question", "wiki_ask");
+      if ("error" in question) {
+        return question.error;
+      }
+      return formatWikiAsk(await port.wikiAsk({ question: question.value }));
     },
   },
 ];

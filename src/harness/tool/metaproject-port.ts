@@ -156,6 +156,85 @@ export interface HealthStatusResult {
   error?: string;
 }
 
+/** One resolved symbol definition — graphSymbol result. */
+export interface SymbolDefinition {
+  /** Stable symbol id ("<path>#<Container>.<name>"). */
+  id: string;
+  /** Symbol name. */
+  name: string;
+  /** Symbol kind (function, class, method, interface). */
+  kind: string;
+  /** Owning file path. */
+  path: string;
+  /** 1-based start line. */
+  startLine: number;
+  /** Enclosing class/namespace, or null. */
+  container: string | null;
+}
+
+/** Structured result of `graphSymbol` — where a symbol is defined + who calls it / what it calls. */
+export interface GraphSymbolResult {
+  /** The requested symbol name/token. */
+  name: string;
+  /** Resolved definitions of the symbol (empty when unresolved or no symbol layer). */
+  definitions: SymbolDefinition[];
+  /** Display labels of the symbols that call the resolved symbol(s), sorted. */
+  callers: string[];
+  /** Display labels of the symbols the resolved symbol(s) call, sorted. */
+  callees: string[];
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/** One ranked repomap entry — the file plus its top rendered symbols. */
+export interface RepomapFile {
+  /** File path (graph node id). */
+  path: string;
+  /** Deterministic PageRank score. */
+  score: number;
+  /** Rendered top symbols/signatures for the file. */
+  symbols: string[];
+}
+
+/** Structured result of `repomap` — a ranked, token-budgeted repo map. */
+export interface RepomapResult {
+  /** Token budget applied to the map. */
+  budget: number;
+  /** Ranked, budget-fitted file entries. */
+  files: RepomapFile[];
+  /** Estimated token count of the rendered map. */
+  tokens: number;
+  /** Number of ranked entries dropped to fit the budget. */
+  omitted: number;
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/** One wiki/memory citation backing a wiki answer — wikiAsk result. */
+export interface WikiAskCitation {
+  /** Citation path (wiki/<page> or memory/<entry>). */
+  path: string;
+  title: string;
+  /** Bounded excerpt of the cited page/entry. */
+  excerpt: string;
+  /** Deterministic lexical relevance score. */
+  score: number;
+  /** Which corpus the citation came from. */
+  source: "wiki" | "memory";
+}
+
+/** Structured result of `wikiAsk` — deterministic lexical Q&A over wiki + memory. */
+export interface WikiAskResult {
+  /** The question asked. */
+  question: string;
+  /** Ranked citations (empty when nothing matched). */
+  citations: WikiAskCitation[];
+  /** Assembled Markdown answer built deterministically from the citations. */
+  answer: string;
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
 /** Structured result of `describeContext` — a lightweight project summary. */
 export interface ContextSummaryResult {
   /** The project root the port is bound to. */
@@ -199,4 +278,15 @@ export interface MetaprojectPort {
   testRelated?(input: { file: string }): Promise<TestRelatedResult>;
   /** The latest code-health status/gate snapshot (health). */
   healthStatus?(): Promise<HealthStatusResult>;
+
+  // --- flow 044: additive OPTIONAL read operations (batch 2) -------------------
+  // Same OPTIONAL contract as flow 043: an absent method is an "unavailable"
+  // operation (a structured, isError result), never a throw.
+
+  /** Where a symbol is defined + its callers/callees over the symbol layer (gdgraph). */
+  graphSymbol?(input: { name: string }): Promise<GraphSymbolResult>;
+  /** A ranked, token-budgeted repo map over the code graph (gdgraph). */
+  repomap?(input: { budget?: number }): Promise<RepomapResult>;
+  /** Deterministic lexical Q&A over the project's wiki + memory (gdwiki). */
+  wikiAsk?(input: { question: string }): Promise<WikiAskResult>;
 }

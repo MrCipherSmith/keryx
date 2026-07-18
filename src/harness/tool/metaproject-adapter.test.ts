@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { AffectedOptions, AffectedResult } from "../../gdgraph/affected";
 import type { GdgraphService } from "../../gdgraph/service";
+import type { GraphData } from "../../gdgraph/types";
 import type {
   MemoryEntry,
   MemorySearchInput,
@@ -221,4 +222,159 @@ test("testRelated returns a structured error (never throws) when the resolver fa
   const result = await adapter.testRelated?.({ file: "src/a.ts" });
   expect(result?.tests).toEqual([]);
   expect(result?.error).toMatch(/testing boom/);
+});
+
+// --- flow 044: batch-2 adapter methods (graph_symbol / repomap / wiki_ask) ----
+
+/** A GdgraphService fake whose loadGraph/repomap are injectable per test. */
+function graphDeps(overrides: {
+  graph?: GraphData;
+  loadThrows?: boolean;
+  repomapResult?: RepomapServiceResult;
+  repomapThrows?: boolean;
+}): Partial<MetaprojectAdapterDeps> {
+  const gdgraph = {
+    async build() {
+      return { nodes: 0, edges: 0, summaryPath: "" };
+    },
+    async loadGraph() {
+      if (overrides.loadThrows) {
+        throw new Error("no graph on disk");
+      }
+      return overrides.graph ?? { nodes: [], edges: [] };
+    },
+    async affected(_cwd: string, target: string) {
+      return { target, depth: 1, dependencies: [], dependents: [], ranked: [] };
+    },
+    async repomap() {
+      if (overrides.repomapThrows) {
+        throw new Error("repomap boom");
+      }
+      return (overrides.repomapResult ?? {
+        path: "",
+        content: "",
+        entries: [],
+        tokens: 0,
+        omitted: 0,
+      }) as never;
+    },
+    async query() {
+      return [];
+    },
+  } satisfies GdgraphService;
+  return { createGdgraphService: () => gdgraph };
+}
+
+type RepomapServiceResult = {
+  path: string;
+  content: string;
+  entries: Array<{ path: string; score: number; symbols: string[] }>;
+  tokens: number;
+  omitted: number;
+};
+
+test("graphSymbol loads the graph and maps querySymbol definitions/callers/callees", async () => {
+  const graph: GraphData = {
+    nodes: [{ id: "src/a.ts", kind: "file", path: "src/a.ts", language: "typescript" }],
+    edges: [],
+    symbols: [
+      {
+        id: "src/a.ts#foo",
+        kind: "function",
+        path: "src/a.ts",
+        name: "foo",
+        container: null,
+        startLine: 3,
+        endLine: 5,
+        language: "typescript",
+      },
+      {
+        id: "src/b.ts#bar",
+        kind: "function",
+        path: "src/b.ts",
+        name: "bar",
+        container: null,
+        startLine: 1,
+        endLine: 2,
+        language: "typescript",
+      },
+    ],
+    calls: [{ id: "c1", from: "src/b.ts#bar", to: "src/a.ts#foo", kind: "calls", resolved: true }],
+  };
+  const adapter = createMetaprojectAdapter(CWD, graphDeps({ graph }));
+  const result = await adapter.graphSymbol?.({ name: "foo" });
+  expect(result?.definitions).toEqual([
+    { id: "src/a.ts#foo", name: "foo", kind: "function", path: "src/a.ts", startLine: 3, container: null },
+  ]);
+  expect(result?.callers).toEqual(["bar (src/b.ts:1)"]);
+  expect(result?.callees).toEqual([]);
+  expect(result?.error).toBeUndefined();
+});
+
+test("graphSymbol returns a structured error (never throws) when the graph load fails", async () => {
+  const adapter = createMetaprojectAdapter(CWD, graphDeps({ loadThrows: true }));
+  const result = await adapter.graphSymbol?.({ name: "foo" });
+  expect(result?.definitions).toEqual([]);
+  expect(result?.error).toContain("no graph on disk");
+});
+
+test("repomap delegates to the gdgraph facade and maps ranked entries", async () => {
+  const adapter = createMetaprojectAdapter(
+    CWD,
+    graphDeps({
+      repomapResult: {
+        path: "/proj/.metaproject/data/gdgraph/artifacts/repomap.md",
+        content: "# map",
+        entries: [{ path: "src/a.ts", score: 0.5, symbols: ["function foo()"] }],
+        tokens: 12,
+        omitted: 3,
+      },
+    }),
+  );
+  const result = await adapter.repomap?.({ budget: 100 });
+  expect(result?.budget).toBe(100);
+  expect(result?.files).toEqual([{ path: "src/a.ts", score: 0.5, symbols: ["function foo()"] }]);
+  expect(result?.tokens).toBe(12);
+  expect(result?.omitted).toBe(3);
+  expect(result?.error).toBeUndefined();
+});
+
+test("repomap returns a structured error (never throws) when the facade fails", async () => {
+  const adapter = createMetaprojectAdapter(CWD, graphDeps({ repomapThrows: true }));
+  const result = await adapter.repomap?.({ budget: 50 });
+  expect(result?.files).toEqual([]);
+  expect(result?.budget).toBe(50);
+  expect(result?.error).toContain("repomap boom");
+});
+
+test("wikiAsk delegates to the injected resolver and maps citations + answer", async () => {
+  const adapter = createMetaprojectAdapter(CWD, {
+    wikiAsk: async ({ cwd, question }) => {
+      expect(cwd).toBe(CWD);
+      return {
+        question,
+        citations: [{ path: "wiki/arch.md", title: "Arch", excerpt: "e", score: 0.5, source: "wiki" }],
+        answerMarkdown: "# Answer",
+      };
+    },
+  });
+  const result = await adapter.wikiAsk?.({ question: "why offline" });
+  expect(result?.question).toBe("why offline");
+  expect(result?.citations).toEqual([
+    { path: "wiki/arch.md", title: "Arch", excerpt: "e", score: 0.5, source: "wiki" },
+  ]);
+  expect(result?.answer).toBe("# Answer");
+  expect(result?.error).toBeUndefined();
+});
+
+test("wikiAsk returns a structured error (never throws) when the resolver fails", async () => {
+  const adapter = createMetaprojectAdapter(CWD, {
+    wikiAsk: async () => {
+      throw new Error("wiki boom");
+    },
+  });
+  const result = await adapter.wikiAsk?.({ question: "q" });
+  expect(result?.citations).toEqual([]);
+  expect(result?.answer).toBe("");
+  expect(result?.error).toMatch(/wiki boom/);
 });

@@ -17,21 +17,27 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
 import { findPath } from "../../gdgraph/path";
+import { querySymbol } from "../../gdgraph/symbol";
 import { createMemoryService } from "../../memory/service";
 import type { MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
 import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
+import { wikiAsk } from "../../wiki/ask";
+import type { WikiAskInput, WikiAskResult as WikiAskFacadeResult } from "../../wiki/types";
 import type {
   ContextSummaryResult,
   GraphAffectedResult,
   GraphPathResult,
   GraphQueryResult,
+  GraphSymbolResult,
   HealthStatusResult,
   MemorySearchResult,
   MetaprojectPort,
+  RepomapResult,
   SearchCodeResult,
   TestRelatedResult,
+  WikiAskResult,
   WikiPageResult,
 } from "./metaproject-port";
 
@@ -43,6 +49,8 @@ export interface MetaprojectAdapterDeps {
   findRelatedTests: (cwd: string, target: string) => Promise<string[]>;
   /** Code-health facade factory (default: the real health service). Injectable for tests. */
   createCodeHealthService: () => CodeHealthService;
+  /** Wiki Q&A resolver (default: the real gdwiki `ask` facade). Injectable for tests. */
+  wikiAsk: (input: WikiAskInput) => Promise<WikiAskFacadeResult>;
 }
 
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
@@ -50,6 +58,7 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   createMemoryService,
   findRelatedTests,
   createCodeHealthService,
+  wikiAsk,
 };
 
 /** Bounded excerpt/output cap so a structured result stays modest. */
@@ -269,6 +278,76 @@ export function createMetaprojectAdapter(
           regressions: 0,
           error: errorMessage(cause),
         };
+      }
+    },
+
+    // --- flow 044: additive read operations over gdgraph / gdwiki (batch 2) ----
+
+    async graphSymbol(input): Promise<GraphSymbolResult> {
+      try {
+        const graph = await gdgraph.loadGraph(cwd);
+        const result = querySymbol(graph, input.name);
+        return {
+          name: input.name,
+          definitions: result.definitions.map((symbol) => ({
+            id: symbol.id,
+            name: symbol.name,
+            kind: symbol.kind,
+            path: symbol.path,
+            startLine: symbol.startLine,
+            container: symbol.container,
+          })),
+          callers: result.callers.map((ref) => ref.label),
+          callees: result.callees.map((ref) => ref.label),
+        };
+      } catch (cause) {
+        return { name: input.name, definitions: [], callers: [], callees: [], error: errorMessage(cause) };
+      }
+    },
+
+    async repomap(input): Promise<RepomapResult> {
+      try {
+        const result = await gdgraph.repomap(
+          cwd,
+          input.budget !== undefined ? { budget: input.budget } : {},
+        );
+        return {
+          budget: input.budget ?? result.tokens,
+          files: result.entries.map((entry) => ({
+            path: entry.path,
+            score: entry.score,
+            symbols: entry.symbols,
+          })),
+          tokens: result.tokens,
+          omitted: result.omitted,
+        };
+      } catch (cause) {
+        return {
+          budget: input.budget ?? 0,
+          files: [],
+          tokens: 0,
+          omitted: 0,
+          error: errorMessage(cause),
+        };
+      }
+    },
+
+    async wikiAsk(input): Promise<WikiAskResult> {
+      try {
+        const result = await deps.wikiAsk({ cwd, question: input.question });
+        return {
+          question: result.question,
+          citations: result.citations.map((citation) => ({
+            path: citation.path,
+            title: citation.title,
+            excerpt: citation.excerpt,
+            score: citation.score,
+            source: citation.source,
+          })),
+          answer: result.answerMarkdown,
+        };
+      } catch (cause) {
+        return { question: input.question, citations: [], answer: "", error: errorMessage(cause) };
       }
     },
   };
