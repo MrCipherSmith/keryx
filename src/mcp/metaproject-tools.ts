@@ -64,7 +64,11 @@ async function invokeStructured(
       return port.readWiki({ path });
     }
     default:
-      return { error: `unknown metaproject operation: ${op.name}` };
+      // Any operation without a bespoke structured case (flows 043/044: graph_path,
+      // test_related, health_status, graph_symbol, repomap, wiki_ask) is invoked via
+      // the descriptor's own content `invoke`, so every registered unified tool is
+      // callable via MCP — never "unknown operation".
+      return op.invoke(port, params);
   }
 }
 

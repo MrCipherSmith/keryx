@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "id": "045",
+  "slug": "keryx-mcp-invoke-all-tools",
+  "title": "keryx MCP invoke for all unified metaproject tools — invokeStructured falls back to op.invoke so every operation is callable via MCP",
+  "status": "in-progress",
+  "createdAt": "2026-07-18T11:10:01.765Z",
+  "updatedAt": "2026-07-18T11:13:18.552Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:303055272d644b0f63603f5f415b918c52e0666bd9ae8e2611d605b7cae71fe9",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-18T11:10:01.765Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-18T11:10:01.934Z",
+      "event": "frozen",
+      "detail": "3 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-18T11:10:02.054Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-18T11:10:02.211Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-18T11:13:18.385Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-18T11:13:18.469Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-18T11:13:18.552Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
