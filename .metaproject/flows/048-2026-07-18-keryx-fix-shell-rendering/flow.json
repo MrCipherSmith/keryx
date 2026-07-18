@@ -3,17 +3,30 @@
   "id": "048",
   "slug": "keryx-fix-shell-rendering",
   "title": "keryx fix shell rendering — remove scroll-region status bar (conflicts with node:readline); show cwd/provider/model in the header instead",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-18T19:08:38.598Z",
-  "updatedAt": "2026-07-18T19:14:02.312Z",
+  "updatedAt": "2026-07-18T19:14:40.962Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:1c837879d32ea7e2e488cbded5c04a73be8fa38ffcace8b882a71acd9489e84f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-18T19:14:32.493Z",
+      "note": "no scrollRegion(/enterBar/exitBar/redrawBar in shell.ts; no DECSTBM region-set escape (smoke: 0)"
+    },
+    "AC2": {
+      "at": "2026-07-18T19:14:32.633Z",
+      "note": "header subtitle includes collapseHome(cwd) (smoke: 'fake/test · agent · ~/goodea/keryx'); prompt/spinner/streaming/markdown/tool rendering kept"
+    },
+    "AC3": {
+      "at": "2026-07-18T19:14:32.762Z",
+      "note": "tsc clean; bun test 1452/0 (= baseline); chat core+agent+tools+providers unchanged; deps {}; non-TTY smoke clean; live-TTY smoke = user"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/70"
   },
   "tasks": [
     {
@@ -110,6 +123,40 @@
       "at": "2026-07-18T19:14:02.312Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-18T19:14:32.339Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/70"
+    },
+    {
+      "at": "2026-07-18T19:14:32.493Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: no scrollRegion(/enterBar/exitBar/redrawBar in shell.ts; no DECSTBM region-set escape (smoke: 0)"
+    },
+    {
+      "at": "2026-07-18T19:14:32.633Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: header subtitle includes collapseHome(cwd) (smoke: 'fake/test · agent · ~/goodea/keryx'); prompt/spinner/streaming/markdown/tool rendering kept"
+    },
+    {
+      "at": "2026-07-18T19:14:32.762Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1452/0 (= baseline); chat core+agent+tools+providers unchanged; deps {}; non-TTY smoke clean; live-TTY smoke = user"
+    },
+    {
+      "at": "2026-07-18T19:14:40.925Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-18T19:14:40.962Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "fb27497705bf04b10e2286ee12ea43577f8fbe3c",
+    "ref": "origin/main",
+    "at": "2026-07-18T19:14:40.962Z"
+  }
 }
