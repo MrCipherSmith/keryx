@@ -28,7 +28,16 @@ const OPERATION_SCHEMA = JSON.parse(
   ),
 ) as Record<string, unknown>;
 
-const EXPECTED_NAMES = ["graph_affected", "graph_query", "memory_search", "read_wiki", "search_code"];
+const EXPECTED_NAMES = [
+  "graph_affected",
+  "graph_path",
+  "graph_query",
+  "health_status",
+  "memory_search",
+  "read_wiki",
+  "search_code",
+  "test_related",
+];
 
 interface PortCalls {
   searchCode: unknown[];
@@ -203,4 +212,55 @@ test("a descriptor invoke returns an error result for a missing required arg", a
   const result = await graphAffected?.invoke(port, {});
   expect(result?.isError).toBe(true);
   expect(calls.graphAffected).toEqual([]); // the port was NOT consulted
+});
+
+// --- flow 043: new operations (graph_path / test_related / health_status) ------
+
+function op(name: string): MetaprojectOperation {
+  const found = METAPROJECT_OPERATIONS.find((o) => o.name === name);
+  if (found === undefined) {
+    throw new Error(`operation not found: ${name}`);
+  }
+  return found;
+}
+
+test("new operations return 'unavailable' when the optional port method is absent", async () => {
+  const { port } = recordingPort(); // has no graphPath/testRelated/healthStatus
+  for (const name of ["graph_path", "test_related", "health_status"]) {
+    const result = await op(name).invoke(port, { from: "a", to: "b", file: "a.ts" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toMatch(/not available/);
+  }
+});
+
+test("new operations format the structured port result when the method is present", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    graphPath: async ({ from, to }) => ({ from, to, nodes: [from, "mid", to] }),
+    testRelated: async ({ file }) => ({ file, tests: ["a.test.ts", "b.test.ts"] }),
+    healthStatus: async () => ({
+      enabled: true,
+      lastRunAt: "2026-07-17",
+      gate: "warn",
+      sources: [],
+      projectScore: 82,
+      regressions: 1,
+    }),
+  };
+  const pathResult = await op("graph_path").invoke(port, { from: "a", to: "b" });
+  expect(pathResult.isError).toBe(false);
+  expect(pathResult.output).toContain("a -> mid -> b");
+
+  const testResult = await op("test_related").invoke(port, { file: "src/x.ts" });
+  expect(testResult.output).toContain("a.test.ts");
+
+  const healthResult = await op("health_status").invoke(port, {});
+  expect(healthResult.output).toContain("gate: warn");
+});
+
+test("toToolDefinitions and MCP-shape names include the new operations", () => {
+  const ids = toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId);
+  expect(ids).toContain("metaproject:graph_path");
+  expect(ids).toContain("metaproject:test_related");
+  expect(ids).toContain("metaproject:health_status");
 });

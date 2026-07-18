@@ -111,6 +111,51 @@ export interface WikiPageResult {
   error?: string;
 }
 
+/** Structured result of `graphPath` — the connection between two graph endpoints. */
+export interface GraphPathResult {
+  /** The requested `from` endpoint token (file path or symbol name). */
+  from: string;
+  /** The requested `to` endpoint token (file path or symbol name). */
+  to: string;
+  /**
+   * Ordered node-id chain from a `from` endpoint to a `to` endpoint, or `[]`
+   * when the endpoints are unconnected (or either could not be resolved).
+   */
+  nodes: string[];
+  /** True when either endpoint resolved to no graph node. */
+  unresolved?: boolean;
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/** Structured result of `testRelated` — the tests related to a file. */
+export interface TestRelatedResult {
+  /** The file whose related tests were computed (relative to the project root). */
+  file: string;
+  /** Related test file paths (naming + directory heuristic), sorted. */
+  tests: string[];
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/** Structured result of `healthStatus` — the latest code-health snapshot. */
+export interface HealthStatusResult {
+  /** Whether the health capability is enabled (health.config.json present). */
+  enabled: boolean;
+  /** ISO timestamp of the last health run, or null when none exists. */
+  lastRunAt: string | null;
+  /** Latest gate status (pass/warn/fail), or null when no report exists. */
+  gate: "pass" | "warn" | "fail" | null;
+  /** Per-source availability status from the latest report. */
+  sources: Array<{ source: string; status: string }>;
+  /** Latest project-level health score, or null when unavailable. */
+  projectScore: number | null;
+  /** Number of metrics with a positive regression score in the latest report. */
+  regressions: number;
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
 /** Structured result of `describeContext` — a lightweight project summary. */
 export interface ContextSummaryResult {
   /** The project root the port is bound to. */
@@ -142,4 +187,16 @@ export interface MetaprojectPort {
   }): Promise<MemorySearchResult>;
   readWiki(input: { path: string }): Promise<WikiPageResult>;
   describeContext(): Promise<ContextSummaryResult>;
+
+  // --- flow 043: additive OPTIONAL read operations ----------------------------
+  // These are OPTIONAL so every pre-existing full `MetaprojectPort` fake still
+  // compiles WITHOUT modification. A consumer must treat an absent method as an
+  // "unavailable" operation (a structured, isError result) rather than a throw.
+
+  /** Shortest connection between two files/symbols over the code graph (gdgraph). */
+  graphPath?(input: { from: string; to: string }): Promise<GraphPathResult>;
+  /** The tests related to a file, by naming + directory heuristic (testing). */
+  testRelated?(input: { file: string }): Promise<TestRelatedResult>;
+  /** The latest code-health status/gate snapshot (health). */
+  healthStatus?(): Promise<HealthStatusResult>;
 }

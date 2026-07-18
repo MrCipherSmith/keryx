@@ -40,7 +40,7 @@ function fakeDeps(opts: {
   query?: string[] | string[][];
   search?: MemorySearchResult;
 }): {
-  deps: MetaprojectAdapterDeps;
+  deps: Partial<MetaprojectAdapterDeps>;
   calls: { affected: Array<[string, string, AffectedOptions | undefined]>; search: MemorySearchInput[] };
 } {
   const calls = {
@@ -199,4 +199,26 @@ test("readWiki rejects an absolute path escape", async () => {
   const port = createMetaprojectAdapter(CWD, fakeDeps({}).deps);
   const result = await port.readWiki({ path: "/etc/passwd" });
   expect(result.isError).toBe(true);
+});
+
+// --- flow 043: new adapter methods -------------------------------------------
+
+test("testRelated delegates to the injected resolver and sorts the results", async () => {
+  const adapter = createMetaprojectAdapter("/proj", {
+    findRelatedTests: async (_cwd, _target) => ["b.test.ts", "a.test.ts"],
+  });
+  const result = await adapter.testRelated?.({ file: "src/a.ts" });
+  expect(result?.tests).toEqual(["a.test.ts", "b.test.ts"]);
+  expect(result?.error).toBeUndefined();
+});
+
+test("testRelated returns a structured error (never throws) when the resolver fails", async () => {
+  const adapter = createMetaprojectAdapter("/proj", {
+    findRelatedTests: async () => {
+      throw new Error("testing boom");
+    },
+  });
+  const result = await adapter.testRelated?.({ file: "src/a.ts" });
+  expect(result?.tests).toEqual([]);
+  expect(result?.error).toMatch(/testing boom/);
 });

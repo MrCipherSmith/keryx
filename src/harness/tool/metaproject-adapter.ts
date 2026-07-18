@@ -16,15 +16,22 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
+import { findPath } from "../../gdgraph/path";
 import { createMemoryService } from "../../memory/service";
 import type { MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
+import { findRelatedTests } from "../../testing/service";
+import { createCodeHealthService } from "../../health/service";
+import type { CodeHealthService } from "../../health/types";
 import type {
   ContextSummaryResult,
   GraphAffectedResult,
+  GraphPathResult,
   GraphQueryResult,
+  HealthStatusResult,
   MemorySearchResult,
   MetaprojectPort,
   SearchCodeResult,
+  TestRelatedResult,
   WikiPageResult,
 } from "./metaproject-port";
 
@@ -32,11 +39,17 @@ import type {
 export interface MetaprojectAdapterDeps {
   createGdgraphService: () => GdgraphService;
   createMemoryService: () => MemoryService;
+  /** Related-tests resolver (default: the real testing facade). Injectable for tests. */
+  findRelatedTests: (cwd: string, target: string) => Promise<string[]>;
+  /** Code-health facade factory (default: the real health service). Injectable for tests. */
+  createCodeHealthService: () => CodeHealthService;
 }
 
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   createGdgraphService,
   createMemoryService,
+  findRelatedTests,
+  createCodeHealthService,
 };
 
 /** Bounded excerpt/output cap so a structured result stays modest. */
@@ -77,8 +90,9 @@ function confineToWiki(cwd: string, candidate: string): string | null {
 
 export function createMetaprojectAdapter(
   cwd: string,
-  deps: MetaprojectAdapterDeps = DEFAULT_DEPS,
+  overrides: Partial<MetaprojectAdapterDeps> = {},
 ): MetaprojectPort {
+  const deps: MetaprojectAdapterDeps = { ...DEFAULT_DEPS, ...overrides };
   const gdgraph = deps.createGdgraphService();
   const memory = deps.createMemoryService();
 
@@ -205,6 +219,57 @@ export function createMetaprojectAdapter(
         hasWikiIndex,
         ...(graphError !== undefined ? { error: graphError } : {}),
       };
+    },
+
+    // --- flow 043: additive read operations over gdgraph / testing / health -----
+
+    async graphPath(input): Promise<GraphPathResult> {
+      try {
+        const graph = await gdgraph.loadGraph(cwd);
+        const result = findPath(graph, input.from, input.to);
+        const unresolved = result.fromResolved.length === 0 || result.toResolved.length === 0;
+        return {
+          from: input.from,
+          to: input.to,
+          nodes: result.nodes,
+          ...(unresolved ? { unresolved: true } : {}),
+        };
+      } catch (cause) {
+        return { from: input.from, to: input.to, nodes: [], error: errorMessage(cause) };
+      }
+    },
+
+    async testRelated(input): Promise<TestRelatedResult> {
+      try {
+        const tests = await deps.findRelatedTests(cwd, input.file);
+        return { file: input.file, tests: [...tests].sort() };
+      } catch (cause) {
+        return { file: input.file, tests: [], error: errorMessage(cause) };
+      }
+    },
+
+    async healthStatus(): Promise<HealthStatusResult> {
+      try {
+        const status = await deps.createCodeHealthService().status({ cwd });
+        return {
+          enabled: status.enabled,
+          lastRunAt: status.lastRunAt,
+          gate: status.gate,
+          sources: status.sources,
+          projectScore: status.projectScore,
+          regressions: status.regressions,
+        };
+      } catch (cause) {
+        return {
+          enabled: false,
+          lastRunAt: null,
+          gate: null,
+          sources: [],
+          projectScore: null,
+          regressions: 0,
+          error: errorMessage(cause),
+        };
+      }
     },
   };
 }

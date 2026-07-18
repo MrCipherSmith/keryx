@@ -18,9 +18,12 @@
 
 import type {
   GraphAffectedResult,
+  GraphPathResult,
   GraphQueryResult,
+  HealthStatusResult,
   MemorySearchResult,
   MetaprojectPort,
+  TestRelatedResult,
   WikiPageResult,
 } from "./metaproject-port";
 import type { ToolDefinition } from "./types";
@@ -194,6 +197,85 @@ const SEARCH_OUTPUT_SCHEMA: Record<string, unknown> = {
  * historical tools (search_code, graph_affected, memory_search) plus the two new
  * read operations (graph_query, read_wiki) that the port already backs.
  */
+/** Render a `graphPath` result as readable text. */
+export function formatPath(result: GraphPathResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `graph_path failed: ${result.error}`, isError: true };
+  }
+  if (result.unresolved === true) {
+    return { output: `graph_path: could not resolve ${result.from} or ${result.to}.`, isError: false };
+  }
+  if (result.nodes.length === 0) {
+    return { output: `No path from ${result.from} to ${result.to}.`, isError: false };
+  }
+  return { output: `Path (${result.nodes.length} node(s)): ${result.nodes.join(" -> ")}`, isError: false };
+}
+
+/** Render a `testRelated` result as readable text. */
+export function formatTestRelated(result: TestRelatedResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `test_related failed: ${result.error}`, isError: true };
+  }
+  if (result.tests.length === 0) {
+    return { output: `No related tests found for ${result.file}.`, isError: false };
+  }
+  const lines = result.tests.map((test) => `  - ${test}`);
+  return { output: [`Related tests for ${result.file} (${result.tests.length}):`, ...lines].join("\n"), isError: false };
+}
+
+/** Render a `healthStatus` result as readable text. */
+export function formatHealth(result: HealthStatusResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `health_status failed: ${result.error}`, isError: true };
+  }
+  if (!result.enabled) {
+    return { output: "Code Health is not enabled for this project.", isError: false };
+  }
+  const parts = [
+    `gate: ${result.gate ?? "n/a"}`,
+    `score: ${result.projectScore ?? "n/a"}`,
+    `regressions: ${result.regressions}`,
+    `last run: ${result.lastRunAt ?? "never"}`,
+  ];
+  return { output: `Code health — ${parts.join(", ")}.`, isError: false };
+}
+
+const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    from: { type: "string" },
+    to: { type: "string" },
+    nodes: { type: "array", items: { type: "string" } },
+    unresolved: { type: "boolean" },
+    error: { type: "string" },
+  },
+  required: ["from", "to", "nodes"],
+};
+
+const TEST_RELATED_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    file: { type: "string" },
+    tests: { type: "array", items: { type: "string" } },
+    error: { type: "string" },
+  },
+  required: ["file", "tests"],
+};
+
+const HEALTH_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    enabled: { type: "boolean" },
+    lastRunAt: { type: ["string", "null"] },
+    gate: { type: ["string", "null"] },
+    sources: { type: "array" },
+    projectScore: { type: ["number", "null"] },
+    regressions: { type: "integer" },
+    error: { type: "string" },
+  },
+  required: ["enabled", "lastRunAt", "gate", "sources", "projectScore", "regressions"],
+};
+
 export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
   {
     name: "search_code",
@@ -303,6 +385,73 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return path.error;
       }
       return formatWiki(await port.readWiki({ path: path.value }));
+    },
+  },
+  {
+    name: "graph_path",
+    risk: "read",
+    module: "gdgraph",
+    description:
+      "Show the dependency path between two files/symbols over the code graph (`keryx gdgraph path`). Input: { from: string, to: string }.",
+    inputSchema: {
+      type: "object",
+      properties: { from: { type: "string" }, to: { type: "string" } },
+      required: ["from", "to"],
+      additionalProperties: false,
+    },
+    outputSchema: PATH_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.graphPath === undefined) {
+        return { output: "graph_path is not available in this session.", isError: true };
+      }
+      const from = requireString(input, "from", "graph_path");
+      if ("error" in from) {
+        return from.error;
+      }
+      const to = requireString(input, "to", "graph_path");
+      if ("error" in to) {
+        return to.error;
+      }
+      return formatPath(await port.graphPath({ from: from.value, to: to.value }));
+    },
+  },
+  {
+    name: "test_related",
+    risk: "read",
+    module: "testing",
+    description:
+      "List the tests related to a file (naming + directory heuristic, `keryx test related`). Input: { file: string } relative to the project root.",
+    inputSchema: {
+      type: "object",
+      properties: { file: { type: "string" } },
+      required: ["file"],
+      additionalProperties: false,
+    },
+    outputSchema: TEST_RELATED_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.testRelated === undefined) {
+        return { output: "test_related is not available in this session.", isError: true };
+      }
+      const file = requireString(input, "file", "test_related");
+      if ("error" in file) {
+        return file.error;
+      }
+      return formatTestRelated(await port.testRelated({ file: file.value }));
+    },
+  },
+  {
+    name: "health_status",
+    risk: "read",
+    module: "health",
+    description:
+      "Show the latest code-health snapshot: gate, project score, regressions (`keryx health status`). No input.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: HEALTH_OUTPUT_SCHEMA,
+    invoke: async (port) => {
+      if (port.healthStatus === undefined) {
+        return { output: "health_status is not available in this session.", isError: true };
+      }
+      return formatHealth(await port.healthStatus());
     },
   },
 ];
