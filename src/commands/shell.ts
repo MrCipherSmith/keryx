@@ -295,6 +295,14 @@ function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"]
         );
       }
     }
+    if (name === "openrouter") {
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (apiKey === undefined || apiKey.length === 0) {
+        write(
+          "OPENROUTER_API_KEY is not set: the openrouter provider needs a credential; using an offline no-op provider for this session.\n",
+        );
+      }
+    }
     return makeProvider(name, model, {
       fetch: globalThis.fetch,
       ...(baseUrl !== undefined ? { baseUrl } : {}),

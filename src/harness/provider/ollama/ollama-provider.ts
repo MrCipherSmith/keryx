@@ -40,6 +40,14 @@ export interface OllamaCapabilityGrant {
   readonly baseUrl?: string;
   /** Narrow opt-in that re-permits LOOPBACK egress only (never widens SSRF). */
   readonly allowLoopback?: boolean;
+  /**
+   * Optional bearer credential for an authenticated OpenAI-compatible gateway
+   * (e.g. OpenRouter). When set, an `Authorization: Bearer <apiKey>` header is
+   * sent. Read from env by the caller; never logged or echoed here.
+   */
+  readonly apiKey?: string;
+  /** Optional extra request headers (e.g. OpenRouter `HTTP-Referer` / `X-Title`). */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /** Injected dependencies. `fetch` is mandatory (never the global); `grant` gates egress. */
@@ -259,9 +267,18 @@ export class OllamaProvider implements ProviderPort {
           }
         : {}),
     };
+    // Base headers are unchanged for local ollama; an authenticated gateway
+    // (OpenRouter) adds a bearer credential + any caller-supplied extra headers.
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (grant.apiKey !== undefined && grant.apiKey.length > 0) {
+      headers.authorization = `Bearer ${grant.apiKey}`;
+    }
+    if (grant.headers !== undefined) {
+      Object.assign(headers, grant.headers);
+    }
     const init: RequestInit = {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
       ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     };

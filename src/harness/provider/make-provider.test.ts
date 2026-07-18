@@ -109,3 +109,19 @@ describe("makeProvider — shared provider-selection factory (review-polish item
     expect(provider).toBeInstanceOf(FakeProvider);
   });
 });
+
+// --- flow 047: openrouter provider ------------------------------------------
+
+test("openrouter with a key constructs the OpenAI-compatible network provider", () => {
+  const provider = makeProvider(
+    "openrouter",
+    "openai/gpt-4o-mini",
+    makeOpts({ env: { OPENROUTER_API_KEY: "sk-or-xxx" } }),
+  );
+  expect(provider.describe().descriptor.providerId).toBe("ollama");
+});
+
+test("openrouter without a key falls back to the offline FakeProvider (fail-closed)", () => {
+  const provider = makeProvider("openrouter", "m", makeOpts({ env: {} }));
+  expect(provider.describe().descriptor.providerId).toBe("fake-provider");
+});
