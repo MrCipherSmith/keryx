@@ -15,3 +15,9 @@
 - 2026-07-18T19:14:02.141Z - task-done: T2: Implement per plan
 - 2026-07-18T19:14:02.227Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-18T19:14:02.312Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-18T19:14:32.339Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/70
+- 2026-07-18T19:14:32.493Z - ac-confirmed: AC1: no scrollRegion(/enterBar/exitBar/redrawBar in shell.ts; no DECSTBM region-set escape (smoke: 0)
+- 2026-07-18T19:14:32.633Z - ac-confirmed: AC2: header subtitle includes collapseHome(cwd) (smoke: 'fake/test · agent · ~/goodea/keryx'); prompt/spinner/streaming/markdown/tool rendering kept
+- 2026-07-18T19:14:32.762Z - ac-confirmed: AC3: tsc clean; bun test 1452/0 (= baseline); chat core+agent+tools+providers unchanged; deps {}; non-TTY smoke clean; live-TTY smoke = user
+- 2026-07-18T19:14:40.925Z - completing
+- 2026-07-18T19:14:40.962Z - done: all gates passed
