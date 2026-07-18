@@ -262,7 +262,21 @@ function graphDeps(overrides: {
       return [];
     },
   } satisfies GdgraphService;
-  return { createGdgraphService: () => gdgraph };
+  // repomap now flows through the injectable NON-writing `repomapCompute` (flow 046),
+  // not the writing gdgraph.repomap service method.
+  const repomapCompute = async () => {
+    if (overrides.repomapThrows) {
+      throw new Error("repomap boom");
+    }
+    return (overrides.repomapResult ?? {
+      path: "",
+      content: "",
+      entries: [],
+      tokens: 0,
+      omitted: 0,
+    }) as never;
+  };
+  return { createGdgraphService: () => gdgraph, repomapCompute };
 }
 
 type RepomapServiceResult = {

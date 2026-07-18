@@ -18,6 +18,13 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
 import { findPath } from "../../gdgraph/path";
 import { querySymbol } from "../../gdgraph/symbol";
+import { loadGraph } from "../../gdgraph/query";
+import { loadGdgraphConfig } from "../../gdgraph/config";
+import {
+  computeRepomap,
+  type RepomapOptions,
+  type RepomapResult as GdgraphRepomapResult,
+} from "../../gdgraph/repomap";
 import { createMemoryService } from "../../memory/service";
 import type { MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
 import { findRelatedTests } from "../../testing/service";
@@ -51,6 +58,12 @@ export interface MetaprojectAdapterDeps {
   createCodeHealthService: () => CodeHealthService;
   /** Wiki Q&A resolver (default: the real gdwiki `ask` facade). Injectable for tests. */
   wikiAsk: (input: WikiAskInput) => Promise<WikiAskFacadeResult>;
+  /**
+   * NON-WRITING repomap compute (default: load graph + config + pure
+   * `computeRepomap`). It never persists the repomap artifact, so the `repomap`
+   * tool is truly read-only. Injectable for tests.
+   */
+  repomapCompute: (cwd: string, options: RepomapOptions) => Promise<GdgraphRepomapResult>;
 }
 
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
@@ -59,6 +72,10 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   findRelatedTests,
   createCodeHealthService,
   wikiAsk,
+  repomapCompute: async (cwd, options) => {
+    const [graph, config] = await Promise.all([loadGraph(cwd), loadGdgraphConfig(cwd)]);
+    return computeRepomap(graph, config, options);
+  },
 };
 
 /** Bounded excerpt/output cap so a structured result stays modest. */
@@ -307,7 +324,8 @@ export function createMetaprojectAdapter(
 
     async repomap(input): Promise<RepomapResult> {
       try {
-        const result = await gdgraph.repomap(
+        // Read-only: compute the map in-process (never writeRepomap → no artifact).
+        const result = await deps.repomapCompute(
           cwd,
           input.budget !== undefined ? { budget: input.budget } : {},
         );
