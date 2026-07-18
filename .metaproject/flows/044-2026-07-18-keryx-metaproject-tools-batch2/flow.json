@@ -3,17 +3,34 @@
   "id": "044",
   "slug": "keryx-metaproject-tools-batch2",
   "title": "keryx metaproject tools batch 2 — add graph_symbol / repomap (+ wiki_ask if cleanly backed) operations auto-surfaced to agent + harness + MCP",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-18T10:58:27.511Z",
-  "updatedAt": "2026-07-18T11:06:14.031Z",
+  "updatedAt": "2026-07-18T11:07:08.015Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:bf9493d8b132781713b1553507543cd5fed5fe378952d6f1fa52baf046ba8463",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-18T11:06:43.680Z",
+      "note": "OPTIONAL graphSymbol/repomap/wikiAsk + adapter impl over gdgraph/gdwiki facades (injectable); 3 delivered; adapter delegation tests"
+    },
+    "AC2": {
+      "at": "2026-07-18T11:06:43.776Z",
+      "note": "3 descriptors risk read, schema-valid (ops schema test); invoke->unavailable when port method absent"
+    },
+    "AC3": {
+      "at": "2026-07-18T11:06:43.876Z",
+      "note": "auto-surfaced via toInteractiveTools/toToolDefinitions/toMcpTools (EXPECTED_NAMES 11 + toToolDefinitions test); M-10 read-only"
+    },
+    "AC4": {
+      "at": "2026-07-18T11:06:43.975Z",
+      "note": "tsc clean; bun test 1445/0 (baseline 1436); deps {}; existing 8 ops/projections/chat/policy unchanged"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/62"
   },
   "tasks": [
     {
@@ -110,6 +127,45 @@
       "at": "2026-07-18T11:06:14.031Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-18T11:06:43.568Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/62"
+    },
+    {
+      "at": "2026-07-18T11:06:43.680Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: OPTIONAL graphSymbol/repomap/wikiAsk + adapter impl over gdgraph/gdwiki facades (injectable); 3 delivered; adapter delegation tests"
+    },
+    {
+      "at": "2026-07-18T11:06:43.776Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: 3 descriptors risk read, schema-valid (ops schema test); invoke->unavailable when port method absent"
+    },
+    {
+      "at": "2026-07-18T11:06:43.876Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: auto-surfaced via toInteractiveTools/toToolDefinitions/toMcpTools (EXPECTED_NAMES 11 + toToolDefinitions test); M-10 read-only"
+    },
+    {
+      "at": "2026-07-18T11:06:43.975Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1445/0 (baseline 1436); deps {}; existing 8 ops/projections/chat/policy unchanged"
+    },
+    {
+      "at": "2026-07-18T11:07:07.986Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-18T11:07:08.015Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "ed753f2c50886285254b96e5f3e1eaf83eea9f8d",
+    "ref": "origin/main",
+    "at": "2026-07-18T11:07:08.015Z"
+  }
 }

@@ -27,3 +27,10 @@
 - 2026-07-18T11:06:13.831Z - task-done: T2: Implement per plan
 - 2026-07-18T11:06:13.929Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-18T11:06:14.031Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-18T11:06:43.568Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/62
+- 2026-07-18T11:06:43.680Z - ac-confirmed: AC1: OPTIONAL graphSymbol/repomap/wikiAsk + adapter impl over gdgraph/gdwiki facades (injectable); 3 delivered; adapter delegation tests
+- 2026-07-18T11:06:43.776Z - ac-confirmed: AC2: 3 descriptors risk read, schema-valid (ops schema test); invoke->unavailable when port method absent
+- 2026-07-18T11:06:43.876Z - ac-confirmed: AC3: auto-surfaced via toInteractiveTools/toToolDefinitions/toMcpTools (EXPECTED_NAMES 11 + toToolDefinitions test); M-10 read-only
+- 2026-07-18T11:06:43.975Z - ac-confirmed: AC4: tsc clean; bun test 1445/0 (baseline 1436); deps {}; existing 8 ops/projections/chat/policy unchanged
+- 2026-07-18T11:07:07.986Z - completing
+- 2026-07-18T11:07:08.015Z - done: all gates passed
