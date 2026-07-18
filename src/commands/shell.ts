@@ -33,7 +33,7 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
-import { formatStatusBar, scrollRegion } from "../lib/statusbar";
+import { collapseHome } from "../lib/statusbar";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
 import { detectProviders, pickProviderModel } from "./select";
@@ -347,23 +347,11 @@ function countRows(text: string, columns: number): number {
   return rows;
 }
 
-/** Minimum terminal height to enable the pinned status bar (flow 032). */
-const MIN_BAR_ROWS = 4;
-
-/** Live provider/model source for the status bar (flow 032). */
-type StatusSource = () => { provider: string; model: string };
-
-/** The rich TTY renderer wired into `ShellIO`'s optional hooks (flow 031/032). */
+/** The rich TTY renderer wired into `ShellIO`'s optional hooks (flow 031). */
 interface RichIo {
   io: ShellIO;
   emitSystem: (text: string) => void;
   printHeader: (title: string, subtitle: string) => void;
-  /** Enter the pinned-status-bar scroll region (no-op unless TTY + color). */
-  enterBar: () => void;
-  /** Reset the scroll region + cursor and remove signal handlers (idempotent). */
-  exitBar: () => void;
-  /** Redraw the bar with the current cwd/selection (no-op when inactive). */
-  redrawBar: () => void;
   /** Print the colored input prompt marker (used between agent-mode turns). */
   printPrompt: () => void;
 }
@@ -376,7 +364,7 @@ interface RichIo {
  * stays timer/`Date.now`/`Math.random`-free) and degrades to plain, uncorrupted
  * output when `NO_COLOR` is set or the sink is not a TTY.
  */
-function createRichIo(lines: AsyncIterable<string>, getStatus?: StatusSource): RichIo {
+function createRichIo(lines: AsyncIterable<string>): RichIo {
   const stdout = process.stdout;
   const rich = colorEnabled() && Boolean(stdout.isTTY);
   const out = (s: string): void => {
@@ -387,61 +375,6 @@ function createRichIo(lines: AsyncIterable<string>, getStatus?: StatusSource): R
   let frame = 0;
   let awaitingFirstToken = false;
   let raw = "";
-
-  // --- flow 032: pinned status bar via a reserved-bottom-row scroll region ---
-  const barSupported = rich && getStatus !== undefined;
-  let barEntered = false;
-  const termRows = (): number => stdout.rows ?? 24;
-  const termCols = (): number => stdout.columns ?? 80;
-
-  const drawBar = (): void => {
-    if (!barEntered || getStatus === undefined) {
-      return;
-    }
-    const rows = termRows();
-    const { provider, model } = getStatus();
-    const bar = formatStatusBar({ cwd: process.cwd(), provider, model, columns: termCols() });
-    out(scrollRegion(rows).drawAt(rows, bar));
-  };
-  const onResize = (): void => {
-    if (!barEntered) {
-      return;
-    }
-    out(scrollRegion(termRows()).enter); // re-arm the region for the new size
-    drawBar();
-  };
-  const onExitReset = (): void => {
-    out(scrollRegion(termRows()).exit);
-  };
-  const exitBar = (): void => {
-    if (!barEntered) {
-      return;
-    }
-    barEntered = false;
-    process.off("SIGWINCH", onResize);
-    process.off("SIGINT", onSigint);
-    process.off("exit", onExitReset);
-    out(scrollRegion(termRows()).exit);
-  };
-  // Ctrl-C: restore the terminal before exiting so it is never left broken.
-  const onSigint = (): void => {
-    exitBar();
-    process.exit(130);
-  };
-  const enterBar = (): void => {
-    if (!barSupported || barEntered || termRows() < MIN_BAR_ROWS) {
-      return;
-    }
-    barEntered = true;
-    out(scrollRegion(termRows()).enter);
-    drawBar();
-    process.on("SIGWINCH", onResize);
-    process.once("SIGINT", onSigint);
-    process.once("exit", onExitReset);
-  };
-  const redrawBar = (): void => {
-    drawBar();
-  };
 
   const stopSpinner = (): void => {
     if (spinner !== undefined) {
@@ -477,7 +410,6 @@ function createRichIo(lines: AsyncIterable<string>, getStatus?: StatusSource): R
     out(s);
     if (s === "\n\n") {
       printPrompt(); // re-prompt before the next input line
-      redrawBar(); // keep the pinned bar fresh after each turn
     }
   };
 
@@ -522,7 +454,7 @@ function createRichIo(lines: AsyncIterable<string>, getStatus?: StatusSource): R
   };
 
   const io: ShellIO = { lines, write, onTurnStart, onTurnEnd, onSystem: emitSystem };
-  return { io, emitSystem, printHeader, enterBar, exitBar, redrawBar, printPrompt };
+  return { io, emitSystem, printHeader, printPrompt };
 }
 
 /** One-line summary of a tool result for the agent-mode transcript. */
@@ -540,7 +472,7 @@ function summarizeToolOutput(text: string): string {
  */
 async function runAgentRepl(
   lines: AsyncIterable<string>,
-  rich: { printPrompt: () => void; redrawBar: () => void },
+  rich: { printPrompt: () => void },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
 ): Promise<void> {
@@ -658,7 +590,6 @@ async function runAgentRepl(
       stopSpinner();
     }
     out("\n\n");
-    rich.redrawBar();
     rich.printPrompt();
   }
 }
@@ -697,14 +628,7 @@ export async function shellCommand(args: string[]): Promise<void> {
   const lineIterator = rl[Symbol.asyncIterator]();
   const sharedLines: AsyncIterable<string> = { [Symbol.asyncIterator]: () => lineIterator };
 
-  // Live selection for the status bar; kept current by the tracking factory below
-  // (the core calls makeProvider on init and on every /model /provider switch).
-  let currentProvider = "";
-  let currentModel = "";
-  const { io, emitSystem, printHeader, enterBar, exitBar, redrawBar, printPrompt } = createRichIo(
-    sharedLines,
-    () => ({ provider: currentProvider, model: currentModel }),
-  );
+  const { io, emitSystem, printHeader, printPrompt } = createRichIo(sharedLines);
 
   let provider: string;
   let model: string;
@@ -738,21 +662,9 @@ export async function shellCommand(args: string[]): Promise<void> {
       }
     }
 
-    currentProvider = provider;
-    currentModel = model;
-
-    // Track the live selection (and refresh the bar) on every provider creation:
-    // the core calls this on init and after each /model / /provider switch.
     const baseFactory = realMakeProvider(emitSystem);
-    const trackingFactory: ShellDeps["makeProvider"] = (name, providerModel, providerBaseUrl) => {
-      currentProvider = name;
-      currentModel = providerModel;
-      redrawBar();
-      return baseFactory(name, providerModel, providerBaseUrl);
-    };
-
     const deps: ShellDeps = {
-      makeProvider: trackingFactory,
+      makeProvider: baseFactory,
       clock: () => new Date().toISOString(),
       idSeq: () => randomUUID(),
       initial: baseUrl === undefined ? { provider, model } : { provider, model, baseUrl },
@@ -760,8 +672,11 @@ export async function shellCommand(args: string[]): Promise<void> {
     };
 
     const modeLabel = agentMode ? " · agent" : "";
-    printHeader("keryx shell", `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel}`);
-    enterBar();
+    const cwdLabel = collapseHome(process.cwd());
+    printHeader(
+      "keryx shell",
+      `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel} · ${cwdLabel}`,
+    );
 
     if (agentMode) {
       // Agent mode: give the model read-only hands + metaproject orientation.
@@ -787,12 +702,11 @@ export async function shellCommand(args: string[]): Promise<void> {
         systemInstruction: buildAgentSystemInstruction(orient),
         idSeq: () => randomUUID(),
       };
-      await runAgentRepl(sharedLines, { printPrompt, redrawBar }, agentDeps, metaprojectPort);
+      await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort);
     } else {
       await runShell(io, deps);
     }
   } finally {
-    exitBar();
     rl.close();
   }
 }
