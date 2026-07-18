@@ -50,5 +50,17 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       grant: { network: true, allowLoopback: true, ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}) },
     });
   }
+  if (name === "openrouter") {
+    // OpenRouter is an OpenAI-compatible public gateway — reuse the OpenAI-compat
+    // adapter with a bearer credential. Fail-closed without a key (never fetches).
+    const apiKey = env.OPENROUTER_API_KEY;
+    if (apiKey === undefined || apiKey.length === 0) {
+      return new FakeProvider([]);
+    }
+    return new OllamaProvider({
+      fetch: opts.fetch,
+      grant: { network: true, baseUrl: opts.baseUrl ?? "https://openrouter.ai/api", apiKey },
+    });
+  }
   return new FakeProvider([]);
 }

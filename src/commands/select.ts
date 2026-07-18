@@ -23,9 +23,9 @@ import type { ShellIO } from "./shell";
 
 /** A provider detected as usable, with its selectable chat `models`. */
 export interface DetectedProvider {
-  name: "ollama" | "anthropic" | "fake";
+  name: "ollama" | "anthropic" | "openrouter" | "fake";
   models: string[];
-  /** Present only for providers with a concrete endpoint (ollama). */
+  /** Present only for providers with a concrete endpoint (ollama, openrouter). */
   baseUrl?: string;
 }
 
@@ -42,6 +42,20 @@ const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
 
 /** Static `claude-*` model list surfaced when `ANTHROPIC_API_KEY` is present. */
 const ANTHROPIC_MODELS: readonly string[] = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"];
+
+/**
+ * Static recommended cheap tool-capable model list surfaced when
+ * `OPENROUTER_API_KEY` is present (OpenRouter serves 400+ models; these are a
+ * curated default — any OpenRouter model id can still be passed via `--model`).
+ */
+const OPENROUTER_MODELS: readonly string[] = [
+  "openai/gpt-4o-mini",
+  "google/gemini-2.0-flash-001",
+  "qwen/qwen-2.5-7b-instruct",
+  "meta-llama/llama-3.1-8b-instruct",
+];
+/** OpenRouter's OpenAI-compatible base URL (the adapter appends /v1/chat/completions). */
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
 
 /** The always-available offline echo provider's model list. */
 const FAKE_MODELS: readonly string[] = ["fake-echo"];
@@ -135,6 +149,13 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
     // The credential is read from `env` only — never placed on the returned
     // shape (which has no field for it) and never logged.
     detected.push({ name: "anthropic", models: [...ANTHROPIC_MODELS] });
+  }
+
+  const openrouterKey = deps.env.OPENROUTER_API_KEY;
+  if (typeof openrouterKey === "string" && openrouterKey.length > 0) {
+    // Key read from `env` only — never surfaced on the returned shape / logged.
+    // No network probe (the model list is static); openrouter never throws here.
+    detected.push({ name: "openrouter", models: [...OPENROUTER_MODELS], baseUrl: OPENROUTER_BASE_URL });
   }
 
   detected.push({ name: "fake", models: [...FAKE_MODELS] });

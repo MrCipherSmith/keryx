@@ -515,3 +515,40 @@ describe("AC3 — provider negatives map to the correct ProviderErrorKind, fail-
     expect(events.some((evt) => evt.kind === "model_end")).toBe(false);
   });
 });
+
+// --- flow 047: optional bearer credential (OpenRouter / authenticated gateways) --
+
+test("sends Authorization: Bearer when the grant carries an apiKey", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({
+    fetch: fetchMock,
+    grant: validGrant({ apiKey: "sk-or-test", baseUrl: "https://openrouter.ai/api", allowLoopback: false }),
+  });
+  await collectEvents(provider.stream(buildRequest("request-auth"), { attemptId: "attempt-auth" }));
+  const headers = calls[0]?.init?.headers as Record<string, string> | undefined;
+  expect(headers?.authorization).toBe("Bearer sk-or-test");
+});
+
+test("sends extra grant headers alongside the bearer credential", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({
+    fetch: fetchMock,
+    grant: validGrant({
+      apiKey: "sk-or-test",
+      baseUrl: "https://openrouter.ai/api",
+      allowLoopback: false,
+      headers: { "http-referer": "https://keryx.dev" },
+    }),
+  });
+  await collectEvents(provider.stream(buildRequest("request-hdrs"), { attemptId: "attempt-hdrs" }));
+  const headers = calls[0]?.init?.headers as Record<string, string> | undefined;
+  expect(headers?.["http-referer"]).toBe("https://keryx.dev");
+});
+
+test("sends NO Authorization header for a keyless (local ollama) grant", async () => {
+  const { fetch: fetchMock, calls } = makeTextFetchMock();
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  await collectEvents(provider.stream(buildRequest("request-noauth"), { attemptId: "attempt-noauth" }));
+  const headers = calls[0]?.init?.headers as Record<string, string> | undefined;
+  expect(headers?.authorization).toBeUndefined();
+});
