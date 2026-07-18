@@ -15,3 +15,10 @@
 - 2026-07-18T18:59:15.324Z - task-done: T2: Implement per plan
 - 2026-07-18T18:59:15.408Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-18T18:59:15.479Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-18T18:59:50.119Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/68
+- 2026-07-18T18:59:50.219Z - ac-confirmed: AC1: grant apiKey -> Authorization: Bearer (+ extra headers); keyless unchanged; ollama-provider.test.ts header present/absent
+- 2026-07-18T18:59:50.302Z - ac-confirmed: AC2: make-provider openrouter: key -> network adapter (ollama descriptor); no key -> fake-provider; tested
+- 2026-07-18T18:59:50.381Z - ac-confirmed: AC3: detectProviders openrouter iff OPENROUTER_API_KEY (static models incl gpt-4o-mini, baseUrl set, no probe); tested
+- 2026-07-18T18:59:50.461Z - ac-confirmed: AC4: tsc clean; bun test 1452/0 (baseline 1446); deps {}; ollama/anthropic/fake unchanged; key env-only
+- 2026-07-18T18:59:59.339Z - completing
+- 2026-07-18T18:59:59.374Z - done: all gates passed

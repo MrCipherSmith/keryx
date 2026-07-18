@@ -3,17 +3,34 @@
   "id": "047",
   "slug": "keryx-openrouter-provider",
   "title": "keryx OpenRouter provider — OpenAI-compatible adapter with API-key auth + make-provider openrouter case + detection",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-18T18:53:20.440Z",
-  "updatedAt": "2026-07-18T18:59:15.479Z",
+  "updatedAt": "2026-07-18T18:59:59.374Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:81b7a1f0f599c2aa69be8c6a6d6d330e5b636dcf15a9f944e8ea09e3000fa2cb",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-18T18:59:50.219Z",
+      "note": "grant apiKey -> Authorization: Bearer (+ extra headers); keyless unchanged; ollama-provider.test.ts header present/absent"
+    },
+    "AC2": {
+      "at": "2026-07-18T18:59:50.302Z",
+      "note": "make-provider openrouter: key -> network adapter (ollama descriptor); no key -> fake-provider; tested"
+    },
+    "AC3": {
+      "at": "2026-07-18T18:59:50.381Z",
+      "note": "detectProviders openrouter iff OPENROUTER_API_KEY (static models incl gpt-4o-mini, baseUrl set, no probe); tested"
+    },
+    "AC4": {
+      "at": "2026-07-18T18:59:50.460Z",
+      "note": "tsc clean; bun test 1452/0 (baseline 1446); deps {}; ollama/anthropic/fake unchanged; key env-only"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/68"
   },
   "tasks": [
     {
@@ -110,6 +127,45 @@
       "at": "2026-07-18T18:59:15.479Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-18T18:59:50.119Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/68"
+    },
+    {
+      "at": "2026-07-18T18:59:50.219Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: grant apiKey -> Authorization: Bearer (+ extra headers); keyless unchanged; ollama-provider.test.ts header present/absent"
+    },
+    {
+      "at": "2026-07-18T18:59:50.302Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: make-provider openrouter: key -> network adapter (ollama descriptor); no key -> fake-provider; tested"
+    },
+    {
+      "at": "2026-07-18T18:59:50.381Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: detectProviders openrouter iff OPENROUTER_API_KEY (static models incl gpt-4o-mini, baseUrl set, no probe); tested"
+    },
+    {
+      "at": "2026-07-18T18:59:50.461Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1452/0 (baseline 1446); deps {}; ollama/anthropic/fake unchanged; key env-only"
+    },
+    {
+      "at": "2026-07-18T18:59:59.339Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-18T18:59:59.374Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "1b1229f671383b292a4c1f21dc1cad61a366885c",
+    "ref": "origin/main",
+    "at": "2026-07-18T18:59:59.374Z"
+  }
 }
