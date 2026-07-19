@@ -35,6 +35,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { collapseHome } from "../lib/statusbar";
+import { LiveMarkdownBlock } from "../lib/live-render";
 import { banner, colorEnabled, note, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
 import { detectProviders, pickProviderModel } from "./select";
@@ -540,14 +541,62 @@ async function runAgentRepl(
   // once when the turn ends.
   let lastUsage: NormalizedUsage | undefined;
 
+  // Live differential markdown rendering (flow 051): stream + repaint in place on
+  // a TTY with color; otherwise fall back to the flow-050 render-once behavior so
+  // piped/redirected output stays clean and deterministic.
+  const liveEnabled = colorEnabled() && Boolean(process.stdout.isTTY);
+  const liveBlock = liveEnabled
+    ? new LiveMarkdownBlock({
+        out,
+        cols: () => process.stdout.columns ?? 80,
+        render: (md) => renderMarkdown(md.trimEnd()),
+        sync: true,
+      })
+    : undefined;
+  let flushTimer: ReturnType<typeof setInterval> | undefined;
+  let blockActive = false;
+  const startBlock = (): void => {
+    if (liveBlock === undefined || blockActive) {
+      return;
+    }
+    blockActive = true;
+    flushTimer = setInterval(() => liveBlock.flush(), 50); // coalesce repaints (~20/s)
+  };
+  const endBlock = (): void => {
+    if (liveBlock === undefined || !blockActive) {
+      return;
+    }
+    if (flushTimer !== undefined) {
+      clearInterval(flushTimer);
+      flushTimer = undefined;
+    }
+    liveBlock.finalize();
+    blockActive = false;
+  };
+
   const agentIo: AgentIO = {
-    // Tokens are buffered by the driver and handed back whole via
-    // `onAssistantText`; `write` only needs to keep the spinner alive so the
-    // user sees progress. (No live per-token paint — markdown is rendered once.)
-    write: () => {},
+    // Live path: append the token to the differential block (a coalescing timer
+    // repaints it). Non-live path: no-op — `onAssistantText` renders once. Either
+    // way the first token drops the spinner.
+    write: (s) => {
+      if (s.length === 0) {
+        return;
+      }
+      if (liveBlock !== undefined) {
+        if (!blockActive) {
+          stopSpinner();
+          startBlock();
+        }
+        liveBlock.append(s);
+      }
+    },
     onAssistantText: (text) => {
       stopSpinner();
-      out(`${renderMarkdown(text.trimEnd())}\n`);
+      if (liveBlock !== undefined) {
+        endBlock(); // final repaint + line break + reset
+      } else {
+        out(`${renderMarkdown(text.trimEnd())}\n`);
+      }
     },
     onUsage: (usage) => {
       lastUsage = usage;
@@ -577,6 +626,7 @@ async function runAgentRepl(
     },
     onToolCall: (name, input) => {
       stopSpinner();
+      endBlock(); // defensive: close any live block before the tool line
       const args = summarizeToolArgs(input);
       const call = args.length > 0 ? `${name}(${args})` : `${name}()`;
       out(`\n${style.cyan(`⚙ ${call}`)}\n`);
@@ -588,6 +638,7 @@ async function runAgentRepl(
     },
     onSystem: (text) => {
       stopSpinner();
+      endBlock(); // close the live block before printing a system/error line over it
       out(colorEnabled() ? (text.includes("[error]") ? style.red(text) : style.dim(text)) : text);
     },
   };
@@ -624,6 +675,7 @@ async function runAgentRepl(
     try {
       await runAgentTurn(agentIo, deps, history, line);
     } finally {
+      endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
     }
     const usageLine = formatUsage(lastUsage);

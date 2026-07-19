@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "id": "051",
+  "slug": "keryx-live-markdown-renderer",
+  "title": "keryx agent live-markdown differential renderer (Pi-style line diff + synchronized output)",
+  "status": "in-progress",
+  "createdAt": "2026-07-19T00:37:41.163Z",
+  "updatedAt": "2026-07-19T00:42:12.657Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:170ba58b09ae9acc59ebc5c79222b5036f0b220d5deb60c31da6f2064a41080e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "implement core live-render.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "wire runAgentRepl to LiveMarkdownBlock",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "tests live-render.test.ts",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "verify tsc+bun+smoke",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-19T00:37:41.163Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-19T00:38:15.837Z",
+      "event": "task-added",
+      "detail": "T5: implement core live-render.ts"
+    },
+    {
+      "at": "2026-07-19T00:38:15.924Z",
+      "event": "task-added",
+      "detail": "T6: wire runAgentRepl to LiveMarkdownBlock"
+    },
+    {
+      "at": "2026-07-19T00:38:16.018Z",
+      "event": "task-added",
+      "detail": "T7: tests live-render.test.ts"
+    },
+    {
+      "at": "2026-07-19T00:38:16.120Z",
+      "event": "task-added",
+      "detail": "T8: verify tsc+bun+smoke"
+    },
+    {
+      "at": "2026-07-19T00:38:16.209Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-19T00:38:16.301Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-19T00:38:16.399Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-19T00:41:47.724Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-19T00:41:47.811Z",
+      "event": "task-done",
+      "detail": "T5: implement core live-render.ts"
+    },
+    {
+      "at": "2026-07-19T00:41:47.902Z",
+      "event": "task-done",
+      "detail": "T6: wire runAgentRepl to LiveMarkdownBlock"
+    },
+    {
+      "at": "2026-07-19T00:41:47.982Z",
+      "event": "task-done",
+      "detail": "T7: tests live-render.test.ts"
+    },
+    {
+      "at": "2026-07-19T00:41:48.062Z",
+      "event": "task-done",
+      "detail": "T8: verify tsc+bun+smoke"
+    },
+    {
+      "at": "2026-07-19T00:42:12.574Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-19T00:42:12.657Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
