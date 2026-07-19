@@ -3,17 +3,34 @@
   "id": "051",
   "slug": "keryx-live-markdown-renderer",
   "title": "keryx agent live-markdown differential renderer (Pi-style line diff + synchronized output)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T00:37:41.163Z",
-  "updatedAt": "2026-07-19T00:42:12.657Z",
+  "updatedAt": "2026-07-19T00:42:42.212Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:170ba58b09ae9acc59ebc5c79222b5036f0b220d5deb60c31da6f2064a41080e",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T00:42:20.473Z",
+      "note": "live-render.ts pure: stripAnsi/displayWidth/physicalRows/computeRepaint; first paint no cursor-up; sync wraps ESC[?2026h/l; no IO"
+    },
+    "AC2": {
+      "at": "2026-07-19T00:42:20.579Z",
+      "note": "LiveMarkdownBlock append/flush(dirty)/finalize; width-change → fresh-block newline (no bogus cursor-up); no SIGWINCH handler; unit-tested via injected out"
+    },
+    "AC3": {
+      "at": "2026-07-19T00:42:20.687Z",
+      "note": "runAgentRepl uses block only when colorEnabled()&&isTTY; else flow-050 render-once; 50ms coalesced flush; driver/roleLabel/chat untouched"
+    },
+    "AC4": {
+      "at": "2026-07-19T00:42:20.799Z",
+      "note": "tsc clean; bun test 1473 pass/0 fail (baseline 1460,+13); live-render.test covers pure fns + block lifecycle; no new dependency"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/76"
   },
   "tasks": [
     {
@@ -210,6 +227,45 @@
       "at": "2026-07-19T00:42:12.657Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-19T00:42:20.378Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/76"
+    },
+    {
+      "at": "2026-07-19T00:42:20.473Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: live-render.ts pure: stripAnsi/displayWidth/physicalRows/computeRepaint; first paint no cursor-up; sync wraps ESC[?2026h/l; no IO"
+    },
+    {
+      "at": "2026-07-19T00:42:20.579Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: LiveMarkdownBlock append/flush(dirty)/finalize; width-change → fresh-block newline (no bogus cursor-up); no SIGWINCH handler; unit-tested via injected out"
+    },
+    {
+      "at": "2026-07-19T00:42:20.687Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: runAgentRepl uses block only when colorEnabled()&&isTTY; else flow-050 render-once; 50ms coalesced flush; driver/roleLabel/chat untouched"
+    },
+    {
+      "at": "2026-07-19T00:42:20.799Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1473 pass/0 fail (baseline 1460,+13); live-render.test covers pure fns + block lifecycle; no new dependency"
+    },
+    {
+      "at": "2026-07-19T00:42:42.178Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T00:42:42.212Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "73c75519efed9324525ed72f4c56fc66f6d10282",
+    "ref": "origin/main",
+    "at": "2026-07-19T00:42:42.211Z"
+  }
 }

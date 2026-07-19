@@ -22,3 +22,10 @@
 - 2026-07-19T00:41:48.062Z - task-done: T8: verify tsc+bun+smoke
 - 2026-07-19T00:42:12.574Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-19T00:42:12.657Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-19T00:42:20.378Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/76
+- 2026-07-19T00:42:20.473Z - ac-confirmed: AC1: live-render.ts pure: stripAnsi/displayWidth/physicalRows/computeRepaint; first paint no cursor-up; sync wraps ESC[?2026h/l; no IO
+- 2026-07-19T00:42:20.579Z - ac-confirmed: AC2: LiveMarkdownBlock append/flush(dirty)/finalize; width-change → fresh-block newline (no bogus cursor-up); no SIGWINCH handler; unit-tested via injected out
+- 2026-07-19T00:42:20.687Z - ac-confirmed: AC3: runAgentRepl uses block only when colorEnabled()&&isTTY; else flow-050 render-once; 50ms coalesced flush; driver/roleLabel/chat untouched
+- 2026-07-19T00:42:20.799Z - ac-confirmed: AC4: tsc clean; bun test 1473 pass/0 fail (baseline 1460,+13); live-render.test covers pure fns + block lifecycle; no new dependency
+- 2026-07-19T00:42:42.178Z - completing
+- 2026-07-19T00:42:42.212Z - done: all gates passed
