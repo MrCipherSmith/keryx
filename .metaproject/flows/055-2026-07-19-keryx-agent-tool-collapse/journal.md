@@ -20,3 +20,10 @@
 - 2026-07-19T01:33:47.426Z - task-done: T5: implement collapse + /expand
 - 2026-07-19T01:33:47.528Z - task-done: T6: collapseToolOutput tests
 - 2026-07-19T01:33:47.617Z - task-done: T7: verify
+- 2026-07-19T01:33:55.181Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/84
+- 2026-07-19T01:33:55.294Z - ac-confirmed: AC1: collapseToolOutput pure {summary,lineCount,hidden}; 6 unit tests
+- 2026-07-19T01:33:55.408Z - ac-confirmed: AC2: onToolResult collapsed ↳ +N more (/expand); single-line plain; last output retained
+- 2026-07-19T01:33:55.527Z - ac-confirmed: AC3: /expand prints full last output (dim, gutter, header, 200-line cap); /help lists it; chat untouched
+- 2026-07-19T01:33:55.640Z - ac-confirmed: AC4: tsc clean; bun test 1486/0 (+6); no new dep
+- 2026-07-19T01:34:19.291Z - completing
+- 2026-07-19T01:34:19.320Z - done: all gates passed

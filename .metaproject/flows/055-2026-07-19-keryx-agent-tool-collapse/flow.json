@@ -3,17 +3,34 @@
   "id": "055",
   "slug": "keryx-agent-tool-collapse",
   "title": "keryx agent collapsible tool output (collapsed summary + /expand)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T01:31:07.757Z",
-  "updatedAt": "2026-07-19T01:33:47.617Z",
+  "updatedAt": "2026-07-19T01:34:19.320Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ad6a1bc692a50d6b85d3a97093feaf56f3224581f8bed0874df13612976213ae",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T01:33:55.294Z",
+      "note": "collapseToolOutput pure {summary,lineCount,hidden}; 6 unit tests"
+    },
+    "AC2": {
+      "at": "2026-07-19T01:33:55.408Z",
+      "note": "onToolResult collapsed ↳ +N more (/expand); single-line plain; last output retained"
+    },
+    "AC3": {
+      "at": "2026-07-19T01:33:55.526Z",
+      "note": "/expand prints full last output (dim, gutter, header, 200-line cap); /help lists it; chat untouched"
+    },
+    "AC4": {
+      "at": "2026-07-19T01:33:55.640Z",
+      "note": "tsc clean; bun test 1486/0 (+6); no new dep"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/84"
   },
   "tasks": [
     {
@@ -185,6 +202,45 @@
       "at": "2026-07-19T01:33:47.617Z",
       "event": "task-done",
       "detail": "T7: verify"
+    },
+    {
+      "at": "2026-07-19T01:33:55.181Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/84"
+    },
+    {
+      "at": "2026-07-19T01:33:55.294Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: collapseToolOutput pure {summary,lineCount,hidden}; 6 unit tests"
+    },
+    {
+      "at": "2026-07-19T01:33:55.408Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: onToolResult collapsed ↳ +N more (/expand); single-line plain; last output retained"
+    },
+    {
+      "at": "2026-07-19T01:33:55.527Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: /expand prints full last output (dim, gutter, header, 200-line cap); /help lists it; chat untouched"
+    },
+    {
+      "at": "2026-07-19T01:33:55.640Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1486/0 (+6); no new dep"
+    },
+    {
+      "at": "2026-07-19T01:34:19.291Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T01:34:19.320Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "1573ed7461513eb9be4d7f54048615055d1a9fa2",
+    "ref": "origin/main",
+    "at": "2026-07-19T01:34:19.319Z"
+  }
 }
