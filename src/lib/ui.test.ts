@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { colorEnabled, renderMarkdown, roleLabel, style, symbols } from "./ui";
+import { colorEnabled, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "./ui";
 
 const savedNoColor = process.env.NO_COLOR;
 const savedForceColor = process.env.FORCE_COLOR;
@@ -93,6 +93,29 @@ test("renderMarkdown (FORCE_COLOR) dims fenced code block lines and drops the fe
   expect(rendered).toContain("const x = 1;");
   expect(rendered).not.toContain("```");
   expect(rendered).toContain("[90m"); // gray/dim code line
+});
+
+// --- flow 050: summarizeToolArgs (pure, color-agnostic) ---
+
+test("summarizeToolArgs renders a JSON object as compact key=value pairs", () => {
+  expect(summarizeToolArgs('{"path":"src","depth":2}')).toBe("path=src, depth=2");
+});
+
+test("summarizeToolArgs collapses nested objects/arrays and shows null", () => {
+  expect(summarizeToolArgs('{"a":{"x":1},"b":[1,2],"c":null}')).toBe("a={…}, b=[…], c=null");
+});
+
+test("summarizeToolArgs returns empty string for empty/whitespace input", () => {
+  expect(summarizeToolArgs("")).toBe("");
+  expect(summarizeToolArgs("   ")).toBe("");
+});
+
+test("summarizeToolArgs falls back to the raw (clipped) string for malformed JSON or non-objects", () => {
+  expect(summarizeToolArgs("not json")).toBe("not json");
+  expect(summarizeToolArgs('"a bare string"')).toBe('"a bare string"');
+  expect(summarizeToolArgs("[1,2,3]")).toBe("[1,2,3]");
+  const long = "x".repeat(200);
+  expect(summarizeToolArgs(long, 10)).toBe(`${"x".repeat(10)}…`);
 });
 
 test("roleLabel styles known roles and passes color state through", () => {
