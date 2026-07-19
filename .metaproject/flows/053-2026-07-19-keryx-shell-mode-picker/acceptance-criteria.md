@@ -1,0 +1,6 @@
+# Acceptance Criteria — flow 053 (shell mode picker, agent default)
+
+- AC1: `select.ts` exports `pickAgentMode(io): Promise<boolean>` — renders a numbered mode menu (`1. agent`, `2. chat`) to `io.write`, reads one choice from `io.lines`, returns `true` for agent / `false` for chat, RE-PROMPTS on invalid input, and DEFAULTS to agent (`true`) on empty line or EOF. Deterministic, never throws/hangs. Mirrors `pickProviderModel`'s IO contract (shared line iterator).
+- AC2: `keryx` launched WITHOUT `--agent`/`--chat` defaults to AGENT mode. When the interactive provider picker runs (no `--provider`), a mode step is offered after model selection (agent pre-selected). When `--provider` is given without a mode flag, agent is the default (no prompt). Explicit `--agent` or `--chat` always wins and skips the mode prompt.
+- AC3: A new `--chat` flag forces chat mode. The header mode label is explicit for BOTH modes: `· agent` or `· chat` (never blank), so the running mode is unambiguous.
+- AC4: `bunx tsc --noEmit` clean; `bun test` green with no reduction from baseline (1473 pass); new `pickAgentMode` unit tests cover agent/chat/reprompt/EOF-default/empty-default. No new runtime dependency. `roleLabel` + chat-core semantics untouched.

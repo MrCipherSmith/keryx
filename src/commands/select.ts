@@ -162,6 +162,40 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
   return detected;
 }
 
+/**
+ * Interactive agent/chat mode picker over the injected `ShellIO`. Renders a
+ * numbered menu (`1. agent`, `2. chat`), reads one choice, and returns `true`
+ * for agent / `false` for chat. Re-prompts on invalid input. DEFAULTS to agent
+ * (`true`) on an empty line (bare Enter) or EOF — agent is the product default.
+ * Never throws/hangs; shares the caller's line iterator like `pickProviderModel`.
+ */
+export async function pickAgentMode(io: ShellIO): Promise<boolean> {
+  const iterator = io.lines[Symbol.asyncIterator]();
+  const nextLine = async (): Promise<string | undefined> => {
+    const result = await iterator.next();
+    return result.done === true ? undefined : result.value;
+  };
+
+  io.write("Select a mode:\n");
+  io.write("  1. agent  (read-only tools + metaproject context)\n");
+  io.write("  2. chat   (plain conversation, no tools)\n");
+
+  while (true) {
+    const line = await nextLine();
+    if (line === undefined) {
+      return true; // EOF → default to agent
+    }
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed === "1") {
+      return true; // bare Enter or "1" → agent
+    }
+    if (trimmed === "2") {
+      return false;
+    }
+    io.write("Invalid choice — enter 1 (agent) or 2 (chat), or Enter for agent.\n");
+  }
+}
+
 /** Parse a 1-based menu choice into a 0-based index, or `undefined` if invalid. */
 function parseChoice(line: string, count: number): number | undefined {
   const trimmed = line.trim();

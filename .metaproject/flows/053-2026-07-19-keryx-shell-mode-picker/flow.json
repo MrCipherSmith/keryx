@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 2,
+  "id": "053",
+  "slug": "keryx-shell-mode-picker",
+  "title": "keryx shell mode picker (agent/chat menu, agent default)",
+  "status": "in-progress",
+  "createdAt": "2026-07-19T01:12:06.230Z",
+  "updatedAt": "2026-07-19T01:16:07.673Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d2ece9387e3b7d725a6521769bb80bd5cee5b828f44486994535450171323c60",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "implement pickAgentMode + shellCommand mode resolution",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "pickAgentMode tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "verify tsc+bun+smoke",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-19T01:12:06.230Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-19T01:12:29.168Z",
+      "event": "task-added",
+      "detail": "T5: implement pickAgentMode + shellCommand mode resolution"
+    },
+    {
+      "at": "2026-07-19T01:12:29.263Z",
+      "event": "task-added",
+      "detail": "T6: pickAgentMode tests"
+    },
+    {
+      "at": "2026-07-19T01:12:29.347Z",
+      "event": "task-added",
+      "detail": "T7: verify tsc+bun+smoke"
+    },
+    {
+      "at": "2026-07-19T01:12:29.444Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-19T01:12:29.528Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-19T01:12:29.608Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-19T01:16:07.250Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-19T01:16:07.339Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-19T01:16:07.422Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-19T01:16:07.502Z",
+      "event": "task-done",
+      "detail": "T5: implement pickAgentMode + shellCommand mode resolution"
+    },
+    {
+      "at": "2026-07-19T01:16:07.586Z",
+      "event": "task-done",
+      "detail": "T6: pickAgentMode tests"
+    },
+    {
+      "at": "2026-07-19T01:16:07.673Z",
+      "event": "task-done",
+      "detail": "T7: verify tsc+bun+smoke"
+    }
+  ]
+}

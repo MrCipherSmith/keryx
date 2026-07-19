@@ -64,7 +64,7 @@ import path from "node:path";
 import { describe, expect, test } from "bun:test";
 // PINNED API (RED: module does not exist until T6).
 import type { DetectedProvider, DetectProvidersDeps } from "./select";
-import { detectProviders, pickProviderModel } from "./select";
+import { detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import type { ShellIO } from "./shell";
 
 const FIXTURE_PATH = path.join(import.meta.dir, "fixtures", "ollama-api-tags.recorded.json");
@@ -329,6 +329,38 @@ describe("AC2 — pickProviderModel: numbered picker, invalid-input safe, no har
     const r2 = await pickProviderModel(io2, SAMPLE_DETECTED);
 
     expect(r1).toEqual(r2);
+  });
+});
+
+describe("flow 053 — pickAgentMode: agent/chat menu, agent default", () => {
+  test("choice 1 selects agent (true)", async () => {
+    const writes: string[] = [];
+    const io: ShellIO = { lines: linesFrom("1"), write: (s) => writes.push(s) };
+    expect(await pickAgentMode(io)).toBe(true);
+    expect(writes.join("")).toMatch(/agent/);
+    expect(writes.join("")).toMatch(/chat/);
+  });
+
+  test("choice 2 selects chat (false)", async () => {
+    const io: ShellIO = { lines: linesFrom("2"), write: () => {} };
+    expect(await pickAgentMode(io)).toBe(false);
+  });
+
+  test("bare Enter (empty line) defaults to agent (true)", async () => {
+    const io: ShellIO = { lines: linesFrom(""), write: () => {} };
+    expect(await pickAgentMode(io)).toBe(true);
+  });
+
+  test("EOF before any choice defaults to agent (true)", async () => {
+    const io: ShellIO = { lines: linesFrom(), write: () => {} };
+    expect(await pickAgentMode(io)).toBe(true);
+  });
+
+  test("re-prompts on invalid input, then honors a valid choice", async () => {
+    const writes: string[] = [];
+    const io: ShellIO = { lines: linesFrom("x", "9", "2"), write: (s) => writes.push(s) };
+    expect(await pickAgentMode(io)).toBe(false);
+    expect(writes.join("")).toMatch(/invalid/i);
   });
 });
 

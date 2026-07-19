@@ -38,7 +38,7 @@ import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { colorEnabled, renderMarkdown, style, summarizeToolArgs } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
-import { detectProviders, pickProviderModel } from "./select";
+import { detectProviders, pickAgentMode, pickProviderModel } from "./select";
 
 /** Async line source + write sink; no real stdio is reached by `runShell`. */
 export interface ShellIO {
@@ -695,8 +695,10 @@ async function runAgentRepl(
 
 /**
  * Thin TTY wrapper (NOT unit-tested): parses `--provider` / `--model` /
- * `--base-url` / `--agent`, wires a real `node:readline` stdin line source + a
- * rich `process.stdout` renderer, and runs the deterministic core.
+ * `--base-url` / `--agent` / `--chat`, wires a real `node:readline` stdin line
+ * source + a rich `process.stdout` renderer, and runs the deterministic core.
+ * Mode defaults to agent; the interactive picker asks agent/chat when no flag is
+ * given.
  *
  * When `--provider` is ABSENT, it first detects the available providers and
  * runs the interactive numbered picker (replacing any hardcoded default). When
@@ -707,7 +709,10 @@ export async function shellCommand(args: string[]): Promise<void> {
   let providerArg: string | undefined;
   let modelArg: string | undefined;
   let baseUrl: string | undefined;
-  let agentMode = false;
+  // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
+  // interactive picker asks (agent-default), and the non-interactive path
+  // defaults to agent. `undefined` = "no explicit flag given".
+  let modeFlag: boolean | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -717,7 +722,9 @@ export async function shellCommand(args: string[]): Promise<void> {
     } else if (arg === "--base-url") {
       baseUrl = args[++i];
     } else if (arg === "--agent") {
-      agentMode = true;
+      modeFlag = true;
+    } else if (arg === "--chat") {
+      modeFlag = false;
     }
   }
 
@@ -745,6 +752,11 @@ export async function shellCommand(args: string[]): Promise<void> {
       if (picked.baseUrl !== undefined) {
         baseUrl = picked.baseUrl;
       }
+      // Offer the agent/chat choice only when no explicit flag was given.
+      if (modeFlag === undefined) {
+        modeFlag = await pickAgentMode(io);
+        io.write("\n");
+      }
     } else {
       provider = providerArg;
       if (modelArg !== undefined) {
@@ -770,7 +782,9 @@ export async function shellCommand(args: string[]): Promise<void> {
       selectProviderModel: realSelectProviderModel(baseUrl),
     };
 
-    const modeLabel = agentMode ? " · agent" : "";
+    // Resolve the mode: explicit flag wins; otherwise default to agent.
+    const agentMode = modeFlag ?? true;
+    const modeLabel = agentMode ? " · agent" : " · chat";
     const cwdLabel = collapseHome(process.cwd());
     printHeader(
       "keryx",
