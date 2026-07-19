@@ -3,17 +3,30 @@
   "id": "049",
   "slug": "keryx-fix-openai-tool-messages",
   "title": "keryx fix OpenAI-compat tool messages — serialize role:tool as a framed user message (OpenRouter/OpenAI reject tool without tool_call_id)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T00:16:10.598Z",
-  "updatedAt": "2026-07-19T00:18:10.968Z",
+  "updatedAt": "2026-07-19T00:18:46.749Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:070559556c53602c71366cbbbd0e2fae26e69996c433fd45b0594af17deab28e",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T00:18:18.760Z",
+      "note": "ollama-provider.ts role:tool -> framed user (Tool result:); system/user/assistant unchanged; no bare tool role sent"
+    },
+    "AC2": {
+      "at": "2026-07-19T00:18:18.863Z",
+      "note": "ollama-provider.test.ts: request with role:tool -> captured body has it as user with prefix, no role:tool"
+    },
+    "AC3": {
+      "at": "2026-07-19T00:18:19.007Z",
+      "note": "tsc clean; bun test 1453/0 (baseline 1452); ollama text+tool-call tests green; deps {}; agent driver/normalized types/other providers unchanged"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/72"
   },
   "tasks": [
     {
@@ -110,6 +123,40 @@
       "at": "2026-07-19T00:18:10.968Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-19T00:18:18.660Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/72"
+    },
+    {
+      "at": "2026-07-19T00:18:18.760Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: ollama-provider.ts role:tool -> framed user (Tool result:); system/user/assistant unchanged; no bare tool role sent"
+    },
+    {
+      "at": "2026-07-19T00:18:18.863Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: ollama-provider.test.ts: request with role:tool -> captured body has it as user with prefix, no role:tool"
+    },
+    {
+      "at": "2026-07-19T00:18:19.008Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1453/0 (baseline 1452); ollama text+tool-call tests green; deps {}; agent driver/normalized types/other providers unchanged"
+    },
+    {
+      "at": "2026-07-19T00:18:46.710Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T00:18:46.749Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "835770f6aafe18e5deb1b1ad9161bd96d4905c85",
+    "ref": "origin/main",
+    "at": "2026-07-19T00:18:46.748Z"
+  }
 }
