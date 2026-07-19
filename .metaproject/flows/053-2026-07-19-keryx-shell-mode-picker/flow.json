@@ -3,17 +3,34 @@
   "id": "053",
   "slug": "keryx-shell-mode-picker",
   "title": "keryx shell mode picker (agent/chat menu, agent default)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T01:12:06.230Z",
-  "updatedAt": "2026-07-19T01:16:07.673Z",
+  "updatedAt": "2026-07-19T01:16:38.452Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d2ece9387e3b7d725a6521769bb80bd5cee5b828f44486994535450171323c60",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T01:16:15.382Z",
+      "note": "pickAgentMode: numbered agent/chat menu, true/false, reprompt, agent-default on empty/EOF; 5 unit tests"
+    },
+    "AC2": {
+      "at": "2026-07-19T01:16:15.497Z",
+      "note": "no flag → agent (smoke); interactive picker offers mode after model; --provider path defaults agent; explicit flag skips prompt"
+    },
+    "AC3": {
+      "at": "2026-07-19T01:16:15.596Z",
+      "note": "--chat forces chat; header shows · agent / · chat explicitly (smoke verified)"
+    },
+    "AC4": {
+      "at": "2026-07-19T01:16:15.693Z",
+      "note": "tsc clean; bun test 1478/0 (+5); no new dep; roleLabel + chat core untouched"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/80"
   },
   "tasks": [
     {
@@ -185,6 +202,45 @@
       "at": "2026-07-19T01:16:07.673Z",
       "event": "task-done",
       "detail": "T7: verify tsc+bun+smoke"
+    },
+    {
+      "at": "2026-07-19T01:16:15.211Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/80"
+    },
+    {
+      "at": "2026-07-19T01:16:15.382Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: pickAgentMode: numbered agent/chat menu, true/false, reprompt, agent-default on empty/EOF; 5 unit tests"
+    },
+    {
+      "at": "2026-07-19T01:16:15.497Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: no flag → agent (smoke); interactive picker offers mode after model; --provider path defaults agent; explicit flag skips prompt"
+    },
+    {
+      "at": "2026-07-19T01:16:15.596Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: --chat forces chat; header shows · agent / · chat explicitly (smoke verified)"
+    },
+    {
+      "at": "2026-07-19T01:16:15.693Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1478/0 (+5); no new dep; roleLabel + chat core untouched"
+    },
+    {
+      "at": "2026-07-19T01:16:38.420Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T01:16:38.452Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "2dad8e13372f711e5463b9c5a24d41e52eaddae9",
+    "ref": "origin/main",
+    "at": "2026-07-19T01:16:38.452Z"
+  }
 }

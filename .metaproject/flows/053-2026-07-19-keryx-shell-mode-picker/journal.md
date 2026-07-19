@@ -20,3 +20,10 @@
 - 2026-07-19T01:16:07.502Z - task-done: T5: implement pickAgentMode + shellCommand mode resolution
 - 2026-07-19T01:16:07.586Z - task-done: T6: pickAgentMode tests
 - 2026-07-19T01:16:07.673Z - task-done: T7: verify tsc+bun+smoke
+- 2026-07-19T01:16:15.211Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/80
+- 2026-07-19T01:16:15.382Z - ac-confirmed: AC1: pickAgentMode: numbered agent/chat menu, true/false, reprompt, agent-default on empty/EOF; 5 unit tests
+- 2026-07-19T01:16:15.497Z - ac-confirmed: AC2: no flag → agent (smoke); interactive picker offers mode after model; --provider path defaults agent; explicit flag skips prompt
+- 2026-07-19T01:16:15.596Z - ac-confirmed: AC3: --chat forces chat; header shows · agent / · chat explicitly (smoke verified)
+- 2026-07-19T01:16:15.693Z - ac-confirmed: AC4: tsc clean; bun test 1478/0 (+5); no new dep; roleLabel + chat core untouched
+- 2026-07-19T01:16:38.420Z - completing
+- 2026-07-19T01:16:38.452Z - done: all gates passed
