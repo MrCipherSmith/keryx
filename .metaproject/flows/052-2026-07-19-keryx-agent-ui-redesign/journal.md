@@ -14,3 +14,11 @@
 - 2026-07-19T00:53:22.299Z - task-done: T5: implement redesign
 - 2026-07-19T00:53:22.387Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-19T00:53:22.482Z - task-done: T6: verify tsc+bun+plain-path+smoke
+- 2026-07-19T00:53:29.792Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/78
+- 2026-07-19T00:53:29.884Z - ac-confirmed: AC1: runAgentRepl no longer prints an initial prompt; plain-path smoke shows exactly one ❯
+- 2026-07-19T00:53:29.969Z - ac-confirmed: AC2: printHeader one-liner ◆ keryx + dim meta + hint; no banner() double rules; chat+agent
+- 2026-07-19T00:53:30.073Z - ac-confirmed: AC3: ● keryx header in agent + chat onTurnStart; roleLabel + [90m test untouched
+- 2026-07-19T00:53:30.169Z - ac-confirmed: AC4: tsc clean; bun test 1473/0; NO_COLOR path escape-free header+single prompt; no new dep
+- 2026-07-19T00:53:44.851Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-19T00:53:53.315Z - completing
+- 2026-07-19T00:53:53.340Z - done: all gates passed

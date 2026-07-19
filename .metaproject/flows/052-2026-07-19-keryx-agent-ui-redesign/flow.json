@@ -3,17 +3,34 @@
   "id": "052",
   "slug": "keryx-agent-ui-redesign",
   "title": "keryx agent-mode UI redesign (codex/grok/pi aesthetic: minimal header, single prompt, clean role markers)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T00:49:51.066Z",
-  "updatedAt": "2026-07-19T00:53:22.482Z",
+  "updatedAt": "2026-07-19T00:53:53.340Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:dca6415a8362d61842afb9af054a3d052faf5da41a23a01c5946c16aef82ba3a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T00:53:29.884Z",
+      "note": "runAgentRepl no longer prints an initial prompt; plain-path smoke shows exactly one ❯"
+    },
+    "AC2": {
+      "at": "2026-07-19T00:53:29.969Z",
+      "note": "printHeader one-liner ◆ keryx + dim meta + hint; no banner() double rules; chat+agent"
+    },
+    "AC3": {
+      "at": "2026-07-19T00:53:30.073Z",
+      "note": "● keryx header in agent + chat onTurnStart; roleLabel + [90m test untouched"
+    },
+    "AC4": {
+      "at": "2026-07-19T00:53:30.169Z",
+      "note": "tsc clean; bun test 1473/0; NO_COLOR path escape-free header+single prompt; no new dep"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/78"
   },
   "tasks": [
     {
@@ -65,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -154,6 +172,50 @@
       "at": "2026-07-19T00:53:22.482Z",
       "event": "task-done",
       "detail": "T6: verify tsc+bun+plain-path+smoke"
+    },
+    {
+      "at": "2026-07-19T00:53:29.792Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/78"
+    },
+    {
+      "at": "2026-07-19T00:53:29.884Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: runAgentRepl no longer prints an initial prompt; plain-path smoke shows exactly one ❯"
+    },
+    {
+      "at": "2026-07-19T00:53:29.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: printHeader one-liner ◆ keryx + dim meta + hint; no banner() double rules; chat+agent"
+    },
+    {
+      "at": "2026-07-19T00:53:30.073Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: ● keryx header in agent + chat onTurnStart; roleLabel + [90m test untouched"
+    },
+    {
+      "at": "2026-07-19T00:53:30.169Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1473/0; NO_COLOR path escape-free header+single prompt; no new dep"
+    },
+    {
+      "at": "2026-07-19T00:53:44.851Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-19T00:53:53.315Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T00:53:53.340Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "9e02b608b8c46b946f03c45da716266ffbf0c831",
+    "ref": "origin/main",
+    "at": "2026-07-19T00:53:53.340Z"
+  }
 }
