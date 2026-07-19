@@ -117,6 +117,16 @@ export function renderMarkdown(md: string): string {
   return out.join("\n");
 }
 
+// Prefix every NON-empty line of `text` with `pad` (a left gutter), leaving
+// empty lines untouched so no trailing whitespace is introduced. Pure — used to
+// give agent-mode output a consistent left margin (OpenCode/codex aesthetic).
+export function indentBlock(text: string, pad: string): string {
+  return text
+    .split("\n")
+    .map((line) => (line.length > 0 ? pad + line : line))
+    .join("\n");
+}
+
 // Compact, human-readable rendering of a tool call's raw JSON input string for
 // the agent transcript: `{"path":"src","depth":2}` → `path=src, depth=2`. Pure +
 // deterministic (no color; the caller styles it). Falls back to the raw string

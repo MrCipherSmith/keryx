@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { colorEnabled, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "./ui";
+import { colorEnabled, indentBlock, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "./ui";
 
 const savedNoColor = process.env.NO_COLOR;
 const savedForceColor = process.env.FORCE_COLOR;
@@ -93,6 +93,17 @@ test("renderMarkdown (FORCE_COLOR) dims fenced code block lines and drops the fe
   expect(rendered).toContain("const x = 1;");
   expect(rendered).not.toContain("```");
   expect(rendered).toContain("[90m"); // gray/dim code line
+});
+
+// --- flow 054: indentBlock (pure left gutter) ---
+
+test("indentBlock prefixes non-empty lines and leaves empty lines untouched", () => {
+  expect(indentBlock("a\n\nb", "  ")).toBe("  a\n\n  b");
+});
+
+test("indentBlock handles a single line and a trailing newline", () => {
+  expect(indentBlock("hello", ">>")).toBe(">>hello");
+  expect(indentBlock("x\n", "  ")).toBe("  x\n"); // trailing empty segment stays empty
 });
 
 // --- flow 050: summarizeToolArgs (pure, color-agnostic) ---
