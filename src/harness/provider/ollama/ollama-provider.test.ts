@@ -575,3 +575,40 @@ test("serializes a normalized role:tool message as a framed user message (no bar
   expect(framed?.role).toBe("user");
   expect(framed?.content).toContain("Tool result:");
 });
+
+// --- flow 056: reasoning_delta surfacing (OpenRouter/DeepSeek) ----------------
+
+function reasoningFetchMock(sse: string): { fetch: typeof fetch; calls: CapturedCall[] } {
+  return makeFetchMock(
+    () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+  );
+}
+
+test("flow 056: delta.reasoning is surfaced as reasoning_delta, before the answer text_delta", async () => {
+  const sse =
+    'data: {"choices":[{"delta":{"reasoning":"thinking hard"}}]}\n\n' +
+    'data: {"choices":[{"delta":{"content":"Answer."}}]}\n\n' +
+    'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+    "data: [DONE]\n\n";
+  const { fetch: fetchMock } = reasoningFetchMock(sse);
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("req-reasoning"), { attemptId: "att-r" }));
+  const kinds = events.map((e) => e.kind);
+  const rIdx = kinds.indexOf("reasoning_delta");
+  const tIdx = kinds.indexOf("text_delta");
+  expect(rIdx).toBeGreaterThanOrEqual(0);
+  expect(tIdx).toBeGreaterThan(rIdx); // reasoning precedes the answer
+  expect(events[rIdx]?.text).toBe("thinking hard");
+});
+
+test("flow 056: delta.reasoning_content (DeepSeek field name) is also surfaced", async () => {
+  const sse =
+    'data: {"choices":[{"delta":{"reasoning_content":"deepseek cot"}}]}\n\n' +
+    'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n' +
+    "data: [DONE]\n\n";
+  const { fetch: fetchMock } = reasoningFetchMock(sse);
+  const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("req-ds"), { attemptId: "att-ds" }));
+  const reasoning = events.find((e) => e.kind === "reasoning_delta");
+  expect(reasoning?.text).toBe("deepseek cot");
+});

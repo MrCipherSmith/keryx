@@ -14,6 +14,8 @@
 export type NormalizedEventKind =
   | "model_start"
   | "text_delta"
+  /** Chain-of-thought text from a reasoning-capable model (carried in `text`). */
+  | "reasoning_delta"
   | "tool_call_start"
   | "tool_call_delta"
   | "tool_call_end"

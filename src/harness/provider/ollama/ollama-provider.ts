@@ -411,6 +411,14 @@ export class OllamaProvider implements ProviderPort {
       const choice0 = asRecord(asArray(data.choices)[0]);
       const delta = asRecord(choice0.delta);
 
+      // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
+      // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
+      // answer content. Surface it as `reasoning_delta`; plain models omit it.
+      const reasoning = asString(delta.reasoning) ?? asString(delta.reasoning_content);
+      if (reasoning !== undefined && reasoning.length > 0) {
+        bodies.push({ kind: "reasoning_delta", text: reasoning });
+      }
+
       const content = asString(delta.content);
       if (content !== undefined && content.length > 0) {
         bodies.push({ kind: "text_delta", text: content });
