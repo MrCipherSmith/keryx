@@ -19,3 +19,10 @@
 - 2026-07-19T01:53:46.292Z - task-done: T5: implement loop guards + actionable message
 - 2026-07-19T01:53:46.377Z - task-done: T6: driver tests
 - 2026-07-19T01:53:46.475Z - task-done: T7: verify
+- 2026-07-19T01:53:54.778Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/88
+- 2026-07-19T01:53:54.898Z - ac-confirmed: AC1: terminate turn when toolCallsUsed>=maxToolCalls (test: resolves + limit notice)
+- 2026-07-19T01:53:55.012Z - ac-confirmed: AC2: abort after 3 identical failing calls; reset on success (2 tests)
+- 2026-07-19T01:53:55.107Z - ac-confirmed: AC3: validation error appends required fields (test: required: query)
+- 2026-07-19T01:53:55.221Z - ac-confirmed: AC4: tsc clean; bun test 1494/0 (+4); existing agent tests green; no new dep
+- 2026-07-19T01:54:16.481Z - completing
+- 2026-07-19T01:54:16.515Z - done: all gates passed
