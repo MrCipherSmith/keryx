@@ -224,6 +224,82 @@ test("shell tool is DEFAULT-DENIED when no approval callback is present", async 
   expect(history.find((m) => m.role === "tool")?.content).toMatch(/not approved/);
 });
 
+// --- flow 050: onAssistantText + onUsage hooks (agent-mode UI polish) ---
+
+test("runAgentTurn calls onAssistantText once per round with the full finalized round text", async () => {
+  const { provider } = scriptedProvider([
+    // Round 1: some text, THEN a tool call → the round produced text.
+    [
+      { kind: "text_delta", text: "Let me " },
+      { kind: "text_delta", text: "check." },
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    // Round 2: final answer text only.
+    [{ kind: "text_delta", text: "Here is the answer." }, { kind: "model_end" }],
+  ]);
+  const rounds: string[] = [];
+  const io: AgentIO = { write: () => {}, onAssistantText: (t) => rounds.push(t) };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  // One call per round that produced text, each carrying that round's FULL text.
+  expect(rounds).toEqual(["Let me check.", "Here is the answer."]);
+});
+
+test("runAgentTurn does not call onAssistantText for a round with no assistant text", async () => {
+  const { provider } = scriptedProvider([
+    // Tool-only round (no text) then a text round.
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const rounds: string[] = [];
+  const io: AgentIO = { write: () => {}, onAssistantText: (t) => rounds.push(t) };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(rounds).toEqual(["done"]); // only the text-bearing round
+});
+
+test("runAgentTurn forwards usage_update events to onUsage", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "text_delta", text: "hi" },
+      { kind: "usage_update", usage: { inputTokens: 12, outputTokens: 3, exact: true } },
+      { kind: "model_end" },
+    ],
+  ]);
+  const seen: Array<{ input?: number | undefined; output?: number | undefined }> = [];
+  const io: AgentIO = { write: () => {}, onUsage: (u) => seen.push({ input: u.inputTokens, output: u.outputTokens }) };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(seen).toEqual([{ input: 12, output: 3 }]);
+});
+
 test("buildAgentSystemInstruction embeds an orient block when present, falls back when absent", () => {
   const withOrient = buildAgentSystemInstruction("MODULE MAP: a→b");
   expect(withOrient).toContain("MODULE MAP: a→b");

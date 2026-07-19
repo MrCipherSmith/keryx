@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "id": "050",
+  "slug": "keryx-agent-ui-polish",
+  "title": "keryx agent-mode UI polish (markdown, roles, token counter, tool styling)",
+  "status": "in-progress",
+  "createdAt": "2026-07-19T00:26:53.830Z",
+  "updatedAt": "2026-07-19T00:32:18.817Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:12a530d3c936603af56fda4f23d4368c9f71a0b07af0a7ce56c87e0785d8eeac",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "context: hook points & invariants",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "implement: AgentIO hooks, ui helper, REPL rendering",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "test: summarizeToolArgs + driver hook tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "verify: tsc + bun test + smoke",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-19T00:26:53.830Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-19T00:27:28.348Z",
+      "event": "task-added",
+      "detail": "T5: context: hook points & invariants"
+    },
+    {
+      "at": "2026-07-19T00:27:28.438Z",
+      "event": "task-added",
+      "detail": "T6: implement: AgentIO hooks, ui helper, REPL rendering"
+    },
+    {
+      "at": "2026-07-19T00:27:28.545Z",
+      "event": "task-added",
+      "detail": "T7: test: summarizeToolArgs + driver hook tests"
+    },
+    {
+      "at": "2026-07-19T00:27:28.667Z",
+      "event": "task-added",
+      "detail": "T8: verify: tsc + bun test + smoke"
+    },
+    {
+      "at": "2026-07-19T00:27:28.960Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-19T00:28:02.666Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-19T00:28:02.775Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-19T00:28:02.881Z",
+      "event": "task-done",
+      "detail": "T5: context: hook points & invariants"
+    },
+    {
+      "at": "2026-07-19T00:32:18.388Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-19T00:32:18.472Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-19T00:32:18.571Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-19T00:32:18.663Z",
+      "event": "task-done",
+      "detail": "T6: implement: AgentIO hooks, ui helper, REPL rendering"
+    },
+    {
+      "at": "2026-07-19T00:32:18.739Z",
+      "event": "task-done",
+      "detail": "T7: test: summarizeToolArgs + driver hook tests"
+    },
+    {
+      "at": "2026-07-19T00:32:18.817Z",
+      "event": "task-done",
+      "detail": "T8: verify: tsc + bun test + smoke"
+    }
+  ]
+}

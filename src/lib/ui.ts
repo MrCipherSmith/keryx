@@ -117,6 +117,44 @@ export function renderMarkdown(md: string): string {
   return out.join("\n");
 }
 
+// Compact, human-readable rendering of a tool call's raw JSON input string for
+// the agent transcript: `{"path":"src","depth":2}` → `path=src, depth=2`. Pure +
+// deterministic (no color; the caller styles it). Falls back to the raw string
+// (clipped to `max`) when the input is not a JSON object — e.g. a bare string or
+// malformed JSON. Scalar values are shown inline; nested objects/arrays collapse
+// to a `{…}` / `[…]` placeholder so a single call never explodes the line.
+export function summarizeToolArgs(input: string, max = 80): string {
+  const clip = (s: string): string => (s.length > max ? `${s.slice(0, max)}…` : s);
+  const raw = input.trim();
+  if (raw.length === 0) {
+    return "";
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return clip(raw);
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return clip(raw);
+  }
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    let shown: string;
+    if (value === null) {
+      shown = "null";
+    } else if (Array.isArray(value)) {
+      shown = "[…]";
+    } else if (typeof value === "object") {
+      shown = "{…}";
+    } else {
+      shown = String(value);
+    }
+    parts.push(`${key}=${shown}`);
+  }
+  return clip(parts.join(", "));
+}
+
 // A styled conversational role marker for the inline chat header/prompt.
 export function roleLabel(role: string): string {
   if (role === "assistant") {

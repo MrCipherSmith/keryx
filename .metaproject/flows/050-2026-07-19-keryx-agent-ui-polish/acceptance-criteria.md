@@ -1,0 +1,6 @@
+# Acceptance Criteria — flow 050 (agent-mode UI polish)
+
+- AC1: Assistant responses in agent mode render through `renderMarkdown` (bold/headings/bullets/inline+fenced code) instead of raw markdown. The driver exposes optional `onAssistantText(text)` (called once per round that produced assistant text, before tool execution); the rich REPL renders it. Driver default (stream via `write`) unchanged when the hook is absent; chat mode and the test-locked `roleLabel` (`[90m`) are untouched.
+- AC2: The driver forwards `usage_update` via optional `onUsage(usage)`. The rich REPL prints a dim per-turn `↑<in> ↓<out> tokens` line when the provider reported usage; absent usage prints no line (no fabricated counts). Hook optional; driver unchanged when absent.
+- AC3: Agent-mode turns show a distinct styled assistant header (glyph + emphasis) and a dim turn separator; tool calls render compact parsed args `⚙ name(k=v, …)` via a pure, unit-tested `summarizeToolArgs(input)` in `src/lib/ui.ts` (NO_COLOR plain; malformed JSON → raw truncated fallback). No cursor-up/scroll-region math introduced (flow-048 readline conflict not reintroduced).
+- AC4: `bunx tsc --noEmit` clean; `bun test` green with no reduction from baseline (1453 pass); new unit tests for `summarizeToolArgs` and the driver hooks pass; no new runtime dependency.

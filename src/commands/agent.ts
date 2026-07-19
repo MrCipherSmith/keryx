@@ -14,11 +14,20 @@
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import type { NormalizedMessage, NormalizedRequest, ProviderPort } from "../harness/provider/types";
+import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
   write: (s: string) => void;
+  /**
+   * A round's assistant text is finalized (called once per round that produced
+   * text, AFTER `write` streamed the tokens and BEFORE any tool execution).
+   * A rich renderer uses this to re-render the buffered round as markdown; when
+   * absent the driver's default streaming via `write` is unchanged.
+   */
+  onAssistantText?: (text: string) => void;
+  /** Provider-reported token usage for this run (forwarded from `usage_update`). */
+  onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
   onToolCall?: (name: string, input: string) => void;
   /** A tool finished; `result.isError` distinguishes failures. */
@@ -154,6 +163,10 @@ export async function runAgentTurn(
               input: event.input ?? "",
             });
           }
+        } else if (event.kind === "usage_update") {
+          if (event.usage !== undefined) {
+            io.onUsage?.(event.usage);
+          }
         } else if (event.kind === "provider_error") {
           system(`\n[error] ${event.error?.message ?? event.error?.kind ?? "provider error"}\n`);
           errored = true;
@@ -169,6 +182,7 @@ export async function runAgentTurn(
 
     if (assistantText.length > 0) {
       history.push({ role: "assistant", content: assistantText, provenance: "model" });
+      io.onAssistantText?.(assistantText);
     }
 
     if (errored || calls.length === 0) {

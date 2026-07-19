@@ -24,6 +24,7 @@ import { makeProvider } from "../harness/provider/make-provider";
 import type {
   NormalizedMessage,
   NormalizedRequest,
+  NormalizedUsage,
   ProviderPort,
 } from "../harness/provider/types";
 import { buildOrientation } from "../ctx/orient";
@@ -34,7 +35,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { collapseHome } from "../lib/statusbar";
-import { banner, colorEnabled, note, renderMarkdown, roleLabel, style } from "../lib/ui";
+import { banner, colorEnabled, note, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
 import { detectProviders, pickProviderModel } from "./select";
 
@@ -464,11 +465,36 @@ function summarizeToolOutput(text: string): string {
   return text.includes("\n") ? `${clipped} …` : clipped;
 }
 
+/** A dim, terminal-width-agnostic separator between agent turns. */
+function turnSeparator(): string {
+  return style.dim("─".repeat(24));
+}
+
+/** A dim `↑in ↓out tokens` summary, or "" when the provider reported nothing. */
+function formatUsage(usage: NormalizedUsage | undefined): string {
+  if (usage === undefined) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (usage.inputTokens !== undefined) {
+    parts.push(`↑${usage.inputTokens}`);
+  }
+  if (usage.outputTokens !== undefined) {
+    parts.push(`↓${usage.outputTokens}`);
+  }
+  if (parts.length === 0) {
+    return "";
+  }
+  return style.dim(`${parts.join(" ")} tokens`);
+}
+
 /**
  * Agent-mode REPL (NOT unit-tested): reads lines and drives the `runAgentTurn`
- * driver, rendering assistant text, tool calls (`⚙ name(input)`), and dim tool
- * result summaries. Reuses the rich prompt + status bar. `runShell`'s chat core
- * is untouched.
+ * driver. Assistant text is buffered under the "thinking…" spinner and rendered
+ * as markdown once per round (via the driver's `onAssistantText` hook) — no
+ * fragile in-place re-render (flow 048). Renders a styled assistant header, tool
+ * calls (`⚙ name(args)`), dim tool-result summaries, a per-turn token line, and a
+ * dim turn separator. `runShell`'s chat core is untouched.
  */
 async function runAgentRepl(
   lines: AsyncIterable<string>,
@@ -510,12 +536,21 @@ async function runAgentRepl(
     return next.done ? undefined : next.value;
   };
 
+  // Per-turn token usage (last `usage_update` the provider reported), printed
+  // once when the turn ends.
+  let lastUsage: NormalizedUsage | undefined;
+
   const agentIo: AgentIO = {
-    write: (s) => {
-      if (s.length > 0) {
-        stopSpinner(); // first token of a round: drop the spinner
-      }
-      out(s);
+    // Tokens are buffered by the driver and handed back whole via
+    // `onAssistantText`; `write` only needs to keep the spinner alive so the
+    // user sees progress. (No live per-token paint — markdown is rendered once.)
+    write: () => {},
+    onAssistantText: (text) => {
+      stopSpinner();
+      out(`${renderMarkdown(text.trimEnd())}\n`);
+    },
+    onUsage: (usage) => {
+      lastUsage = usage;
     },
     requestApproval: async (_tool, input) => {
       stopSpinner();
@@ -542,8 +577,9 @@ async function runAgentRepl(
     },
     onToolCall: (name, input) => {
       stopSpinner();
-      const shownInput = input.length > 80 ? `${input.slice(0, 80)}…` : input;
-      out(`\n${style.cyan(`⚙ ${name}`)} ${style.dim(shownInput)}\n`);
+      const args = summarizeToolArgs(input);
+      const call = args.length > 0 ? `${name}(${args})` : `${name}()`;
+      out(`\n${style.cyan(`⚙ ${call}`)}\n`);
     },
     onToolResult: (name, result) => {
       const marker = result.isError ? style.red("  ✗ ") : style.gray("  ↳ ");
@@ -582,14 +618,19 @@ async function runAgentRepl(
       rich.printPrompt();
       continue;
     }
-    out(`\n${roleLabel("assistant")}\n`);
+    out(`\n${style.cyan(symbols.bullet)} ${style.bold("assistant")}\n`);
+    lastUsage = undefined;
     startSpinner();
     try {
       await runAgentTurn(agentIo, deps, history, line);
     } finally {
       stopSpinner();
     }
-    out("\n\n");
+    const usageLine = formatUsage(lastUsage);
+    if (usageLine.length > 0) {
+      out(`\n${usageLine}\n`);
+    }
+    out(`\n${turnSeparator()}\n\n`);
     rich.printPrompt();
   }
 }
