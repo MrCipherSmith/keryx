@@ -36,7 +36,7 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
-import { banner, colorEnabled, note, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "../lib/ui";
+import { colorEnabled, renderMarkdown, style, summarizeToolArgs } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
 import { detectProviders, pickProviderModel } from "./select";
 
@@ -420,7 +420,7 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
     if (!rich) {
       return;
     }
-    out(`\n${roleLabel("assistant")}\n`);
+    out(`\n${style.cyan("●")} ${style.bold("keryx")}\n`);
     awaitingFirstToken = true;
     frame = 0;
     spinner = setInterval(() => {
@@ -449,9 +449,14 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   };
 
   const printHeader = (title: string, subtitle: string): void => {
-    banner(title, subtitle);
-    note("Type a message, or /help for commands.");
-    out("\n"); // breathing room between the header and the first prompt
+    // Minimal one-line header (codex/grok/pi aesthetic) — no double rules.
+    if (rich) {
+      out(`\n${style.cyan("◆")} ${style.bold(title)}  ${style.dim(subtitle)}\n`);
+      out(`${style.dim("type a task · /help for commands · /exit to quit")}\n\n`);
+    } else {
+      out(`${title} — ${subtitle}\n`);
+      out("Type a message, or /help for commands.\n\n");
+    }
     printPrompt();
   };
 
@@ -644,7 +649,8 @@ async function runAgentRepl(
   };
 
   const history: NormalizedMessage[] = [];
-  rich.printPrompt();
+  // `printHeader` already emitted the first prompt — do NOT print another here
+  // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
   for (;;) {
     const line = await readLine();
     if (line === undefined) {
@@ -669,7 +675,7 @@ async function runAgentRepl(
       rich.printPrompt();
       continue;
     }
-    out(`\n${style.cyan(symbols.bullet)} ${style.bold("assistant")}\n`);
+    out(`\n${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
     startSpinner();
     try {
@@ -767,7 +773,7 @@ export async function shellCommand(args: string[]): Promise<void> {
     const modeLabel = agentMode ? " · agent" : "";
     const cwdLabel = collapseHome(process.cwd());
     printHeader(
-      "keryx shell",
+      "keryx",
       `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel} · ${cwdLabel}`,
     );
 

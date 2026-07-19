@@ -1,0 +1,6 @@
+# Acceptance Criteria — flow 052 (agent-mode UI redesign)
+
+- AC1: The duplicate prompt is gone — exactly ONE prompt marker is shown before the first agent-mode input. `printHeader` prints the initial prompt; `runAgentRepl` no longer prints its own initial prompt (only re-prompts after turns / slash-commands / blank lines).
+- AC2: The launch header is a single minimal line (no double cyan rules / `banner()`): an accent glyph + bold product name + a dim meta line (`provider/model · mode · cwd`) + a dim one-line hint, then a blank line and the prompt. Applies to both chat and agent shells.
+- AC3: Role markers are clean and consistent: the assistant block header is an accent glyph + bold product label (`● keryx`) in both agent mode and chat mode (`roleLabel` itself, and its `[90m` test invariant, are untouched; the header wording is changed at the call sites, not in `roleLabel`). Turn spacing/separator reads clean (codex/grok/pi-style whitespace, no heavy rules).
+- AC4: `bunx tsc --noEmit` clean; `bun test` green with no reduction from baseline (1473 pass); the non-TTY/NO_COLOR path stays plain and uncorrupted (header + prompt still emitted, no escape sequences). No new runtime dependency.

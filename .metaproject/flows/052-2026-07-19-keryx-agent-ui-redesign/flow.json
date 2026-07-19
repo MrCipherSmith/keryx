@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "052",
+  "slug": "keryx-agent-ui-redesign",
+  "title": "keryx agent-mode UI redesign (codex/grok/pi aesthetic: minimal header, single prompt, clean role markers)",
+  "status": "in-progress",
+  "createdAt": "2026-07-19T00:49:51.066Z",
+  "updatedAt": "2026-07-19T00:53:22.482Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:dca6415a8362d61842afb9af054a3d052faf5da41a23a01c5946c16aef82ba3a",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "implement redesign",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify tsc+bun+plain-path+smoke",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-19T00:49:51.066Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-19T00:50:46.786Z",
+      "event": "task-added",
+      "detail": "T5: implement redesign"
+    },
+    {
+      "at": "2026-07-19T00:50:46.892Z",
+      "event": "task-added",
+      "detail": "T6: verify tsc+bun+plain-path+smoke"
+    },
+    {
+      "at": "2026-07-19T00:50:46.988Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-19T00:50:47.072Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-19T00:50:47.155Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-19T00:53:22.200Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-19T00:53:22.299Z",
+      "event": "task-done",
+      "detail": "T5: implement redesign"
+    },
+    {
+      "at": "2026-07-19T00:53:22.387Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-19T00:53:22.482Z",
+      "event": "task-done",
+      "detail": "T6: verify tsc+bun+plain-path+smoke"
+    }
+  ]
+}
