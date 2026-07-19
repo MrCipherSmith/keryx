@@ -26,6 +26,12 @@ export interface AgentIO {
    * absent the driver's default streaming via `write` is unchanged.
    */
   onAssistantText?: (text: string) => void;
+  /**
+   * A round's chain-of-thought (from a reasoning-capable model) is finalized.
+   * Called ONCE per round that produced reasoning, BEFORE the answer renders.
+   * Absent for models that emit no reasoning (e.g. gpt-4o-mini).
+   */
+  onReasoning?: (text: string) => void;
   /** Provider-reported token usage for this run (forwarded from `usage_update`). */
   onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
@@ -141,13 +147,24 @@ export async function runAgentTurn(
     };
 
     let assistantText = "";
+    let reasoningText = "";
+    let reasoningFlushed = false;
+    const flushReasoning = (): void => {
+      if (reasoningText.length > 0 && !reasoningFlushed) {
+        io.onReasoning?.(reasoningText);
+        reasoningFlushed = true;
+      }
+    };
     const nameById = new Map<string, string>();
     const calls: PendingCall[] = [];
     let errored = false;
 
     try {
       for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
-        if (event.kind === "text_delta") {
+        if (event.kind === "reasoning_delta") {
+          reasoningText += event.text ?? "";
+        } else if (event.kind === "text_delta") {
+          flushReasoning(); // reasoning precedes the answer → surface it first
           const text = event.text ?? "";
           io.write(text);
           assistantText += text;
@@ -179,6 +196,8 @@ export async function runAgentTurn(
       system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
       errored = true;
     }
+
+    flushReasoning(); // reasoning-only round (e.g. before a tool call) still surfaces it
 
     if (assistantText.length > 0) {
       history.push({ role: "assistant", content: assistantText, provenance: "model" });

@@ -603,6 +603,12 @@ async function runAgentRepl(
         out(`${indentBlock(renderMarkdown(text.trimEnd()), GUTTER)}\n`);
       }
     },
+    onReasoning: (text) => {
+      stopSpinner();
+      endBlock(); // reasoning precedes the answer block
+      out(`\n${GUTTER}${style.dim("⋯ thinking")}\n`);
+      out(`${indentBlock(style.dim(text.trimEnd()), GUTTER)}\n`);
+    },
     onUsage: (usage) => {
       lastUsage = usage;
     },

@@ -300,6 +300,52 @@ test("runAgentTurn forwards usage_update events to onUsage", async () => {
   expect(seen).toEqual([{ input: 12, output: 3 }]);
 });
 
+// --- flow 056: onReasoning hook ---
+
+test("runAgentTurn surfaces reasoning via onReasoning once, before onAssistantText", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "step 1 " },
+      { kind: "reasoning_delta", text: "step 2" },
+      { kind: "text_delta", text: "Final answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const order: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoning: (t) => order.push(`reasoning:${t}`),
+    onAssistantText: (t) => order.push(`text:${t}`),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  // Reasoning is accumulated across deltas and surfaced ONCE, before the answer.
+  expect(order).toEqual(["reasoning:step 1 step 2", "text:Final answer."]);
+});
+
+test("runAgentTurn does not call onReasoning when the model emits no reasoning", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  let called = false;
+  const io: AgentIO = { write: () => {}, onReasoning: () => { called = true; } };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(called).toBe(false);
+});
+
 test("buildAgentSystemInstruction embeds an orient block when present, falls back when absent", () => {
   const withOrient = buildAgentSystemInstruction("MODULE MAP: a→b");
   expect(withOrient).toContain("MODULE MAP: a→b");

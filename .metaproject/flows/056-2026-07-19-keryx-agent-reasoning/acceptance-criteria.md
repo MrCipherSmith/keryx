@@ -1,0 +1,6 @@
+# Acceptance Criteria — flow 056 (agent reasoning/thinking section)
+
+- AC1: `NormalizedEventKind` gains `"reasoning_delta"`. The OpenAI-compat (ollama/openrouter) adapter emits a `reasoning_delta` event (reusing `text`) for a streaming chunk whose `delta.reasoning` OR `delta.reasoning_content` is a non-empty string — reasoning-capable OpenRouter/DeepSeek models. Chunks without a reasoning field are unaffected (no reasoning_delta).
+- AC2: `runAgentTurn` accumulates reasoning per round and exposes an optional `AgentIO.onReasoning(text)` hook, invoked ONCE per round that produced reasoning — BEFORE the answer renders (at the first `text_delta`, or at round end if the round was reasoning-only). Driver default is unchanged when the hook is absent; a model with no reasoning (e.g. gpt-4o-mini) never triggers it.
+- AC3: In agent mode the REPL renders a dim, gutter-indented "thinking" section (a `⋯ thinking` header + the reasoning text) before the answer. It is visually secondary (dim) and never shown when there is no reasoning. Chat mode and `roleLabel` untouched.
+- AC4: `bunx tsc --noEmit` clean; `bun test` green with no reduction from baseline (1486 pass); new tests cover the adapter reasoning_delta emission and the driver onReasoning hook (fired once, before onAssistantText; not fired without reasoning). No new runtime dependency.

@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 2,
+  "id": "056",
+  "slug": "keryx-agent-reasoning",
+  "title": "keryx agent reasoning/thinking section (delta.reasoning capture + dim render)",
+  "status": "in-progress",
+  "createdAt": "2026-07-19T01:35:08.162Z",
+  "updatedAt": "2026-07-19T01:39:25.602Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fedf8d7da779ac284c0c89584898a98faf776cb7da46042188ccbb7cabb25d7b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "implement reasoning_delta + onReasoning + render",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "tests adapter + driver",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-19T01:35:08.162Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-19T01:35:36.819Z",
+      "event": "task-added",
+      "detail": "T5: implement reasoning_delta + onReasoning + render"
+    },
+    {
+      "at": "2026-07-19T01:35:36.928Z",
+      "event": "task-added",
+      "detail": "T6: tests adapter + driver"
+    },
+    {
+      "at": "2026-07-19T01:35:37.085Z",
+      "event": "task-added",
+      "detail": "T7: verify"
+    },
+    {
+      "at": "2026-07-19T01:35:37.229Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-19T01:35:37.342Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-19T01:35:37.434Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-19T01:39:24.958Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-19T01:39:25.092Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-19T01:39:25.208Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-19T01:39:25.324Z",
+      "event": "task-done",
+      "detail": "T5: implement reasoning_delta + onReasoning + render"
+    },
+    {
+      "at": "2026-07-19T01:39:25.479Z",
+      "event": "task-done",
+      "detail": "T6: tests adapter + driver"
+    },
+    {
+      "at": "2026-07-19T01:39:25.602Z",
+      "event": "task-done",
+      "detail": "T7: verify"
+    }
+  ]
+}
