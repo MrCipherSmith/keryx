@@ -3,17 +3,34 @@
   "id": "054",
   "slug": "keryx-agent-gutter-padding",
   "title": "keryx agent-mode left gutter padding (OpenCode/codex aesthetic)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T01:24:24.605Z",
-  "updatedAt": "2026-07-19T01:27:30.596Z",
+  "updatedAt": "2026-07-19T01:28:01.628Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:06a647a5ba55a7e268eee79170c0adca6b728fd84dd5d5dec53d4b6cb258e441",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T01:27:38.148Z",
+      "note": "2-space gutter on header/prompt/● keryx/tool/usage/separator/system/body (smoke: cols start at 2)"
+    },
+    "AC2": {
+      "at": "2026-07-19T01:27:38.223Z",
+      "note": "gutter via LiveMarkdownBlock.render (physicalRows counts padded lines); empty lines unpadded; plain path escape-free"
+    },
+    "AC3": {
+      "at": "2026-07-19T01:27:38.298Z",
+      "note": "pure indentBlock(text,pad) in ui.ts; 2 unit tests (non-empty prefixed, empty untouched, single line, trailing newline)"
+    },
+    "AC4": {
+      "at": "2026-07-19T01:27:38.373Z",
+      "note": "tsc clean; bun test 1480/0 (+2); no new dep; chat core + roleLabel untouched"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/82"
   },
   "tasks": [
     {
@@ -185,6 +202,45 @@
       "at": "2026-07-19T01:27:30.596Z",
       "event": "task-done",
       "detail": "T7: verify"
+    },
+    {
+      "at": "2026-07-19T01:27:38.061Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/82"
+    },
+    {
+      "at": "2026-07-19T01:27:38.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 2-space gutter on header/prompt/● keryx/tool/usage/separator/system/body (smoke: cols start at 2)"
+    },
+    {
+      "at": "2026-07-19T01:27:38.223Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: gutter via LiveMarkdownBlock.render (physicalRows counts padded lines); empty lines unpadded; plain path escape-free"
+    },
+    {
+      "at": "2026-07-19T01:27:38.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: pure indentBlock(text,pad) in ui.ts; 2 unit tests (non-empty prefixed, empty untouched, single line, trailing newline)"
+    },
+    {
+      "at": "2026-07-19T01:27:38.373Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1480/0 (+2); no new dep; chat core + roleLabel untouched"
+    },
+    {
+      "at": "2026-07-19T01:28:01.598Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T01:28:01.628Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "f082f6313fb4825df993ad116cce2b984b2deb13",
+    "ref": "origin/main",
+    "at": "2026-07-19T01:28:01.628Z"
+  }
 }

@@ -20,3 +20,10 @@
 - 2026-07-19T01:27:30.396Z - task-done: T5: implement gutter + indentBlock
 - 2026-07-19T01:27:30.495Z - task-done: T6: indentBlock tests
 - 2026-07-19T01:27:30.596Z - task-done: T7: verify
+- 2026-07-19T01:27:38.061Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/82
+- 2026-07-19T01:27:38.148Z - ac-confirmed: AC1: 2-space gutter on header/prompt/● keryx/tool/usage/separator/system/body (smoke: cols start at 2)
+- 2026-07-19T01:27:38.223Z - ac-confirmed: AC2: gutter via LiveMarkdownBlock.render (physicalRows counts padded lines); empty lines unpadded; plain path escape-free
+- 2026-07-19T01:27:38.298Z - ac-confirmed: AC3: pure indentBlock(text,pad) in ui.ts; 2 unit tests (non-empty prefixed, empty untouched, single line, trailing newline)
+- 2026-07-19T01:27:38.373Z - ac-confirmed: AC4: tsc clean; bun test 1480/0 (+2); no new dep; chat core + roleLabel untouched
+- 2026-07-19T01:28:01.598Z - completing
+- 2026-07-19T01:28:01.628Z - done: all gates passed
