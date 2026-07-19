@@ -22,3 +22,10 @@
 - 2026-07-19T01:39:25.324Z - task-done: T5: implement reasoning_delta + onReasoning + render
 - 2026-07-19T01:39:25.479Z - task-done: T6: tests adapter + driver
 - 2026-07-19T01:39:25.602Z - task-done: T7: verify
+- 2026-07-19T01:39:33.128Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/86
+- 2026-07-19T01:39:33.218Z - ac-confirmed: AC1: NormalizedEventKind += reasoning_delta; adapter parses delta.reasoning/reasoning_content; 2 adapter tests
+- 2026-07-19T01:39:33.301Z - ac-confirmed: AC2: runAgentTurn accumulates + onReasoning once before onAssistantText (flush at first text or round end); 2 driver tests
+- 2026-07-19T01:39:33.393Z - ac-confirmed: AC3: REPL dim ⋯ thinking section, gutter-indented, before answer; absent when no reasoning
+- 2026-07-19T01:39:33.484Z - ac-confirmed: AC4: tsc clean; bun test 1490/0 (+4); no new dep; chat core + roleLabel untouched
+- 2026-07-19T01:39:55.239Z - completing
+- 2026-07-19T01:39:55.276Z - done: all gates passed

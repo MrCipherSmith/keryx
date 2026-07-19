@@ -3,17 +3,34 @@
   "id": "056",
   "slug": "keryx-agent-reasoning",
   "title": "keryx agent reasoning/thinking section (delta.reasoning capture + dim render)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T01:35:08.162Z",
-  "updatedAt": "2026-07-19T01:39:25.602Z",
+  "updatedAt": "2026-07-19T01:39:55.276Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:fedf8d7da779ac284c0c89584898a98faf776cb7da46042188ccbb7cabb25d7b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T01:39:33.218Z",
+      "note": "NormalizedEventKind += reasoning_delta; adapter parses delta.reasoning/reasoning_content; 2 adapter tests"
+    },
+    "AC2": {
+      "at": "2026-07-19T01:39:33.301Z",
+      "note": "runAgentTurn accumulates + onReasoning once before onAssistantText (flush at first text or round end); 2 driver tests"
+    },
+    "AC3": {
+      "at": "2026-07-19T01:39:33.393Z",
+      "note": "REPL dim ⋯ thinking section, gutter-indented, before answer; absent when no reasoning"
+    },
+    "AC4": {
+      "at": "2026-07-19T01:39:33.484Z",
+      "note": "tsc clean; bun test 1490/0 (+4); no new dep; chat core + roleLabel untouched"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/86"
   },
   "tasks": [
     {
@@ -185,6 +202,45 @@
       "at": "2026-07-19T01:39:25.602Z",
       "event": "task-done",
       "detail": "T7: verify"
+    },
+    {
+      "at": "2026-07-19T01:39:33.128Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/86"
+    },
+    {
+      "at": "2026-07-19T01:39:33.218Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: NormalizedEventKind += reasoning_delta; adapter parses delta.reasoning/reasoning_content; 2 adapter tests"
+    },
+    {
+      "at": "2026-07-19T01:39:33.301Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: runAgentTurn accumulates + onReasoning once before onAssistantText (flush at first text or round end); 2 driver tests"
+    },
+    {
+      "at": "2026-07-19T01:39:33.393Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: REPL dim ⋯ thinking section, gutter-indented, before answer; absent when no reasoning"
+    },
+    {
+      "at": "2026-07-19T01:39:33.484Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1490/0 (+4); no new dep; chat core + roleLabel untouched"
+    },
+    {
+      "at": "2026-07-19T01:39:55.239Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T01:39:55.276Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "2fb2049bdb26573dffb5617bc9e859934623c1f2",
+    "ref": "origin/main",
+    "at": "2026-07-19T01:39:55.276Z"
+  }
 }
