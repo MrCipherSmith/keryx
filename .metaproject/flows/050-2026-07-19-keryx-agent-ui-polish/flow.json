@@ -3,17 +3,34 @@
   "id": "050",
   "slug": "keryx-agent-ui-polish",
   "title": "keryx agent-mode UI polish (markdown, roles, token counter, tool styling)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-19T00:26:53.830Z",
-  "updatedAt": "2026-07-19T00:32:18.817Z",
+  "updatedAt": "2026-07-19T00:32:48.637Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:12a530d3c936603af56fda4f23d4368c9f71a0b07af0a7ce56c87e0785d8eeac",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-19T00:32:26.297Z",
+      "note": "onAssistantText hook (agent.ts) rendered via renderMarkdown in runAgentRepl; driver default unchanged when absent (agent.test); roleLabel/[90m intact"
+    },
+    "AC2": {
+      "at": "2026-07-19T00:32:26.398Z",
+      "note": "onUsage forwards usage_update (agent.test); REPL prints dim ↑in ↓out tokens after the turn; absent usage → no line"
+    },
+    "AC3": {
+      "at": "2026-07-19T00:32:26.507Z",
+      "note": "styled ● assistant header + dim separator; ⚙ name(args) via pure summarizeToolArgs (4 ui.test cases); no cursor/scroll math"
+    },
+    "AC4": {
+      "at": "2026-07-19T00:32:26.602Z",
+      "note": "tsc clean; bun test 1460 pass/0 fail (baseline 1453,+7); no new dependency"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/74"
   },
   "tasks": [
     {
@@ -210,6 +227,45 @@
       "at": "2026-07-19T00:32:18.817Z",
       "event": "task-done",
       "detail": "T8: verify: tsc + bun test + smoke"
+    },
+    {
+      "at": "2026-07-19T00:32:26.188Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/74"
+    },
+    {
+      "at": "2026-07-19T00:32:26.297Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: onAssistantText hook (agent.ts) rendered via renderMarkdown in runAgentRepl; driver default unchanged when absent (agent.test); roleLabel/[90m intact"
+    },
+    {
+      "at": "2026-07-19T00:32:26.398Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: onUsage forwards usage_update (agent.test); REPL prints dim ↑in ↓out tokens after the turn; absent usage → no line"
+    },
+    {
+      "at": "2026-07-19T00:32:26.508Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: styled ● assistant header + dim separator; ⚙ name(args) via pure summarizeToolArgs (4 ui.test cases); no cursor/scroll math"
+    },
+    {
+      "at": "2026-07-19T00:32:26.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1460 pass/0 fail (baseline 1453,+7); no new dependency"
+    },
+    {
+      "at": "2026-07-19T00:32:48.603Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-19T00:32:48.637Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "c756097e91b6f2a39fb8f6057b412b004237150b",
+    "ref": "origin/main",
+    "at": "2026-07-19T00:32:48.636Z"
+  }
 }

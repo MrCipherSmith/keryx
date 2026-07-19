@@ -23,3 +23,10 @@
 - 2026-07-19T00:32:18.663Z - task-done: T6: implement: AgentIO hooks, ui helper, REPL rendering
 - 2026-07-19T00:32:18.739Z - task-done: T7: test: summarizeToolArgs + driver hook tests
 - 2026-07-19T00:32:18.817Z - task-done: T8: verify: tsc + bun test + smoke
+- 2026-07-19T00:32:26.188Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/74
+- 2026-07-19T00:32:26.297Z - ac-confirmed: AC1: onAssistantText hook (agent.ts) rendered via renderMarkdown in runAgentRepl; driver default unchanged when absent (agent.test); roleLabel/[90m intact
+- 2026-07-19T00:32:26.398Z - ac-confirmed: AC2: onUsage forwards usage_update (agent.test); REPL prints dim ↑in ↓out tokens after the turn; absent usage → no line
+- 2026-07-19T00:32:26.508Z - ac-confirmed: AC3: styled ● assistant header + dim separator; ⚙ name(args) via pure summarizeToolArgs (4 ui.test cases); no cursor/scroll math
+- 2026-07-19T00:32:26.602Z - ac-confirmed: AC4: tsc clean; bun test 1460 pass/0 fail (baseline 1453,+7); no new dependency
+- 2026-07-19T00:32:48.603Z - completing
+- 2026-07-19T00:32:48.637Z - done: all gates passed
