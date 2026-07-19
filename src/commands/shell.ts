@@ -36,7 +36,7 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
-import { colorEnabled, renderMarkdown, style, summarizeToolArgs } from "../lib/ui";
+import { colorEnabled, indentBlock, renderMarkdown, style, summarizeToolArgs } from "../lib/ui";
 import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
 import { detectProviders, pickAgentMode, pickProviderModel } from "./select";
 
@@ -329,6 +329,8 @@ function realSelectProviderModel(baseUrl: string | undefined): NonNullable<Shell
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const PROMPT_MARK = "❯ ";
+/** Left gutter applied across the shell chrome (OpenCode/codex aesthetic). */
+const GUTTER = "  ";
 
 /** Terminal rows `text` occupies starting at column 0 for the given width. */
 function countRows(text: string, columns: number): number {
@@ -396,7 +398,7 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   };
 
   const printPrompt = (): void => {
-    out(rich ? style.cyan(PROMPT_MARK) : PROMPT_MARK);
+    out(rich ? style.cyan(`${GUTTER}${PROMPT_MARK}`) : `${GUTTER}${PROMPT_MARK}`);
   };
 
   const write = (s: string): void => {
@@ -449,13 +451,14 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   };
 
   const printHeader = (title: string, subtitle: string): void => {
-    // Minimal one-line header (codex/grok/pi aesthetic) — no double rules.
+    // Minimal one-line header (codex/grok/pi aesthetic) — no double rules, with
+    // the shared left gutter.
     if (rich) {
-      out(`\n${style.cyan("◆")} ${style.bold(title)}  ${style.dim(subtitle)}\n`);
-      out(`${style.dim("type a task · /help for commands · /exit to quit")}\n\n`);
+      out(`\n${GUTTER}${style.cyan("◆")} ${style.bold(title)}  ${style.dim(subtitle)}\n`);
+      out(`${GUTTER}${style.dim("type a task · /help for commands · /exit to quit")}\n\n`);
     } else {
-      out(`${title} — ${subtitle}\n`);
-      out("Type a message, or /help for commands.\n\n");
+      out(`${GUTTER}${title} — ${subtitle}\n`);
+      out(`${GUTTER}Type a message, or /help for commands.\n\n`);
     }
     printPrompt();
   };
@@ -522,7 +525,7 @@ async function runAgentRepl(
     frame = 0;
     spinner = setInterval(() => {
       const glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "";
-      out(`${clearLine}${style.dim(`${glyph} thinking…`)}`);
+      out(`${clearLine}${GUTTER}${style.dim(`${glyph} thinking…`)}`);
       frame += 1;
     }, 80);
   };
@@ -554,7 +557,7 @@ async function runAgentRepl(
     ? new LiveMarkdownBlock({
         out,
         cols: () => process.stdout.columns ?? 80,
-        render: (md) => renderMarkdown(md.trimEnd()),
+        render: (md) => indentBlock(renderMarkdown(md.trimEnd()), GUTTER),
         sync: true,
       })
     : undefined;
@@ -600,7 +603,7 @@ async function runAgentRepl(
       if (liveBlock !== undefined) {
         endBlock(); // final repaint + line break + reset
       } else {
-        out(`${renderMarkdown(text.trimEnd())}\n`);
+        out(`${indentBlock(renderMarkdown(text.trimEnd()), GUTTER)}\n`);
       }
     },
     onUsage: (usage) => {
@@ -621,9 +624,9 @@ async function runAgentRepl(
       // the prompt. Best-effort — never blocks or changes the default-deny gate.
       const context = await buildApprovalContext(metaprojectPort, command);
       if (context.length > 0) {
-        out(`\n${style.dim(context)}`);
+        out(`\n${indentBlock(style.dim(context), GUTTER)}`);
       }
-      out(`\n${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`);
+      out(`\n${GUTTER}${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`);
       const answer = (await readLine()) ?? "";
       const approved = /^y(es)?$/i.test(answer.trim());
       out(approved ? style.green("approved\n") : style.red("denied\n"));
@@ -634,17 +637,18 @@ async function runAgentRepl(
       endBlock(); // defensive: close any live block before the tool line
       const args = summarizeToolArgs(input);
       const call = args.length > 0 ? `${name}(${args})` : `${name}()`;
-      out(`\n${style.cyan(`⚙ ${call}`)}\n`);
+      out(`\n${GUTTER}${style.cyan(`⚙ ${call}`)}\n`);
     },
     onToolResult: (name, result) => {
-      const marker = result.isError ? style.red("  ✗ ") : style.gray("  ↳ ");
-      out(`${marker}${style.dim(summarizeToolOutput(result.output))}\n`);
+      const marker = result.isError ? style.red("✗ ") : style.gray("↳ ");
+      out(`${GUTTER}${marker}${style.dim(summarizeToolOutput(result.output))}\n`);
       startSpinner(); // a tool finished; wait for the model's next round
     },
     onSystem: (text) => {
       stopSpinner();
       endBlock(); // close the live block before printing a system/error line over it
-      out(colorEnabled() ? (text.includes("[error]") ? style.red(text) : style.dim(text)) : text);
+      const styled = colorEnabled() ? (text.includes("[error]") ? style.red(text) : style.dim(text)) : text;
+      out(indentBlock(styled, GUTTER));
     },
   };
 
@@ -675,7 +679,7 @@ async function runAgentRepl(
       rich.printPrompt();
       continue;
     }
-    out(`\n${style.cyan("●")} ${style.bold("keryx")}\n`);
+    out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
     startSpinner();
     try {
@@ -686,9 +690,9 @@ async function runAgentRepl(
     }
     const usageLine = formatUsage(lastUsage);
     if (usageLine.length > 0) {
-      out(`\n${usageLine}\n`);
+      out(`\n${GUTTER}${usageLine}\n`);
     }
-    out(`\n${turnSeparator()}\n\n`);
+    out(`\n${GUTTER}${turnSeparator()}\n\n`);
     rich.printPrompt();
   }
 }
