@@ -1,0 +1,6 @@
+# Acceptance Criteria — flow 066 (OpenTUI stdin handoff fix)
+
+- AC1: `launchTuiAgentShell` releases stdin BEFORE `createCliRenderer` runs: it takes an `onBeforeInit` hook, invoked AFTER the no-TTY / absent-dep guards but BEFORE `createCliRenderer`, so the caller detaches its readline interface before OpenTUI sends its terminal capability/DA/DSR queries. This prevents the query RESPONSES from being consumed by readline and leaking as text (the flow-065 corruption).
+- AC2: `shellCommand` passes `onBeforeInit: () => rl.close()` (was `onStart` after init). The no-TTY / absent-dep fallback paths do NOT release readline (they return false before `onBeforeInit`), so the readline shell stays usable there.
+- AC3: The default stays readline (flow 065) — TUI is still opt-in via `--tui`; this fix only changes the handoff TIMING so `--tui` can be validated on a real terminal. `runAgentTurn`, chat mode, and `roleLabel` unchanged.
+- AC4: `bunx tsc --noEmit` clean; `bun test` green with no reduction from baseline (1506); default `--agent` (no --tui) still runs the readline shell (smoke). No new dependency. NOTE: the fix's real-terminal effect (no leaked query responses) can only be validated by the user via `keryx shell --agent --tui`.

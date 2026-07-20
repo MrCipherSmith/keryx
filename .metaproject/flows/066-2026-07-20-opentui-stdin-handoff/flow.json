@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "066",
+  "slug": "opentui-stdin-handoff",
+  "title": "OpenTUI stdin handoff fix — release readline BEFORE createCliRenderer (terminal query responses leaked)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T10:50:33.336Z",
+  "updatedAt": "2026-07-20T10:52:43.845Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2f9ff3a50c122ef7a46f8e32b133892840ee63f90378fff17f48c3f5553d6f15",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "onBeforeInit stdin handoff",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T10:50:33.336Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T10:52:43.203Z",
+      "event": "task-added",
+      "detail": "T5: onBeforeInit stdin handoff"
+    },
+    {
+      "at": "2026-07-20T10:52:43.278Z",
+      "event": "task-added",
+      "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T10:52:43.359Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T10:52:43.455Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T10:52:43.536Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T10:52:43.618Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T10:52:43.692Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T10:52:43.773Z",
+      "event": "task-done",
+      "detail": "T5: onBeforeInit stdin handoff"
+    },
+    {
+      "at": "2026-07-20T10:52:43.845Z",
+      "event": "task-done",
+      "detail": "T6: verify"
+    }
+  ]
+}
