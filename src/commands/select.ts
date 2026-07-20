@@ -57,6 +57,28 @@ const OPENROUTER_MODELS: readonly string[] = [
 /** OpenRouter's OpenAI-compatible base URL (the adapter appends /v1/chat/completions). */
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
 
+/**
+ * Fetch OpenRouter's LIVE model list (`GET /api/v1/models`, public — no key) so the
+ * picker offers all models (filterable by name, e.g. `:free`). Returns model ids
+ * sorted alphabetically; on any failure (offline / non-2xx / malformed) falls back
+ * to the curated {@link OPENROUTER_MODELS}. Never throws.
+ */
+export async function fetchOpenRouterModels(fetchFn: typeof fetch): Promise<string[]> {
+  try {
+    const res = await fetchFn(`${OPENROUTER_BASE_URL}/v1/models`);
+    if (!res.ok) {
+      return [...OPENROUTER_MODELS];
+    }
+    const body = (await res.json()) as { data?: Array<{ id?: unknown }> } | null;
+    const ids = Array.isArray(body?.data)
+      ? body.data.map((m) => (typeof m.id === "string" ? m.id : "")).filter((id) => id.length > 0)
+      : [];
+    return ids.length > 0 ? Array.from(new Set(ids)).sort() : [...OPENROUTER_MODELS];
+  } catch {
+    return [...OPENROUTER_MODELS];
+  }
+}
+
 /** The always-available offline echo provider's model list. */
 const FAKE_MODELS: readonly string[] = ["fake-echo"];
 

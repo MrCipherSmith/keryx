@@ -18,7 +18,7 @@ import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { AGENT_SLASH_COMMANDS, filterCommands, findAgentCommand } from "../commands/agent-commands";
-import type { DetectedProvider } from "../commands/select";
+import { type DetectedProvider, fetchOpenRouterModels } from "../commands/select";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { saveShellConfig } from "../lib/shell-config";
 
@@ -196,11 +196,50 @@ function hhmm(): string {
   return `${hour}:${d.getMinutes().toString().padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
+/** A full-screen absolute overlay box (covers the running shell for a picker). */
+function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
+  return new otui.BoxRenderable(r, {
+    id,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#0a1414",
+    flexDirection: "column",
+    padding: 1,
+  });
+}
+
+/** Prompt for the OpenRouter API key in an overlay; resolve the key or `undefined`. */
+function promptOpenRouterKey(otui: OpenTui, r: Renderer): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "key-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "kp-title", content: otui.t`${otui.bold("Paste your OpenRouter API key")} ${otui.dim("(Enter)")}` }));
+    box.add(
+      new otui.TextRenderable(r, {
+        id: "kp-note",
+        content: otui.t`${otui.dim("Get one at openrouter.ai/keys · saved to your keryx config dir (owner-only, 0600)")}`,
+        marginTop: 1,
+      }),
+    );
+    const keyInput = new otui.InputRenderable(r, { id: "kp-input", placeholder: "sk-or-...", marginTop: 1 });
+    box.add(keyInput);
+    keyInput.focus();
+    keyInput.on(otui.InputRenderableEvents.ENTER, () => {
+      const key = keyInput.value.trim();
+      r.root.remove(box);
+      resolve(key.length > 0 ? key : undefined);
+    });
+  });
+}
+
 /**
- * In-TUI provider → model picker (used when no `--provider`/`--model` flags were
- * given). Renders a provider SelectRenderable, then a model SelectRenderable, both
- * navigated with ↑/↓ + Enter (they own focus, so no readline/Input conflict).
- * Resolves the chosen selection, or `undefined` if it cannot resolve one.
+ * In-TUI provider → model picker. A provider SelectRenderable, then the filterable
+ * {@link pickModelInTui}. For OpenRouter the LIVE model list is fetched (all models,
+ * searchable — e.g. `free`); without a key it then prompts + persists one. Absolute
+ * overlay (works at startup AND for `/connect`). Resolves the selection or `undefined`.
  */
 function selectProviderModelInTui(
   otui: OpenTui,
@@ -212,130 +251,118 @@ function selectProviderModelInTui(
       resolve(undefined);
       return;
     }
-    // Absolute full-screen overlay, so this works at startup AND when re-invoked
-    // mid-session by `/connect` (it covers the running shell, then is removed).
-    const box = new otui.BoxRenderable(r, {
-      id: "picker",
-      position: "absolute",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      backgroundColor: "#0a1414",
-      flexDirection: "column",
-      padding: 1,
-    });
+    const box = overlayBox(otui, r, "picker");
     r.root.add(box);
-    const title = new otui.TextRenderable(r, {
-      id: "picker-title",
-      content: otui.t`${otui.bold("Select a provider")} ${otui.dim("(↑/↓, Enter)")}`,
-    });
-    box.add(title);
+    box.add(new otui.TextRenderable(r, { id: "picker-title", content: otui.t`${otui.bold("Select a provider")} ${otui.dim("(↑/↓, Enter)")}` }));
     const provSelect = new otui.SelectRenderable(r, {
       id: "picker-provider",
       width: 60,
       height: Math.min(8, Math.max(1, detected.length)),
-      options: detected.map((d) => ({ name: d.name, description: `${d.models.length} model(s)` })),
+      options: detected.map((d) => ({ name: d.name, description: d.name === "openrouter" ? "hosted · many models" : `${d.models.length} model(s)` })),
+      selectedTextColor: "#ffd166",
     });
     box.add(provSelect);
     provSelect.focus();
     provSelect.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = provSelect.getSelectedOption();
       const prov = chosen === null ? undefined : detected.find((d) => d.name === chosen.name);
+      r.root.remove(box);
       if (prov === undefined) {
-        r.root.remove(box);
         resolve(undefined);
         return;
       }
-      title.content = otui.t`${otui.bold(`Select a model for ${prov.name}`)} ${otui.dim("(↑/↓, Enter)")}`;
-      box.remove(provSelect);
-      const models = prov.models.length > 0 ? prov.models : ["fake-echo"];
-      const modelSelect = new otui.SelectRenderable(r, {
-        id: "picker-model",
-        width: 60,
-        // showDescription defaults to TRUE, which reserved a 2nd (empty) line per
-        // item and hid the model name — models have no description, so disable it.
-        showDescription: false,
-        height: Math.min(12, Math.max(3, models.length)),
-        options: models.map((m) => ({ name: m, description: "" })),
-      });
-      box.add(modelSelect);
-      modelSelect.focus();
-      modelSelect.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-        const chosenModel = modelSelect.getSelectedOption();
-        const model = chosenModel === null ? (models[0] ?? "fake-echo") : chosenModel.name;
-        const finish = (): void => {
-          r.root.remove(box);
-          resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
-        };
-        // OpenRouter without a key → prompt for it in the TUI, then set it in the
-        // process env (in-memory only; never persisted/logged) so the provider
-        // factory picks it up.
-        const hasKey = typeof process.env.OPENROUTER_API_KEY === "string" && process.env.OPENROUTER_API_KEY.length > 0;
-        if (prov.name === "openrouter" && !hasKey) {
-          box.remove(modelSelect);
-          title.content = otui.t`${otui.bold("Paste your OpenRouter API key")} ${otui.dim("(Enter)")}`;
-          const keyInput = new otui.InputRenderable(r, { id: "picker-key", placeholder: "sk-or-..." });
-          box.add(keyInput);
-          box.add(
-            new otui.TextRenderable(r, {
-              id: "picker-key-note",
-              content: otui.t`${otui.dim("Get one at openrouter.ai/keys · saved to your keryx config dir (owner-only, 0600)")}`,
-              marginTop: 1,
-            }),
-          );
-          keyInput.focus();
-          keyInput.on(otui.InputRenderableEvents.ENTER, () => {
-            const key = keyInput.value.trim();
-            if (key.length > 0) {
-              process.env.OPENROUTER_API_KEY = key;
-              saveShellConfig({ openrouterKey: key }); // persist (0600), opencode-style
-            }
-            finish();
-          });
+      void (async () => {
+        // OpenRouter: fetch the live, filterable model list; others use detected.
+        const models = prov.name === "openrouter" ? await fetchOpenRouterModels(globalThis.fetch) : prov.models;
+        const model = await pickModelInTui(otui, r, models);
+        if (model === undefined) {
+          resolve(undefined);
           return;
         }
-        finish();
-      });
+        const hasKey = typeof process.env.OPENROUTER_API_KEY === "string" && process.env.OPENROUTER_API_KEY.length > 0;
+        if (prov.name === "openrouter" && !hasKey) {
+          const key = await promptOpenRouterKey(otui, r);
+          if (key !== undefined) {
+            process.env.OPENROUTER_API_KEY = key;
+            saveShellConfig({ openrouterKey: key }); // persist (0600), opencode-style
+          }
+        }
+        resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
+      })();
     });
   });
 }
 
 /**
- * In-TUI model-only picker (used by `/model` to switch the model mid-session for
- * the CURRENT provider). Absolute overlay; resolves the chosen model, or
- * `undefined` if the user provided none.
+ * In-TUI model picker with TYPE-TO-FILTER (search by name, e.g. `free`). Absolute
+ * overlay; the SelectRenderable is focused (↑/↓/Enter native) while printable keys
+ * and Backspace edit a live filter over the (potentially large) model list. Resolves
+ * the chosen model, or `undefined` on Esc / no match. Removes its key handler on close.
  */
 function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const list = models.length > 0 ? models : ["fake-echo"];
-    const box = new otui.BoxRenderable(r, {
-      id: "model-picker",
-      position: "absolute",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      backgroundColor: "#0a1414",
-      flexDirection: "column",
-      padding: 1,
-    });
+    const all = models.length > 0 ? models : ["fake-echo"];
+    const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")} ${otui.dim("(↑/↓, Enter · Esc to cancel)")}` }));
+    box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
+    const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to cancel")}` });
+    box.add(filterLine);
+    const NO_MATCH = "(no match)";
     const sel = new otui.SelectRenderable(r, {
       id: "mp-sel",
-      width: 60,
+      width: 72,
       showDescription: false,
-      height: Math.min(12, Math.max(3, list.length)),
-      options: list.map((m) => ({ name: m, description: "" })),
+      height: 14,
+      showScrollIndicator: true,
+      wrapSelection: true,
+      options: all.map((m) => ({ name: m, description: "" })),
       selectedTextColor: "#ffd166",
     });
     box.add(sel);
     sel.focus();
+
+    let filter = "";
+    const apply = (): void => {
+      const q = filter.trim().toLowerCase();
+      const matches = q.length > 0 ? all.filter((m) => m.toLowerCase().includes(q)) : all;
+      sel.options = matches.length > 0 ? matches.map((m) => ({ name: m, description: "" })) : [{ name: NO_MATCH, description: "" }];
+      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to cancel")}`;
+    };
+
+    const onKey = (key: { name: string; ctrl: boolean; meta: boolean; sequence: string; preventDefault: () => void; stopPropagation: () => void }): void => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve(undefined);
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "backspace") {
+        filter = filter.slice(0, -1);
+        apply();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      const ch = key.sequence;
+      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
+        filter += ch;
+        apply();
+        key.preventDefault();
+        key.stopPropagation();
+      }
+      // ↑/↓/Enter fall through to the focused SelectRenderable.
+    };
+    const cleanup = (): void => {
+      r._internalKeyInput.offInternal("keypress", onKey);
+      r.root.remove(box);
+    };
+    r._internalKeyInput.onInternal("keypress", onKey);
+
     sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = sel.getSelectedOption();
-      r.root.remove(box);
-      resolve(chosen === null ? list[0] : chosen.name);
+      cleanup();
+      resolve(chosen === null || chosen.name === NO_MATCH ? undefined : chosen.name);
     });
   });
 }
@@ -685,7 +712,9 @@ export async function launchTuiAgentShell(opts: {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const prov = detected.find((d) => d.name === currentSel.provider);
-            const chosen = await pickModelInTui(otui, r, prov?.models ?? []);
+            // OpenRouter: fetch the live, filterable model list; others use detected.
+            const models = currentSel.provider === "openrouter" ? await fetchOpenRouterModels(globalThis.fetch) : (prov?.models ?? []);
+            const chosen = await pickModelInTui(otui, r, models);
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined

@@ -64,7 +64,7 @@ import path from "node:path";
 import { describe, expect, test } from "bun:test";
 // PINNED API (RED: module does not exist until T6).
 import type { DetectedProvider, DetectProvidersDeps } from "./select";
-import { detectProviders, pickAgentMode, pickProviderModel } from "./select";
+import { detectProviders, fetchOpenRouterModels, pickAgentMode, pickProviderModel } from "./select";
 import type { ShellIO } from "./shell";
 
 const FIXTURE_PATH = path.join(import.meta.dir, "fixtures", "ollama-api-tags.recorded.json");
@@ -362,6 +362,22 @@ describe("flow 053 — pickAgentMode: agent/chat menu, agent default", () => {
     expect(await pickAgentMode(io)).toBe(false);
     expect(writes.join("")).toMatch(/invalid/i);
   });
+});
+
+test("flow 083: fetchOpenRouterModels parses /v1/models (sorted, deduped); falls back on failure", async () => {
+  const okFetch = (async () =>
+    new Response(JSON.stringify({ data: [{ id: "z/m" }, { id: "a/m" }, { id: "a/m" }, { id: 42 }] }), {
+      status: 200,
+    })) as unknown as typeof fetch;
+  expect(await fetchOpenRouterModels(okFetch)).toEqual(["a/m", "z/m"]);
+
+  const badFetch = (async () => new Response("nope", { status: 500 })) as unknown as typeof fetch;
+  expect(await fetchOpenRouterModels(badFetch)).toContain("openai/gpt-4o-mini"); // curated fallback
+
+  const throwFetch = (async () => {
+    throw new Error("offline");
+  }) as unknown as typeof fetch;
+  expect(await fetchOpenRouterModels(throwFetch)).toContain("openai/gpt-4o-mini");
 });
 
 test("flow 078: openrouter is ALWAYS offered (key entered at use time; no network probe)", async () => {
