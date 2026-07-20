@@ -17,3 +17,10 @@
 - 2026-07-20T14:35:35.917Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T14:35:35.996Z - task-done: T5: /model + /connect
 - 2026-07-20T14:35:36.095Z - task-done: T6: verify
+- 2026-07-20T14:36:07.961Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/134 (warning: PR is not a draft)
+- 2026-07-20T14:36:08.112Z - ac-confirmed: AC1: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY
+- 2026-07-20T14:36:08.220Z - ac-confirmed: AC2: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY
+- 2026-07-20T14:36:08.316Z - ac-confirmed: AC3: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY
+- 2026-07-20T14:36:08.444Z - ac-confirmed: AC4: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY
+- 2026-07-20T14:36:08.609Z - completing
+- 2026-07-20T14:36:08.639Z - done: all gates passed

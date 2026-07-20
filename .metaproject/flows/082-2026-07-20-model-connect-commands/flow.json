@@ -3,17 +3,34 @@
   "id": "082",
   "slug": "model-connect-commands",
   "title": "In-session /model + /connect commands — switch model/provider on the fly (rebuild deps, persist, toast, update labels)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T14:35:35.164Z",
-  "updatedAt": "2026-07-20T14:35:36.095Z",
+  "updatedAt": "2026-07-20T14:36:08.639Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:edad93d8fd94e3e1a1ec729ebf83cec94ad992d302097368d005de4554f771b3",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T14:36:08.111Z",
+      "note": "tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    "AC2": {
+      "at": "2026-07-20T14:36:08.219Z",
+      "note": "tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    "AC3": {
+      "at": "2026-07-20T14:36:08.316Z",
+      "note": "tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    "AC4": {
+      "at": "2026-07-20T14:36:08.444Z",
+      "note": "tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/134"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T14:35:36.095Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T14:36:07.961Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/134 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T14:36:08.112Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    {
+      "at": "2026-07-20T14:36:08.220Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    {
+      "at": "2026-07-20T14:36:08.316Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    {
+      "at": "2026-07-20T14:36:08.444Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1516/0; registry tests updated; interactive = user on TTY"
+    },
+    {
+      "at": "2026-07-20T14:36:08.609Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T14:36:08.639Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "f824d3790a185cbe8b3b0cc348e6b77c2b22f115",
+    "ref": "origin/main",
+    "at": "2026-07-20T14:36:08.638Z"
+  }
 }
