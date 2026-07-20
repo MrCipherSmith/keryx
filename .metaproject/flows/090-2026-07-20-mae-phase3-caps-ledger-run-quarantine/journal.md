@@ -13,3 +13,6 @@
 - 2026-07-20T19:40:51.185Z - ac-confirmed: AC4: childRunModel(extension)->{provider,model}; runOffline stamps them on output.metrics (stub-provider test); makeProvider credentials map precedes ambient env; unauthorized provider => FakeProvider
 - 2026-07-20T19:40:51.336Z - ac-confirmed: AC5: quarantine.ts scans control-tag/turn-marker/permission-config; prepends marker, never removes text; 6 tests incl determinism
 - 2026-07-20T19:40:51.416Z - ac-confirmed: AC6: all new modules pure (no Date.now/Math.random); full suite 1618 pass/0 fail incl no-optional-imports dep guard; tsc clean
+- 2026-07-20T19:42:44.459Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/151 (warning: PR is not a draft)
+- 2026-07-20T19:42:44.555Z - completing
+- 2026-07-20T19:42:44.581Z - done: all gates passed
