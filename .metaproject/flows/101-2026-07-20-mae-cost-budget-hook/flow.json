@@ -3,9 +3,9 @@
   "id": "101",
   "slug": "mae-cost-budget-hook",
   "title": "Multi-Agent Engine: cost/token budget hook (maxCostUnits in the ledger)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T22:41:42.176Z",
-  "updatedAt": "2026-07-20T22:46:10.278Z",
+  "updatedAt": "2026-07-20T22:47:20.446Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/166"
   },
   "tasks": [
     {
@@ -165,6 +165,25 @@
       "at": "2026-07-20T22:46:10.278Z",
       "event": "ac-confirmed",
       "detail": "AC6: ledger.test.ts cost block added; full suite 1786 pass/0 fail (--timeout 30000, incl dep guard); tsc clean"
+    },
+    {
+      "at": "2026-07-20T22:47:20.300Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/166 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T22:47:20.417Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T22:47:20.446Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "1e911cb07ab9d39832aa42687328090ea141f39a",
+    "ref": "origin/main",
+    "at": "2026-07-20T22:47:20.445Z"
+  }
 }
