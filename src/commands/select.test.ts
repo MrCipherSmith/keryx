@@ -364,12 +364,13 @@ describe("flow 053 — pickAgentMode: agent/chat menu, agent default", () => {
   });
 });
 
-test("flow 047: openrouter present iff OPENROUTER_API_KEY is set (no network probe)", async () => {
+test("flow 078: openrouter is ALWAYS offered (key entered at use time; no network probe)", async () => {
   const withKey = await detectProviders({ fetch: throwingFetch("no ollama"), env: { OPENROUTER_API_KEY: "sk-or-x" } });
   const openrouter = withKey.find((d) => d.name === "openrouter");
   expect(openrouter?.models).toContain("openai/gpt-4o-mini");
   expect(openrouter?.baseUrl).toBe("https://openrouter.ai/api");
 
+  // Present even without a key — the interactive shell prompts for it.
   const without = await detectProviders({ fetch: throwingFetch("no ollama"), env: {} });
-  expect(without.find((d) => d.name === "openrouter")).toBeUndefined();
+  expect(without.find((d) => d.name === "openrouter")?.models).toContain("openai/gpt-4o-mini");
 });

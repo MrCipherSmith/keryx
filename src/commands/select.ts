@@ -151,12 +151,12 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
     detected.push({ name: "anthropic", models: [...ANTHROPIC_MODELS] });
   }
 
-  const openrouterKey = deps.env.OPENROUTER_API_KEY;
-  if (typeof openrouterKey === "string" && openrouterKey.length > 0) {
-    // Key read from `env` only — never surfaced on the returned shape / logged.
-    // No network probe (the model list is static); openrouter never throws here.
-    detected.push({ name: "openrouter", models: [...OPENROUTER_MODELS], baseUrl: OPENROUTER_BASE_URL });
-  }
+  // OpenRouter is ALWAYS offered (a major hosted gateway). The `OPENROUTER_API_KEY`
+  // is read from env at provider-construction time, or the interactive shell
+  // prompts for it when absent — so a user need not pre-set the env var just to see
+  // it in the picker. Static curated (cheap) model list; no network probe; the key
+  // is never surfaced on the returned shape / logged.
+  detected.push({ name: "openrouter", models: [...OPENROUTER_MODELS], baseUrl: OPENROUTER_BASE_URL });
 
   detected.push({ name: "fake", models: [...FAKE_MODELS] });
   return detected;

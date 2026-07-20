@@ -251,8 +251,30 @@ function selectProviderModelInTui(
       modelSelect.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
         const chosenModel = modelSelect.getSelectedOption();
         const model = chosenModel === null ? (models[0] ?? "fake-echo") : chosenModel.name;
-        r.root.remove(box);
-        resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
+        const finish = (): void => {
+          r.root.remove(box);
+          resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
+        };
+        // OpenRouter without a key → prompt for it in the TUI, then set it in the
+        // process env (in-memory only; never persisted/logged) so the provider
+        // factory picks it up.
+        const hasKey = typeof process.env.OPENROUTER_API_KEY === "string" && process.env.OPENROUTER_API_KEY.length > 0;
+        if (prov.name === "openrouter" && !hasKey) {
+          box.remove(modelSelect);
+          title.content = otui.t`${otui.bold("Paste your OpenRouter API key")} ${otui.dim("(Enter · get one at openrouter.ai/keys)")}`;
+          const keyInput = new otui.InputRenderable(r, { id: "picker-key", placeholder: "sk-or-..." });
+          box.add(keyInput);
+          keyInput.focus();
+          keyInput.on(otui.InputRenderableEvents.ENTER, () => {
+            const key = keyInput.value.trim();
+            if (key.length > 0) {
+              process.env.OPENROUTER_API_KEY = key;
+            }
+            finish();
+          });
+          return;
+        }
+        finish();
       });
     });
   });

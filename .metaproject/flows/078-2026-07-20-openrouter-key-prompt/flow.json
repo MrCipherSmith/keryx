@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "078",
+  "slug": "openrouter-key-prompt",
+  "title": "OpenRouter always offered + in-TUI API key prompt when missing (cheap curated models)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T13:51:25.515Z",
+  "updatedAt": "2026-07-20T13:51:26.323Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7abff15f58379d56e1bf12c1dbad0874e2fd49969902211560b0b772001da09c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "always-offer + key prompt",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T13:51:25.515Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T13:51:25.643Z",
+      "event": "task-added",
+      "detail": "T5: always-offer + key prompt"
+    },
+    {
+      "at": "2026-07-20T13:51:25.730Z",
+      "event": "task-added",
+      "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T13:51:25.815Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T13:51:25.896Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T13:51:25.981Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T13:51:26.074Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T13:51:26.162Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T13:51:26.246Z",
+      "event": "task-done",
+      "detail": "T5: always-offer + key prompt"
+    },
+    {
+      "at": "2026-07-20T13:51:26.323Z",
+      "event": "task-done",
+      "detail": "T6: verify"
+    }
+  ]
+}
