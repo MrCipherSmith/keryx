@@ -3,17 +3,34 @@
   "id": "071",
   "slug": "opentui-menu-focus",
   "title": "OpenTUI /-menu focus-transfer nav + command echo + compact composer (arrow focuses menu, Enter selects via ITEM_SELECTED)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T12:03:46.879Z",
-  "updatedAt": "2026-07-20T12:03:47.822Z",
+  "updatedAt": "2026-07-20T12:04:26.144Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d8e51f16381db146622cffb19796339ee1b397648eefe1c6b0b22a947b9b1be2",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T12:04:25.555Z",
+      "note": "verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    "AC2": {
+      "at": "2026-07-20T12:04:25.659Z",
+      "note": "verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    "AC3": {
+      "at": "2026-07-20T12:04:25.742Z",
+      "note": "verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    "AC4": {
+      "at": "2026-07-20T12:04:25.826Z",
+      "note": "verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/112"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T12:03:47.822Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T12:04:25.448Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/112 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T12:04:25.555Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    {
+      "at": "2026-07-20T12:04:25.659Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    {
+      "at": "2026-07-20T12:04:25.742Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    {
+      "at": "2026-07-20T12:04:25.826Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY"
+    },
+    {
+      "at": "2026-07-20T12:04:25.919Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T12:04:26.144Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "a253a7504363749126503faa1a3b48560fb2e1a3",
+    "ref": "origin/main",
+    "at": "2026-07-20T12:04:26.143Z"
+  }
 }

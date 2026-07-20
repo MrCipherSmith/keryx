@@ -15,3 +15,10 @@
 - 2026-07-20T12:03:47.536Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T12:03:47.731Z - task-done: T5: focus-transfer nav
 - 2026-07-20T12:03:47.822Z - task-done: T6: verify
+- 2026-07-20T12:04:25.448Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/112 (warning: PR is not a draft)
+- 2026-07-20T12:04:25.555Z - ac-confirmed: AC1: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY
+- 2026-07-20T12:04:25.659Z - ac-confirmed: AC2: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY
+- 2026-07-20T12:04:25.742Z - ac-confirmed: AC3: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY
+- 2026-07-20T12:04:25.826Z - ac-confirmed: AC4: verified: tsc clean; bun test 1507/0; user validates keyboard on TTY
+- 2026-07-20T12:04:25.919Z - completing
+- 2026-07-20T12:04:26.144Z - done: all gates passed
