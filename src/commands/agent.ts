@@ -57,14 +57,21 @@ export interface AgentDeps {
   /** Trusted system instruction (assembled by `buildAgentSystemInstruction`). */
   systemInstruction: string;
   idSeq: () => string;
-  /** Max tool executions per user turn (loop-safety guard). Default 8. */
+  /**
+   * Max **unique** tool signatures per user turn (loop-safety guard). Default 8.
+   * The same call (name + normalized input hash) may be retried up to
+   * {@link MAX_ATTEMPTS_PER_HASH} times and still counts as **one** budget slot.
+   */
   maxToolCalls?: number;
 }
 
 const DEFAULT_MAX_TOOL_CALLS = 8;
 
-/** Consecutive identical failing tool calls that abort a turn (runaway guard). */
-const MAX_REPEAT_FAILS = 3;
+/**
+ * Max attempts for the same tool signature (name + input hash). All attempts of
+ * one signature share a single budget slot.
+ */
+export const MAX_ATTEMPTS_PER_HASH = 3;
 
 /** Optional session context baked into the system instruction (provider/model). */
 export interface AgentInstructionContext {
@@ -144,6 +151,75 @@ function parseToolInput(raw: string): Record<string, unknown> {
   }
 }
 
+/** Canonical JSON with sorted keys so equivalent objects hash the same. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+}
+
+/**
+ * Hash for budget / retry accounting: tool name + normalized input.
+ * Exported for unit tests.
+ */
+export function toolCallHash(name: string, input: string): string {
+  const parsed = parseToolInput(input);
+  return `${name}\0${stableStringify(parsed)}`;
+}
+
+interface ToolBudgetState {
+  /** Unique signatures that have consumed a budget slot. */
+  charged: Set<string>;
+  /** Attempt count per signature (capped at {@link MAX_ATTEMPTS_PER_HASH}). */
+  attempts: Map<string, number>;
+  maxUnique: number;
+}
+
+function budgetUsed(state: ToolBudgetState): number {
+  return state.charged.size;
+}
+
+/**
+ * Decide whether to run this call and whether it charges a new budget slot.
+ * - Same hash: up to {@link MAX_ATTEMPTS_PER_HASH} attempts, **one** budget slot.
+ * - New hash: charges one slot if budget remains; else rejected.
+ */
+export function reserveToolAttempt(
+  state: ToolBudgetState,
+  name: string,
+  input: string,
+): { ok: true; hash: string; attempt: number; chargedNew: boolean } | { ok: false; hash: string; reason: string } {
+  const hash = toolCallHash(name, input);
+  const prev = state.attempts.get(hash) ?? 0;
+  if (prev >= MAX_ATTEMPTS_PER_HASH) {
+    return {
+      ok: false,
+      hash,
+      reason: `same tool call already tried ${MAX_ATTEMPTS_PER_HASH}× (hash budget); change the arguments or a different tool`,
+    };
+  }
+  const isNew = !state.charged.has(hash);
+  if (isNew && state.charged.size >= state.maxUnique) {
+    return {
+      ok: false,
+      hash,
+      reason: `tool-call budget exhausted (${state.maxUnique} unique signatures per turn; same call may retry up to ${MAX_ATTEMPTS_PER_HASH}× as one slot)`,
+    };
+  }
+  if (isNew) {
+    state.charged.add(hash);
+  }
+  const attempt = prev + 1;
+  state.attempts.set(hash, attempt);
+  return { ok: true, hash, attempt, chargedNew: isNew };
+}
+
 /**
  * Run ONE user turn to completion (possibly several model round-trips if tools are
  * called). Appends the user message plus every assistant/tool message produced to
@@ -161,10 +237,13 @@ export async function runAgentTurn(
   const toolDefs = deps.tools.map((t) => t.definition);
   const maxToolCalls = deps.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
   const parentRunId = deps.idSeq();
-  let toolCallsUsed = 0;
-  // Runaway guard: track consecutive identical FAILING calls across rounds.
-  let repeatFailSig: string | undefined;
-  let repeatFailCount = 0;
+  const budget: ToolBudgetState = {
+    charged: new Set(),
+    attempts: new Map(),
+    maxUnique: maxToolCalls,
+  };
+  /** Short log of tool outcomes for the budget-exhausted wrap-up. */
+  const toolLog: string[] = [];
 
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -252,42 +331,144 @@ export async function runAgentTurn(
     }
 
     // Execute each tool call and append its result, then loop to re-request.
-    let abort: string | undefined;
+    let stopForBudget = false;
+    let executedAny = false;
     for (const call of calls) {
       io.onToolCall?.(call.name, call.input);
-      const result = await executeCall(call, toolByName, io.requestApproval, () => toolCallsUsed++, {
-        used: () => toolCallsUsed,
-        max: maxToolCalls,
-      });
+      const reservation = reserveToolAttempt(budget, call.name, call.input);
+      if (!reservation.ok) {
+        const result: InteractiveToolResult = { output: reservation.reason, isError: true };
+        io.onToolResult?.(call.name, result);
+        history.push({ role: "tool", content: result.output, provenance: "tool" });
+        toolLog.push(`${call.name}: skipped (${reservation.reason.split(";")[0] ?? "budget"})`);
+        if (reservation.reason.startsWith("tool-call budget exhausted")) {
+          stopForBudget = true;
+        }
+        continue;
+      }
+
+      executedAny = true;
+      const result = await executeCall(call, toolByName, io.requestApproval);
       io.onToolResult?.(call.name, result);
       history.push({ role: "tool", content: result.output, provenance: "tool" });
+      const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
+      toolLog.push(
+        `${call.name}(${shortIn}) → ${result.isError ? "error" : "ok"} [attempt ${reservation.attempt}/${MAX_ATTEMPTS_PER_HASH}, unique ${budgetUsed(budget)}/${maxToolCalls}]`,
+      );
+    }
 
-      // Runaway guard: a model that re-issues the SAME failing call every round
-      // would otherwise spin forever. Abort after N consecutive identical errors.
-      if (result.isError) {
-        const sig = `${call.name}:${call.input}`;
-        repeatFailCount = sig === repeatFailSig ? repeatFailCount + 1 : 1;
-        repeatFailSig = sig;
-        if (repeatFailCount >= MAX_REPEAT_FAILS) {
-          abort = `repeated identical tool error — ${call.name} failed ${repeatFailCount}× with the same input`;
-          break;
+    // Stop when unique budget is full, OR the model only re-issued exhausted
+    // hashes (no progress) — otherwise it could loop forever on the same call.
+    const noProgress = !executedAny && calls.length > 0;
+    if (stopForBudget || budgetUsed(budget) >= maxToolCalls || noProgress) {
+      await finishWithBudgetSummary(io, deps, history, parentRunId, {
+        maxUnique: maxToolCalls,
+        used: budgetUsed(budget),
+        toolLog,
+        noProgress,
+      });
+      return;
+    }
+  }
+}
+
+/**
+ * Budget exhausted (or maxed unique signatures): one final model turn **without
+ * tools** so the assistant explains what happened and suggests next steps.
+ */
+async function finishWithBudgetSummary(
+  io: AgentIO,
+  deps: AgentDeps,
+  history: NormalizedMessage[],
+  parentRunId: string,
+  info: { maxUnique: number; used: number; toolLog: string[]; noProgress?: boolean },
+): Promise<void> {
+  const system = (text: string): void => {
+    if (io.onSystem !== undefined) {
+      io.onSystem(text);
+    } else {
+      io.write(text);
+    }
+  };
+
+  const why = info.noProgress
+    ? `no progress (only repeated/exhausted tool signatures; max ${MAX_ATTEMPTS_PER_HASH} attempts each)`
+    : `unique signature budget ${info.used}/${info.maxUnique} (same call may retry up to ${MAX_ATTEMPTS_PER_HASH}× as one slot)`;
+
+  system(`\n[budget] Stopping tools: ${why}. Asking the model for a short wrap-up…\n`);
+
+  const logBlock =
+    info.toolLog.length > 0
+      ? info.toolLog
+          .slice(-12)
+          .map((line) => `- ${line}`)
+          .join("\n")
+      : "- (no tool log)";
+
+  history.push({
+    role: "user",
+    content:
+      `[system] Tool loop stopped: ${why}.\n\n` +
+      `Recent tool outcomes:\n${logBlock}\n\n` +
+      `Reply briefly in the user's language: (1) what you tried, (2) what went wrong, ` +
+      `(3) 1–3 concrete next steps (commands to re-run, fixes, or “send the same request again”). ` +
+      `Do NOT call tools.`,
+    provenance: "project",
+  });
+
+  const request: NormalizedRequest = {
+    providerId: deps.providerId,
+    modelId: deps.modelId,
+    systemInstruction: deps.systemInstruction,
+    messages: [...history],
+    // No tools — force a text wrap-up.
+    budget: { maxOutputTokens: 1024, runReservation: 1024 },
+    stream: true,
+    requestId: deps.idSeq(),
+    parentRunId,
+  };
+
+  let assistantText = "";
+  let reasoningText = "";
+  let reasoningFlushed = false;
+  try {
+    for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
+      if (event.kind === "reasoning_delta") {
+        reasoningText += event.text ?? "";
+      } else if (event.kind === "text_delta") {
+        if (reasoningText.length > 0 && !reasoningFlushed) {
+          io.onReasoning?.(reasoningText);
+          reasoningFlushed = true;
         }
-      } else {
-        repeatFailSig = undefined;
-        repeatFailCount = 0;
+        const text = event.text ?? "";
+        io.write(text);
+        assistantText += text;
+      } else if (event.kind === "usage_update") {
+        if (event.usage !== undefined) {
+          io.onUsage?.(event.usage);
+        }
+      } else if (event.kind === "provider_error") {
+        system(`\n[error] ${event.error?.message ?? event.error?.kind ?? "provider error"}\n`);
+        break;
+      } else if (event.kind === "model_end") {
+        break;
       }
     }
+  } catch (cause) {
+    system(`\n[error] wrap-up failed: ${cause instanceof Error ? cause.message : String(cause)}\n`);
+  }
 
-    if (abort !== undefined) {
-      system(`\n[stopped] ${abort}\n`);
-      return;
-    }
-    // Terminate the turn once the tool-call budget is spent instead of
-    // re-requesting forever (every further call would just return "exhausted").
-    if (toolCallsUsed >= maxToolCalls) {
-      system(`\n[stopped] tool-call limit reached (${maxToolCalls} per turn)\n`);
-      return;
-    }
+  if (reasoningText.length > 0 && !reasoningFlushed) {
+    io.onReasoning?.(reasoningText);
+  }
+  if (assistantText.length > 0) {
+    history.push({ role: "assistant", content: assistantText, provenance: "model" });
+    io.onAssistantText?.(assistantText);
+  } else {
+    system(
+      "\n[budget] No wrap-up text from the model. Re-run your request, or call the " +
+        "needed `keryx …` command directly (e.g. `keryx wiki enrich --all`).\n",
+    );
   }
 }
 
@@ -296,14 +477,7 @@ async function executeCall(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
-  countCall: () => void,
-  budget: { used: () => number; max: number },
 ): Promise<InteractiveToolResult> {
-  if (budget.used() >= budget.max) {
-    return { output: `tool-call budget exhausted (${budget.max} per turn)`, isError: true };
-  }
-  countCall();
-
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
     return { output: `unknown tool: ${call.name}`, isError: true };
