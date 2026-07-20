@@ -16,3 +16,10 @@
 - 2026-07-20T10:59:45.432Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T10:59:45.508Z - task-done: T5: refactor launch + shellCommand
 - 2026-07-20T10:59:45.576Z - task-done: T6: verify
+- 2026-07-20T11:00:48.089Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/104
+- 2026-07-20T11:00:48.225Z - ac-confirmed: AC1: --tui runs OpenTUI before readline.createInterface; no concurrent readline
+- 2026-07-20T11:00:48.323Z - ac-confirmed: AC2: launchTuiAgentShell({detected,initial?,makeAgentDeps}) + in-TUI provider→model SelectRenderable picker
+- 2026-07-20T11:00:48.425Z - ac-confirmed: AC3: default readline; --tui opt-in; --no-tui/chat skip; decline → readline fallback; driver/chat/roleLabel unchanged
+- 2026-07-20T11:00:48.519Z - ac-confirmed: AC4: tsc clean; bun test 1506/0; default --agent → readline smoke; no new dep; real-TTY --tui = user
+- 2026-07-20T11:01:13.968Z - completing
+- 2026-07-20T11:01:14.013Z - done: all gates passed

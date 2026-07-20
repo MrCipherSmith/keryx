@@ -3,17 +3,34 @@
   "id": "067",
   "slug": "opentui-owns-terminal",
   "title": "OpenTUI owns terminal from start — no readline picker; provider/model selected via flags or in-TUI SelectRenderable (--tui)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T10:56:50.700Z",
-  "updatedAt": "2026-07-20T10:59:45.576Z",
+  "updatedAt": "2026-07-20T11:01:14.013Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:c3011e4d62dd499fb5e1cd0079884d00b19c677599cb82994935713a69f76ae6",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T11:00:48.225Z",
+      "note": "--tui runs OpenTUI before readline.createInterface; no concurrent readline"
+    },
+    "AC2": {
+      "at": "2026-07-20T11:00:48.323Z",
+      "note": "launchTuiAgentShell({detected,initial?,makeAgentDeps}) + in-TUI provider→model SelectRenderable picker"
+    },
+    "AC3": {
+      "at": "2026-07-20T11:00:48.425Z",
+      "note": "default readline; --tui opt-in; --no-tui/chat skip; decline → readline fallback; driver/chat/roleLabel unchanged"
+    },
+    "AC4": {
+      "at": "2026-07-20T11:00:48.519Z",
+      "note": "tsc clean; bun test 1506/0; default --agent → readline smoke; no new dep; real-TTY --tui = user"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/104"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T10:59:45.576Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T11:00:48.089Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/104"
+    },
+    {
+      "at": "2026-07-20T11:00:48.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: --tui runs OpenTUI before readline.createInterface; no concurrent readline"
+    },
+    {
+      "at": "2026-07-20T11:00:48.323Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: launchTuiAgentShell({detected,initial?,makeAgentDeps}) + in-TUI provider→model SelectRenderable picker"
+    },
+    {
+      "at": "2026-07-20T11:00:48.425Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: default readline; --tui opt-in; --no-tui/chat skip; decline → readline fallback; driver/chat/roleLabel unchanged"
+    },
+    {
+      "at": "2026-07-20T11:00:48.519Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1506/0; default --agent → readline smoke; no new dep; real-TTY --tui = user"
+    },
+    {
+      "at": "2026-07-20T11:01:13.968Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T11:01:14.013Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "aeceec152de835944afc0d8961e10837aa3adf7f",
+    "ref": "origin/main",
+    "at": "2026-07-20T11:01:14.012Z"
+  }
 }
