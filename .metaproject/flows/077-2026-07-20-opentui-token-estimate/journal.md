@@ -15,3 +15,10 @@
 - 2026-07-20T13:46:49.144Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T13:46:49.231Z - task-done: T5: token estimate fallback
 - 2026-07-20T13:46:49.318Z - task-done: T6: verify
+- 2026-07-20T13:47:30.064Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/124 (warning: PR is not a draft)
+- 2026-07-20T13:47:30.208Z - ac-confirmed: AC1: tsc clean; bun test 1511/0; estimate unit-tested
+- 2026-07-20T13:47:30.317Z - ac-confirmed: AC2: tsc clean; bun test 1511/0; estimate unit-tested
+- 2026-07-20T13:47:30.525Z - ac-confirmed: AC3: tsc clean; bun test 1511/0; estimate unit-tested
+- 2026-07-20T13:47:30.656Z - ac-confirmed: AC4: tsc clean; bun test 1511/0; estimate unit-tested
+- 2026-07-20T13:47:30.758Z - completing
+- 2026-07-20T13:47:30.796Z - done: all gates passed

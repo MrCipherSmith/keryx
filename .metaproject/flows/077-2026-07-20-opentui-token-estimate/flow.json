@@ -3,17 +3,34 @@
   "id": "077",
   "slug": "opentui-token-estimate",
   "title": "OpenTUI token counter estimate — show ~N context tokens when the provider reports no usage (local Ollama)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T13:46:48.465Z",
-  "updatedAt": "2026-07-20T13:46:49.318Z",
+  "updatedAt": "2026-07-20T13:47:30.796Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:27d755f15935e4a67b9f6fd225a5a6823cad4bd6520b416a9f6f242d8d7667ee",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T13:47:30.208Z",
+      "note": "tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    "AC2": {
+      "at": "2026-07-20T13:47:30.317Z",
+      "note": "tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    "AC3": {
+      "at": "2026-07-20T13:47:30.525Z",
+      "note": "tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    "AC4": {
+      "at": "2026-07-20T13:47:30.656Z",
+      "note": "tsc clean; bun test 1511/0; estimate unit-tested"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/124"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T13:46:49.318Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T13:47:30.064Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/124 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T13:47:30.208Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    {
+      "at": "2026-07-20T13:47:30.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    {
+      "at": "2026-07-20T13:47:30.525Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    {
+      "at": "2026-07-20T13:47:30.656Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1511/0; estimate unit-tested"
+    },
+    {
+      "at": "2026-07-20T13:47:30.758Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T13:47:30.796Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "f1bd61a7c09ff49934ec29cae6101f802aee1d36",
+    "ref": "origin/main",
+    "at": "2026-07-20T13:47:30.795Z"
+  }
 }
