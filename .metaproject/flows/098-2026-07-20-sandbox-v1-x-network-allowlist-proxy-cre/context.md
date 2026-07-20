@@ -37,13 +37,23 @@ Use `keryx gdgraph affected <file>` for blast radius.
 - `network-run.ts` `setupNetworkRun` starts proxy for restricted, yields HTTP(S)_PROXY env + close().
 - Linux restricted ⇒ fail-closed in `wrap.ts` (no false boundary without netns+relay).
 
-### BLOCKER — async spawn adapter required
-`RealProcessAdapter` uses `spawnSync`, which BLOCKS the event loop, so the in-process
-proxy can't serve the contained process during a restricted run (times out). Confirmed:
-`spawnSync` even times out a plain `(allow default)` loopback fetch; async `spawn` of the
-identical profile returns code=0. ⇒ Wiring `restricted` needs an ASYNC process adapter (a
-noted follow-up in real-process-adapter.ts) or an out-of-process proxy. `off`/`on` unaffected.
+### Slice 2 done — event-loop blocker RESOLVED (worker-thread proxy)
+`spawnSync` blocks the main event loop, so an in-thread proxy can't serve the contained
+process during a restricted run. FIX: run the proxy in a WORKER THREAD (`proxy-worker.ts`),
+which has an independent event loop that keeps serving while main is blocked. `network-run.ts`
+now spawns the worker and waits for its `{ready, port}`.
+
+PROVEN end-to-end on real macOS with the PRODUCTION sync spawnSync path
+(`network-restricted.smoke.test.ts`, flag-gated): allowlisted host reachable via proxy
+(`OK-UP`), disallowed host → proxy `403` body, direct network → seatbelt denies the bypass.
+
+Done in this flow: proxy engine, profile model, seatbelt restricted rule, worker-thread
+lifecycle, Linux fail-closed, live e2e smoke. `off`/`on` unaffected.
 
 ### Remaining
-1. Async adapter (or worker-thread proxy) → wire setupNetworkRun into exec + live restricted smoke.
+1. Exec-path opt-in: `runExec` awaits `setupNetworkRun` when restricted (env merge + proxy
+   addr + close after run). Currently the mechanism + API are ready; the CLI toggle is the
+   last wire.
 2. Credential masking (sentinel env + proxy substitution on injectHosts; TLS-terminate scope).
+3. Dist caveat: worker path is `import.meta.url`-relative (works from src; verify under the
+   bundled build or ship the worker as a separate asset).
