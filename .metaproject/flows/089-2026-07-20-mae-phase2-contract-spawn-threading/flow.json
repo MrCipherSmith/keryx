@@ -3,9 +3,9 @@
   "id": "089",
   "slug": "mae-phase2-contract-spawn-threading",
   "title": "Multi-Agent Engine Phase 2: model block contract + spawnChild threading",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T18:43:24.138Z",
-  "updatedAt": "2026-07-20T19:22:53.463Z",
+  "updatedAt": "2026-07-20T19:24:15.459Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/149"
   },
   "tasks": [
     {
@@ -165,6 +165,25 @@
       "at": "2026-07-20T19:22:53.463Z",
       "event": "ac-confirmed",
       "detail": "AC6: spawn.test.ts + contract.test.ts extended; full suite 1594 pass/0 fail incl no-optional-imports dep guard; tsc clean; determinism preserved"
+    },
+    {
+      "at": "2026-07-20T19:24:15.315Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/149 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T19:24:15.416Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T19:24:15.459Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "3a2d432797e0dd66191eb358283eaf1fa29ad9f6",
+    "ref": "origin/main",
+    "at": "2026-07-20T19:24:15.458Z"
+  }
 }

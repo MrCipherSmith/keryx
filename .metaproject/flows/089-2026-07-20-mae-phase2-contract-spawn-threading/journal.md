@@ -13,3 +13,6 @@
 - 2026-07-20T19:22:53.182Z - ac-confirmed: AC4: success carries modelSelection {providerId,modelId,source}; explicit/inherit reflected; parseDispatchModel maps dispatch block
 - 2026-07-20T19:22:53.317Z - ac-confirmed: AC5: backward-compat: no parentModel => no modelSelection, extension schema-valid, identical to pre-phase (regression test)
 - 2026-07-20T19:22:53.463Z - ac-confirmed: AC6: spawn.test.ts + contract.test.ts extended; full suite 1594 pass/0 fail incl no-optional-imports dep guard; tsc clean; determinism preserved
+- 2026-07-20T19:24:15.315Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/149 (warning: PR is not a draft)
+- 2026-07-20T19:24:15.416Z - completing
+- 2026-07-20T19:24:15.459Z - done: all gates passed
