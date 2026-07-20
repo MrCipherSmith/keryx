@@ -26,7 +26,7 @@
   },
   "scripts": {
     "keryx": "bun ./src/cli.ts",
-    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers --external @opentui/core",
     "prepack": "bun run build",
     "prepare": "bun run build",
     "typecheck": "tsc --noEmit",

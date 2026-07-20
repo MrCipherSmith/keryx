@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 2,
+  "id": "084",
+  "slug": "fix-ci-externalize-opentui-core-in-build",
+  "title": "Fix CI: externalize @opentui/core in build script so bun build/prepare no longer fails on platform sub-packages",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T14:53:40.340Z",
+  "updatedAt": "2026-07-20T14:55:50.639Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1939b2a0c04bea5b83745854b1c0ee0801ce348a1722b653581c72204ac0857d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T14:53:40.340Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T14:55:50.538Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T14:55:50.639Z",
+      "event": "started"
+    }
+  ]
+}
