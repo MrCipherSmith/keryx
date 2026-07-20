@@ -67,7 +67,11 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "gdgraph query",
     summary: "Structural graph queries: import cycles or orphan files.",
     intent: ["найди циклы", "find cycles", "orphan files", "сироты в графе"],
-    args: [{ name: "<cycles|orphans>", type: "enum", required: true, values: ["cycles", "orphans"], desc: "query kind" }],
+    args: [
+      { name: "<cycles|orphans>", type: "enum", required: true, values: ["cycles", "orphans"], desc: "query kind" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    json: true,
     read: true,
   },
   // ---- gdctx ------------------------------------------------------------
@@ -76,7 +80,11 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "ctx rg",
     summary: "Token-aware code search (mandatory instead of raw rg/grep).",
     intent: ["найди в коде", "search code", "grep", "где встречается"],
-    args: [{ name: "<pattern>", type: "string", required: true, desc: "regex / literal pattern" }],
+    args: [
+      { name: "<pattern>", type: "string", required: true, desc: "regex / literal pattern" },
+      { name: "json", type: "bool", required: false, desc: "structured matches (our summary, not rg --json)" },
+    ],
+    json: true,
     read: true,
   },
   // ---- gdwiki -----------------------------------------------------------
@@ -130,9 +138,13 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "health run",
     summary: "Run the aggregate quality gate (lint/type/test/complexity).",
     intent: ["проверь качество", "run health", "quality gate", "прогони health"],
-    args: [{ name: "strict", type: "bool", required: false, desc: "fail on warnings" }],
+    args: [
+      { name: "strict", type: "bool", required: false, desc: "fail on warnings" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON report" },
+    ],
+    json: true,
     read: false,
-    sideEffects: ["writes data/health/artifacts/latest.json (read for structured results)"],
+    sideEffects: ["writes data/health/artifacts/**"],
   },
   // ---- testing ----------------------------------------------------------
   {

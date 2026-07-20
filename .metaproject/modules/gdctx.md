@@ -8,7 +8,7 @@ Runs common project context commands with token-aware filtering and stores raw o
 
 - `keryx ctx status`
 - `keryx ctx diff`
-- `keryx ctx rg "<pattern>"`
+- `keryx ctx rg "<pattern>" [--json]` — `--json` emits token-aware structured matches (not rg's native `--json`)
 - `keryx ctx read <file>`
 - `keryx ctx run -- <command...>`
 - `keryx ctx show latest`
