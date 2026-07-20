@@ -527,8 +527,6 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
       completed.add(entry.path);
     } else if (entry.action === "dry-run") {
       result.dryRun += 1;
-    } else if (entry.action === "skipped") {
-      result.skipped += 1;
     } else if (entry.action === "failed") {
       result.failed += 1;
       resumeState.failed.push({ path: entry.path, reason: entry.reason ?? "failed" });

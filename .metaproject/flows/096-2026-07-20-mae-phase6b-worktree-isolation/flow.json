@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 2,
+  "id": "096",
+  "slug": "mae-phase6b-worktree-isolation",
+  "title": "Multi-Agent Engine Phase 6b: worktree isolation for parallel mutators",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T20:46:07.517Z",
+  "updatedAt": "2026-07-20T22:32:52.538Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c6d245ac8388ed0366e571d5e5a1bbe15ea8e5cd5dde26a5b4e4978230cc9ed0",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T22:32:52.184Z",
+      "note": "needsWorktree true iff requiredControls.isolation=required-fail-closed AND actions include write/git; read-only or not-isolated => false (matrix tested)"
+    },
+    "AC2": {
+      "at": "2026-07-20T22:32:52.262Z",
+      "note": "planWorktrees pure/deterministic: mutators get unique stable wt-<taskId>, others shared cwd, input order preserved; identical input deep-equal"
+    },
+    "AC3": {
+      "at": "2026-07-20T22:32:52.364Z",
+      "note": "fail-closed: empty taskId for isolation-required mutator denied; duplicate taskId among mutators denied (worktree id collision); never silent shared-cwd fallback"
+    },
+    "AC4": {
+      "at": "2026-07-20T22:32:52.452Z",
+      "note": "injected WorktreePort: provisionWorktrees creates in stable taskId order; resolveChildCwd feeds cwd (worktree path vs sharedCwd); mergeWorktrees merges in stable order; fake-port test asserts call order; unprovisioned worktree throws"
+    },
+    "AC5": {
+      "at": "2026-07-20T22:32:52.538Z",
+      "note": "worktree.test.ts 10 tests pass; full suite 1773 pass/0 fail (--timeout 30000, incl dep guard); tsc clean (also fixed pre-existing wiki/enrich.ts dead-branch TS2367 blocking main; chip filed for author on latent skipped-count); no new deps"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T20:46:07.517Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T20:49:16.123Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T22:29:11.778Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T22:32:51.790Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T22:32:51.918Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T22:32:52.020Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T22:32:52.104Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T22:32:52.185Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: needsWorktree true iff requiredControls.isolation=required-fail-closed AND actions include write/git; read-only or not-isolated => false (matrix tested)"
+    },
+    {
+      "at": "2026-07-20T22:32:52.262Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: planWorktrees pure/deterministic: mutators get unique stable wt-<taskId>, others shared cwd, input order preserved; identical input deep-equal"
+    },
+    {
+      "at": "2026-07-20T22:32:52.364Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: fail-closed: empty taskId for isolation-required mutator denied; duplicate taskId among mutators denied (worktree id collision); never silent shared-cwd fallback"
+    },
+    {
+      "at": "2026-07-20T22:32:52.452Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: injected WorktreePort: provisionWorktrees creates in stable taskId order; resolveChildCwd feeds cwd (worktree path vs sharedCwd); mergeWorktrees merges in stable order; fake-port test asserts call order; unprovisioned worktree throws"
+    },
+    {
+      "at": "2026-07-20T22:32:52.538Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: worktree.test.ts 10 tests pass; full suite 1773 pass/0 fail (--timeout 30000, incl dep guard); tsc clean (also fixed pre-existing wiki/enrich.ts dead-branch TS2367 blocking main; chip filed for author on latent skipped-count); no new deps"
+    }
+  ]
+}
