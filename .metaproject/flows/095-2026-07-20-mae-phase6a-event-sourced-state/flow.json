@@ -3,24 +3,45 @@
   "id": "095",
   "slug": "mae-phase6a-event-sourced-state",
   "title": "Multi-Agent Engine Phase 6a: event-sourced orchestrator state (reduceState fold)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T20:46:06.365Z",
-  "updatedAt": "2026-07-20T21:08:24.651Z",
+  "updatedAt": "2026-07-20T22:15:36.340Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d4a02ed873a354e910386c248bba53c0f6ffc08c23de57b84238310e41790db7",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T22:14:35.393Z",
+      "note": "reduceState in monitor/reduce-state.ts folds agent-events into OrchestratorState; validates against orchestrator-state.schema.json via contracts/validator (2 schema tests)"
+    },
+    "AC2": {
+      "at": "2026-07-20T22:14:35.484Z",
+      "note": "mappings: run_started->in_progress, run_completed->completed, run_failed->failed; dispatch created/completed/blocked, validation_failed->step statuses; terminal not downgraded; current_step + artifact dedup covered"
+    },
+    "AC3": {
+      "at": "2026-07-20T22:14:35.577Z",
+      "note": "pure/deterministic: identical logs deep-equal; no Date.now/Math.random/fs; steps first-seen order; updated_at monotonic"
+    },
+    "AC4": {
+      "at": "2026-07-20T22:14:35.678Z",
+      "note": "replay-safety structural: applyEvents(applyEvents(init,prefix),suffix) deep-equals reduceState(whole) for every split; applyEvents does not mutate input"
+    },
+    "AC5": {
+      "at": "2026-07-20T22:14:35.769Z",
+      "note": "reduce-state.test.ts 11 tests pass (monitor suite 25/25); reduce-state.ts type-clean (no tsc error references monitor/); NOTE full-project tsc/suite transiently red from a CONCURRENT fleet session's uncommitted sandbox/* edits (not in this commit)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/162"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +49,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +64,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +79,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +94,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +111,70 @@
     {
       "at": "2026-07-20T21:08:24.651Z",
       "event": "started"
+    },
+    {
+      "at": "2026-07-20T22:14:35.000Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T22:14:35.117Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T22:14:35.213Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T22:14:35.298Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T22:14:35.393Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: reduceState in monitor/reduce-state.ts folds agent-events into OrchestratorState; validates against orchestrator-state.schema.json via contracts/validator (2 schema tests)"
+    },
+    {
+      "at": "2026-07-20T22:14:35.484Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: mappings: run_started->in_progress, run_completed->completed, run_failed->failed; dispatch created/completed/blocked, validation_failed->step statuses; terminal not downgraded; current_step + artifact dedup covered"
+    },
+    {
+      "at": "2026-07-20T22:14:35.577Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: pure/deterministic: identical logs deep-equal; no Date.now/Math.random/fs; steps first-seen order; updated_at monotonic"
+    },
+    {
+      "at": "2026-07-20T22:14:35.678Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: replay-safety structural: applyEvents(applyEvents(init,prefix),suffix) deep-equals reduceState(whole) for every split; applyEvents does not mutate input"
+    },
+    {
+      "at": "2026-07-20T22:14:35.769Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: reduce-state.test.ts 11 tests pass (monitor suite 25/25); reduce-state.ts type-clean (no tsc error references monitor/); NOTE full-project tsc/suite transiently red from a CONCURRENT fleet session's uncommitted sandbox/* edits (not in this commit)"
+    },
+    {
+      "at": "2026-07-20T22:15:36.206Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/162 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T22:15:36.309Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T22:15:36.340Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "914b319f8fd7b0530e3f0e50b028d9e6989b1574",
+    "ref": "origin/main",
+    "at": "2026-07-20T22:15:36.340Z"
+  }
 }
