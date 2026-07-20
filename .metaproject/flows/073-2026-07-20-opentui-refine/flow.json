@@ -3,17 +3,34 @@
   "id": "073",
   "slug": "opentui-refine",
   "title": "OpenTUI UX refinement — collapse reasoning, turn timing (worked for Xs), muted palette, model in footer (toward grok/opencode)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T12:33:07.742Z",
-  "updatedAt": "2026-07-20T12:33:08.539Z",
+  "updatedAt": "2026-07-20T12:33:57.542Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:37670e5081417da1af69b037bc1ea78853aa15042ab96cb2d14ff298bf680d8a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T12:33:57.031Z",
+      "note": "tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    "AC2": {
+      "at": "2026-07-20T12:33:57.126Z",
+      "note": "tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    "AC3": {
+      "at": "2026-07-20T12:33:57.231Z",
+      "note": "tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    "AC4": {
+      "at": "2026-07-20T12:33:57.339Z",
+      "note": "tsc clean; bun test 1507/0; user validates look on TTY"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/116"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T12:33:08.539Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T12:33:56.844Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/116 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T12:33:57.031Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    {
+      "at": "2026-07-20T12:33:57.126Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    {
+      "at": "2026-07-20T12:33:57.231Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    {
+      "at": "2026-07-20T12:33:57.339Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1507/0; user validates look on TTY"
+    },
+    {
+      "at": "2026-07-20T12:33:57.515Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T12:33:57.542Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "5716dd3ac6c148bfddea0cec3a1816f66d9f7632",
+    "ref": "origin/main",
+    "at": "2026-07-20T12:33:57.542Z"
+  }
 }
