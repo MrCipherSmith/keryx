@@ -13,3 +13,6 @@
 - 2026-07-20T21:04:18.253Z - ac-confirmed: AC4: buildPeerMessageEvent validates against agent-event-extensions.schema.json (with/without run_id) via contracts/validator
 - 2026-07-20T21:04:18.373Z - ac-confirmed: AC5: 'peer' added to allowed_actions enum in BOTH subagent-dispatch.schema.json copies; diff IDENTICAL (parity); additive/backward-compatible
 - 2026-07-20T21:04:18.539Z - ac-confirmed: AC6: peer.test.ts 9 tests (gate allow/deny, inline-body+malformed reject, inbox fold+determinism, schema-valid build); full suite 1724 pass/0 fail incl dep guard+parity; tsc clean
+- 2026-07-20T21:05:48.040Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/160 (warning: PR is not a draft)
+- 2026-07-20T21:05:48.205Z - completing
+- 2026-07-20T21:05:48.260Z - done: all gates passed

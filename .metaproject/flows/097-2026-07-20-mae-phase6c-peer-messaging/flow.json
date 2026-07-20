@@ -3,9 +3,9 @@
   "id": "097",
   "slug": "mae-phase6c-peer-messaging",
   "title": "Multi-Agent Engine Phase 6c: bounded peer messaging",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T20:46:08.453Z",
-  "updatedAt": "2026-07-20T21:04:18.539Z",
+  "updatedAt": "2026-07-20T21:05:48.260Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/160"
   },
   "tasks": [
     {
@@ -165,6 +165,25 @@
       "at": "2026-07-20T21:04:18.539Z",
       "event": "ac-confirmed",
       "detail": "AC6: peer.test.ts 9 tests (gate allow/deny, inline-body+malformed reject, inbox fold+determinism, schema-valid build); full suite 1724 pass/0 fail incl dep guard+parity; tsc clean"
+    },
+    {
+      "at": "2026-07-20T21:05:48.040Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/160 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T21:05:48.205Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T21:05:48.260Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "0033ab43a95e7ab6207092363f03120f32426a98",
+    "ref": "origin/main",
+    "at": "2026-07-20T21:05:48.259Z"
+  }
 }
