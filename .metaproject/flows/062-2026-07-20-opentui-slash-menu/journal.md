@@ -20,3 +20,10 @@
 - 2026-07-20T08:30:14.431Z - task-done: T5: registry + live menu wiring
 - 2026-07-20T08:30:14.507Z - task-done: T6: filter/find + reactivity tests
 - 2026-07-20T08:30:14.585Z - task-done: T7: verify
+- 2026-07-20T08:30:23.823Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/96
+- 2026-07-20T08:30:23.971Z - ac-confirmed: AC1: agent-commands.ts registry + pure filterCommands + findAgentCommand; 5 unit tests
+- 2026-07-20T08:30:24.083Z - ac-confirmed: AC2: SelectRenderable menu filtered live via input INPUT event; visible on slash query
+- 2026-07-20T08:30:24.171Z - ac-confirmed: AC3: ENTER runs /help(list)/clear(reset+note)/exit; unknown slash → note+list; else turn; menu hides; driver/readline/chat/roleLabel unchanged
+- 2026-07-20T08:30:24.256Z - ac-confirmed: AC4: headless reactivity test (/h → menu visible, /help shown, /clear filtered) + units; tsc clean; bun test 1503/0 (+6); no new dep
+- 2026-07-20T08:30:50.256Z - completing
+- 2026-07-20T08:30:50.284Z - done: all gates passed
