@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "071",
+  "slug": "opentui-menu-focus",
+  "title": "OpenTUI /-menu focus-transfer nav + command echo + compact composer (arrow focuses menu, Enter selects via ITEM_SELECTED)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T12:03:46.879Z",
+  "updatedAt": "2026-07-20T12:03:47.822Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d8e51f16381db146622cffb19796339ee1b397648eefe1c6b0b22a947b9b1be2",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "focus-transfer nav",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T12:03:46.879Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T12:03:47.004Z",
+      "event": "task-added",
+      "detail": "T5: focus-transfer nav"
+    },
+    {
+      "at": "2026-07-20T12:03:47.086Z",
+      "event": "task-added",
+      "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T12:03:47.190Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T12:03:47.269Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T12:03:47.358Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T12:03:47.441Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T12:03:47.536Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T12:03:47.731Z",
+      "event": "task-done",
+      "detail": "T5: focus-transfer nav"
+    },
+    {
+      "at": "2026-07-20T12:03:47.822Z",
+      "event": "task-done",
+      "detail": "T6: verify"
+    }
+  ]
+}

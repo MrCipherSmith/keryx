@@ -367,15 +367,13 @@ export async function launchTuiAgentShell(opts: {
     });
     r.root.add(menu);
 
-    // Bordered composer (grok-style rounded input box); taller for breathing room.
+    // Bordered composer (grok-style rounded input box) — compact single line.
     const composer = new otui.BoxRenderable(r, {
       id: "composer",
       borderStyle: "rounded",
       border: true,
       paddingLeft: 1,
       paddingRight: 1,
-      paddingTop: 1,
-      paddingBottom: 1,
     });
     const input = new otui.InputRenderable(r, { id: "prompt", placeholder: "type a task or / for commands" });
     composer.add(input);
@@ -391,6 +389,8 @@ export async function launchTuiAgentShell(opts: {
       }),
     );
 
+    // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
+    let menuNav = false;
     input.on(otui.InputRenderableEvents.INPUT, () => {
       const matches = filterCommands(input.value);
       if (matches.length > 0) {
@@ -398,6 +398,7 @@ export async function launchTuiAgentShell(opts: {
         menu.visible = true;
       } else {
         menu.visible = false;
+        menuNav = false;
       }
     });
 
@@ -410,6 +411,13 @@ export async function launchTuiAgentShell(opts: {
     const runLine = (line: string): void => {
       if (busy || line.length === 0) {
         return;
+      }
+      // Echo a slash command so it is clear WHICH command ran (turns echo their
+      // own `❯ …` user box below).
+      if (line.startsWith("/")) {
+        transcript.add(
+          new otui.TextRenderable(r, { id: `c${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}`, marginTop: 1 }),
+        );
       }
       const command = findAgentCommand(line);
       if (command !== undefined) {
@@ -453,29 +461,43 @@ export async function launchTuiAgentShell(opts: {
     // Route ↑/↓/Enter/Esc to the `/` command dropdown when it is open — via the
     // GLOBAL internal key handler, which runs BEFORE the focused Input, so a
     // handled key does not also move the Input's cursor / submit a turn.
+    // Selecting a command from the dropdown (Enter on the focused menu) runs it
+    // and returns focus to the composer.
+    menu.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const opt = menu.getSelectedOption();
+      menuNav = false;
+      menu.visible = false;
+      input.value = "";
+      input.focus();
+      if (opt !== null) {
+        runLine(opt.name);
+      }
+    });
+    // The first ↑/↓ while the dropdown is open TRANSFERS focus to the menu; from
+    // then on the native SelectRenderable handles ↑/↓/Enter (the case that worked
+    // via mouse-focus). Esc closes and returns focus to the composer. Typing (no
+    // arrow) keeps composer focus and filters. Runs before the Input via onInternal.
     r._internalKeyInput.onInternal("keypress", (key) => {
       if (!menu.visible) {
+        menuNav = false;
         return;
       }
-      if (key.name === "up") {
-        menu.moveUp();
-        key.preventDefault();
-        key.stopPropagation();
-      } else if (key.name === "down") {
-        menu.moveDown();
-        key.preventDefault();
-        key.stopPropagation();
-      } else if (key.name === "return" || key.name === "enter") {
-        const opt = menu.getSelectedOption();
+      if (key.name === "escape") {
         menu.visible = false;
-        input.value = "";
-        if (opt !== null) {
-          runLine(opt.name);
+        menuNav = false;
+        input.focus();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (!menuNav && (key.name === "up" || key.name === "down")) {
+        menuNav = true;
+        menu.focus();
+        if (key.name === "down") {
+          menu.moveDown();
+        } else {
+          menu.moveUp();
         }
-        key.preventDefault();
-        key.stopPropagation();
-      } else if (key.name === "escape") {
-        menu.visible = false;
         key.preventDefault();
         key.stopPropagation();
       }
