@@ -13,3 +13,6 @@
 - 2026-07-20T20:26:14.828Z - ac-confirmed: AC4: keryx agents monitor [--json] <events-file>: folds JSON/JSONL agent-event source, --json emits AgentsSnapshot, text renders run->dispatch tree + tokens; read-only; descriptor added to command-registry (json:true, read:true)
 - 2026-07-20T20:26:14.962Z - ac-confirmed: AC5: reduceAgents/diffAgents pure (no Date.now/Math.random/fs/network); CLI does all IO + rendering; display never feeds the fold
 - 2026-07-20T20:26:15.097Z - ac-confirmed: AC6: reduce.test.ts (status/usage/diff/determinism) + agents.monitor.test.ts (json+text+read-only-error); full suite 1658 pass/0 fail incl dep guard; tsc clean (also fixed pre-existing ollama-provider.test type error blocking main)
+- 2026-07-20T20:28:01.639Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/155 (warning: PR is not a draft)
+- 2026-07-20T20:28:01.775Z - completing
+- 2026-07-20T20:28:01.802Z - done: all gates passed

@@ -3,9 +3,9 @@
   "id": "092",
   "slug": "mae-phase4-monitoring-agents",
   "title": "Multi-Agent Engine Phase 4: monitoring fold + keryx agents surface",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T20:15:28.033Z",
-  "updatedAt": "2026-07-20T20:26:15.097Z",
+  "updatedAt": "2026-07-20T20:28:01.802Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/155"
   },
   "tasks": [
     {
@@ -165,6 +165,25 @@
       "at": "2026-07-20T20:26:15.097Z",
       "event": "ac-confirmed",
       "detail": "AC6: reduce.test.ts (status/usage/diff/determinism) + agents.monitor.test.ts (json+text+read-only-error); full suite 1658 pass/0 fail incl dep guard; tsc clean (also fixed pre-existing ollama-provider.test type error blocking main)"
+    },
+    {
+      "at": "2026-07-20T20:28:01.639Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/155 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T20:28:01.775Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T20:28:01.802Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "900f01bb042472186ec56cf4e3cea249596033df",
+    "ref": "origin/main",
+    "at": "2026-07-20T20:28:01.802Z"
+  }
 }
