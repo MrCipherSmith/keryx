@@ -167,6 +167,11 @@ export function isShellApproved(answer: string): boolean {
   return /^y(es)?$/i.test(answer.trim());
 }
 
+/** Compact token count for the header counter: 1234 → "1.2K", else the number. */
+export function fmtTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+}
+
 /**
  * In-TUI provider → model picker (used when no `--provider`/`--model` flags were
  * given). Renders a provider SelectRenderable, then a model SelectRenderable, both
@@ -279,6 +284,25 @@ export async function launchTuiAgentShell(opts: {
     }
     const deps = await opts.makeAgentDeps(sel);
 
+    // Header bar (grok-style): identity on the left, cumulative token counter on
+    // the right (updated from usage).
+    const header = new otui.BoxRenderable(r, {
+      id: "header",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingLeft: 1,
+      paddingRight: 1,
+    });
+    header.add(
+      new otui.TextRenderable(r, {
+        id: "header-left",
+        content: otui.t`${otui.dim(`keryx · agent · ${sel.provider}/${sel.model}`)}`,
+      }),
+    );
+    const tokenText = new otui.TextRenderable(r, { id: "header-tokens", content: "" });
+    header.add(tokenText);
+    r.root.add(header);
+
     // A scrollable, sticky-to-bottom transcript so long conversations scroll and
     // auto-follow the newest output; the AgentIO renders into its `.content`.
     const scroll = new otui.ScrollBoxRenderable(r, {
@@ -287,18 +311,20 @@ export async function launchTuiAgentShell(opts: {
       scrollY: true,
       stickyScroll: true,
       stickyStart: "bottom",
-      contentOptions: { flexDirection: "column", padding: 1 },
+      contentOptions: { flexDirection: "column", paddingLeft: 1, paddingRight: 1 },
     });
     r.root.add(scroll);
     const transcript = scroll.content;
-    transcript.add(
-      new otui.TextRenderable(r, {
-        id: "header",
-        content: "keryx — agent (OpenTUI) · type a task · Ctrl+C to exit",
-      }),
-    );
 
     const io = createTuiAgentIo(otui, r, transcript);
+    // Cumulative token usage → the header counter (not per-turn transcript lines).
+    let totalIn = 0;
+    let totalOut = 0;
+    io.onUsage = (u) => {
+      totalIn += u.inputTokens ?? 0;
+      totalOut += u.outputTokens ?? 0;
+      tokenText.content = otui.t`${otui.dim(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`)}`;
+    };
     // `shell_exec` approval: render a prompt; resolve from the NEXT composer
     // submit (handled in the ENTER listener). Keeps the default-deny gate.
     io.requestApproval = (_tool, inputJson) => {
@@ -332,9 +358,27 @@ export async function launchTuiAgentShell(opts: {
     });
     r.root.add(menu);
 
+    // Bordered composer (grok-style rounded input box).
+    const composer = new otui.BoxRenderable(r, {
+      id: "composer",
+      borderStyle: "rounded",
+      border: true,
+      paddingLeft: 1,
+      paddingRight: 1,
+    });
     const input = new otui.InputRenderable(r, { id: "prompt", placeholder: "type a task or / for commands" });
-    r.root.add(input);
+    composer.add(input);
+    r.root.add(composer);
     input.focus();
+
+    // Footer hints.
+    r.root.add(
+      new otui.TextRenderable(r, {
+        id: "footer",
+        content: otui.t`${otui.dim("/ commands · Ctrl+C to exit")}`,
+        paddingLeft: 1,
+      }),
+    );
 
     input.on(otui.InputRenderableEvents.INPUT, () => {
       const matches = filterCommands(input.value);
@@ -396,8 +440,20 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(helpText());
         return;
       }
-      transcript.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}` }));
-      transcript.add(new otui.TextRenderable(r, { id: `h${uid++}`, content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}` }));
+      const userBox = new otui.BoxRenderable(r, {
+        id: `ub${uid++}`,
+        borderStyle: "rounded",
+        border: true,
+        paddingLeft: 1,
+        paddingRight: 1,
+        marginTop: 1,
+        alignSelf: "flex-start",
+      });
+      userBox.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}` }));
+      transcript.add(userBox);
+      transcript.add(
+        new otui.TextRenderable(r, { id: `h${uid++}`, content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}`, marginTop: 1 }),
+      );
       busy = true;
       void runAgentTurn(io, deps, history, line).finally(() => {
         busy = false;

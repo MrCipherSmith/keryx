@@ -7,7 +7,7 @@
 // via dynamic import; the tests skip when it is absent.
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
-import { createTuiAgentIo, isShellApproved } from "./tui-shell";
+import { createTuiAgentIo, fmtTokens, isShellApproved } from "./tui-shell";
 import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
@@ -176,6 +176,14 @@ test("isShellApproved: only explicit y/yes approves (default-deny)", () => {
   expect(isShellApproved("no")).toBe(false);
   expect(isShellApproved("")).toBe(false);
   expect(isShellApproved("yep")).toBe(false);
+});
+
+test("fmtTokens: compact K formatting", () => {
+  expect(fmtTokens(0)).toBe("0");
+  expect(fmtTokens(999)).toBe("999");
+  expect(fmtTokens(1000)).toBe("1.0K");
+  expect(fmtTokens(1234)).toBe("1.2K");
+  expect(fmtTokens(22000)).toBe("22.0K");
 });
 
 test("ScrollBox transcript renders appended content (headless)", async () => {
