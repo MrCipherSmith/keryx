@@ -361,9 +361,19 @@ export async function launchTuiAgentShell(opts: {
     // as the composer changes; hidden when the value is not a slash query.
     const menu = new otui.SelectRenderable(r, {
       id: "menu",
-      height: 6,
+      height: 10,
       visible: false,
       options: [...AGENT_SLASH_COMMANDS],
+      showScrollIndicator: true,
+      wrapSelection: true,
+      backgroundColor: "#0f1b1b",
+      focusedBackgroundColor: "#0f1b1b",
+      selectedBackgroundColor: "#22333b",
+      textColor: "#c8d0d0",
+      focusedTextColor: "#c8d0d0",
+      selectedTextColor: "#ffd166",
+      descriptionColor: "#6b7a7a",
+      selectedDescriptionColor: "#8b9a9a",
     });
     r.root.add(menu);
 
@@ -390,17 +400,28 @@ export async function launchTuiAgentShell(opts: {
     );
 
     // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
+    // The dropdown is FOCUSED as soon as it opens, so ↑/↓/Enter work immediately;
+    // printable keys / Backspace are re-routed to the composer value (below) so
+    // typing still filters live.
     let menuNav = false;
-    input.on(otui.InputRenderableEvents.INPUT, () => {
+    const refilter = (): void => {
       const matches = filterCommands(input.value);
-      if (matches.length > 0) {
+      if (matches.length > 0 && input.value.startsWith("/")) {
         menu.options = matches;
         menu.visible = true;
+        if (!menuNav) {
+          menu.focus();
+          menuNav = true;
+        }
       } else {
         menu.visible = false;
-        menuNav = false;
+        if (menuNav) {
+          menuNav = false;
+          input.focus();
+        }
       }
-    });
+    };
+    input.on(otui.InputRenderableEvents.INPUT, refilter);
 
     const helpText = (): string =>
       ["Commands:", ...AGENT_SLASH_COMMANDS.map((c) => `  ${c.name}  ${c.description}`)].join("\n") + "\n";
@@ -473,34 +494,39 @@ export async function launchTuiAgentShell(opts: {
         runLine(opt.name);
       }
     });
-    // The first ↑/↓ while the dropdown is open TRANSFERS focus to the menu; from
-    // then on the native SelectRenderable handles ↑/↓/Enter (the case that worked
-    // via mouse-focus). Esc closes and returns focus to the composer. Typing (no
-    // arrow) keeps composer focus and filters. Runs before the Input via onInternal.
+    // The dropdown is FOCUSED from the moment it opens (`refilter`), so the native
+    // SelectRenderable handles ↑/↓/Enter immediately. Here we only re-route
+    // printable keys / Backspace back into the composer value so typing still
+    // filters live, and Esc to close. Runs before the focused menu via onInternal.
     r._internalKeyInput.onInternal("keypress", (key) => {
-      if (!menu.visible) {
-        menuNav = false;
+      if (!menu.visible || !menuNav) {
         return;
       }
       if (key.name === "escape") {
         menu.visible = false;
         menuNav = false;
+        input.value = "";
         input.focus();
         key.preventDefault();
         key.stopPropagation();
         return;
       }
-      if (!menuNav && (key.name === "up" || key.name === "down")) {
-        menuNav = true;
-        menu.focus();
-        if (key.name === "down") {
-          menu.moveDown();
-        } else {
-          menu.moveUp();
-        }
+      if (key.name === "backspace") {
+        input.value = input.value.slice(0, -1);
+        refilter();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      // A printable single character (no modifiers) → append to the filter query.
+      const ch = key.sequence;
+      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
+        input.value += ch;
+        refilter();
         key.preventDefault();
         key.stopPropagation();
       }
+      // ↑/↓/Enter fall through → the focused SelectRenderable handles them.
     });
 
     input.on(otui.InputRenderableEvents.ENTER, () => {

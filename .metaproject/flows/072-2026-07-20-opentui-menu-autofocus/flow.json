@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "072",
+  "slug": "opentui-menu-autofocus",
+  "title": "OpenTUI /-menu auto-focus + live filter + grok-style menu colors (focus on open, printable keys filter, scroll indicator)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T12:12:08.724Z",
+  "updatedAt": "2026-07-20T12:12:09.822Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0a12dd4e28c80868948f80ea0c31e0719186fd2741d21bda96652159d5ef02b8",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "auto-focus + filter + style",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T12:12:08.724Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T12:12:08.830Z",
+      "event": "task-added",
+      "detail": "T5: auto-focus + filter + style"
+    },
+    {
+      "at": "2026-07-20T12:12:08.979Z",
+      "event": "task-added",
+      "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T12:12:09.080Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T12:12:09.168Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T12:12:09.311Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T12:12:09.404Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T12:12:09.490Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T12:12:09.564Z",
+      "event": "task-done",
+      "detail": "T5: auto-focus + filter + style"
+    },
+    {
+      "at": "2026-07-20T12:12:09.822Z",
+      "event": "task-done",
+      "detail": "T6: verify"
+    }
+  ]
+}
