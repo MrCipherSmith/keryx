@@ -1,17 +1,38 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "093",
   "slug": "os-sandbox-for-shell-exec-v1-workspace-w",
   "title": "OS-sandbox for shell_exec (v1: workspace-write + network-off, grok-build model)",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-07-20T20:25:58.473Z",
-  "updatedAt": "2026-07-20T20:25:58.473Z",
+  "updatedAt": "2026-07-20T20:49:35.703Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:328d324d1c57eb491b1c054fa04a7a46e7260d3fc411065fcb788c7a03346149",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T20:49:13.274Z",
+      "note": "shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    "AC2": {
+      "at": "2026-07-20T20:49:13.387Z",
+      "note": "shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    "AC3": {
+      "at": "2026-07-20T20:49:13.487Z",
+      "note": "shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    "AC4": {
+      "at": "2026-07-20T20:49:13.590Z",
+      "note": "shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    "AC5": {
+      "at": "2026-07-20T20:49:13.728Z",
+      "note": "shipped on origin/main (sandbox module + ADR-0006)"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -20,31 +41,121 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-07-20T20:25:58.473Z",
       "event": "created"
+    },
+    {
+      "at": "2026-07-20T20:49:13.031Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T20:49:13.153Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T20:49:13.274Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    {
+      "at": "2026-07-20T20:49:13.387Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    {
+      "at": "2026-07-20T20:49:13.488Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    {
+      "at": "2026-07-20T20:49:13.590Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    {
+      "at": "2026-07-20T20:49:13.728Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: shipped on origin/main (sandbox module + ADR-0006)"
+    },
+    {
+      "at": "2026-07-20T20:49:35.252Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T20:49:35.459Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T20:49:35.599Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T20:49:35.703Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

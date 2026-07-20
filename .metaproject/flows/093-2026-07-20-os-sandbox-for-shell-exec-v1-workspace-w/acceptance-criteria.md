@@ -10,4 +10,8 @@ Rules:
 
 ## Criteria
 
-- AC1: <replace with a hard, verifiable criterion before freeze>
+- AC1: A pure `SandboxProfile` model maps from `PolicyProfile` with a v1 default of workspace-write + network-off; deterministic and unit-tested.
+- AC2: macOS Seatbelt and Linux bwrap builders produce deterministic, unit-tested profiles/argv that deny writes outside workspace roots, deny secret reads, and deny network when off.
+- AC3: `SandboxedProcessAdapter` wraps the executor `ProcessAdapter` port and fails closed on a missing launcher / unsupported platform; `runContainedProcess` and guard unchanged.
+- AC4: `keryx harness exec` runs OS-contained by default with realpath'd roots and `KERYX_DANGEROUSLY_DISABLE_SANDBOX` / `KERYX_SANDBOX_ALLOW_UNSANDBOXED` escape hatches.
+- AC5: A flag-gated live smoke proves on the real OS that a write outside the workspace is denied while a write inside succeeds; full suite green, `tsc` clean.
