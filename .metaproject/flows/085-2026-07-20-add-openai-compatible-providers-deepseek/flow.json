@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 2,
+  "id": "085",
+  "slug": "add-openai-compatible-providers-deepseek",
+  "title": "Add OpenAI-compatible providers (DeepSeek, Z.AI GLM incl. coding endpoint, Cerebras, Groq, Moonshot) to detect/make-provider/picker with per-provider API-key entry + live model fetch",
+  "status": "done",
+  "createdAt": "2026-07-20T15:53:40.646Z",
+  "updatedAt": "2026-07-20T16:06:33.278Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e9c68b362ada156c3474fc484c3543ea7ce60f9c082f069a2093fa8485f07b33",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T16:06:30.149Z"
+    },
+    "AC2": {
+      "at": "2026-07-20T16:06:30.273Z"
+    },
+    "AC3": {
+      "at": "2026-07-20T16:06:30.510Z"
+    },
+    "AC4": {
+      "at": "2026-07-20T16:06:30.623Z"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/141"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T15:53:40.646Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T16:05:01.529Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T16:05:01.680Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T16:06:29.635Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T16:06:29.769Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T16:06:29.902Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T16:06:30.015Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T16:06:30.149Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-20T16:06:30.273Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-20T16:06:30.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-20T16:06:30.623Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-20T16:06:33.042Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/141 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T16:06:33.185Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T16:06:33.278Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "merged": {
+    "commit": "b59ac96",
+    "ref": "origin/main",
+    "at": "2026-07-20T16:06:33.278Z"
+  }
+}
