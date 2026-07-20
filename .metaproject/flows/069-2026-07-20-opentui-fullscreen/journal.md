@@ -15,3 +15,10 @@
 - 2026-07-20T11:31:19.007Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T11:31:19.102Z - task-done: T5: alternate-screen
 - 2026-07-20T11:31:19.181Z - task-done: T6: verify
+- 2026-07-20T11:31:55.136Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/108 (warning: PR is not a draft)
+- 2026-07-20T11:31:55.231Z - ac-confirmed: AC1: screenMode alternate-screen + clearOnShutdown; clears launch scrollback; restores on exit
+- 2026-07-20T11:31:55.317Z - ac-confirmed: AC2: layout fills terminal; composer anchored bottom
+- 2026-07-20T11:31:55.405Z - ac-confirmed: AC3: driver/readline/chat/roleLabel + flow-067/068 preserved; --tui opt-in
+- 2026-07-20T11:31:55.745Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; headless unaffected; no new dep
+- 2026-07-20T11:31:55.880Z - completing
+- 2026-07-20T11:31:55.920Z - done: all gates passed

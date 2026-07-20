@@ -3,17 +3,34 @@
   "id": "069",
   "slug": "opentui-fullscreen",
   "title": "OpenTUI full-screen — alternate-screen mode (clears screen, composer anchored to bottom; split-footer left install output + floating composer)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T11:30:13.525Z",
-  "updatedAt": "2026-07-20T11:31:19.181Z",
+  "updatedAt": "2026-07-20T11:31:55.920Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:03836c90c2e4074c1b428141b6ac1a8e9a7925594e9ab74c0df56e46f1e5bbc9",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T11:31:55.231Z",
+      "note": "screenMode alternate-screen + clearOnShutdown; clears launch scrollback; restores on exit"
+    },
+    "AC2": {
+      "at": "2026-07-20T11:31:55.317Z",
+      "note": "layout fills terminal; composer anchored bottom"
+    },
+    "AC3": {
+      "at": "2026-07-20T11:31:55.405Z",
+      "note": "driver/readline/chat/roleLabel + flow-067/068 preserved; --tui opt-in"
+    },
+    "AC4": {
+      "at": "2026-07-20T11:31:55.745Z",
+      "note": "tsc clean; bun test 1507/0; headless unaffected; no new dep"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/108"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T11:31:19.181Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T11:31:55.136Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/108 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T11:31:55.231Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: screenMode alternate-screen + clearOnShutdown; clears launch scrollback; restores on exit"
+    },
+    {
+      "at": "2026-07-20T11:31:55.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: layout fills terminal; composer anchored bottom"
+    },
+    {
+      "at": "2026-07-20T11:31:55.405Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: driver/readline/chat/roleLabel + flow-067/068 preserved; --tui opt-in"
+    },
+    {
+      "at": "2026-07-20T11:31:55.745Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1507/0; headless unaffected; no new dep"
+    },
+    {
+      "at": "2026-07-20T11:31:55.880Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T11:31:55.920Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "d07c1f1f96d4e5c5b9a946e32da73742dc4c2340",
+    "ref": "origin/main",
+    "at": "2026-07-20T11:31:55.917Z"
+  }
 }
