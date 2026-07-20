@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/multi-agent/agent-event-extensions.schema.json",
+  "title": "Keryx Agent Event Extensions",
+  "description": "New agent-event types added by the multi-agent engine, layered over the existing .metaproject/core/gdskills/contracts/agent-event schema. All events are deterministic records (timestamps/ids injected, never Date.now/Math.random) and feed the pure accounting fold.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "type", "dispatch_id", "recorded_at", "data"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "type": {
+      "type": "string",
+      "enum": ["model_resolved", "tier_escalated", "peer_message"]
+    },
+    "dispatch_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "recorded_at": {
+      "type": "string",
+      "description": "Injected timestamp (from clock dep), not wall-clock at emit."
+    },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "model_resolved" } } },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider", "model", "source"],
+            "properties": {
+              "provider": { "type": "string", "minLength": 1 },
+              "model": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "enum": ["env", "explicit", "tier", "inherited"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "tier_escalated" } } },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from_tier", "to_tier", "trigger", "attempt_number"],
+            "properties": {
+              "from_tier": { "type": "string" },
+              "to_tier": { "type": "string" },
+              "trigger": {
+                "type": "string",
+                "description": "Why escalation fired: e.g. status:BLOCKED, acceptance:not_met, metric-threshold.",
+                "minLength": 1
+              },
+              "attempt_number": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "peer_message" } } },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from_dispatch_id", "to_dispatch_id", "artifact_ref"],
+            "properties": {
+              "from_dispatch_id": { "type": "string", "minLength": 1 },
+              "to_dispatch_id": { "type": "string", "minLength": 1 },
+              "artifact_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "kind", "hash"],
+                "description": "Bounded, hash-addressed, redacted artifact reference only — never inline free-text (prevents context blowup and injection).",
+                "properties": {
+                  "path": { "type": "string", "minLength": 1 },
+                  "kind": { "type": "string", "minLength": 1 },
+                  "hash": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

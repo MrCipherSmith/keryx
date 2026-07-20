@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "088",
+  "slug": "mae-phase1-resolve-child-model",
+  "title": "Multi-Agent Engine Phase 1: resolveChildModel resolver (explicit-or-inherit, policy-gated)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T18:43:23.095Z",
+  "updatedAt": "2026-07-20T18:57:22.497Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:beb6d35cb4bb1893ef891795b350a0b0f08c65fb5faf9ed7714c0948d3d1e172",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T18:57:22.088Z",
+      "note": "model.test.ts: omitted & {kind:inherit} -> parent, source:inherited (2 tests pass)"
+    },
+    "AC2": {
+      "at": "2026-07-20T18:57:22.166Z",
+      "note": "explicit->source:explicit; tier->tier map; unknown tier & absent map denied (4 tests)"
+    },
+    "AC3": {
+      "at": "2026-07-20T18:57:22.241Z",
+      "note": "G1 allowlist, G2 network(read-only & network!=allow), G3 unknown, inherited gated (6 tests)"
+    },
+    "AC4": {
+      "at": "2026-07-20T18:57:22.326Z",
+      "note": "env override precedence + still-gated; parseEnvModel inherit/empty/malformed/inner-slash (5 tests)"
+    },
+    "AC5": {
+      "at": "2026-07-20T18:57:22.419Z",
+      "note": "providerClass over OPENAI_COMPAT_PROVIDERS+anthropic/ollama; unknown otherwise; KNOWN_PROVIDER_IDS; zero new deps (import-only)"
+    },
+    "AC6": {
+      "at": "2026-07-20T18:57:22.497Z",
+      "note": "determinism deep-equal + no parent mutation; no Date.now/Math.random; typecheck clean"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T18:43:23.095Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T18:46:35.480Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T18:53:03.720Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T18:57:21.722Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T18:57:21.837Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T18:57:21.912Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T18:57:22.004Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T18:57:22.088Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: model.test.ts: omitted & {kind:inherit} -> parent, source:inherited (2 tests pass)"
+    },
+    {
+      "at": "2026-07-20T18:57:22.166Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: explicit->source:explicit; tier->tier map; unknown tier & absent map denied (4 tests)"
+    },
+    {
+      "at": "2026-07-20T18:57:22.242Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: G1 allowlist, G2 network(read-only & network!=allow), G3 unknown, inherited gated (6 tests)"
+    },
+    {
+      "at": "2026-07-20T18:57:22.326Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: env override precedence + still-gated; parseEnvModel inherit/empty/malformed/inner-slash (5 tests)"
+    },
+    {
+      "at": "2026-07-20T18:57:22.419Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: providerClass over OPENAI_COMPAT_PROVIDERS+anthropic/ollama; unknown otherwise; KNOWN_PROVIDER_IDS; zero new deps (import-only)"
+    },
+    {
+      "at": "2026-07-20T18:57:22.497Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: determinism deep-equal + no parent mutation; no Date.now/Math.random; typecheck clean"
+    }
+  ]
+}

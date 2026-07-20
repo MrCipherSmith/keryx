@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/multi-agent/child-model-selection.schema.json",
+  "title": "Keryx Child Model Selection",
+  "description": "Optional `model` block added to subagent-dispatch (the agent-definition surface) and the resolved `modelSelection` field stamped on the harness ChildContractExtension. Omitted request => inherit parent verbatim.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "modelRequest": {
+      "title": "Dispatch model request",
+      "description": "What the orchestrator asks for. Omit the whole block to inherit the parent orchestrator's provider/model. `provider`/`model` present => explicit lateral selection. `tier` present => resolve through the configured tier map. `provider`+`model` and `tier` are mutually exclusive.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "tier": { "type": "string", "enum": ["cheap", "standard", "deep"] },
+        "inherit": {
+          "type": "boolean",
+          "description": "Explicit inherit marker (equivalent to omitting the block). If true, provider/model/tier are ignored."
+        }
+      },
+      "not": {
+        "allOf": [
+          { "required": ["tier"] },
+          { "anyOf": [{ "required": ["provider"] }, { "required": ["model"] }] }
+        ]
+      }
+    },
+    "resolvedSelection": {
+      "title": "Resolved model selection",
+      "description": "Concrete, gated result stamped on ChildContractExtension after resolveChildModel succeeds (gates G1 allowlist, G2 trust/network, G3 classifiable all passed).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["providerId", "modelId", "source"],
+      "properties": {
+        "providerId": { "type": "string", "minLength": 1 },
+        "modelId": { "type": "string", "minLength": 1 },
+        "source": {
+          "type": "string",
+          "enum": ["env", "explicit", "tier", "inherited"],
+          "description": "Which rung of the resolution order produced this selection."
+        }
+      }
+    }
+  },
+  "properties": {
+    "model": { "$ref": "#/$defs/modelRequest" },
+    "modelSelection": { "$ref": "#/$defs/resolvedSelection" }
+  }
+}
