@@ -291,12 +291,30 @@ export async function launchTuiAgentShell(opts: {
       // composer mid-screen.
       screenMode: "alternate-screen",
       clearOnShutdown: true,
+      // Enable mouse so OpenTUI tracks drag-selection (the alternate screen would
+      // otherwise disable the terminal's native selection). Copy-on-select is
+      // wired below (OSC52), matching grok/opencode.
+      useMouse: true,
       onDestroy: () => {
         pendingApproval?.(false); // deny any in-flight approval on exit
         pendingApproval = undefined;
         resolveDone();
       },
     }));
+    // Copy-on-select (grok/opencode): when a mouse selection changes, copy the
+    // selected text to the SYSTEM clipboard via OSC52 (works locally and over SSH;
+    // the terminal must permit clipboard access — e.g. iTerm2's "Applications may
+    // access the clipboard"). Best-effort: any failure is ignored.
+    r.on(otui.CliRenderEvents.SELECTION, () => {
+      try {
+        const text = r.getSelection()?.getSelectedText() ?? "";
+        if (text.length > 0) {
+          r.copyToClipboardOSC52(text);
+        }
+      } catch {
+        // clipboard access not permitted — ignore
+      }
+    });
 
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
