@@ -7,7 +7,7 @@
 // via dynamic import; the tests skip when it is absent.
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
-import { createTuiAgentIo, fmtTokens, isShellApproved } from "./tui-shell";
+import { createTuiAgentIo, estimateContextTokens, fmtTokens, isShellApproved } from "./tui-shell";
 import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
@@ -176,6 +176,12 @@ test("isShellApproved: only explicit y/yes approves (default-deny)", () => {
   expect(isShellApproved("no")).toBe(false);
   expect(isShellApproved("")).toBe(false);
   expect(isShellApproved("yep")).toBe(false);
+});
+
+test("estimateContextTokens: ~4 chars/token over the history", () => {
+  expect(estimateContextTokens([])).toBe(0);
+  expect(estimateContextTokens([{ content: "abcd" }])).toBe(1);
+  expect(estimateContextTokens([{ content: "a".repeat(400) }, { content: "b".repeat(400) }])).toBe(200);
 });
 
 test("fmtTokens: compact K formatting", () => {

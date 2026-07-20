@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "077",
+  "slug": "opentui-token-estimate",
+  "title": "OpenTUI token counter estimate — show ~N context tokens when the provider reports no usage (local Ollama)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T13:46:48.465Z",
+  "updatedAt": "2026-07-20T13:46:49.318Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:27d755f15935e4a67b9f6fd225a5a6823cad4bd6520b416a9f6f242d8d7667ee",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "token estimate fallback",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T13:46:48.465Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T13:46:48.594Z",
+      "event": "task-added",
+      "detail": "T5: token estimate fallback"
+    },
+    {
+      "at": "2026-07-20T13:46:48.684Z",
+      "event": "task-added",
+      "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T13:46:48.770Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T13:46:48.855Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T13:46:48.951Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T13:46:49.050Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T13:46:49.144Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T13:46:49.231Z",
+      "event": "task-done",
+      "detail": "T5: token estimate fallback"
+    },
+    {
+      "at": "2026-07-20T13:46:49.318Z",
+      "event": "task-done",
+      "detail": "T6: verify"
+    }
+  ]
+}

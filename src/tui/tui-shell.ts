@@ -177,6 +177,16 @@ export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 }
 
+/**
+ * Rough token estimate of the conversation (≈ 4 chars/token) — a fallback for the
+ * context counter when the provider does not report exact `usage` (e.g. local
+ * Ollama models). Pure.
+ */
+export function estimateContextTokens(history: readonly { content: string }[]): number {
+  const chars = history.reduce((n, m) => n + m.content.length, 0);
+  return Math.round(chars / 4);
+}
+
 /** Current wall-clock time as `h:mm AM/PM` (UI-only; the core stays clock-free). */
 function hhmm(): string {
   const d = new Date();
@@ -388,10 +398,17 @@ export async function launchTuiAgentShell(opts: {
     const transcript = scroll.content;
 
     const io = createTuiAgentIo(otui, r, transcript);
-    // Cumulative token usage → the header counter (not per-turn transcript lines).
+    // Cumulative token usage → the header counter + sidebar. Prefer the provider's
+    // EXACT `usage`; fall back to an estimate (see the turn `finally` below) for
+    // providers that report nothing (e.g. local Ollama models).
     let totalIn = 0;
     let totalOut = 0;
+    let hasExactUsage = false;
     io.onUsage = (u) => {
+      if ((u.inputTokens ?? 0) === 0 && (u.outputTokens ?? 0) === 0) {
+        return; // a 0/0 report is not usable — keep the estimate
+      }
+      hasExactUsage = true;
       totalIn += u.inputTokens ?? 0;
       totalOut += u.outputTokens ?? 0;
       tokenText.content = otui.t`${otui.dim(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`)}`;
@@ -571,6 +588,12 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${otui.dim(`worked for ${secs}s`)}`, marginTop: 1 }),
         );
+        // No exact provider usage → show an estimated context size (never stuck at 0).
+        if (!hasExactUsage) {
+          const est = estimateContextTokens(history);
+          tokenText.content = otui.t`${otui.dim(`~${fmtTokens(est)}`)}`;
+          sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
+        }
       });
     };
 
