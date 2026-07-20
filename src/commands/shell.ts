@@ -823,7 +823,10 @@ export async function shellCommand(args: string[]): Promise<void> {
           ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
           shellExecTool(cwd),
         ],
-        systemInstruction: buildAgentSystemInstruction(orient),
+        systemInstruction: buildAgentSystemInstruction(orient, {
+          providerId: sel.provider,
+          modelId: sel.model,
+        }),
         idSeq: () => randomUUID(),
       };
     };
@@ -958,7 +961,10 @@ export async function shellCommand(args: string[]): Promise<void> {
           ...builtinMetaprojectTools(process.cwd(), makeKeryxRunner(process.cwd()), metaprojectPort),
           shellExecTool(process.cwd()),
         ],
-        systemInstruction: buildAgentSystemInstruction(orient),
+        systemInstruction: buildAgentSystemInstruction(orient, {
+          providerId: provider,
+          modelId: model,
+        }),
         idSeq: () => randomUUID(),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is

@@ -447,3 +447,15 @@ test("buildAgentSystemInstruction embeds an orient block when present, falls bac
   // Empty/whitespace orient must not throw and must fall back.
   expect(buildAgentSystemInstruction("   ")).toBe(buildAgentSystemInstruction(undefined));
 });
+
+test("buildAgentSystemInstruction routes wiki enrich intents to keryx wiki enrich shell_exec", () => {
+  const instr = buildAgentSystemInstruction(undefined, {
+    providerId: "zai-coding",
+    modelId: "glm-5.2",
+  });
+  expect(instr).toMatch(/wiki enrich/);
+  expect(instr).toMatch(/обогати вики|обогатить вики/i);
+  expect(instr).toContain("keryx wiki enrich --all --provider zai-coding --model glm-5.2");
+  expect(instr).toMatch(/required field|pattern|Never call a tool with an empty object/i);
+  expect(instr).toMatch(/shell_exec/);
+});

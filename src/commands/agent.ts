@@ -66,23 +66,57 @@ const DEFAULT_MAX_TOOL_CALLS = 8;
 /** Consecutive identical failing tool calls that abort a turn (runaway guard). */
 const MAX_REPEAT_FAILS = 3;
 
+/** Optional session context baked into the system instruction (provider/model). */
+export interface AgentInstructionContext {
+  providerId?: string;
+  modelId?: string;
+}
+
 /**
  * Assemble the trusted system instruction. When a `keryx orient` block is present
  * and non-empty it is embedded; otherwise a minimal static instruction is used.
  * Pure — never throws on a missing/empty orientation block.
+ *
+ * Includes explicit **workflow routing** so the harness acts on product intents
+ * (e.g. "обогати вики через модель" → `keryx wiki enrich`) instead of thrashing
+ * read tools with empty arguments.
  */
-export function buildAgentSystemInstruction(orient?: string): string {
+export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructionContext = {}): string {
+  const sessionProvider = ctx.providerId?.trim() ?? "";
+  const sessionModel = ctx.modelId?.trim() ?? "";
+  const enrichFlags =
+    sessionProvider.length > 0 && sessionModel.length > 0
+      ? ` --provider ${sessionProvider} --model ${sessionModel}`
+      : "";
+
   const base =
-    "You are the keryx interactive agent. You have read-only tools to inspect the " +
-    "real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
-    "graph_affected, memory_search (keryx metaproject: compact code search, code-graph " +
-    "blast radius, and project memory). You may also propose shell_exec to run a command, " +
-    "which requires the user's explicit approval before it executes. ALWAYS use a tool to " +
-    "obtain facts instead of guessing; never fabricate paths, file contents, or results. " +
-    "Be economical with output tokens: lead with the conclusion, give the shortest correct " +
-    "answer, prefer bullet points over prose, and omit preamble and restated context. Do NOT " +
-    "paste large tool/command output back into your reply — the compact tool result is already " +
-    "in context; reference it instead of repeating it.";
+    "You are the keryx interactive agent (project harness). You have read-only tools to " +
+    "inspect the real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
+    "graph_affected, memory_search, read_wiki, wiki_ask, graph_symbol (keryx metaproject). " +
+    "You may also propose shell_exec to run a command, which requires the user's explicit " +
+    "approval before it executes.\n\n" +
+    "Tool-calling rules (critical):\n" +
+    "- ALWAYS pass every required field in the tool JSON (e.g. search_code needs " +
+    "`pattern`, read_wiki needs `path`, wiki_ask needs `question`). Never call a tool " +
+    "with an empty object.\n" +
+    "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
+    "to run a known keryx workflow.\n\n" +
+    "Workflow routing (follow these instead of improvising):\n" +
+    "- User asks to enrich / enrich wiki / enrich with a model / «обогати вики» / " +
+    "«обогатить вики через модель» → use shell_exec with command:\n" +
+    `    keryx wiki enrich --all${enrichFlags}\n` +
+    `  For a single page: keryx wiki enrich <page-or-slug>${enrichFlags}. ` +
+    "Do NOT try to rewrite wiki pages by hand with search_code/read_wiki alone — " +
+    "wiki enrich is the dedicated model-backed enricher.\n" +
+    "- Optional prep: `keryx wiki collect` scaffolds drafts; then `keryx wiki enrich --all`.\n" +
+    "- Other keryx work (graph, health, memory, flow) → prefer `shell_exec` with the " +
+    "matching `keryx …` CLI when the user wants a full command run.\n\n" +
+    "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +
+    "contents, or results. Be economical with output tokens: lead with the conclusion, " +
+    "give the shortest correct answer, prefer bullet points over prose, and omit preamble. " +
+    "Do NOT paste large tool/command output back into your reply — the compact tool result " +
+    "is already in context; reference it instead of repeating it.";
+
   const trimmed = orient?.trim() ?? "";
   if (trimmed.length === 0) {
     return base;

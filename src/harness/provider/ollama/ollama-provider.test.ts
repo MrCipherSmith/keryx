@@ -148,6 +148,16 @@ function makeToolFetchMock(): { fetch: typeof fetch; calls: CapturedCall[] } {
   );
 }
 
+function makeFragmentedToolFetchMock(): { fetch: typeof fetch; calls: CapturedCall[] } {
+  const body = readFileSync(
+    path.join(import.meta.dir, "fixtures", "tool-call-stream-fragmented.recorded.sse"),
+    "utf8",
+  );
+  return makeFetchMock(
+    () => new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
+  );
+}
+
 async function collectEvents(iterable: AsyncIterable<NormalizedEvent>): Promise<NormalizedEvent[]> {
   const events: NormalizedEvent[] = [];
   for await (const evt of iterable) {
@@ -335,6 +345,29 @@ describe("AC1 — recorded tool-call-stream SSE transcript normalizes tool_call_
       expect(evt.sequence).toBe(index);
       expect(evt.attemptId).toBe("attempt-tool");
     });
+  });
+
+  test("fragmented OpenAI/Z.AI tool_call argument chunks are ACCUMULATED into one full input", async () => {
+    // Regression: emitting tool_call_end on every SSE chunk left empty/partial
+    // inputs → agent "Missing required property" spam for search_code/read_wiki.
+    const { fetch: fetchMock } = makeFragmentedToolFetchMock();
+    const provider = new OllamaProvider({ fetch: fetchMock, grant: validGrant() });
+    const events = await collectEvents(
+      provider.stream(buildRequest("request-frag", [WEATHER_TOOL]), { attemptId: "attempt-frag" }),
+    );
+
+    const ends = events.filter((e) => e.kind === "tool_call_end");
+    expect(ends).toHaveLength(1);
+    expect(ends[0]!.toolCallId).toBe("call_frag1");
+    expect(JSON.parse(ends[0]!.input as string)).toEqual({ pattern: "wiki enrich" });
+
+    const starts = events.filter((e) => e.kind === "tool_call_start");
+    expect(starts).toHaveLength(1);
+    expect(starts[0]!.toolName).toBe("search_code");
+
+    // Deltas concatenate to the final input (OpenAI-style streaming).
+    const deltas = events.filter((e) => e.kind === "tool_call_delta");
+    expect(deltas.map((d) => d.inputDelta ?? "").join("")).toBe(ends[0]!.input);
   });
 });
 

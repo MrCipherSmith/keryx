@@ -372,11 +372,61 @@ export class OllamaProvider implements ProviderPort {
     let sawDone = false;
     let malformed: NormalizedError | undefined;
 
+    // OpenAI-compat streams tool calls across chunks: first delta often has
+    // `name` + empty/partial `arguments`, later deltas APPEND argument fragments.
+    // We must ACCUMULATE by index/id and only emit `tool_call_end` on finish
+    // (Z.AI / OpenRouter / OpenAI). Emitting end per-chunk produced empty inputs
+    // (`Missing required property`) in the interactive agent.
+    interface PendingToolCall {
+      id: string;
+      name: string;
+      arguments: string;
+      started: boolean;
+      ended: boolean;
+    }
+    const pendingTools = new Map<string, PendingToolCall>();
+
+    // Prefer `index` (stable across streamed fragments). OpenAI/Z.AI only put
+    // `id` on the FIRST delta; later deltas have only `index` + argument slices.
+    // Keying by id first would split one call into two pending entries.
+    const toolCallKey = (toolCall: Record<string, unknown>): string => {
+      const index = asNumber(toolCall.index);
+      if (index !== undefined) {
+        return `idx:${index}`;
+      }
+      const id = asString(toolCall.id);
+      if (id !== undefined && id.length > 0) {
+        return `id:${id}`;
+      }
+      return "idx:0";
+    };
+
+    const flushPendingToolEnds = (): void => {
+      for (const acc of pendingTools.values()) {
+        if (acc.ended) {
+          continue;
+        }
+        if (!acc.started) {
+          const startBody: EventBody = { kind: "tool_call_start", toolCallId: acc.id };
+          if (acc.name.length > 0) {
+            startBody.toolName = acc.name;
+          }
+          bodies.push(startBody);
+          acc.started = true;
+        }
+        bodies.push({ kind: "tool_call_end", toolCallId: acc.id, input: acc.arguments });
+        acc.ended = true;
+      }
+      pendingTools.clear();
+    };
+
     for (const record of records) {
       const trimmed = record.data.trim();
       // `data: [DONE]` is the stream terminator, never a model chunk.
       if (trimmed === "[DONE]") {
         sawDone = true;
+        // Flush any tool calls that never saw finish_reason (defensive).
+        flushPendingToolEnds();
         continue;
       }
 
@@ -435,29 +485,55 @@ export class OllamaProvider implements ProviderPort {
         const fn = asRecord(toolCall.function);
         const toolCallId = asString(toolCall.id);
         const toolName = asString(fn.name);
-        const argumentsString = asString(fn.arguments) ?? "";
+        const argumentsFragment = asString(fn.arguments) ?? "";
+        const key = toolCallKey(toolCall);
 
-        const startBody: EventBody = { kind: "tool_call_start" };
-        if (toolCallId !== undefined) startBody.toolCallId = toolCallId;
-        if (toolName !== undefined) startBody.toolName = toolName;
-        bodies.push(startBody);
+        let acc = pendingTools.get(key);
+        if (acc === undefined) {
+          acc = {
+            id: toolCallId ?? `call_${key.replace(/[^a-zA-Z0-9_:-]/g, "_")}`,
+            name: toolName ?? "",
+            arguments: "",
+            started: false,
+            ended: false,
+          };
+          pendingTools.set(key, acc);
+        }
+        if (toolCallId !== undefined && toolCallId.length > 0) {
+          acc.id = toolCallId;
+        }
+        if (toolName !== undefined && toolName.length > 0) {
+          acc.name = toolName;
+        }
 
-        // Ollama sends the whole `arguments` string in one chunk; emit one
-        // `tool_call_delta` so its `inputDelta` concatenates to the final input.
-        const deltaBody: EventBody = { kind: "tool_call_delta", inputDelta: argumentsString };
-        if (toolCallId !== undefined) deltaBody.toolCallId = toolCallId;
-        bodies.push(deltaBody);
+        if (!acc.started) {
+          const startBody: EventBody = { kind: "tool_call_start", toolCallId: acc.id };
+          if (acc.name.length > 0) {
+            startBody.toolName = acc.name;
+          }
+          bodies.push(startBody);
+          acc.started = true;
+        }
 
-        const endBody: EventBody = { kind: "tool_call_end", input: argumentsString };
-        if (toolCallId !== undefined) endBody.toolCallId = toolCallId;
-        bodies.push(endBody);
+        // Fragments append (OpenAI/Z.AI streaming). One-shot providers (Ollama)
+        // send the whole JSON in a single fragment — still correct as append.
+        if (argumentsFragment.length > 0) {
+          acc.arguments += argumentsFragment;
+          bodies.push({
+            kind: "tool_call_delta",
+            toolCallId: acc.id,
+            inputDelta: argumentsFragment,
+          });
+        }
       }
 
-      // `finish_reason` is DEFERRED: it marks completion but emits no event; the
-      // trailing usage chunk (above) is surfaced BEFORE `model_end`.
+      // `finish_reason` marks completion: flush accumulated tool calls so
+      // `tool_call_end.input` is the FULL concatenated arguments JSON.
+      // Trailing usage is still emitted before `model_end` (below).
       const finishReason = asString(choice0.finish_reason);
       if (finishReason !== undefined && finishReason.length > 0) {
         sawFinish = true;
+        flushPendingToolEnds();
       }
     }
 
@@ -468,6 +544,11 @@ export class OllamaProvider implements ProviderPort {
         retryable: retryableFor("malformed", false),
         message: "Ollama SSE stream ended mid-record (torn stream)",
       };
+    }
+
+    // Defensive: stream ended without finish_reason but with pending tools.
+    if (malformed === undefined) {
+      flushPendingToolEnds();
     }
 
     // A clean stream that reached `[DONE]` or a `finish_reason` completes with a
