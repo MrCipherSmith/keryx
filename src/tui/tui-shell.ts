@@ -225,12 +225,19 @@ function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
   });
 }
 
-/** Prompt for a provider API key in an overlay; resolve the key or `undefined`. */
-function promptApiKey(otui: OpenTui, r: Renderer, opts: { label: string; envKey: string; placeholder?: string }): Promise<string | undefined> {
+/** Result of the API-key step: a key to save, skip (proceed keyless), or go back. */
+type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
+
+/**
+ * API-key entry step. Enter with text → `key`; empty Enter → `skip` (proceed without
+ * a key); Esc → `back` (return to the previous step). Absolute overlay; removes its
+ * key handler on close.
+ */
+function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; envKey: string; placeholder?: string }): Promise<KeyStepResult> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "key-picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "kp-title", content: otui.t`${otui.bold(`Paste your ${opts.label} API key`)} ${otui.dim("(Enter)")}` }));
+    box.add(new otui.TextRenderable(r, { id: "kp-title", content: otui.t`${otui.bold(`Paste your ${opts.label} API key`)} ${otui.dim("(Enter · Esc to go back)")}` }));
     box.add(
       new otui.TextRenderable(r, {
         id: "kp-note",
@@ -241,10 +248,23 @@ function promptApiKey(otui: OpenTui, r: Renderer, opts: { label: string; envKey:
     const keyInput = new otui.InputRenderable(r, { id: "kp-input", placeholder: opts.placeholder ?? "sk-...", marginTop: 1 });
     box.add(keyInput);
     keyInput.focus();
-    keyInput.on(otui.InputRenderableEvents.ENTER, () => {
-      const key = keyInput.value.trim();
+    const onKey = (key: { name: string; preventDefault: () => void; stopPropagation: () => void }): void => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve({ kind: "back" });
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    };
+    const cleanup = (): void => {
+      r._internalKeyInput.offInternal("keypress", onKey);
       r.root.remove(box);
-      resolve(key.length > 0 ? key : undefined);
+    };
+    r._internalKeyInput.onInternal("keypress", onKey);
+    keyInput.on(otui.InputRenderableEvents.ENTER, () => {
+      const value = keyInput.value.trim();
+      cleanup();
+      resolve(value.length > 0 ? { kind: "key", value } : { kind: "skip" });
     });
   });
 }
@@ -263,45 +283,12 @@ async function modelsForPicker(prov: DetectedProvider): Promise<string[]> {
   return fetchOpenAiCompatModels(globalThis.fetch, compat, key);
 }
 
-/**
- * If `prov` is a registered OpenAI-compat provider missing its key, prompt for it,
- * set it in the env, and persist it (0600) under its `envKey`. No-op otherwise.
- */
-async function ensureProviderKey(otui: OpenTui, r: Renderer, prov: DetectedProvider): Promise<void> {
-  if (prov.envKey === undefined) {
-    return;
-  }
-  const current = process.env[prov.envKey];
-  if (current !== undefined && current.length > 0) {
-    return;
-  }
-  const key = await promptApiKey(otui, r, { label: prov.label ?? prov.name, envKey: prov.envKey });
-  if (key !== undefined) {
-    process.env[prov.envKey] = key;
-    saveApiKey(prov.envKey, key); // persist (0600), opencode-style
-  }
-}
-
-/**
- * In-TUI provider → model picker. A provider SelectRenderable, then the filterable
- * {@link pickModelInTui}. Registered providers (OpenRouter, DeepSeek, Z.AI GLM,
- * Cerebras, Groq, Moonshot, …) fetch their LIVE model list and prompt + persist a key
- * when missing. Absolute overlay (works at startup AND for `/connect`). Resolves the
- * selection or `undefined`.
- */
-function selectProviderModelInTui(
-  otui: OpenTui,
-  r: Renderer,
-  detected: DetectedProvider[],
-): Promise<TuiSelection | undefined> {
+/** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
+function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
   return new Promise((resolve) => {
-    if (detected.length === 0) {
-      resolve(undefined);
-      return;
-    }
     const box = overlayBox(otui, r, "picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "picker-title", content: otui.t`${otui.bold("Select a provider")} ${otui.dim("(↑/↓, Enter)")}` }));
+    box.add(new otui.TextRenderable(r, { id: "picker-title", content: otui.t`${otui.bold("Select a provider")} ${otui.dim("(↑/↓, Enter · Esc to cancel)")}` }));
     // Match by the displayed label (unique) so registry ids stay hidden but resolvable.
     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
     const provSelect = new otui.SelectRenderable(r, {
@@ -316,24 +303,78 @@ function selectProviderModelInTui(
     });
     box.add(provSelect);
     provSelect.focus();
+    const onKey = (key: { name: string; preventDefault: () => void; stopPropagation: () => void }): void => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve(undefined);
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    };
+    const cleanup = (): void => {
+      r._internalKeyInput.offInternal("keypress", onKey);
+      r.root.remove(box);
+    };
+    r._internalKeyInput.onInternal("keypress", onKey);
     provSelect.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = provSelect.getSelectedOption();
-      const prov = chosen === null ? undefined : detected.find((d) => labelOf(d) === chosen.name);
-      r.root.remove(box);
-      if (prov === undefined) {
-        resolve(undefined);
-        return;
-      }
-      void (async () => {
-        const model = await pickModelInTui(otui, r, await modelsForPicker(prov));
-        if (model === undefined) {
+      cleanup();
+      resolve(chosen === null ? undefined : detected.find((d) => labelOf(d) === chosen.name));
+    });
+  });
+}
+
+/**
+ * In-TUI provider → model → key wizard with BACK navigation: Esc at the provider step
+ * cancels; Esc at the model step returns to the provider list; Esc at the key step
+ * returns to the model list. Registered providers (OpenRouter, DeepSeek, Z.AI GLM,
+ * Cerebras, Groq, Moonshot, …) fetch their LIVE model list and prompt + persist a key
+ * when missing. Absolute overlay (works at startup AND for `/connect`). Resolves the
+ * selection or `undefined`.
+ */
+function selectProviderModelInTui(
+  otui: OpenTui,
+  r: Renderer,
+  detected: DetectedProvider[],
+): Promise<TuiSelection | undefined> {
+  return new Promise((resolve) => {
+    if (detected.length === 0) {
+      resolve(undefined);
+      return;
+    }
+    void (async () => {
+      // Provider ← Esc cancels; model ← Esc backs to provider; key ← Esc backs to model.
+      while (true) {
+        const prov = await pickProviderStep(otui, r, detected);
+        if (prov === undefined) {
           resolve(undefined);
           return;
         }
-        await ensureProviderKey(otui, r, prov);
-        resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
-      })();
-    });
+        let backToProvider = false;
+        while (!backToProvider) {
+          const model = await pickModelInTui(otui, r, await modelsForPicker(prov));
+          if (model === undefined) {
+            backToProvider = true; // Esc at the model step → re-pick the provider
+            break;
+          }
+          const envKey = prov.envKey;
+          const hasKey = envKey !== undefined && typeof process.env[envKey] === "string" && (process.env[envKey] as string).length > 0;
+          if (envKey !== undefined && !hasKey) {
+            const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
+            if (kr.kind === "back") {
+              continue; // Esc at the key step → re-pick the model
+            }
+            if (kr.kind === "key") {
+              process.env[envKey] = kr.value;
+              saveApiKey(envKey, kr.value); // persist (0600), opencode-style
+            }
+            // kind === "skip" → proceed without a key (offline/fail-closed provider)
+          }
+          resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
+          return;
+        }
+      }
+    })();
   });
 }
 
@@ -349,7 +390,7 @@ function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<s
     const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
-    const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to cancel")}` });
+    const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to go back")}` });
     box.add(filterLine);
     const NO_MATCH = "(no match)";
     const sel = new otui.SelectRenderable(r, {
@@ -370,7 +411,7 @@ function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<s
       const q = filter.trim().toLowerCase();
       const matches = q.length > 0 ? all.filter((m) => m.toLowerCase().includes(q)) : all;
       sel.options = matches.length > 0 ? matches.map((m) => ({ name: m, description: "" })) : [{ name: NO_MATCH, description: "" }];
-      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to cancel")}`;
+      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to go back")}`;
     };
 
     const onKey = (key: { name: string; ctrl: boolean; meta: boolean; sequence: string; preventDefault: () => void; stopPropagation: () => void }): void => {
