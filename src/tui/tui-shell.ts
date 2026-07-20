@@ -310,11 +310,12 @@ export async function launchTuiAgentShell(opts: {
     // sidebar (model, context, tools).
     const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
     r.root.add(rootRow);
-    const main = new otui.BoxRenderable(r, { id: "main", flexGrow: 1, flexDirection: "column" });
+    const main = new otui.BoxRenderable(r, { id: "main", flexGrow: 1, minWidth: 0, flexDirection: "column" });
     rootRow.add(main);
     const sidebar = new otui.BoxRenderable(r, {
       id: "sidebar",
       width: 30,
+      flexShrink: 0,
       flexDirection: "column",
       border: ["left"],
       borderColor: "#22333b",
@@ -338,6 +339,7 @@ export async function launchTuiAgentShell(opts: {
     // the right (updated from usage).
     const header = new otui.BoxRenderable(r, {
       id: "header",
+      flexShrink: 0,
       flexDirection: "row",
       justifyContent: "space-between",
       paddingLeft: 1,
@@ -358,6 +360,7 @@ export async function launchTuiAgentShell(opts: {
     const scroll = new otui.ScrollBoxRenderable(r, {
       id: "transcript",
       flexGrow: 1,
+      minHeight: 0,
       scrollY: true,
       stickyScroll: true,
       stickyStart: "bottom",
@@ -415,6 +418,7 @@ export async function launchTuiAgentShell(opts: {
     // as the composer changes; hidden when the value is not a slash query.
     const menu = new otui.SelectRenderable(r, {
       id: "menu",
+      flexShrink: 0,
       height: 10,
       visible: false,
       options: [...AGENT_SLASH_COMMANDS],
@@ -434,6 +438,7 @@ export async function launchTuiAgentShell(opts: {
     // Bordered composer (grok-style rounded input box) — compact single line.
     const composer = new otui.BoxRenderable(r, {
       id: "composer",
+      flexShrink: 0,
       borderStyle: "rounded",
       border: true,
       paddingLeft: 1,
@@ -447,6 +452,7 @@ export async function launchTuiAgentShell(opts: {
     // Footer: hints on the left, model on the right (grok/opencode style).
     const footer = new otui.BoxRenderable(r, {
       id: "footer",
+      flexShrink: 0,
       flexDirection: "row",
       justifyContent: "space-between",
       paddingLeft: 1,
