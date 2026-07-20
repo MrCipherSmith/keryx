@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "094",
+  "slug": "mae-phase5-adaptive-escalation",
+  "title": "Multi-Agent Engine Phase 5: adaptive model escalation",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T20:30:08.930Z",
+  "updatedAt": "2026-07-20T20:41:15.649Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:62631d5771514b0e032403bdb65018902868d6593fbc82eddfe753089eddc846",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T20:41:14.740Z",
+      "note": "classifyInitialTier: high-signal(critical/security/production)->highest, low-signal(simple/typo/rename)->lowest, neutral->middle; empty ladder throws; pure"
+    },
+    "AC2": {
+      "at": "2026-07-20T20:41:14.904Z",
+      "note": "shouldEscalate: NEEDS_CONTEXT/BLOCKED/FAILED + acceptance not_met + metricsThreshold -> escalate w/ trigger; DONE/DONE_WITH_CONCERNS all-met -> no escalate"
+    },
+    "AC3": {
+      "at": "2026-07-20T20:41:15.116Z",
+      "note": "escalate driver: starts at classified rung via injected runRung(tier,attempt); escalates to next ladder rung as new attempt.number on same branchId; stops on first non-escalating result"
+    },
+    "AC4": {
+      "at": "2026-07-20T20:41:15.387Z",
+      "note": "tier_escalated{from_tier,to_tier,trigger,attempt_number} per escalation (schema-conformant); returns ordered events + attempts + finalResult; cheap->standard test asserts exact event"
+    },
+    "AC5": {
+      "at": "2026-07-20T20:41:15.533Z",
+      "note": "each rung admitted to shared RemainingBudgetLedger; denial => budget-exhausted, NO further rung, NO event; ladder exhaustion stops with last result"
+    },
+    "AC6": {
+      "at": "2026-07-20T20:41:15.649Z",
+      "note": "pure/deterministic (injected runRung/ledger/idSeq/clock; no Date.now/Math.random); escalation.test.ts 14 tests; full suite 1715 pass/0 fail (--timeout 30000; earlier fails were 5s-timeout flakes under load, vary run-to-run); tsc clean"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T20:30:08.930Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T20:31:22.157Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T20:33:01.425Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T20:41:14.242Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T20:41:14.375Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T20:41:14.496Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T20:41:14.592Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T20:41:14.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: classifyInitialTier: high-signal(critical/security/production)->highest, low-signal(simple/typo/rename)->lowest, neutral->middle; empty ladder throws; pure"
+    },
+    {
+      "at": "2026-07-20T20:41:14.905Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shouldEscalate: NEEDS_CONTEXT/BLOCKED/FAILED + acceptance not_met + metricsThreshold -> escalate w/ trigger; DONE/DONE_WITH_CONCERNS all-met -> no escalate"
+    },
+    {
+      "at": "2026-07-20T20:41:15.116Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: escalate driver: starts at classified rung via injected runRung(tier,attempt); escalates to next ladder rung as new attempt.number on same branchId; stops on first non-escalating result"
+    },
+    {
+      "at": "2026-07-20T20:41:15.388Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tier_escalated{from_tier,to_tier,trigger,attempt_number} per escalation (schema-conformant); returns ordered events + attempts + finalResult; cheap->standard test asserts exact event"
+    },
+    {
+      "at": "2026-07-20T20:41:15.534Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: each rung admitted to shared RemainingBudgetLedger; denial => budget-exhausted, NO further rung, NO event; ladder exhaustion stops with last result"
+    },
+    {
+      "at": "2026-07-20T20:41:15.649Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: pure/deterministic (injected runRung/ledger/idSeq/clock; no Date.now/Math.random); escalation.test.ts 14 tests; full suite 1715 pass/0 fail (--timeout 30000; earlier fails were 5s-timeout flakes under load, vary run-to-run); tsc clean"
+    }
+  ]
+}
