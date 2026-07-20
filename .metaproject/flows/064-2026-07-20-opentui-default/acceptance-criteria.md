@@ -1,0 +1,6 @@
+# Acceptance Criteria — flow 064 (OpenTUI default on TTY)
+
+- AC1: In agent mode on an interactive TTY, `keryx shell` launches the OpenTUI shell BY DEFAULT (no `--tui` needed). `--tui` remains accepted (no-op alias). A `--no-tui` flag forces the readline shell.
+- AC2: The readline shell is RETAINED as the guaranteed fallback (NOT retired): OpenTUI is used only when `process.stdout.isTTY` && not `--no-tui` && the optional dep loads && the renderer inits; any miss falls back to the readline agent REPL. Non-TTY / piped / CI keep the readline shell with identical plain output. Chat mode is unaffected (readline).
+- AC3: stdin is handed off cleanly: `launchTuiAgentShell` accepts an `onStart` hook, invoked ONLY after the renderer initialises, which closes the readline interface so OpenTUI owns stdin (avoiding a dual-consumer conflict). On the pre-init fallback paths `onStart` is not called and readline stays usable.
+- AC4: `bunx tsc --noEmit` clean; `bun test` green with no reduction from baseline (1506); a smoke confirms a non-TTY `keryx shell --agent` still runs the readline shell (default TUI does not hijack non-TTY), and `--no-tui` forces readline. No new dependency; `runAgentTurn`, chat mode, and `roleLabel` unchanged.

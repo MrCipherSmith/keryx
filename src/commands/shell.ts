@@ -740,6 +740,7 @@ export async function shellCommand(args: string[]): Promise<void> {
   // defaults to agent. `undefined` = "no explicit flag given".
   let modeFlag: boolean | undefined;
   let tuiFlag = false;
+  let noTuiFlag = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -754,6 +755,8 @@ export async function shellCommand(args: string[]): Promise<void> {
       modeFlag = false;
     } else if (arg === "--tui") {
       tuiFlag = true;
+    } else if (arg === "--no-tui") {
+      noTuiFlag = true;
     }
   }
 
@@ -844,10 +847,13 @@ export async function shellCommand(args: string[]): Promise<void> {
         systemInstruction: buildAgentSystemInstruction(orient),
         idSeq: () => randomUUID(),
       };
-      // Experimental OpenTUI agent shell (flow 060, ADR-0005). Opt-in via `--tui`;
-      // on no-TTY / absent optional dep / init failure it returns false and the
-      // readline REPL below runs instead (guaranteed fallback).
-      if (tuiFlag && (await launchTuiAgentShell(agentDeps))) {
+      // OpenTUI agent shell (flows 060-064, ADR-0005). DEFAULT on an interactive
+      // TTY; `--no-tui` forces the readline REPL. On no-TTY / absent optional dep /
+      // init failure it returns false and the readline REPL below runs instead
+      // (guaranteed fallback — readline is retained, not retired). `tuiFlag`
+      // (`--tui`) is an accepted no-op alias now that TUI is the default.
+      void tuiFlag;
+      if (!noTuiFlag && process.stdout.isTTY && (await launchTuiAgentShell(agentDeps, { onStart: () => rl.close() }))) {
         return;
       }
       await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort);
