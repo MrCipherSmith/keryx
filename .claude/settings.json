@@ -21,10 +21,21 @@
           }
         ],
         "_keryxManaged": "security-agent-hooks"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx ctx hook claude"
+          }
+        ],
+        "_keryxManaged": "ctx-agent-hooks"
       }
     ]
   },
   "_keryxManaged": [
-    "security-agent-hooks"
+    "security-agent-hooks",
+    "ctx-agent-hooks"
   ]
 }
