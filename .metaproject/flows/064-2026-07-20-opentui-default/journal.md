@@ -16,3 +16,10 @@
 - 2026-07-20T08:53:32.549Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T08:53:32.625Z - task-done: T5: implement default + stdin handoff
 - 2026-07-20T08:53:32.698Z - task-done: T6: smoke + verify
+- 2026-07-20T08:53:41.101Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/100
+- 2026-07-20T08:53:41.211Z - ac-confirmed: AC1: agent TTY launches TUI by default; --no-tui forces readline; --tui no-op alias
+- 2026-07-20T08:53:41.377Z - ac-confirmed: AC2: readline retained as fallback; non-TTY --agent → readline (smoke); chat unaffected
+- 2026-07-20T08:53:41.473Z - ac-confirmed: AC3: onStart closes rl only post-init; pre-init fallbacks keep readline usable
+- 2026-07-20T08:53:41.580Z - ac-confirmed: AC4: tsc clean; bun test 1506/0; non-TTY + --no-tui smokes → readline; no new dep; driver/chat/roleLabel unchanged
+- 2026-07-20T08:54:05.319Z - completing
+- 2026-07-20T08:54:05.359Z - done: all gates passed

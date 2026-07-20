@@ -3,17 +3,34 @@
   "id": "064",
   "slug": "opentui-default",
   "title": "OpenTUI shell Phase 5 (TUI default on TTY agent mode, --no-tui opt-out, readline retained as fallback)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T08:51:48.553Z",
-  "updatedAt": "2026-07-20T08:53:32.698Z",
+  "updatedAt": "2026-07-20T08:54:05.359Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ac805b456c31432008e52a9cc4dc1e72492e607eeb9038458404c0fd46c515a7",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T08:53:41.210Z",
+      "note": "agent TTY launches TUI by default; --no-tui forces readline; --tui no-op alias"
+    },
+    "AC2": {
+      "at": "2026-07-20T08:53:41.377Z",
+      "note": "readline retained as fallback; non-TTY --agent → readline (smoke); chat unaffected"
+    },
+    "AC3": {
+      "at": "2026-07-20T08:53:41.473Z",
+      "note": "onStart closes rl only post-init; pre-init fallbacks keep readline usable"
+    },
+    "AC4": {
+      "at": "2026-07-20T08:53:41.580Z",
+      "note": "tsc clean; bun test 1506/0; non-TTY + --no-tui smokes → readline; no new dep; driver/chat/roleLabel unchanged"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/100"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T08:53:32.698Z",
       "event": "task-done",
       "detail": "T6: smoke + verify"
+    },
+    {
+      "at": "2026-07-20T08:53:41.101Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/100"
+    },
+    {
+      "at": "2026-07-20T08:53:41.211Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: agent TTY launches TUI by default; --no-tui forces readline; --tui no-op alias"
+    },
+    {
+      "at": "2026-07-20T08:53:41.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: readline retained as fallback; non-TTY --agent → readline (smoke); chat unaffected"
+    },
+    {
+      "at": "2026-07-20T08:53:41.473Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: onStart closes rl only post-init; pre-init fallbacks keep readline usable"
+    },
+    {
+      "at": "2026-07-20T08:53:41.580Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1506/0; non-TTY + --no-tui smokes → readline; no new dep; driver/chat/roleLabel unchanged"
+    },
+    {
+      "at": "2026-07-20T08:54:05.319Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T08:54:05.359Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "b6ae19f8f62cc1618a7934cc4063372bfee0ffa2",
+    "ref": "origin/main",
+    "at": "2026-07-20T08:54:05.358Z"
+  }
 }
