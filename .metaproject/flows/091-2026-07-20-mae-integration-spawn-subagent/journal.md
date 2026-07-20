@@ -13,3 +13,6 @@
 - 2026-07-20T20:09:45.234Z - ac-confirmed: AC4: config.subagents mapped to spawnChild caps/tiers/envOverride; omitted config => DEFAULT_MAX_TREE_DEPTH/CHILDREN; default depth cap denies too-deep child
 - 2026-07-20T20:09:45.311Z - ac-confirmed: AC5: foldChildSummary runs quarantineChildSummary; clean passes, instruction-shaped flagged with marker + original preserved
 - 2026-07-20T20:09:45.448Z - ac-confirmed: AC6: facade pure (injected detection+ledger+idSeq/clock, no Date.now/Math.random); orchestrate.test.ts 12 tests; full suite 1638 pass/0 fail incl dep guard; tsc clean
+- 2026-07-20T20:10:50.722Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/153 (warning: PR is not a draft)
+- 2026-07-20T20:10:51.027Z - completing
+- 2026-07-20T20:10:51.054Z - done: all gates passed

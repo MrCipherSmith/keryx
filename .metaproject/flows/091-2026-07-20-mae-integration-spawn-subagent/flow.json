@@ -3,9 +3,9 @@
   "id": "091",
   "slug": "mae-integration-spawn-subagent",
   "title": "Multi-Agent Engine Integration: spawnSubagent orchestration assembly",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T19:46:27.171Z",
-  "updatedAt": "2026-07-20T20:09:45.448Z",
+  "updatedAt": "2026-07-20T20:10:51.054Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/153"
   },
   "tasks": [
     {
@@ -165,6 +165,25 @@
       "at": "2026-07-20T20:09:45.448Z",
       "event": "ac-confirmed",
       "detail": "AC6: facade pure (injected detection+ledger+idSeq/clock, no Date.now/Math.random); orchestrate.test.ts 12 tests; full suite 1638 pass/0 fail incl dep guard; tsc clean"
+    },
+    {
+      "at": "2026-07-20T20:10:50.722Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/153 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T20:10:51.027Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T20:10:51.054Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "d7450fbc5c6f59f834163566991992df124b1781",
+    "ref": "origin/main",
+    "at": "2026-07-20T20:10:51.054Z"
+  }
 }
