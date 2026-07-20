@@ -367,7 +367,7 @@ describe("AC1 — recorded tool-call-stream SSE transcript normalizes tool_call_
 
     // Deltas concatenate to the final input (OpenAI-style streaming).
     const deltas = events.filter((e) => e.kind === "tool_call_delta");
-    expect(deltas.map((d) => d.inputDelta ?? "").join("")).toBe(ends[0]!.input);
+    expect(deltas.map((d) => d.inputDelta ?? "").join("")).toBe(ends[0]!.input as string);
   });
 });
 

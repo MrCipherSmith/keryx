@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   agentBootstrapRuntimeIds,
   agentBootstrapStatus,
@@ -6,6 +7,8 @@ import {
   resolveAgentBootstrapRuntimes,
   uninstallAgentBootstrap,
 } from "../agents/bootstrap";
+import { reduceAgents } from "../harness/monitor/reduce";
+import type { AgentEvent, AgentsSnapshot } from "../harness/monitor/reduce";
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, statusLine } from "../lib/ui";
 
@@ -18,6 +21,11 @@ export async function agentsCommand(args: string[] = []): Promise<void> {
     return;
   }
 
+  if (subcommand === "monitor") {
+    monitorCommand(args.slice(1));
+    return;
+  }
+
   if (subcommand !== "bootstrap") {
     console.error(`Unknown agents command: ${subcommand}`);
     printAgentsHelp();
@@ -26,6 +34,79 @@ export async function agentsCommand(args: string[] = []): Promise<void> {
   }
 
   await bootstrapCommand(args.slice(1));
+}
+
+/** Parse an agent-event source: a JSON array, or newline-delimited JSON (JSONL). */
+function parseAgentEvents(content: string): AgentEvent[] {
+  const trimmed = content.trim();
+  if (trimmed.length === 0) return [];
+  if (trimmed.startsWith("[")) {
+    return JSON.parse(trimmed) as AgentEvent[];
+  }
+  return trimmed
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as AgentEvent);
+}
+
+/**
+ * `keryx agents monitor [--json] <events-file>` — read-only. Folds a persisted /
+ * provided canonical agent-event source via the pure `reduceAgents` accounting
+ * layer and renders it: `--json` emits the raw {@link AgentsSnapshot}; text mode
+ * renders a run→dispatch tree with status, model, and ↑in/↓out tokens. Writes
+ * nothing.
+ */
+export function monitorCommand(args: string[]): void {
+  if (args.includes("--help") || args.includes("-h")) {
+    helpTitle("keryx agents monitor", "fold a subagent agent-event stream into a fleet snapshot (read-only)");
+    helpUsage(["keryx agents monitor <events-file> [--json]"]);
+    helpOptions([{ flag: "--json", desc: "Emit the raw AgentsSnapshot as JSON instead of a tree." }]);
+    return;
+  }
+
+  const json = args.includes("--json");
+  const source = args.find((arg) => !arg.startsWith("-"));
+  if (source === undefined) {
+    console.error("Provide an agent-event source file: keryx agents monitor <events-file> [--json]");
+    process.exitCode = 1;
+    return;
+  }
+
+  let events: AgentEvent[];
+  try {
+    events = parseAgentEvents(readFileSync(source, "utf8"));
+  } catch (error) {
+    console.error(`Failed to read/parse agent-event source "${source}": ${(error as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const snapshot = reduceAgents(events);
+  if (json) {
+    console.log(JSON.stringify(snapshot, null, 2));
+    return;
+  }
+  renderAgentsTree(snapshot);
+}
+
+const STATUS_GLYPH: Record<string, string> = {
+  running: "◐",
+  done: "●",
+  blocked: "◼",
+  failed: "✗",
+  unknown: "○",
+};
+
+/** Render a folded {@link AgentsSnapshot} as a run→dispatch tree with tokens. */
+function renderAgentsTree(snapshot: AgentsSnapshot): void {
+  console.log("# agents monitor");
+  console.log("");
+  console.log(`run ${snapshot.runId ?? "(unknown)"} — ${snapshot.agents.length} subagent(s)`);
+  for (const agent of snapshot.agents) {
+    const tokens = `↑${agent.usage.inputTokens} ↓${agent.usage.outputTokens}${agent.usage.exact ? "" : "~"}`;
+    const glyph = STATUS_GLYPH[agent.status] ?? "○";
+    console.log(`  ${glyph} ${agent.dispatchId}  ${agent.status}  ${agent.model ?? "-"}  ${tokens}`);
+  }
 }
 
 async function bootstrapCommand(args: string[]): Promise<void> {
@@ -106,12 +187,13 @@ async function bootstrapCommand(args: string[]): Promise<void> {
 }
 
 function printAgentsHelp(): void {
-  helpTitle("keryx agents", "manage global agent bootstrap instructions");
+  helpTitle("keryx agents", "manage agent bootstrap instructions and monitor a subagent fleet");
   helpUsage([
     `keryx agents bootstrap status --runtime ${RUNTIME_USAGE}`,
     `keryx agents bootstrap install --runtime ${RUNTIME_USAGE} [--dry-run]`,
     `keryx agents bootstrap uninstall --runtime ${RUNTIME_USAGE} [--dry-run]`,
     "keryx agents bootstrap print",
+    "keryx agents monitor <events-file> [--json]",
   ]);
 }
 

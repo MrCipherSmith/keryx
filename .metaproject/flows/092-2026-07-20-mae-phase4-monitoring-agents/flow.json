@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "092",
+  "slug": "mae-phase4-monitoring-agents",
+  "title": "Multi-Agent Engine Phase 4: monitoring fold + keryx agents surface",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T20:15:28.033Z",
+  "updatedAt": "2026-07-20T20:26:15.097Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7d176e963e6e42ae350afeeaee1343aaf215968bafe4f8f3ad18095b245ff9a1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T20:26:14.309Z",
+      "note": "reduceAgents in harness/monitor/reduce.ts: created->running/completed->done/blocked->blocked/validation_failed+run_failed->failed; terminal not downgraded; sorted by dispatchId; deterministic"
+    },
+    "AC2": {
+      "at": "2026-07-20T20:26:14.518Z",
+      "note": "usage sums only data.usage.exact:true; inexact flips usage.exact=false and is NOT summed; tests cover exact/inexact/none"
+    },
+    "AC3": {
+      "at": "2026-07-20T20:26:14.658Z",
+      "note": "diffAgents: new->spawned, prev-only->idle, status-change->new status (running/done/failed/blocked); sorted, deterministic"
+    },
+    "AC4": {
+      "at": "2026-07-20T20:26:14.828Z",
+      "note": "keryx agents monitor [--json] <events-file>: folds JSON/JSONL agent-event source, --json emits AgentsSnapshot, text renders run->dispatch tree + tokens; read-only; descriptor added to command-registry (json:true, read:true)"
+    },
+    "AC5": {
+      "at": "2026-07-20T20:26:14.961Z",
+      "note": "reduceAgents/diffAgents pure (no Date.now/Math.random/fs/network); CLI does all IO + rendering; display never feeds the fold"
+    },
+    "AC6": {
+      "at": "2026-07-20T20:26:15.097Z",
+      "note": "reduce.test.ts (status/usage/diff/determinism) + agents.monitor.test.ts (json+text+read-only-error); full suite 1658 pass/0 fail incl dep guard; tsc clean (also fixed pre-existing ollama-provider.test type error blocking main)"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T20:15:28.033Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T20:16:45.684Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T20:17:38.633Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T20:26:13.854Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T20:26:13.943Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T20:26:14.033Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T20:26:14.159Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T20:26:14.309Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: reduceAgents in harness/monitor/reduce.ts: created->running/completed->done/blocked->blocked/validation_failed+run_failed->failed; terminal not downgraded; sorted by dispatchId; deterministic"
+    },
+    {
+      "at": "2026-07-20T20:26:14.518Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: usage sums only data.usage.exact:true; inexact flips usage.exact=false and is NOT summed; tests cover exact/inexact/none"
+    },
+    {
+      "at": "2026-07-20T20:26:14.658Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: diffAgents: new->spawned, prev-only->idle, status-change->new status (running/done/failed/blocked); sorted, deterministic"
+    },
+    {
+      "at": "2026-07-20T20:26:14.828Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: keryx agents monitor [--json] <events-file>: folds JSON/JSONL agent-event source, --json emits AgentsSnapshot, text renders run->dispatch tree + tokens; read-only; descriptor added to command-registry (json:true, read:true)"
+    },
+    {
+      "at": "2026-07-20T20:26:14.962Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: reduceAgents/diffAgents pure (no Date.now/Math.random/fs/network); CLI does all IO + rendering; display never feeds the fold"
+    },
+    {
+      "at": "2026-07-20T20:26:15.097Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: reduce.test.ts (status/usage/diff/determinism) + agents.monitor.test.ts (json+text+read-only-error); full suite 1658 pass/0 fail incl dep guard; tsc clean (also fixed pre-existing ollama-provider.test type error blocking main)"
+    }
+  ]
+}

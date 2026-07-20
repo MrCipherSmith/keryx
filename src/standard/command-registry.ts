@@ -242,6 +242,19 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- agents (subagent fleet) ------------------------------------------
+  {
+    module: "agents",
+    command: "agents monitor",
+    summary: "Fold a subagent agent-event stream into a fleet snapshot (status/model/tokens).",
+    intent: ["покажи сабагентов", "статус флота агентов", "monitor subagents", "fleet status", "agents snapshot"],
+    args: [
+      { name: "<events-file>", type: "path", required: true, desc: "agent-event source (JSON array or JSONL)" },
+      { name: "json", type: "bool", required: false, desc: "emit the raw AgentsSnapshot as JSON" },
+    ],
+    json: true,
+    read: true,
+  },
 ];
 
 /** Deterministic sort key: module then command. */
