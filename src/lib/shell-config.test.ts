@@ -32,6 +32,23 @@ test("saveShellConfig writes the file mode 0600 (owner-only)", () => {
   expect(mode).toBe(0o600);
 });
 
+test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {
+  if (process.platform === "win32") {
+    return; // Windows uses %APPDATA%; skip the XDG assertion
+  }
+  const saved = process.env.XDG_DATA_HOME;
+  process.env.XDG_DATA_HOME = path.join(tmpdir(), "xdg-keryx-test");
+  try {
+    expect(shellConfigPath()).toBe(path.join(process.env.XDG_DATA_HOME, "keryx", "auth.json"));
+  } finally {
+    if (saved === undefined) {
+      delete process.env.XDG_DATA_HOME;
+    } else {
+      process.env.XDG_DATA_HOME = saved;
+    }
+  }
+});
+
 test("loadShellConfig tolerates malformed JSON → {}", () => {
   const dir = tempDir();
   // Write junk directly, then load.

@@ -19,9 +19,26 @@ export interface ShellConfig {
   openrouterKey?: string;
 }
 
-/** The config directory (`~/.local/share/keryx` by default; overridable for tests). */
+/**
+ * The per-user config directory for keryx, cross-platform:
+ *   - Windows: `%APPDATA%\keryx` (or `~/AppData/Roaming/keryx`).
+ *   - Linux/BSD: `$XDG_DATA_HOME/keryx` (or `~/.local/share/keryx`).
+ *   - macOS: `~/.local/share/keryx` (as opencode/most CLIs use on Unix).
+ * Overridable via `dir` for tests.
+ */
 function configDir(dir?: string): string {
-  return dir ?? path.join(homedir(), ".local", "share", "keryx");
+  if (dir !== undefined) {
+    return dir;
+  }
+  const home = homedir();
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA;
+    const base = appData !== undefined && appData.length > 0 ? appData : path.join(home, "AppData", "Roaming");
+    return path.join(base, "keryx");
+  }
+  const xdg = process.env.XDG_DATA_HOME;
+  const base = xdg !== undefined && xdg.length > 0 ? xdg : path.join(home, ".local", "share");
+  return path.join(base, "keryx");
 }
 
 /** Absolute path to the `auth.json` config file. */

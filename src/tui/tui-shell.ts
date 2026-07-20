@@ -268,7 +268,7 @@ function selectProviderModelInTui(
           box.add(
             new otui.TextRenderable(r, {
               id: "picker-key-note",
-              content: otui.t`${otui.dim("Get one at openrouter.ai/keys · saved to ~/.local/share/keryx/auth.json (chmod 600)")}`,
+              content: otui.t`${otui.dim("Get one at openrouter.ai/keys · saved to your keryx config dir (owner-only, 0600)")}`,
               marginTop: 1,
             }),
           );
