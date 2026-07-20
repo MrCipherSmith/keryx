@@ -29,6 +29,7 @@ import {
   parseShellExecCommand,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
+import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 
 /** A resolved provider/model selection. */
 export interface TuiSelection {
@@ -183,6 +184,83 @@ export function isShellApproved(answer: string): boolean {
 
 /** Outcomes of the interactive shell_exec approval picker (OpenCode-style). */
 export type ShellApprovalChoice = "once" | "always-exact" | "always-prefix" | "deny";
+
+/** Outcomes of the wiki-enrich pre-router picker. */
+export type WikiEnrichChoice = "drafts" | "force" | "cancel";
+
+/**
+ * Ask how to run wiki enrich after listing draft/accepted counts.
+ * drafts = batch drafts only; force = all statuses; cancel = do nothing.
+ */
+function pickWikiEnrichMode(
+  otui: OpenTui,
+  r: Renderer,
+  plan: { draftCount: number; acceptedCount: number; total: number },
+): Promise<WikiEnrichChoice> {
+  return new Promise((resolve) => {
+    const options: Array<{ name: string; description: string; choice: WikiEnrichChoice }> = [
+      {
+        name: `Enrich ${plan.draftCount} draft page(s)`,
+        description: "Default batch — Status: draft only",
+        choice: "drafts",
+      },
+      {
+        name: `Force enrich all ${plan.total} page(s)`,
+        description: `Includes ${plan.acceptedCount} accepted (+ other statuses)`,
+        choice: "force",
+      },
+      {
+        name: "Skip / cancel",
+        description: "Do not run enrich",
+        choice: "cancel",
+      },
+    ];
+    const box = overlayBox(otui, r, "wiki-enrich-plan");
+    r.root.add(box);
+    box.add(
+      new otui.TextRenderable(r, {
+        id: "we-title",
+        content: otui.t`${otui.bold("Wiki enrich")} ${otui.dim("↑/↓ Enter · Esc cancel")}`,
+      }),
+    );
+    box.add(
+      new otui.TextRenderable(r, {
+        id: "we-sum",
+        content: otui.t`${otui.dim(`drafts: ${plan.draftCount} · accepted: ${plan.acceptedCount} · total: ${plan.total}`)}`,
+      }),
+    );
+    const sel = new otui.SelectRenderable(r, {
+      id: "we-sel",
+      width: 72,
+      height: selectBoxHeight(options.length, true),
+      showScrollIndicator: false,
+      showDescription: true,
+      options: options.map((o) => ({ name: o.name, description: o.description })),
+      selectedTextColor: "#ffd166",
+    });
+    box.add(sel);
+    sel.focus();
+    const cleanup = (): void => {
+      unsub();
+      r.root.remove(box);
+    };
+    const onKey = (key: { name: string; preventDefault: () => void; stopPropagation: () => void }): void => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve("cancel");
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    };
+    const unsub = onKeypress(r, onKey);
+    sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = sel.getSelectedOption();
+      cleanup();
+      const match = options.find((o) => o.name === chosen?.name);
+      resolve(match?.choice ?? "cancel");
+    });
+  });
+}
 
 /**
  * Interactive approval menu (↑/↓ · Enter · Esc = deny), same interaction model as
@@ -1106,6 +1184,138 @@ export async function launchTuiAgentShell(opts: {
           marginTop: 1,
         }),
       );
+
+      // Hard pre-router: "обогати вики" → list pages + interactive plan, then run
+      // wikiEnrich in-process (no model thrash on search_code).
+      if (isWikiEnrichIntent(line)) {
+        const startedAt = Date.now();
+        busy = true;
+        void (async () => {
+          try {
+            startBusy("planning wiki enrich…");
+            const plan = await planWikiEnrich(process.cwd());
+            stopBusy();
+
+            const maxList = 40;
+            const draftLines = plan.drafts.slice(0, maxList).map((p) => `  · ${p.relativePath}`);
+            const moreDrafts =
+              plan.drafts.length > maxList ? `  · … +${plan.drafts.length - maxList} more drafts` : "";
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `we-list${uid++}`,
+                content: otui.t`${otui.dim(
+                  [
+                    `Wiki enrich plan: ${plan.drafts.length} draft · ${plan.accepted.length} accepted · ${plan.forceTargets.length} total`,
+                    ...(plan.drafts.length > 0 ? ["Drafts:", ...draftLines, ...(moreDrafts ? [moreDrafts] : [])] : ["Drafts: (none)"]),
+                    plan.accepted.length > 0
+                      ? `Accepted (need --force): ${plan.accepted.length} page(s)`
+                      : "Accepted: (none)",
+                  ].join("\n"),
+                )}`,
+                marginTop: 1,
+              }),
+            );
+
+            if (plan.forceTargets.length === 0) {
+              transcript.add(
+                new otui.TextRenderable(r, {
+                  id: `we-empty${uid++}`,
+                  content: otui.t`${otui.yellow("No wiki pages found. Run `keryx wiki collect` first.")}`,
+                }),
+              );
+              return;
+            }
+
+            const choice = await pickWikiEnrichMode(otui, r, {
+              draftCount: plan.drafts.length,
+              acceptedCount: plan.accepted.length,
+              total: plan.forceTargets.length,
+            });
+            input.focus();
+
+            if (choice === "cancel") {
+              transcript.add(
+                new otui.TextRenderable(r, {
+                  id: `we-cancel${uid++}`,
+                  content: otui.t`${otui.dim("Wiki enrich cancelled.")}`,
+                }),
+              );
+              return;
+            }
+
+            if (choice === "drafts" && plan.drafts.length === 0) {
+              transcript.add(
+                new otui.TextRenderable(r, {
+                  id: `we-nodraft${uid++}`,
+                  content: otui.t`${otui.yellow("No draft pages. Choose force enrich all, or collect new drafts.")}`,
+                }),
+              );
+              return;
+            }
+
+            const force = choice === "force";
+            startBusy(`wiki enrich ${force ? "(force all)" : "(drafts)"}…`);
+            const result = await wikiEnrich({
+              cwd: process.cwd(),
+              all: true,
+              force,
+              provider: currentSel.provider,
+              model: currentSel.model,
+              onPage: (info) => {
+                setBusyPhase(`enrich ${info.index}/${info.total} ${info.path}`);
+              },
+            });
+            stopBusy();
+
+            const lines = [
+              `provider: ${result.provider} (${result.model})`,
+              `credential: ${result.credentialAvailable ? "yes" : "no"}`,
+              `mode: ${force ? "force (all statuses)" : "drafts only"}`,
+              `enriched: ${result.enriched}  skipped: ${result.skipped}  failed: ${result.failed}`,
+            ];
+            for (const entry of result.pages.slice(0, 30)) {
+              lines.push(`- ${entry.action}: ${entry.path}${entry.reason ? ` — ${entry.reason}` : ""}`);
+            }
+            if (result.pages.length > 30) {
+              lines.push(`- … +${result.pages.length - 30} more`);
+            }
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `we-res${uid++}`,
+                content: otui.t`${otui.dim(lines.join("\n"))}`,
+                marginTop: 1,
+              }),
+            );
+            history.push({ role: "user", content: line, provenance: "project" });
+            history.push({
+              role: "assistant",
+              content: lines.join("\n"),
+              provenance: "model",
+            });
+          } catch (cause) {
+            stopBusy();
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `we-err${uid++}`,
+                content: otui.t`${otui.red(`wiki enrich failed: ${cause instanceof Error ? cause.message : String(cause)}`)}`,
+              }),
+            );
+          } finally {
+            const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `w${uid++}`,
+                content: otui.t`${otui.dim(`worked for ${secs}s`)}`,
+                marginTop: 1,
+              }),
+            );
+            busy = false;
+            input.focus();
+          }
+        })();
+        return;
+      }
+
       startBusy("waiting for model");
       const startedAt = Date.now();
       void runAgentTurn(io, deps, history, line).finally(() => {

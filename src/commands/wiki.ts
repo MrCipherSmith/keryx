@@ -232,23 +232,80 @@ async function runAsk(args: string[]): Promise<void> {
 }
 
 async function runEnrich(args: string[]): Promise<void> {
-  const { wikiEnrich } = await import("../wiki/enrich");
+  const { planWikiEnrich, wikiEnrich } = await import("../wiki/enrich");
   const prompt = optionValue(args, "--prompt");
   const provider = optionValue(args, "--provider");
   const model = optionValue(args, "--model");
+  const force = args.includes("--force");
+  const listOnly = args.includes("--list");
   // Positional page = first bare token that is neither a flag nor a flag's value.
   const valueFlags = new Set(["--page", "--prompt", "--provider", "--model"]);
   const page = args.find(
     (arg, i) => !arg.startsWith("--") && !(i > 0 && valueFlags.has(args[i - 1] as string)),
   );
+
+  if (listOnly) {
+    const plan = await planWikiEnrich(process.cwd());
+    if (args.includes("--json")) {
+      console.log(
+        JSON.stringify(
+          {
+            drafts: plan.drafts.map((p) => ({ path: p.relativePath, status: p.status ?? "draft" })),
+            accepted: plan.accepted.map((p) => ({ path: p.relativePath, status: p.status ?? "accepted" })),
+            other: plan.other.map((p) => ({ path: p.relativePath, status: p.status ?? "unknown" })),
+            defaultCount: plan.defaultTargets.length,
+            forceCount: plan.forceTargets.length,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+    console.log("# gdwiki enrich — plan");
+    console.log("");
+    console.log(`drafts (default batch): ${plan.drafts.length}`);
+    console.log(`accepted (need --force): ${plan.accepted.length}`);
+    console.log(`other status: ${plan.other.length}`);
+    console.log(`with --force: ${plan.forceTargets.length} page(s)`);
+    console.log("");
+    if (plan.drafts.length > 0) {
+      console.log("## Drafts");
+      for (const p of plan.drafts) {
+        console.log(`- ${p.relativePath}`);
+      }
+      console.log("");
+    }
+    if (plan.accepted.length > 0) {
+      console.log("## Accepted (skipped unless --force)");
+      for (const p of plan.accepted) {
+        console.log(`- ${p.relativePath}`);
+      }
+      console.log("");
+    }
+    if (plan.drafts.length === 0 && plan.accepted.length === 0) {
+      console.log("- no wiki pages found");
+    } else {
+      console.log("Run:");
+      console.log("  keryx wiki enrich --all                  # drafts only");
+      console.log("  keryx wiki enrich --all --force          # drafts + accepted");
+      console.log("  keryx wiki enrich <page>                 # one page (any status)");
+    }
+    return;
+  }
+
   const result = await wikiEnrich({
     cwd: process.cwd(),
     ...(page ? { page } : {}),
     all: args.includes("--all"),
+    force,
     ...(prompt ? { prompt } : {}),
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
     dryRun: args.includes("--dry-run"),
+    onPage: (info) => {
+      console.error(`[enrich] ${info.index}/${info.total} ${info.path} (${info.status})`);
+    },
   });
 
   if (args.includes("--json")) {
@@ -261,6 +318,7 @@ async function runEnrich(args: string[]): Promise<void> {
   console.log("");
   console.log(`provider: ${result.provider} (${result.model})`);
   console.log(`credential available: ${result.credentialAvailable ? "yes" : "no"}`);
+  console.log(`mode: ${page ? `page ${page}` : force ? "batch --force (all statuses)" : "batch drafts only"}`);
   console.log(
     `enriched: ${result.enriched}  dry-run: ${result.dryRun}  skipped: ${result.skipped}  failed: ${result.failed}`,
   );
@@ -270,7 +328,11 @@ async function runEnrich(args: string[]): Promise<void> {
     console.log(`- ${entry.action}: ${entry.path}${note}`);
   }
   if (result.pages.length === 0) {
-    console.log("- no draft pages to enrich (use --page <slug> to force one)");
+    console.log(
+      force
+        ? "- no wiki pages to enrich"
+        : "- no draft pages to enrich (use --force for accepted, or --page <slug> for one page)",
+    );
   }
   process.exitCode = result.failed > 0 ? 1 : 0;
 }
@@ -324,7 +386,8 @@ Usage:
   keryx wiki check-links
   keryx wiki validate
   keryx wiki ask "<question>" [--k <n>] [--rerank]
-  keryx wiki enrich [<page>|--all] [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]
+  keryx wiki enrich [<page>|--all] [--force] [--list] [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]
+                         # default batch: draft only; --force includes accepted; --list plans without calling the model
   keryx wiki context
   keryx wiki backlinks <wiki-page-or-code-file>
 

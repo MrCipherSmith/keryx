@@ -109,13 +109,15 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
     "to run a known keryx workflow.\n\n" +
     "Workflow routing (follow these instead of improvising):\n" +
-    "- User asks to enrich / enrich wiki / enrich with a model / «обогати вики» / " +
-    "«обогатить вики через модель» → use shell_exec with command:\n" +
-    `    keryx wiki enrich --all${enrichFlags}\n` +
-    `  For a single page: keryx wiki enrich <page-or-slug>${enrichFlags}. ` +
-    "Do NOT try to rewrite wiki pages by hand with search_code/read_wiki alone — " +
-    "wiki enrich is the dedicated model-backed enricher.\n" +
-    "- Optional prep: `keryx wiki collect` scaffolds drafts; then `keryx wiki enrich --all`.\n" +
+    "- User asks to enrich / enrich wiki / «обогати вики» (TUI also pre-routes this):\n" +
+    "  1) Prefer `keryx wiki enrich --list` (or plan) to show draft vs accepted counts.\n" +
+    "  2) Ask the user: enrich drafts only, OR force all pages (`--force`), OR cancel.\n" +
+    "  3) Then shell_exec:\n" +
+    `       keryx wiki enrich --all${enrichFlags}                 # drafts only\n` +
+    `       keryx wiki enrich --all --force${enrichFlags}        # drafts + accepted\n` +
+    `       keryx wiki enrich <page-or-slug>${enrichFlags}       # one page any status\n` +
+    "  Do NOT thrash search_code/read_wiki instead of running wiki enrich.\n" +
+    "- Optional prep: `keryx wiki collect` scaffolds drafts; then enrich.\n" +
     "- Other keryx work (graph, health, memory, flow) → prefer `shell_exec` with the " +
     "matching `keryx …` CLI when the user wants a full command run.\n\n" +
     "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +

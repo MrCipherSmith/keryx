@@ -3,7 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { wikiCollect } from "./service";
-import { hasCredential, wikiEnrich, type ProviderFactory } from "./enrich";
+import {
+  hasCredential,
+  isWikiEnrichIntent,
+  planWikiEnrich,
+  wikiEnrich,
+  type ProviderFactory,
+} from "./enrich";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
 
 const jsonl = (rows: object[]): string => rows.map((r) => JSON.stringify(r)).join("\n");
@@ -139,4 +145,35 @@ test("hasCredential: ollama always true, anthropic needs a key", () => {
   expect(hasCredential("anthropic", { ANTHROPIC_API_KEY: "sk-x" })).toBe(true);
   expect(hasCredential("grok", { XAI_API_KEY: "xai-x" })).toBe(true);
   expect(hasCredential("grok", {})).toBe(false);
+});
+
+test("isWikiEnrichIntent matches RU/EN enrich requests", () => {
+  expect(isWikiEnrichIntent("обогати вики через модель")).toBe(true);
+  expect(isWikiEnrichIntent("Обогатить вики")).toBe(true);
+  expect(isWikiEnrichIntent("enrich the wiki please")).toBe(true);
+  expect(isWikiEnrichIntent("wiki enrich all drafts")).toBe(true);
+  expect(isWikiEnrichIntent("что такое graph")).toBe(false);
+});
+
+test("force enrich includes accepted pages; default batch is drafts only", async () => {
+  const root = await seedDrafts();
+  const factory: ProviderFactory = () => stubProvider("# Enriched\n\nBody.");
+  try {
+    // Mark one page accepted.
+    const acceptedPath = path.join(root, ".metaproject", "wiki", "components", "src-alpha.md");
+    const raw = await readFile(acceptedPath, "utf8");
+    await writeFile(acceptedPath, raw.replace(/status:\s*draft/i, "status: accepted"), "utf8");
+
+    const plan = await planWikiEnrich(root);
+    expect(plan.drafts.length).toBeGreaterThan(0);
+    expect(plan.accepted.length).toBeGreaterThanOrEqual(1);
+
+    const draftsOnly = await wikiEnrich({ cwd: root, providerFactory: factory });
+    const forceAll = await wikiEnrich({ cwd: root, force: true, providerFactory: factory });
+
+    expect(forceAll.enriched).toBeGreaterThan(draftsOnly.enriched);
+    expect(forceAll.pages.some((p) => p.path.includes("src-alpha"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

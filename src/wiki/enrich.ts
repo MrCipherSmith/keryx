@@ -25,8 +25,17 @@ export interface WikiEnrichInput {
   cwd: string;
   /** Enrich only this page (slug or wiki-relative path). Default: all drafts. */
   page?: string;
-  /** Enrich every draft page (explicit; default behavior when no `page`). */
+  /**
+   * Batch mode marker (CLI `--all`). Without {@link force}, still means
+   * **draft pages only** — same as omitting a page argument.
+   */
   all?: boolean;
+  /**
+   * Include non-draft pages (e.g. `accepted`) in batch mode.
+   * CLI: `--force`. Ignored when a single `page` is specified (single page
+   * already matches regardless of status).
+   */
+  force?: boolean;
   /** Extra instruction merged into the enrichment prompt. */
   prompt?: string;
   /** Provider name (anthropic | ollama | openrouter | grok | …). */
@@ -35,11 +44,24 @@ export interface WikiEnrichInput {
   model?: string;
   /** Print the enriched draft without writing it. */
   dryRun?: boolean;
+  /** Called before each page is sent to the model (1-based index). */
+  onPage?: (info: { index: number; total: number; path: string; status: string }) => void;
   // Injected, all-optional for deterministic offline tests:
   fetch?: typeof fetch;
   env?: Record<string, string | undefined>;
   baseUrl?: string;
   providerFactory?: ProviderFactory;
+}
+
+/** Draft vs accepted (and other) split for planning / agent prompts. */
+export interface WikiEnrichPlan {
+  drafts: WikiPage[];
+  accepted: WikiPage[];
+  other: WikiPage[];
+  /** Pages that would run without `--force` (drafts only). */
+  defaultTargets: WikiPage[];
+  /** Pages that would run with `--force` (all wiki pages). */
+  forceTargets: WikiPage[];
 }
 
 export type WikiEnrichAction = "enriched" | "dry-run" | "skipped" | "failed";
@@ -91,8 +113,13 @@ async function loadSystemPrompt(cwd: string): Promise<string> {
   return DEFAULT_SYSTEM_PROMPT;
 }
 
-/** Select the pages to enrich: a named page, or every draft page. */
-async function selectPages(input: WikiEnrichInput): Promise<WikiPage[]> {
+/**
+ * Select pages to enrich:
+ * - `page` set → match that slug/path (any status);
+ * - `force` → every wiki page;
+ * - else → draft pages only (`--all` does not change this).
+ */
+export async function selectPages(input: WikiEnrichInput): Promise<WikiPage[]> {
   const pages = await collectPages(input.cwd);
   if (input.page) {
     const needle = input.page.replace(/\.md$/, "");
@@ -103,7 +130,52 @@ async function selectPages(input: WikiEnrichInput): Promise<WikiPage[]> {
         page.relativePath.replace(/\.md$/, "").endsWith(`/${needle}`),
     );
   }
+  if (input.force) {
+    return pages;
+  }
   return pages.filter((page) => (page.status ?? "draft") === "draft");
+}
+
+/** Split the wiki into draft / accepted / other for planning UIs and `--list`. */
+export async function planWikiEnrich(cwd: string): Promise<WikiEnrichPlan> {
+  const pages = await collectPages(cwd);
+  const drafts: WikiPage[] = [];
+  const accepted: WikiPage[] = [];
+  const other: WikiPage[] = [];
+  for (const page of pages) {
+    const status = page.status ?? "draft";
+    if (status === "draft") {
+      drafts.push(page);
+    } else if (status === "accepted") {
+      accepted.push(page);
+    } else {
+      other.push(page);
+    }
+  }
+  return {
+    drafts,
+    accepted,
+    other,
+    defaultTargets: drafts,
+    forceTargets: pages,
+  };
+}
+
+/**
+ * True when the user message is an enrich-wiki intent (RU/EN).
+ * Used by the TUI pre-router so the harness does not thrash read tools.
+ */
+export function isWikiEnrichIntent(line: string): boolean {
+  const t = line.trim().toLowerCase();
+  if (t.length === 0) {
+    return false;
+  }
+  // Cyrillic: do not use \w (ASCII-only without /u). Match stems loosely.
+  const ru =
+    t.includes("вики") && (t.includes("обогат") || t.includes("обогащ"));
+  const en =
+    (/\benrich\b/.test(t) && /\bwiki\b/.test(t)) || /\bwiki\s+enrich\b/.test(t);
+  return ru || en;
 }
 
 export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResult> {
@@ -145,8 +217,17 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   }
 
   const systemPrompt = await loadSystemPrompt(input.cwd);
+  const total = pages.length;
 
-  for (const page of pages) {
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i]!;
+    input.onPage?.({
+      index: i + 1,
+      total,
+      path: page.relativePath,
+      status: page.status ?? "draft",
+    });
+
     const original = await readFile(page.absolutePath, "utf8");
     const turn = await runModelTurn({
       provider,
