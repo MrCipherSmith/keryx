@@ -36,7 +36,9 @@ import type {
 } from "../harness/process/executor";
 import { RealProcessAdapter } from "../harness/process/real-process-adapter";
 import { defaultSandboxProfile } from "../harness/process/sandbox/profile";
+import type { SandboxProfile } from "../harness/process/sandbox/profile";
 import { resolveSandboxAdapter } from "../harness/process/sandbox/detect";
+import { setupNetworkRun } from "../harness/process/sandbox/network-run";
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import type { BudgetReservation, ParentRemainingBudget } from "../harness/child/isolation";
@@ -72,10 +74,12 @@ function canonicalPath(p: string): string {
 function buildDefaultShellAdapter(
   cwd: string,
   env: Record<string, string | undefined>,
+  profileOverride?: SandboxProfile,
 ): ProcessAdapter {
   const real = new RealProcessAdapter({ allowRealSubprocess: true });
-  let profile = defaultSandboxProfile(canonicalPath(cwd), canonicalPath(tmpdir()), homedir());
-  if (env.KERYX_DANGEROUSLY_DISABLE_SANDBOX === "1") {
+  let profile =
+    profileOverride ?? defaultSandboxProfile(canonicalPath(cwd), canonicalPath(tmpdir()), homedir());
+  if (profileOverride === undefined && env.KERYX_DANGEROUSLY_DISABLE_SANDBOX === "1") {
     profile = { ...profile, mode: "danger-full-access", required: false };
   }
   const { adapter } = resolveSandboxAdapter(profile, real, {
@@ -291,7 +295,7 @@ function toStructured(result: RunResult): StructuredResult {
 export async function harnessCommand(args: string[], deps?: HarnessCommandDeps): Promise<void> {
   const subcommand = args[0];
   if (subcommand === "exec") {
-    harnessExec(args, deps);
+    await harnessExec(args, deps);
     return;
   }
   if (subcommand === "extension") {
@@ -413,6 +417,8 @@ interface ParsedExecArgs {
   allowEnvKeys: string[];
   maxRuntimeMs?: number;
   allowRealSubprocess: boolean;
+  /** `--allowed-domains a,b,c` ⇒ restricted network via the loopback proxy. */
+  allowedDomains?: string[];
   commandPath: string;
   commandArgs: string[];
 }
@@ -422,6 +428,7 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
   const allowEnvKeys: string[] = [];
   let maxRuntimeMs: number | undefined;
   let allowRealSubprocess = false;
+  let allowedDomains: string[] | undefined;
   let commandPath = "";
   let commandArgs: string[] = [];
 
@@ -442,11 +449,17 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
       if (Number.isFinite(parsed)) maxRuntimeMs = parsed;
     } else if (arg === "--allow-real-subprocess") {
       allowRealSubprocess = true;
+    } else if (arg === "--allowed-domains") {
+      const raw = args[++i];
+      if (raw !== undefined) {
+        allowedDomains = raw.split(",").map((d) => d.trim()).filter((d) => d.length > 0);
+      }
     }
   }
 
   const parsed: ParsedExecArgs = { allowEnvKeys, allowRealSubprocess, commandPath, commandArgs };
   if (maxRuntimeMs !== undefined) parsed.maxRuntimeMs = maxRuntimeMs;
+  if (allowedDomains !== undefined) parsed.allowedDomains = allowedDomains;
   return parsed;
 }
 
@@ -459,9 +472,9 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
  * ONE JSON blob as its last `console.log`; NEVER persists flow state (D-02) and
  * never logs env values.
  */
-function harnessExec(args: string[], deps?: HarnessCommandDeps): void {
+async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<void> {
   const { env, clock, idSeq } = resolveRuntime(deps);
-  const { allowEnvKeys, maxRuntimeMs, allowRealSubprocess, commandPath, commandArgs } =
+  const { allowEnvKeys, maxRuntimeMs, allowRealSubprocess, allowedDomains, commandPath, commandArgs } =
     parseExecArgs(args);
 
   // Fail-closed opt-in gate: with no injected adapter and no explicit real-
@@ -482,6 +495,32 @@ function harnessExec(args: string[], deps?: HarnessCommandDeps): void {
   for (const key of allowEnvKeys) {
     const value = env[key];
     if (value !== undefined) commandEnv[key] = value;
+  }
+
+  // Restricted-network opt-in: `--allowed-domains a,b` or
+  // KERYX_SANDBOX_ALLOWED_DOMAINS. Starts the loopback allowlist proxy (worker),
+  // points the contained command at it via HTTP(S)_PROXY, and constrains the OS
+  // sandbox to allow only that loopback socket. Only for real (non-injected) runs.
+  const envDomains = env.KERYX_SANDBOX_ALLOWED_DOMAINS
+    ? env.KERYX_SANDBOX_ALLOWED_DOMAINS.split(",").map((d) => d.trim()).filter((d) => d.length > 0)
+    : undefined;
+  const restrictedDomains = allowedDomains ?? envDomains;
+  let effectiveAllowEnvKeys = allowEnvKeys;
+  let profileOverride: SandboxProfile | undefined;
+  let closeNetwork: () => Promise<void> = async () => {};
+  if (restrictedDomains !== undefined && deps?.processAdapter === undefined) {
+    const baseProfile = defaultSandboxProfile(canonicalPath(cwd), canonicalPath(tmpdir()), homedir());
+    const net = await setupNetworkRun({
+      ...baseProfile,
+      network: "restricted",
+      allowedDomains: restrictedDomains,
+    });
+    profileOverride = net.profile;
+    closeNetwork = net.close;
+    for (const [key, value] of Object.entries(net.envAdditions)) {
+      commandEnv[key] = value;
+    }
+    effectiveAllowEnvKeys = [...allowEnvKeys, ...Object.keys(net.envAdditions)];
   }
 
   const command: ContainedCommand = {
@@ -506,13 +545,14 @@ function harnessExec(args: string[], deps?: HarnessCommandDeps): void {
   // (writable = cwd + session tmp) + network OFF, fail-closed when the launcher
   // is missing. Set KERYX_DANGEROUSLY_DISABLE_SANDBOX=1 to opt out, or
   // KERYX_SANDBOX_ALLOW_UNSANDBOXED=1 to run unsandboxed when no launcher exists.
-  const adapter: ProcessAdapter = deps?.processAdapter ?? buildDefaultShellAdapter(cwd, env);
+  const adapter: ProcessAdapter =
+    deps?.processAdapter ?? buildDefaultShellAdapter(cwd, env, profileOverride);
 
   const runInput: RunContainedProcessInput = {
     command,
     allowlist: {
       worktreeRoot,
-      envAllowlist: allowEnvKeys,
+      envAllowlist: effectiveAllowEnvKeys,
       profile: shellAllowProfile(),
       interactive: true,
       scanAvailable: true,
@@ -524,22 +564,26 @@ function harnessExec(args: string[], deps?: HarnessCommandDeps): void {
     adapter,
   };
 
-  const outcome = runContainedProcess(runInput, { clock, idSeq });
-
   let output: Record<string, unknown>;
-  if (outcome.kind === "completed") {
-    output = {
-      outcome: {
-        kind: "completed",
-        ...(outcome.exitCode !== undefined ? { exitCode: outcome.exitCode } : {}),
-      },
-      receipt: outcome.receipt,
-      evidenceRefs: outcome.evidenceRefs,
-    };
-  } else if (outcome.kind === "blocked") {
-    output = { outcome: { kind: "blocked", reason: outcome.reason } };
-  } else {
-    output = { outcome: { kind: outcome.kind }, receipt: outcome.receipt };
+  try {
+    const outcome = runContainedProcess(runInput, { clock, idSeq });
+    if (outcome.kind === "completed") {
+      output = {
+        outcome: {
+          kind: "completed",
+          ...(outcome.exitCode !== undefined ? { exitCode: outcome.exitCode } : {}),
+        },
+        receipt: outcome.receipt,
+        evidenceRefs: outcome.evidenceRefs,
+      };
+    } else if (outcome.kind === "blocked") {
+      output = { outcome: { kind: "blocked", reason: outcome.reason } };
+    } else {
+      output = { outcome: { kind: outcome.kind }, receipt: outcome.receipt };
+    }
+  } finally {
+    // Always tear down the proxy worker, even if the run threw.
+    await closeNetwork();
   }
   console.log(JSON.stringify(output));
 }

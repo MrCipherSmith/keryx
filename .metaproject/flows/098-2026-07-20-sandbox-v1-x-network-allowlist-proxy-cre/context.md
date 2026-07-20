@@ -50,10 +50,23 @@ PROVEN end-to-end on real macOS with the PRODUCTION sync spawnSync path
 Done in this flow: proxy engine, profile model, seatbelt restricted rule, worker-thread
 lifecycle, Linux fail-closed, live e2e smoke. `off`/`on` unaffected.
 
+### Slice 3 done — exec-path opt-in wired
+`keryx harness exec --allowed-domains a,b` (or `KERYX_SANDBOX_ALLOWED_DOMAINS`) now runs
+restricted: `harnessExec` is async, awaits `setupNetworkRun`, merges HTTP(S)_PROXY into the
+command env + env-allowlist, constrains the sandbox to the loopback proxy, and closes the
+proxy in a `finally`. `buildDefaultShellAdapter` takes a profile override. Proven end-to-end
+through the real CLI (`harness-exec-restricted.smoke.test.ts`, flag-gated): a non-allowlisted
+host is refused by the proxy (403 body), never reaching upstream.
+
+FINDING: the executor's structural guard denies loopback/private-egress addresses in argv
+(anti-SSRF) BEFORE the proxy — so `--allowed-domains localhost` is blocked by the guard, not
+the proxy. This is correct: real allowlists target public hosts. The smoke therefore proves
+the proxy path via a deny (deterministic, no internet).
+
 ### Remaining
-1. Exec-path opt-in: `runExec` awaits `setupNetworkRun` when restricted (env merge + proxy
-   addr + close after run). Currently the mechanism + API are ready; the CLI toggle is the
-   last wire.
-2. Credential masking (sentinel env + proxy substitution on injectHosts; TLS-terminate scope).
+1. Credential masking (sentinel env + proxy substitution on injectHosts; TLS-terminate scope).
+2. Wire restricted into the AGENT shell_exec path (not just `harness exec`).
 3. Dist caveat: worker path is `import.meta.url`-relative (works from src; verify under the
    bundled build or ship the worker as a separate asset).
+4. Pre-existing (NOT this flow): `tsc` error in `src/tui/tui-shell.ts:1256` (liveSession)
+   from a parallel session's work on main — needs their fix.
