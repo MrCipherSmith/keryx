@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 2,
+  "id": "061",
+  "slug": "opentui-shell-phase2",
+  "title": "OpenTUI shell Phase 2 (chrome parity: markdown, role header, tool+collapse, reasoning, usage)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T08:21:29.655Z",
+  "updatedAt": "2026-07-20T08:22:48.927Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:48f34e6976d9514aa57a60892ab72e354388e22466d88b80caa3100b306ab0e7",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "implement chrome parity",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "headless markdown/tool test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T08:21:29.655Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T08:21:29.779Z",
+      "event": "task-added",
+      "detail": "T5: implement chrome parity"
+    },
+    {
+      "at": "2026-07-20T08:21:29.874Z",
+      "event": "task-added",
+      "detail": "T6: headless markdown/tool test"
+    },
+    {
+      "at": "2026-07-20T08:21:29.954Z",
+      "event": "task-added",
+      "detail": "T7: verify"
+    },
+    {
+      "at": "2026-07-20T08:21:30.045Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T08:21:30.131Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T08:21:30.211Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T08:22:48.480Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T08:22:48.584Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T08:22:48.670Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T08:22:48.752Z",
+      "event": "task-done",
+      "detail": "T5: implement chrome parity"
+    },
+    {
+      "at": "2026-07-20T08:22:48.836Z",
+      "event": "task-done",
+      "detail": "T6: headless markdown/tool test"
+    },
+    {
+      "at": "2026-07-20T08:22:48.927Z",
+      "event": "task-done",
+      "detail": "T7: verify"
+    }
+  ]
+}
