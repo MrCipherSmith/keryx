@@ -16,3 +16,10 @@
 - 2026-07-20T11:26:33.333Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T11:26:33.414Z - task-done: T5: grok layout
 - 2026-07-20T11:26:33.489Z - task-done: T6: verify
+- 2026-07-20T11:27:31.128Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/106 (warning: PR is not a draft)
+- 2026-07-20T11:27:31.242Z - ac-confirmed: AC1: header bar + right token counter; bordered rounded composer; footer
+- 2026-07-20T11:27:31.321Z - ac-confirmed: AC2: io.onUsage → header counter (fmtTokens); user messages in rounded boxes
+- 2026-07-20T11:27:31.404Z - ac-confirmed: AC3: driver/readline/chat/roleLabel unchanged; flow-067 launch preserved; --tui opt-in
+- 2026-07-20T11:27:31.487Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; fmtTokens unit; no new dep
+- 2026-07-20T11:27:31.568Z - completing
+- 2026-07-20T11:27:31.594Z - done: all gates passed
