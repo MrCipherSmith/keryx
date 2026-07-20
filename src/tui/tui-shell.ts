@@ -225,6 +225,26 @@ function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
   });
 }
 
+/** OpenTUI keypress event fields the overlay steps read. */
+type KeypressEvent = {
+  name: string;
+  ctrl: boolean;
+  meta: boolean;
+  sequence: string;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+};
+
+/**
+ * Subscribe `handler` to OpenTUI's internal keypress stream and return an unsubscribe
+ * fn. The single place that reaches into the private `_internalKeyInput` API, so the
+ * overlay steps don't each duplicate the on/off wiring (flow 086).
+ */
+function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => void {
+  r._internalKeyInput.onInternal("keypress", handler);
+  return () => r._internalKeyInput.offInternal("keypress", handler);
+}
+
 /** Result of the API-key step: a key to save, skip (proceed keyless), or go back. */
 type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
 
@@ -256,11 +276,11 @@ function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; env
         key.stopPropagation();
       }
     };
+    const unsub = onKeypress(r, onKey);
     const cleanup = (): void => {
-      r._internalKeyInput.offInternal("keypress", onKey);
+      unsub();
       r.root.remove(box);
     };
-    r._internalKeyInput.onInternal("keypress", onKey);
     keyInput.on(otui.InputRenderableEvents.ENTER, () => {
       const value = keyInput.value.trim();
       cleanup();
@@ -311,11 +331,11 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
         key.stopPropagation();
       }
     };
+    const unsub = onKeypress(r, onKey);
     const cleanup = (): void => {
-      r._internalKeyInput.offInternal("keypress", onKey);
+      unsub();
       r.root.remove(box);
     };
-    r._internalKeyInput.onInternal("keypress", onKey);
     provSelect.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = provSelect.getSelectedOption();
       cleanup();
@@ -350,16 +370,17 @@ function selectProviderModelInTui(
           resolve(undefined);
           return;
         }
-        let backToProvider = false;
-        while (!backToProvider) {
-          const model = await pickModelInTui(otui, r, await modelsForPicker(prov));
+        // Fetch the model list once per provider selection; the key ↔ model back-nav
+        // below re-uses it instead of re-hitting the network each round.
+        const models = await modelsForPicker(prov);
+        while (true) {
+          const model = await pickModelInTui(otui, r, models);
           if (model === undefined) {
-            backToProvider = true; // Esc at the model step → re-pick the provider
-            break;
+            break; // Esc at the model step → re-pick the provider (outer loop)
           }
           const envKey = prov.envKey;
-          const hasKey = envKey !== undefined && typeof process.env[envKey] === "string" && (process.env[envKey] as string).length > 0;
-          if (envKey !== undefined && !hasKey) {
+          const existingKey = envKey !== undefined ? process.env[envKey] : undefined;
+          if (envKey !== undefined && (existingKey === undefined || existingKey.length === 0)) {
             const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
             if (kr.kind === "back") {
               continue; // Esc at the key step → re-pick the model
@@ -438,11 +459,11 @@ function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<s
       }
       // ↑/↓/Enter fall through to the focused SelectRenderable.
     };
+    const unsub = onKeypress(r, onKey);
     const cleanup = (): void => {
-      r._internalKeyInput.offInternal("keypress", onKey);
+      unsub();
       r.root.remove(box);
     };
-    r._internalKeyInput.onInternal("keypress", onKey);
 
     sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = sel.getSelectedOption();
