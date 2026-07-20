@@ -20,6 +20,7 @@ import { defaultSandboxProfile } from "../../process/sandbox/profile";
 import type { SandboxProfile } from "../../process/sandbox/profile";
 import { detectSandboxLauncher } from "../../process/sandbox/detect";
 import { wrapWithSandbox } from "../../process/sandbox/wrap";
+import { setupNetworkRun } from "../../process/sandbox/network-run";
 
 /** Runs a shell command string and returns bounded output (or an error result). */
 export type CommandRunner = (command: string) => Promise<InteractiveToolResult>;
@@ -62,10 +63,25 @@ function extraWritableRoots(env: Record<string, string | undefined>): string[] {
     .map((p) => canonical(p.startsWith("~/") ? p.replace(/^~/, homedir()) : p));
 }
 
-/** Build the agent-shell sandbox profile for `mode` (never `off`). */
+/** Allowed domains from `KERYX_SANDBOX_ALLOWED_DOMAINS` (comma-separated). */
+function allowedDomainsFromEnv(env: Record<string, string | undefined>): string[] {
+  const raw = env.KERYX_SANDBOX_ALLOWED_DOMAINS;
+  if (!raw) return [];
+  return raw.split(",").map((d) => d.trim()).filter((d) => d.length > 0);
+}
+
+/**
+ * Build the agent-shell sandbox profile for `mode` (never `off`). A domain
+ * allowlist (`KERYX_SANDBOX_ALLOWED_DOMAINS`) switches network to `restricted`
+ * (only those hosts via the loopback proxy), overriding the mode's on/off.
+ */
 function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off">, env: Record<string, string | undefined>): SandboxProfile {
   const base = defaultSandboxProfile(canonical(root), canonical(tmpdir()), homedir());
   const writableRoots = [...base.writableRoots, ...extraWritableRoots(env)];
+  const domains = allowedDomainsFromEnv(env);
+  if (domains.length > 0) {
+    return { ...base, writableRoots, network: "restricted", allowedDomains: domains };
+  }
   return { ...base, writableRoots, network: mode === "strict" ? "off" : "on" };
 }
 
@@ -76,6 +92,9 @@ function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off"
  */
 export function makeCommandRunner(root: string): CommandRunner {
   return async (command) => {
+    // Closes the restricted-network proxy worker (no-op unless restricted). Run
+    // exactly once in the finally, after success or failure.
+    let netClose: () => Promise<void> = async () => {};
     try {
       // Ensure keys entered in `keryx shell` (auth.json) are on process.env, then
       // pass env explicitly so the child always sees them (some hosts inherit
@@ -94,13 +113,21 @@ export function makeCommandRunner(root: string): CommandRunner {
       let spawnArgs = ["/bin/sh", "-c", command];
       const mode = resolveShellSandboxMode(process.env);
       if (mode !== "off") {
-        const profile = shellSandboxProfile(root, mode, process.env);
+        let profile = shellSandboxProfile(root, mode, process.env);
         const launcher = detectSandboxLauncher();
         if (!launcher.available) {
           return {
             output: `shell_exec: OS sandbox requested (KERYX_SANDBOX_SHELL=${mode}) but the launcher is unavailable (${launcher.reason ?? "unknown"}); failing closed. Install it or set KERYX_SANDBOX_SHELL=off.`,
             isError: true,
           };
+        }
+        // Restricted network: start the loopback allowlist proxy, point the
+        // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
+        if (profile.network === "restricted") {
+          const net = await setupNetworkRun(profile);
+          profile = net.profile;
+          netClose = net.close;
+          for (const [k, v] of Object.entries(net.envAdditions)) env[k] = v;
         }
         const wrapped = wrapWithSandbox(
           { path: "/bin/sh", argv: ["sh", "-c", command], env, cwd: root },
@@ -136,6 +163,8 @@ export function makeCommandRunner(root: string): CommandRunner {
         output: `command failed to start: ${cause instanceof Error ? cause.message : String(cause)}`,
         isError: true,
       };
+    } finally {
+      await netClose();
     }
   };
 }
