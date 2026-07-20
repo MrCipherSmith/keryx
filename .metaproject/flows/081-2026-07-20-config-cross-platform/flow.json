@@ -3,17 +3,34 @@
   "id": "081",
   "slug": "config-cross-platform",
   "title": "Cross-platform config dir — Windows %APPDATA%, Linux XDG_DATA_HOME, macOS ~/.local/share (was hardcoded)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T14:28:09.864Z",
-  "updatedAt": "2026-07-20T14:28:10.672Z",
+  "updatedAt": "2026-07-20T14:28:45.668Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:730626023de72f0c5bffd21e86a663b21a9530409fb9ca62588af74677d16eb4",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T14:28:45.204Z",
+      "note": "tsc clean; bun test 1516/0; XDG test added"
+    },
+    "AC2": {
+      "at": "2026-07-20T14:28:45.371Z",
+      "note": "tsc clean; bun test 1516/0; XDG test added"
+    },
+    "AC3": {
+      "at": "2026-07-20T14:28:45.472Z",
+      "note": "tsc clean; bun test 1516/0; XDG test added"
+    },
+    "AC4": {
+      "at": "2026-07-20T14:28:45.551Z",
+      "note": "tsc clean; bun test 1516/0; XDG test added"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/132"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T14:28:10.672Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T14:28:44.956Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/132 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T14:28:45.204Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: tsc clean; bun test 1516/0; XDG test added"
+    },
+    {
+      "at": "2026-07-20T14:28:45.371Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tsc clean; bun test 1516/0; XDG test added"
+    },
+    {
+      "at": "2026-07-20T14:28:45.472Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1516/0; XDG test added"
+    },
+    {
+      "at": "2026-07-20T14:28:45.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1516/0; XDG test added"
+    },
+    {
+      "at": "2026-07-20T14:28:45.637Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T14:28:45.668Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "4be3e66c08b1fd56850014d709f470b1c3c6499c",
+    "ref": "origin/main",
+    "at": "2026-07-20T14:28:45.667Z"
+  }
 }
