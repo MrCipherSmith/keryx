@@ -1,11 +1,13 @@
-// OpenTUI interactive agent shell — Phase 1 renderer skeleton (flow 060).
+// OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
-// agent.ts): it appends PLAIN-TEXT blocks to an OpenTUI transcript and drives
-// `runAgentTurn` from a `split-footer` composer (a fixed footer input over a
-// scrolling main region — the Pi/grok layout). The deterministic driver and the
-// pure render helpers are unchanged; markdown / gutter / tool-collapse / reasoning
-// chrome parity is Phase 2.
+// agent.ts): it renders into an OpenTUI transcript and drives `runAgentTurn` from
+// a `split-footer` composer (a fixed footer input over a scrolling main region —
+// the Pi/grok layout). Chrome parity with the readline shell: assistant text →
+// native `MarkdownRenderable`; `● keryx` role header; `⚙ tool(args)` (via the pure
+// `summarizeToolArgs`); collapsed tool output (`collapseToolOutput`); dim
+// `⋯ thinking` reasoning; dim `↑in ↓out tokens`. The deterministic driver and the
+// pure helpers are unchanged. Gutter = the transcript box `padding`.
 //
 // `@opentui/core` is an OPTIONAL dependency (ADR-0005) loaded ONLY via a dynamic
 // `import()` — never a top-level import (keryx's zero-`dependencies` floor + lazy
@@ -15,55 +17,139 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import type { NormalizedMessage } from "../harness/provider/types";
+import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only import). */
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
 type Text = InstanceType<OpenTui["TextRenderable"]>;
+type Chunk = ReturnType<OpenTui["bold"]>;
+type StyledContent = string | ReturnType<OpenTui["t"]>;
+
+// Lightweight markdown → OpenTUI StyledText, mirroring the readline `renderMarkdown`
+// rules (ATX headings, **bold**, `inline code`, fenced blocks, -/* bullets) — but
+// emitting `@opentui/core` text chunks instead of ANSI, so it needs no parser
+// worker (the native `MarkdownRenderable` spins a WASM worker that is unavailable
+// headless) and renders through a plain `TextRenderable`.
+function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
+  const out: Chunk[] = [];
+  const plain = (s: string): void => {
+    if (s.length > 0) {
+      out.push(...otui.stringToStyledText(s).chunks);
+    }
+  };
+  const inline = (text: string): void => {
+    const re = /(`[^`]+`)|(\*\*[^*]+\*\*)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      plain(text.slice(last, m.index));
+      if (m[1] !== undefined) {
+        out.push(otui.dim(m[1].slice(1, -1))); // `code` → dim
+      } else if (m[2] !== undefined) {
+        out.push(otui.bold(m[2].slice(2, -2))); // **bold**
+      }
+      last = m.index + m[0].length;
+    }
+    plain(text.slice(last));
+  };
+  const lines = md.split("\n");
+  let inCode = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (/^\s*```/.test(line)) {
+      inCode = !inCode; // drop the fence line
+      continue;
+    }
+    if (i > 0) {
+      plain("\n");
+    }
+    if (inCode) {
+      out.push(otui.dim(line));
+      continue;
+    }
+    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    if (heading !== null) {
+      out.push(otui.cyan(otui.bold(heading[1] ?? "")));
+      continue;
+    }
+    const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
+    if (bullet !== null) {
+      plain(`${bullet[1] ?? ""}• `);
+      inline(bullet[2] ?? "");
+      continue;
+    }
+    inline(line);
+  }
+  return out;
+}
 
 /**
- * Build an `AgentIO` that renders into an OpenTUI `transcript` box as plain text.
- * Streamed tokens (`write`) accumulate into an active `TextRenderable`; each other
- * hook appends a labelled block. Exported so the headless test can drive the same
- * render path through `runAgentTurn` without a real TTY.
+ * Build an `AgentIO` that renders into an OpenTUI `transcript` box with chrome
+ * parity: streamed tokens (`write`) accumulate into a native `MarkdownRenderable`;
+ * tool calls/results, reasoning, usage, and system lines append styled blocks.
+ * Exported so the headless test can drive the same render path through
+ * `runAgentTurn` without a real TTY.
  */
 export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): AgentIO {
   let seq = 0;
   let active: Text | undefined;
   let pending = "";
-  const append = (content: string): void => {
+  const append = (content: StyledContent): void => {
     transcript.add(new otui.TextRenderable(renderer, { id: `n${seq++}`, content }));
   };
+  const render = (md: string): InstanceType<OpenTui["StyledText"]> => new otui.StyledText(markdownToChunks(otui, md));
   return {
+    // Assistant text streams into a TextRenderable whose StyledText is our
+    // worker-free markdown render (bold/headings/lists/code) — parity with the
+    // readline `renderMarkdown`.
     write: (s) => {
       if (s.length === 0) {
         return;
       }
       pending += s;
       if (active === undefined) {
-        active = new otui.TextRenderable(renderer, { id: `a${seq++}`, content: pending });
+        active = new otui.TextRenderable(renderer, { id: `a${seq++}`, content: render(pending) });
         transcript.add(active);
       } else {
-        active.content = pending;
+        active.content = render(pending);
       }
     },
     onAssistantText: (text) => {
       if (active !== undefined) {
-        active.content = text;
+        active.content = render(text);
         active = undefined;
       } else {
-        append(text);
+        append(render(text));
       }
       pending = "";
     },
-    onReasoning: (text) => append(`⋯ thinking\n${text}`),
-    onUsage: () => {
-      // Phase 2 renders the token line; the skeleton drops it.
+    onReasoning: (text) => append(otui.t`${otui.dim(`⋯ thinking\n${text}`)}`),
+    onUsage: (usage) => {
+      const parts: string[] = [];
+      if (usage.inputTokens !== undefined) {
+        parts.push(`↑${usage.inputTokens}`);
+      }
+      if (usage.outputTokens !== undefined) {
+        parts.push(`↓${usage.outputTokens}`);
+      }
+      if (parts.length > 0) {
+        append(otui.t`${otui.dim(`${parts.join(" ")} tokens`)}`);
+      }
     },
-    onToolCall: (name, input) => append(`⚙ ${name}(${input})`),
-    onToolResult: (_name, result) => append(`↳ ${result.output.split("\n")[0] ?? ""}`),
-    onSystem: (text) => append(text),
+    onToolCall: (name, input) => {
+      const args = summarizeToolArgs(input);
+      const call = args.length > 0 ? `${name}(${args})` : `${name}()`;
+      append(otui.t`${otui.cyan(`⚙ ${call}`)}`);
+    },
+    onToolResult: (_name, result) => {
+      const { summary, hidden } = collapseToolOutput(result.output);
+      const more = hidden > 0 ? ` · +${hidden} more` : "";
+      const line = `${result.isError ? "✗" : "↳"} ${summary}${more}`;
+      append(result.isError ? otui.t`${otui.red(line)}` : otui.t`${otui.dim(line)}`);
+    },
+    onSystem: (text) => append(text.includes("[error]") ? otui.t`${otui.red(text)}` : otui.t`${otui.dim(text)}`),
   };
 }
 
@@ -131,7 +217,8 @@ export async function launchTuiAgentShell(deps: AgentDeps): Promise<boolean> {
         r.destroy();
         return;
       }
-      transcript.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: `❯ ${line}` }));
+      transcript.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}` }));
+      transcript.add(new otui.TextRenderable(r, { id: `h${uid++}`, content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}` }));
       busy = true;
       void runAgentTurn(io, deps, history, line).finally(() => {
         busy = false;

@@ -100,6 +100,35 @@ test("driver → TuiShell renders streamed assistant text + a tool line (headles
   renderer.destroy();
 });
 
+test("assistant markdown renders bold/bullets without raw markers (headless, chrome parity)", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 12 });
+  const transcript = new otui.core.BoxRenderable(renderer, { id: "transcript", flexGrow: 1, flexDirection: "column" });
+  renderer.root.add(transcript);
+  const io = createTuiAgentIo(otui.core, renderer, transcript);
+  const provider = scriptedProvider([
+    [{ kind: "text_delta", text: "**Bold** text\n- item one" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "md");
+  await flush();
+  const frame = captureCharFrame();
+  expect(frame).toContain("Bold"); // bold word rendered
+  expect(frame).not.toContain("**"); // raw bold markers stripped
+  expect(frame).toContain("•"); // bullet glyph rendered
+  renderer.destroy();
+});
+
 test("OpenTUI Input accepts typed keys (composer primitive)", async () => {
   const otui = await loadOpenTui();
   if (otui === undefined) {
