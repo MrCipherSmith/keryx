@@ -20,6 +20,14 @@ export {
 export { buildSeatbeltProfile, wrapSeatbelt, SANDBOX_EXEC_PATH } from "./seatbelt";
 export { buildBwrapArgs, wrapBwrap, BWRAP_PROGRAM } from "./bwrap";
 export { wrapWithSandbox, type WrapOptions, type WrapResult } from "./wrap";
+export {
+  createAllowlistProxy,
+  matchesAllowlist,
+  type AllowlistProxy,
+  type AllowlistProxyOptions,
+  type ProxyDecision,
+} from "./proxy";
+export { setupNetworkRun, type NetworkRunSetup } from "./network-run";
 export { SandboxedProcessAdapter, type SandboxedProcessAdapterOptions } from "./adapter";
 export {
   detectSandboxLauncher,
