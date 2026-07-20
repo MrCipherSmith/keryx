@@ -3,17 +3,34 @@
   "id": "080",
   "slug": "shell-persist",
   "title": "Persist provider/model + OpenRouter key (opencode-style auth.json 0600), reused on next launch",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T14:07:43.081Z",
-  "updatedAt": "2026-07-20T14:07:43.879Z",
+  "updatedAt": "2026-07-20T14:08:17.052Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:06685c91e2f4a3f3ccd3fdb27014d97efdb38690bcb82bf10fee084404e81030",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T14:08:16.697Z",
+      "note": "tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    "AC2": {
+      "at": "2026-07-20T14:08:16.784Z",
+      "note": "tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    "AC3": {
+      "at": "2026-07-20T14:08:16.861Z",
+      "note": "tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    "AC4": {
+      "at": "2026-07-20T14:08:16.948Z",
+      "note": "tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/130"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T14:07:43.879Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T14:08:16.537Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/130 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T14:08:16.697Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    {
+      "at": "2026-07-20T14:08:16.784Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    {
+      "at": "2026-07-20T14:08:16.861Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    {
+      "at": "2026-07-20T14:08:16.948Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY"
+    },
+    {
+      "at": "2026-07-20T14:08:17.027Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T14:08:17.052Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "e68e3f0ff466d55bcebb710ae1a58fbce3bd096a",
+    "ref": "origin/main",
+    "at": "2026-07-20T14:08:17.052Z"
+  }
 }

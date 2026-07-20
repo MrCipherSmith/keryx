@@ -17,3 +17,10 @@
 - 2026-07-20T14:07:43.734Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T14:07:43.805Z - task-done: T5: persist
 - 2026-07-20T14:07:43.879Z - task-done: T6: verify
+- 2026-07-20T14:08:16.537Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/130 (warning: PR is not a draft)
+- 2026-07-20T14:08:16.697Z - ac-confirmed: AC1: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY
+- 2026-07-20T14:08:16.784Z - ac-confirmed: AC2: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY
+- 2026-07-20T14:08:16.861Z - ac-confirmed: AC3: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY
+- 2026-07-20T14:08:16.948Z - ac-confirmed: AC4: tsc clean; bun test 1515/0; shell-config unit-tested (0600); user validates on TTY
+- 2026-07-20T14:08:17.027Z - completing
+- 2026-07-20T14:08:17.052Z - done: all gates passed
