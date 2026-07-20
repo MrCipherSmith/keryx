@@ -17,6 +17,7 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import type { NormalizedMessage } from "../harness/provider/types";
+import { AGENT_SLASH_COMMANDS, filterCommands, findAgentCommand } from "../commands/agent-commands";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only import). */
@@ -197,9 +198,33 @@ export async function launchTuiAgentShell(deps: AgentDeps): Promise<boolean> {
     );
 
     const io = createTuiAgentIo(otui, r, transcript);
-    const input = new otui.InputRenderable(r, { id: "prompt", placeholder: "type a task…" });
+
+    // The live `/` command dropdown (Pi/grok-style): a SelectRenderable filtered
+    // as the composer changes; hidden when the value is not a slash query.
+    const menu = new otui.SelectRenderable(r, {
+      id: "menu",
+      height: 6,
+      visible: false,
+      options: [...AGENT_SLASH_COMMANDS],
+    });
+    r.root.add(menu);
+
+    const input = new otui.InputRenderable(r, { id: "prompt", placeholder: "type a task or / for commands" });
     r.root.add(input);
     input.focus();
+
+    input.on(otui.InputRenderableEvents.INPUT, () => {
+      const matches = filterCommands(input.value);
+      if (matches.length > 0) {
+        menu.options = matches;
+        menu.visible = true;
+      } else {
+        menu.visible = false;
+      }
+    });
+
+    const helpText = (): string =>
+      ["Commands:", ...AGENT_SLASH_COMMANDS.map((c) => `  ${c.name}  ${c.description}`)].join("\n") + "\n";
 
     const history: NormalizedMessage[] = [];
     let uid = 0;
@@ -210,11 +235,27 @@ export async function launchTuiAgentShell(deps: AgentDeps): Promise<boolean> {
       }
       const line = input.value.trim();
       input.value = "";
+      menu.visible = false;
       if (line.length === 0) {
         return;
       }
-      if (line === "/exit" || line === "/quit") {
-        r.destroy();
+      const command = findAgentCommand(line);
+      if (command !== undefined) {
+        if (command.name === "/exit") {
+          r.destroy();
+          return;
+        }
+        if (command.name === "/clear") {
+          history.length = 0;
+          io.onSystem?.("Conversation cleared.\n");
+          return;
+        }
+        io.onSystem?.(helpText()); // /help
+        return;
+      }
+      if (line.startsWith("/")) {
+        io.onSystem?.(`Unknown command: ${line}\n`);
+        io.onSystem?.(helpText());
         return;
       }
       transcript.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}` }));

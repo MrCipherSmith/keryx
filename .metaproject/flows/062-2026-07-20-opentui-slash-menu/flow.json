@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 2,
+  "id": "062",
+  "slug": "opentui-slash-menu",
+  "title": "OpenTUI shell Phase 3 (live /-command dropdown + shared command registry)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T08:27:30.337Z",
+  "updatedAt": "2026-07-20T08:30:14.585Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3820c017bcc45fed16cc97a3b3982ef8373ed3d40941b0bd4cf721349074a029",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "registry + live menu wiring",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "filter/find + reactivity tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T08:27:30.337Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T08:27:30.458Z",
+      "event": "task-added",
+      "detail": "T5: registry + live menu wiring"
+    },
+    {
+      "at": "2026-07-20T08:27:30.556Z",
+      "event": "task-added",
+      "detail": "T6: filter/find + reactivity tests"
+    },
+    {
+      "at": "2026-07-20T08:27:30.639Z",
+      "event": "task-added",
+      "detail": "T7: verify"
+    },
+    {
+      "at": "2026-07-20T08:27:30.716Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T08:27:30.804Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T08:27:30.892Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T08:30:14.206Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T08:30:14.278Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T08:30:14.351Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T08:30:14.431Z",
+      "event": "task-done",
+      "detail": "T5: registry + live menu wiring"
+    },
+    {
+      "at": "2026-07-20T08:30:14.507Z",
+      "event": "task-done",
+      "detail": "T6: filter/find + reactivity tests"
+    },
+    {
+      "at": "2026-07-20T08:30:14.585Z",
+      "event": "task-done",
+      "detail": "T7: verify"
+    }
+  ]
+}

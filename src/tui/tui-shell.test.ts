@@ -8,6 +8,7 @@
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { createTuiAgentIo } from "./tui-shell";
+import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
@@ -126,6 +127,43 @@ test("assistant markdown renders bold/bullets without raw markers (headless, chr
   expect(frame).toContain("Bold"); // bold word rendered
   expect(frame).not.toContain("**"); // raw bold markers stripped
   expect(frame).toContain("•"); // bullet glyph rendered
+  renderer.destroy();
+});
+
+test("live /-dropdown filters commands as you type (headless reactivity)", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const { renderer, mockInput, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 12 });
+  const menu = new otui.core.SelectRenderable(renderer, {
+    id: "menu",
+    width: 80,
+    height: 6,
+    visible: false,
+    options: [...AGENT_SLASH_COMMANDS],
+  });
+  renderer.root.add(menu);
+  const input = new otui.core.InputRenderable(renderer, { id: "prompt" });
+  renderer.root.add(input);
+  input.focus();
+  input.on(otui.core.InputRenderableEvents.INPUT, () => {
+    const matches = filterCommands(input.value);
+    if (matches.length > 0) {
+      menu.options = matches;
+      menu.visible = true;
+    } else {
+      menu.visible = false;
+    }
+  });
+
+  await mockInput.pressKeys(["/", "h"]);
+  await flush();
+  expect(input.value).toBe("/h");
+  expect(menu.visible).toBe(true);
+  const frame = captureCharFrame();
+  expect(frame).toContain("/help");
+  expect(frame).not.toContain("/clear"); // filtered out by the `h` prefix
   renderer.destroy();
 });
 
