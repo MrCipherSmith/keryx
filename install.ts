@@ -2,7 +2,14 @@
 /**
  * Short global install / update entrypoint (Bun).
  *
- *   bun https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts
+ * Bun does NOT resolve remote `https://…/file.ts` as an entrypoint
+ * ("Module not found"). Pipe the script into Bun instead:
+ *
+ *   curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts | bun -
+ *
+ * Pure Bun (no curl binary):
+ *
+ *   bun -e 'await Bun.spawn(["bash","-s"],{stdin:await fetch("https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install"),stdout:"inherit",stderr:"inherit"}).exited'
  *
  * Same effect as:
  *   curl -fsSL …/scripts/install.sh | bash -s -- --global

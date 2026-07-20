@@ -58,8 +58,14 @@ Re-run either command to update:
 # curl (short)
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install | bash
 
-# bun (short) — same installer
-bun https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts
+# bun (short) — pipe into bun (Bun cannot run remote https://…/file.ts as entrypoint)
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts | bun -
+```
+
+Pure Bun without the `curl` binary:
+
+```bash
+bun -e 'await Bun.spawn(["bash","-s"],{stdin:await fetch("https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install"),stdout:"inherit",stderr:"inherit"}).exited'
 ```
 
 Both invoke `scripts/install.sh --global`.
@@ -85,7 +91,7 @@ Pin a ref:
 ```bash
 export KERYX_REF="v0.1.0"
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install | bash
-# or: bun https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts
+# or: curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts | bun -
 ```
 
 ## 3. Project-local installation alternative

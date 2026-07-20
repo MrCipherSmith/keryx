@@ -24,8 +24,14 @@ Re-run either short command to update:
 # curl (short)
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install | bash
 
-# bun (short) — same as curl, no curl required
-bun https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts
+# bun (short) — pipe into bun (Bun cannot run remote https://…/file.ts as entrypoint)
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts | bun -
+```
+
+Pure Bun without the `curl` binary:
+
+```bash
+bun -e 'await Bun.spawn(["bash","-s"],{stdin:await fetch("https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install"),stdout:"inherit",stderr:"inherit"}).exited'
 ```
 
 Both are thin wrappers around `scripts/install.sh --global`.
