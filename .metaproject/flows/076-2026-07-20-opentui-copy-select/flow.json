@@ -3,17 +3,34 @@
   "id": "076",
   "slug": "opentui-copy-select",
   "title": "OpenTUI copy-on-select — mouse selection copies to system clipboard via OSC52 (grok/opencode style)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T13:42:16.625Z",
-  "updatedAt": "2026-07-20T13:42:17.635Z",
+  "updatedAt": "2026-07-20T13:43:04.027Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:10462c51a3b7c532935d4335d5ad5f2a195054b9cefc9f0dc63826d31132f5db",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T13:43:03.436Z",
+      "note": "tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    "AC2": {
+      "at": "2026-07-20T13:43:03.578Z",
+      "note": "tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    "AC3": {
+      "at": "2026-07-20T13:43:03.671Z",
+      "note": "tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    "AC4": {
+      "at": "2026-07-20T13:43:03.798Z",
+      "note": "tsc clean; bun test 1507/0; user validates copy on TTY"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/122"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T13:42:17.635Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T13:43:03.234Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/122 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T13:43:03.436Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    {
+      "at": "2026-07-20T13:43:03.578Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    {
+      "at": "2026-07-20T13:43:03.671Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    {
+      "at": "2026-07-20T13:43:03.798Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1507/0; user validates copy on TTY"
+    },
+    {
+      "at": "2026-07-20T13:43:03.892Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T13:43:04.027Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "d8403cc3b027c7ec158b765d258a78635fecfc51",
+    "ref": "origin/main",
+    "at": "2026-07-20T13:43:04.023Z"
+  }
 }

@@ -15,3 +15,10 @@
 - 2026-07-20T13:42:17.468Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T13:42:17.545Z - task-done: T5: copy-on-select
 - 2026-07-20T13:42:17.635Z - task-done: T6: verify
+- 2026-07-20T13:43:03.234Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/122 (warning: PR is not a draft)
+- 2026-07-20T13:43:03.436Z - ac-confirmed: AC1: tsc clean; bun test 1507/0; user validates copy on TTY
+- 2026-07-20T13:43:03.578Z - ac-confirmed: AC2: tsc clean; bun test 1507/0; user validates copy on TTY
+- 2026-07-20T13:43:03.671Z - ac-confirmed: AC3: tsc clean; bun test 1507/0; user validates copy on TTY
+- 2026-07-20T13:43:03.798Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; user validates copy on TTY
+- 2026-07-20T13:43:03.892Z - completing
+- 2026-07-20T13:43:04.027Z - done: all gates passed
