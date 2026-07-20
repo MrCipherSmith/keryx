@@ -72,7 +72,7 @@ import type { CanonicalSubagentResult, ChildContractExtension } from "./contract
 
 // PINNED API (see dispatch) — CA-02 impl (T8) exports these; imports fail
 // until then (expected RED: "Cannot find module './spawn'").
-import { childResultToEvidence, spawnChild } from "./spawn";
+import { childResultToEvidence, childRunModel, spawnChild } from "./spawn";
 import type { ChildResultToEvidenceInput, ChildSpawnResult, SpawnChildDeps, SpawnChildInput } from "./spawn";
 
 // Frozen schemas dir, computed relative to this file
@@ -759,5 +759,77 @@ describe("spawnChild — model resolution threading (flow 089)", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected budget denial");
     expect(result.reason).toContain("budget inheritance denied");
+  });
+});
+
+// ============================================================================
+// Structural caps (flow 090, Phase 3 / AC2) + childRunModel (AC4).
+// ============================================================================
+
+describe("spawnChild — depth/count caps (flow 090)", () => {
+  const deepParent: Provenance = {
+    provenanceId: "provenance-deep",
+    trustLevel: "derived",
+    sourceKind: "harness-run",
+    taintIds: ["p0", "p1"], // parent already at depth 2
+  };
+
+  test("caps omitted => unchanged (grants as before)", () => {
+    const granted = expectGranted(spawnChild(makeSpawnInput(), makeSpawnDeps()));
+    expect(granted.extension).toBeDefined();
+  });
+
+  test("depth cap: a would-be child past maxTreeDepth is denied fail-closed", () => {
+    const input = makeSpawnInput({
+      parentProvenance: deepParent,
+      caps: { maxTreeDepth: 2 },
+    });
+    const result = spawnChild(input, makeSpawnDeps());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected depth-cap denial");
+    expect(result.reason).toContain("depth cap 2");
+    expect((result as unknown as { extension?: unknown }).extension).toBeUndefined();
+  });
+
+  test("depth ok: parent below maxTreeDepth still spawns", () => {
+    const shallow: Provenance = { ...deepParent, taintIds: ["p0"] };
+    const input = makeSpawnInput({ parentProvenance: shallow, caps: { maxTreeDepth: 2 } });
+    expectGranted(spawnChild(input, makeSpawnDeps()));
+  });
+
+  test("count cap: currentChildCount at maxChildren is denied", () => {
+    const input = makeSpawnInput({ caps: { maxChildren: 3, currentChildCount: 3 } });
+    const result = spawnChild(input, makeSpawnDeps());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected count-cap denial");
+    expect(result.reason).toContain("child count cap 3");
+  });
+
+  test("caps preempt budget/policy/model (structural gate is first)", () => {
+    const input = makeSpawnInput({
+      parentProvenance: deepParent,
+      caps: { maxTreeDepth: 1 },
+      parentRemainingBudget: { maxRuntimeMs: 1, maxToolCalls: 0 }, // would also fail budget
+    });
+    const result = spawnChild(input, makeSpawnDeps());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected cap denial");
+    expect(result.reason).toContain("depth cap");
+  });
+});
+
+describe("childRunModel — maps modelSelection to run input (flow 090)", () => {
+  test("returns {provider,model} from a resolved modelSelection", () => {
+    const input = makeSpawnInput({
+      parentModel: { providerId: "ollama", modelId: "qwen2.5-coder" },
+      allowedProviders: new Set(["ollama"]),
+    });
+    const granted = expectGranted(spawnChild(input, makeSpawnDeps()));
+    expect(childRunModel(granted.extension)).toEqual({ provider: "ollama", model: "qwen2.5-coder" });
+  });
+
+  test("returns undefined when the extension carries no selection (legacy path)", () => {
+    const granted = expectGranted(spawnChild(makeSpawnInput(), makeSpawnDeps()));
+    expect(childRunModel(granted.extension)).toBeUndefined();
   });
 });

@@ -405,3 +405,23 @@ describe("AC5 — planWaves is pure and deterministic (no Date.now/Math.random)"
     expect(first).toEqual(second);
   });
 });
+
+// --- flow 090 (AC3): ChildTask.modelRequest is carried, fold is model-agnostic
+describe("planWaves — optional modelRequest is threaded, not interpreted", () => {
+  const config: PlanWavesConfig = { maxConcurrency: 2, parentRemaining: { maxRuntimeMs: 100_000, maxToolCalls: 20 } };
+
+  test("adding modelRequest to tasks does not change the wave plan", () => {
+    const plain: ChildTask[] = [task("A", [], 1_000), task("B", ["A"], 1_000)];
+    const withModel: ChildTask[] = [
+      { ...task("A", [], 1_000), modelRequest: { kind: "tier", tier: "cheap" } },
+      { ...task("B", ["A"], 1_000), modelRequest: { kind: "explicit", providerId: "ollama", modelId: "llama3" } },
+    ];
+    expect(planWaves(withModel, config)).toEqual(planWaves(plain, config));
+  });
+
+  test("a task carrying modelRequest still schedules successfully", () => {
+    const tasks: ChildTask[] = [{ ...task("A", [], 1_000), modelRequest: { kind: "inherit" } }];
+    const result = planWaves(tasks, config);
+    expect(result.ok).toBe(true);
+  });
+});

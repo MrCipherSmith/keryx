@@ -20,6 +20,7 @@
 // writes flow state — planning NEVER owns completion. Optional fields are set
 // via conditional spread to respect `exactOptionalPropertyTypes`.
 import { type BudgetReservation, inheritBudget, type ParentRemainingBudget } from "../child/isolation";
+import type { ChildModelRequest } from "../child/model";
 
 /** A child task to schedule: its dependencies and its requested budget reservation. */
 export interface ChildTask {
@@ -27,6 +28,12 @@ export interface ChildTask {
   dependsOn: string[];
   budgetRequest: BudgetReservation;
   cancelled?: boolean;
+  /**
+   * Optional model/provider request carried through to the child's dispatch
+   * (flow 090). Scheduling and the budget fold are model-agnostic — this field is
+   * threaded, not interpreted, by `planWaves`.
+   */
+  modelRequest?: ChildModelRequest;
 }
 
 /** Ceilings the plan must respect: per-wave concurrency and the parent's remaining budget. */

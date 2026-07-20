@@ -434,3 +434,49 @@ describe("runOffline — stops a repeated ineffective loop", () => {
     expect(result.output.status).not.toBe("completed");
   });
 });
+
+// ---------------------------------------------------------------------------
+// flow 090 (AC4): a child run threads its resolved provider/model to the wire.
+// The orchestrator feeds `childRunModel(extension)` into input.provider/model;
+// runOffline stamps them onto the NormalizedRequest and the output. Uses a tiny
+// stub provider (one model_end event) so no transcript-hash matching is needed.
+// ---------------------------------------------------------------------------
+describe("runOffline — threads the child's resolved provider/model (flow 090)", () => {
+  test("input.provider/model (as supplied by childRunModel) are stamped on the output", async () => {
+    const stubProvider: ProviderPort = {
+      describe: () => ({
+        capabilities: {
+          streaming: true,
+          toolCalls: false,
+          parallelToolCalls: false,
+          structuredOutput: false,
+          reasoningMetadata: false,
+          promptCaching: false,
+          vision: false,
+          tokenCounting: false,
+          modelListing: false,
+        },
+        descriptor: { providerId: "stub" },
+      }),
+      // eslint-disable-next-line require-yield
+      async *stream() {
+        yield { kind: "model_end", sequence: 0, attemptId: "attempt-stub" } as const;
+      },
+    };
+    const registry = buildRegistry(FAKE_READONLY_TOOL);
+    const deps = buildRunDeps({
+      provider: stubProvider,
+      toolRegistry: registry,
+      toolExecutor: new FakeToolExecutor(registry, { schemaDir: SCHEMA_DIR }),
+    });
+
+    const result: RunResult = await runOffline(
+      buildInput({ provider: "anthropic", model: "claude-opus-4-8" }),
+      buildConfig(),
+      deps,
+    );
+
+    expect(result.output.metrics.provider).toBe("anthropic");
+    expect(result.output.metrics.model).toBe("claude-opus-4-8");
+  });
+});
