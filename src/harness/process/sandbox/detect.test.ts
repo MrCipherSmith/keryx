@@ -8,6 +8,7 @@ const profile: SandboxProfile = {
   network: "off",
   writableRoots: ["/work"],
   readDenyList: [],
+  allowedDomains: [],
   required: false,
 };
 

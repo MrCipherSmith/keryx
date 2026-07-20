@@ -8,6 +8,7 @@ const workspaceWrite: SandboxProfile = {
   network: "off",
   writableRoots: ["/work/repo", "/tmp/session"],
   readDenyList: ["/home/u/.ssh", "/home/u/.aws"],
+  allowedDomains: [],
   required: true,
 };
 
@@ -34,6 +35,23 @@ describe("buildSeatbeltProfile", () => {
   test("network on omits the network deny", () => {
     const sb = buildSeatbeltProfile({ ...workspaceWrite, network: "on" });
     expect(sb).not.toContain("(deny network*)");
+  });
+
+  test("network restricted: deny-all then allow only the loopback proxy socket", () => {
+    const sb = buildSeatbeltProfile({
+      ...workspaceWrite,
+      network: "restricted",
+      allowedDomains: ["api.github.com"],
+      proxy: { host: "127.0.0.1", port: 51234 },
+    });
+    expect(sb).toContain("(deny network*)");
+    expect(sb).toContain('(allow network-outbound (remote ip "localhost:51234"))');
+  });
+
+  test("network restricted without a live proxy denies all network (fail-safe)", () => {
+    const sb = buildSeatbeltProfile({ ...workspaceWrite, network: "restricted", allowedDomains: ["x.com"] });
+    expect(sb).toContain("(deny network*)");
+    expect(sb).not.toContain("network-outbound");
   });
 
   test("secret reads are denied", () => {

@@ -9,6 +9,7 @@ const profile: SandboxProfile = {
   network: "off",
   writableRoots: ["/work/repo"],
   readDenyList: [],
+  allowedDomains: [],
   required: false,
 };
 
@@ -57,6 +58,22 @@ describe("wrapWithSandbox", () => {
     const r = wrapWithSandbox(command, profile, { platform: "win32" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain("win32");
+  });
+
+  test("linux + network restricted ⇒ fail closed (not yet enforceable)", () => {
+    const r = wrapWithSandbox(command, { ...profile, network: "restricted", allowedDomains: ["x.com"] }, { platform: "linux" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain("restricted");
+  });
+
+  test("darwin + network restricted ⇒ seatbelt-wrapped", () => {
+    const r = wrapWithSandbox(
+      command,
+      { ...profile, network: "restricted", allowedDomains: ["x.com"], proxy: { host: "127.0.0.1", port: 5000 } },
+      { platform: "darwin" },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.command.path).toBe("/usr/bin/sandbox-exec");
   });
 });
 

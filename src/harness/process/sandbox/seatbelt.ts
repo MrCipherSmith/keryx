@@ -72,6 +72,15 @@ export function buildSeatbeltProfile(profile: SandboxProfile): string {
 
   if (profile.network === "off") {
     lines.push("", ";; --- network off ---", "(deny network*)");
+  } else if (profile.network === "restricted") {
+    // Deny all network, then re-allow ONLY the loopback allowlist proxy socket.
+    // Without a proxy address the profile denies all network (fail-safe).
+    lines.push("", ";; --- network restricted to loopback allowlist proxy ---", "(deny network*)");
+    if (profile.proxy) {
+      // Seatbelt's `remote ip` host must be `*` or `localhost` (a literal IP is a
+      // parse error), so the loopback proxy is allowed via `localhost:<port>`.
+      lines.push(`(allow network-outbound (remote ip ${sbplString(`localhost:${profile.proxy.port}`)}))`);
+    }
   }
 
   return `${lines.join("\n")}\n`;

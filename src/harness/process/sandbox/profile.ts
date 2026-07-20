@@ -15,8 +15,15 @@ import type { PolicyProfile } from "../../policy/types";
 /** OS-sandbox filesystem posture. */
 export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 
-/** Network posture (v1 enforces only `off`; `on` = no network restriction). */
-export type SandboxNetwork = "off" | "on";
+/**
+ * Network posture:
+ * - `off`        — no network at all.
+ * - `on`         — unrestricted host network.
+ * - `restricted` — network allowed ONLY to `allowedDomains` via the loopback
+ *   allowlist proxy (the OS layer denies all direct network except the proxy
+ *   socket, and the process is pointed at it through HTTP(S)_PROXY).
+ */
+export type SandboxNetwork = "off" | "on" | "restricted";
 
 /** The resolved OS-sandbox profile a launcher builder consumes. */
 export interface SandboxProfile {
@@ -26,6 +33,14 @@ export interface SandboxProfile {
   writableRoots: string[];
   /** Absolute paths whose READ is denied even under the broad read default. */
   readDenyList: string[];
+  /** Allowed domains when `network === "restricted"` (else empty). */
+  allowedDomains: string[];
+  /**
+   * Loopback proxy address for `network === "restricted"`, filled in by the run
+   * wiring once the proxy is listening. Absent means the proxy is not up yet, so
+   * a `restricted` profile denies all network (fail-safe).
+   */
+  proxy?: { host: string; port: number };
   /**
    * When true, an unavailable/failed sandbox launcher MUST fail closed (refuse
    * to run) rather than fall back to an unsandboxed spawn. Derived from the
@@ -43,6 +58,11 @@ export interface SandboxProfileInput {
   tmpDir: string;
   /** Absolute home directory, used to expand the default secret read-deny list. */
   home?: string;
+  /**
+   * When present and network is not denied, switch to `restricted` network:
+   * only these domains are reachable (via the loopback allowlist proxy).
+   */
+  allowedDomains?: string[];
   /**
    * Explicit escape hatch: bypass OS containment entirely. Only ever set from a
    * trusted, approved caller (mirrors Claude Code's `dangerouslyDisableSandbox`).
@@ -85,15 +105,23 @@ export function sandboxProfileFromPolicy(input: SandboxProfileInput): SandboxPro
       network: "on",
       writableRoots: [],
       readDenyList: [],
+      allowedDomains: [],
       required: false,
     };
   }
 
   const mode: SandboxMode =
     input.policy.defaults.write === "deny" ? "read-only" : "workspace-write";
-  const network: SandboxNetwork = input.policy.defaults.network === "allow" ? "on" : "off";
-  const writableRoots =
-    mode === "workspace-write" ? dedupe([input.cwd, input.tmpDir]) : [];
+  const networkAllowed = input.policy.defaults.network === "allow";
+  const allowedDomains = input.allowedDomains?.filter((d) => d.trim().length > 0) ?? [];
+  // A domain allowlist narrows an otherwise-open network to `restricted`; with no
+  // allowlist it stays fully on/off per the policy.
+  const network: SandboxNetwork = !networkAllowed
+    ? "off"
+    : allowedDomains.length > 0
+      ? "restricted"
+      : "on";
+  const writableRoots = mode === "workspace-write" ? dedupe([input.cwd, input.tmpDir]) : [];
   const required = input.policy.requiredControls.isolation === "required-fail-closed";
 
   return {
@@ -101,6 +129,7 @@ export function sandboxProfileFromPolicy(input: SandboxProfileInput): SandboxPro
     network,
     writableRoots,
     readDenyList: defaultReadDenyList(input.home),
+    allowedDomains: network === "restricted" ? dedupe(allowedDomains) : [],
     required,
   };
 }
@@ -116,6 +145,7 @@ export function defaultSandboxProfile(cwd: string, tmpDir: string, home?: string
     network: "off",
     writableRoots: dedupe([cwd, tmpDir]),
     readDenyList: defaultReadDenyList(home),
+    allowedDomains: [],
     required: false,
   };
 }

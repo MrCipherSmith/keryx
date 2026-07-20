@@ -45,6 +45,27 @@ describe("sandboxProfileFromPolicy", () => {
   test("network=allow ⇒ network on", () => {
     const p = sandboxProfileFromPolicy({ ...base, policy: policy({ network: "allow" }) });
     expect(p.network).toBe("on");
+    expect(p.allowedDomains).toEqual([]);
+  });
+
+  test("network=allow + allowedDomains ⇒ restricted with those domains", () => {
+    const p = sandboxProfileFromPolicy({
+      ...base,
+      policy: policy({ network: "allow" }),
+      allowedDomains: ["*.github.com", "registry.npmjs.org", "  "],
+    });
+    expect(p.network).toBe("restricted");
+    expect(p.allowedDomains).toEqual(["*.github.com", "registry.npmjs.org"]);
+  });
+
+  test("network=deny ignores allowedDomains (stays off)", () => {
+    const p = sandboxProfileFromPolicy({
+      ...base,
+      policy: policy({ network: "deny" }),
+      allowedDomains: ["*.github.com"],
+    });
+    expect(p.network).toBe("off");
+    expect(p.allowedDomains).toEqual([]);
   });
 
   test("isolation required-fail-closed ⇒ required true", () => {

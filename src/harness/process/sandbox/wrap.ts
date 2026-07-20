@@ -42,6 +42,17 @@ export function wrapWithSandbox(
   }
 
   if (opts.platform === "linux") {
+    // `restricted` needs a network namespace + relay to force traffic through the
+    // proxy; bwrap alone cannot (it would either cut the proxy with --unshare-net
+    // or leave the network fully open). Fail closed rather than ship a false
+    // boundary — Linux restricted lands with the netns+socat follow-up (flow 099).
+    if (profile.network === "restricted") {
+      return {
+        ok: false,
+        reason:
+          "network=restricted is not yet enforced on Linux (needs a network namespace + proxy relay); use network off/on or run inside a container.",
+      };
+    }
     const wrapped = opts.bwrapPath
       ? wrapBwrap(command, profile, opts.bwrapPath)
       : wrapBwrap(command, profile);

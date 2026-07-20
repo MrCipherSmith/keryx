@@ -8,6 +8,7 @@ const workspaceWrite: SandboxProfile = {
   network: "off",
   writableRoots: ["/work/repo", "/tmp/session"],
   readDenyList: ["/home/u/.ssh"],
+  allowedDomains: [],
   required: true,
 };
 
