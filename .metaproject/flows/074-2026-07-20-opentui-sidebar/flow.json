@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "id": "074",
+  "slug": "opentui-sidebar",
+  "title": "OpenTUI opencode-style sidebar + expandable reasoning (/think) + timestamps + always-on token counter",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T13:05:24.773Z",
+  "updatedAt": "2026-07-20T13:05:25.553Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:58ca5d41610476d14730978ad396e1bb93548903f4ae3b1349359e629fc81e0a",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "sidebar+reasoning+timestamps+tokens",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T13:05:24.773Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T13:05:24.907Z",
+      "event": "task-added",
+      "detail": "T5: sidebar+reasoning+timestamps+tokens"
+    },
+    {
+      "at": "2026-07-20T13:05:24.995Z",
+      "event": "task-added",
+      "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T13:05:25.087Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T13:05:25.167Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T13:05:25.252Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T13:05:25.322Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T13:05:25.400Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T13:05:25.476Z",
+      "event": "task-done",
+      "detail": "T5: sidebar+reasoning+timestamps+tokens"
+    },
+    {
+      "at": "2026-07-20T13:05:25.553Z",
+      "event": "task-done",
+      "detail": "T6: verify"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ export interface AgentSlashCommand {
 /** The agent-mode commands, in menu order. */
 export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/help", description: "Show available commands" },
+  { name: "/think", description: "Show the last reasoning" },
   { name: "/clear", description: "Clear the conversation" },
   { name: "/exit", description: "Leave agent mode" },
 ];

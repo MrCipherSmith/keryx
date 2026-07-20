@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { AGENT_SLASH_COMMANDS, filterCommands, findAgentCommand } from "./agent-commands";
 
 test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
-  expect(AGENT_SLASH_COMMANDS.map((c) => c.name)).toEqual(["/help", "/clear", "/exit"]);
+  expect(AGENT_SLASH_COMMANDS.map((c) => c.name)).toEqual(["/help", "/think", "/clear", "/exit"]);
 });
 
 test("filterCommands: `/` returns all commands", () => {
-  expect(filterCommands("/").map((c) => c.name)).toEqual(["/help", "/clear", "/exit"]);
+  expect(filterCommands("/").map((c) => c.name)).toEqual(["/help", "/think", "/clear", "/exit"]);
 });
 
 test("filterCommands: prefix narrows the set", () => {

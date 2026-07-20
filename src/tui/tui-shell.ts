@@ -177,6 +177,14 @@ export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 }
 
+/** Current wall-clock time as `h:mm AM/PM` (UI-only; the core stays clock-free). */
+function hhmm(): string {
+  const d = new Date();
+  const h = d.getHours();
+  const hour = h % 12 || 12;
+  return `${hour}:${d.getMinutes().toString().padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
 /**
  * In-TUI provider → model picker (used when no `--provider`/`--model` flags were
  * given). Renders a provider SelectRenderable, then a model SelectRenderable, both
@@ -298,6 +306,34 @@ export async function launchTuiAgentShell(opts: {
     }
     const deps = await opts.makeAgentDeps(sel);
 
+    // opencode-style layout: a main chat column on the left + a right status
+    // sidebar (model, context, tools).
+    const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
+    r.root.add(rootRow);
+    const main = new otui.BoxRenderable(r, { id: "main", flexGrow: 1, flexDirection: "column" });
+    rootRow.add(main);
+    const sidebar = new otui.BoxRenderable(r, {
+      id: "sidebar",
+      width: 30,
+      flexDirection: "column",
+      border: ["left"],
+      borderColor: "#22333b",
+      paddingLeft: 2,
+      paddingRight: 1,
+      paddingTop: 1,
+    });
+    rootRow.add(sidebar);
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${otui.bold("keryx")}` }));
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` }));
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
+    const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("0 tokens")}` });
+    sidebar.add(sbContext);
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-tools-k", content: otui.t`${otui.dim("Tools")}`, marginTop: 1 }));
+    sidebar.add(
+      new otui.TextRenderable(r, { id: "sb-tools-v", content: otui.t`${otui.dim(`${deps.tools.length} available`)}` }),
+    );
+
     // Header bar (grok-style): identity on the left, cumulative token counter on
     // the right (updated from usage).
     const header = new otui.BoxRenderable(r, {
@@ -313,9 +349,9 @@ export async function launchTuiAgentShell(opts: {
         content: otui.t`${otui.dim(`keryx · agent · ${sel.provider}/${sel.model}`)}`,
       }),
     );
-    const tokenText = new otui.TextRenderable(r, { id: "header-tokens", content: "" });
+    const tokenText = new otui.TextRenderable(r, { id: "header-tokens", content: otui.t`${otui.dim("↑0 ↓0")}` });
     header.add(tokenText);
-    r.root.add(header);
+    main.add(header);
 
     // A scrollable, sticky-to-bottom transcript so long conversations scroll and
     // auto-follow the newest output; the AgentIO renders into its `.content`.
@@ -327,7 +363,7 @@ export async function launchTuiAgentShell(opts: {
       stickyStart: "bottom",
       contentOptions: { flexDirection: "column", paddingLeft: 1, paddingRight: 1 },
     });
-    r.root.add(scroll);
+    main.add(scroll);
     const transcript = scroll.content;
 
     const io = createTuiAgentIo(otui, r, transcript);
@@ -338,6 +374,19 @@ export async function launchTuiAgentShell(opts: {
       totalIn += u.inputTokens ?? 0;
       totalOut += u.outputTokens ?? 0;
       tokenText.content = otui.t`${otui.dim(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`)}`;
+      sbContext.content = otui.t`${otui.dim(`${(totalIn + totalOut).toLocaleString()} tokens`)}`;
+    };
+    // Reasoning: store the full text (for `/think`) and render a collapsed marker.
+    let lastReasoning = "";
+    io.onReasoning = (text) => {
+      lastReasoning = text;
+      const n = text.trim().split("\n").filter((l) => l.trim().length > 0).length;
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `th${uid++}`,
+          content: otui.t`${otui.dim(`◆ thought (${n} line${n === 1 ? "" : "s"}) · /think to expand`)}`,
+        }),
+      );
     };
     // `shell_exec` approval: render a prompt; resolve from the NEXT composer
     // submit (handled in the ENTER listener). Keeps the default-deny gate.
@@ -380,7 +429,7 @@ export async function launchTuiAgentShell(opts: {
       descriptionColor: "#6b7a7a",
       selectedDescriptionColor: "#8b9a9a",
     });
-    r.root.add(menu);
+    main.add(menu);
 
     // Bordered composer (grok-style rounded input box) — compact single line.
     const composer = new otui.BoxRenderable(r, {
@@ -392,7 +441,7 @@ export async function launchTuiAgentShell(opts: {
     });
     const input = new otui.InputRenderable(r, { id: "prompt", placeholder: "type a task or / for commands" });
     composer.add(input);
-    r.root.add(composer);
+    main.add(composer);
     input.focus();
 
     // Footer: hints on the left, model on the right (grok/opencode style).
@@ -405,7 +454,7 @@ export async function launchTuiAgentShell(opts: {
     });
     footer.add(new otui.TextRenderable(r, { id: "footer-left", content: otui.t`${otui.dim("/ commands · Ctrl+C to exit")}` }));
     footer.add(new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` }));
-    r.root.add(footer);
+    main.add(footer);
 
     // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
     // The dropdown is FOCUSED as soon as it opens, so ↑/↓/Enter work immediately;
@@ -459,6 +508,10 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("Conversation cleared.\n");
           return;
         }
+        if (command.name === "/think") {
+          io.onSystem?.(lastReasoning.trim().length > 0 ? `${lastReasoning.trim()}\n` : "No reasoning yet.\n");
+          return;
+        }
         io.onSystem?.(helpText()); // /help
         return;
       }
@@ -480,7 +533,11 @@ export async function launchTuiAgentShell(opts: {
       userBox.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.dim(`❯ ${line}`)}` }));
       transcript.add(userBox);
       transcript.add(
-        new otui.TextRenderable(r, { id: `h${uid++}`, content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}`, marginTop: 1 }),
+        new otui.TextRenderable(r, {
+          id: `h${uid++}`,
+          content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}  ${otui.dim(hhmm())}`,
+          marginTop: 1,
+        }),
       );
       busy = true;
       const startedAt = Date.now();
