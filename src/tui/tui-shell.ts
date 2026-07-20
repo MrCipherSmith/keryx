@@ -30,7 +30,7 @@ import {
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
-import { formatFleetSidebar, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
+import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 
 /** A resolved provider/model selection. */
 export interface TuiSelection {
@@ -772,6 +772,22 @@ export async function launchTuiAgentShell(opts: {
       sbWorkers.content = otui.t`${otui.dim(text)}`;
     };
     fleet.subscribe(paintFleet);
+
+    /** Update the pinned main-agent slot (same glyphs as page workers / subagents). */
+    const setMainAgent = (
+      status: "queued" | "running" | "done" | "failed" | "blocked",
+      detail?: string,
+    ): void => {
+      fleet.upsert({
+        id: MAIN_AGENT_ID,
+        label: "main",
+        status,
+        ...(detail !== undefined ? { detail } : {}),
+        model: `${currentSel.provider}/${currentSel.model}`,
+      });
+    };
+    // Idle main agent visible from launch.
+    setMainAgent("queued", "idle");
     // Toast area pinned to the bottom of the sidebar (spacer pushes it down).
     sidebar.add(new otui.BoxRenderable(r, { id: "sb-spacer", flexGrow: 1 }));
     const toastText = new otui.TextRenderable(r, { id: "sb-toast", content: "" });
@@ -832,12 +848,16 @@ export async function launchTuiAgentShell(opts: {
     const baseWrite = io.write.bind(io);
     const baseOnToolCall = io.onToolCall?.bind(io);
     const baseOnToolResult = io.onToolResult?.bind(io);
+    const baseOnSystem = io.onSystem?.bind(io);
     // Live phase updates (footer spinner + in-transcript status) — defined after
     // footer chrome below; assigned no-ops until then, then rewired.
     let setBusyPhase: (phase: string) => void = () => {};
+    // setMainAgent is already defined above (Workers fleet); hooks close over it.
+
     io.write = (s: string) => {
       if (s.length > 0) {
         setBusyPhase("streaming reply");
+        setMainAgent("running", "streaming");
       }
       baseWrite(s);
     };
@@ -856,6 +876,7 @@ export async function launchTuiAgentShell(opts: {
     let lastReasoning = "";
     io.onReasoning = (text) => {
       setBusyPhase("thinking");
+      setMainAgent("running", "thinking");
       lastReasoning = text;
       const n = text.trim().split("\n").filter((l) => l.trim().length > 0).length;
       transcript.add(
@@ -869,26 +890,21 @@ export async function launchTuiAgentShell(opts: {
       const args = summarizeToolArgs(input);
       const short = args.length > 40 ? `${args.slice(0, 37)}…` : args;
       setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
-      // Show the main agent slot in the Workers panel (alongside page workers).
-      fleet.upsert({
-        id: "agent:main",
-        label: "main",
-        status: "running",
-        detail: name,
-        model: `${currentSel.provider}/${currentSel.model}`,
-      });
+      setMainAgent("running", name.length > 14 ? `${name.slice(0, 12)}…` : name);
       baseOnToolCall?.(name, input);
     };
     io.onToolResult = (name, result) => {
       setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
-      fleet.upsert({
-        id: "agent:main",
-        label: "main",
-        status: result.isError ? "failed" : "done",
-        detail: name,
-        model: `${currentSel.provider}/${currentSel.model}`,
-      });
+      // Stay "running" between tools (multi-step turn); only terminal on turn end.
+      setMainAgent("running", result.isError ? `err:${name.slice(0, 10)}` : "waiting");
       baseOnToolResult?.(name, result);
+    };
+    io.onSystem = (text) => {
+      // Surface budget/stop/errors on the main agent slot.
+      if (/\[error\]|\[budget\]|\[stopped\]/i.test(text)) {
+        setMainAgent("failed", text.includes("[budget]") ? "budget" : "error");
+      }
+      baseOnSystem?.(text);
     };
     // `shell_exec` approval: OpenCode/Claude-style interactive picker
     // (once / always-exact / always-prefix / deny). Remembered allow patterns
@@ -915,6 +931,7 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${otui.yellow(`⚙ shell_exec needs approval`)}`,
         }),
       );
+      setMainAgent("blocked", "approval");
       const choice = await pickShellApproval(otui, r, cmd);
       input.focus();
 
@@ -925,6 +942,7 @@ export async function launchTuiAgentShell(opts: {
             content: otui.t`${otui.red("denied")}`,
           }),
         );
+        setMainAgent("running", "denied");
         return false;
       }
 
@@ -939,6 +957,7 @@ export async function launchTuiAgentShell(opts: {
             content: otui.t`${otui.green(`approved · remembered “${pattern}”`)}`,
           }),
         );
+        setMainAgent("running", "shell");
         return true;
       }
 
@@ -949,6 +968,7 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${otui.green("approved (once)")}`,
         }),
       );
+      setMainAgent("running", "shell");
       return true;
     };
 
@@ -1285,6 +1305,7 @@ export async function launchTuiAgentShell(opts: {
             const force = choice === "force";
             const targets = force ? plan.forceTargets : plan.drafts;
             fleet.clear();
+            setMainAgent("running", force ? "force-all" : "drafts");
             for (const p of targets) {
               fleet.upsert({
                 id: p.relativePath,
@@ -1306,6 +1327,7 @@ export async function launchTuiAgentShell(opts: {
               concurrency: 2, // small parallel swarm; raise via CLI for larger batches
               onPage: (info) => {
                 setBusyPhase(`enrich ${info.index}/${info.total} [${info.phase}] ${info.path}`);
+                setMainAgent("running", `${info.index}/${info.total}`);
                 const status =
                   info.phase === "done" ? "done" : info.phase === "failed" ? "failed" : "running";
                 fleet.upsert({
@@ -1318,6 +1340,10 @@ export async function launchTuiAgentShell(opts: {
               },
             });
             stopBusy();
+            setMainAgent(
+              result.failed > 0 && result.enriched === 0 ? "failed" : "done",
+              `${result.enriched}ok/${result.failed}fail`,
+            );
             // Leave final fleet state visible; clear on next enrich run.
 
             const lines = [
@@ -1369,11 +1395,23 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
 
+      // Clear previous page workers but keep a clean main-agent turn.
+      fleet.clear();
+      setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();
+      let turnFailed = false;
+      const prevOnSystem = io.onSystem;
+      io.onSystem = (text) => {
+        if (/\[error\]|\[budget\]|\[stopped\]/i.test(text)) {
+          turnFailed = true;
+        }
+        prevOnSystem?.(text);
+      };
       void runAgentTurn(io, deps, history, line).finally(() => {
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
+        setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
         transcript.add(
           new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${otui.dim(`worked for ${secs}s`)}`, marginTop: 1 }),
         );

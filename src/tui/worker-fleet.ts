@@ -34,12 +34,22 @@ const STATUS_ORDER: Record<FleetWorkerStatus, number> = {
   done: 4,
 };
 
+/** Stable id for the interactive shell's primary agent slot. */
+export const MAIN_AGENT_ID = "agent:main";
+
 /** Pure: format workers for a fixed-width sidebar panel. */
 export function formatFleetSidebar(workers: readonly FleetWorker[], maxLines = 14): string {
   if (workers.length === 0) {
     return "(idle)";
   }
+  // Main agent always first; then by status priority, then label.
   const sorted = [...workers].sort((a, b) => {
+    if (a.id === MAIN_AGENT_ID && b.id !== MAIN_AGENT_ID) {
+      return -1;
+    }
+    if (b.id === MAIN_AGENT_ID && a.id !== MAIN_AGENT_ID) {
+      return 1;
+    }
     const so = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (so !== 0) {
       return so;
@@ -58,7 +68,7 @@ export function formatFleetSidebar(workers: readonly FleetWorker[], maxLines = 1
   if (sorted.length > maxLines) {
     lines.push(`… +${sorted.length - maxLines} more`);
   }
-  const running = workers.filter((w) => w.status === "running").length;
+  const running = workers.filter((w) => w.status === "running" || w.status === "blocked").length;
   const done = workers.filter((w) => w.status === "done").length;
   const failed = workers.filter((w) => w.status === "failed").length;
   const header = `${running} run · ${done} ok · ${failed} fail`;
