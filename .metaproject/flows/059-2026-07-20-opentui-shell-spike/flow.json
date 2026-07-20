@@ -3,9 +3,9 @@
   "id": "059",
   "slug": "opentui-shell-spike",
   "title": "OpenTUI shell Phase 0 spike (de-risk native dep, scrollback, component API; /-dropdown proof)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T07:20:11.829Z",
-  "updatedAt": "2026-07-20T07:34:36.869Z",
+  "updatedAt": "2026-07-20T07:35:39.404Z",
   "source": {
     "type": "description",
     "ref": null
@@ -222,6 +222,21 @@
       "at": "2026-07-20T07:34:36.869Z",
       "event": "ac-confirmed",
       "detail": "AC4: report.md: R1-R5 + GO verdict + AC15 dependency-surface decision for Phase 1; headless spike tests green; main not changed (dep stays on spike branch)"
+    },
+    {
+      "at": "2026-07-20T07:35:39.367Z",
+      "event": "completing",
+      "detail": "merged commit: 337f266474a6dab616ae69f47e9860f9596fe4ca"
+    },
+    {
+      "at": "2026-07-20T07:35:39.404Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "337f266474a6dab616ae69f47e9860f9596fe4ca",
+    "ref": "origin/main",
+    "at": "2026-07-20T07:35:39.404Z"
+  }
 }

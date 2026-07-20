@@ -27,3 +27,5 @@
 - 2026-07-20T07:34:36.656Z - ac-confirmed: AC2: API mapped: Input/Select/ScrollBox/Box/Text/Markdown Renderables + KeyHandler + createCliRenderer; split-footer screenMode
 - 2026-07-20T07:34:36.753Z - ac-confirmed: AC3: src/tui/tui-shell.ts --tui skeleton (split-footer transcript+composer+/-dropdown); tsc clean; non-TTY→readline fallback verified; dynamic import + optionalDependencies
 - 2026-07-20T07:34:36.869Z - ac-confirmed: AC4: report.md: R1-R5 + GO verdict + AC15 dependency-surface decision for Phase 1; headless spike tests green; main not changed (dep stays on spike branch)
+- 2026-07-20T07:35:39.367Z - completing: merged commit: 337f266474a6dab616ae69f47e9860f9596fe4ca
+- 2026-07-20T07:35:39.404Z - done: all gates passed

@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 2,
+  "id": "060",
+  "slug": "opentui-shell-phase1",
+  "title": "OpenTUI shell Phase 1 (ADR-0005 dependency ratification + TuiShell renderer skeleton wired to driver, --tui opt-in)",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T08:04:41.813Z",
+  "updatedAt": "2026-07-20T08:11:32.491Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6e864ba7e430723c5483d2ff6865a821bb694627ef647f8b45f541b60a27ec2a",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "ADR-0005 + dependency ratification",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "TuiShell skeleton + --tui wiring",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "headless test + verify",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T08:04:41.813Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T08:05:09.874Z",
+      "event": "task-added",
+      "detail": "T5: ADR-0005 + dependency ratification"
+    },
+    {
+      "at": "2026-07-20T08:05:09.957Z",
+      "event": "task-added",
+      "detail": "T6: TuiShell skeleton + --tui wiring"
+    },
+    {
+      "at": "2026-07-20T08:05:10.054Z",
+      "event": "task-added",
+      "detail": "T7: headless test + verify"
+    },
+    {
+      "at": "2026-07-20T08:05:10.150Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T08:05:10.647Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T08:05:11.061Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T08:11:31.961Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T08:11:32.055Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T08:11:32.134Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T08:11:32.284Z",
+      "event": "task-done",
+      "detail": "T5: ADR-0005 + dependency ratification"
+    },
+    {
+      "at": "2026-07-20T08:11:32.406Z",
+      "event": "task-done",
+      "detail": "T6: TuiShell skeleton + --tui wiring"
+    },
+    {
+      "at": "2026-07-20T08:11:32.491Z",
+      "event": "task-done",
+      "detail": "T7: headless test + verify"
+    }
+  ]
+}

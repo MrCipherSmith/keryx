@@ -72,11 +72,14 @@ test("AC15: Block D adds no new runtime dependency", async () => {
 
   // The deterministic core has zero runtime dependencies.
   expect(pkg.dependencies ?? {}).toEqual({});
-  // optionalDependencies are the lean set: the MCP SDK and web-tree-sitter (the
-  // 288KB symbol-layer parser). `@xenova/transformers` (the ~230MB ONNX runtime)
-  // was removed — model-backed features run on deterministic fallbacks.
+  // optionalDependencies are the lean set: the MCP SDK, web-tree-sitter (the
+  // 288KB symbol-layer parser), and `@opentui/core` (the interactive-shell TUI
+  // renderer — ADR-0005, loaded ONLY via dynamic import with a readline fallback).
+  // `@xenova/transformers` (the ~230MB ONNX runtime) was removed — model-backed
+  // features run on deterministic fallbacks.
   expect(Object.keys(pkg.optionalDependencies ?? {}).sort()).toEqual([
     "@modelcontextprotocol/sdk",
+    "@opentui/core",
     "web-tree-sitter",
   ]);
 });
