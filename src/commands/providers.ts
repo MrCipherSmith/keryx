@@ -66,7 +66,18 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "ZAI_API_KEY",
     chatPath: "/chat/completions",
     modelsPath: "/models",
-    models: ["glm-4.6", "glm-4.5", "glm-4.5-air"],
+    // Curated fallback when live GET /models fails (auth missing, offline, …).
+    // Newest first — matches https://docs.z.ai (GLM-5.2 / 5.1 / 5 / 4.7 …).
+    models: [
+      "glm-5.2",
+      "glm-5.1",
+      "glm-5",
+      "glm-5-turbo",
+      "glm-4.7",
+      "glm-4.6",
+      "glm-4.5",
+      "glm-4.5-air",
+    ],
     note: "GLM API",
   },
   {
@@ -76,7 +87,16 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "ZAI_API_KEY",
     chatPath: "/chat/completions",
     modelsPath: "/models",
-    models: ["glm-4.6", "glm-4.5"],
+    // Coding Plan docs: all plans support GLM-5.2, GLM-5-Turbo, GLM-4.7.
+    // Live /models needs a Bearer key — without it the picker uses this list.
+    models: [
+      "glm-5.2",
+      "glm-5-turbo",
+      "glm-5",
+      "glm-4.7",
+      "glm-4.6",
+      "glm-4.5",
+    ],
     note: "coding plan (flat rate)",
   },
   {

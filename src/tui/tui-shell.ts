@@ -363,37 +363,47 @@ function selectProviderModelInTui(
       return;
     }
     void (async () => {
-      // Provider ← Esc cancels; model ← Esc backs to provider; key ← Esc backs to model.
+      // Provider ← Esc cancels.
+      // Key (when required) ← Esc backs to provider.
+      // Model ← Esc backs to provider.
+      // IMPORTANT: prompt for the API key BEFORE fetching /models — Z.AI and most
+      // OpenAI-compat gateways return 401 without a Bearer key, and we would
+      // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
       while (true) {
         const prov = await pickProviderStep(otui, r, detected);
         if (prov === undefined) {
           resolve(undefined);
           return;
         }
-        // Fetch the model list once per provider selection; the key ↔ model back-nav
-        // below re-uses it instead of re-hitting the network each round.
-        const models = await modelsForPicker(prov);
-        while (true) {
-          const model = await pickModelInTui(otui, r, models);
-          if (model === undefined) {
-            break; // Esc at the model step → re-pick the provider (outer loop)
-          }
-          const envKey = prov.envKey;
-          const existingKey = envKey !== undefined ? process.env[envKey] : undefined;
-          if (envKey !== undefined && (existingKey === undefined || existingKey.length === 0)) {
+
+        const envKey = prov.envKey;
+        if (envKey !== undefined) {
+          const existingKey = process.env[envKey];
+          if (existingKey === undefined || existingKey.length === 0) {
             const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
             if (kr.kind === "back") {
-              continue; // Esc at the key step → re-pick the model
+              continue; // Esc at the key step → re-pick the provider
             }
             if (kr.kind === "key") {
               process.env[envKey] = kr.value;
               saveApiKey(envKey, kr.value); // persist (0600), opencode-style
             }
-            // kind === "skip" → proceed without a key (offline/fail-closed provider)
+            // kind === "skip" → proceed without a key (curated fallback models)
           }
-          resolve(prov.baseUrl === undefined ? { provider: prov.name, model } : { provider: prov.name, model, baseUrl: prov.baseUrl });
-          return;
         }
+
+        // Fetch AFTER key is available so live GET /models can authenticate.
+        const models = await modelsForPicker(prov);
+        const model = await pickModelInTui(otui, r, models);
+        if (model === undefined) {
+          continue; // Esc at the model step → re-pick the provider
+        }
+        resolve(
+          prov.baseUrl === undefined
+            ? { provider: prov.name, model }
+            : { provider: prov.name, model, baseUrl: prov.baseUrl },
+        );
+        return;
       }
     })();
   });

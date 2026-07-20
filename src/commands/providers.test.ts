@@ -25,6 +25,18 @@ test("Z.AI GLM uses versioned paas/v4 endpoints (no /v1) via path overrides", ()
   expect(coding?.baseUrl).toBe("https://api.z.ai/api/coding/paas/v4");
 });
 
+test("Z.AI curated fallbacks include current GLM-5.x / Coding Plan models", () => {
+  const zai = providerByName("zai");
+  const coding = providerByName("zai-coding");
+  expect(zai?.models).toContain("glm-5.2");
+  expect(zai?.models).toContain("glm-5.1");
+  expect(coding?.models).toContain("glm-5.2");
+  expect(coding?.models).toContain("glm-5-turbo");
+  expect(coding?.models).toContain("glm-4.7");
+  // Newest first so a fallback-only picker surfaces 5.2 without scrolling.
+  expect(coding?.models[0]).toBe("glm-5.2");
+});
+
 test("providerByName returns undefined for a non-registry name", () => {
   expect(providerByName("ollama")).toBeUndefined();
   expect(providerByName("nope")).toBeUndefined();
