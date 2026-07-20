@@ -615,12 +615,14 @@ export async function launchTuiAgentShell(opts: {
       onDestroy: () => {
         pendingApproval?.(false); // deny any in-flight approval on exit
         pendingApproval = undefined;
+        clearBusyTimer?.(); // stop live spinner if a turn is mid-flight
         resolveDone();
       },
     }));
     // Assigned once the sidebar toast is built (below); the copy handler may fire
     // before then, so start with a safe no-op.
     let showToast: (msg: string) => void = () => {};
+    let clearBusyTimer: (() => void) | undefined;
     // Copy-on-select (grok/opencode): when a mouse selection changes, copy the
     // selected text to the SYSTEM clipboard via OSC52 (works locally and over SSH;
     // the terminal must permit clipboard access — e.g. iTerm2's "Applications may
@@ -735,6 +737,18 @@ export async function launchTuiAgentShell(opts: {
     let totalIn = 0;
     let totalOut = 0;
     let hasExactUsage = false;
+    const baseWrite = io.write.bind(io);
+    const baseOnToolCall = io.onToolCall?.bind(io);
+    const baseOnToolResult = io.onToolResult?.bind(io);
+    // Live phase updates (footer spinner + in-transcript status) — defined after
+    // footer chrome below; assigned no-ops until then, then rewired.
+    let setBusyPhase: (phase: string) => void = () => {};
+    io.write = (s: string) => {
+      if (s.length > 0) {
+        setBusyPhase("streaming reply");
+      }
+      baseWrite(s);
+    };
     io.onUsage = (u) => {
       if ((u.inputTokens ?? 0) === 0 && (u.outputTokens ?? 0) === 0) {
         return; // a 0/0 report is not usable — keep the estimate
@@ -746,8 +760,10 @@ export async function launchTuiAgentShell(opts: {
       sbContext.content = otui.t`${otui.dim(`${(totalIn + totalOut).toLocaleString()} tokens`)}`;
     };
     // Reasoning: store the full text (for `/think`) and render a collapsed marker.
+    // Do NOT call createTuiAgentIo's default onReasoning — it would double-print.
     let lastReasoning = "";
     io.onReasoning = (text) => {
+      setBusyPhase("thinking");
       lastReasoning = text;
       const n = text.trim().split("\n").filter((l) => l.trim().length > 0).length;
       transcript.add(
@@ -756,6 +772,16 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${otui.dim(`◆ thought (${n} line${n === 1 ? "" : "s"}) · /think to expand`)}`,
         }),
       );
+    };
+    io.onToolCall = (name, input) => {
+      const args = summarizeToolArgs(input);
+      const short = args.length > 40 ? `${args.slice(0, 37)}…` : args;
+      setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
+      baseOnToolCall?.(name, input);
+    };
+    io.onToolResult = (name, result) => {
+      setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
+      baseOnToolResult?.(name, result);
     };
     // `shell_exec` approval: OpenCode/Claude-style interactive picker
     // (once / always-exact / always-prefix / deny). Remembered allow patterns
@@ -854,7 +880,7 @@ export async function launchTuiAgentShell(opts: {
     main.add(composer);
     input.focus();
 
-    // Footer: hints on the left, model on the right (grok/opencode style).
+    // Footer: live status (spinner + phase + elapsed) while busy; idle hints.
     const footer = new otui.BoxRenderable(r, {
       id: "footer",
       flexShrink: 0,
@@ -863,10 +889,90 @@ export async function launchTuiAgentShell(opts: {
       paddingLeft: 1,
       paddingRight: 1,
     });
-    footer.add(new otui.TextRenderable(r, { id: "footer-left", content: otui.t`${otui.dim("/ commands · Ctrl+C to exit")}` }));
+    const FOOTER_IDLE = "/ commands · Ctrl+C to exit";
+    const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+    const footerLeft = new otui.TextRenderable(r, {
+      id: "footer-left",
+      content: otui.t`${otui.dim(FOOTER_IDLE)}`,
+    });
+    footer.add(footerLeft);
     const footerRight = new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     footer.add(footerRight);
     main.add(footer);
+
+    // In-transcript live status line (updated in place while the agent works).
+    let liveStatus: InstanceType<OpenTui["TextRenderable"]> | undefined;
+    let busyPhase = "waiting for model";
+    let busyStartedAt = 0;
+    let spinIdx = 0;
+    let busyTimer: ReturnType<typeof setInterval> | undefined;
+    // Declared early so paintBusyStatus can read it; toggled in runLine.
+    let busy = false;
+
+    const paintBusyStatus = (): void => {
+      if (!busy) {
+        footerLeft.content = otui.t`${otui.dim(FOOTER_IDLE)}`;
+        return;
+      }
+      const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
+      const secs = ((Date.now() - busyStartedAt) / 1000).toFixed(1);
+      const line = `${frame} ${busyPhase} · ${secs}s`;
+      footerLeft.content = otui.t`${otui.yellow(line)}`;
+      if (liveStatus !== undefined) {
+        liveStatus.content = otui.t`${otui.dim(line)}`;
+      }
+    };
+
+    // Wire the outer setBusyPhase used by AgentIO hooks (defined earlier as a no-op).
+    setBusyPhase = (phase: string): void => {
+      busyPhase = phase;
+      paintBusyStatus();
+    };
+
+    const startBusy = (phase = "waiting for model"): void => {
+      busy = true;
+      busyPhase = phase;
+      busyStartedAt = Date.now();
+      spinIdx = 0;
+      liveStatus = new otui.TextRenderable(r, {
+        id: `ls${uid++}`,
+        content: otui.t`${otui.dim(`⠋ ${phase} · 0.0s`)}`,
+        marginTop: 1,
+      });
+      transcript.add(liveStatus);
+      if (busyTimer !== undefined) {
+        clearInterval(busyTimer);
+      }
+      busyTimer = setInterval(() => {
+        spinIdx += 1;
+        paintBusyStatus();
+      }, 120);
+      paintBusyStatus();
+    };
+
+    const stopBusy = (): void => {
+      busy = false;
+      if (busyTimer !== undefined) {
+        clearInterval(busyTimer);
+        busyTimer = undefined;
+      }
+      // Remove the in-transcript spinner line; "worked for Ns" replaces it.
+      if (liveStatus !== undefined) {
+        try {
+          transcript.remove(liveStatus);
+        } catch {
+          // best-effort
+        }
+        liveStatus = undefined;
+      }
+      footerLeft.content = otui.t`${otui.dim(FOOTER_IDLE)}`;
+    };
+    clearBusyTimer = () => {
+      if (busyTimer !== undefined) {
+        clearInterval(busyTimer);
+        busyTimer = undefined;
+      }
+    };
 
     // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
     // The dropdown is FOCUSED as soon as it opens, so ↑/↓/Enter work immediately;
@@ -896,7 +1002,6 @@ export async function launchTuiAgentShell(opts: {
       ["Commands:", ...AGENT_SLASH_COMMANDS.map((c) => `  ${c.name}  ${c.description}`)].join("\n") + "\n";
 
     const history: NormalizedMessage[] = [];
-    let busy = false;
 
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
     const updateModelLabels = (): void => {
@@ -1001,11 +1106,11 @@ export async function launchTuiAgentShell(opts: {
           marginTop: 1,
         }),
       );
-      busy = true;
+      startBusy("waiting for model");
       const startedAt = Date.now();
       void runAgentTurn(io, deps, history, line).finally(() => {
-        busy = false;
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        stopBusy();
         transcript.add(
           new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${otui.dim(`worked for ${secs}s`)}`, marginTop: 1 }),
         );
@@ -1015,6 +1120,7 @@ export async function launchTuiAgentShell(opts: {
           tokenText.content = otui.t`${otui.dim(`~${fmtTokens(est)}`)}`;
           sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
         }
+        input.focus();
       });
     };
 
