@@ -830,6 +830,13 @@ export async function shellCommand(args: string[]): Promise<void> {
       await launchTuiAgentShell({
         detected: tuiDetected,
         makeAgentDeps,
+        // `/connect` and `/model` re-probe providers fresh.
+        redetect: () =>
+          detectProviders({
+            fetch: globalThis.fetch,
+            env: process.env,
+            ...(baseUrl !== undefined ? { baseUrl } : {}),
+          }),
         ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
       })
     ) {

@@ -212,7 +212,19 @@ function selectProviderModelInTui(
       resolve(undefined);
       return;
     }
-    const box = new otui.BoxRenderable(r, { id: "picker", flexGrow: 1, flexDirection: "column", padding: 1 });
+    // Absolute full-screen overlay, so this works at startup AND when re-invoked
+    // mid-session by `/connect` (it covers the running shell, then is removed).
+    const box = new otui.BoxRenderable(r, {
+      id: "picker",
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "#0a1414",
+      flexDirection: "column",
+      padding: 1,
+    });
     r.root.add(box);
     const title = new otui.TextRenderable(r, {
       id: "picker-title",
@@ -290,6 +302,45 @@ function selectProviderModelInTui(
 }
 
 /**
+ * In-TUI model-only picker (used by `/model` to switch the model mid-session for
+ * the CURRENT provider). Absolute overlay; resolves the chosen model, or
+ * `undefined` if the user provided none.
+ */
+function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const list = models.length > 0 ? models : ["fake-echo"];
+    const box = new otui.BoxRenderable(r, {
+      id: "model-picker",
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "#0a1414",
+      flexDirection: "column",
+      padding: 1,
+    });
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")} ${otui.dim("(↑/↓, Enter · Esc to cancel)")}` }));
+    const sel = new otui.SelectRenderable(r, {
+      id: "mp-sel",
+      width: 60,
+      showDescription: false,
+      height: Math.min(12, Math.max(3, list.length)),
+      options: list.map((m) => ({ name: m, description: "" })),
+      selectedTextColor: "#ffd166",
+    });
+    box.add(sel);
+    sel.focus();
+    sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = sel.getSelectedOption();
+      r.root.remove(box);
+      resolve(chosen === null ? list[0] : chosen.name);
+    });
+  });
+}
+
+/**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
  * NO concurrent readline (that leaked terminal query responses, flows 065/066).
  * The provider/model is taken from `opts.initial` (flags) or an in-TUI picker over
@@ -301,6 +352,8 @@ export async function launchTuiAgentShell(opts: {
   detected: DetectedProvider[];
   initial?: TuiSelection;
   makeAgentDeps: (sel: TuiSelection) => Promise<AgentDeps>;
+  /** Re-probe providers for `/connect` and `/model` (fresh detection). */
+  redetect?: () => Promise<DetectedProvider[]>;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -369,7 +422,9 @@ export async function launchTuiAgentShell(opts: {
     }
     // Persist the chosen provider/model (opencode-style) so the next launch reuses it.
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
-    const deps = await opts.makeAgentDeps(sel);
+    // Mutable: `/connect` and `/model` rebuild these mid-session.
+    let currentSel: TuiSelection = sel;
+    let deps = await opts.makeAgentDeps(sel);
 
     // opencode-style layout: a main chat column on the left + a right status
     // sidebar (model, context, tools).
@@ -391,7 +446,8 @@ export async function launchTuiAgentShell(opts: {
     rootRow.add(sidebar);
     sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${otui.bold("keryx")}` }));
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` }));
+    const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
+    sidebar.add(sbModelV);
     sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
     const sbContext = new otui.TextRenderable(r, { id: "sb-ctx-v", content: otui.t`${otui.dim("0 tokens")}` });
     sidebar.add(sbContext);
@@ -426,12 +482,11 @@ export async function launchTuiAgentShell(opts: {
       paddingLeft: 1,
       paddingRight: 1,
     });
-    header.add(
-      new otui.TextRenderable(r, {
-        id: "header-left",
-        content: otui.t`${otui.dim(`keryx · agent · ${sel.provider}/${sel.model}`)}`,
-      }),
-    );
+    const headerLeft = new otui.TextRenderable(r, {
+      id: "header-left",
+      content: otui.t`${otui.dim(`keryx · agent · ${sel.provider}/${sel.model}`)}`,
+    });
+    header.add(headerLeft);
     const tokenText = new otui.TextRenderable(r, { id: "header-tokens", content: otui.t`${otui.dim("↑0 ↓0")}` });
     header.add(tokenText);
     main.add(header);
@@ -547,7 +602,8 @@ export async function launchTuiAgentShell(opts: {
       paddingRight: 1,
     });
     footer.add(new otui.TextRenderable(r, { id: "footer-left", content: otui.t`${otui.dim("/ commands · Ctrl+C to exit")}` }));
-    footer.add(new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` }));
+    const footerRight = new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
+    footer.add(footerRight);
     main.add(footer);
 
     // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
@@ -579,6 +635,25 @@ export async function launchTuiAgentShell(opts: {
 
     const history: NormalizedMessage[] = [];
     let busy = false;
+
+    // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
+    const updateModelLabels = (): void => {
+      const label = `${currentSel.provider}/${currentSel.model}`;
+      headerLeft.content = otui.t`${otui.dim(`keryx · agent · ${label}`)}`;
+      sbModelV.content = otui.t`${otui.dim(label)}`;
+      footerRight.content = otui.t`${otui.dim(label)}`;
+    };
+    const switchTo = async (ns: TuiSelection): Promise<void> => {
+      currentSel = ns;
+      deps = await opts.makeAgentDeps(ns);
+      saveShellConfig(
+        ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
+      );
+      updateModelLabels();
+      input.focus();
+      showToast(`Switched to ${ns.provider}/${ns.model}`);
+    };
+
     // Run a submitted line: a slash command, an unknown-slash notice, or a turn.
     const runLine = (line: string): void => {
       if (busy || line.length === 0) {
@@ -604,6 +679,35 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === "/think") {
           io.onSystem?.(lastReasoning.trim().length > 0 ? `${lastReasoning.trim()}\n` : "No reasoning yet.\n");
+          return;
+        }
+        if (command.name === "/model") {
+          void (async () => {
+            const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+            const prov = detected.find((d) => d.name === currentSel.provider);
+            const chosen = await pickModelInTui(otui, r, prov?.models ?? []);
+            if (chosen !== undefined) {
+              await switchTo(
+                currentSel.baseUrl === undefined
+                  ? { provider: currentSel.provider, model: chosen }
+                  : { provider: currentSel.provider, model: chosen, baseUrl: currentSel.baseUrl },
+              );
+            } else {
+              input.focus();
+            }
+          })();
+          return;
+        }
+        if (command.name === "/connect") {
+          void (async () => {
+            const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+            const ns = await selectProviderModelInTui(otui, r, detected);
+            if (ns !== undefined) {
+              await switchTo(ns);
+            } else {
+              input.focus();
+            }
+          })();
           return;
         }
         io.onSystem?.(helpText()); // /help
