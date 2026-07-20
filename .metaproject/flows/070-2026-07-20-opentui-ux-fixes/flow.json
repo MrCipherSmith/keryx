@@ -3,17 +3,34 @@
   "id": "070",
   "slug": "opentui-ux-fixes",
   "title": "OpenTUI UX fixes — model-select visibility, /-menu keyboard nav (arrows/Enter), taller composer",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T11:43:51.432Z",
-  "updatedAt": "2026-07-20T11:43:52.304Z",
+  "updatedAt": "2026-07-20T11:44:23.515Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d5414a03d56c003bcaf3ebaa3c1e3beb788a1af1c3e8b26a4e1c574e84aabf2f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T11:44:23.162Z",
+      "note": "model select showDescription:false → names visible"
+    },
+    "AC2": {
+      "at": "2026-07-20T11:44:23.248Z",
+      "note": "_internalKeyInput.onInternal routes ↑/↓/Enter/Esc before Input; typing filters"
+    },
+    "AC3": {
+      "at": "2026-07-20T11:44:23.328Z",
+      "note": "composer vertical padding; flow-067/068/069 preserved; --tui opt-in"
+    },
+    "AC4": {
+      "at": "2026-07-20T11:44:23.411Z",
+      "note": "tsc clean; bun test 1507/0; no new dep; keyboard+look = user"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/110"
   },
   "tasks": [
     {
@@ -154,6 +171,45 @@
       "at": "2026-07-20T11:43:52.304Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-20T11:44:23.049Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/110 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T11:44:23.162Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: model select showDescription:false → names visible"
+    },
+    {
+      "at": "2026-07-20T11:44:23.248Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: _internalKeyInput.onInternal routes ↑/↓/Enter/Esc before Input; typing filters"
+    },
+    {
+      "at": "2026-07-20T11:44:23.328Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: composer vertical padding; flow-067/068/069 preserved; --tui opt-in"
+    },
+    {
+      "at": "2026-07-20T11:44:23.411Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc clean; bun test 1507/0; no new dep; keyboard+look = user"
+    },
+    {
+      "at": "2026-07-20T11:44:23.492Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T11:44:23.515Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "0675b945a788739cc54738d71d60d33b847afd56",
+    "ref": "origin/main",
+    "at": "2026-07-20T11:44:23.515Z"
+  }
 }
