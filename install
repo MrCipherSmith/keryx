@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Short global install / update entrypoint.
+#
+#   curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install | bash
+#
+# Same effect as:
+#   curl -fsSL …/scripts/install.sh | bash -s -- --global
+#
+# Env (optional):
+#   KERYX_REF          Git ref for the raw installer (default: main)
+#   KERYX_RAW_BASE     Override the raw.githubusercontent.com base URL
+#   KERYX_REPO_URL     Forwarded to scripts/install.sh
+set -euo pipefail
+
+REF="${KERYX_REF:-main}"
+RAW_BASE="${KERYX_RAW_BASE:-https://raw.githubusercontent.com/MrCipherSmith/keryx/${REF}}"
+
+# Prefer a local clone's scripts/install.sh when this file is executed from a checkout.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+if [ -n "${SCRIPT_DIR}" ] && [ -f "${SCRIPT_DIR}/scripts/install.sh" ]; then
+  exec bash "${SCRIPT_DIR}/scripts/install.sh" --global "$@"
+fi
+
+curl -fsSL "${RAW_BASE}/scripts/install.sh" | bash -s -- --global "$@"

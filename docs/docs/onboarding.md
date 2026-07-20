@@ -17,34 +17,36 @@ You can install `keryx` as a global command, as a project-local runtime, or run 
 
 ### Global install
 
-**Short form (recommended)** — installs the `keryx` binary via Bun from GitHub.
-Re-run the same command to update:
+Managed layout: clones into `~/.keryx/keryx` and writes `~/.local/bin/keryx`.
+Re-run either short command to update:
 
 ```bash
-bun i -g github:MrCipherSmith/keryx
-keryx init
+# curl (short)
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install | bash
+
+# bun (short) — same as curl, no curl required
+bun https://raw.githubusercontent.com/MrCipherSmith/keryx/main/install.ts
 ```
 
-**Managed layout** — clones the runtime into `~/.keryx/keryx` and writes a
-wrapper at `~/.local/bin/keryx` (also re-run to update):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh | bash -s -- --global
-keryx init
-```
+Both are thin wrappers around `scripts/install.sh --global`.
 
 Private repository (through GitHub CLI):
 
 ```bash
 gh auth setup-git
 gh api repos/MrCipherSmith/keryx/contents/scripts/install.sh --jq .content | base64 -d | bash -s -- --global
-keryx init
 ```
 
 Make sure `~/.local/bin` is on your `PATH`:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then:
+
+```bash
+keryx init
 ```
 
 ### Project-local install
