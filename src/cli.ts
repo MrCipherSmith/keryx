@@ -32,13 +32,8 @@ export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
 
-  if (command === "--help" || command === "-h" || command === "help") {
+  if (command === "--help" || command === "-h" || command === "help" || !command) {
     printHelp();
-    return;
-  }
-
-  if (!command) {
-    await shellCommand(args);
     return;
   }
 
@@ -47,14 +42,8 @@ export async function main(): Promise<void> {
     return;
   }
 
-  // A `--flag` first argument (other than --help/--version handled above) means
-  // the user wants the interactive shell with options, e.g. `keryx --provider
-  // ollama --model llama3.1:latest` — route it to the shell rather than treating
-  // the flag as an unknown command.
-  if (command.startsWith("--")) {
-    await shellCommand(args);
-    return;
-  }
+  // Bare `keryx` is the CLI surface (help above). The interactive TUI agent
+  // harness is only `keryx shell […]`. Do not route stray `--flags` into shell.
 
   if (command === "init") {
     await initCommand(args.slice(1));
@@ -195,8 +184,9 @@ function printHelp(): void {
   console.log(`keryx ${VERSION}
 
 Usage:
-  keryx                                        Start TUI agent shell (default)
+  keryx                                        Show CLI usage
   keryx shell [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
+                                               Start TUI agent shell (default UI)
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess] -- <path> [args...]
   keryx harness extension --spec <path>
@@ -268,7 +258,7 @@ Usage:
   keryx --version
 
 Commands:
-  shell     Start TUI agent shell (default; also runs when keryx is called with no command). Use --no-tui or --chat to opt out.
+  shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
   harness   Run a single provider turn (harness run) and print structured events
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status

@@ -10,12 +10,8 @@ import path from "node:path";
 // interactive shell — this is a behavioral, offline spawn test (no stdin is
 // read for `--help`).
 //
-// Bare `keryx` (no args) must dispatch to the interactive shell
-// (`shellCommand`/`runShell` from `src/commands/shell.ts`, T6). A behavioral
-// test would block forever on real stdin (the shell reads a live line
-// source), so per the T5 dispatch this is a source-text audit of the `!command`
-// branch in `main()` instead — NOT a per-test bug, but it WILL fail (RED)
-// until `src/cli.ts` routes `!command` to `shellCommand(...)`.
+// Bare `keryx` (no args) is the CLI surface and must print usage — NOT launch
+// the interactive shell. The TUI agent harness is only `keryx shell […]`.
 
 test("--help lists the harness command and the interactive shell", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
@@ -25,14 +21,23 @@ test("--help lists the harness command and the interactive shell", async () => {
   expect(/shell|interactive/i.test(output)).toBe(true);
 });
 
-test("bare `keryx` (no args) dispatches to the interactive shell (source-text audit)", () => {
+test("bare `keryx` (no args) prints CLI usage, not the shell", async () => {
+  const cliPath = path.join(import.meta.dir, "cli.ts");
+  const output = await runBun([cliPath]);
+
+  expect(output).toMatch(/Usage:/);
+  expect(output).toMatch(/keryx shell/);
+  expect(output).not.toMatch(/Select a provider/);
+});
+
+test("`keryx shell` is dispatched via shellCommand (source-text audit)", () => {
   const cliSource = readFileSync(path.join(import.meta.dir, "cli.ts"), "utf8");
 
   expect(/shellCommand/.test(cliSource)).toBe(true);
-
-  const bareBranch = /if\s*\(\s*!command\s*\)\s*\{([\s\S]*?)\}/.exec(cliSource);
-  expect(bareBranch).not.toBeNull();
-  expect(bareBranch?.[1] ?? "").toMatch(/shellCommand/);
+  expect(cliSource).toMatch(/if\s*\(\s*command\s*===\s*"shell"\s*\)/);
+  // Bare / no-args path must print help, not enter the shell.
+  expect(cliSource).toMatch(/!command/);
+  expect(cliSource).toMatch(/printHelp\(\)/);
 });
 
 test("dash alias is advertised in CLI help", async () => {

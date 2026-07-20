@@ -35,14 +35,17 @@ Optional managed layout (`~/.keryx/keryx` + `~/.local/bin/keryx`):
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh | bash -s -- --global
 ```
 
-### Interactive shell (TUI agent by default)
+### Interactive shell (TUI agent harness)
+
+Bare `keryx` is the **CLI** (lists commands / usage). The interactive TUI agent
+harness starts only with **`keryx shell`**:
 
 ```bash
-keryx shell    # OpenTUI + agent mode
-keryx          # same (bare CLI also starts the shell)
+keryx              # CLI help — metaproject commands
+keryx shell        # OpenTUI + agent harness (default UI)
 ```
 
-Useful flags:
+Useful `shell` flags:
 
 | Flag | Effect |
 |------|--------|
