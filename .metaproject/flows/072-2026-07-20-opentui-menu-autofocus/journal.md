@@ -15,3 +15,10 @@
 - 2026-07-20T12:12:09.490Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T12:12:09.564Z - task-done: T5: auto-focus + filter + style
 - 2026-07-20T12:12:09.822Z - task-done: T6: verify
+- 2026-07-20T12:13:17.208Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/114 (warning: PR is not a draft)
+- 2026-07-20T12:13:17.305Z - ac-confirmed: AC1: tsc clean; bun test 1507/0; user validates on TTY
+- 2026-07-20T12:13:17.384Z - ac-confirmed: AC2: tsc clean; bun test 1507/0; user validates on TTY
+- 2026-07-20T12:13:17.465Z - ac-confirmed: AC3: tsc clean; bun test 1507/0; user validates on TTY
+- 2026-07-20T12:13:17.544Z - ac-confirmed: AC4: tsc clean; bun test 1507/0; user validates on TTY
+- 2026-07-20T12:13:17.632Z - completing
+- 2026-07-20T12:13:17.659Z - done: all gates passed
