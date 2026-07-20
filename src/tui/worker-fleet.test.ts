@@ -81,3 +81,13 @@ test("WorkerFleet upsert and subscribe", () => {
   expect(fleet.list()).toHaveLength(0);
   unsub();
 });
+
+test("WorkerFleet clearMatching keeps side workers", () => {
+  const fleet = new WorkerFleet();
+  fleet.upsert({ id: MAIN_AGENT_ID, label: "main", status: "running" });
+  fleet.upsert({ id: "side:1", label: "side-1", status: "running" });
+  fleet.upsert({ id: "page-a", label: "page-a", status: "queued" });
+  fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID && !w.id.startsWith("side:"));
+  const ids = fleet.list().map((w) => w.id).sort();
+  expect(ids).toEqual([MAIN_AGENT_ID, "side:1"].sort());
+});

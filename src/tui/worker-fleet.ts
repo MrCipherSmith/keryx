@@ -220,6 +220,30 @@ export class WorkerFleet {
     this.emit();
   }
 
+  /** Remove one worker by id (no-op if missing). */
+  remove(id: string): void {
+    if (this.workers.delete(id)) {
+      this.emit();
+    }
+  }
+
+  /**
+   * Drop workers matching `pred`. Use to clear enrich pages without wiping
+   * main / side workers.
+   */
+  clearMatching(pred: (w: FleetWorker) => boolean): void {
+    let changed = false;
+    for (const [id, w] of this.workers) {
+      if (pred(w)) {
+        this.workers.delete(id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.emit();
+    }
+  }
+
   /** Insert or merge a worker by id. */
   upsert(partial: Partial<FleetWorker> & Pick<FleetWorker, "id" | "label" | "status">): void {
     const prev = this.workers.get(partial.id);

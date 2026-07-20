@@ -42,6 +42,13 @@ import {
 } from "../session";
 import { setAskUserHost } from "./ask-user-bridge";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import {
+  buildSideWorkerPrompt,
+  buildSideWorkerSystemInstruction,
+  isSideWorkerId,
+  SIDE_WORKER_ID_PREFIX,
+  sideWorkerLabel,
+} from "./side-worker";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 
 /** A resolved provider/model selection. */
@@ -1382,16 +1389,205 @@ export async function launchTuiAgentShell(opts: {
       showToast(`Switched to ${ns.provider}/${ns.model}`);
     };
 
-    // Run a submitted line: a slash command, an unknown-slash notice, or a turn.
-    const runLine = (line: string): void => {
-      if (busy || line.length === 0) {
+    // Side workers while main is busy (automatic — no special slash command).
+    let sideSeq = 0;
+    let activeSides = 0;
+    const MAX_SIDE_WORKERS = 3;
+
+    const spawnSideWorker = (question: string): void => {
+      if (activeSides >= MAX_SIDE_WORKERS) {
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `side-max${uid++}`,
+            content: otui.t`${otui.yellow(
+              `◇ side worker limit (${MAX_SIDE_WORKERS}) — wait for one to finish`,
+            )}`,
+            marginTop: 1,
+          }),
+        );
         return;
       }
+      sideSeq += 1;
+      activeSides += 1;
+      const seq = sideSeq;
+      const workerId = `${SIDE_WORKER_ID_PREFIX}${seq}`;
+      const label = sideWorkerLabel(seq);
+      const mainSlot = fleet.list().find((w) => w.id === MAIN_AGENT_ID);
+      const elapsedSec = busyStartedAt > 0 ? (Date.now() - busyStartedAt) / 1000 : undefined;
+
+      fleet.upsert({
+        id: workerId,
+        label,
+        status: "running",
+        detail: "side Q",
+        model: `${currentSel.provider}/${currentSel.model}`,
+      });
+
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `side-h${uid++}`,
+          content: otui.t`${otui.magenta(`◇ ${label}`)} ${otui.dim(`· while main: ${busyPhase}`)}`,
+          marginTop: 1,
+        }),
+      );
+      const qBox = new otui.BoxRenderable(r, {
+        id: `side-q${uid++}`,
+        borderStyle: "rounded",
+        border: true,
+        borderColor: "#5a3a6a",
+        paddingLeft: 1,
+        paddingRight: 1,
+        marginTop: 0,
+        alignSelf: "flex-start",
+      });
+      qBox.add(
+        new otui.TextRenderable(r, {
+          id: `side-qt${uid++}`,
+          content: otui.t`${otui.dim(`❯ ${question}`)}`,
+        }),
+      );
+      transcript.add(qBox);
+
+      const prompt = buildSideWorkerPrompt({
+        question,
+        snapshot: {
+          phase: busyPhase,
+          ...(mainSlot?.detail !== undefined ? { mainDetail: mainSlot.detail } : {}),
+          ...(elapsedSec !== undefined ? { elapsedSec } : {}),
+        },
+        recentHistory: history,
+      });
+
+      void (async () => {
+        let answer = "";
+        try {
+          const base = await opts.makeAgentDeps(currentSel);
+          // Read-only: never allow shell/mutations from a side worker.
+          const tools = base.tools.filter((t) => t.definition.risk === "read");
+          const sideDeps: AgentDeps = {
+            ...base,
+            tools,
+            systemInstruction: buildSideWorkerSystemInstruction(currentSel.provider, currentSel.model),
+            maxToolCalls: 4,
+            idSeq: () => `${workerId}-${base.idSeq()}`,
+          };
+          const sideHistory: NormalizedMessage[] = [];
+          const sideIo: AgentIO = {
+            write: (s) => {
+              answer += s;
+            },
+            onAssistantText: (text) => {
+              answer = text;
+            },
+            onToolCall: (name) => {
+              fleet.upsert({
+                id: workerId,
+                label,
+                status: "running",
+                detail: name.length > 12 ? `${name.slice(0, 10)}…` : name,
+              });
+            },
+            onToolResult: () => {
+              fleet.upsert({ id: workerId, label, status: "running", detail: "waiting" });
+            },
+            onSystem: (text) => {
+              transcript.add(
+                new otui.TextRenderable(r, {
+                  id: `side-sys${uid++}`,
+                  content: otui.t`${otui.dim(text.trimEnd())}`,
+                }),
+              );
+            },
+            // Side workers never get shell approval — tools are read-only only.
+            requestApproval: async () => false,
+          };
+          await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
+          const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `side-a${uid++}`,
+              content: otui.t`${otui.magenta("◇")} ${body}`,
+              marginTop: 0,
+            }),
+          );
+          fleet.upsert({ id: workerId, label, status: "done", detail: "answered" });
+        } catch (cause) {
+          const msg = cause instanceof Error ? cause.message : String(cause);
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `side-err${uid++}`,
+              content: otui.t`${otui.red(`◇ ${label} failed: ${msg}`)}`,
+            }),
+          );
+          fleet.upsert({ id: workerId, label, status: "failed", detail: "error" });
+        } finally {
+          activeSides = Math.max(0, activeSides - 1);
+          // Auto-drop finished side slots after a short moment so the panel stays clean.
+          setTimeout(() => {
+            try {
+              fleet.remove(workerId);
+            } catch {
+              // ignore
+            }
+          }, 12_000);
+        }
+      })();
+    };
+
+    // Run a submitted line: a slash command, an unknown-slash notice, a main turn,
+    // or (when main is busy) an automatic side worker — no special command needed.
+    const runLine = (line: string): void => {
+      if (line.length === 0) {
+        return;
+      }
+
+      // While main is in progress: control slash still works; anything else → side worker.
+      if (busy) {
+        const command = findAgentCommand(line);
+        if (command?.name === "/exit") {
+          r.destroy();
+          return;
+        }
+        if (command?.name === "/help") {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `c${uid++}`,
+              content: otui.t`${otui.cyan(`❯ ${line}`)}`,
+              marginTop: 1,
+            }),
+          );
+          io.onSystem?.(
+            "Main agent is busy. Type a normal question to spawn a side worker " +
+              "(sees main status + recent context; read-only). /exit still works.\n",
+          );
+          return;
+        }
+        // /new /resume /compact /model while busy: refuse (avoid racing main session).
+        if (command !== undefined || line.startsWith("/")) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `c${uid++}`,
+              content: otui.t`${otui.yellow(
+                `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
+              )}`,
+              marginTop: 1,
+            }),
+          );
+          return;
+        }
+        spawnSideWorker(line);
+        return;
+      }
+
       // Echo a slash command so it is clear WHICH command ran (turns echo their
       // own `❯ …` user box below).
       if (line.startsWith("/")) {
         transcript.add(
-          new otui.TextRenderable(r, { id: `c${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}`, marginTop: 1 }),
+          new otui.TextRenderable(r, {
+            id: `c${uid++}`,
+            content: otui.t`${otui.cyan(`❯ ${line}`)}`,
+            marginTop: 1,
+          }),
         );
       }
       const command = findAgentCommand(line);
@@ -1565,7 +1761,8 @@ export async function launchTuiAgentShell(opts: {
 
             const force = choice === "force";
             const targets = force ? plan.forceTargets : plan.drafts;
-            fleet.clear();
+            // Keep side workers; drop previous enrich page slots only.
+            fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID && !isSideWorkerId(w.id));
             setMainAgent("running", force ? "force-all" : "drafts");
             for (const p of targets) {
               fleet.upsert({
@@ -1661,8 +1858,8 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
 
-      // Clear previous page workers but keep a clean main-agent turn.
-      fleet.clear();
+      // Clear enrich/page workers only — keep concurrent side workers visible.
+      fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID && !isSideWorkerId(w.id));
       setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();
