@@ -13,3 +13,6 @@
 - 2026-07-20T22:46:10.124Z - ac-confirmed: AC4: no maxCostUnits => costRemaining undefined, costUnits on reservation ignored, behavior unchanged; ledger/spawn/scheduler suites 64/64 green
 - 2026-07-20T22:46:10.199Z - ac-confirmed: AC5: property sweep: aggregate admitted cost never exceeds cap across many caps/costs; pure/deterministic (no Date.now/Math.random)
 - 2026-07-20T22:46:10.278Z - ac-confirmed: AC6: ledger.test.ts cost block added; full suite 1786 pass/0 fail (--timeout 30000, incl dep guard); tsc clean
+- 2026-07-20T22:47:20.300Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/166 (warning: PR is not a draft)
+- 2026-07-20T22:47:20.417Z - completing
+- 2026-07-20T22:47:20.446Z - done: all gates passed
