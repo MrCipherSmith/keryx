@@ -261,9 +261,16 @@ function selectProviderModelInTui(
         const hasKey = typeof process.env.OPENROUTER_API_KEY === "string" && process.env.OPENROUTER_API_KEY.length > 0;
         if (prov.name === "openrouter" && !hasKey) {
           box.remove(modelSelect);
-          title.content = otui.t`${otui.bold("Paste your OpenRouter API key")} ${otui.dim("(Enter · get one at openrouter.ai/keys)")}`;
+          title.content = otui.t`${otui.bold("Paste your OpenRouter API key")} ${otui.dim("(Enter)")}`;
           const keyInput = new otui.InputRenderable(r, { id: "picker-key", placeholder: "sk-or-..." });
           box.add(keyInput);
+          box.add(
+            new otui.TextRenderable(r, {
+              id: "picker-key-note",
+              content: otui.t`${otui.dim("Get one at openrouter.ai/keys · used for this session (not saved to disk)")}`,
+              marginTop: 1,
+            }),
+          );
           keyInput.focus();
           keyInput.on(otui.InputRenderableEvents.ENTER, () => {
             const key = keyInput.value.trim();
@@ -333,6 +340,9 @@ export async function launchTuiAgentShell(opts: {
         resolveDone();
       },
     }));
+    // Assigned once the sidebar toast is built (below); the copy handler may fire
+    // before then, so start with a safe no-op.
+    let showToast: (msg: string) => void = () => {};
     // Copy-on-select (grok/opencode): when a mouse selection changes, copy the
     // selected text to the SYSTEM clipboard via OSC52 (works locally and over SSH;
     // the terminal must permit clipboard access — e.g. iTerm2's "Applications may
@@ -342,6 +352,7 @@ export async function launchTuiAgentShell(opts: {
         const text = r.getSelection()?.getSelectedText() ?? "";
         if (text.length > 0) {
           r.copyToClipboardOSC52(text);
+          showToast("Copied to clipboard");
         }
       } catch {
         // clipboard access not permitted — ignore
@@ -384,6 +395,22 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(
       new otui.TextRenderable(r, { id: "sb-tools-v", content: otui.t`${otui.dim(`${deps.tools.length} available`)}` }),
     );
+    // Toast area pinned to the bottom of the sidebar (spacer pushes it down).
+    sidebar.add(new otui.BoxRenderable(r, { id: "sb-spacer", flexGrow: 1 }));
+    const toastText = new otui.TextRenderable(r, { id: "sb-toast", content: "" });
+    sidebar.add(toastText);
+    // A transient toast: `✓ <msg>`, cleared after 5s or replaced by the next toast.
+    let toastTimer: ReturnType<typeof setTimeout> | undefined;
+    showToast = (msg: string): void => {
+      toastText.content = otui.t`${otui.green(`✓ ${msg}`)}`;
+      if (toastTimer !== undefined) {
+        clearTimeout(toastTimer);
+      }
+      toastTimer = setTimeout(() => {
+        toastText.content = "";
+        toastTimer = undefined;
+      }, 5000);
+    };
 
     // Header bar (grok-style): identity on the left, cumulative token counter on
     // the right (updated from usage).
