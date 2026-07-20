@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
+import http from "node:http";
 import path from "node:path";
 import { type CommandRunner, makeCommandRunner, resolveShellSandboxMode, shellExecTool } from "./shell-exec-tool";
 
@@ -82,6 +83,38 @@ describe.skipIf(!liveFlag)("makeCommandRunner OS sandbox (macOS live)", () => {
       if (prev === undefined) delete process.env.KERYX_SANDBOX_SHELL;
       else process.env.KERYX_SANDBOX_SHELL = prev;
       if (existsSync(outside)) rmSync(outside);
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("restricted network: allowlisted host reachable via proxy, others blocked", async () => {
+    const upstream = http.createServer((_q, r) => {
+      r.writeHead(200);
+      r.end("OK-UP");
+    });
+    const upPort: number = await new Promise((res) =>
+      upstream.listen(0, "127.0.0.1", () => res((upstream.address() as { port: number }).port)),
+    );
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-shell-net-")));
+    const prevMode = process.env.KERYX_SANDBOX_SHELL;
+    const prevDomains = process.env.KERYX_SANDBOX_ALLOWED_DOMAINS;
+    process.env.KERYX_SANDBOX_SHELL = "strict";
+    process.env.KERYX_SANDBOX_ALLOWED_DOMAINS = "localhost";
+    try {
+      const run = makeCommandRunner(root);
+      await run(`/usr/bin/curl -sS -m 5 -o ./allowed.txt http://localhost:${upPort}/`);
+      expect(readFileSync(path.join(root, "allowed.txt"), "utf8")).toContain("OK-UP");
+
+      await run("/usr/bin/curl -sS -m 5 -o ./blocked.txt http://blocked.invalid/");
+      expect(readFileSync(path.join(root, "blocked.txt"), "utf8")).toContain(
+        "blocked by keryx sandbox network allowlist",
+      );
+    } finally {
+      if (prevMode === undefined) delete process.env.KERYX_SANDBOX_SHELL;
+      else process.env.KERYX_SANDBOX_SHELL = prevMode;
+      if (prevDomains === undefined) delete process.env.KERYX_SANDBOX_ALLOWED_DOMAINS;
+      else process.env.KERYX_SANDBOX_ALLOWED_DOMAINS = prevDomains;
+      await new Promise<void>((r) => upstream.close(() => r()));
       rmSync(root, { recursive: true, force: true });
     }
   });
