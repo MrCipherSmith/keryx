@@ -268,7 +268,13 @@ export async function launchTuiAgentShell(opts: {
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await otui.createCliRenderer({
       exitOnCtrlC: true,
-      screenMode: "split-footer",
+      // Full-screen (grok/opencode style): own the alternate screen buffer so the
+      // shell's prior scrollback is cleared on launch and restored on exit, and
+      // the layout fills the terminal (composer anchored to the bottom). The
+      // earlier `split-footer` left the launch output on screen and floated the
+      // composer mid-screen.
+      screenMode: "alternate-screen",
+      clearOnShutdown: true,
       onDestroy: () => {
         pendingApproval?.(false); // deny any in-flight approval on exit
         pendingApproval = undefined;
