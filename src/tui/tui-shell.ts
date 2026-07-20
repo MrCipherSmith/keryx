@@ -134,7 +134,12 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
       }
       pending = "";
     },
-    onReasoning: (text) => append(otui.t`${otui.dim(`⋯ thinking\n${text}`)}`),
+    // Reasoning is COLLAPSED to a one-line marker (grok/opencode style) instead of
+    // dumping the whole chain-of-thought; `line count` hints at its length.
+    onReasoning: (text) => {
+      const lines = text.trim().split("\n").filter((l) => l.trim().length > 0).length;
+      append(otui.t`${otui.dim(`◆ thought (${lines} line${lines === 1 ? "" : "s"})`)}`);
+    },
     onUsage: (usage) => {
       const parts: string[] = [];
       if (usage.inputTokens !== undefined) {
@@ -390,14 +395,17 @@ export async function launchTuiAgentShell(opts: {
     r.root.add(composer);
     input.focus();
 
-    // Footer hints.
-    r.root.add(
-      new otui.TextRenderable(r, {
-        id: "footer",
-        content: otui.t`${otui.dim("/ commands · Ctrl+C to exit")}`,
-        paddingLeft: 1,
-      }),
-    );
+    // Footer: hints on the left, model on the right (grok/opencode style).
+    const footer = new otui.BoxRenderable(r, {
+      id: "footer",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingLeft: 1,
+      paddingRight: 1,
+    });
+    footer.add(new otui.TextRenderable(r, { id: "footer-left", content: otui.t`${otui.dim("/ commands · Ctrl+C to exit")}` }));
+    footer.add(new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` }));
+    r.root.add(footer);
 
     // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
     // The dropdown is FOCUSED as soon as it opens, so ↑/↓/Enter work immediately;
@@ -463,19 +471,25 @@ export async function launchTuiAgentShell(opts: {
         id: `ub${uid++}`,
         borderStyle: "rounded",
         border: true,
+        borderColor: "#3a4a4a", // muted (was bright cyan)
         paddingLeft: 1,
         paddingRight: 1,
         marginTop: 1,
         alignSelf: "flex-start",
       });
-      userBox.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.cyan(`❯ ${line}`)}` }));
+      userBox.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.dim(`❯ ${line}`)}` }));
       transcript.add(userBox);
       transcript.add(
         new otui.TextRenderable(r, { id: `h${uid++}`, content: otui.t`${otui.cyan("●")} ${otui.bold("keryx")}`, marginTop: 1 }),
       );
       busy = true;
+      const startedAt = Date.now();
       void runAgentTurn(io, deps, history, line).finally(() => {
         busy = false;
+        const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        transcript.add(
+          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${otui.dim(`worked for ${secs}s`)}`, marginTop: 1 }),
+        );
       });
     };
 
