@@ -20,33 +20,65 @@ The core is deterministic, local, and offline — with zero runtime dependencies
 
 ## Quick Start
 
+**Requirements:** `git` and `bun` (>= 1.1.0).
+
+### Install / update (global)
+
 ```bash
-# Install the CLI globally (curl)
+# Short form — install or update (re-run to upgrade)
+bun i -g github:MrCipherSmith/keryx
+```
+
+Optional managed layout (`~/.keryx/keryx` + `~/.local/bin/keryx`):
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh | bash -s -- --global
+```
 
-# ...or with bun (no curl needed — bun is already a requirement)
-bun -e 'await Bun.spawn(["bash","-s","--","--global"],{stdin:await fetch("https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh"),stdout:"inherit",stderr:"inherit"}).exited'
+### Interactive shell (TUI agent by default)
 
-# Initialize the workspace in your project
+```bash
+keryx shell    # OpenTUI + agent mode
+keryx          # same (bare CLI also starts the shell)
+```
+
+Useful flags:
+
+| Flag | Effect |
+|------|--------|
+| *(default)* | TUI + agent |
+| `--no-tui` | classic readline shell |
+| `--chat` | chat without tools (readline) |
+| `--agent` | agent mode explicitly |
+| `--provider <p> --model <m>` | skip the provider/model picker |
+| `--base-url <url>` | custom provider endpoint |
+
+Examples:
+
+```bash
+keryx shell --provider ollama --model llama3.1:latest
+keryx shell --no-tui
+keryx shell --chat
+```
+
+### First project setup
+
+```bash
 cd path/to/your-project
 keryx init
 
-# Build the first artifacts
 keryx gdgraph build          # code dependency graph
 keryx test analyze           # testing context report
 keryx health run --changed   # normalized health report
 
-# Open the human admin dashboard
-keryx dash
+keryx dash                   # human admin dashboard
 ```
 
 `keryx init` creates a `.metaproject/` workspace and connects your existing
 `AGENTS.md` / `CLAUDE.md` entrypoints to it, so agents are routed to the right
 module automatically. See the
 [onboarding guide](docs/docs/onboarding.md) for the full first-run walkthrough
-and alternative install paths (global via `bun`, or project-local).
-
-**Requirements:** `git` and `bun` (>= 1.1.0).
+and alternative install paths (managed curl installer, or project-local).
 
 ## Interactive agent shell (TUI)
 

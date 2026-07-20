@@ -118,7 +118,7 @@ import type {
 } from "../harness/provider/types";
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
-import { runShell } from "./shell";
+import { parseShellCliFlags, runShell } from "./shell";
 
 const NO_CAPS: ProviderCapabilities = {
   streaming: false,
@@ -697,5 +697,42 @@ describe("flow 031 — additive ShellIO rich-rendering hooks", () => {
 
     expect(systemText.join("")).toMatch(/\[error\].*boom/);
     expect(tokens.join("")).not.toMatch(/\[error\]/);
+  });
+});
+
+describe("parseShellCliFlags — default TUI agent shell", () => {
+  test("bare args prefer TUI and leave agent mode unset (default agent)", () => {
+    const flags = parseShellCliFlags([]);
+    expect(flags.wantTui).toBe(true);
+    expect(flags.modeFlag).toBeUndefined();
+  });
+
+  test("--no-tui opts out of OpenTUI", () => {
+    expect(parseShellCliFlags(["--no-tui"]).wantTui).toBe(false);
+  });
+
+  test("--chat selects chat mode; --agent selects agent mode", () => {
+    expect(parseShellCliFlags(["--chat"]).modeFlag).toBe(false);
+    expect(parseShellCliFlags(["--agent"]).modeFlag).toBe(true);
+  });
+
+  test("--tui remains accepted and keeps wantTui true", () => {
+    expect(parseShellCliFlags(["--tui"]).wantTui).toBe(true);
+    expect(parseShellCliFlags(["--no-tui", "--tui"]).wantTui).toBe(true);
+  });
+
+  test("provider/model/base-url are parsed", () => {
+    const flags = parseShellCliFlags([
+      "--provider",
+      "ollama",
+      "--model",
+      "llama3.1:latest",
+      "--base-url",
+      "http://localhost:11434",
+    ]);
+    expect(flags.providerArg).toBe("ollama");
+    expect(flags.modelArg).toBe("llama3.1:latest");
+    expect(flags.baseUrl).toBe("http://localhost:11434");
+    expect(flags.wantTui).toBe(true);
   });
 });

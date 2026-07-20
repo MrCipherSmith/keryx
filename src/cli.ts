@@ -195,8 +195,8 @@ function printHelp(): void {
   console.log(`keryx ${VERSION}
 
 Usage:
-  keryx                                        Start the interactive shell (REPL)
-  keryx shell [--provider <p>] [--model <m>] [--base-url <url>]
+  keryx                                        Start TUI agent shell (default)
+  keryx shell [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess] -- <path> [args...]
   keryx harness extension --spec <path>
@@ -268,7 +268,7 @@ Usage:
   keryx --version
 
 Commands:
-  shell     Start the interactive keryx shell (also runs when keryx is called with no command)
+  shell     Start TUI agent shell (default; also runs when keryx is called with no command). Use --no-tui or --chat to opt out.
   harness   Run a single provider turn (harness run) and print structured events
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status

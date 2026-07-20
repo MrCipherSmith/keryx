@@ -17,16 +17,16 @@ You can install `keryx` as a global command, as a project-local runtime, or run 
 
 ### Global install
 
-Installs a wrapper at `~/.local/bin/keryx` that execs the cloned runtime via `bun`. The runtime lives in `~/.keryx/keryx`.
-
-Using Bun directly from the GitHub source:
+**Short form (recommended)** — installs the `keryx` binary via Bun from GitHub.
+Re-run the same command to update:
 
 ```bash
-bun install -g github:MrCipherSmith/keryx
+bun i -g github:MrCipherSmith/keryx
 keryx init
 ```
 
-Using the installer script (public/raw):
+**Managed layout** — clones the runtime into `~/.keryx/keryx` and writes a
+wrapper at `~/.local/bin/keryx` (also re-run to update):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh | bash -s -- --global

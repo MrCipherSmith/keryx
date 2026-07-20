@@ -720,28 +720,27 @@ async function runAgentRepl(
   }
 }
 
+/** Parsed flags for the interactive shell entrypoint. */
+export interface ShellCliFlags {
+  providerArg?: string;
+  modelArg?: string;
+  baseUrl?: string;
+  /** `true` = agent, `false` = chat, `undefined` = no explicit flag. */
+  modeFlag?: boolean;
+  /** Prefer OpenTUI when a TTY is available (default true). */
+  wantTui: boolean;
+}
+
 /**
- * Thin TTY wrapper (NOT unit-tested): parses `--provider` / `--model` /
- * `--base-url` / `--agent` / `--chat`, wires a real `node:readline` stdin line
- * source + a rich `process.stdout` renderer, and runs the deterministic core.
- * Mode defaults to agent; the interactive picker asks agent/chat when no flag is
- * given.
- *
- * When `--provider` is ABSENT, it first detects the available providers and
- * runs the interactive numbered picker (replacing any hardcoded default). When
- * `--provider X` is given, the picker is skipped: the model is `--model Y` if
- * given, otherwise that provider's first detected model.
+ * Parse shell CLI flags. Defaults: TUI on, agent mode implied (modeFlag
+ * undefined). `--no-tui` opts out of TUI; `--chat` selects chat mode.
  */
-export async function shellCommand(args: string[]): Promise<void> {
+export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let providerArg: string | undefined;
   let modelArg: string | undefined;
   let baseUrl: string | undefined;
-  // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
-  // interactive picker asks (agent-default), and the non-interactive path
-  // defaults to agent. `undefined` = "no explicit flag given".
   let modeFlag: boolean | undefined;
-  let tuiFlag = false;
-  let noTuiFlag = false;
+  let wantTui = true;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -755,19 +754,51 @@ export async function shellCommand(args: string[]): Promise<void> {
     } else if (arg === "--chat") {
       modeFlag = false;
     } else if (arg === "--tui") {
-      tuiFlag = true;
+      wantTui = true;
     } else if (arg === "--no-tui") {
-      noTuiFlag = true;
+      wantTui = false;
     }
   }
+  return {
+    ...(providerArg !== undefined ? { providerArg } : {}),
+    ...(modelArg !== undefined ? { modelArg } : {}),
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
+    ...(modeFlag !== undefined ? { modeFlag } : {}),
+    wantTui,
+  };
+}
 
-  // Clean OpenTUI agent path (flow 067, opt-in via `--tui`): OpenTUI owns the
-  // terminal from the START — NO readline is created here, so it cannot consume
-  // the terminal's responses to OpenTUI's capability queries (the flows 065/066
-  // corruption). Provider/model come from flags or an in-TUI picker. On no-TTY /
-  // absent optional dep / init failure it returns false and we fall through to the
+/**
+ * Thin TTY wrapper (NOT unit-tested end-to-end): parses flags, wires IO, and
+ * runs the deterministic core.
+ *
+ * Defaults: **TUI + agent** when stdout is a TTY. Escape hatches:
+ * - `--no-tui` → classic readline shell
+ * - `--chat` → chat mode (no tools; also forces readline, not TUI)
+ * - `--tui` is accepted for compatibility (TUI is already the default)
+ *
+ * When `--provider` is ABSENT, providers are detected and the user picks one
+ * (in-TUI picker, or readline picker on fallback). When `--provider X` is
+ * given, the picker is skipped: the model is `--model Y` if given, otherwise
+ * that provider's first detected model.
+ */
+export async function shellCommand(args: string[]): Promise<void> {
+  const flags = parseShellCliFlags(args);
+  let providerArg = flags.providerArg;
+  let modelArg = flags.modelArg;
+  let baseUrl = flags.baseUrl;
+  // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
+  // interactive picker asks (agent-default), and the non-interactive path
+  // defaults to agent. `undefined` = "no explicit flag given".
+  let modeFlag = flags.modeFlag;
+
+  // OpenTUI agent path (default when TTY): OpenTUI owns the terminal from the
+  // START — NO readline is created here, so it cannot consume the terminal's
+  // responses to OpenTUI's capability queries (the flows 065/066 corruption).
+  // Provider/model come from flags or an in-TUI picker. On no-TTY / absent
+  // optional dep / init failure / `--no-tui` / `--chat` it falls through to the
   // readline shell below. Agent mode only (not `--chat`).
-  if (tuiFlag && !noTuiFlag && modeFlag !== false && process.stdout.isTTY) {
+  if (flags.wantTui && modeFlag !== false && process.stdout.isTTY) {
     const cwd = process.cwd();
     const tuiProviderFactory = realMakeProvider(() => {});
     const makeAgentDeps = async (sel: { provider: string; model: string; baseUrl?: string }): Promise<AgentDeps> => {
@@ -926,9 +957,9 @@ export async function shellCommand(args: string[]): Promise<void> {
         systemInstruction: buildAgentSystemInstruction(orient),
         idSeq: () => randomUUID(),
       };
-      // OpenTUI (`--tui`) is handled EARLIER, before readline is created (flow
-      // 067), so it never runs here. This is the readline agent REPL — the default
-      // and the fallback when the TUI declines.
+      // OpenTUI is handled EARLIER (default when TTY), before readline is
+      // created (flow 067), so it never runs here. This is the readline agent
+      // REPL — fallback for `--no-tui`, no-TTY, or TUI init failure.
       await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort);
     } else {
       await runShell(io, deps);

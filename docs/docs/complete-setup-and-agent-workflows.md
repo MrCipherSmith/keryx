@@ -49,37 +49,14 @@ bun --version
 
 ## 2. Global keryx installation
 
-The global installer clones keryx into `~/.keryx/keryx`, installs pinned
-dependencies when available, and creates `~/.local/bin/keryx`.
-
-### Install globally
+### Install / update globally (short form)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh \
-  | bash -s -- --global
+bun i -g github:MrCipherSmith/keryx
 ```
 
-### Add keryx to `PATH`
-
-For the current shell:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Persist it for zsh:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-source "$HOME/.zshrc"
-```
-
-Persist it for bash:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-source "$HOME/.bashrc"
-```
+Re-run the same command to update. This is the recommended path when Bun is
+already installed.
 
 ### Verify the installation
 
@@ -89,26 +66,32 @@ keryx --version
 keryx --help
 ```
 
-### Install a specific Git ref
+### Managed layout (optional)
 
-Use a release tag or commit instead of `main` when reproducibility matters:
+The repository installer clones keryx into `~/.keryx/keryx`, installs pinned
+dependencies when available, and creates `~/.local/bin/keryx`. Use it when you
+want that self-update layout instead of Bun's global package store:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh \
+  | bash -s -- --global
+```
+
+Add `~/.local/bin` to `PATH` if needed:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+# zsh: echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+# bash: echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+```
+
+Pin a ref with the managed installer:
 
 ```bash
 export KERYX_REF="v0.1.0"
 curl -fsSL https://raw.githubusercontent.com/MrCipherSmith/keryx/main/scripts/install.sh \
   | bash -s -- --global
 ```
-
-Replace `v0.1.0` with the release version approved for the project.
-
-### Alternative Bun global installation
-
-```bash
-bun install -g github:MrCipherSmith/keryx
-```
-
-Use the repository installer when you want the managed self-update layout under
-`~/.keryx`.
 
 ## 3. Project-local installation alternative
 
