@@ -12,3 +12,6 @@
 - 2026-07-20T20:49:35.459Z - task-done: T2: Implement per plan
 - 2026-07-20T20:49:35.599Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-07-20T20:49:35.703Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-20T20:51:57.871Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/159 (warning: PR is not a draft)
+- 2026-07-20T20:52:19.095Z - completing
+- 2026-07-20T20:52:21.477Z - done: all gates passed

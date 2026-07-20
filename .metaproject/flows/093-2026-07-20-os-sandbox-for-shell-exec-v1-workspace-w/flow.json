@@ -3,9 +3,9 @@
   "id": "093",
   "slug": "os-sandbox-for-shell-exec-v1-workspace-w",
   "title": "OS-sandbox for shell_exec (v1: workspace-write + network-off, grok-build model)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T20:25:58.473Z",
-  "updatedAt": "2026-07-20T20:49:35.703Z",
+  "updatedAt": "2026-07-20T20:52:21.477Z",
   "source": {
     "type": "description",
     "ref": null
@@ -34,7 +34,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/159"
   },
   "tasks": [
     {
@@ -156,6 +156,20 @@
       "at": "2026-07-20T20:49:35.703Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T20:51:57.871Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/159 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T20:52:19.095Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T20:52:21.477Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
