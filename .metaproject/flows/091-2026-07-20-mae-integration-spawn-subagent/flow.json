@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "091",
+  "slug": "mae-integration-spawn-subagent",
+  "title": "Multi-Agent Engine Integration: spawnSubagent orchestration assembly",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T19:46:27.171Z",
+  "updatedAt": "2026-07-20T20:09:45.448Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d0fecf4a82b811526d749b11e632b74fe4ed430a7d879323faa9d597be12b1cb",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T20:09:44.951Z",
+      "note": "spawnSubagent (orchestrate.ts) composes spawnChild(caps+budget+policy+model)+childRunModel; returns {extension,runModel,provenance,reservation} or fail-closed denial; assembly tests inherit/explicit/tier"
+    },
+    "AC2": {
+      "at": "2026-07-20T20:09:45.056Z",
+      "note": "allowedProvidersFromDetected derives allowlist from injected detection; non-detected provider denied (not in allowlist); network provider admissible only when detected+policy allows; no ambient env read in facade"
+    },
+    "AC3": {
+      "at": "2026-07-20T20:09:45.155Z",
+      "note": "single RemainingBudgetLedger threaded via ctx; 5 sequential calls granted=2 (budget-bound), childCount/remaining correct; maxChildren cap denies 3rd"
+    },
+    "AC4": {
+      "at": "2026-07-20T20:09:45.234Z",
+      "note": "config.subagents mapped to spawnChild caps/tiers/envOverride; omitted config => DEFAULT_MAX_TREE_DEPTH/CHILDREN; default depth cap denies too-deep child"
+    },
+    "AC5": {
+      "at": "2026-07-20T20:09:45.311Z",
+      "note": "foldChildSummary runs quarantineChildSummary; clean passes, instruction-shaped flagged with marker + original preserved"
+    },
+    "AC6": {
+      "at": "2026-07-20T20:09:45.448Z",
+      "note": "facade pure (injected detection+ledger+idSeq/clock, no Date.now/Math.random); orchestrate.test.ts 12 tests; full suite 1638 pass/0 fail incl dep guard; tsc clean"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T19:46:27.171Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T19:47:30.192Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T20:05:42.778Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T20:09:44.563Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T20:09:44.658Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T20:09:44.760Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T20:09:44.862Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T20:09:44.951Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: spawnSubagent (orchestrate.ts) composes spawnChild(caps+budget+policy+model)+childRunModel; returns {extension,runModel,provenance,reservation} or fail-closed denial; assembly tests inherit/explicit/tier"
+    },
+    {
+      "at": "2026-07-20T20:09:45.056Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: allowedProvidersFromDetected derives allowlist from injected detection; non-detected provider denied (not in allowlist); network provider admissible only when detected+policy allows; no ambient env read in facade"
+    },
+    {
+      "at": "2026-07-20T20:09:45.156Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: single RemainingBudgetLedger threaded via ctx; 5 sequential calls granted=2 (budget-bound), childCount/remaining correct; maxChildren cap denies 3rd"
+    },
+    {
+      "at": "2026-07-20T20:09:45.234Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: config.subagents mapped to spawnChild caps/tiers/envOverride; omitted config => DEFAULT_MAX_TREE_DEPTH/CHILDREN; default depth cap denies too-deep child"
+    },
+    {
+      "at": "2026-07-20T20:09:45.311Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: foldChildSummary runs quarantineChildSummary; clean passes, instruction-shaped flagged with marker + original preserved"
+    },
+    {
+      "at": "2026-07-20T20:09:45.448Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: facade pure (injected detection+ledger+idSeq/clock, no Date.now/Math.random); orchestrate.test.ts 12 tests; full suite 1638 pass/0 fail incl dep guard; tsc clean"
+    }
+  ]
+}
