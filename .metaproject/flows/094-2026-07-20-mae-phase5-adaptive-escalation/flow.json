@@ -3,9 +3,9 @@
   "id": "094",
   "slug": "mae-phase5-adaptive-escalation",
   "title": "Multi-Agent Engine Phase 5: adaptive model escalation",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T20:30:08.930Z",
-  "updatedAt": "2026-07-20T20:41:15.649Z",
+  "updatedAt": "2026-07-20T20:42:24.265Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/157"
   },
   "tasks": [
     {
@@ -165,6 +165,25 @@
       "at": "2026-07-20T20:41:15.649Z",
       "event": "ac-confirmed",
       "detail": "AC6: pure/deterministic (injected runRung/ledger/idSeq/clock; no Date.now/Math.random); escalation.test.ts 14 tests; full suite 1715 pass/0 fail (--timeout 30000; earlier fails were 5s-timeout flakes under load, vary run-to-run); tsc clean"
+    },
+    {
+      "at": "2026-07-20T20:42:24.074Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/157 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T20:42:24.220Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T20:42:24.265Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "59b70f8f46865dacc7c72ecc059789c90b3cc800",
+    "ref": "origin/main",
+    "at": "2026-07-20T20:42:24.264Z"
+  }
 }
