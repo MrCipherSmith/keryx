@@ -168,6 +168,26 @@ async function runExplain(args: string[]): Promise<void> {
       console.log(`- [${f.priority}] ${f.source}: ${f.message}${f.line ? ` (line ${f.line})` : ""}`);
     }
   }
+
+  if (args.includes("--narrate")) {
+    const { narrate } = await import("../lib/narrate");
+    console.log("");
+    console.log("## Narration");
+    await narrate({
+      args,
+      requestId: `health-explain:${target}`,
+      maxOutputTokens: 800,
+      system:
+        "You are a senior engineer reviewing a code-health report for one file or module. " +
+        "Explain what the metrics and findings mean and give concrete, prioritized remediation " +
+        "steps. Be specific and concise. Do not invent findings beyond those provided.",
+      user: `Target: ${target}\n\nHealth data (JSON):\n\`\`\`json\n${JSON.stringify(
+        { metrics: result.metrics, findings: result.findings.slice(0, 30) },
+        null,
+        2,
+      )}\n\`\`\``,
+    });
+  }
 }
 
 async function runBaseline(args: string[]): Promise<void> {
@@ -240,7 +260,7 @@ Usage:
   keryx health status
   keryx health gate [--strict-warn]
   keryx health sources
-  keryx health explain <file-or-module>
+  keryx health explain <file-or-module> [--narrate] [--provider <p>] [--json]
   keryx health baseline update [--scope ...]
   keryx health trend [--scope <scope-key>] [--limit <n>]
 `);

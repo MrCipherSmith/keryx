@@ -83,6 +83,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runSimple(args.slice(1), "unblock");
       case "check":
         return await runCheck();
+      case "plan":
+        return await runPlan(args.slice(1));
       case "schema":
         return await runSchema(args.slice(1));
       default:
@@ -118,6 +120,49 @@ async function runInit(args: string[]): Promise<void> {
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,
     `Freeze and start: ${style.cyan(`keryx flow freeze ${result.flow.id}`)} then ${style.cyan(`flow start ${result.flow.id}`)}.`,
   ]);
+}
+
+async function runPlan(args: string[]): Promise<void> {
+  const id = requireId(args);
+  const cwd = process.cwd();
+  const flow = await getService().get({ cwd, id });
+
+  const { readFile } = await import("node:fs/promises");
+  const pathMod = (await import("node:path")).default;
+  const { resolveFlowDir } = await import("../flow/store");
+  const dir = await resolveFlowDir(cwd, id);
+  const read = async (name: string): Promise<string> => {
+    try {
+      return await readFile(pathMod.join(cwd, ".metaproject", "flows", dir, name), "utf8");
+    } catch {
+      return "(none)";
+    }
+  };
+  const [description, ac] = await Promise.all([
+    read("description.md"),
+    read("acceptance-criteria.md"),
+  ]);
+
+  const { narrate } = await import("../lib/narrate");
+  await narrate({
+    args,
+    requestId: `flow-plan:${flow.id}`,
+    maxOutputTokens: 1200,
+    system:
+      "You are a tech lead decomposing a work item into atomic, verifiable implementation " +
+      "tasks. Output a numbered task list; each task is small, independently testable, and " +
+      "phrased as an action. Note ordering/dependencies where they matter. This is a " +
+      "suggestion only — it does not modify flow state.",
+    user: [
+      `Flow ${flow.id}: ${flow.title}`,
+      "",
+      "Description:",
+      description,
+      "",
+      "Acceptance criteria:",
+      ac,
+    ].join("\n"),
+  });
 }
 
 async function runList(args: string[] = []): Promise<void> {
@@ -368,6 +413,7 @@ function printHelp(): void {
     "keryx flow complete <id> [--comment] [--merged <commit>]",
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
     "keryx flow check",
+    "keryx flow plan <id> [--provider <p>] [--json]   (model-suggested task breakdown)",
     "keryx flow schema [--out <path>]",
   ]);
 }

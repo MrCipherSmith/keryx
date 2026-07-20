@@ -82,6 +82,10 @@ the registry (`src/standard/command-registry.ts`) is the source of truth.
 | проверь качество / quality gate | `keryx health run` |
 | вспомни / search memory / past decisions | `keryx memory search "<query>"` |
 | прогони тесты / run tests | `keryx test run [--changed]` |
+| предложи тесты / suggest tests (model) | `keryx test suggest <file>` |
+| объясни health / explain health (model) | `keryx health explain <target> --narrate` |
+| разбей на задачи / plan flow (model) | `keryx flow plan <id>` |
+| обобщи память / reflect memory (model) | `keryx memory reflect --narrate` |
 | покажи флоу / list flows | `keryx flow list` |
 | проверь на секреты / security scan | `keryx security scan <path>` |
 

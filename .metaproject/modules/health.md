@@ -14,7 +14,7 @@ deterministic quality gate report.
 - `keryx health status`
 - `keryx health gate [--strict-warn]`
 - `keryx health sources`
-- `keryx health explain <file-or-module>`
+- `keryx health explain <file-or-module> [--narrate] [--provider <p>] [--json]` — `--narrate` adds a model explanation + prioritized fixes (fail-closed without a credential)
 - `keryx health baseline update [--scope ...]`
 - `keryx health trend [--scope <scope-key>] [--limit <n>]`
 

@@ -15,6 +15,7 @@ and writes normalized test reports for agents, Code Health and gdskills.
 - `keryx test explain <file-or-scope>`
 - `keryx test related <file>`
 - `keryx test report latest [--json]`
+- `keryx test suggest <file> [--provider <p>] [--model <m>] [--json]` — model-backed: propose a prioritized test plan from project frameworks + related tests. Fail-closed without a credential.
 
 ## Data
 

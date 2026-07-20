@@ -11,20 +11,14 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { makeProvider } from "../harness/provider/make-provider";
-import type { ProviderPort } from "../harness/provider/types";
-import type { NormalizedError, NormalizedRequest } from "../harness/provider/types";
-import { providerByName } from "../commands/providers";
+import { defaultModelFor, hasCredential, runModelTurn } from "../harness/provider/single-turn";
+import type { ProviderFactory } from "../harness/provider/single-turn";
 import { pathExists } from "../lib/fs";
 import { collectPages } from "./service";
 import type { WikiPage } from "./types";
 
-/** Provider factory matching `makeProvider`'s shape (injectable for tests). */
-export type ProviderFactory = (
-  name: string,
-  model: string,
-  opts: { fetch: typeof fetch; env?: Record<string, string | undefined>; baseUrl?: string },
-) => ProviderPort;
+export type { ProviderFactory } from "../harness/provider/single-turn";
+export { hasCredential } from "../harness/provider/single-turn";
 
 export interface WikiEnrichInput {
   cwd: string;
@@ -72,11 +66,6 @@ export interface WikiEnrichResult {
 
 const DEFAULT_PROVIDER = "anthropic";
 
-const DEFAULT_MODELS: Record<string, string> = {
-  anthropic: "claude-haiku-4-5-20251001",
-  ollama: "llama3.2",
-};
-
 const DEFAULT_SYSTEM_PROMPT = `You are a technical writer maintaining a software project's knowledge wiki.
 You are given ONE wiki page whose prose is a stub or draft. Rewrite it into clear,
 accurate, well-structured Markdown documentation.
@@ -88,32 +77,6 @@ Rules:
   title, type, and summary. When unsure, describe intent at a high level.
 - Prefer short paragraphs and bullet lists over walls of text.
 - Return ONLY the full Markdown page (frontmatter + body), no commentary.`;
-
-/** Resolve the default model for a provider. */
-function defaultModelFor(provider: string): string {
-  if (DEFAULT_MODELS[provider]) {
-    return DEFAULT_MODELS[provider] as string;
-  }
-  const compat = providerByName(provider);
-  return compat?.models[0] ?? "unknown";
-}
-
-/** Whether a usable credential exists for `provider` in `env`. */
-export function hasCredential(provider: string, env: Record<string, string | undefined>): boolean {
-  if (provider === "ollama") {
-    return true; // local loopback, no key required
-  }
-  if (provider === "anthropic") {
-    const key = env.ANTHROPIC_API_KEY;
-    return key !== undefined && key.length > 0;
-  }
-  const compat = providerByName(provider);
-  if (compat) {
-    const key = env[compat.envKey];
-    return key !== undefined && key.length > 0;
-  }
-  return false;
-}
 
 /** Load the enrichment system prompt, preferring a project-local override. */
 async function loadSystemPrompt(cwd: string): Promise<string> {
@@ -142,30 +105,10 @@ async function selectPages(input: WikiEnrichInput): Promise<WikiPage[]> {
   return pages.filter((page) => (page.status ?? "draft") === "draft");
 }
 
-/** Consume a single provider turn into assembled text (or a normalized error). */
-async function runTurn(
-  provider: ProviderPort,
-  request: NormalizedRequest,
-): Promise<{ text: string; error?: NormalizedError }> {
-  let text = "";
-  let error: NormalizedError | undefined;
-  for await (const event of provider.stream(request, { attemptId: request.requestId })) {
-    if (event.kind === "text_delta" && event.text) {
-      text += event.text;
-    } else if (event.kind === "provider_error" && event.error) {
-      error = event.error;
-    }
-  }
-  return error ? { text, error } : { text };
-}
-
 export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResult> {
   const provider = input.provider ?? DEFAULT_PROVIDER;
   const model = input.model ?? defaultModelFor(provider);
   const env = input.env ?? process.env;
-  const fetchImpl = input.fetch ?? globalThis.fetch;
-  const factory = input.providerFactory ?? makeProvider;
-
   const credentialAvailable = hasCredential(provider, env);
   const result: WikiEnrichResult = {
     provider,
@@ -184,9 +127,8 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   }
 
   // Fail-closed: no credential ⇒ refuse every page with a clear reason rather
-  // than fall back to an offline FakeProvider (which has no transcript to
-  // replay). Dry-run still needs a real provider to preview a completion. An
-  // injected factory (tests) bypasses the credential requirement.
+  // than fall back to an offline FakeProvider. An injected factory (tests)
+  // bypasses the credential requirement.
   if (!credentialAvailable && input.providerFactory === undefined) {
     for (const page of pages) {
       result.pages.push({
@@ -200,27 +142,22 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   }
 
   const systemPrompt = await loadSystemPrompt(input.cwd);
-  const providerPort = factory(provider, model, {
-    fetch: fetchImpl,
-    env,
-    ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
-  });
 
   for (const page of pages) {
     const original = await readFile(page.absolutePath, "utf8");
-    const userPrompt = buildUserPrompt(page, original, input.prompt);
-    const request: NormalizedRequest = {
-      providerId: provider,
-      modelId: model,
-      systemInstruction: systemPrompt,
-      messages: [{ role: "user", content: userPrompt, provenance: "project" }],
-      budget: { maxOutputTokens: 2048, runReservation: 2048 },
-      stream: true,
+    const turn = await runModelTurn({
+      provider,
+      model,
+      system: systemPrompt,
+      user: buildUserPrompt(page, original, input.prompt),
+      maxOutputTokens: 2048,
       requestId: `wiki-enrich:${page.relativePath}`,
-      parentRunId: "wiki-enrich",
-    };
+      env,
+      ...(input.fetch ? { fetch: input.fetch } : {}),
+      ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+      ...(input.providerFactory ? { providerFactory: input.providerFactory } : {}),
+    });
 
-    const turn = await runTurn(providerPort, request);
     if (turn.error) {
       result.pages.push({
         path: page.relativePath,

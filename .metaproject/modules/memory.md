@@ -11,9 +11,10 @@ gdskills learning signal.
 
 - `keryx memory new <type> --title "<title>"`
 - `keryx memory index`
-- `keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>]`
+- `keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--json]`
 - `keryx memory ingest --from-<source> <path>`
 - `keryx memory check`
+- `keryx memory reflect [--narrate] [--provider <p>]` — cluster related entries; `--narrate` adds a model summary of themes (fail-closed without a credential)
 
 ## Config
 

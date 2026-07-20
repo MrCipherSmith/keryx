@@ -63,7 +63,7 @@ export async function memoryCommand(args: string[]): Promise<void> {
     return;
   }
   if (command === "reflect") {
-    await runReflect();
+    await runReflect(args.slice(1));
     return;
   }
 
@@ -271,7 +271,7 @@ async function runCheck(): Promise<void> {
   process.exitCode = 1;
 }
 
-async function runReflect(): Promise<void> {
+async function runReflect(args: string[] = []): Promise<void> {
   const config = await loadMemoryConfig(process.cwd());
   const result = await reflectMemory(process.cwd(), config, new Date());
   console.log("# memory reflect");
@@ -284,6 +284,26 @@ async function runReflect(): Promise<void> {
   }
   for (const created of result.created) {
     console.log(`  -> ${created}`);
+  }
+
+  if (args.includes("--narrate")) {
+    const { narrate } = await import("../lib/narrate");
+    console.log("");
+    console.log("## Narration");
+    await narrate({
+      args,
+      requestId: "memory-reflect",
+      maxOutputTokens: 800,
+      system:
+        "You are a knowledge curator. Given clusters of related project memory entries, " +
+        "summarize the recurring themes and propose which durable lessons/patterns are worth " +
+        "consolidating. Be concise; do not invent entries beyond those listed.",
+      user: `Reflection clusters:\n\`\`\`json\n${JSON.stringify(
+        result.clusters.map((c) => ({ tag: c.tag, members: c.members.length })),
+        null,
+        2,
+      )}\n\`\`\``,
+    });
   }
 }
 
@@ -298,7 +318,7 @@ Usage:
   keryx memory assets <list|verify|pull> [<id>]
   keryx memory ingest --from-<review|health|job|skill-verifier> <path>
   keryx memory check
-  keryx memory reflect
+  keryx memory reflect [--narrate] [--provider <p>]
 
 Types:
   lesson, decision, constraint, known-mistake, historical-context, pattern,

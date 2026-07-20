@@ -120,6 +120,20 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   // ---- memory -----------------------------------------------------------
   {
     module: "memory",
+    command: "memory reflect",
+    summary: "Cluster related memory; --narrate adds a model summary of themes.",
+    intent: ["обобщи память", "reflect memory", "consolidate memory", "темы в памяти"],
+    args: [
+      { name: "narrate", type: "bool", required: false, desc: "add a model narration of clusters" },
+      { name: "provider", type: "enum", required: false, values: ["anthropic", "ollama", "openrouter", "grok"], desc: "model provider (with --narrate)" },
+    ],
+    model: true,
+    promptTemplate: "(inline: memory reflect narration)",
+    read: false,
+    sideEffects: ["writes pattern drafts under memory/"],
+  },
+  {
+    module: "memory",
     command: "memory search",
     summary: "Ranked search over accepted project memory.",
     intent: ["вспомни", "search memory", "были ли решения по", "past decisions"],
@@ -146,7 +160,37 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: false,
     sideEffects: ["writes data/health/artifacts/**"],
   },
+  {
+    module: "health",
+    command: "health explain",
+    summary: "Explain a file/module's health; --narrate adds model remediation steps.",
+    intent: ["объясни health", "explain health", "почему низкий score", "how to fix health"],
+    args: [
+      { name: "<file-or-module>", type: "string", required: true, desc: "target scope" },
+      { name: "narrate", type: "bool", required: false, desc: "add a model narration + fixes" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result (with --narrate)" },
+    ],
+    model: true,
+    promptTemplate: "(inline: health explain narration)",
+    json: true,
+    read: true,
+  },
   // ---- testing ----------------------------------------------------------
+  {
+    module: "testing",
+    command: "test suggest",
+    summary: "Model-generated test plan for a file, matching project frameworks.",
+    intent: ["предложи тесты", "suggest tests", "какие тесты написать", "test plan for file"],
+    args: [
+      { name: "<file>", type: "path", required: true, desc: "source file to plan tests for" },
+      { name: "provider", type: "enum", required: false, values: ["anthropic", "ollama", "openrouter", "grok"], desc: "model provider" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    model: true,
+    promptTemplate: "(inline: test suggest)",
+    json: true,
+    read: true,
+  },
   {
     module: "testing",
     command: "test run",
@@ -161,6 +205,21 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     sideEffects: ["writes data/testing/artifacts/**"],
   },
   // ---- tasks / flow -----------------------------------------------------
+  {
+    module: "tasks",
+    command: "flow plan",
+    summary: "Model-suggested atomic task breakdown from a flow's description + AC.",
+    intent: ["разбей на задачи", "plan flow", "decompose flow", "task breakdown"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "provider", type: "enum", required: false, values: ["anthropic", "ollama", "openrouter", "grok"], desc: "model provider" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    model: true,
+    promptTemplate: "(inline: flow plan)",
+    json: true,
+    read: true,
+  },
   {
     module: "tasks",
     command: "flow list",

@@ -127,7 +127,8 @@
         "complete",
         "block",
         "unblock",
-        "check"
+        "check",
+        "plan"
       ]
     },
     "health": {
@@ -162,7 +163,8 @@
         "context",
         "explain",
         "related",
-        "report"
+        "report",
+        "suggest"
       ],
       "hooks": {
         "gitPostCommit": ".git/hooks/post-commit",

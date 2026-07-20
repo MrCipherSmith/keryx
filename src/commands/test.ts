@@ -50,10 +50,60 @@ export async function testCommand(args: string[]): Promise<void> {
     await runCoverageMap(args.slice(1));
     return;
   }
+  if (command === "suggest") {
+    await runSuggest(args.slice(1));
+    return;
+  }
 
   console.error(`Unknown test command: ${command}`);
   printHelp();
   process.exitCode = 1;
+}
+
+async function runSuggest(args: string[]): Promise<void> {
+  const target = args.find((arg) => !arg.startsWith("--"));
+  if (!target) {
+    console.error("Usage: keryx test suggest <file> [--provider <p>] [--model <m>] [--json]");
+    process.exitCode = 1;
+    return;
+  }
+
+  const cwd = process.cwd();
+  const [context, related] = await Promise.all([
+    analyzeTestingProject(cwd),
+    findRelatedTests(cwd, target),
+  ]);
+  const { readFile } = await import("node:fs/promises");
+  const pathMod = (await import("node:path")).default;
+  let source = "";
+  try {
+    source = await readFile(pathMod.resolve(cwd, target), "utf8");
+  } catch {
+    console.error(`Cannot read ${target}.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { narrate } = await import("../lib/narrate");
+  await narrate({
+    args,
+    requestId: `test-suggest:${target}`,
+    maxOutputTokens: 1200,
+    system:
+      "You are a test engineer. Propose a concise, prioritized test plan (unit + edge cases) " +
+      "for the given source file, matching the project's existing test frameworks and " +
+      "conventions. List concrete cases as a bullet list; do not write full test code unless " +
+      "a case needs a short illustrative snippet.",
+    user: [
+      `Frameworks: ${context.frameworks.join(", ") || "unknown"}`,
+      `Existing related tests: ${related.length > 0 ? related.join(", ") : "none"}`,
+      "",
+      `Source file: ${target}`,
+      "```",
+      source.slice(0, 8000),
+      "```",
+    ].join("\n"),
+  });
 }
 
 async function runAnalyze(): Promise<void> {
@@ -271,6 +321,7 @@ Usage:
   keryx test explain <file-or-scope>
   keryx test related <file>
   keryx test report latest [--json]
+  keryx test suggest <file> [--provider <p>] [--model <m>] [--json]
   keryx test coverage-map build
   keryx test coverage-map status
 `);
