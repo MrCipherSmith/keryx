@@ -188,6 +188,19 @@ export function estimateContextTokens(history: readonly { content: string }[]): 
   return Math.round(chars / 4);
 }
 
+/**
+ * Box height (rows) for a `SelectRenderable` so ALL `count` items stay visible.
+ * OpenTUI renders each item across `linesPerItem` rows — 2 when descriptions are
+ * shown, 1 otherwise — and `maxVisibleItems = floor(height / linesPerItem)`. So a
+ * height of `count` rows shows only `count/2` described items (the "only the first
+ * provider is listed" bug, flow 084). Height is `count * per`, capped at `max`
+ * (overflow then scrolls). Pure.
+ */
+export function selectBoxHeight(count: number, withDescription: boolean, max = 16): number {
+  const per = withDescription ? 2 : 1;
+  return Math.min(max, Math.max(per, count * per));
+}
+
 /** Current wall-clock time as `h:mm AM/PM` (UI-only; the core stays clock-free). */
 function hhmm(): string {
   const d = new Date();
@@ -257,7 +270,10 @@ function selectProviderModelInTui(
     const provSelect = new otui.SelectRenderable(r, {
       id: "picker-provider",
       width: 60,
-      height: Math.min(8, Math.max(1, detected.length)),
+      // Descriptions are shown → 2 rows per item, so height must be 2× the count
+      // or only half the providers stay visible (flow 084 fix).
+      height: selectBoxHeight(detected.length, true),
+      showScrollIndicator: true,
       options: detected.map((d) => ({ name: d.name, description: d.name === "openrouter" ? "hosted · many models" : `${d.models.length} model(s)` })),
       selectedTextColor: "#ffd166",
     });

@@ -7,7 +7,7 @@
 // via dynamic import; the tests skip when it is absent.
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
-import { createTuiAgentIo, estimateContextTokens, fmtTokens, isShellApproved } from "./tui-shell";
+import { createTuiAgentIo, estimateContextTokens, fmtTokens, isShellApproved, selectBoxHeight } from "./tui-shell";
 import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
@@ -190,6 +190,26 @@ test("fmtTokens: compact K formatting", () => {
   expect(fmtTokens(1000)).toBe("1.0K");
   expect(fmtTokens(1234)).toBe("1.2K");
   expect(fmtTokens(22000)).toBe("22.0K");
+});
+
+test("selectBoxHeight: described items need 2 rows each so all stay visible (flow 084)", () => {
+  // Regression: the provider picker showed descriptions (2 rows/item) but was
+  // sized `= count`, so `maxVisibleItems = floor(height/2)` hid all but the first.
+  // With descriptions, every item must survive floor(height / 2).
+  for (const count of [1, 2, 3, 4]) {
+    const h = selectBoxHeight(count, true);
+    expect(Math.floor(h / 2)).toBeGreaterThanOrEqual(count);
+  }
+  expect(selectBoxHeight(3, true)).toBe(6); // 3 providers → 6 rows
+  // Without descriptions, 1 row per item.
+  expect(selectBoxHeight(3, false)).toBe(3);
+  expect(Math.floor(selectBoxHeight(4, false) / 1)).toBeGreaterThanOrEqual(4);
+  // Capped so a huge list scrolls instead of overflowing the screen.
+  expect(selectBoxHeight(100, true)).toBe(16);
+  expect(selectBoxHeight(100, true, 8)).toBe(8);
+  // Never returns 0 rows for an empty list.
+  expect(selectBoxHeight(0, true)).toBe(2);
+  expect(selectBoxHeight(0, false)).toBe(1);
 });
 
 test("ScrollBox transcript renders appended content (headless)", async () => {
