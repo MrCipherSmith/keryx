@@ -115,6 +115,38 @@ export function parseEnvModel(raw: string | undefined): ModelSelection | undefin
   return { providerId, modelId };
 }
 
+/** The optional `model` block on a canonical `subagent-dispatch` object. */
+export interface DispatchModelBlock {
+  provider?: string;
+  model?: string;
+  tier?: string;
+  inherit?: boolean;
+}
+
+/**
+ * Map the declarative `subagent-dispatch` `model` block onto a
+ * {@link ChildModelRequest} for {@link resolveChildModel}. An omitted block, an
+ * explicit `inherit: true`, or an under-specified block (e.g. `provider` without
+ * `model`) all mean inherit — the fail-safe default. A complete `provider`+`model`
+ * pair is `explicit`; otherwise a non-empty `tier` is used. Pure.
+ */
+export function parseDispatchModel(block: DispatchModelBlock | undefined): ChildModelRequest | undefined {
+  if (block === undefined) return undefined;
+  if (block.inherit === true) return { kind: "inherit" };
+  if (
+    block.provider !== undefined &&
+    block.provider.length > 0 &&
+    block.model !== undefined &&
+    block.model.length > 0
+  ) {
+    return { kind: "explicit", providerId: block.provider, modelId: block.model };
+  }
+  if (block.tier !== undefined && block.tier.length > 0) {
+    return { kind: "tier", tier: block.tier };
+  }
+  return { kind: "inherit" };
+}
+
 /**
  * Resolve a child's model/provider, explicitly or by inheriting the parent, then
  * apply the three fail-closed authorization gates. See the module header for the

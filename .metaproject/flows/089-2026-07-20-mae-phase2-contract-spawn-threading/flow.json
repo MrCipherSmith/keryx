@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "089",
+  "slug": "mae-phase2-contract-spawn-threading",
+  "title": "Multi-Agent Engine Phase 2: model block contract + spawnChild threading",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T18:43:24.138Z",
+  "updatedAt": "2026-07-20T19:22:53.463Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f69d0c61274d8b3d6deccd41cc5b33bf89cc608c327f7c08dd7b9396682987a2",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T19:22:52.789Z",
+      "note": "optional model block added to BOTH subagent-dispatch.schema.json copies (parity IDENTICAL); dispatch without it still validates (gdskills suite green)"
+    },
+    "AC2": {
+      "at": "2026-07-20T19:22:52.917Z",
+      "note": "ChildContractExtension + harness-child-contract-extension.schema.json gained optional modelSelection; buildChildDispatchExtension conditional-spread; contract.test.ts 4 new tests"
+    },
+    "AC3": {
+      "at": "2026-07-20T19:22:53.057Z",
+      "note": "spawnChild resolves after policy gate (budget->policy->model); network-under-readonly & not-allowlisted denials refuse whole spawn (no extension); guard-order test"
+    },
+    "AC4": {
+      "at": "2026-07-20T19:22:53.182Z",
+      "note": "success carries modelSelection {providerId,modelId,source}; explicit/inherit reflected; parseDispatchModel maps dispatch block"
+    },
+    "AC5": {
+      "at": "2026-07-20T19:22:53.317Z",
+      "note": "backward-compat: no parentModel => no modelSelection, extension schema-valid, identical to pre-phase (regression test)"
+    },
+    "AC6": {
+      "at": "2026-07-20T19:22:53.463Z",
+      "note": "spawn.test.ts + contract.test.ts extended; full suite 1594 pass/0 fail incl no-optional-imports dep guard; tsc clean; determinism preserved"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T18:43:24.138Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T18:46:35.560Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T19:09:54.321Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T19:22:52.235Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T19:22:52.409Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T19:22:52.500Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T19:22:52.640Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T19:22:52.789Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: optional model block added to BOTH subagent-dispatch.schema.json copies (parity IDENTICAL); dispatch without it still validates (gdskills suite green)"
+    },
+    {
+      "at": "2026-07-20T19:22:52.917Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: ChildContractExtension + harness-child-contract-extension.schema.json gained optional modelSelection; buildChildDispatchExtension conditional-spread; contract.test.ts 4 new tests"
+    },
+    {
+      "at": "2026-07-20T19:22:53.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: spawnChild resolves after policy gate (budget->policy->model); network-under-readonly & not-allowlisted denials refuse whole spawn (no extension); guard-order test"
+    },
+    {
+      "at": "2026-07-20T19:22:53.182Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: success carries modelSelection {providerId,modelId,source}; explicit/inherit reflected; parseDispatchModel maps dispatch block"
+    },
+    {
+      "at": "2026-07-20T19:22:53.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: backward-compat: no parentModel => no modelSelection, extension schema-valid, identical to pre-phase (regression test)"
+    },
+    {
+      "at": "2026-07-20T19:22:53.463Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: spawn.test.ts + contract.test.ts extended; full suite 1594 pass/0 fail incl no-optional-imports dep guard; tsc clean; determinism preserved"
+    }
+  ]
+}

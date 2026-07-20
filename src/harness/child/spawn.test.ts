@@ -643,3 +643,121 @@ describe("Determinism — spawnChild / childResultToEvidence are pure aside from
     expect(first).toEqual(second);
   });
 });
+
+// ============================================================================
+// Model threading (flow 089, Phase 2): guard order budget -> policy -> model.
+// ============================================================================
+
+// A trusted-local profile that permits network (none of the base fixtures do),
+// used to exercise the positive network-provider path.
+const networkAllowedProfile: PolicyProfile = {
+  ...monitoredProfile,
+  defaults: { read: "allow", write: "ask", shell: "ask", network: "allow", delegate: "ask" },
+};
+
+describe("spawnChild — model resolution threading (flow 089)", () => {
+  test("AC5 backward-compat: no parentModel => no modelSelection, extension stays schema-valid", () => {
+    const granted = expectGranted(spawnChild(makeSpawnInput(), makeSpawnDeps()));
+    expect(granted.extension.modelSelection).toBeUndefined();
+    const validation = validateAgainstSchema(
+      "harness-child-contract-extension.schema.json",
+      granted.extension,
+      { schemaDir: SCHEMA_DIR },
+    );
+    expect(validation.valid).toBe(true);
+  });
+
+  test("inherit default: parentModel + omitted modelRequest => source:inherited equals parent", () => {
+    const input = makeSpawnInput({
+      parentModel: { providerId: "ollama", modelId: "qwen2.5-coder" },
+      allowedProviders: new Set(["ollama"]),
+    });
+    const granted = expectGranted(spawnChild(input, makeSpawnDeps()));
+    expect(granted.extension.modelSelection).toEqual({
+      providerId: "ollama",
+      modelId: "qwen2.5-coder",
+      source: "inherited",
+    });
+    const validation = validateAgainstSchema(
+      "harness-child-contract-extension.schema.json",
+      granted.extension,
+      { schemaDir: SCHEMA_DIR },
+    );
+    expect(validation.valid).toBe(true);
+  });
+
+  test("explicit request is reflected on the extension with source:explicit", () => {
+    const input = makeSpawnInput({
+      parentModel: { providerId: "ollama", modelId: "qwen2.5-coder" },
+      allowedProviders: new Set(["ollama"]),
+      childRequest: {
+        ...makeSpawnInput().childRequest,
+        modelRequest: { kind: "explicit", providerId: "ollama", modelId: "llama3" },
+      },
+    });
+    const granted = expectGranted(spawnChild(input, makeSpawnDeps()));
+    expect(granted.extension.modelSelection).toEqual({
+      providerId: "ollama",
+      modelId: "llama3",
+      source: "explicit",
+    });
+  });
+
+  test("a network provider is granted when the child policy permits network", () => {
+    const input = makeSpawnInput({
+      // Parent must also permit network, else the child's network:allow is a
+      // policy escalation and inheritPolicy denies before the model gate runs.
+      parentPolicy: networkAllowedProfile,
+      parentModel: { providerId: "anthropic", modelId: "claude-opus-4-8" },
+      allowedProviders: new Set(["anthropic", "ollama"]),
+      childRequest: { ...makeSpawnInput().childRequest, policyRequest: networkAllowedProfile },
+    });
+    const granted = expectGranted(spawnChild(input, makeSpawnDeps()));
+    expect(granted.extension.modelSelection?.providerId).toBe("anthropic");
+    expect(granted.extension.modelSelection?.source).toBe("inherited");
+  });
+
+  test("AC3 model denial (network provider under read-only policy) refuses the whole spawn — no extension", () => {
+    const input = makeSpawnInput({
+      parentModel: { providerId: "anthropic", modelId: "claude-opus-4-8" },
+      allowedProviders: new Set(["anthropic", "ollama"]),
+      // childRequest.policyRequest defaults to readOnlyProfile (network deny).
+    });
+    const result = spawnChild(input, makeSpawnDeps());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected model resolution to deny the spawn");
+    expect(result.reason).toContain("model resolution denied");
+    expect((result as unknown as { extension?: unknown }).extension).toBeUndefined();
+  });
+
+  test("AC3 model denial (provider not in allowlist) refuses the whole spawn", () => {
+    const input = makeSpawnInput({
+      parentModel: { providerId: "ollama", modelId: "qwen2.5-coder" },
+      allowedProviders: new Set(["ollama"]),
+      childRequest: {
+        ...makeSpawnInput().childRequest,
+        modelRequest: { kind: "explicit", providerId: "deepseek", modelId: "deepseek-chat" },
+      },
+    });
+    const result = spawnChild(input, makeSpawnDeps());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected allowlist denial");
+    expect(result.reason).toContain("model resolution denied");
+  });
+
+  test("guard order: a budget denial preempts model resolution", () => {
+    const input = makeSpawnInput({
+      parentRemainingBudget: { maxRuntimeMs: 1_000, maxToolCalls: 1 },
+      parentModel: { providerId: "ollama", modelId: "qwen2.5-coder" },
+      allowedProviders: new Set(["ollama"]),
+      childRequest: {
+        ...makeSpawnInput().childRequest,
+        budgetRequest: { reservationId: "res-over", maxRuntimeMs: 999_999, maxToolCalls: 999 },
+      },
+    });
+    const result = spawnChild(input, makeSpawnDeps());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected budget denial");
+    expect(result.reason).toContain("budget inheritance denied");
+  });
+});

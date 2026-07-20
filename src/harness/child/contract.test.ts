@@ -359,3 +359,51 @@ describe("Determinism — identical inputs yield identical output (no Date.now/M
     expect(first).toEqual(second);
   });
 });
+
+// --- Optional modelSelection field (flow 089, Phase 2) ----------------------
+
+describe("modelSelection — optional additive extension field", () => {
+  test("omitted modelSelection is absent on the built extension and schema-valid", () => {
+    const extension = buildChildDispatchExtension(makeExtensionInput());
+    expect(extension.modelSelection).toBeUndefined();
+    const result = validateAgainstSchema(EXTENSION_SCHEMA, extension, { schemaDir: FROZEN_SCHEMA_DIR });
+    expect(result.valid).toBe(true);
+  });
+
+  test("a provided modelSelection is carried through and validates against the frozen schema", () => {
+    const extension = buildChildDispatchExtension(
+      makeExtensionInput({
+        modelSelection: { providerId: "anthropic", modelId: "claude-opus-4-8", source: "inherited" },
+      }),
+    );
+    expect(extension.modelSelection).toEqual({
+      providerId: "anthropic",
+      modelId: "claude-opus-4-8",
+      source: "inherited",
+    });
+    const result = validateAgainstSchema(EXTENSION_SCHEMA, extension, { schemaDir: FROZEN_SCHEMA_DIR });
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  test("a modelSelection missing a required sub-field is schema-invalid", () => {
+    const extension = buildChildDispatchExtension(
+      makeExtensionInput({
+        modelSelection: { providerId: "anthropic", modelId: "claude-opus-4-8", source: "inherited" },
+      }),
+    ) as unknown as Record<string, unknown>;
+    const mutated = { ...extension, modelSelection: { providerId: "anthropic", modelId: "claude-opus-4-8" } };
+    const result = validateAgainstSchema(EXTENSION_SCHEMA, mutated, { schemaDir: FROZEN_SCHEMA_DIR });
+    expect(result.valid).toBe(false);
+  });
+
+  test("an out-of-enum modelSelection.source is schema-invalid", () => {
+    const extension = buildChildDispatchExtension(makeExtensionInput()) as unknown as Record<string, unknown>;
+    const mutated = {
+      ...extension,
+      modelSelection: { providerId: "anthropic", modelId: "claude-opus-4-8", source: "guessed" },
+    };
+    const result = validateAgainstSchema(EXTENSION_SCHEMA, mutated, { schemaDir: FROZEN_SCHEMA_DIR });
+    expect(result.valid).toBe(false);
+  });
+});

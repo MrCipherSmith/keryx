@@ -11,6 +11,7 @@ import { OPENAI_COMPAT_PROVIDERS } from "../../commands/providers";
 import type { PolicyProfile, PolicyOutcome, PolicyTrustMode } from "../policy/types";
 import {
   KNOWN_PROVIDER_IDS,
+  parseDispatchModel,
   parseEnvModel,
   providerClass,
   resolveChildModel,
@@ -214,5 +215,40 @@ describe("resolveChildModel — AC6 determinism", () => {
     const snapshot: ModelSelection = { ...parent };
     resolveChildModel(parent, { kind: "inherit" }, deps());
     expect(parent).toEqual(snapshot);
+  });
+});
+
+describe("parseDispatchModel — dispatch model block -> ChildModelRequest (flow 089)", () => {
+  test("undefined block -> undefined (caller inherits)", () => {
+    expect(parseDispatchModel(undefined)).toBeUndefined();
+  });
+
+  test("inherit:true -> {kind:inherit}", () => {
+    expect(parseDispatchModel({ inherit: true })).toEqual({ kind: "inherit" });
+  });
+
+  test("complete provider+model -> explicit", () => {
+    expect(parseDispatchModel({ provider: "ollama", model: "llama3" })).toEqual({
+      kind: "explicit",
+      providerId: "ollama",
+      modelId: "llama3",
+    });
+  });
+
+  test("tier -> {kind:tier}", () => {
+    expect(parseDispatchModel({ tier: "cheap" })).toEqual({ kind: "tier", tier: "cheap" });
+  });
+
+  test("under-specified block (provider without model) falls back to inherit", () => {
+    expect(parseDispatchModel({ provider: "ollama" })).toEqual({ kind: "inherit" });
+    expect(parseDispatchModel({})).toEqual({ kind: "inherit" });
+  });
+
+  test("complete provider+model takes precedence over a tier", () => {
+    expect(parseDispatchModel({ provider: "ollama", model: "llama3", tier: "deep" })).toEqual({
+      kind: "explicit",
+      providerId: "ollama",
+      modelId: "llama3",
+    });
   });
 });

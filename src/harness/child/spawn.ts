@@ -33,6 +33,8 @@ import { buildChildDispatchExtension } from "./contract";
 import type { CanonicalSubagentResult, ChildContractExtension } from "./contract";
 import { childProvenance, inheritBudget, inheritPolicy } from "./isolation";
 import type { BudgetReservation, ParentRemainingBudget } from "./isolation";
+import { providerClass, resolveChildModel } from "./model";
+import type { ChildModelRequest, ModelSelection, ParentModelContext } from "./model";
 
 /** A parent's request to spawn one bounded child attempt. */
 export interface SpawnChildRequest {
@@ -41,6 +43,12 @@ export interface SpawnChildRequest {
   budgetRequest: BudgetReservation;
   policyRequest: PolicyProfile;
   durableResultArtifact: ChildContractExtension["durableResultArtifact"];
+  /**
+   * Optional model/provider request for this child (flow 089). Omitted =>
+   * inherit the parent's selection. Only consulted when the parent supplies
+   * `SpawnChildInput.parentModel`; see {@link resolveChildModel}.
+   */
+  modelRequest?: ChildModelRequest;
 }
 
 /** Everything {@link spawnChild} needs from the parent to derive a bounded child. */
@@ -54,6 +62,20 @@ export interface SpawnChildInput {
   parentPolicy: PolicyProfile;
   parentLeafEntryId?: string;
   childRequest: SpawnChildRequest;
+  /**
+   * The parent orchestrator's active model/provider (flow 089). When present,
+   * `spawnChild` resolves the child model (budget -> policy -> model) and stamps
+   * `modelSelection` on the extension. When ABSENT the model step is skipped
+   * entirely and no `modelSelection` is produced — byte-for-byte the pre-Phase-2
+   * legacy behavior (backward-compatible).
+   */
+  parentModel?: ParentModelContext;
+  /** Providers the child may resolve to (the parent's credentialed allowlist). */
+  allowedProviders?: ReadonlySet<string>;
+  /** Deterministic tier -> selection map for `{kind:"tier"}` requests. */
+  modelTiers?: Record<string, ModelSelection>;
+  /** Parsed `KERYX_SUBAGENT_MODEL` override (undefined when unset / `inherit`). */
+  modelEnvOverride?: ModelSelection;
 }
 
 /** Injected non-determinism for the spawn/evidence path: id source + fixed clock. */
@@ -79,9 +101,11 @@ export type ChildSpawnResult =
   | { ok: false; reason: string };
 
 /**
- * Spawn a bounded child. Fail-closed: budget and policy inheritance are both
- * enforced before anything is built, and EITHER denial refuses to spawn — no
- * partial extension, session entry, or provenance escapes. Deterministic: only
+ * Spawn a bounded child. Fail-closed with a fixed guard order — budget -> policy
+ * -> model — enforced before anything is built; ANY denial refuses to spawn (no
+ * partial extension, session entry, or provenance escapes). The model step runs
+ * only when `input.parentModel` is supplied; otherwise it is skipped and the
+ * result is byte-for-byte the pre-Phase-2 behavior. Deterministic: only
  * `deps.idSeq` (via {@link childProvenance}) is consulted; the same input twice
  * yields deep-equal output.
  */
@@ -96,6 +120,27 @@ export function spawnChild(input: SpawnChildInput, deps: SpawnChildDeps): ChildS
     return { ok: false, reason: `policy inheritance denied: ${policy.reason}` };
   }
 
+  // Model resolution (guard order budget -> policy -> model). Skipped when the
+  // parent supplies no model context — legacy path, no `modelSelection` stamped.
+  let modelSelection: ChildContractExtension["modelSelection"];
+  if (input.parentModel !== undefined) {
+    const model = resolveChildModel(input.parentModel, input.childRequest.modelRequest, {
+      allowedProviders: input.allowedProviders ?? new Set<string>(),
+      policy: policy.policy,
+      providerClass,
+      ...(input.modelTiers !== undefined ? { tiers: input.modelTiers } : {}),
+      ...(input.modelEnvOverride !== undefined ? { envOverride: input.modelEnvOverride } : {}),
+    });
+    if (!model.ok) {
+      return { ok: false, reason: `model resolution denied: ${model.reason}` };
+    }
+    modelSelection = {
+      providerId: model.selection.providerId,
+      modelId: model.selection.modelId,
+      source: model.source,
+    };
+  }
+
   const extension = buildChildDispatchExtension({
     canonicalContract: "subagent-dispatch",
     canonicalContractVersion: input.canonicalContractVersion,
@@ -107,6 +152,7 @@ export function spawnChild(input: SpawnChildInput, deps: SpawnChildDeps): ChildS
     policyFingerprint: policy.policy.fingerprint,
     budgetReservation: budget.reservation,
     durableResultArtifact: input.childRequest.durableResultArtifact,
+    ...(modelSelection !== undefined ? { modelSelection } : {}),
   });
 
   const dispatchArtifactRef: ArtifactRef = {

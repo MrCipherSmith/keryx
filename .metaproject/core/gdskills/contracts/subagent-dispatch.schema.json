@@ -82,6 +82,16 @@
         "max_findings": { "type": ["integer", "null"], "minimum": 1 }
       }
     },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "tier": { "type": "string", "minLength": 1 },
+        "inherit": { "type": "boolean" }
+      }
+    },
     "provenance": {
       "type": "object",
       "additionalProperties": true,

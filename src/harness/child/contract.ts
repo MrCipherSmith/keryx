@@ -33,6 +33,13 @@ export interface ChildContractExtension {
   policyFingerprint: string;
   budgetReservation: { reservationId: string; maxRuntimeMs: number; maxToolCalls?: number };
   durableResultArtifact: { artifactId: string; kind: string; path?: string; hash: string };
+  /**
+   * The child's fail-closed-resolved model/provider selection (flow 089). Optional
+   * and additive: absent on legacy dispatches (backward-compatible), present once a
+   * parent threads model context through `spawnChild` (see `./model` +
+   * `resolveChildModel`). `source` records which resolution rung produced it.
+   */
+  modelSelection?: { providerId: string; modelId: string; source: "env" | "explicit" | "tier" | "inherited" };
 }
 
 /**
@@ -146,6 +153,7 @@ export function buildChildDispatchExtension(
     policyFingerprint: input.policyFingerprint,
     budgetReservation,
     durableResultArtifact,
+    ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
   };
 }
 

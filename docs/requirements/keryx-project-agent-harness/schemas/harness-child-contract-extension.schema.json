@@ -17,6 +17,7 @@
     "contextManifestHash": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
     "policyFingerprint": { "$ref": "harness-envelope.schema.json#/$defs/sha256" },
     "budgetReservation": { "type": "object", "additionalProperties": false, "required": ["reservationId", "maxRuntimeMs"], "properties": { "reservationId": { "$ref": "harness-envelope.schema.json#/$defs/id" }, "maxRuntimeMs": { "type": "integer", "minimum": 1 }, "maxToolCalls": { "type": "integer", "minimum": 0 } } },
-    "durableResultArtifact": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" }
+    "durableResultArtifact": { "$ref": "harness-envelope.schema.json#/$defs/artifactRef" },
+    "modelSelection": { "type": "object", "additionalProperties": false, "required": ["providerId", "modelId", "source"], "properties": { "providerId": { "type": "string", "minLength": 1 }, "modelId": { "type": "string", "minLength": 1 }, "source": { "enum": ["env", "explicit", "tier", "inherited"] } } }
   }
 }
