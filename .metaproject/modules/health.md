@@ -10,7 +10,7 @@ deterministic quality gate report.
 
 ## Commands
 
-- `keryx health run [--strict] [--scope ...] [--source ...]`
+- `keryx health run [--strict] [--scope ...] [--source ...] [--json]`
 - `keryx health status`
 - `keryx health gate [--strict-warn]`
 - `keryx health sources`

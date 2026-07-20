@@ -14,6 +14,7 @@ import { flowCommand } from "./commands/flow";
 import { reviewCommand } from "./commands/review";
 import { rulesCommand } from "./commands/rules";
 import { standardCommand } from "./commands/standard";
+import { commandsCommand } from "./commands/commands";
 import { securityCommand } from "./commands/security";
 import { mcpCommand } from "./commands/mcp";
 import { statusCommand } from "./commands/status";
@@ -155,6 +156,11 @@ export async function main(): Promise<void> {
     return;
   }
 
+  if (command === "commands") {
+    await commandsCommand(args.slice(1));
+    return;
+  }
+
   if (command === "security") {
     await securityCommand(args.slice(1));
     return;
@@ -242,6 +248,7 @@ Usage:
   keryx standard capabilities
   keryx standard baseline --baseline <status> --pr <status>
   keryx standard emit llms [--stdout]
+  keryx commands [--json] [--module <name>] [--intent "<phrase>"] [--intents]
   keryx security status
   keryx security scan <path> [--json]
   keryx security scan-mcp <manifest|dir> [--json]
@@ -278,6 +285,7 @@ Commands:
   flow      Agent-first flow lifecycle (Task Manager)
   review    Managed review packages and lightweight report-only review mode
   standard  Validate the workspace against the Metaproject Standard
+  commands  Agent-callable command registry (intents, args, output, model usage)
   security  Policy-based scanning, redaction, guardrails and audit reports
   mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
 `);

@@ -151,8 +151,13 @@ async function diffAndSummarize(args: string[], config: CtxConfig): Promise<void
 }
 
 async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> {
-  if (args.length === 0) {
-    console.error('Usage: keryx ctx rg "<pattern>" [path]');
+  // `--json` is OUR structured-output flag (a token-aware summary), consumed
+  // here and NOT forwarded to rg (whose native `--json` emits a different,
+  // verbose stream). Strip it before building the rg command.
+  const wantsJson = args.includes("--json");
+  const rgArgs = args.filter((arg) => arg !== "--json");
+  if (rgArgs.length === 0) {
+    console.error('Usage: keryx ctx rg "<pattern>" [path] [--json]');
     process.exitCode = 1;
     return;
   }
@@ -160,11 +165,21 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
   // `--files-with-matches`/`--files`/`--count` make rg emit bare paths (or
   // `path:count`), not the `file:line:col:text` the match parser expects — so
   // summarize those as a file list instead of garbled "(unknown) 0:0" matches.
-  const listMode = rgListMode(args);
+  const listMode = rgListMode(rgArgs);
   const command = listMode
-    ? ["rg", "--no-heading", ...args]
-    : ["rg", "--line-number", "--column", "--no-heading", ...args];
+    ? ["rg", "--no-heading", ...rgArgs]
+    : ["rg", "--line-number", "--column", "--no-heading", ...rgArgs];
   const result = await runCommand(command);
+
+  if (wantsJson) {
+    const lines = nonEmptyLines(result.raw);
+    const payload = listMode
+      ? { command: command.join(" "), exitCode: result.exitCode, mode: listMode, files: lines }
+      : { command: command.join(" "), exitCode: result.exitCode, matches: parseRgMatches(lines) };
+    console.log(JSON.stringify(payload, null, 2));
+    process.exitCode = result.exitCode;
+    return;
+  }
   const summary = listMode
     ? summarizeRgFileList(command.join(" "), result, config, listMode)
     : summarizeRg(command.join(" "), result, config);

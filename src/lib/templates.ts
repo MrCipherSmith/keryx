@@ -2193,11 +2193,20 @@ if (command === "build") {
 }
 
 if (command === "query") {
-  const query = args.slice(1).join(" ").trim();
+  const asJson = args.includes("--json");
+  const query = args
+    .slice(1)
+    .filter((arg) => !arg.startsWith("--"))
+    .join(" ")
+    .trim();
   const graph = await loadGraph(process.cwd());
 
   if (query === "cycles") {
     const cycles = getCycles(graph);
+    if (asJson) {
+      console.log(JSON.stringify({ query: "cycles", cycles }, null, 2));
+      process.exit(0);
+    }
     if (cycles.length === 0) {
       console.log("No cycles found.");
       process.exit(0);
@@ -2210,6 +2219,10 @@ if (command === "query") {
 
   if (query === "orphans") {
     const orphans = getOrphans(graph);
+    if (asJson) {
+      console.log(JSON.stringify({ query: "orphans", orphans }, null, 2));
+      process.exit(0);
+    }
     if (orphans.length === 0) {
       console.log("No orphan modules found.");
       process.exit(0);
@@ -2226,14 +2239,20 @@ if (command === "query") {
 }
 
 if (command === "affected") {
-  const target = args[1];
+  const asJson = args.includes("--json");
+  const target = args.slice(1).find((arg) => !arg.startsWith("--"));
   if (!target) {
-    console.error("Usage: keryx gdgraph affected <file>");
+    console.error("Usage: keryx gdgraph affected <file> [--json]");
     process.exit(1);
   }
 
   const graph = await loadGraph(process.cwd());
   const affected = getAffected(graph, target);
+
+  if (asJson) {
+    console.log(JSON.stringify(affected, null, 2));
+    process.exit(0);
+  }
 
   console.log(\`# Affected context for \${affected.target}\`);
   console.log("");

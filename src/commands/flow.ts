@@ -62,7 +62,7 @@ export async function flowCommand(args: string[]): Promise<void> {
       case "init":
         return await runInit(args.slice(1));
       case "list":
-        return await runList();
+        return await runList(args.slice(1));
       case "status":
         return await runStatus(args.slice(1));
       case "freeze":
@@ -120,8 +120,25 @@ async function runInit(args: string[]): Promise<void> {
   ]);
 }
 
-async function runList(): Promise<void> {
+async function runList(args: string[] = []): Promise<void> {
   const flows = await getService().list({ cwd: process.cwd() });
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        flows.map((flow) => ({
+          id: flow.id,
+          status: flow.status,
+          title: flow.title,
+          tasksDone: flow.tasksDone,
+          tasksTotal: flow.tasksTotal,
+          dir: flow.dir,
+        })),
+        null,
+        2,
+      ),
+    );
+    return;
+  }
   if (flows.length === 0) {
     console.log(`  ${style.dim("No flows yet.")} Start one: ${style.cyan('keryx flow init --title "..."')}`);
     return;

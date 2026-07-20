@@ -39,11 +39,20 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
   }
 
   if (command === "query") {
-    const query = args.slice(1).join(" ").trim();
+    const asJson = args.includes("--json");
+    const query = args
+      .slice(1)
+      .filter((arg) => !arg.startsWith("--"))
+      .join(" ")
+      .trim();
     const graph = await loadGraph(process.cwd());
 
     if (query === "cycles") {
       const cycles = getCycles(graph);
+      if (asJson) {
+        console.log(JSON.stringify({ query: "cycles", cycles }, null, 2));
+        return;
+      }
       if (cycles.length === 0) {
         console.log("No cycles found.");
         return;
@@ -56,6 +65,10 @@ export async function gdgraphCommand(args: string[]): Promise<void> {
 
     if (query === "orphans") {
       const orphans = getOrphans(graph);
+      if (asJson) {
+        console.log(JSON.stringify({ query: "orphans", orphans }, null, 2));
+        return;
+      }
       if (orphans.length === 0) {
         console.log("No orphan modules found.");
         return;
@@ -556,8 +569,10 @@ async function delegateToLocalRunner(args: string[]): Promise<boolean> {
   // `find` / `ctx rg` / `affected`. `affected` is package-only now so it can be
   // symbol-aware (the package default output stays legacy-identical). `find` /
   // `symbol` / `path` are package-only.
+  // `--json` query output is a package-only capability (the copied local runner
+  // predates it); keep those in-process so the package handler serves them.
   const delegatable = (command === "build" && !treesitterOn)
-    || (command === "query" && (args[1] === "cycles" || args[1] === "orphans"));
+    || (command === "query" && !args.includes("--json") && (args[1] === "cycles" || args[1] === "orphans"));
   if (!delegatable) {
     return false;
   }

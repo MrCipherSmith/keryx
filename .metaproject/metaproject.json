@@ -180,7 +180,8 @@
         "collect",
         "index",
         "check-links",
-        "validate"
+        "validate",
+        "enrich"
       ]
     },
     "security": {

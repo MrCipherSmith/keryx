@@ -64,6 +64,12 @@ async function runRun(args: string[]): Promise<void> {
     ...(runId ? { runId } : {}),
   });
 
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result.report, null, 2));
+    process.exitCode = result.report.gate.status === "fail" ? 1 : 0;
+    return;
+  }
+
   const project = result.report.metrics.find((m) => m.key === "project");
   console.log(`# Code Health: ${result.report.gate.status.toUpperCase()}`);
   console.log("");

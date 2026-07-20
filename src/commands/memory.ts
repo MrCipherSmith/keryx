@@ -141,6 +141,27 @@ async function runSearch(args: string[]): Promise<void> {
   };
 
   const result = await getService().search({ cwd: process.cwd(), query, filters });
+
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          query,
+          results: result.results.map((item) => ({
+            score: item.score,
+            title: item.entry.title,
+            type: item.entry.type,
+            status: item.entry.status,
+            path: item.entry.relativePath,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
   console.log(`# memory search: ${query}`);
   console.log("");
   console.log(`results: ${result.results.length}`);
