@@ -853,7 +853,7 @@ export async function shellCommand(args: string[]): Promise<void> {
       // DA/DSR query responses as text and corrupts the terminal (see the flow-065
       // report). Until that handoff is fixed and validated on a real terminal, the
       // readline shell is the default; `--tui` opts in (and `--no-tui` overrides).
-      if (tuiFlag && !noTuiFlag && process.stdout.isTTY && (await launchTuiAgentShell(agentDeps, { onStart: () => rl.close() }))) {
+      if (tuiFlag && !noTuiFlag && process.stdout.isTTY && (await launchTuiAgentShell(agentDeps, { onBeforeInit: () => rl.close() }))) {
         return;
       }
       await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort);

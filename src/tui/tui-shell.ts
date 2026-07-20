@@ -166,7 +166,7 @@ export function isShellApproved(answer: string): boolean {
  */
 export async function launchTuiAgentShell(
   deps: AgentDeps,
-  opts?: { onStart?: () => void },
+  opts?: { onBeforeInit?: () => void },
 ): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -177,6 +177,12 @@ export async function launchTuiAgentShell(
   } catch {
     return false;
   }
+  // Hand off stdin BEFORE OpenTUI initialises: the caller detaches its readline
+  // interface so the terminal's responses to OpenTUI's capability/DA/DSR queries
+  // (sent inside `createCliRenderer`) reach OpenTUI's parser instead of leaking as
+  // text. Runs only past the no-TTY / absent-dep guards above, so those fallback
+  // paths keep the readline shell usable.
+  opts?.onBeforeInit?.();
 
   let renderer: Renderer | undefined;
   let resolveDone: () => void = () => {};
@@ -198,10 +204,6 @@ export async function launchTuiAgentShell(
         resolveDone();
       },
     }));
-    // The renderer initialised — hand off stdin (the caller closes readline) so
-    // OpenTUI is the sole stdin consumer. Called ONLY past this point, so the
-    // pre-init fallback paths above keep the readline shell usable.
-    opts?.onStart?.();
     // A scrollable, sticky-to-bottom transcript so long conversations scroll and
     // auto-follow the newest output; the AgentIO renders into its `.content`.
     const scroll = new otui.ScrollBoxRenderable(r, {
