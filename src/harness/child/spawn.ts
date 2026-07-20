@@ -76,6 +76,13 @@ export interface SpawnChildInput {
   modelTiers?: Record<string, ModelSelection>;
   /** Parsed `KERYX_SUBAGENT_MODEL` override (undefined when unset / `inherit`). */
   modelEnvOverride?: ModelSelection;
+  /**
+   * Fail-closed structural caps (flow 090). When absent the pre-Phase-3 behavior
+   * is unchanged. Depth is read from `parentProvenance.taintIds.length` (the
+   * would-be child sits one level deeper); `currentChildCount`/`maxChildren` bound
+   * the total fan-out (typically fed from a {@link RemainingBudgetLedger}).
+   */
+  caps?: { maxTreeDepth?: number; maxChildren?: number; currentChildCount?: number };
 }
 
 /** Injected non-determinism for the spawn/evidence path: id source + fixed clock. */
@@ -110,6 +117,27 @@ export type ChildSpawnResult =
  * yields deep-equal output.
  */
 export function spawnChild(input: SpawnChildInput, deps: SpawnChildDeps): ChildSpawnResult {
+  // Structural caps first (cheapest, fail-closed). Skipped entirely when no caps
+  // are supplied — legacy callers are unchanged.
+  if (input.caps !== undefined) {
+    const parentDepth = input.parentProvenance.taintIds?.length ?? 0;
+    if (input.caps.maxTreeDepth !== undefined && parentDepth >= input.caps.maxTreeDepth) {
+      return {
+        ok: false,
+        reason: `subagent depth cap ${input.caps.maxTreeDepth} reached (parent depth ${parentDepth})`,
+      };
+    }
+    if (
+      input.caps.maxChildren !== undefined &&
+      (input.caps.currentChildCount ?? 0) >= input.caps.maxChildren
+    ) {
+      return {
+        ok: false,
+        reason: `subagent child count cap ${input.caps.maxChildren} reached`,
+      };
+    }
+  }
+
   const budget = inheritBudget(input.parentRemainingBudget, input.childRequest.budgetRequest);
   if (!budget.ok) {
     return { ok: false, reason: `budget inheritance denied: ${budget.reason}` };
@@ -177,6 +205,19 @@ export function spawnChild(input: SpawnChildInput, deps: SpawnChildDeps): ChildS
   const provenance = childProvenance(input.parentProvenance, { idSeq: deps.idSeq });
 
   return { ok: true, extension, dispatchEntryPayload, appendOptions, provenance };
+}
+
+/**
+ * Map a child extension's resolved `modelSelection` onto the `provider`/`model`
+ * pair a child `runOffline` consumes (flow 090 / AC4). Returns `undefined` when
+ * the extension carries no selection (legacy path), in which case the child run
+ * falls back to the harness default provider/model. Pure.
+ */
+export function childRunModel(
+  extension: Pick<ChildContractExtension, "modelSelection">,
+): { provider: string; model: string } | undefined {
+  const sel = extension.modelSelection;
+  return sel === undefined ? undefined : { provider: sel.providerId, model: sel.modelId };
 }
 
 /** Input to {@link childResultToEvidence}: a canonical child result + its extension. */

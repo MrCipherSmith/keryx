@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "090",
+  "slug": "mae-phase3-caps-ledger-run-quarantine",
+  "title": "Multi-Agent Engine Phase 3: subagent caps + shared budget ledger + run threading + injection quarantine",
+  "status": "in-progress",
+  "createdAt": "2026-07-20T19:29:45.892Z",
+  "updatedAt": "2026-07-20T19:40:51.416Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:700414c51be37ed72f06676b5aae18e8182b28025564446cc083becfead0a730",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T19:40:50.582Z",
+      "note": "RemainingBudgetLedger (ledger.ts) decrements across admit + admitWaves; property sweep proves cumulative <= initial; denied admit leaves state unchanged; inheritBudget unchanged"
+    },
+    "AC2": {
+      "at": "2026-07-20T19:40:50.793Z",
+      "note": "spawnChild caps: depth from taintIds.length >= maxTreeDepth denied; currentChildCount>=maxChildren denied (distinct reasons); caps omitted => unchanged; ledger maxChildren cap tested"
+    },
+    "AC3": {
+      "at": "2026-07-20T19:40:50.985Z",
+      "note": "ChildTask.modelRequest optional, carried; planWaves plan identical with/without it (fold model-agnostic); scheduler tests green"
+    },
+    "AC4": {
+      "at": "2026-07-20T19:40:51.185Z",
+      "note": "childRunModel(extension)->{provider,model}; runOffline stamps them on output.metrics (stub-provider test); makeProvider credentials map precedes ambient env; unauthorized provider => FakeProvider"
+    },
+    "AC5": {
+      "at": "2026-07-20T19:40:51.335Z",
+      "note": "quarantine.ts scans control-tag/turn-marker/permission-config; prepends marker, never removes text; 6 tests incl determinism"
+    },
+    "AC6": {
+      "at": "2026-07-20T19:40:51.416Z",
+      "note": "all new modules pure (no Date.now/Math.random); full suite 1618 pass/0 fail incl no-optional-imports dep guard; tsc clean"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-20T19:29:45.892Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-20T19:30:45.208Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-20T19:30:45.350Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-20T19:40:50.120Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T19:40:50.219Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T19:40:50.390Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T19:40:50.481Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T19:40:50.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: RemainingBudgetLedger (ledger.ts) decrements across admit + admitWaves; property sweep proves cumulative <= initial; denied admit leaves state unchanged; inheritBudget unchanged"
+    },
+    {
+      "at": "2026-07-20T19:40:50.793Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: spawnChild caps: depth from taintIds.length >= maxTreeDepth denied; currentChildCount>=maxChildren denied (distinct reasons); caps omitted => unchanged; ledger maxChildren cap tested"
+    },
+    {
+      "at": "2026-07-20T19:40:50.986Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: ChildTask.modelRequest optional, carried; planWaves plan identical with/without it (fold model-agnostic); scheduler tests green"
+    },
+    {
+      "at": "2026-07-20T19:40:51.185Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: childRunModel(extension)->{provider,model}; runOffline stamps them on output.metrics (stub-provider test); makeProvider credentials map precedes ambient env; unauthorized provider => FakeProvider"
+    },
+    {
+      "at": "2026-07-20T19:40:51.336Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: quarantine.ts scans control-tag/turn-marker/permission-config; prepends marker, never removes text; 6 tests incl determinism"
+    },
+    {
+      "at": "2026-07-20T19:40:51.416Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: all new modules pure (no Date.now/Math.random); full suite 1618 pass/0 fail incl no-optional-imports dep guard; tsc clean"
+    }
+  ]
+}

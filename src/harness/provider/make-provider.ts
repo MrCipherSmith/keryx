@@ -21,6 +21,15 @@ export interface MakeProviderOpts {
   fetch: typeof fetch;
   /** Credential/config source; defaults to `process.env`. */
   env?: Record<string, string | undefined>;
+  /**
+   * Scoped credential map for a subagent/child construction (flow 090 / AC4).
+   * When provided it is used for key lookup INSTEAD of `env`/`process.env`, so a
+   * child sees only the credentials its policy grants and cannot probe ambient
+   * `process.env` for the presence of keys it was never granted (Critic Q8). Only
+   * the keys present here are visible; everything else fails closed to
+   * `FakeProvider`.
+   */
+  credentials?: Record<string, string | undefined>;
   /** Ollama loopback base url (forwarded to `OllamaProvider` when present). */
   baseUrl?: string;
 }
@@ -37,7 +46,9 @@ export interface MakeProviderOpts {
  * does not vary construction today.
  */
 export function makeProvider(name: string, _model: string, opts: MakeProviderOpts): ProviderPort {
-  const env = opts.env ?? process.env;
+  // A scoped credential map (child path) takes precedence over ambient env, so a
+  // child construction never reads `process.env` for keys it was not granted.
+  const env = opts.credentials ?? opts.env ?? process.env;
   if (name === "anthropic") {
     const apiKey = env.ANTHROPIC_API_KEY;
     if (apiKey === undefined || apiKey.length === 0) {

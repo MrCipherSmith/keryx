@@ -144,3 +144,36 @@ test("zai (GLM) constructs a network provider from ZAI_API_KEY (versioned coding
   const provider = makeProvider("zai", "glm-4.6", makeOpts({ env: { ZAI_API_KEY: "sk-zai" } }));
   expect(provider.describe().descriptor.providerId).toBe("ollama");
 });
+
+// --- flow 090: credential-scoped child construction (AC4) -------------------
+
+describe("makeProvider — scoped credentials (flow 090, AC4)", () => {
+  test("opts.credentials supplies the key (constructs the network provider)", () => {
+    const provider = makeProvider(
+      "anthropic",
+      "claude-opus-4-8",
+      makeOpts({ credentials: { ANTHROPIC_API_KEY: "scoped-key" } }),
+    );
+    expect(provider).toBeInstanceOf(AnthropicProvider);
+  });
+
+  test("opts.credentials takes precedence over opts.env — ambient env is NOT consulted", () => {
+    // env has the key, but the empty scoped credential map wins => fail-closed to Fake.
+    const provider = makeProvider(
+      "anthropic",
+      "claude-opus-4-8",
+      makeOpts({ env: { ANTHROPIC_API_KEY: "ambient-key" }, credentials: {} }),
+    );
+    expect(provider).toBeInstanceOf(FakeProvider);
+    expect(provider.describe().descriptor.providerId).toBe("fake-provider");
+  });
+
+  test("a child granted only ollama cannot construct a network provider it wasn't granted", () => {
+    const provider = makeProvider(
+      "deepseek",
+      "deepseek-chat",
+      makeOpts({ credentials: { OLLAMA: "n/a" } }),
+    );
+    expect(provider).toBeInstanceOf(FakeProvider);
+  });
+});
