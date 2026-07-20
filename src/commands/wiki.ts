@@ -52,6 +52,11 @@ export async function wikiCommand(args: string[]): Promise<void> {
     return;
   }
 
+  if (command === "enrich") {
+    await runEnrich(args.slice(1));
+    return;
+  }
+
   if (command === "context") {
     const { wikiContext } = await import("../ctx/orient");
     console.log(await wikiContext(process.cwd()));
@@ -226,6 +231,50 @@ async function runAsk(args: string[]): Promise<void> {
   console.log(result.answerMarkdown);
 }
 
+async function runEnrich(args: string[]): Promise<void> {
+  const { wikiEnrich } = await import("../wiki/enrich");
+  const prompt = optionValue(args, "--prompt");
+  const provider = optionValue(args, "--provider");
+  const model = optionValue(args, "--model");
+  // Positional page = first bare token that is neither a flag nor a flag's value.
+  const valueFlags = new Set(["--page", "--prompt", "--provider", "--model"]);
+  const page = args.find(
+    (arg, i) => !arg.startsWith("--") && !(i > 0 && valueFlags.has(args[i - 1] as string)),
+  );
+  const result = await wikiEnrich({
+    cwd: process.cwd(),
+    ...(page ? { page } : {}),
+    all: args.includes("--all"),
+    ...(prompt ? { prompt } : {}),
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+    dryRun: args.includes("--dry-run"),
+  });
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    process.exitCode = result.failed > 0 ? 1 : 0;
+    return;
+  }
+
+  console.log("# gdwiki enrich");
+  console.log("");
+  console.log(`provider: ${result.provider} (${result.model})`);
+  console.log(`credential available: ${result.credentialAvailable ? "yes" : "no"}`);
+  console.log(
+    `enriched: ${result.enriched}  dry-run: ${result.dryRun}  skipped: ${result.skipped}  failed: ${result.failed}`,
+  );
+  console.log("");
+  for (const entry of result.pages) {
+    const note = entry.reason ? ` — ${entry.reason}` : "";
+    console.log(`- ${entry.action}: ${entry.path}${note}`);
+  }
+  if (result.pages.length === 0) {
+    console.log("- no draft pages to enrich (use --page <slug> to force one)");
+  }
+  process.exitCode = result.failed > 0 ? 1 : 0;
+}
+
 async function runBacklinks(args: string[]): Promise<void> {
   const target = args.find((a) => !a.startsWith("--"));
   if (!target) {
@@ -275,6 +324,7 @@ Usage:
   keryx wiki check-links
   keryx wiki validate
   keryx wiki ask "<question>" [--k <n>] [--rerank]
+  keryx wiki enrich [<page>|--all] [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]
   keryx wiki context
   keryx wiki backlinks <wiki-page-or-code-file>
 

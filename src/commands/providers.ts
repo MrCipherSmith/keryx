@@ -103,6 +103,14 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     models: ["kimi-k2-turbo-preview", "moonshot-v1-128k", "moonshot-v1-32k"],
     note: "Kimi",
   },
+  {
+    name: "grok",
+    label: "xAI (Grok)",
+    baseUrl: "https://api.x.ai",
+    envKey: "XAI_API_KEY",
+    models: ["grok-2-latest", "grok-2", "grok-beta"],
+    note: "xAI · OpenAI-compatible",
+  },
 ];
 
 /** Look up a registry provider by its `name`. */

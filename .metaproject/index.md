@@ -64,6 +64,27 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | Implement, review, refactor, document, plan, analyze, or verify | `gdskills` | `skills/catalog.md`; `project-skills/`; `skills/gdskills/` | Route to local orchestrators/reviewers/quality skills before global skills. |
 | Start, resume, track, or finish managed work | `flow` / `flow-orchestrator` | `skills/flow/SKILL.md`; `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` | Use Task Manager state and never edit flow files by hand. |
 
+### Command Intent Map (agent-callable)
+
+For a direct natural-language phrase → concrete `keryx` command, consult the
+machine-readable command registry: `keryx commands --json` (full descriptor
+schema: intents, args, output shape, model usage) or `keryx commands --intent
+"<phrase>"` to resolve one phrase. The table below is the curated quick map;
+the registry (`src/standard/command-registry.ts`) is the source of truth.
+
+| User intent | Command |
+|-------------|---------|
+| найди в коде / search code / grep | `keryx ctx rg "<pattern>"` |
+| что сломается если изменить / blast radius | `keryx gdgraph affected <file-or-symbol>` |
+| найди циклы / orphan files | `keryx gdgraph query <cycles\|orphans>` |
+| обогати вики / enrich wiki | `keryx wiki enrich [--page <slug>\|--all]` |
+| сделай индексацию вики / reindex wiki | `keryx wiki index` |
+| проверь качество / quality gate | `keryx health run` |
+| вспомни / search memory / past decisions | `keryx memory search "<query>"` |
+| прогони тесты / run tests | `keryx test run [--changed]` |
+| покажи флоу / list flows | `keryx flow list` |
+| проверь на секреты / security scan | `keryx security scan <path>` |
+
 ## Agent Workflow
 
 1. Read this file first.

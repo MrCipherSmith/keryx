@@ -14,6 +14,7 @@ Project knowledge base from business logic to implementation.
 - `keryx wiki index`
 - `keryx wiki check-links`
 - `keryx wiki validate`
+- `keryx wiki enrich [<page>|--all] [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]` — model-backed: rewrite draft page prose via a provider (anthropic/ollama/openrouter/grok). Fail-closed without a credential. Prompt override: `.metaproject/wiki/enrich.prompt.md`.
 
 ## Page Types
 
