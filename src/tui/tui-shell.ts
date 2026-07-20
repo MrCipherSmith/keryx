@@ -217,7 +217,10 @@ function selectProviderModelInTui(
       const modelSelect = new otui.SelectRenderable(r, {
         id: "picker-model",
         width: 60,
-        height: Math.min(10, Math.max(1, models.length)),
+        // showDescription defaults to TRUE, which reserved a 2nd (empty) line per
+        // item and hid the model name — models have no description, so disable it.
+        showDescription: false,
+        height: Math.min(12, Math.max(3, models.length)),
         options: models.map((m) => ({ name: m, description: "" })),
       });
       box.add(modelSelect);
@@ -364,13 +367,15 @@ export async function launchTuiAgentShell(opts: {
     });
     r.root.add(menu);
 
-    // Bordered composer (grok-style rounded input box).
+    // Bordered composer (grok-style rounded input box); taller for breathing room.
     const composer = new otui.BoxRenderable(r, {
       id: "composer",
       borderStyle: "rounded",
       border: true,
       paddingLeft: 1,
       paddingRight: 1,
+      paddingTop: 1,
+      paddingBottom: 1,
     });
     const input = new otui.InputRenderable(r, { id: "prompt", placeholder: "type a task or / for commands" });
     composer.add(input);
@@ -401,30 +406,9 @@ export async function launchTuiAgentShell(opts: {
 
     const history: NormalizedMessage[] = [];
     let busy = false;
-    input.on(otui.InputRenderableEvents.ENTER, () => {
-      // A pending shell_exec approval consumes this submit (y/N), never a turn.
-      if (pendingApproval !== undefined) {
-        const ok = isShellApproved(input.value);
-        input.value = "";
-        menu.visible = false;
-        const resolve = pendingApproval;
-        pendingApproval = undefined;
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `av${uid++}`,
-            content: ok ? otui.t`${otui.green("approved")}` : otui.t`${otui.red("denied")}`,
-          }),
-        );
-        resolve(ok);
-        return;
-      }
-      if (busy) {
-        return; // one turn at a time
-      }
-      const line = input.value.trim();
-      input.value = "";
-      menu.visible = false;
-      if (line.length === 0) {
+    // Run a submitted line: a slash command, an unknown-slash notice, or a turn.
+    const runLine = (line: string): void => {
+      if (busy || line.length === 0) {
         return;
       }
       const command = findAgentCommand(line);
@@ -464,6 +448,60 @@ export async function launchTuiAgentShell(opts: {
       void runAgentTurn(io, deps, history, line).finally(() => {
         busy = false;
       });
+    };
+
+    // Route ↑/↓/Enter/Esc to the `/` command dropdown when it is open — via the
+    // GLOBAL internal key handler, which runs BEFORE the focused Input, so a
+    // handled key does not also move the Input's cursor / submit a turn.
+    r._internalKeyInput.onInternal("keypress", (key) => {
+      if (!menu.visible) {
+        return;
+      }
+      if (key.name === "up") {
+        menu.moveUp();
+        key.preventDefault();
+        key.stopPropagation();
+      } else if (key.name === "down") {
+        menu.moveDown();
+        key.preventDefault();
+        key.stopPropagation();
+      } else if (key.name === "return" || key.name === "enter") {
+        const opt = menu.getSelectedOption();
+        menu.visible = false;
+        input.value = "";
+        if (opt !== null) {
+          runLine(opt.name);
+        }
+        key.preventDefault();
+        key.stopPropagation();
+      } else if (key.name === "escape") {
+        menu.visible = false;
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+
+    input.on(otui.InputRenderableEvents.ENTER, () => {
+      // A pending shell_exec approval consumes this submit (y/N), never a turn.
+      if (pendingApproval !== undefined) {
+        const ok = isShellApproved(input.value);
+        input.value = "";
+        menu.visible = false;
+        const resolve = pendingApproval;
+        pendingApproval = undefined;
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `av${uid++}`,
+            content: ok ? otui.t`${otui.green("approved")}` : otui.t`${otui.red("denied")}`,
+          }),
+        );
+        resolve(ok);
+        return;
+      }
+      const line = input.value.trim();
+      input.value = "";
+      menu.visible = false;
+      runLine(line);
     });
 
     await done;
