@@ -3,9 +3,9 @@
   "id": "096",
   "slug": "mae-phase6b-worktree-isolation",
   "title": "Multi-Agent Engine Phase 6b: worktree isolation for parallel mutators",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T20:46:07.517Z",
-  "updatedAt": "2026-07-20T22:32:52.538Z",
+  "updatedAt": "2026-07-20T22:34:11.227Z",
   "source": {
     "type": "description",
     "ref": null
@@ -34,7 +34,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/164"
   },
   "tasks": [
     {
@@ -156,6 +156,25 @@
       "at": "2026-07-20T22:32:52.538Z",
       "event": "ac-confirmed",
       "detail": "AC5: worktree.test.ts 10 tests pass; full suite 1773 pass/0 fail (--timeout 30000, incl dep guard); tsc clean (also fixed pre-existing wiki/enrich.ts dead-branch TS2367 blocking main; chip filed for author on latent skipped-count); no new deps"
+    },
+    {
+      "at": "2026-07-20T22:34:11.104Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/164 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-20T22:34:11.199Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T22:34:11.227Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "e775a0c0ec26ac1be8bda73711fd83a24827c5d2",
+    "ref": "origin/main",
+    "at": "2026-07-20T22:34:11.227Z"
+  }
 }

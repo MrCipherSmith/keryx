@@ -12,3 +12,6 @@
 - 2026-07-20T22:32:52.364Z - ac-confirmed: AC3: fail-closed: empty taskId for isolation-required mutator denied; duplicate taskId among mutators denied (worktree id collision); never silent shared-cwd fallback
 - 2026-07-20T22:32:52.452Z - ac-confirmed: AC4: injected WorktreePort: provisionWorktrees creates in stable taskId order; resolveChildCwd feeds cwd (worktree path vs sharedCwd); mergeWorktrees merges in stable order; fake-port test asserts call order; unprovisioned worktree throws
 - 2026-07-20T22:32:52.538Z - ac-confirmed: AC5: worktree.test.ts 10 tests pass; full suite 1773 pass/0 fail (--timeout 30000, incl dep guard); tsc clean (also fixed pre-existing wiki/enrich.ts dead-branch TS2367 blocking main; chip filed for author on latent skipped-count); no new deps
+- 2026-07-20T22:34:11.104Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/164 (warning: PR is not a draft)
+- 2026-07-20T22:34:11.199Z - completing
+- 2026-07-20T22:34:11.227Z - done: all gates passed
