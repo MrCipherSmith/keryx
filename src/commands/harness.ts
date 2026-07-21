@@ -542,10 +542,19 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     commandArgs,
   } = parsedArgs;
 
+  /** Structured fail-closed outcome (machine-readable; no spawn). */
+  const emitBlocked = (reason: string, sandbox?: { launcher?: string; detail?: string }): void => {
+    const body: Record<string, unknown> = {
+      outcome: { kind: "blocked", reason },
+    };
+    if (sandbox !== undefined) {
+      body.sandbox = sandbox;
+    }
+    console.log(JSON.stringify(body));
+  };
+
   if (maskModeError !== undefined) {
-    console.log(
-      `keryx harness exec: invalid --mask-mode "${maskModeError}" (expected auto|manual|off).`,
-    );
+    emitBlocked(`invalid --mask-mode "${maskModeError}" (expected auto|manual|off)`);
     return;
   }
 
@@ -553,8 +562,8 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   // surface as an opaque exit 71 from the sandbox launcher failing to exec "".
   // Say what is actually wrong instead.
   if (deps?.processAdapter === undefined && commandPath.length === 0) {
-    console.log(
-      "keryx harness exec: no command. Put the program after a `--` terminator, " +
+    emitBlocked(
+      "no command. Put the program after a `--` terminator, " +
         "e.g. `keryx harness exec --allow-real-subprocess -- /bin/echo hi`.",
     );
     return;
@@ -588,7 +597,8 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   const envOrPolicyDomains = policyDomains.length > 0 ? policyDomains : undefined;
 
   // Credential masking via shared resolver (P0–P2). Keys from auth.json participate
-  // in auto-mask (envWithSavedApiKeys); real values never logged.
+  // in auto-mask (envWithSavedApiKeys); real values never logged. Prefer shared
+  // resolveMasksFromSandboxEnv — no forked mask/TLS logic (ADR-0007 / AC-H7).
   const envForMask = envWithSavedApiKeys(env);
   const providers = buildDefaultMaskProviders(OPENAI_COMPAT_PROVIDERS);
   const maskResult = resolveMasksFromSandboxEnv({
@@ -600,7 +610,9 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     projectRoot: cwd,
   });
   if (!maskResult.ok) {
-    console.log(`keryx harness exec: ${maskResult.reason}`);
+    // AC-H1: non-empty masks without TLS (and other resolve failures) → blocked,
+    // structured reason, no spawn.
+    emitBlocked(maskResult.reason);
     return;
   }
   const masks: MaskedCredential[] = maskResult.resolution.masks.map((m) => ({
@@ -665,8 +677,18 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   // (writable = cwd + session tmp) + network OFF, fail-closed when the launcher
   // is missing. Set KERYX_DANGEROUSLY_DISABLE_SANDBOX=1 to opt out, or
   // KERYX_SANDBOX_ALLOW_UNSANDBOXED=1 to run unsandboxed when no launcher exists.
+  const usingInjectedAdapter = deps?.processAdapter !== undefined;
   const adapter: ProcessAdapter =
     deps?.processAdapter ?? buildDefaultShellAdapter(cwd, env, profileOverride);
+  // For diagnostics (AC-H2): name the platform launcher when we own the adapter.
+  const sandboxLauncher =
+    usingInjectedAdapter
+      ? undefined
+      : process.platform === "darwin"
+        ? "seatbelt"
+        : process.platform === "linux"
+          ? "bwrap"
+          : "none";
 
   const runInput: RunContainedProcessInput = {
     command,
@@ -688,18 +710,51 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   try {
     const outcome = runContainedProcess(runInput, { clock, idSeq });
     if (outcome.kind === "completed") {
+      const exitCode = outcome.exitCode;
+      // Exit 71 (EX_OSERR) from a sandboxed run is usually launcher/helper failure
+      // (non-executable path, missing binary) — surface structured detail so
+      // operators do not mark UNKNOWN on bare 71 (AC-H2).
+      const exit71Detail =
+        exitCode === 71 && sandboxLauncher !== undefined && sandboxLauncher !== "none"
+          ? "sandbox or OS reported exit 71 (EX_OSERR): often missing/non-executable helper, path denied inside the sandbox, or launcher failure"
+          : undefined;
       output = {
         outcome: {
           kind: "completed",
-          ...(outcome.exitCode !== undefined ? { exitCode: outcome.exitCode } : {}),
+          ...(exitCode !== undefined ? { exitCode } : {}),
+          ...(exit71Detail !== undefined ? { reason: exit71Detail } : {}),
         },
         receipt: outcome.receipt,
         evidenceRefs: outcome.evidenceRefs,
+        ...(exit71Detail !== undefined && sandboxLauncher !== undefined
+          ? {
+              sandbox: {
+                launcher: sandboxLauncher,
+                detail: exit71Detail,
+              },
+            }
+          : sandboxLauncher !== undefined
+            ? { sandbox: { launcher: sandboxLauncher } }
+            : {}),
       };
     } else if (outcome.kind === "blocked") {
-      output = { outcome: { kind: "blocked", reason: outcome.reason } };
+      output = {
+        outcome: { kind: "blocked", reason: outcome.reason },
+        ...(sandboxLauncher !== undefined
+          ? {
+              sandbox: {
+                launcher: sandboxLauncher,
+                detail: outcome.reason,
+              },
+            }
+          : {}),
+      };
     } else {
-      output = { outcome: { kind: outcome.kind }, receipt: outcome.receipt };
+      output = {
+        outcome: { kind: outcome.kind },
+        receipt: outcome.receipt,
+        ...(sandboxLauncher !== undefined ? { sandbox: { launcher: sandboxLauncher } } : {}),
+      };
     }
   } finally {
     // Always tear down the proxy worker, even if the run threw.

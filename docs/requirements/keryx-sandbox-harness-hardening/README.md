@@ -3,7 +3,7 @@ Version: 0.1.0
 
 ## Status
 
-**draft (specification ready — not implemented)**
+**implemented (H1 + H2 + H3-light)** — runtime + portable probe landed; H0 docs were already on main.
 
 Closes operator and security gaps found during a live macOS deep sandbox probe
 (2026-07-21) and follow-on agent-shell UX work. Does **not** re-implement OS
@@ -16,10 +16,10 @@ and harness ergonomics**.
 | OS FS + network-off + allowlist (macOS) | **already implemented** — probe PASS |
 | Tool-call budget 8→48 | **landed** (PR #180) |
 | Multiline shell allow patterns | **landed** (PR #181) |
-| Mask-without-TLS fail-closed (CLI/harness) | **this package — not done** |
-| `harness exec` exit-71 / path diagnostics | **this package — not done** |
-| Portable deep-probe script + REPORT contract | **this package — not done** |
-| Decisions-visible outcomes in agent UX | **this package — not done** |
+| Mask-without-TLS fail-closed (CLI/harness) | **landed** (H1) |
+| `harness exec` exit-71 / path diagnostics | **landed** (H1) |
+| Portable deep-probe script + REPORT contract | **landed** (H2) |
+| Decisions-over-exitCode agent guidance | **landed** (H2/H3 docs) |
 
 ## Purpose
 
@@ -85,11 +85,30 @@ Make sandbox **operable and verifiable** without multi-hour agent thrash:
 | Live bun smokes | SKIP (PATH) |
 | Helper-script exec | exit 71 UNKNOWN |
 
+## How to run the deep probe (H2)
+
+From the repo root (macOS recommended for full restricted matrix; Linux documents fail-closed):
+
+```bash
+./scripts/sandbox-deep-probe.sh
+# optional live section:
+./scripts/sandbox-deep-probe.sh --live-smokes
+```
+
+- Creates `RUN_DIR` at `.metaproject/tmp/sandbox-probe-<utc>/`
+- Writes `REPORT.md` + `report.json` (see [schemas/probe-report.schema.json](schemas/probe-report.schema.json))
+- Uses portable `date` (no GNU `%N`), absolute paths, CONTROL runs on deny rows
+- Overall is `PASS` | `PASS_WITH_GAPS` | `FAIL`; redaction hit → `FAIL`
+- Fixtures use synthetic secrets only (`sk-fixture-…`)
+
+Read only `RUN_DIR/REPORT.md` for the summary. Do not re-run the matrix
+tool-by-tool unless the script is missing.
+
 ## Delivery phases (summary)
 
 | Phase | Name | Outcome |
 |-------|------|---------|
-| **H0** | Contract locks | Spec + AC frozen; no silent regressions |
-| **H1** | Fail-closed mask/TLS + diagnostics | Security + exit-71 reasons |
-| **H2** | Operator probe automation | `scripts/sandbox-deep-probe.sh` + schema |
-| **H3** | Agent UX polish | decisions surfaced; probe docs linked |
+| **H0** | Contract locks | Spec + AC frozen; no silent regressions — **done** |
+| **H1** | Fail-closed mask/TLS + diagnostics | Security + exit-71 reasons — **done** |
+| **H2** | Operator probe automation | `scripts/sandbox-deep-probe.sh` + schema — **done** |
+| **H3** | Agent UX polish (light) | decisions rule + operator-guide link — **done** (no heavy TUI) |

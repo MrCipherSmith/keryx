@@ -1,0 +1,21 @@
+# Journal — flow 111
+
+- 2026-07-21: flow init; package read; context from harness/mask-resolve/adapter/executor.
+- Standing rule: one flow / one branch / one PR; merge when green.
+- User owns full package in one go (no phase split questions).
+- 2026-07-21T18:02:15.120Z - task-added: T5: H1 security: mask-without-TLS fail-closed on harness + unit test
+- 2026-07-21T18:02:15.187Z - task-added: T6: H1 diagnostics: spawn failure reason/detail + regression test
+- 2026-07-21T18:02:15.254Z - task-added: T7: H2 portable probe script + REPORT + redaction
+- 2026-07-21T18:02:15.318Z - task-added: T8: H2/H3 docs + package/roadmap status
+- 2026-07-21T18:02:15.382Z - task-added: T9: code-verifier + focused tests + review before PR
+- 2026-07-21T18:02:15.447Z - frozen: 8 criteria; checksum recorded
+- 2026-07-21T18:02:15.511Z - started
+- 2026-07-21T18:08:48.932Z - task-done: T1: Collect remaining context
+- 2026-07-21T18:08:48.998Z - task-done: T2: Implement per plan
+- 2026-07-21T18:08:49.061Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-21T18:08:49.125Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-21T18:08:49.189Z - task-done: T5: H1 security: mask-without-TLS fail-closed on harness + unit test
+- 2026-07-21T18:08:49.254Z - task-done: T6: H1 diagnostics: spawn failure reason/detail + regression test
+- 2026-07-21T18:08:49.319Z - task-done: T7: H2 portable probe script + REPORT + redaction
+- 2026-07-21T18:08:49.384Z - task-done: T8: H2/H3 docs + package/roadmap status
+- 2026-07-21T18:08:49.449Z - task-done: T9: code-verifier + focused tests + review before PR
