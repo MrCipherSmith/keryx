@@ -3,9 +3,9 @@
   "id": "107",
   "slug": "p2-project-sandbox-policy-init-skeleton",
   "title": "P2 project sandbox policy + init skeleton",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T15:43:17.316Z",
-  "updatedAt": "2026-07-21T15:46:20.919Z",
+  "updatedAt": "2026-07-21T15:47:22.445Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/178"
   },
   "tasks": [
     {
@@ -165,6 +165,20 @@
       "at": "2026-07-21T15:46:20.919Z",
       "event": "ac-confirmed",
       "detail": "AC6: P2 unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:47:20.302Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/178 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T15:47:20.382Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T15:47:22.445Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

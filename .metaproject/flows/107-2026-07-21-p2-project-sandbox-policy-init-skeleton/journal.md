@@ -13,3 +13,6 @@ P2 implementation: project policy loader, resolution merge, init skeleton.
 - 2026-07-21T15:46:20.793Z - ac-confirmed: AC4: P2 unit tests + wiring
 - 2026-07-21T15:46:20.856Z - ac-confirmed: AC5: P2 unit tests + wiring
 - 2026-07-21T15:46:20.919Z - ac-confirmed: AC6: P2 unit tests + wiring
+- 2026-07-21T15:47:20.302Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/178 (warning: PR is not a draft)
+- 2026-07-21T15:47:20.382Z - completing
+- 2026-07-21T15:47:22.445Z - done: all gates passed
