@@ -1,13 +1,14 @@
 # Keryx OpenTUI Interactive Shell — Technical Specification
 Version: 0.2.0
 
-Status: `implemented (agent mode) — chat renderer outstanding`. The architecture
-described below — swap the IO layer for an OpenTUI renderer, keep the
-deterministic driver unchanged — has shipped for the **agent** shell (flows
-059–067; `src/tui/tui-shell.ts`, `src/commands/agent-commands.ts`, ADR-0005
-Accepted), and the TUI is the default interactive shell on a TTY. The chat half
-of the scope was never built and `--chat` still runs readline — see **§10 Open
-items**, which also lists four smaller gaps.
+Status: `implemented`. The architecture described below — swap the IO layer for
+an OpenTUI renderer, keep the deterministic driver unchanged — has shipped for
+**both** modes (flows 059–067 for the agent shell, flow 112 for chat;
+`src/tui/tui-shell.ts`, `src/tui/shell-chrome.ts`, `src/tui/chat-shell.ts`,
+`src/commands/agent-commands.ts`, ADR-0005 Accepted). The TUI is the default
+interactive shell on a TTY in both modes; readline remains the mandatory fallback
+for no-TTY, a missing optional dependency, or renderer init failure. **§10 Open
+items** still lists three smaller gaps (O-3, O-4, O-5).
 
 Two reading notes. The `(SPIKE)` names below were resolved by the Phase 0 spike
 (flow 059) and are recorded as answered in §2, but may diverge in spelling from
@@ -34,17 +35,28 @@ This migration replaces ONLY the IO implementation with an OpenTUI renderer. The
 driver, helpers, provider, policy, and metaproject port are untouched. This is the
 crux that keeps the change bounded and testable.
 
+As shipped (flow 112 made the `ShellIO` half real; before it, only the `AgentIO`
+side existed and this diagram was aspirational):
+
 ```
-            unchanged                         REPLACED
-  ┌───────────────────────────┐   ┌─────────────────────────────┐
-  │ runAgentTurn / runShell   │──▶│ TuiShell (OpenTUI)          │
-  │ (driver, port-based)      │   │  implements AgentIO/ShellIO │
-  └───────────────────────────┘   └─────────────────────────────┘
-            │  reuses                         │ renders via
-            ▼                                 ▼
-  renderMarkdown · indentBlock ·      @opentui/core renderer
-  collapseToolOutput · live-render      (transcript + composer)
+            unchanged                          REPLACED
+  ┌───────────────────────────┐   ┌──────────────────────────────────┐
+  │ runAgentTurn              │──▶│ tui-shell.ts  implements AgentIO │
+  │ runShell                  │──▶│ chat-shell.ts implements ShellIO │
+  │ (drivers, port-based)     │   └───────────────┬──────────────────┘
+  └───────────────────────────┘                   │ both mount
+            │  reuse                              ▼
+            ▼                          shell-chrome.ts (mode-agnostic)
+  md-blocks · transcript-blocks ·      layout · composer · /-menu ·
+  renderMarkdown · collapseToolOutput   footer · toast · overlay guard
+                                                  │ renders via
+                                                  ▼
+                                          @opentui/core renderer
 ```
+
+`ShellIO` pulls its input (`lines: AsyncIterable<string>`) while `AgentIO` leaves
+the loop to the caller. That asymmetry — not the missing tool hooks — is what
+made the chat renderer expensive; the bridge that reconciles it is D-A4.
 
 ## 2. OpenTUI facts (verified) and spike items
 
@@ -344,34 +356,129 @@ both shells change with it and the pure tests are updated in the same commit.
 Anything that would alter driver, port, provider or policy behavior is still out
 of bounds and needs its own ADR.
 
+### D-A1 — one shared chrome, not one shell per mode
+
+**Status:** accepted (flow 112). `src/tui/shell-chrome.ts` owns everything that
+does not know what a tool is — layout, composer, `/`-menu, footer and busy
+spinner, toast, overlay guard, copy-on-select — and is returned as a plain
+`ShellChrome` object rather than a base class, because the old closure's coupling
+was data, not behaviour. `launchTuiAgentShell` keeps only agent concerns
+(approval, ask-user, worker fleet, side workers, the wiki router, the block
+registry and nav, the `runAgentTurn` call site) and shrank from 1610 to 1254
+lines; `src/tui/chat-shell.ts` mounts the same chrome.
+
+A second chat shell beside the agent one was rejected for the reason D-6 exists:
+three surfaces drift, and the readline `/expand` had already proved it.
+
+The extraction also removed four forward-declared mutable bindings the closure
+depended on (`showToast`, `clearBusyTimer`, `setBusyPhase`, and the nav
+controller's late closure over `menu` / `input` / `textarea`) by fixing
+construction order. Where a cycle is genuine it is an explicit registration
+point — `addOverlaySource(isActive)` and `setFooterOverride(paint)` — never a
+placeholder no-op rebound later.
+
+**Cost accepted:** this restructured ~450 lines of the product's default UI,
+which had zero tests and one caller. The mitigation was to write the chrome's
+headless mount tests *first* — the first tests this shell's chrome has ever had —
+and to re-land the agent shell before writing any chat code.
+
+### D-A2 — chat's token counter is an estimate, not a new hook
+
+`ShellIO` has no `onUsage`, so TUI chat cannot report exact usage. Adding the
+hook would change a driver surface this package promised to leave alone, so chat
+reuses `estimateContextTokens` (flow 077's local-model estimator) and the header
+labels the number as an estimate. Revisit only if exact chat usage becomes a
+requirement, and then as an additive driver change with its own AC.
+
+### D-A3 — assistant replies stay segment views in chat
+
+Registering replies as addressable blocks would give chat `Ctrl+O` and `/copy`,
+but it touches D-3 (modal navigation), D-5 (sticky-scroll suspension) and the
+AC11 layout guard. Deferred deliberately, not overlooked. `Ctrl+O` and `/copy`
+remain agent-only.
+
+### D-A4 — the push/pull adapter derives turn state from the driver
+
+`runShell` pulls (`lines: AsyncIterable<string>`) while the composer pushes. The
+bridge in `chat-shell.ts` queues submissions and hands out exactly one line per
+`next()`, so **the driver asking for another line is the proof the previous turn
+finished** — including error paths where `onTurnEnd` never fires. Turn state is
+therefore derived, not mirrored from a spinner flag, and cannot desynchronise.
+
+Slash commands typed mid-turn are refused rather than queued, because by the time
+the turn ends `/model` or `/compact` may no longer match the state they were
+typed against — the same call the agent shell's `runLine` makes. `/exit` closes
+the stream immediately so teardown does not wait for the model.
+
+`runShell` emits a `"\n\n"` turn separator unconditionally, including for a turn
+that produced nothing and therefore never fired `onTurnEnd`. An ambiguous
+leading separator is **held** and flushed as content only if more output follows,
+which keeps a legitimate leading blank line while never letting the separator
+open an empty trailing block.
+
 ## 10. Open items
 
-Recorded 2026-07-21 after auditing the package against the code. Phases 0-5
-shipped for the **agent** shell, which is why the package reads as delivered —
-but "implemented" was too strong for the scope as written. Each item below was
-verified in the source, not inferred from the roadmap.
+Recorded 2026-07-21 after auditing the package against the code, because "Phases
+0-5 shipped" was true of the roadmap and too strong for the scope as written.
+Each item was verified in the source, not inferred from the roadmap.
 
-### O-1 — the chat shell has no OpenTUI renderer (scope gap, blocks Phase 5)
+**O-1 and O-2 were closed by flow 112**; their entries are kept with the original
+finding above the resolution, so the audit trail survives. **O-3, O-4 and O-5
+remain open.**
 
-The package scope is "the interactive shell (chat + agent)", and §1 above names
-`runShell` / `ShellIO` as the chat analogue of `runAgentTurn` / `AgentIO`. Only
-the agent half was built. `ShellIO` has **zero** references under `src/tui/` — it
-appears only in `src/commands/shell.ts` and `src/commands/select.ts` — and the
-launch guard is `if (flags.wantTui && modeFlag !== false && process.stdout.isTTY)`
-(`src/commands/shell.ts:1094`), where `--chat` sets `modeFlag = false`. So chat
-unconditionally uses readline.
+### O-1 — chat has no OpenTUI renderer — **CLOSED** (flow 112)
 
-Consequence: Phase 5's second half ("retire the readline path only once at
-parity") is unreachable, because readline is chat's only implementation. Anyone
-reading "TUI is the default" should understand it as *agent mode is the default
-and is a TUI*; chat is unchanged from before this package.
+*Was:* the package scope is "the interactive shell (chat + agent)", and §1 names
+`runShell` / `ShellIO` as the chat analogue of `runAgentTurn` / `AgentIO`, but
+only the agent half was built. `ShellIO` had zero references under `src/tui/`,
+and the launch guard `if (flags.wantTui && modeFlag !== false &&
+process.stdout.isTTY)` sent every `--chat` invocation to readline.
 
-### O-2 — F1's shared command registry has only one consumer
+*Now:* `src/tui/chat-shell.ts` renders `ShellIO` through the shared chrome,
+driven by **the real `runShell`** — so TUI chat and readline chat are identical
+in system instruction, budget and turn semantics by construction rather than by
+discipline. The guard is now `chooseShellSurface(flags, isTty)` returning
+`"tui-agent" | "tui-chat" | "readline"`, a pure exported helper with its own
+tests; the readline fallback is unchanged for both modes.
 
-F1 requires the `/` dropdown to reuse a shared registry "so chat and agent share
-definitions". Only `AGENT_SLASH_COMMANDS` exists (`src/commands/agent-commands.ts:15`).
-There is no chat command set, so the sharing requirement is vacuous rather than
-met. It becomes real work the moment O-1 is addressed.
+Chat consequently gained everything the agent shell already had: the provider and
+model pickers, saved credentials, session flags, and flow 109's block, fenced-code
+and diff rendering. It also fixes a real defect — `loadShellConfig()` /
+`applySavedApiKeys()` used to run only inside the agent branch, so **a provider
+key added via `/connect` was invisible to `--chat`**.
+
+Path chosen: extract a mode-agnostic `ShellChrome` (`src/tui/shell-chrome.ts`),
+re-land the agent shell on it, then add a thin chat driver. The alternative —
+running chat as a tool-free agent — was rejected because it would have put two
+different engines behind one flag. See decisions D-A1..D-A4.
+
+Phase 5's second half ("retire the readline path only once at parity") is now
+*unblocked in principle*, but not done: readline remains the mandatory fallback
+for no-TTY and missing-optional-dependency, so retiring it is a separate scope
+decision, not a consequence of this flow.
+
+### O-2 — the shared command registry had one consumer — **CLOSED** (flow 112)
+
+*Was:* F1 requires the `/` dropdown to reuse a shared registry "so chat and agent
+share definitions", but only `AGENT_SLASH_COMMANDS` existed, with one consumer,
+while three divergent command surfaces were maintained by hand.
+
+*Now:* `AgentSlashCommand` carries `modes: readonly ShellMode[]` plus optional
+`modeDescriptions`, and the flattened `{name, description}` shape a menu needs is
+obtainable **only through a mode** (`describeCommand`, `commandsForMode`,
+`filterCommands(query, mode)`). A consumer therefore cannot render a menu without
+naming its mode, so a menu structurally cannot show the other mode's wording.
+
+`/expand`, `/think`, `/copy` and `/resume` are agent-only; `/models` and
+`/provider` are chat-only, subsumed in the TUI by `/model` and `/connect`. Three
+entries carry genuinely different per-mode wording — `/model` (argument vs
+picker), `/connect` (static guidance vs interactive key entry) and `/exit`. The
+registry now has three consumers: the TUI, chat readline, and agent readline.
+An agent-only command typed in chat fails with an explanatory message instead of
+`Unknown command`, and vice versa.
+
+This also fixed a live bug the audit had not spotted: the agent TUI's `/help` was
+printing the *chat* description of `/connect`.
 
 ### O-3 — N1 platform coverage is unvalidated beyond darwin-arm64
 

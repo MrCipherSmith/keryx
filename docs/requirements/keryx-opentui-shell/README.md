@@ -3,10 +3,13 @@ Version: 0.2.0
 
 ## Status
 
-`implemented (agent mode) — chat renderer outstanding`. Phases 0–5 shipped for
-the **agent** shell. The scope below says "chat + agent", and the chat half was
-never built: `--chat` still runs the readline renderer. See **§10 Open items**
-in `specification.md` for the full list of what remains.
+`implemented`. Phases 0–5 shipped for the agent shell (flows 059–067); the chat
+half of the scope was closed later by **flow 112**, which extracted a shared
+`ShellChrome`, re-landed the agent shell on it, and added a chat driver that
+renders `ShellIO` through the same chrome using the real `runShell`. Both modes
+are now TUI by default on a TTY. **§10 Open items** in `specification.md` still
+lists three gaps (O-3 platform coverage, O-4 fallback-parity test, O-5 cold-start
+latency).
 
 This package specified migrating the keryx interactive shell/agent UI from the
 line-based `node:readline` renderer to a full-screen **OpenTUI**
@@ -32,8 +35,9 @@ the optional dependency is absent, or the renderer fails to initialise.
 | 5 | TUI default on TTY, `--no-tui` opt-out | 064; reverted by 065 over a stdin-handoff leak, root-caused in 066 and re-landed in 067 |
 
 Phase 5's second half — "retire the readline path once at parity" — is **not**
-done and cannot be until the chat renderer exists, because chat has no other
-home. Readline is therefore load-bearing, not merely a fallback.
+done. It was blocked until flow 112 gave chat a TUI; it is now merely undone.
+Readline stays the mandatory fallback for no-TTY, a missing optional dependency,
+and renderer init failure, so retiring it is a separate scope decision.
 
 Post-migration work that amends this package rather than extending the roadmap:
 layout and UX passes (068–079), persistence and provider work (080–086), and
@@ -43,15 +47,21 @@ decisions those flows recorded.
 
 ### Runtime evidence
 
-- `src/tui/tui-shell.ts` — the OpenTUI renderer. It implements **`AgentIO` only**;
-  `ShellIO` has no implementation under `src/tui/`, which is exactly open item
-  O-1 (flows 060 skeleton + 061 chrome parity).
-- `src/commands/shell.ts:1094` selects OpenTUI when `flags.wantTui && modeFlag
-  !== false && process.stdout.isTTY` — note the middle clause: `--chat` sets
-  `modeFlag = false`, so chat never reaches the TUI.
-- `src/commands/agent-commands.ts` — the promoted command registry with the pure
-  `filterCommands` / `findAgentCommand` helpers (flow 062). It currently has one
-  consumer; PRD F1's "chat and agent share definitions" is open item O-2.
+- `src/tui/shell-chrome.ts` — the mode-agnostic chrome both shells mount: layout,
+  composer, `/`-menu, footer and busy spinner, toast, overlay guard,
+  copy-on-select (flow 112).
+- `src/tui/tui-shell.ts` — the agent renderer, implementing `AgentIO`
+  (flows 060 skeleton + 061 chrome parity; re-landed on the chrome by flow 112).
+- `src/tui/chat-shell.ts` — the chat renderer, implementing `ShellIO` and driven
+  by the real `runShell`, so TUI chat and readline chat cannot diverge in
+  behaviour (flow 112).
+- `src/commands/shell.ts` — `chooseShellSurface(flags, isTty)` returns
+  `"tui-agent" | "tui-chat" | "readline"`; both TUI surfaces fall back to
+  readline on no-TTY, a missing optional dependency, or init failure.
+- `src/commands/agent-commands.ts` — the mode-aware command registry
+  (flow 062, made mode-aware by flow 112). The flattened `{name, description}` a
+  menu needs is obtainable only through a mode, so a menu cannot show the other
+  mode's wording. Three consumers: the TUI, chat readline, agent readline.
 - `@opentui/core` declared under `optionalDependencies`, loaded via dynamic
   `import()` with a readline fallback. ADR-0005 is **Accepted (Phase 1)** and its
   guard update landed — the package is pinned in the optional-dependency set at

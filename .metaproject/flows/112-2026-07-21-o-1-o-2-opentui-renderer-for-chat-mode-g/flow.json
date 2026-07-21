@@ -5,7 +5,7 @@
   "title": "O-1/O-2: OpenTUI renderer for chat mode + genuinely shared slash-command registry",
   "status": "in-progress",
   "createdAt": "2026-07-21T19:17:37.552Z",
-  "updatedAt": "2026-07-21T19:33:56.642Z",
+  "updatedAt": "2026-07-21T21:01:03.771Z",
   "source": {
     "type": "description",
     "ref": null
@@ -35,7 +35,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -43,13 +43,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,13 +58,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -71,13 +73,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
       "title": "S4 — mode-aware shared command registry, readline surfaces included",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -85,13 +88,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "S3 — chat driver + --chat launch path",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -99,7 +103,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -114,6 +119,21 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Fix review findings: helper duplication, menu focus/menuNav desync, tautological AC12 test, dead pendingApproval",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -149,6 +169,41 @@
       "at": "2026-07-21T19:33:56.642Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T19:44:04.304Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T19:56:46.786Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T20:11:24.899Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T20:21:26.304Z",
+      "event": "task-done",
+      "detail": "T5: S4 — mode-aware shared command registry, readline surfaces included"
+    },
+    {
+      "at": "2026-07-21T20:36:23.017Z",
+      "event": "task-done",
+      "detail": "T6: S3 — chat driver + --chat launch path"
+    },
+    {
+      "at": "2026-07-21T20:46:39.242Z",
+      "event": "task-added",
+      "detail": "T8: Fix review findings: helper duplication, menu focus/menuNav desync, tautological AC12 test, dead pendingApproval"
+    },
+    {
+      "at": "2026-07-21T21:01:03.771Z",
+      "event": "task-done",
+      "detail": "T8: Fix review findings: helper duplication, menu focus/menuNav desync, tautological AC12 test, dead pendingApproval"
     }
   ]
 }
