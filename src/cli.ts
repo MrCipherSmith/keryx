@@ -201,7 +201,8 @@ Usage:
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|export <id>|path         List / export sessions for the current project
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
-  keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess] -- <path> [args...]
+  keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
+                     [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] -- <path> [args...]
   keryx harness extension --spec <path>
   keryx harness wave --spec <path>
   keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { X509Certificate } from "node:crypto";
-import { setupNetworkRun } from "./network-run";
+import { parseMaskSpec, setupNetworkRun } from "./network-run";
 import type { SandboxProfile } from "./profile";
 
 const base: SandboxProfile = {
@@ -12,6 +12,26 @@ const base: SandboxProfile = {
   allowedDomains: [],
   required: false,
 };
+
+describe("parseMaskSpec", () => {
+  test("parses NAME@host and NAME@host1,host2", () => {
+    expect(parseMaskSpec("GH_TOKEN@api.github.com")).toEqual({
+      name: "GH_TOKEN",
+      injectHosts: ["api.github.com"],
+    });
+    expect(parseMaskSpec("T@a.com, *.b.com ")).toEqual({
+      name: "T",
+      injectHosts: ["a.com", "*.b.com"],
+    });
+  });
+
+  test("rejects malformed specs", () => {
+    expect(parseMaskSpec("NOHOST")).toBeUndefined();
+    expect(parseMaskSpec("@only.host")).toBeUndefined();
+    expect(parseMaskSpec("NAME@")).toBeUndefined();
+    expect(parseMaskSpec("")).toBeUndefined();
+  });
+});
 
 describe("setupNetworkRun", () => {
   test("non-restricted ⇒ no proxy, no env, noop close", async () => {

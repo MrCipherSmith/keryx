@@ -20,7 +20,8 @@ import { defaultSandboxProfile } from "../../process/sandbox/profile";
 import type { SandboxProfile } from "../../process/sandbox/profile";
 import { detectSandboxLauncher } from "../../process/sandbox/detect";
 import { wrapWithSandbox } from "../../process/sandbox/wrap";
-import { setupNetworkRun } from "../../process/sandbox/network-run";
+import { parseMaskSpec, setupNetworkRun } from "../../process/sandbox/network-run";
+import type { MaskedCredential } from "../../process/sandbox/network-run";
 
 /** Runs a shell command string and returns bounded output (or an error result). */
 export type CommandRunner = (command: string) => Promise<InteractiveToolResult>;
@@ -124,7 +125,41 @@ export function makeCommandRunner(root: string): CommandRunner {
         // Restricted network: start the loopback allowlist proxy, point the
         // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
         if (profile.network === "restricted") {
-          const net = await setupNetworkRun(profile);
+          // Credential masking: KERYX_SANDBOX_MASK_ENV="NAME@host;OTHER@host".
+          // Requires TLS termination — otherwise an HTTPS sentinel leaves the
+          // sandbox unchanged (auth fails), so refuse rather than half-work.
+          const specs = (process.env.KERYX_SANDBOX_MASK_ENV ?? "")
+            .split(";")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+          const masks: MaskedCredential[] = [];
+          for (const spec of specs) {
+            const parsed = parseMaskSpec(spec);
+            if (!parsed) {
+              return {
+                output: `shell_exec: invalid KERYX_SANDBOX_MASK_ENV spec "${spec}" (expected NAME@host[,host]).`,
+                isError: true,
+              };
+            }
+            masks.push({
+              name: parsed.name,
+              realValue: process.env[parsed.name] ?? "",
+              injectHosts: parsed.injectHosts,
+            });
+          }
+          const wantsTls = process.env.KERYX_SANDBOX_TLS_TERMINATE === "1";
+          if (masks.length > 0 && !wantsTls) {
+            return {
+              output:
+                "shell_exec: KERYX_SANDBOX_MASK_ENV requires KERYX_SANDBOX_TLS_TERMINATE=1 — without TLS " +
+                "termination the proxy cannot rewrite encrypted requests, so an HTTPS sentinel would not be replaced.",
+              isError: true,
+            };
+          }
+          const net = await setupNetworkRun(profile, {
+            ...(masks.length > 0 ? { masks } : {}),
+            ...(wantsTls ? { tlsTerminate: true } : {}),
+          });
           profile = net.profile;
           netClose = net.close;
           for (const [k, v] of Object.entries(net.envAdditions)) env[k] = v;

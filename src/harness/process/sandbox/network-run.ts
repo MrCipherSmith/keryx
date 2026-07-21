@@ -28,6 +28,24 @@ export interface MaskedCredential {
   injectHosts: string[];
 }
 
+/**
+ * Parse a `NAME@host1,host2` credential-mask spec (the CLI/env surface).
+ * Returns undefined for a malformed spec. Hosts accept the same `*.domain`
+ * wildcards as the allowlist.
+ */
+export function parseMaskSpec(spec: string): { name: string; injectHosts: string[] } | undefined {
+  const at = spec.indexOf("@");
+  if (at <= 0) return undefined;
+  const name = spec.slice(0, at).trim();
+  const injectHosts = spec
+    .slice(at + 1)
+    .split(",")
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0);
+  if (name.length === 0 || injectHosts.length === 0) return undefined;
+  return { name, injectHosts };
+}
+
 export interface NetworkRunOptions {
   masks?: MaskedCredential[];
   /**
