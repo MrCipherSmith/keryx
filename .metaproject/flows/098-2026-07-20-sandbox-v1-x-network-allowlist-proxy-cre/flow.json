@@ -3,9 +3,9 @@
   "id": "098",
   "slug": "sandbox-v1-x-network-allowlist-proxy-cre",
   "title": "sandbox v1.x: network allowlist proxy + credential masking",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T22:09:04.033Z",
-  "updatedAt": "2026-07-21T13:02:32.930Z",
+  "updatedAt": "2026-07-21T13:04:09.417Z",
   "source": {
     "type": "description",
     "ref": null
@@ -34,7 +34,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/170"
   },
   "tasks": [
     {
@@ -156,6 +156,20 @@
       "at": "2026-07-21T13:02:32.930Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T13:04:06.944Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/170 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T13:04:07.058Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T13:04:09.417Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
