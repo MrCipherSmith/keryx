@@ -310,3 +310,90 @@ changed-scope run and the historical record rather than a re-measured `pass`.
 premise in the dispatch could not be reproduced and looks stale. Refreshing
 `.metaproject/health/baselines/scores.json` is a separate call for the
 orchestrator, not something a task worker should do silently.
+- 2026-07-21T18:10:23.997Z - task-added: T6: Fix review findings: CRLF fence regression, unbounded maxRetainedChars, AC1 wiring tautology
+- 2026-07-21T18:10:52.291Z - task-done: T5: Headless TUI tests + readline parity + verify/review/docs
+- 2026-07-21T18:26:03.480Z - task-done: T6: Fix review findings: CRLF fence regression, unbounded maxRetainedChars, AC1 wiring tautology
+
+### Review pass (AC13) — findings and dispositions
+
+A read-only `review-orchestrator` pass ran over `main...HEAD` in the worktree,
+with the T4 caveat made explicit in the dispatch: the bulk of
+`src/tui/transcript-blocks.ts` and the `tui-shell.ts` wiring was written by an
+interrupted worker and only *verified* by the one that signed off, so it was
+reviewed as unreviewed code. Every disposition below is recorded, none dropped.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| F1 | HIGH | `FENCE_LINE` never matched a CRLF line (`\r` is a JS line terminator, so `.`/`$` skip it). `segmentMarkdown("a\r\n```ts\r\nx\r\n```\r\nb")` returned one text segment — raw fences as prose, no language tag, no diff colors. A **regression** against the `/^\s*```/` it replaced; hit any Windows/CRLF payload. | **Fixed** (`d523e8e`): regex tolerates `\r`, plus `stripTrailingCr`/`splitLines` applied through `segmentMarkdown`, `looksLikeUnifiedDiff`, `ui.ts` and the TUI chunkers. Covered by a CR/LF/tab acceptance table (10 cases) + CRLF cases in `ui.test.ts`. |
+| F2 | MED | `enforceBounds` exempted the newest block, so `maxRetainedChars` was not a bound: a 5 MB payload against a 10-char cap was retained in full for the process lifetime. AC8's char-cap test only used 8-char payloads. | **Fixed** (`7ca9421`): clip-on-register — an oversized payload retains a prefix up to the cap and is marked `truncated`, so the user still sees its head. New `retainedChars()`; 4 tests incl. a 5,000-char payload against a 100-char cap. Plan **D-4 amended** to the new semantics. |
+| F3 | MED | AC1's proof was a replica: the exported `createTuiAgentIo` still discarded full text, retention lived only in the untested closure, and the test drove a hand-written `mountBlockHarness.add` mirroring `addBlock`. A regression in the real wiring would have failed nothing. | **Fixed** (`7ca9421`): `attachBlockIo(io, addBlock)` exported + `createBlockMount`; a headless test drives `runAgentTurn` through the real IO and asserts `registry.bodyText(id)` equals the tool's full output. Replica retired. |
+| F4 | MED | `createStreamSegmenter` — the whole streaming path and R1's mitigation — had zero direct tests; the plan's "assert with a token-count test" was never done. | **Fixed** (`7ca9421`): 9 tests — mid-marker chunk split, char-by-char parity with `segmentMarkdown`, frozen monotonicity asserted by **reference identity** per token, `reset()` incl. an unclosed fence, CRLF parity, and the trailing-partial divergence deliberately kept and pinned. |
+| F5 | LOW | `bodyText(unknownId)` returned the eviction marker (indistinguishable from a real eviction), and `copy()` of an evicted block copied the marker while toasting a false `"Copied to clipboard"`. | **Fixed** (`7ca9421`): `UNKNOWN_BLOCK_TEXT` added, copy refuses and toasts truthfully. One pre-existing assertion changed — see below. |
+| F6-F9 | LOW | Two `tui-shell.ts` comments claimed rendering via the native `MarkdownRenderable` (which D-2 rejects and the code never did); a `shell.ts` comment overstated readline/TUI header parity (readline passes the tool name as `kind`, the TUI passes `"output"`); spec §3 claimed `/copy` takes the newest *markdown-payload* block, but assistant markdown is never registered as a block; `/copy`'s `navMode()` branch was unreachable. | **All fixed** (`7ca9421`). |
+
+**Assertion changed under review authority (the only one):**
+`transcript-blocks.test.ts:220`, `bodyText of an unknown id is the evicted
+marker` → `bodyText distinguishes an unknown id from an evicted block`
+(`EVICTED_BLOCK_TEXT` → `UNKNOWN_BLOCK_TEXT`, plus new assertions that a genuine
+eviction still returns `EVICTED_BLOCK_TEXT` and the two constants differ). The
+old pin encoded the F5 defect; it was written before the behavior was understood
+to be wrong. No other assertion was weakened or removed.
+
+**Accepted as-is, with reasons:**
+- **AC11's carve-out** — the reviewer independently re-derived that the pin is
+  built from pure OpenTUI primitives with zero flow-109 code, sweeps offsets 0-3,
+  and fails loudly when upstream fixes the bug. Honest and correctly scoped.
+- **Health gate WARN** — the T5 investigation above stands: stale 2026-07-06
+  baseline, zero P0/P1, regression of 3 vs. the 5 already recorded in flow 001,
+  and a changed-scope run attributes nothing to this flow. Refreshing
+  `.metaproject/health/baselines/scores.json` is a separate decision.
+
+**Deferred, deliberately (open follow-up):**
+- **Paint performance** — `render()` unconditionally rebuilds every expanded
+  block body on every `↑`/`↓` (`paintAll` → up to 200 lines re-parsed per
+  expanded block per keystroke), and `Enter` paints twice. Real, but a
+  rework in the same pass as the correctness fixes would have muddied both.
+- **`collapseToolOutput` does not normalize CRLF** — a CRLF tool result's
+  one-line readline summary can carry a stray `\r`. Outside F1's fence scope,
+  unpinned by any test; flagged rather than widening the diff.
+
+**Verification after T6:** `bun test` (full) → **2012 pass / 11 skip / 0 fail**
+across 231 files (+40 tests, same skips). `bun test src/tui src/lib
+src/commands` → 382 pass / 3 skip / 0 fail. `bun run typecheck` → clean.
+AC9 re-proven: `@opentui` under `src/lib/**` → 0 matches;
+`CodeRenderable|DiffRenderable|MarkdownRenderable|TreeSitterClient` under
+`src/**` → 4 matches, all comments; `package.json`/`bun.lock` diff empty.
+
+### Skill learning (from the review)
+
+Two reusable rules, both earned the hard way in this flow:
+1. **A test that mirrors the wiring is not a test of the wiring.** T5 extracted
+   `createBlockNavController` precisely so nav mode could be driven for real,
+   then registered a hand-written `add()` duplicating the closure's `addBlock` —
+   reintroducing the same tautology one layer up. When an AC says "prove X after
+   render", the test must enter through the function the product enters through;
+   if it cannot, that function is the next extraction, not a place for a replica.
+2. **When replacing a permissive regex with a spec-correct one, enumerate what
+   the old one accepted.** `/^\s*```/` → `/^[ \t]{0,3}(```|~~~)(.*)$/` fixed the
+   indented-fence case the journal was tracking and silently lost `\r`, because
+   `\s` includes `\r` while `[ \t]`, `.` and `$` do not. A CR/LF/tab table in the
+   test file would have caught it on the first run.
+
+### Orchestration lesson (three lost working trees)
+
+This flow lost its working tree twice and had a task killed a third time, all
+from the same cause: **flow-orchestrator hands an uncommitted working tree from
+one worker to the next, in a repo where the user runs several agent sessions
+against a single checkout.** Branch pinning at the hard gate does not survive a
+concurrent `git checkout`. What worked, in order of effectiveness:
+1. **Run long tasks in a dedicated git worktree.** A `git checkout` in the main
+   tree cannot reach it. T5 attempt 3 and T6 both completed without incident.
+2. **Commit at every task boundary**, not just at flow end.
+3. **Re-assert `git branch --show-current` immediately before the first write**,
+   not only at the gate — this caught attempt 2 before it committed onto a
+   foreign branch.
+4. A scratchpad `git diff` backup costs one command and saved attempt 2's work.
+
+Also, twice in this flow a `keryx flow ...` / `git restore` was aimed at the
+wrong tree because the shell cwd had moved into the worktree. Flow-state commands
+must be run with an explicit, verified cwd.
