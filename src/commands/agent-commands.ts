@@ -51,7 +51,10 @@ const BOTH: readonly ShellMode[] = ["chat", "agent"];
 
 /**
  * The commands, in menu order. Filtering this list to `agent` reproduces the
- * pre-flow-112 agent menu exactly, in the same order.
+ * pre-flow-112 agent menu's SET and ORDER exactly — but not verbatim: four
+ * descriptions were sharpened when the registry became mode-aware (`/model`,
+ * `/connect` and `/exit`, which now spell out the agent-mode behaviour their
+ * `modeDescriptions` carry, plus `/compact`, which names its `[focus]` argument).
  */
 export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/help", description: "Show available commands", modes: BOTH },

@@ -218,7 +218,12 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
   return io;
 }
 
-/** True only for an explicit `y`/`yes` (case-insensitive). Default-deny otherwise. */
+/**
+ * True only for an explicit `y`/`yes` (case-insensitive). Default-deny otherwise.
+ * The TUI itself no longer has a typed y/N approval path — every approval goes
+ * through the interactive dock picker — so this is kept as the shared
+ * default-deny predicate (and its test) rather than as live shell wiring.
+ */
 export function isShellApproved(answer: string): boolean {
   return /^y(es)?$/i.test(answer.trim());
 }
@@ -664,9 +669,7 @@ export async function launchTuiAgentShell(opts: {
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
-  // Pending `shell_exec` approval (legacy y/N path + interactive picker teardown).
   let uid = 0;
-  let pendingApproval: ((ok: boolean) => void) | undefined;
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
   // The chrome can only be mounted once a provider/model is chosen (the startup
@@ -679,8 +682,6 @@ export async function launchTuiAgentShell(opts: {
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await createShellRenderer(otui, {
       onDestroy: () => {
-        pendingApproval?.(false); // deny any in-flight approval on exit
-        pendingApproval = undefined;
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
@@ -720,9 +721,6 @@ export async function launchTuiAgentShell(opts: {
     mountedChrome = chrome;
     const transcript = chrome.transcript;
     const input = chrome.input;
-    // A pending composer approval is an overlay only the agent shell knows about,
-    // so it is registered rather than baked into the chrome's own guard.
-    chrome.addOverlaySource(() => pendingApproval !== undefined);
 
     // The chrome owns the spinner; the closure mirrors only the phase and the
     // start time, which it still needs for the side-worker context snapshot and
@@ -1797,8 +1795,10 @@ export async function launchTuiAgentShell(opts: {
                 marginTop: 1,
               }),
             );
-            // No `busy = false` here: every path out of the try/catch above has
-            // already gone through `stopBusy()`, which is what clears it now.
+            // Belt and braces: the paths above are believed to have stopped the
+            // spinner already, but `stopBusy()` is idempotent and a missed one
+            // leaves a live 120ms interval painting over an idle shell.
+            stopBusy();
             focusComposer(); // never steal focus from an active block-nav mode (R3)
           }
         })();
@@ -1859,21 +1859,6 @@ export async function launchTuiAgentShell(opts: {
     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
     // already trimmed the line, cleared the composer and closed the dropdown.
     chrome.onSubmit((line) => {
-      // Legacy y/N fallback if an approval is still pending on the composer
-      // (interactive picker is the primary path and resolves itself).
-      if (pendingApproval !== undefined) {
-        const ok = isShellApproved(line);
-        const resolve = pendingApproval;
-        pendingApproval = undefined;
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `av${uid++}`,
-            content: ok ? otui.t`${otui.green("approved")}` : otui.t`${otui.red("denied")}`,
-          }),
-        );
-        resolve(ok);
-        return;
-      }
       runLine(line);
     });
 
