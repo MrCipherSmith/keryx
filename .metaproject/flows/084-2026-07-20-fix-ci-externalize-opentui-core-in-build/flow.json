@@ -3,24 +3,37 @@
   "id": "084",
   "slug": "fix-ci-externalize-opentui-core-in-build",
   "title": "Fix CI: externalize @opentui/core in build script so bun build/prepare no longer fails on platform sub-packages",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T14:53:40.340Z",
-  "updatedAt": "2026-07-20T14:55:50.639Z",
+  "updatedAt": "2026-07-20T14:58:28.453Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:1939b2a0c04bea5b83745854b1c0ee0801ce348a1722b653581c72204ac0857d",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-20T14:57:59.084Z"
+    },
+    "AC2": {
+      "at": "2026-07-20T14:57:59.192Z"
+    },
+    "AC3": {
+      "at": "2026-07-20T14:57:59.276Z"
+    },
+    "AC4": {
+      "at": "2026-07-20T14:57:59.389Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/138"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +41,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +56,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +71,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +86,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +103,74 @@
     {
       "at": "2026-07-20T14:55:50.639Z",
       "event": "started"
+    },
+    {
+      "at": "2026-07-20T14:56:34.959Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-20T14:56:35.058Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-20T14:56:35.149Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-20T14:56:35.234Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-20T14:57:23.137Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/138"
+    },
+    {
+      "at": "2026-07-20T14:57:59.085Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-07-20T14:57:59.192Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-07-20T14:57:59.276Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-07-20T14:57:59.389Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-07-20T14:57:59.475Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T14:58:02.340Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-20T14:58:25.824Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/138"
+    },
+    {
+      "at": "2026-07-20T14:58:25.960Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-20T14:58:28.453Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
