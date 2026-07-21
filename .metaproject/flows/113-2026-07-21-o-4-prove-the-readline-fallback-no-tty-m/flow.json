@@ -3,17 +3,58 @@
   "id": "113",
   "slug": "o-4-prove-the-readline-fallback-no-tty-m",
   "title": "O-4: prove the readline fallback — no-TTY, missing optional dep, renderer init failure, and escape-free output parity",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T21:19:45.624Z",
-  "updatedAt": "2026-07-21T21:36:50.798Z",
+  "updatedAt": "2026-07-21T21:39:12.134Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:29563623627aacc4782805b35fa4801799152080fa9172aae669d419e15658b9",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T21:38:33.776Z",
+      "note": "shell-fallback.test.ts pins both guards (tui-shell.ts:657, chat-shell.ts:493) via a probe recording whether @opentui/core was imported at all - the return value cannot carry the proof because every failing path returns false. Falsified: removing each guard makes the test fail at expect(probe.imported).toBe(false) with Received: true."
+    },
+    "AC2": {
+      "at": "2026-07-21T21:38:33.840Z",
+      "note": "End-to-end test runs the real src/cli.ts shell with stdin piped and no TTY, asserting the readline shell ran and no renderer was mounted (probe.imported false), not chooseShellSurface's return value. Falsified: removing only the isTty term left it passing (that break is caught by shell-launch.test.ts instead); removing the launch guard too made it fail. The chain has two independent layers and each link is pinned by a different test - recorded as defence in depth, not a defect."
+    },
+    "AC3": {
+      "at": "2026-07-21T21:38:33.904Z",
+      "note": "With @opentui/core unresolvable via the preload plugin, both launch functions return false rather than throwing. Falsified: replacing the try/catch with a bare await import made both tests fail at expect(threw).toBeNull() with Received: Cannot find module '@opentui/core'."
+    },
+    "AC4": {
+      "at": "2026-07-21T21:38:33.968Z",
+      "note": "With createCliRenderer throwing, both launch functions decline rather than propagating. Falsified: changing the outer catch to rethrow made both tests fail at expect(threw).toBeNull() with Received: renderer init failed (flow 113 probe)."
+    },
+    "AC5": {
+      "at": "2026-07-21T21:38:34.032Z",
+      "note": "Asserted on raw bytes: expect(stdout).not.toContain(ESC-[) for a NO_COLOR run, plus a control asserting the same run WITH colour DOES emit escapes - so the property belongs to NO_COLOR, not to a sink that could never be coloured. Both directions falsified independently. The test also compares the no-TTY and forced-plain outputs byte for byte, normalising only FakeProvider's per-request sha256."
+    },
+    "AC6": {
+      "at": "2026-07-21T21:38:34.096Z",
+      "note": "All seven falsification runs are recorded in journal.md with the exact failure output, each followed by git checkout -- and a clean-tree check. The AC2 draft that passed against broken code is recorded too, as the concrete instance of the risk this AC exists to prevent."
+    },
+    "AC7": {
+      "at": "2026-07-21T21:38:34.160Z",
+      "note": "Answered in specification section 10, split into two claims: 'produces a working CLI' is testable (install.sh honours KERYX_REPO_URL/KERYX_REF/KERYX_HOME/KERYX_BIN_DIR) and deliberately deferred as an installer concern rather than a fallback one; '...launches the TUI' is NOT testable in CI as the repo stands, because a GitHub Actions step has no controlling terminal so the shell takes the readline fallback by design, and proving otherwise needs an allocated pty that does not exist here. CI is ubuntu-latest only, so even a pty harness would evidence one platform (O-3)."
+    },
+    "AC8": {
+      "at": "2026-07-21T21:38:34.224Z",
+      "note": "bun run typecheck clean; bun test 2081 pass / 11 skip / 0 fail (baseline 2072/11/0 plus the 9 new, skip count unchanged); bun test src/tui 94 pass with 0 skips, so the OpenTUI-dependent tests genuinely execute rather than passing vacuously."
+    },
+    "AC9": {
+      "at": "2026-07-21T21:38:34.297Z",
+      "note": "No production file changed - the diff is one new test file plus documentation. The only seam is external: a --preload plugin in a child process. One finding was reported rather than fixed: the no-TTY path has two independent layers (chooseShellSurface plus the per-shell guard) and either alone suffices, so no single test can pin the whole chain. A pre-existing unrelated checksum warning on flow 002 was also reported, not touched."
+    },
+    "AC10": {
+      "at": "2026-07-21T21:38:34.362Z",
+      "note": "specification.md section 10: O-4 marked CLOSED in part with the original finding kept above the resolution, matching how O-1 and O-2 read; the section header now says O-3 and O-5 remain open along with O-4's install clause."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/189"
   },
   "tasks": [
     {
@@ -65,7 +106,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +114,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -104,6 +146,89 @@
       "at": "2026-07-21T21:36:50.798Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T21:38:31.618Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T21:38:33.699Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/189"
+    },
+    {
+      "at": "2026-07-21T21:38:33.776Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-fallback.test.ts pins both guards (tui-shell.ts:657, chat-shell.ts:493) via a probe recording whether @opentui/core was imported at all - the return value cannot carry the proof because every failing path returns false. Falsified: removing each guard makes the test fail at expect(probe.imported).toBe(false) with Received: true."
+    },
+    {
+      "at": "2026-07-21T21:38:33.840Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: End-to-end test runs the real src/cli.ts shell with stdin piped and no TTY, asserting the readline shell ran and no renderer was mounted (probe.imported false), not chooseShellSurface's return value. Falsified: removing only the isTty term left it passing (that break is caught by shell-launch.test.ts instead); removing the launch guard too made it fail. The chain has two independent layers and each link is pinned by a different test - recorded as defence in depth, not a defect."
+    },
+    {
+      "at": "2026-07-21T21:38:33.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: With @opentui/core unresolvable via the preload plugin, both launch functions return false rather than throwing. Falsified: replacing the try/catch with a bare await import made both tests fail at expect(threw).toBeNull() with Received: Cannot find module '@opentui/core'."
+    },
+    {
+      "at": "2026-07-21T21:38:33.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: With createCliRenderer throwing, both launch functions decline rather than propagating. Falsified: changing the outer catch to rethrow made both tests fail at expect(threw).toBeNull() with Received: renderer init failed (flow 113 probe)."
+    },
+    {
+      "at": "2026-07-21T21:38:34.032Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Asserted on raw bytes: expect(stdout).not.toContain(ESC-[) for a NO_COLOR run, plus a control asserting the same run WITH colour DOES emit escapes - so the property belongs to NO_COLOR, not to a sink that could never be coloured. Both directions falsified independently. The test also compares the no-TTY and forced-plain outputs byte for byte, normalising only FakeProvider's per-request sha256."
+    },
+    {
+      "at": "2026-07-21T21:38:34.097Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: All seven falsification runs are recorded in journal.md with the exact failure output, each followed by git checkout -- and a clean-tree check. The AC2 draft that passed against broken code is recorded too, as the concrete instance of the risk this AC exists to prevent."
+    },
+    {
+      "at": "2026-07-21T21:38:34.161Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Answered in specification section 10, split into two claims: 'produces a working CLI' is testable (install.sh honours KERYX_REPO_URL/KERYX_REF/KERYX_HOME/KERYX_BIN_DIR) and deliberately deferred as an installer concern rather than a fallback one; '...launches the TUI' is NOT testable in CI as the repo stands, because a GitHub Actions step has no controlling terminal so the shell takes the readline fallback by design, and proving otherwise needs an allocated pty that does not exist here. CI is ubuntu-latest only, so even a pty harness would evidence one platform (O-3)."
+    },
+    {
+      "at": "2026-07-21T21:38:34.224Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun run typecheck clean; bun test 2081 pass / 11 skip / 0 fail (baseline 2072/11/0 plus the 9 new, skip count unchanged); bun test src/tui 94 pass with 0 skips, so the OpenTUI-dependent tests genuinely execute rather than passing vacuously."
+    },
+    {
+      "at": "2026-07-21T21:38:34.297Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: No production file changed - the diff is one new test file plus documentation. The only seam is external: a --preload plugin in a child process. One finding was reported rather than fixed: the no-TTY path has two independent layers (chooseShellSurface plus the per-shell guard) and either alone suffices, so no single test can pin the whole chain. A pre-existing unrelated checksum warning on flow 002 was also reported, not touched."
+    },
+    {
+      "at": "2026-07-21T21:38:34.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: specification.md section 10: O-4 marked CLOSED in part with the original finding kept above the resolution, matching how O-1 and O-2 read; the section header now says O-3 and O-5 remain open along with O-4's install clause."
+    },
+    {
+      "at": "2026-07-21T21:38:34.424Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T21:38:36.487Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-21T21:39:10.153Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/189"
+    },
+    {
+      "at": "2026-07-21T21:39:10.239Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T21:39:12.134Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
