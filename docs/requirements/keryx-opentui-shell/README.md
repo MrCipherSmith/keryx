@@ -7,9 +7,13 @@ Version: 0.2.0
 half of the scope was closed later by **flow 112**, which extracted a shared
 `ShellChrome`, re-landed the agent shell on it, and added a chat driver that
 renders `ShellIO` through the same chrome using the real `runShell`. Both modes
-are now TUI by default on a TTY. **§10 Open items** in `specification.md` still
-lists three gaps (O-3 platform coverage, O-4 fallback-parity test, O-5 cold-start
-latency).
+are now TUI by default on a TTY.
+
+O-3, O-4 and O-5 were subsequently closed by flows 113 and 114. **§10 Open items**
+in `specification.md` now lists exactly one: **O-6** — no automated check can
+evidence a rendered TUI frame, because `createCliRenderer` needs a controlling
+terminal that hosted CI runners lack. Consult §10 rather than this paragraph; it
+is the authority.
 
 This package specified migrating the keryx interactive shell/agent UI from the
 line-based `node:readline` renderer to a full-screen **OpenTUI**

@@ -60,12 +60,14 @@ async function loadOpenTui(): Promise<{
  * renderer tests instead of passing them — the same shape `chat-shell.test.ts`
  * and `shell-chrome.test.ts` already use.
  *
- * Flow 114 changed this. The three renderer tests below used to `return` early
- * when the dependency was missing, which bun reports as a PASS: on a platform
- * whose prebuilt native binary does not resolve they became silent no-ops and
- * the run still went green. That is fine for a developer, and useless as the
- * per-platform evidence O-3 needs — so the absence is now visible as a skip,
- * which `scripts/opentui-tests-no-skips.ts` turns into a hard CI failure.
+ * Every renderer test below used to `return` early when the dependency was
+ * missing, which bun reports as a PASS: on a platform whose prebuilt native
+ * binary does not resolve they became silent no-ops and the run still went
+ * green. That is fine for a developer, and useless as the per-platform evidence
+ * O-3 needs — so the absence is now visible as a skip, which
+ * `scripts/opentui-tests-no-skips.ts` turns into a hard CI failure. Flow 114
+ * converted the first three; the remaining 13 followed, so `otuiTest` is now
+ * the ONLY way a test in this file reaches a renderer.
  */
 const OTUI = await loadOpenTui();
 const otuiTest = test.skipIf(OTUI === undefined);
@@ -267,11 +269,8 @@ test("selectBoxHeight: described items need 2 rows each so all stay visible (flo
   expect(selectBoxHeight(0, false)).toBe(1);
 });
 
-test("ScrollBox transcript renders appended content (headless)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("ScrollBox transcript renders appended content (headless)", async () => {
+  const otui = requireOtui();
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 60, height: 10 });
   const scroll = new otui.core.ScrollBoxRenderable(renderer, {
     id: "transcript",
@@ -288,11 +287,8 @@ test("ScrollBox transcript renders appended content (headless)", async () => {
   renderer.destroy();
 });
 
-test("content survives a terminal resize (headless)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("content survives a terminal resize (headless)", async () => {
+  const otui = requireOtui();
   const { renderer, flush, captureCharFrame, resize } = await otui.testing.createTestRenderer({ width: 60, height: 10 });
   const box = new otui.core.BoxRenderable(renderer, { id: "b", flexGrow: 1, flexDirection: "column" });
   renderer.root.add(box);
@@ -305,11 +301,8 @@ test("content survives a terminal resize (headless)", async () => {
   renderer.destroy();
 });
 
-test("OpenTUI Input accepts typed keys (composer primitive)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("OpenTUI Input accepts typed keys (composer primitive)", async () => {
+  const otui = requireOtui();
   const { renderer, mockInput } = await otui.testing.createTestRenderer({ width: 70, height: 4 });
   const input = new otui.core.InputRenderable(renderer, { id: "prompt" });
   renderer.root.add(input);
@@ -519,11 +512,8 @@ async function mountBlockHarness(
   };
 }
 
-test("AC1: the REAL io wiring retains a tool result's full output (headless, through runAgentTurn)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC1: the REAL io wiring retains a tool result's full output (headless, through runAgentTurn)", async () => {
+  const otui = requireOtui();
   // The shipped path end to end: `createTuiAgentIo` + `attachBlockIo` + the real
   // `createBlockMount`, driven by `runAgentTurn`. No hand-written IO handlers —
   // a wrong field / wrong lineCount / missing fullText in `attachBlockIo` fails
@@ -593,11 +583,8 @@ test("AC1: the REAL io wiring retains a tool result's full output (headless, thr
   await rm(root, { recursive: true, force: true });
 });
 
-test("AC3: Ctrl+O enters block-nav, ↑/↓ move focus, Enter expands, y copies, Esc restores the composer", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC3: Ctrl+O enters block-nav, ↑/↓ move focus, Enter expands, y copies, Esc restores the composer", async () => {
+  const otui = requireOtui();
   const h = await mountBlockHarness(otui, { width: 80, height: 24 });
   h.add({ kind: "thought", summary: "alpha-summary", fullText: "ALPHA-BODY" });
   const beta = h.add({ kind: "tool", summary: "beta-summary", fullText: "BETA-BODY" });
@@ -706,11 +693,8 @@ function countingCore(otui: OtuiBundle): {
 
 const DIFF_BODY = ["@@ -1,2 +1,2 @@", "-old line", "+new line one", "+new line two"].join("\n");
 
-test("entering nav mode and moving focus repaint the highlight WITHOUT rebuilding any expanded body", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("entering nav mode and moving focus repaint the highlight WITHOUT rebuilding any expanded body", async () => {
+  const otui = requireOtui();
   const { core, counts } = countingCore(otui);
   const h = await mountBlockHarness(otui, { width: 80, height: 24, core });
   const first = h.add({ kind: "output", summary: "first-summary", fullText: DIFF_BODY });
@@ -757,11 +741,8 @@ test("entering nav mode and moving focus repaint the highlight WITHOUT rebuildin
   h.destroy();
 });
 
-test("a repaint whose body text CHANGED (an eviction) repaints in place, keeping the mounted renderables", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("a repaint whose body text CHANGED (an eviction) repaints in place, keeping the mounted renderables", async () => {
+  const otui = requireOtui();
   const { core, counts } = countingCore(otui);
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 12 });
   const transcript = new otui.core.BoxRenderable(renderer, { id: "transcript", flexGrow: 1, flexDirection: "column" });
@@ -800,11 +781,8 @@ test("a repaint whose body text CHANGED (an eviction) repaints in place, keeping
   renderer.destroy();
 });
 
-test("AC4: nav keys stay inert while the /-menu or an overlay owns the keyboard, and a turn ending mid-nav keeps focus", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC4: nav keys stay inert while the /-menu or an overlay owns the keyboard, and a turn ending mid-nav keeps focus", async () => {
+  const otui = requireOtui();
   const h = await mountBlockHarness(otui, { width: 80, height: 24 });
   h.add({ kind: "tool", summary: "first-summary", fullText: "FIRST-BODY" });
   h.add({ kind: "output", summary: "second-summary", fullText: "SECOND-BODY" });
@@ -858,11 +836,8 @@ test("AC4: nav keys stay inert while the /-menu or an overlay owns the keyboard,
   h.destroy();
 });
 
-test("AC5: a ```ts fence renders as a framed block whose header carries the language tag (headless)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC5: a ```ts fence renders as a framed block whose header carries the language tag (headless)", async () => {
+  const otui = requireOtui();
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 20 });
   const transcript = new otui.core.BoxRenderable(renderer, { id: "transcript", flexGrow: 1, flexDirection: "column" });
   renderer.root.add(transcript);
@@ -892,11 +867,8 @@ test("AC5: a ```ts fence renders as a framed block whose header carries the lang
   renderer.destroy();
 });
 
-test("AC7: diff add/del/hunk lines get distinct span colors and a bullet list is not misread as a diff", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC7: diff add/del/hunk lines get distinct span colors and a bullet list is not misread as a diff", async () => {
+  const otui = requireOtui();
   const h = await mountBlockHarness(otui, { width: 80, height: 24 });
   const diff = h.add({
     kind: "output",
@@ -941,11 +913,8 @@ test("AC7: diff add/del/hunk lines get distinct span colors and a bullet list is
   h.destroy();
 });
 
-test("AC11: expanding a large block then resizing never pushes the composer or footer off-screen (flow-075 regression)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC11: expanding a large block then resizing never pushes the composer or footer off-screen (flow-075 regression)", async () => {
+  const otui = requireOtui();
   const h = await mountBlockHarness(otui, { width: 80, height: 20 });
   const big = h.add({
     kind: "output",
@@ -989,11 +958,8 @@ test("AC11: expanding a large block then resizing never pushes the composer or f
   h.destroy();
 });
 
-test("known @opentui/core defect: a bordered child in a ScrollBox at scrollTop===2 overdraws the row below the viewport", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("known @opentui/core defect: a bordered child in a ScrollBox at scrollTop===2 overdraws the row below the viewport", async () => {
+  const otui = requireOtui();
   // Built from PURE OpenTUI primitives — no flow-109 code — so this pins the
   // upstream bug rather than our layout. `createBlockView` renders an expanded
   // body as a bordered box inside the transcript ScrollBox, so it inherits the
@@ -1086,11 +1052,8 @@ test("known @opentui/core defect: a bordered child in a ScrollBox at scrollTop==
   expect(observed[3]).toBe(true);
 });
 
-test("AC12: expanding a non-newest block preserves the scroll offset instead of jumping to the bottom", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC12: expanding a non-newest block preserves the scroll offset instead of jumping to the bottom", async () => {
+  const otui = requireOtui();
   // 40 filler lines in a 14-row viewport, so the transcript is genuinely scrolled.
   const h = await mountBlockHarness(otui, { width: 60, height: 14, filler: 40 });
   const older = h.add({

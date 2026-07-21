@@ -96,8 +96,29 @@ const TITLE = "keryx · chrome";
 const STATUS = "s/m";
 const FOOTER_HINT = "/ commands";
 const PLACEHOLDER = "ask keryx";
-/** Toast auto-clear window; the product default (5s) is unusable in a test. */
-const TOAST_MS = 40;
+/**
+ * Toast window for every test that asserts the toast is PRESENT.
+ *
+ * `showToast` arms `setTimeout(…, toastMs)` from the CALL, but the frame a test
+ * reads is painted inside the FOLLOWING `flush()` — and `flush()` awaits a
+ * render frame, not wall time (same clock/frame split as `ESC_PARSER_TIMEOUT_MS`
+ * above). So the auto-clear and the paint race on the real clock. Measured on
+ * this harness, at the exact AC2 sequence (`showToast` + `startBusy` +
+ * `setBusyPhase`, then flush) the paint lands ~35-40ms after the call: with the
+ * window at 35ms the toast survived into 0/10 frames, at 40ms into 10/10 — the
+ * previous value sat ON that cliff, and a full `src/tui` run under CPU
+ * contention lost the toast in 2/20 iterations. Holding the window open past
+ * any possible frame takes the clock out of every presence assertion; only the
+ * auto-clear test opts out, below. (`destroy()` clears the pending timer, so a
+ * long window never outlives its test.)
+ */
+const TOAST_HOLD_MS = 60_000;
+/**
+ * …and the window for the one test that asserts the toast EXPIRES. Kept an
+ * order of magnitude above that ~40ms paint deadline, so that test's own "it
+ * rendered first" assertion is not racing the expiry it then waits for.
+ */
+const TOAST_CLEAR_MS = 300;
 
 async function mountChrome(
   otui: OtuiBundle,
@@ -110,7 +131,7 @@ async function mountChrome(
     footerHint: FOOTER_HINT,
     placeholder: PLACEHOLDER,
     commands: commandsForMode("agent"),
-    toastMs: TOAST_MS,
+    toastMs: TOAST_HOLD_MS,
     ...opts.chrome,
   });
   await setup.flush();
@@ -176,7 +197,10 @@ otuiTest("AC2: showToast and the busy status are live at mount, not placeholder 
   const otui = requireOtui();
   // The pre-extraction closure assigned `showToast` / `setBusyPhase` as no-ops
   // and rebound them 100-400 lines later; anything firing in between was
-  // silently dropped. Here both are the FIRST calls after mount.
+  // silently dropped. Here both are the FIRST calls after mount, on a toast
+  // window (`TOAST_HOLD_MS`) that cannot expire before the frame is painted —
+  // a toast missing from that frame therefore means it was SWALLOWED, which is
+  // the only thing this test is entitled to conclude.
   const h = await mountChrome(otui, { width: 90, height: 20 });
   h.chrome.showToast("Copied to clipboard");
   h.chrome.startBusy("waiting for model");
@@ -331,7 +355,10 @@ otuiTest("AC3: an active overlay suppresses the `/`-menu key router", async () =
 
 otuiTest("AC4: showToast renders and auto-clears", async () => {
   const otui = requireOtui();
-  const h = await mountChrome(otui, { width: 90, height: 20, chrome: { toastMs: TOAST_MS } });
+  // The ONE test that wants a toast to expire, so the ONE that opts out of
+  // `TOAST_HOLD_MS`. Its own presence assertions still need to outrun the
+  // window, hence `TOAST_CLEAR_MS` rather than a value near the paint deadline.
+  const h = await mountChrome(otui, { width: 90, height: 20, chrome: { toastMs: TOAST_CLEAR_MS } });
   h.chrome.showToast("Copied to clipboard");
   await h.flush();
   expect(h.captureCharFrame()).toContain("Copied to clipboard");
@@ -343,8 +370,10 @@ otuiTest("AC4: showToast renders and auto-clears", async () => {
   expect(replaced).toContain("Session saved");
   expect(replaced).not.toContain("Copied to clipboard");
 
-  // …and it clears itself after `toastMs`.
-  await new Promise((resolve) => setTimeout(resolve, TOAST_MS * 4));
+  // …and it clears itself after `toastMs`. The wait is generous in the SAFE
+  // direction: overshooting the window can only make the clear more certain,
+  // where undershooting a presence assertion is what made AC2 flaky.
+  await new Promise((resolve) => setTimeout(resolve, TOAST_CLEAR_MS * 2));
   await h.flush();
   expect(h.captureCharFrame()).not.toContain("Session saved");
 

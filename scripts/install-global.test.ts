@@ -57,6 +57,14 @@ let prefixHome: string;
 let binDir: string;
 let fakeHome: string;
 
+/**
+ * Budget for anything in this file that shells out to git or runs install.sh
+ * (which itself runs `bun install` inside a fresh clone). Generous on purpose:
+ * these steps are I/O- and contention-bound, so a tight bound produces a flake
+ * that looks like a product bug — a SIGTERM'd git — rather than a slow fixture.
+ */
+const FIXTURE_TIMEOUT_MS = 120_000;
+
 beforeAll(async () => {
   if (!installable) {
     return;
@@ -105,13 +113,19 @@ beforeAll(async () => {
     "flow114 install-global test snapshot",
   ]);
   await runOk(["git", "-C", snapshot, "push", "--quiet", originGit, `HEAD:refs/heads/${INSTALL_REF}`]);
-});
+  // Bun's default hook timeout is 5s. This fixture shells out to git five times
+  // (archive, init, add, commit, push) over the whole worktree, which fits well
+  // under 5s on an idle machine and does NOT on a loaded one — the failure then
+  // surfaces as a SIGTERM'd `git commit` (exit 143), which reads like a hung git
+  // rather than a budget the fixture outgrew. Observed failing 5/5 on a busy
+  // laptop while passing in CI and on an idle checkout.
+}, FIXTURE_TIMEOUT_MS);
 
 afterAll(async () => {
   if (workspace !== undefined) {
     await rm(workspace, { recursive: true, force: true });
   }
-});
+}, FIXTURE_TIMEOUT_MS);
 
 interface Ran {
   exitCode: number;
