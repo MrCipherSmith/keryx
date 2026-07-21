@@ -14,11 +14,14 @@
 
 import { parentPort, workerData } from "node:worker_threads";
 import { createAllowlistProxy, type AllowlistProxy, type CredentialMask } from "./proxy";
+import { createRunCa, type RunCa } from "./tls-ca";
 
 interface WorkerData {
   allowedDomains: string[];
   host?: string;
   masks?: CredentialMask[];
+  /** Enable TLS termination; the run CA is created HERE (it cannot be serialized). */
+  tlsTerminate?: boolean;
 }
 
 async function main(): Promise<void> {
@@ -26,16 +29,33 @@ async function main(): Promise<void> {
     return; // not run as a worker
   }
   const data = (workerData ?? {}) as WorkerData;
+
+  // The run CA lives in the worker: its PRIVATE KEY never crosses a boundary.
+  // Only the CA CERTIFICATE is reported back, for the contained process to trust.
+  let ca: RunCa | undefined;
+  if (data.tlsTerminate === true) {
+    ca = await createRunCa();
+  }
+
   const proxy: AllowlistProxy = await createAllowlistProxy({
     allowedDomains: Array.isArray(data.allowedDomains) ? data.allowedDomains : [],
     ...(typeof data.host === "string" ? { host: data.host } : {}),
     ...(Array.isArray(data.masks) ? { masks: data.masks } : {}),
+    ...(ca ? { tlsTerminate: ca } : {}),
   });
-  parentPort.postMessage({ type: "ready", port: proxy.port, host: proxy.host });
+  parentPort.postMessage({
+    type: "ready",
+    port: proxy.port,
+    host: proxy.host,
+    ...(ca ? { caCertPem: ca.caCertPem } : {}),
+  });
 
   parentPort.on("message", (msg: { type?: string }) => {
     if (msg && msg.type === "close") {
-      void proxy.close().then(() => process.exit(0));
+      void proxy
+        .close()
+        .then(() => (ca ? ca.dispose() : undefined))
+        .then(() => process.exit(0));
     }
   });
 }
