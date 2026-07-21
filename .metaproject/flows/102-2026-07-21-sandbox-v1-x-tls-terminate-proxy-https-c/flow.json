@@ -3,9 +3,9 @@
   "id": "102",
   "slug": "sandbox-v1-x-tls-terminate-proxy-https-c",
   "title": "sandbox v1.x: TLS-terminate proxy → HTTPS credential masking + content filtering",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T08:33:42.500Z",
-  "updatedAt": "2026-07-21T09:57:43.286Z",
+  "updatedAt": "2026-07-21T09:59:12.624Z",
   "source": {
     "type": "description",
     "ref": null
@@ -34,7 +34,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/168"
   },
   "tasks": [
     {
@@ -156,6 +156,34 @@
       "at": "2026-07-21T09:57:43.286Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T09:58:17.061Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/168 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T09:58:17.164Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T09:58:19.807Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-07-21T09:59:10.114Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/168 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T09:59:10.255Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T09:59:12.624Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
