@@ -7,8 +7,13 @@ an OpenTUI renderer, keep the deterministic driver unchanged — has shipped for
 `src/tui/tui-shell.ts`, `src/tui/shell-chrome.ts`, `src/tui/chat-shell.ts`,
 `src/commands/agent-commands.ts`, ADR-0005 Accepted). The TUI is the default
 interactive shell on a TTY in both modes; readline remains the mandatory fallback
-for no-TTY, a missing optional dependency, or renderer init failure. **§10 Open
-items** still lists three smaller gaps (O-3, O-4, O-5).
+for no-TTY, a missing optional dependency, or renderer init failure.
+
+**§10** now records O-1 through O-5 as closed (flows 112-114) and leaves exactly
+one open item, **O-6**: no automated check can evidence a rendered TUI frame,
+because `createCliRenderer` needs a controlling terminal that hosted runners
+lack. Read §10 rather than this paragraph — it is the authority, and this
+sentence has already been stale once.
 
 Two reading notes. The `(SPIKE)` names below were resolved by the Phase 0 spike
 (flow 059) and are recorded as answered in §2, but may diverge in spelling from
@@ -74,14 +79,19 @@ Verified from OpenTUI docs/repo:
 `(SPIKE)` items — **resolved** by the flow-059 Phase 0 spike (GO verdict; see
 ADR-0005). Answers as shipped:
 
-- **Primitives:** `TextRenderable`, `BoxRenderable`, `InputRenderable`,
+- **Primitives as actually used:** `TextRenderable`, `BoxRenderable`,
   `SelectRenderable` (the `/` dropdown and every picker), `ScrollBoxRenderable`
-  (the transcript). Later work also uses `TabSelectRenderable` and the testing
-  harness's `captureSpans`.
+  (the transcript), `TextareaRenderable` (the composer), and `InputRenderable` —
+  which survives only in the API-key entry step, not the composer. Later work
+  also uses the testing harness's `captureSpans`.
+  *An earlier revision of this list also named `TabSelectRenderable`; it has never
+  been used anywhere in `src/` and was removed by the 2026-07-22 audit.*
 - **Keyboard + focus:** declarative `keyBindings` on the composer plus a
   pre-focus global keypress stream, wrapped once as `onKeypress(renderer, handler)`
-  in `src/tui/tui-shell.ts`. Focus is routed explicitly (`focus()` / `blur()`);
-  ownership is arbitrated by a single `focusOwner` guard — see D-3.
+  — which now lives in `src/tui/shell-chrome.ts` (and `src/tui/composer-choice.ts`),
+  not `tui-shell.ts`, since flow 112 extracted the chrome. Focus is routed
+  explicitly (`focus()` / `blur()`); ownership is arbitrated by a single
+  `focusOwner` guard — see D-3.
 - **Screen mode:** alternate screen (`screenMode: "alternate-screen"`,
   `clearOnShutdown: true`). Native scrollback is forfeited by design (R2 accepted,
   as codex/claude do); everything lives inside the `ScrollBoxRenderable`. This is
@@ -120,7 +130,10 @@ CliRenderer.root
     tool-result entries are registered as addressable **collapsible blocks**
     (`src/tui/transcript-blocks.ts`) that retain their full text under a bounded
     cap. Collapse state is **per block** — toggling one never touches another.
-    A collapsed header reads `▸ <kind> (n lines) · ctrl+o`; expanded reads `▾`.
+    A collapsed header reads `▸ <kind> (n lines) · <hint>`; expanded reads `▾`.
+    The hint differs per block kind: reasoning `/think · ctrl+o`, tool result
+    `/expand · ctrl+o`, tool call just `ctrl+o` — an earlier revision of this
+    line showed only the last form.
     Expansion is driven by a modal **block-navigation mode** rather than a
     pointer selection:
 
@@ -158,9 +171,21 @@ CliRenderer.root
 | `onToolCall`        | append a `⚙ name(args)` block (collapsed)                              |
 | `onToolResult`      | attach full output to the block; show collapsed summary + expander    |
 | `onSystem`          | append a dim/red system line                                          |
-| `requestApproval`   | focus a modal/inline confirm; resolve on y/N; keep default-deny       |
+| `requestApproval`   | open the choice dock and resolve on the selected option; default-deny |
 
-`ShellIO` (chat) maps the same way minus the tool/reasoning hooks.
+The approval row originally read "resolve on y/N". The TUI **no longer has a
+typed y/N path** — every approval goes through the interactive dock picker
+(`pickShellApproval`), and `isShellApproved` survives only as the shared
+default-deny predicate and its test. The default-deny half of the original row
+was and remains correct.
+
+`ShellIO` (chat) is **not** simply `AgentIO` minus the tool and reasoning hooks —
+a framing this document used before the chat renderer existed. It also lacks
+`onUsage` (hence D-A2's estimator), `onAssistantText` and `requestApproval`, and
+it *adds* `onTurnStart` / `onTurnEnd`. Most importantly it inverts direction: it
+owns its input as `lines: AsyncIterable<string>`, so the driver pulls where
+`AgentIO` leaves the loop to the caller. That asymmetry is what D-A4's bridge
+exists to reconcile.
 
 ## 5. Input + the live `/` command dropdown (G1/F1)
 
@@ -170,8 +195,14 @@ CliRenderer.root
   Esc closes. Submit (Enter with no open menu) hands the line to the driver.
 - **Shared command registry** — promote the flow-058 `AGENT_SLASH_COMMANDS`
   (`{name, desc}` + `findAgentCommand`) into `src/commands/agent-commands.ts` as the
-  single source; the pure filter `filterCommands(query, registry)` is unit-tested;
-  the TUI dropdown and any readline fallback both consume it.
+  single source; the pure filter is unit-tested; the TUI dropdown and any
+  readline fallback both consume it.
+
+  *As shipped the signature is `filterCommands(query, mode: ShellMode)`, not
+  `(query, registry)` — the registry is module-internal and the second parameter
+  became the mode, so a menu cannot be rendered without naming its mode (see
+  O-2). Matching is case-insensitive **prefix** only; the "fuzzy" this section
+  once promised was never implemented.*
 - Registry (initial): `/help`, `/expand` (or inline expand), `/clear`, `/exit`.
   New TUI-era commands (e.g. `/model`, `/copy`) are additive later.
 
@@ -285,10 +316,18 @@ two standing positions:
   `MarkdownRenderable` spins a WASM worker that is unavailable headless" — the
   worker also makes the render path untestable under `createTestRenderer`, which
   is where flow 109's entire AC3/AC4/AC5/AC7/AC11/AC12 coverage lives.
-- **Keryx's egress posture.** Model output must not be able to cause an outbound
-  fetch as a side effect of being *displayed*. A fenced block with an attacker-
-  chosen info string is model-controlled input; letting it reach a network-capable
-  loader is a needless widening.
+- **Keryx's egress posture.** Model output should not be able to cause an
+  outbound fetch as a side effect of being *displayed*, and a fenced block's info
+  string is model-controlled input reaching a network-capable loader.
+
+  **Precision added by the 2026-07-22 audit.** The three factual claims above all
+  verify — the highlighter does spawn a `Worker`, its grammar loader does `fetch`
+  when the source string starts with `http(s)://`, and exactly five grammars ship
+  bundled. But the *reachability* is weaker than the original wording implied:
+  the fetch fires only for a grammar source explicitly configured as a URL, and
+  the package ships no default remote grammar URL, so a model cannot reach the
+  network merely by choosing an info string. The decision stands on the worker
+  and the offline-bundling gap; it should not be cited as a live injection path.
 
 **Instead**, blocks render structurally: a frame, a dim language tag, and diff
 line classes derived from the pure, dependency-free helpers in
@@ -305,8 +344,10 @@ for the tool output the transcript actually carries.
 resolved from disk with no URL path in the loader — *and* the highlighter is
 reachable without spawning a worker, or the worker runs under
 `createTestRenderer`. At that point the trade-off flips and D-2 should be
-re-opened; nothing else about the block model needs to change, since the
-structural renderer is confined to `createBlockView`.
+re-opened; nothing else about the block model needs to change. The structural
+renderer lives in `createBlockView` **and** `createSegmentView` — the latter is
+what frames a fenced segment and carries its language tag — so a D-2 revisit
+touches both, not one as this sentence originally said.
 
 ### D-3 — block navigation is a mode (`Ctrl+O` … `Esc`), not bare single keys
 
@@ -365,7 +406,8 @@ spinner, toast, overlay guard, copy-on-select — and is returned as a plain
 was data, not behaviour. `launchTuiAgentShell` keeps only agent concerns
 (approval, ask-user, worker fleet, side workers, the wiki router, the block
 registry and nav, the `runAgentTurn` call site) and shrank from 1610 to 1254
-lines; `src/tui/chat-shell.ts` mounts the same chrome.
+lines at the flow-112 re-land — 1237 as of the 2026-07-22 audit, in a file of
+1876. `src/tui/chat-shell.ts` mounts the same chrome.
 
 A second chat shell beside the agent one was rejected for the reason D-6 exists:
 three surfaces drift, and the readline `/expand` had already proved it.
@@ -521,6 +563,15 @@ Per leg the job proves two things, both **positively**:
   skip means the optional dependency did not resolve and a green-with-skips run
   would be vacuous. This caught three `tui-shell.test.ts` renderer tests that used
   early-`return` — which bun counts as PASS — and moved them to `test.skipIf`.
+
+  **Correction (audit, 2026-07-22).** That sentence originally read as if the
+  hazard had been eliminated. It had not: three cases were converted, and at the
+  time of the audit **thirteen** early-`return` guards remained in the same file,
+  including the §7.1 `scrollTop === 2` defect pin. The CI guarantee still holds —
+  the converted cases skip when the optional dependency is missing, which is
+  enough to fail `opentui-tests-no-skips.ts` — but the hazard was *sampled*, not
+  removed. Treat any `if (otui === undefined) return;` in a test as a silent pass,
+  and prefer `test.skipIf`.
 
 **What is covered, and what is not.** N1's wording — binaries cover the
 platforms, the install path pulls them, no Zig — is proven on all four. "The TUI
