@@ -12,7 +12,10 @@
 // (seatbelt/bwrap). The proxy binds loopback and is created per run.
 
 import http from "node:http";
+import https from "node:https";
 import net from "node:net";
+import tls from "node:tls";
+import type { RunCa } from "./tls-ca";
 
 /**
  * Match a host against an allowlist. Exact match, or a `*.example.com` wildcard
@@ -68,6 +71,21 @@ export interface AllowlistProxyOptions {
   onDecision?: (decision: ProxyDecision) => void;
   /** Credentials to unmask on outbound HTTP requests to their inject hosts. */
   masks?: CredentialMask[];
+  /**
+   * OPT-IN TLS termination (MITM). When set, an allowlisted `CONNECT` is
+   * terminated with a leaf certificate issued by this run CA instead of being
+   * blind-relayed, so request contents (and therefore credential masking) become
+   * visible. The contained process must trust `ca.caCertPem` — delivered via CA
+   * env vars, never the system trust store. Without this, HTTPS stays a blind
+   * relay (the default).
+   */
+  tlsTerminate?: RunCa;
+  /**
+   * CA(s) used to verify the REAL upstream while terminating. Default: the
+   * system trust store with `rejectUnauthorized: true`. Tests pass their own CA
+   * so a local TLS upstream verifies.
+   */
+  upstreamCa?: string | string[];
 }
 
 /** Replace every mask's sentinel with its real value inside a header value. */
@@ -158,6 +176,62 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
     req.pipe(upstream);
   });
 
+  // Decrypt-and-forward handler for terminated TLS connections: mask the request
+  // and forward it to the real upstream over TLS (verified against the system
+  // store, or `upstreamCa` when supplied).
+  //
+  // Bun constraints that shape this design:
+  //   - `server.emit("connection", socket)` (Node's socket-injection trick) is
+  //     NOT supported, so the decrypted stream is piped into a REAL loopback
+  //     listener instead.
+  //   - server-side `new tls.TLSSocket(sock, {isServer:true})` never completes a
+  //     handshake, so termination uses a real `https.createServer`.
+  //   - `SNICallback` is IGNORED, so we cannot serve every host from one TLS
+  //     listener — instead one internal HTTPS listener is created PER HOST with
+  //     that host's leaf certificate, cached for the run.
+  const mitmHandler = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+    const hostHeader = req.headers.host ?? "";
+    const [rawHost, rawPort] = hostHeader.split(":");
+    const hostname = rawHost ?? "";
+    const upstreamPort = Number(rawPort) || 443;
+    const headers = applyMasks(req.headers, opts.masks ?? [], hostname);
+    const upstreamReq = https.request(
+      {
+        host: hostname,
+        port: upstreamPort,
+        method: req.method,
+        path: req.url ?? "/",
+        headers,
+        servername: hostname,
+        ...(opts.upstreamCa !== undefined ? { ca: opts.upstreamCa } : {}),
+      },
+      (up) => {
+        res.writeHead(up.statusCode ?? 502, up.headers);
+        up.pipe(res);
+      },
+    );
+    upstreamReq.on("error", () => {
+      if (!res.headersSent) res.writeHead(502);
+      res.end("upstream error");
+    });
+    req.pipe(upstreamReq);
+  };
+
+  /** One internal HTTPS terminator per host (Bun ignores SNICallback), cached. */
+  const mitmServers = new Map<string, { server: https.Server; port: number }>();
+  const mitmPortFor = async (hostname: string, ca: RunCa): Promise<number> => {
+    const key = hostname.toLowerCase();
+    const hit = mitmServers.get(key);
+    if (hit) return hit.port;
+    const leaf = await ca.issueLeaf(key);
+    const server = https.createServer({ key: leaf.keyPem, cert: leaf.certPem }, mitmHandler);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const addr = server.address();
+    const port = addr && typeof addr === "object" ? addr.port : 0;
+    mitmServers.set(key, { server, port });
+    return port;
+  };
+
   server.on("connect", (req, clientSocket, head) => {
     const [reqHost, reqPort] = (req.url ?? "").split(":");
     const hostname = reqHost ?? "";
@@ -167,6 +241,32 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       clientSocket.end();
       return;
     }
+
+    // OPT-IN MITM: terminate TLS with a leaf for this host so contents (and
+    // credential masking) are visible, instead of a blind byte relay.
+    const ca = opts.tlsTerminate;
+    if (ca) {
+      void (async () => {
+        try {
+          const terminatorPort = await mitmPortFor(hostname, ca);
+          clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+          // The client now speaks TLS; hand the raw bytes to this host's
+          // internal HTTPS terminator, which does the handshake and decrypts.
+          const internal = net.connect(terminatorPort, "127.0.0.1", () => {
+            if (head && head.length > 0) internal.write(head);
+            clientSocket.pipe(internal);
+            internal.pipe(clientSocket);
+          });
+          internal.on("error", () => clientSocket.destroy());
+          clientSocket.on("error", () => internal.destroy());
+        } catch {
+          clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+          clientSocket.end();
+        }
+      })();
+      return;
+    }
+
     const upstream = net.connect(port, hostname, () => {
       clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
       if (head && head.length > 0) upstream.write(head);
@@ -186,7 +286,16 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
   return {
     host,
     port,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: async () => {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      // Tear down every per-host TLS terminator created for this run.
+      await Promise.all(
+        [...mitmServers.values()].map(
+          ({ server: s }) => new Promise<void>((resolve) => s.close(() => resolve())),
+        ),
+      );
+      mitmServers.clear();
+    },
   };
 }
 
