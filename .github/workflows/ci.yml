@@ -72,7 +72,7 @@ jobs:
       # containment failure is otherwise invisible.
       - name: Diagnose the real bwrap argument shape
         run: |
-          cat > /tmp/diag.ts <<'EOF'
+          cat > ./diag.ts <<'EOF'
           import { mkdtempSync, existsSync, realpathSync } from "node:fs";
           import { tmpdir } from "node:os";
           import path from "node:path";
@@ -89,7 +89,7 @@ jobs:
           console.log("stderr:", (r.stderr || "").trim());
           console.log("file created:", existsSync(path.join(work, "inside.txt")));
           EOF
-          bun /tmp/diag.ts
+          bun ./diag.ts && rm -f ./diag.ts
 
       - name: OS-sandbox live smokes (real subprocesses under bwrap)
         env:
