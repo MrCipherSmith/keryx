@@ -62,4 +62,54 @@ describe.skipIf(!flag || !supported)("OS-sandbox live smoke", () => {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  test("the default profile denies network (verified against an unsandboxed control)", async () => {
+    const { RealProcessAdapter } = await import("../real-process-adapter");
+    const { SandboxedProcessAdapter } = await import("./adapter");
+    const { defaultSandboxProfile } = await import("./profile");
+
+    const work = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-net-")));
+    const tmp = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-nettmp-")));
+    const out = path.join(work, "fetched.txt");
+    const env = { PATH: "/usr/bin:/bin", HOME: homedir() };
+    const inner = new RealProcessAdapter({ allowRealSubprocess: true, timeoutMs: 20000 });
+
+    /** Fetch a public URL into `out`; returns true when bytes were received. */
+    const fetched = (profileMode: "sandboxed" | "control"): boolean => {
+      if (existsSync(out)) rmSync(out);
+      const base = defaultSandboxProfile(work, tmp, homedir()); // workspace-write + net OFF
+      const profile =
+        profileMode === "control"
+          ? { ...base, mode: "danger-full-access" as const } // adapter skips containment
+          : base;
+      const adapter = new SandboxedProcessAdapter({
+        profile,
+        inner,
+        platform: process.platform,
+        launcherAvailable: launcher.available,
+        ...(launcher.path ? { bwrapPath: launcher.path } : {}),
+      });
+      adapter.spawn({
+        path: "/usr/bin/curl",
+        argv: ["curl", "-sS", "-m", "10", "-o", out, "https://example.com"],
+        env,
+        cwd: work,
+      });
+      return existsSync(out) && Bun.file(out).size > 0;
+    };
+
+    try {
+      // Control first: if the runner has no outbound network at all, the
+      // sandboxed leg would "pass" for the wrong reason — so skip instead.
+      if (!fetched("control")) {
+        console.warn("[skip] no outbound network in this environment; net-off assertion inconclusive");
+        return;
+      }
+      expect(fetched("sandboxed")).toBe(false); // network denied by the OS sandbox
+    } finally {
+      if (existsSync(out)) rmSync(out);
+      rmSync(work, { recursive: true, force: true });
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
