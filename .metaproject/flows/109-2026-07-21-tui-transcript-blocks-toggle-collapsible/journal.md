@@ -180,3 +180,97 @@ The blocked worker finished reading the implementation before it vanished:
    than settling for a substring check.
 3. The load-bearing `loadOpenTui()` sequential-import fix is now committed.
 - 2026-07-21T17:10:50.638Z - task-done: T4: Self-review and prepare draft PR
+
+## T5 — headless TUI tests, readline parity, docs (attempt 3)
+
+Ran in an isolated worktree (`.claude/worktrees/keryx-flow-109`), which is what
+finally let this task finish: attempts 1 and 2 were killed by concurrent sessions
+switching branches in the main checkout, and a worktree is out of reach of a
+`git checkout` there.
+
+Attempt 2's 450 lines of tests were still sitting uncommitted in the worktree.
+They were kept, not rewritten — 14 of their 17 assertions were already correct.
+Three failed, and both root causes turned out to be harness/upstream facts rather
+than product bugs.
+
+### The two harness facts
+
+**A lone `Esc` is invisible to `flush()`.** OpenTUI's stdin parser holds a bare
+`\x1b` in its pending buffer for `DEFAULT_TIMEOUT_MS` (20ms on the real clock,
+`reconcileTimeoutState` in the vendored `chunk-*.js`) so it can tell a bare Esc
+apart from the start of an escape *sequence*. `flush()` only awaits a render
+frame, never wall time, so `pressEscape()` + `flush()` observed nothing at all
+and both AC3 and AC4 failed at their Esc step. Probed directly: immediately after
+`pressEscape()` the handler had seen `[]`; after a 200ms sleep it had seen
+`{name:"escape"}`. Fixed with `pressEscapeAndSettle`, which waits the timeout out.
+Real terminals pay the identical 20ms, so nothing about the product changed.
+
+**AC11's 40x8 failure is an upstream ScrollBox clipping defect.** At exactly
+`scrollTop === 2`, a bordered child inside a `ScrollBoxRenderable` paints its
+bottom border one row past the viewport clip, over the composer's interior row —
+`│─draft─prompt─────╯`, which is why the `includes("draft prompt")` assertion
+failed while the composer was plainly still on screen. Narrowed with four probes:
+
+- it reproduces from **pure OpenTUI primitives with zero flow-109 code**;
+- it is a pure function of the offset — a sweep over 0/1/2/3 (via header-line
+  count) bleeds at 2 and is clean at 0, 1 and 3, at four different terminal sizes;
+- `overflow: "hidden"` on the scrollbox, its content, the child and the column
+  parent all fail to suppress it;
+- `markNeedsRerender` / `requestRender` / `needsUpdate` / extra flushes all fail
+  to suppress it, and setting `scrollTop = 0` then back to `2` reproduces it
+  exactly — so it is live overdraw, not a stale-paint artifact.
+
+Keryx cannot fix this from the outside without dropping the frame border that
+AC5/AC7 require. Rather than weaken AC11 into something vacuous, it was split:
+the AC11 test now asserts the guarantee AC11 actually makes — that a 120-line
+expanded block never pushes the chrome off-screen, checked structurally (footer
+is the last row, the composer's rounded box occupies the three rows directly
+above it, the draft survives in `textarea.plainText`) at four sizes — and the
+defect is pinned by its own test that asserts `scrollTop === 2` bleeds and 0/1/3
+do not. That test **fails when upstream fixes the bug**, at which point it and the
+`scrollTop !== 2` carve-out in AC11 should both be deleted. Recorded in
+specification §7.1.
+
+### Readline parity (AC10)
+
+`/expand` lived inside the non-exported `runAgentRepl` closure and had already
+drifted from the TUI: a hand-rolled `<tool> output:` header and a flatly dimmed
+body that rendered diffs in monochrome. Lifted the pure formatting into an
+exported `expandedToolOutput(name, output, maxLines)` pointed at the same
+`src/lib` helpers the TUI uses — `blockLabel` for the header, `renderDiff` for a
+body that `looksLikeUnifiedDiff` recognizes. Eight tests, including the AC7
+negative (a `- ` bullet list must not colorize as deletions) and a NO_COLOR case.
+Cap, truncation notice, gutter and the "Nothing to expand" path are unchanged;
+the header's line count is taken after trailing newlines are trimmed so it
+matches what is actually shown.
+
+### Docs (AC14)
+
+- §3: the stale `tool →` bullet claiming inline expand "replac[es] the
+  line-based `/expand`" now describes the delivered behavior — per-block
+  collapse, the full key table (`Ctrl+O` / `↑↓` / `Enter`·`Space` / `y` / `Esc`),
+  and the fact that `/expand` and `/copy` both survive in both shells.
+- §7.1 (new): the three load-bearing headless-harness facts — the sequential
+  `@opentui/core` + `/testing` import (a `Promise.all` trips the
+  `core-slot.ts` → `Renderable` module cycle), the 20ms Esc timeout, and the
+  ScrollBox border bleed.
+- §9 Decisions (new): **D-2** records why `CodeRenderable`/`DiffRenderable`/
+  `MarkdownRenderable` were rejected. Verified against the vendored package
+  before writing it down rather than restating the dispatch: `new Worker(workerPath)`
+  → `parser.worker.js`, whose grammar loader branches on
+  `source.startsWith("http://")` and `await fetch(source)`es a URL, and exactly
+  five grammars ship bundled (`javascript`, `markdown`, `markdown_inline`,
+  `typescript`, `zig`). Revisit condition: offline grammar bundling with no URL
+  path in the loader, plus a worker-free or headless-reachable highlighter.
+  D-3 (mode over bare keys) and D-5 (sticky-scroll suspend) recorded alongside.
+
+### Deliberately not done
+
+- `review-orchestrator` (named in the T5 task body, not in any AC this worker
+  owns) was not run — left to the orchestrator's completion gate under AC13.
+- The wiki page refresh mentioned in the T5 task body was not done; AC14 scopes
+  the docs requirement to the specification, which is updated.
+
+**skill_drift:** none beyond the T5a entry above, whose recommendation (a) the
+isolated worktree fully addresses and (b) this run followed — three commits, one
+per deliverable.
