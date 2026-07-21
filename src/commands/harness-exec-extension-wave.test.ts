@@ -198,6 +198,22 @@ describe("keryx harness exec — offline completed outcome via an injected FAKE 
   });
 });
 
+describe("keryx harness exec — a missing `--` command is named, not silently mangled", () => {
+  test("no command after the flags -> an actionable message, nothing spawned", async () => {
+    const { logs, restore } = captureConsoleLog();
+    try {
+      // No injected adapter: this is the real-CLI path, where an empty command
+      // path used to reach the sandbox launcher and come back as exit 71.
+      await harnessCommand(["exec", "--allow-real-subprocess", "--allow-env", "PATH"], fixedClockIdEnv());
+    } finally {
+      restore();
+    }
+    expect(logs.join("\n")).toContain("no command");
+    expect(logs.join("\n")).toContain("--");
+    expect(lastJson(logs)).toBeUndefined(); // never reached the run
+  });
+});
+
 describe("keryx harness exec — non-completed scripted outcomes surface their own kind", () => {
   test.each([
     ["timeout", timeoutObservation, "timeout"],

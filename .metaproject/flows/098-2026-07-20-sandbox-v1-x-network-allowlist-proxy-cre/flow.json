@@ -1,50 +1,175 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "098",
   "slug": "sandbox-v1-x-network-allowlist-proxy-cre",
   "title": "sandbox v1.x: network allowlist proxy + credential masking",
-  "status": "initializing",
+  "status": "done",
   "createdAt": "2026-07-20T22:09:04.033Z",
-  "updatedAt": "2026-07-20T22:09:04.033Z",
+  "updatedAt": "2026-07-21T13:04:09.417Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:1e80b578fc43629766fb7d5a9addf2d5c3e222c2c5adac1d6f094f77712dbb98",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T13:02:32.227Z",
+      "note": "shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    "AC2": {
+      "at": "2026-07-21T13:02:32.310Z",
+      "note": "shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    "AC3": {
+      "at": "2026-07-21T13:02:32.404Z",
+      "note": "shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    "AC4": {
+      "at": "2026-07-21T13:02:32.489Z",
+      "note": "shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    "AC5": {
+      "at": "2026-07-21T13:02:32.595Z",
+      "note": "shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/170"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-07-20T22:09:04.033Z",
       "event": "created"
+    },
+    {
+      "at": "2026-07-21T13:02:31.944Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T13:02:32.124Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T13:02:32.227Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    {
+      "at": "2026-07-21T13:02:32.310Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    {
+      "at": "2026-07-21T13:02:32.404Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    {
+      "at": "2026-07-21T13:02:32.489Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    {
+      "at": "2026-07-21T13:02:32.595Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: shipped on origin/main (flow 098 slices 1-4 + agent wiring); AC5 verified against real internet"
+    },
+    {
+      "at": "2026-07-21T13:02:32.672Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T13:02:32.750Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T13:02:32.837Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T13:02:32.930Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T13:04:06.944Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/170 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T13:04:07.058Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T13:04:09.417Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

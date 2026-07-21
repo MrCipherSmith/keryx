@@ -6,7 +6,8 @@
 // Boundary model:
 //   --ro-bind / /        whole host filesystem, READ-ONLY
 //   --bind <root> <root> re-bind each writable root (cwd + session tmp) RW
-//   --tmpfs <secret>     mask each secret path with an empty tmpfs (deny-read)
+//   --tmpfs <secret-dir> mask each secret DIRECTORY with an empty tmpfs (deny-read)
+//   --ro-bind /dev/null <secret-file>  mask each secret FILE as empty
 //   --unshare-net        no network namespace ⇒ network OFF (when profile off)
 //   --dev /dev --proc /proc  minimal device + proc for tool compatibility
 //   --die-with-parent --new-session --unshare-ipc  hardening (no orphan, no
@@ -17,17 +18,40 @@
 // validated by the flag-gated live smoke (T7). `danger-full-access` never
 // reaches this module — the wrap dispatcher skips containment for it.
 
+import { statSync } from "node:fs";
 import type { ContainedCommand } from "../executor";
 import type { SandboxProfile } from "./profile";
 
 /** Default launcher program name (resolved via PATH; detect.ts confirms it). */
 export const BWRAP_PROGRAM = "bwrap";
 
+/** What a read-deny path actually is on disk — decides how it gets masked. */
+export type MaskTargetKind = "dir" | "file" | "missing";
+
+/**
+ * Classify a read-deny path on the host filesystem. Masking has to know this:
+ * bwrap mounts over an EXISTING mount point, and because `/` is bound read-only
+ * it cannot create a missing one — `--tmpfs /home/runner/.ssh` on a machine
+ * without an `.ssh` dir aborts the whole sandbox with
+ * `Can't mkdir …: Read-only file system` (observed on GitHub's ubuntu runners).
+ */
+export function inspectMaskTarget(target: string): MaskTargetKind {
+  try {
+    return statSync(target).isDirectory() ? "dir" : "file";
+  } catch {
+    return "missing";
+  }
+}
+
 /**
  * Build the `bwrap` argument list (everything up to and including `--`, before
- * the wrapped command). Deterministic given the profile.
+ * the wrapped command). Deterministic given the profile and the mask-target
+ * classification (injectable so unit tests stay off the real filesystem).
  */
-export function buildBwrapArgs(profile: SandboxProfile): string[] {
+export function buildBwrapArgs(
+  profile: SandboxProfile,
+  inspect: (target: string) => MaskTargetKind = inspectMaskTarget,
+): string[] {
   const args: string[] = [
     "--ro-bind",
     "/",
@@ -46,9 +70,17 @@ export function buildBwrapArgs(profile: SandboxProfile): string[] {
     args.push("--bind", root, root);
   }
 
-  // Mask secrets with empty tmpfs so reads see nothing (deny-read).
+  // Mask secrets so reads see nothing (deny-read). A directory gets an empty
+  // tmpfs; a regular file is bound over with /dev/null (reads as empty). A path
+  // that does not exist is skipped — there is nothing to leak, and mounting over
+  // it would abort the sandbox (see inspectMaskTarget).
   for (const secret of profile.readDenyList) {
-    args.push("--tmpfs", secret);
+    const kind = inspect(secret);
+    if (kind === "dir") {
+      args.push("--tmpfs", secret);
+    } else if (kind === "file") {
+      args.push("--ro-bind", "/dev/null", secret);
+    }
   }
 
   if (profile.network === "off") {

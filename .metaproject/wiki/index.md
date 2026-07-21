@@ -31,10 +31,11 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-07-10T08:25:02.695Z | pages: 37 -->
+<!-- generated: 2026-07-21T14:10:18.564Z | pages: 38 -->
 
 ### Architecture
 
+- [OS Sandbox](architecture/os-sandbox.md) (accepted) - The OS sandbox is a kernel-enforced containment layer that sits *below* keryx's policy engine, structural command guard, env allowlist, and approval gate. Those layers decide **whether a command may start**; the OS sandbox constrains **what the process can do once running** — which paths it can write, which secrets it can read, and which network it can reach — using macOS Seatbelt (`sandbox-exec`) or Linux bubblewrap (`bwrap`). It adds no npm dependencies: containment is delegated to system binaries. When containment cannot be applied, a run is **refused**, never silently downgraded.
 - [Project Map](architecture/project-map.md) (draft) - Deterministic map of 304 code files, 4 assets, and 691 import edges across 35 top-level modules. Enrich each module page with the gdwiki skill.
 - [Quality Map](architecture/quality-map.md) (draft) - Generated from Code Health: gate warn, score 90, 62 findings.
 - [Testing Map](architecture/testing-map.md) (draft) - generatedAt: 2026-07-09T21:29:25.307Z

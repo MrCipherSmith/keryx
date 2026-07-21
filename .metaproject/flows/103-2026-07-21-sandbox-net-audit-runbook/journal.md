@@ -1,0 +1,31 @@
+# Flow Journal
+
+- 2026-07-21T13:34:09.676Z - flow created
+- 2026-07-21T13:34:39.167Z - frozen: 5 criteria; checksum recorded
+- 2026-07-21T13:34:39.259Z - started
+- 2026-07-21T13:34:52.592Z - task-added: T5: Forward proxy allow/deny decisions from the worker to setupNetworkRun
+- 2026-07-21T13:34:52.676Z - task-added: T6: Print a network-decision summary from keryx harness exec
+- 2026-07-21T13:34:52.763Z - task-added: T7: Write the self-contained Linux sandbox verification runbook
+- 2026-07-21T13:34:52.845Z - task-added: T8: Typecheck + full suite green
+- 2026-07-21T13:51:45.617Z - task-done: T5: Forward proxy allow/deny decisions from the worker to setupNetworkRun
+- 2026-07-21T13:51:45.802Z - task-done: T6: Print a network-decision summary from keryx harness exec
+- 2026-07-21T13:51:45.934Z - task-done: T7: Write the self-contained Linux sandbox verification runbook
+- 2026-07-21T13:51:46.034Z - task-done: T8: Typecheck + full suite green
+- 2026-07-21T13:51:46.120Z - ac-confirmed: AC1: network-run.test.ts drives real allow+deny traffic through the worker proxy and asserts both decisions arrive; mutation-checked (breaking the worker postMessage turns 13 pass/0 fail into 12/1).
+- 2026-07-21T13:51:46.205Z - ac-confirmed: AC2: harness exec emits network.{restricted,allowedDomains,decisions}; verified live: allowed example.com -> allowed:true, example.org -> allowed:false (curl exits 0 in both cases, so the field is the only signal). Absent for a non-restricted run.
+- 2026-07-21T13:51:46.289Z - ac-confirmed: AC3: docs/verification/linux-sandbox-verification.md covers prerequisites, launcher sanity, smokes, FS containment, network-off, allowlist, credential masking, Go/MITM limitation, plus a flag reference. Every command rehearsed end-to-end.
+- 2026-07-21T13:51:46.377Z - ac-confirmed: AC4: Each section states PASS and FALSE PASS; controls are mandatory for the network checks; INCONCLUSIVE is an explicit allowed verdict in the report template.
+- 2026-07-21T13:51:46.473Z - ac-confirmed: AC5: tsc --noEmit clean; bun test 1829 pass / 9 skip / 0 fail.
+- 2026-07-21T13:52:06.572Z - task-done: T1: Collect remaining context
+- 2026-07-21T13:52:06.683Z - task-done: T2: Implement per plan
+- 2026-07-21T13:52:06.767Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-21T13:52:06.849Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-21T13:58:07.713Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)
+- 2026-07-21T13:59:23.179Z - completing
+- 2026-07-21T13:59:26.324Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-07-21T13:59:59.964Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)
+- 2026-07-21T14:00:00.122Z - completing
+- 2026-07-21T14:00:02.666Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-07-21T14:00:33.280Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)
+- 2026-07-21T14:00:33.413Z - completing
+- 2026-07-21T14:00:36.345Z - done: all gates passed

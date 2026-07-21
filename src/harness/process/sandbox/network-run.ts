@@ -10,11 +10,13 @@
 
 import { Worker } from "node:worker_threads";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SandboxProfile } from "./profile";
-import type { CredentialMask } from "./proxy";
+import type { CredentialMask, ProxyDecision } from "./proxy";
 
 /**
  * A credential to mask: the contained process sees `sentinel` (set by
@@ -64,20 +66,80 @@ export interface NetworkRunSetup {
   profile: SandboxProfile;
   /** Env vars to merge into the contained command (empty unless restricted). */
   envAdditions: Record<string, string>;
+  /**
+   * Every allow/deny ruling the proxy made during the run, in order. Empty when
+   * the network is not restricted (no proxy runs). Read it AFTER the contained
+   * command finishes — the array is appended to as decisions arrive. This is
+   * what makes "the sandbox blocked something" visible instead of surfacing as
+   * an unexplained connection error inside the contained process.
+   */
+  decisions: ProxyDecision[];
   /** Tear down the proxy worker (no-op when not restricted). Always call after the run. */
   close: () => Promise<void>;
 }
 
+/** One line per host in a network-decision summary. */
+export interface NetworkDecisionSummaryEntry {
+  host: string;
+  allowed: boolean;
+  count: number;
+}
+
+/**
+ * Collapse a decision list into one entry per (host, verdict), ordered denied
+ * first (that is the part a caller most needs to see) then by descending count.
+ */
+export function summarizeDecisions(decisions: ProxyDecision[]): NetworkDecisionSummaryEntry[] {
+  const byKey = new Map<string, NetworkDecisionSummaryEntry>();
+  for (const d of decisions) {
+    const key = `${d.allowed ? "a" : "d"}:${d.host}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      byKey.set(key, { host: d.host, allowed: d.allowed, count: 1 });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => {
+    if (a.allowed !== b.allowed) return a.allowed ? 1 : -1;
+    if (a.count !== b.count) return b.count - a.count;
+    return a.host.localeCompare(b.host);
+  });
+}
+
 const NOOP_CLOSE = async (): Promise<void> => {};
 
-/** Spawn the proxy worker and resolve once it reports its listening port. */
+/**
+ * Resolve the proxy-worker entry for BOTH execution modes.
+ *
+ * Running from source the worker sits next to this file as `proxy-worker.ts`; in
+ * a bundled build (`bun build`) the emitted sibling is `proxy-worker.js`.
+ * Without this fallback a bundled `keryx` fails every restricted-network run
+ * with `ModuleNotFound resolving <dist>/proxy-worker.ts` — the bundler does not
+ * follow this dynamic worker reference, so the worker is a separate build entry.
+ */
+export function proxyWorkerUrl(): URL {
+  const ts = new URL("./proxy-worker.ts", import.meta.url);
+  try {
+    if (existsSync(fileURLToPath(ts))) return ts;
+  } catch {
+    // not a file: URL (or unreadable) — fall through to the bundled sibling
+  }
+  return new URL("./proxy-worker.js", import.meta.url);
+}
+
+/**
+ * Spawn the proxy worker and resolve once it reports its listening port.
+ * `decisions` is appended to for the life of the worker as rulings arrive.
+ */
 function startProxyWorker(
   allowedDomains: string[],
   masks: CredentialMask[],
   tlsTerminate: boolean,
+  decisions: ProxyDecision[],
 ): Promise<{ port: number; caCertPem?: string; close: () => Promise<void> }> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL("./proxy-worker.ts", import.meta.url), {
+    const worker = new Worker(proxyWorkerUrl(), {
       workerData: { allowedDomains, masks, tlsTerminate },
     });
     let settled = false;
@@ -89,24 +151,38 @@ function startProxyWorker(
       }
     }, 5000);
 
-    worker.on("message", (msg: { type?: string; port?: number; caCertPem?: string }) => {
-      if (settled || msg?.type !== "ready" || typeof msg.port !== "number") {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve({
-        port: msg.port,
-        ...(typeof msg.caCertPem === "string" ? { caCertPem: msg.caCertPem } : {}),
-        close: () =>
-          new Promise<void>((res) => {
-            worker.once("exit", () => res());
-            worker.postMessage({ type: "close" });
-            // Fallback: force-terminate if the graceful close stalls.
-            setTimeout(() => void worker.terminate().then(() => res()), 2000);
-          }),
-      });
-    });
+    worker.on(
+      "message",
+      (msg: {
+        type?: string;
+        port?: number;
+        caCertPem?: string;
+        host?: string;
+        allowed?: boolean;
+        kind?: ProxyDecision["kind"];
+      }) => {
+        if (msg?.type === "decision" && typeof msg.host === "string" && typeof msg.allowed === "boolean") {
+          decisions.push({ host: msg.host, allowed: msg.allowed, kind: msg.kind ?? "http" });
+          return;
+        }
+        if (settled || msg?.type !== "ready" || typeof msg.port !== "number") {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve({
+          port: msg.port,
+          ...(typeof msg.caCertPem === "string" ? { caCertPem: msg.caCertPem } : {}),
+          close: () =>
+            new Promise<void>((res) => {
+              worker.once("exit", () => res());
+              worker.postMessage({ type: "close" });
+              // Fallback: force-terminate if the graceful close stalls.
+              setTimeout(() => void worker.terminate().then(() => res()), 2000);
+            }),
+        });
+      },
+    );
     worker.on("error", (err) => {
       if (!settled) {
         settled = true;
@@ -128,7 +204,7 @@ export async function setupNetworkRun(
   options: NetworkRunOptions = {},
 ): Promise<NetworkRunSetup> {
   if (profile.network !== "restricted") {
-    return { profile, envAdditions: {}, close: NOOP_CLOSE };
+    return { profile, envAdditions: {}, decisions: [], close: NOOP_CLOSE };
   }
 
   // Generate a per-run sentinel for each masked credential. The contained
@@ -144,10 +220,13 @@ export async function setupNetworkRun(
   }
 
   const tlsTerminate = options.tlsTerminate === true;
+  // Appended to by the worker's decision messages for the life of the proxy.
+  const decisions: ProxyDecision[] = [];
   const { port, caCertPem, close } = await startProxyWorker(
     profile.allowedDomains,
     proxyMasks,
     tlsTerminate,
+    decisions,
   );
 
   // When terminating TLS the contained process must trust the run CA. Deliver it
@@ -170,6 +249,7 @@ export async function setupNetworkRun(
   const url = `http://localhost:${port}`;
   return {
     profile: { ...profile, proxy: { host: "127.0.0.1", port } },
+    decisions,
     envAdditions: {
       HTTP_PROXY: url,
       HTTPS_PROXY: url,

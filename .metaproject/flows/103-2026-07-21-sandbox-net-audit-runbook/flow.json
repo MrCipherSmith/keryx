@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 2,
+  "id": "103",
+  "slug": "sandbox-net-audit-runbook",
+  "title": "sandbox v1.x: network decision audit + Linux verification runbook",
+  "status": "done",
+  "createdAt": "2026-07-21T13:34:09.676Z",
+  "updatedAt": "2026-07-21T14:00:36.345Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7b0ff64fb7c99e64a21c0ce4284fbabd0c2e15399e26ea2d6fe04c9931d9af45",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T13:51:46.120Z",
+      "note": "network-run.test.ts drives real allow+deny traffic through the worker proxy and asserts both decisions arrive; mutation-checked (breaking the worker postMessage turns 13 pass/0 fail into 12/1)."
+    },
+    "AC2": {
+      "at": "2026-07-21T13:51:46.205Z",
+      "note": "harness exec emits network.{restricted,allowedDomains,decisions}; verified live: allowed example.com -> allowed:true, example.org -> allowed:false (curl exits 0 in both cases, so the field is the only signal). Absent for a non-restricted run."
+    },
+    "AC3": {
+      "at": "2026-07-21T13:51:46.289Z",
+      "note": "docs/verification/linux-sandbox-verification.md covers prerequisites, launcher sanity, smokes, FS containment, network-off, allowlist, credential masking, Go/MITM limitation, plus a flag reference. Every command rehearsed end-to-end."
+    },
+    "AC4": {
+      "at": "2026-07-21T13:51:46.377Z",
+      "note": "Each section states PASS and FALSE PASS; controls are mandatory for the network checks; INCONCLUSIVE is an explicit allowed verdict in the report template."
+    },
+    "AC5": {
+      "at": "2026-07-21T13:51:46.473Z",
+      "note": "tsc --noEmit clean; bun test 1829 pass / 9 skip / 0 fail."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/172"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Forward proxy allow/deny decisions from the worker to setupNetworkRun",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Print a network-decision summary from keryx harness exec",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Write the self-contained Linux sandbox verification runbook",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Typecheck + full suite green",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T13:34:09.676Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T13:34:39.167Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T13:34:39.259Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T13:34:52.592Z",
+      "event": "task-added",
+      "detail": "T5: Forward proxy allow/deny decisions from the worker to setupNetworkRun"
+    },
+    {
+      "at": "2026-07-21T13:34:52.676Z",
+      "event": "task-added",
+      "detail": "T6: Print a network-decision summary from keryx harness exec"
+    },
+    {
+      "at": "2026-07-21T13:34:52.763Z",
+      "event": "task-added",
+      "detail": "T7: Write the self-contained Linux sandbox verification runbook"
+    },
+    {
+      "at": "2026-07-21T13:34:52.845Z",
+      "event": "task-added",
+      "detail": "T8: Typecheck + full suite green"
+    },
+    {
+      "at": "2026-07-21T13:51:45.617Z",
+      "event": "task-done",
+      "detail": "T5: Forward proxy allow/deny decisions from the worker to setupNetworkRun"
+    },
+    {
+      "at": "2026-07-21T13:51:45.802Z",
+      "event": "task-done",
+      "detail": "T6: Print a network-decision summary from keryx harness exec"
+    },
+    {
+      "at": "2026-07-21T13:51:45.934Z",
+      "event": "task-done",
+      "detail": "T7: Write the self-contained Linux sandbox verification runbook"
+    },
+    {
+      "at": "2026-07-21T13:51:46.034Z",
+      "event": "task-done",
+      "detail": "T8: Typecheck + full suite green"
+    },
+    {
+      "at": "2026-07-21T13:51:46.120Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: network-run.test.ts drives real allow+deny traffic through the worker proxy and asserts both decisions arrive; mutation-checked (breaking the worker postMessage turns 13 pass/0 fail into 12/1)."
+    },
+    {
+      "at": "2026-07-21T13:51:46.205Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: harness exec emits network.{restricted,allowedDomains,decisions}; verified live: allowed example.com -> allowed:true, example.org -> allowed:false (curl exits 0 in both cases, so the field is the only signal). Absent for a non-restricted run."
+    },
+    {
+      "at": "2026-07-21T13:51:46.289Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: docs/verification/linux-sandbox-verification.md covers prerequisites, launcher sanity, smokes, FS containment, network-off, allowlist, credential masking, Go/MITM limitation, plus a flag reference. Every command rehearsed end-to-end."
+    },
+    {
+      "at": "2026-07-21T13:51:46.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Each section states PASS and FALSE PASS; controls are mandatory for the network checks; INCONCLUSIVE is an explicit allowed verdict in the report template."
+    },
+    {
+      "at": "2026-07-21T13:51:46.473Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsc --noEmit clean; bun test 1829 pass / 9 skip / 0 fail."
+    },
+    {
+      "at": "2026-07-21T13:52:06.572Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T13:52:06.683Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T13:52:06.767Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T13:52:06.849Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T13:58:07.713Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T13:59:23.179Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T13:59:26.324Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-21T13:59:59.964Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T14:00:00.122Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T14:00:02.666Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-21T14:00:33.280Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T14:00:33.413Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T14:00:36.345Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}
