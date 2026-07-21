@@ -23,3 +23,6 @@
 - 2026-07-21T14:13:15.523Z - ac-confirmed: AC4: wiki/architecture/os-sandbox.md (accepted) links the whole package; keryx wiki index regenerated (38 pages) and the page appears under Architecture; .metaproject/index.md intent router routes sandbox questions to the agent/human docs and the wiki page.
 - 2026-07-21T14:13:15.609Z - ac-confirmed: AC5: roadmap.md 0.8.0 -> 0.9.0 with an entry whose status names the Linux limitation. Claims re-verified against code: package.json dependencies is {}; the documented reproduce command runs verbatim (8 pass/1 skip/0 fail).
 - 2026-07-21T14:13:15.764Z - ac-confirmed: AC6: tsc --noEmit clean; bun test 1839 tests, 0 fail.
+- 2026-07-21T14:15:18.816Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/173 (warning: PR is not a draft)
+- 2026-07-21T14:15:18.945Z - completing
+- 2026-07-21T14:15:22.236Z - done: all gates passed

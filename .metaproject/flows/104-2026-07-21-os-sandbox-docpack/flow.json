@@ -3,9 +3,9 @@
   "id": "104",
   "slug": "os-sandbox-docpack",
   "title": "OS sandbox documentation package + human/agent guides + wiki integration",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T14:03:48.577Z",
-  "updatedAt": "2026-07-21T14:13:15.764Z",
+  "updatedAt": "2026-07-21T14:15:22.236Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/173"
   },
   "tasks": [
     {
@@ -290,6 +290,20 @@
       "at": "2026-07-21T14:13:15.764Z",
       "event": "ac-confirmed",
       "detail": "AC6: tsc --noEmit clean; bun test 1839 tests, 0 fail."
+    },
+    {
+      "at": "2026-07-21T14:15:18.816Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/173 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T14:15:18.945Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T14:15:22.236Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
