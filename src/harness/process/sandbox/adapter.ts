@@ -66,7 +66,7 @@ export class SandboxedProcessAdapter implements ProcessAdapter {
       if (failClosed) {
         return spawnError(
           command,
-          "OS sandbox launcher unavailable; failing closed (install bubblewrap on Linux, or relax failIfUnavailable to run unsandboxed).",
+          `OS sandbox launcher unavailable on ${platform} for program "${command.path}"; failing closed (install bubblewrap on Linux, or relax failIfUnavailable to run unsandboxed).`,
         );
       }
       return inner.spawn(command);
@@ -78,11 +78,37 @@ export class SandboxedProcessAdapter implements ProcessAdapter {
     });
     if (!wrap.ok) {
       if (failClosed) {
-        return spawnError(command, wrap.reason);
+        return spawnError(
+          command,
+          `sandbox wrap refused program "${command.path}" on ${platform}: ${wrap.reason}`,
+        );
       }
       return inner.spawn(command);
     }
 
-    return inner.spawn(wrap.command);
+    const observation = inner.spawn(wrap.command);
+    // Launcher started but reported a spawn-class failure: keep the structured
+    // errorMessage and prefix with original program path so harness JSON is not
+    // a bare exit code (AC-H2 / exit-71 class diagnostics).
+    if (observation.kind === "spawn-error") {
+      const detail = observation.errorMessage ?? "unknown spawn error";
+      return spawnError(
+        command,
+        `sandbox spawn failed for "${command.path}" via ${platform} launcher: ${detail}`,
+      );
+    }
+    // clean-exit with 71 (EX_OSERR) after seatbelt/bwrap wrap is almost always a
+    // helper/path/exec problem inside the sandbox, not a successful program run.
+    if (
+      observation.kind === "clean-exit" &&
+      observation.exitCode === 71 &&
+      wrap.wrapped
+    ) {
+      return spawnError(
+        command,
+        `sandbox launcher returned exit 71 (EX_OSERR) for "${command.path}" on ${platform}; often missing/non-executable helper or path denied inside the sandbox`,
+      );
+    }
+    return observation;
   }
 }

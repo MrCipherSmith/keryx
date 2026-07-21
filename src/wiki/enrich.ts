@@ -144,8 +144,11 @@ You are given ONE wiki page whose prose is a stub or draft. Rewrite it into clea
 accurate, well-structured Markdown documentation.
 
 Rules:
-- Preserve the YAML frontmatter block (between the leading --- lines) EXACTLY in structure
-  (Title, Version, Type, Status, Summary keys). You may set Status to accepted when prose is solid.
+- The page ALWAYS starts with a YAML frontmatter block between leading --- lines.
+  Preserve that block's structure (Title, Version, Type, Status, Summary keys).
+  You may set Status to accepted when prose is solid.
+- If the provided page somehow lacks frontmatter, CREATE a valid block that starts
+  with --- and includes Title and Status, then the body.
 - Keep the existing H1 title.
 - Do not invent APIs, files, or behavior that are not implied by the page's own
   title, type, and summary. When unsure, describe intent at a high level.
@@ -288,6 +291,231 @@ export function isWikiEnrichIntent(line: string): boolean {
   return ru || en;
 }
 
+/** True when markdown already has a leading YAML frontmatter fence. */
+export function hasYamlFrontmatter(markdown: string): boolean {
+  return markdown.replace(/^\uFEFF/, "").trimStart().startsWith("---");
+}
+
+/**
+ * Extract the leading `--- ... ---` frontmatter block (including fences), or null.
+ * Tolerates optional UTF-8 BOM and leading whitespace.
+ */
+export function extractYamlFrontmatterBlock(markdown: string): string | null {
+  const text = markdown.replace(/^\uFEFF/, "").trimStart();
+  if (!text.startsWith("---")) {
+    return null;
+  }
+  const close = text.indexOf("\n---", 3);
+  if (close < 0) {
+    return null;
+  }
+  // Include the closing --- line (and optional trailing newline after it).
+  let end = close + 4; // \n---
+  if (text[end] === "\n") {
+    end += 1;
+  } else if (text[end] === "\r" && text[end + 1] === "\n") {
+    end += 2;
+  }
+  return text.slice(0, end);
+}
+
+/** Quote a YAML scalar when it would be ambiguous unquoted. */
+function yamlScalar(value: string): string {
+  const v = value.trim();
+  if (v.length === 0) {
+    return '""';
+  }
+  // Safe unquoted tokens (no colon, #, quotes, leading specials).
+  if (/^[A-Za-z0-9_./+-][A-Za-z0-9_./+ -]*$/.test(v) && !v.includes(": ")) {
+    return v;
+  }
+  return `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+const PSEUDO_META_KEYS = new Set(["version", "type", "status", "summary", "title"]);
+
+export interface EnsureWikiFrontmatterHints {
+  /** Fallback Title when no H1 / Title: line is present. */
+  title?: string;
+  /** Fallback Type (e.g. page.pageType from collectPages). */
+  pageType?: string;
+}
+
+export interface EnsureWikiFrontmatterResult {
+  markdown: string;
+  /** True when a YAML block was synthesized (legacy page). */
+  normalized: boolean;
+}
+
+/**
+ * Ensure the page starts with a valid YAML frontmatter block.
+ *
+ * Legacy wiki pages often use:
+ *   # Title
+ *   Version: 1.0.0
+ *   Type: component
+ *   Status: accepted
+ * without `---` fences. Enrich validation requires real YAML frontmatter, so
+ * pre-normalize before the model turn so "preserve frontmatter" is meaningful.
+ *
+ * Idempotent for pages that already start with `---`.
+ */
+export function ensureWikiFrontmatter(
+  source: string,
+  hints: EnsureWikiFrontmatterHints = {},
+): EnsureWikiFrontmatterResult {
+  const raw = source.replace(/^\uFEFF/, "");
+  if (hasYamlFrontmatter(raw)) {
+    // Already fenced — ensure Title/Status exist when possible (non-destructive).
+    const block = extractYamlFrontmatterBlock(raw);
+    if (block !== null) {
+      let fm = block;
+      const body = raw.trimStart().slice(block.length);
+      if (!/^Title:\s*\S+/im.test(fm) && !/\nTitle:\s*\S+/im.test(fm)) {
+        const title =
+          hints.title?.trim() ||
+          body.match(/^#\s+(.+)$/m)?.[1]?.trim() ||
+          "Untitled";
+        fm = fm.replace(/^---\n/, `---\nTitle: ${yamlScalar(title)}\n`);
+      }
+      if (!/^Status:\s*\S+/im.test(fm) && !/\nStatus:\s*\S+/im.test(fm)) {
+        fm = fm.replace(/^---\n/, "---\nStatus: draft\n");
+      }
+      if (fm !== block) {
+        return { markdown: `${fm}${body.startsWith("\n") ? body : `\n${body}`}`, normalized: true };
+      }
+    }
+    return { markdown: raw, normalized: false };
+  }
+
+  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  let i = 0;
+  while (i < lines.length && lines[i]!.trim() === "") {
+    i += 1;
+  }
+
+  let title = hints.title?.trim() ?? "";
+  if (i < lines.length) {
+    const h1 = lines[i]!.match(/^#\s+(.+)$/);
+    if (h1) {
+      title = h1[1]!.trim();
+      i += 1;
+      while (i < lines.length && lines[i]!.trim() === "") {
+        i += 1;
+      }
+    }
+  }
+
+  const meta: Record<string, string> = {};
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (line.trim() === "") {
+      i += 1;
+      // Stop pseudo-meta after first blank once we have at least one field,
+      // OR continue if next non-empty is still Key: value meta.
+      let j = i;
+      while (j < lines.length && lines[j]!.trim() === "") {
+        j += 1;
+      }
+      if (j >= lines.length) {
+        break;
+      }
+      const next = lines[j]!;
+      const m = next.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/);
+      if (!m || !PSEUDO_META_KEYS.has(m[1]!.toLowerCase())) {
+        break;
+      }
+      i = j;
+      continue;
+    }
+    const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/);
+    if (!m || !PSEUDO_META_KEYS.has(m[1]!.toLowerCase())) {
+      break;
+    }
+    const key = m[1]!.toLowerCase();
+    const val = m[2]!.trim();
+    if (key === "title" && val.length > 0) {
+      title = val;
+    } else if (key !== "title") {
+      meta[key] = val;
+    }
+    i += 1;
+  }
+
+  while (i < lines.length && lines[i]!.trim() === "") {
+    i += 1;
+  }
+  const bodyLines = lines.slice(i);
+  let body = bodyLines.join("\n").replace(/^\n+/, "");
+
+  // Prefer an explicit ## Summary section's first paragraph for Summary when missing.
+  if (!meta.summary) {
+    const sumMatch = body.match(/^##\s+Summary\s*\n+([\s\S]*?)(?=\n##\s|\n#\s|$)/i);
+    if (sumMatch) {
+      const para = sumMatch[1]!
+        .trim()
+        .split(/\n\n+/)[0]
+        ?.replace(/\n/g, " ")
+        .trim();
+      if (para && para.length > 0 && para.length < 400) {
+        meta.summary = para;
+      }
+    }
+  }
+
+  if (title.length === 0) {
+    title = "Untitled";
+  }
+  const version = meta.version ?? "0.1.0";
+  const type = meta.type ?? hints.pageType ?? "component";
+  const status = meta.status ?? "draft";
+  const summary = meta.summary ?? "";
+
+  const fmLines = [
+    "---",
+    `Title: ${yamlScalar(title)}`,
+    `Version: ${yamlScalar(version)}`,
+    `Type: ${yamlScalar(type)}`,
+    `Status: ${yamlScalar(status)}`,
+    `Summary: ${yamlScalar(summary)}`,
+    "---",
+    "",
+  ];
+
+  // Keep original H1 in body when we stripped it for Title.
+  if (!body.match(/^#\s+/m)) {
+    body = `# ${title}\n\n${body}`.replace(/\n+$/, "\n");
+  } else if (!body.startsWith("#")) {
+    body = `# ${title}\n\n${body}`;
+  }
+
+  const out = `${fmLines.join("\n")}${body.endsWith("\n") ? body : `${body}\n`}`;
+  return { markdown: out, normalized: true };
+}
+
+/**
+ * If the model returned a body without YAML frontmatter, re-attach the
+ * frontmatter from the (already normalized) original. Returns `enriched`
+ * unchanged when it already has a valid leading frontmatter block.
+ */
+export function repairEnrichedFrontmatter(original: string, enriched: string): string {
+  const text = enriched.replace(/^\uFEFF/, "").trim();
+  if (text.length === 0) {
+    return enriched;
+  }
+  if (hasYamlFrontmatter(text)) {
+    return text;
+  }
+  const fm = extractYamlFrontmatterBlock(original);
+  if (fm === null) {
+    // Last resort: synthesize from the model body alone.
+    return ensureWikiFrontmatter(text).markdown.trimEnd();
+  }
+  const body = text.replace(/^\uFEFF/, "").trimStart();
+  const joined = `${fm.endsWith("\n") ? fm : `${fm}\n`}${body.endsWith("\n") ? body : `${body}\n`}`;
+  return joined.trimEnd();
+}
+
 /**
  * Lightweight structural validation of model output before write.
  * Returns null if OK, or a reason string.
@@ -321,7 +549,17 @@ export function validateEnrichedMarkdown(original: string, enriched: string): st
     return "looks like commentary, not a full page";
   }
   // Size sanity: model should not delete almost everything or explode 20×.
-  if (original.length > 200 && text.length < original.length * 0.15) {
+  // Compare against the body of the original when original has frontmatter so
+  // pre-normalization does not inflate the baseline unfairly.
+  const originalBody = (() => {
+    const block = extractYamlFrontmatterBlock(original);
+    if (block === null) {
+      return original;
+    }
+    return original.trimStart().slice(block.length);
+  })();
+  const baselineLen = Math.max(originalBody.length, original.length * 0.5);
+  if (baselineLen > 200 && text.length < baselineLen * 0.15) {
     return "enriched content much shorter than original (possible truncation)";
   }
   return null;
@@ -452,7 +690,14 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
     onPage({ index, total, path: page.relativePath, status, phase: "start" });
 
     try {
-      const original = await readFile(page.absolutePath, "utf8");
+      const originalRaw = await readFile(page.absolutePath, "utf8");
+      // Pre-normalize legacy pages (H1 + Version/Type/Status without ---) so the
+      // model always sees real YAML frontmatter and validation can stay strict.
+      const ensured = ensureWikiFrontmatter(originalRaw, {
+        title: page.title,
+        pageType: page.pageType,
+      });
+      const original = ensured.markdown;
       onPage({ index, total, path: page.relativePath, status, phase: "model" });
 
       const turn = await runModelTurn({
@@ -483,6 +728,9 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         return { path: page.relativePath, action: "failed" as const, reason: "empty model response" };
       }
 
+      // Model sometimes returns body-only; re-attach original frontmatter.
+      enriched = repairEnrichedFrontmatter(original, enriched);
+
       if (validate) {
         onPage({ index, total, path: page.relativePath, status, phase: "validate" });
         const structural = validateEnrichedMarkdown(original, enriched);
@@ -501,19 +749,19 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         return {
           path: page.relativePath,
           action: "dry-run" as const,
-          bytesBefore: original.length,
+          bytesBefore: originalRaw.length,
           bytesAfter: enriched.length,
           preview: enriched,
         };
       }
 
-      await writeFile(page.absolutePath, `${enriched}\n`, "utf8");
+      await writeFile(page.absolutePath, `${enriched.endsWith("\n") ? enriched : `${enriched}\n`}`, "utf8");
 
       onPage({ index, total, path: page.relativePath, status: markAccepted ? "accepted" : status, phase: "done" });
       return {
         path: page.relativePath,
         action: "enriched" as const,
-        bytesBefore: original.length,
+        bytesBefore: originalRaw.length,
         bytesAfter: enriched.length,
       };
     } catch (cause) {
@@ -589,7 +837,8 @@ function buildUserPrompt(page: WikiPage, original: string, extra?: string): stri
     `Title: ${page.title}`,
     `Summary: ${page.summary || "(none)"}`,
     "",
-    "Current page content (enrich the prose, keep frontmatter and title):",
+    "Current page content (enrich the prose; keep or create YAML frontmatter starting with ---,",
+    "including Title and Status; keep the H1 title):",
     "```markdown",
     original.trimEnd(),
     "```",

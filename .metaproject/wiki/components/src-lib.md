@@ -1,8 +1,12 @@
-# Module src/lib
-
+---
+Title: Module src/lib
 Version: 1.0.0
 Type: component
 Status: accepted
+Summary: `src/lib` groups 11 file(s). Depends on `src/testing`. Exposes 7 public symbol(s).
+---
+
+# Module src/lib
 
 ## Summary
 
@@ -10,28 +14,41 @@ Status: accepted
 
 ## Overview
 
-`src/lib` is the zero-dependency shared utilities layer for keryx. It provides the primitives that all other modules (`src/commands`, `src/gdskills`, `src/security`, `src/health`, `src/memory`, `src/mcp`) build on: safe filesystem operations, JSON I/O, CLI argument parsing, terminal output formatting, and large code-generation templates. Every function in this module is a leaf node — no module in the codebase depends on fewer things, making it the stable foundation the rest of the system rests on.
+`src/lib` is the shared utilities layer for keryx. It depends only on the `src/testing` module and is the foundation that all other modules (`src/commands`, `src/gdskills`, `src/security`, `src/health`, `src/memory`, `src/mcp`) build on. It provides safe filesystem operations, JSON I/O, CLI argument parsing, terminal output formatting, and large code-generation templates. Every file in this module is a dependency leaf — no file imports anything else from the project (except the single `src/testing` import in `templates.ts`), making this the stable base of the system.
 
 ## How it works
 
-The module is composed of six focused files with no internal cross-dependencies. The filesystem layer (`fs.ts`) provides safe, crash-consistent writes via an atomic rename strategy (write-to-temp then rename), a directory-based advisory file lock with stale-lock recovery, and path-safety predicates. The JSON layer (`json.ts`) wraps Node's `readFile`/`JSON.parse` with meaningful error messages and a fallback variant that returns a caller-supplied default when the file is missing or malformed. The argument-parsing layer (`args.ts`) wraps Node's built-in `parseArgs` to give commands a declarative boolean-flag API with automatic short-flag aliasing for `--help` and `--yes`. The UI layer (`ui.ts`) produces ANSI-colored terminal output that automatically degrades to plain text for piped/redirected streams, controlled by the `NO_COLOR`/`FORCE_COLOR` environment variables; it exports both low-level style primitives and high-level layout helpers (`banner`, `heading`, `statusLine`, `nextSteps`, `helpOptions`). The test-cwd module (`test-cwd.ts`) solves a Bun-specific concurrency hazard: because Bun runs test files concurrently in a single process, `process.chdir` calls from separate test files would race; the module serializes all `chdir` critical sections through a promise chain so each section holds the working directory exclusively. The templates file (`templates.ts`) is the heaviest piece: it contains the render functions that generate the `.metaproject/index.md` agent-entrypoint file and the full HTML metaproject dashboard, parameterized by which modules are enabled.
+The module consists of six focused files, each with no internal cross-dependencies:
+
+- **`fs.ts`** — Safe filesystem operations: atomic writes (write-to-temp then rename), directory-based advisory file locks with stale-lock recovery (`withFileLock`), and path-safety predicates (`isPathInside`).
+- **`json.ts`** — JSON reading with clear error messages and a fallback variant (`readJsonFileOr`) that returns a default value if the file is missing or malformed.
+- **`args.ts`** — CLI argument parsing wrapping Node's `parseArgs`, providing a declarative boolean-flag API with automatic short-flag aliases for `--help` and `--yes`.
+- **`ui.ts`** — Terminal output formatting with ANSI colors that degrade to plain text when output is piped or redirected, respecting `NO_COLOR` and `FORCE_COLOR`. Exports low-level style primitives and high-level helpers (`banner`, `heading`, `statusLine`, `nextSteps`, `helpOptions`).
+- **`test-cwd.ts`** — A mutex for working-directory changes during testing, solving a Bun concurrency issue by serializing `chdir` calls behind a promise chain.
+- **`templates.ts`** — Template renderers for the `.metaproject/index.md` agent-entrypoint file and the HTML metaproject dashboard, parameterized by module enablement flags.
 
 ## Key concepts
 
-- **Atomic write** — `writeFileAtomic` writes to a uniquely named temp file then renames it into place, ensuring readers never observe a partial write.
-- **Directory lock** — `withFileLock` uses `mkdir` as an atomic lock-acquisition primitive (the OS guarantees at-most-one success), with built-in stale-lock expiry and a polling retry loop.
-- **Path safety** — `isPathInside` uses `path.resolve` + `path.relative` to determine containment without string manipulation, preventing path-traversal bugs.
-- **Color degradation** — `colorEnabled()` checks `NO_COLOR`, then `FORCE_COLOR`, then `stdout.isTTY`; all style helpers call it on every invocation so the output mode is always current.
-- **Cwd mutex** — `test-cwd.ts` maintains a module-level promise chain that acts as a process-wide mutex for the working directory; tests enqueue `chdir` sections onto this chain rather than calling `chdir` directly.
-- **Metaproject rendering** — `templates.ts` contains `renderIndexMarkdown` and `renderMetaprojectDashboardHtml`, which assemble the agent-readable index and the HTML dashboard respectively from module-enablement flags and live data snapshots.
+- **Atomic write** — `writeFileAtomic` writes to a uniquely-named temp file then atomically renames it to the target path, guaranteeing that readers never see a partial write.
+- **Directory lock** — `withFileLock` uses `mkdir` as an atomic lock acquisition (the OS ensures at most one success), with built-in stale-lock expiry and a polling retry loop.
+- **Path safety** — `isPathInside` uses `path.resolve` and `path.relative` to check containment without string matching, preventing path-traversal bugs.
+- **Color degradation** — `colorEnabled()` checks `NO_COLOR`, then `FORCE_COLOR`, then `stdout.isTTY`. All style helpers call it on every invocation for correct output mode.
+- **Cwd mutex** — `test-cwd.ts` maintains a module-level promise chain that serializes `chdir` sections, preventing races between concurrently running test files.
+- **Metaproject rendering** — `templates.ts` provides `renderIndexMarkdown` and `renderMetaprojectDashboardHtml` to assemble agent-readable index and HTML dashboard from module-enablement flags and live data snapshots.
 
 ## Main flows
 
-**Safe file write** — a command calls `writeFileAtomic(path, content)`. `fs.ts` creates the parent directory with `mkdir({ recursive: true })`, writes to a temp path (incorporating PID, timestamp, and UUID for uniqueness), then atomically renames it to the final path. If the write fails, the temp file is silently removed.
+### Safe file write
 
-**JSON config load with fallback** — a module calls `readJsonFileOr(configPath, defaultValue)` at startup. `json.ts` delegates to `readJsonFile`, which reads and parses the file. If the file is absent or contains invalid JSON, the error is caught and `defaultValue` is returned, letting the caller continue with safe defaults without extra error handling.
+A command calls `writeFileAtomic(path, content)`. `fs.ts` creates the parent directory (`mkdir({ recursive: true })`), writes to a temp path (including PID, timestamp, UUID), then atomically renames it to the final path. If writing fails, the temp file is removed.
 
-**Metaproject index regeneration** — the `keryx index refresh` command calls `renderIndexMarkdown` in `templates.ts` with the set of enabled module flags and rule sources. The function assembles module rows, skill references, intent router table, agent workflow steps, and data references into the final Markdown string, which is then written to `.metaproject/index.md` via `writeFileAtomic` from `fs.ts`.
+### JSON config load with fallback
+
+A module calls `readJsonFileOr(configPath, defaultValue)`. `json.ts` behaves like `readJsonFile` but catches errors (file missing or invalid JSON) and returns the provided default, allowing callers to start with safe defaults.
+
+### Metaproject index regeneration
+
+The `keryx index refresh` command calls `renderIndexMarkdown` from `templates.ts` with enabled module flags and rule sources. The function assembles module rows, skill references, intent router tables, agent workflow steps, and data references into a Markdown string, which is then written to `.metaproject/index.md` via `writeFileAtomic`.
 
 ---
 

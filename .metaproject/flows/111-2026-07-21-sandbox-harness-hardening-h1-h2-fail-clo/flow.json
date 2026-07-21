@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 2,
+  "id": "111",
+  "slug": "sandbox-harness-hardening-h1-h2-fail-clo",
+  "title": "Sandbox harness hardening H1+H2 (fail-closed + deep probe)",
+  "status": "done",
+  "createdAt": "2026-07-21T17:58:45.329Z",
+  "updatedAt": "2026-07-21T18:11:00.348Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9a1945b3b1c1677725dc265d2e4fcfbf85971f48a89bbcacfdef41ea4fe454d1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T18:10:57.468Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC2": {
+      "at": "2026-07-21T18:10:57.532Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC3": {
+      "at": "2026-07-21T18:10:57.600Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC4": {
+      "at": "2026-07-21T18:10:57.665Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC5": {
+      "at": "2026-07-21T18:10:57.731Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC6": {
+      "at": "2026-07-21T18:10:57.795Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC7": {
+      "at": "2026-07-21T18:10:57.861Z",
+      "note": "merged PR #184; evidence on main"
+    },
+    "AC8": {
+      "at": "2026-07-21T18:10:57.926Z",
+      "note": "merged PR #184; evidence on main"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/184"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "H1 security: mask-without-TLS fail-closed on harness + unit test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "H1 diagnostics: spawn failure reason/detail + regression test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "H2 portable probe script + REPORT + redaction",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "H2/H3 docs + package/roadmap status",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "code-verifier + focused tests + review before PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T17:58:45.329Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T18:02:15.120Z",
+      "event": "task-added",
+      "detail": "T5: H1 security: mask-without-TLS fail-closed on harness + unit test"
+    },
+    {
+      "at": "2026-07-21T18:02:15.187Z",
+      "event": "task-added",
+      "detail": "T6: H1 diagnostics: spawn failure reason/detail + regression test"
+    },
+    {
+      "at": "2026-07-21T18:02:15.254Z",
+      "event": "task-added",
+      "detail": "T7: H2 portable probe script + REPORT + redaction"
+    },
+    {
+      "at": "2026-07-21T18:02:15.318Z",
+      "event": "task-added",
+      "detail": "T8: H2/H3 docs + package/roadmap status"
+    },
+    {
+      "at": "2026-07-21T18:02:15.382Z",
+      "event": "task-added",
+      "detail": "T9: code-verifier + focused tests + review before PR"
+    },
+    {
+      "at": "2026-07-21T18:02:15.447Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T18:02:15.511Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T18:08:48.932Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T18:08:48.998Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T18:08:49.061Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T18:08:49.125Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T18:08:49.189Z",
+      "event": "task-done",
+      "detail": "T5: H1 security: mask-without-TLS fail-closed on harness + unit test"
+    },
+    {
+      "at": "2026-07-21T18:08:49.254Z",
+      "event": "task-done",
+      "detail": "T6: H1 diagnostics: spawn failure reason/detail + regression test"
+    },
+    {
+      "at": "2026-07-21T18:08:49.319Z",
+      "event": "task-done",
+      "detail": "T7: H2 portable probe script + REPORT + redaction"
+    },
+    {
+      "at": "2026-07-21T18:08:49.384Z",
+      "event": "task-done",
+      "detail": "T8: H2/H3 docs + package/roadmap status"
+    },
+    {
+      "at": "2026-07-21T18:08:49.449Z",
+      "event": "task-done",
+      "detail": "T9: code-verifier + focused tests + review before PR"
+    },
+    {
+      "at": "2026-07-21T18:10:57.359Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/184 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T18:10:57.468Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.600Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.665Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.731Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.795Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.861Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.926Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: merged PR #184; evidence on main"
+    },
+    {
+      "at": "2026-07-21T18:10:57.993Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T18:11:00.348Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

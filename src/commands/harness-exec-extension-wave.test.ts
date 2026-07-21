@@ -199,7 +199,7 @@ describe("keryx harness exec — offline completed outcome via an injected FAKE 
 });
 
 describe("keryx harness exec — a missing `--` command is named, not silently mangled", () => {
-  test("no command after the flags -> an actionable message, nothing spawned", async () => {
+  test("no command after the flags -> structured blocked reason, nothing spawned", async () => {
     const { logs, restore } = captureConsoleLog();
     try {
       // No injected adapter: this is the real-CLI path, where an empty command
@@ -208,9 +208,105 @@ describe("keryx harness exec — a missing `--` command is named, not silently m
     } finally {
       restore();
     }
-    expect(logs.join("\n")).toContain("no command");
-    expect(logs.join("\n")).toContain("--");
-    expect(lastJson(logs)).toBeUndefined(); // never reached the run
+    const result = lastJson(logs);
+    const outcome = result?.outcome as { kind?: string; reason?: string } | undefined;
+    expect(outcome?.kind).toBe("blocked");
+    expect(outcome?.reason).toMatch(/no command/i);
+    expect(outcome?.reason).toContain("--");
+  });
+});
+
+describe("keryx harness exec — AC-H1 mask without TLS fail-closed", () => {
+  test("manual --mask-env without --tls-terminate → blocked JSON, adapter never called", async () => {
+    const adapter = new FakeProcessAdapter(cleanObservation);
+    const { logs, restore } = captureConsoleLog();
+    try {
+      await harnessCommand(
+        [
+          "exec",
+          "--mask-mode",
+          "manual",
+          "--mask-env",
+          "FIXTURE_TOKEN@api.example.com",
+          "--",
+          "/bin/echo",
+          "hi",
+        ],
+        {
+          ...fixedClockIdEnv(),
+          env: { FIXTURE_TOKEN: "fixture-token-not-a-real-key" },
+          processAdapter: adapter,
+        },
+      );
+    } finally {
+      restore();
+    }
+    const result = lastJson(logs);
+    const outcome = result?.outcome as { kind?: string; reason?: string } | undefined;
+    expect(outcome?.kind).toBe("blocked");
+    expect(typeof outcome?.reason).toBe("string");
+    expect(outcome?.reason?.toLowerCase()).toMatch(/tls/);
+    expect(adapter.spawnCalls).toHaveLength(0);
+  });
+
+  test("manual mask + explicit TLS disabled via env → blocked, no spawn", async () => {
+    const adapter = new FakeProcessAdapter(cleanObservation);
+    const { logs, restore } = captureConsoleLog();
+    try {
+      await harnessCommand(
+        [
+          "exec",
+          "--mask-mode",
+          "manual",
+          "--mask-env",
+          "FIXTURE_TOKEN@api.example.com",
+          "--",
+          "/bin/echo",
+          "hi",
+        ],
+        {
+          ...fixedClockIdEnv(),
+          env: {
+            FIXTURE_TOKEN: "fixture-token-not-a-real-key",
+            KERYX_SANDBOX_TLS_TERMINATE: "0",
+          },
+          processAdapter: adapter,
+        },
+      );
+    } finally {
+      restore();
+    }
+    const result = lastJson(logs);
+    const outcome = result?.outcome as { kind?: string; reason?: string } | undefined;
+    expect(outcome?.kind).toBe("blocked");
+    expect(outcome?.reason?.toLowerCase()).toMatch(/tls/);
+    expect(adapter.spawnCalls).toHaveLength(0);
+  });
+});
+
+describe("keryx harness exec — AC-H2 spawn failure reason/detail", () => {
+  test("fake adapter spawn-error → blocked with non-empty reason", async () => {
+    const adapter = new FakeProcessAdapter({
+      kind: "spawn-error",
+      observedHash: "e".repeat(64),
+      errorMessage: "ENOENT: forced sandbox spawn failure for test",
+    });
+    const { logs, restore } = captureConsoleLog();
+    try {
+      await harnessCommand(
+        ["exec", "--", "/bin/echo", "hi"],
+        { ...fixedClockIdEnv(), processAdapter: adapter },
+      );
+    } finally {
+      restore();
+    }
+    const result = lastJson(logs);
+    const outcome = result?.outcome as { kind?: string; reason?: string } | undefined;
+    expect(outcome?.kind).toBe("blocked");
+    expect(typeof outcome?.reason).toBe("string");
+    expect((outcome?.reason ?? "").length).toBeGreaterThan(0);
+    expect(outcome?.reason).toMatch(/spawn|ENOENT|failed/i);
+    expect(adapter.spawnCalls).toHaveLength(1);
   });
 });
 

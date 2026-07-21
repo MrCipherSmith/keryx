@@ -1,9 +1,19 @@
 # Keryx OpenTUI Interactive Shell — Technical Specification
-Version: 0.1.0
+Version: 0.2.0
 
-Status: `implemented`. Phases 0-5 shipped (flows 059-067); the `(SPIKE)` items
-were resolved by the flow-059 Phase 0 spike and are recorded as answered in §2.
-Post-migration work continues to amend this document — see §9 Decisions.
+Status: `implemented (agent mode) — chat renderer outstanding`. The architecture
+described below — swap the IO layer for an OpenTUI renderer, keep the
+deterministic driver unchanged — has shipped for the **agent** shell (flows
+059–067; `src/tui/tui-shell.ts`, `src/commands/agent-commands.ts`, ADR-0005
+Accepted), and the TUI is the default interactive shell on a TTY. The chat half
+of the scope was never built and `--chat` still runs readline — see **§10 Open
+items**, which also lists four smaller gaps.
+
+Two reading notes. The `(SPIKE)` names below were resolved by the Phase 0 spike
+(flow 059) and are recorded as answered in §2, but may diverge in spelling from
+this prose: the runtime source under `src/tui/` is the source of truth for the
+current component API. And the "pure helpers unchanged" premise no longer holds
+literally — see §9 D-6. Post-migration work continues to amend this document.
 
 ## 1. Guiding principle — swap the IO layer, keep the brain
 

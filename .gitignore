@@ -35,4 +35,6 @@ coverage/
 .metaproject/data/security/artifacts/latest.md
 .metaproject/data/security/artifacts/latest.json
 .metaproject/reports/
+# Local transient probe / smoke artifacts (e.g. sandbox dual-axis probes).
+.metaproject/tmp/
 # keryx:end

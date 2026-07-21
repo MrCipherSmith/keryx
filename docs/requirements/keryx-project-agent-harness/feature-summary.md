@@ -1,5 +1,11 @@
 # Feature Summary
-Version: 1.0.0
+Version: 0.8.0
+
+> **Note on versioning:** this feature summary is kept version-aligned with
+> `README.md` (the package entry point). The earlier `Version: 1.0.0` label was
+> an artifact of a one-off summary pass and did not reflect a 1.0 release of the
+> package; it is reconciled here to the package version. See `README.md` for the
+> current implementation status (Release 0 + most of Release 1/2 landed).
 
 ## Purpose
 

@@ -1,5 +1,11 @@
 # Multi-Agent Engine — Product Requirements
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** the requirements below have been **implemented** as flows
+> 088–101 (see `README.md` for the runtime evidence and the two minor deferrals:
+> live `keryx agents` snapshot against a running run, and a dedicated
+> `orchestrator-state` fold). This PRD is retained as the original requirements
+> record.
 
 ## Problem
 

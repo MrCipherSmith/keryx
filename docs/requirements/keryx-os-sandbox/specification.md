@@ -1,7 +1,5 @@
 # Keryx OS Sandbox — Specification
-Version: 1.0.0
-
-## 1. Module identity
+Version: 1.1.0
 
 | Field | Value |
 |---|---|
@@ -16,17 +14,28 @@ Version: 1.0.0
 
 ```text
 src/harness/process/sandbox/
-  profile.ts        SandboxProfile, policy→profile projection, default profile
-  seatbelt.ts       macOS: SBPL profile text + command wrap
-  bwrap.ts          Linux: bwrap argv builder + command wrap
-  wrap.ts           platform dispatcher; refuses unsupported postures
-  detect.ts         launcher detection; resolveSandboxAdapter
-  adapter.ts        SandboxedProcessAdapter (decorates ProcessAdapter)
-  proxy.ts          loopback allowlist proxy, allowlist matching, masking, MITM
-  proxy-worker.ts   worker-thread entry for the proxy
-  network-run.ts    restricted-run lifecycle: sentinels, CA trust env, decisions
-  tls-ca.ts         ephemeral run CA + per-host leaf certificates via openssl
-  index.ts          public surface
+  profile.ts          SandboxProfile, policy→profile projection, default profile
+  seatbelt.ts         macOS: SBPL profile text + command wrap
+  bwrap.ts            Linux: bwrap argv builder + command wrap
+  wrap.ts             platform dispatcher; refuses unsupported postures
+  detect.ts           launcher detection; resolveSandboxAdapter
+  adapter.ts          SandboxedProcessAdapter (decorates ProcessAdapter)
+  proxy.ts            loopback allowlist proxy, allowlist matching, masking, MITM
+  proxy-worker.ts     worker-thread entry for the proxy
+  network-run.ts      restricted-run lifecycle: sentinels, CA trust env, decisions
+  tls-ca.ts           ephemeral run CA + per-host leaf certificates via openssl
+  mask-resolve.ts     credential-mask resolver: derive HTTPS mask specs from the
+                      provider registry + project/global sandbox config; returns
+                      fail-closed when masks are non-empty and TLS is not
+                      enabled/auto-derived. Wired into `shell_exec` and
+                      `keryx harness exec`. (See the
+                      keryx-sandbox-credential-auto-mask package.)
+  dual-axis-report.ts dual-axis verification report renderer (Axis A model/network,
+                      Axis B shell_exec mask, Axis C harness parity) consumed by
+                      the operator runbook and the flag-gated live smoke test
+                      (`dual-axis-live.smoke.test.ts`, gated by
+                      `KERYX_DUAL_AXIS_LIVE=1`).
+  index.ts            public surface
 ```
 
 Tests sit beside their modules. Real-process tests are `*.smoke.test.ts` and are
@@ -236,6 +245,8 @@ than reaching the launcher as an empty path.
 | `--allowed-domains a,b` | Switch to `restricted` and allow only these hosts. |
 | `--mask-env NAME@host[,host]` | Mask a credential. Requires `--tls-terminate`. |
 | `--tls-terminate` | Terminate allowlisted HTTPS with the run CA. |
+| `--mask-mode auto\|manual\|off` | Credential-mask resolution mode. **`auto`** (built-in default since P0.b) auto-derives HTTPS masks from the provider registry whenever a key is present in env/`auth.json` and network is restricted. **`manual`** keeps the pre-P0.b behavior (masks must be passed explicitly via `--mask-env`). **`off`** disables resolution. Still fail-closed under ADR-0007: when masks are non-empty, TLS must be enabled or auto-derived. Equivalent env: `KERYX_SANDBOX_MASK_MODE`; file overrides via the global `sandbox.json` or project `.keryx/sandbox-policy.json` (resolution order: env > project > global > built-in `auto`). |
+| `--auto-mask` | Convenience alias selecting `--mask-mode auto` for a single run. |
 
 ### Output contract
 

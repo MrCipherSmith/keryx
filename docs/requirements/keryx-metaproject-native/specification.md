@@ -1,5 +1,13 @@
 # Keryx Metaproject-Native Harness Specification
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** Phases 1–3 are **implemented**
+> (`src/harness/tool/metaproject-{port,adapter,operations}.ts`,
+> `src/mcp/metaproject-tools.ts`, `src/flow/schema.ts` + `keryx flow schema` CLI;
+> flows 037/038/040). Phase 4 (MP-6 policy-context enrichment) and the
+> harness-core `RunDeps.metaprojectPort` seam (S1) are still pending; legacy MCP
+> adapter retirement and subprocess-wrapper retirement are partial. See
+> `README.md` for the full runtime evidence.
 
 ## Identity
 
@@ -7,7 +15,7 @@ Version: 0.1.0
 |---|---|
 | Name | `keryx-metaproject-native` |
 | Kind | standard capability (harness ↔ metaproject integration) |
-| Status | draft (no runtime implemented; foundation modules cited) |
+| Status | implemented (Phases 1–3; Phase 4 + S1 `RunDeps.metaprojectPort` pending) |
 | Owner | Keryx core / Metaproject maintainers |
 | State owner | Metaproject module facades (`src/gdgraph`, `src/memory`, wiki, `src/flow`) — unchanged |
 | Runtime owner | Keryx harness core (`src/harness`) + agent shell (`src/commands/agent.ts`) + `src/mcp` |

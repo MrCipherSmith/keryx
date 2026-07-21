@@ -1,19 +1,35 @@
 # Sandbox Credential Auto-Mask — Specification
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** **implemented** — P0 / Verify / P1 / P2 / P0.b have all landed
+> (PR #175–#179, flows 103 / 105 / 106 / 107 / 108). The "Home code (planned)"
+> paths below are the actual runtime locations today:
+> `src/harness/process/sandbox/mask-resolve.ts` exports `resolveCredentialMasks`
+> and `resolveMasksFromSandboxEnv` and is called from
+> `src/harness/tool/builtin/shell-exec-tool.ts` and `src/commands/harness.ts`;
+> `src/lib/sandbox-config.ts` (`loadSandboxDefaults`, P1) and
+> `src/lib/project-sandbox-policy.ts` (`writeProjectSandboxPolicySkeletonIfMissing`,
+> P2) are wired into `src/commands/init.ts`. As of P0.b (PR #179) the built-in
+> product default for an unset `maskMode` is **`auto`**, not `manual`
+> (`src/harness/process/sandbox/mask-resolve.ts:329`). ADR-0007 fail-closed TLS
+> still holds. The prose below is retained as the original design record; the
+> runtime source under `src/harness/process/sandbox/` and `src/lib/` is the
+> source of truth.
 
 ## Module Identity
 
 - **Name:** `keryx-sandbox-credential-auto-mask`
 - **Kind:** harness / shell security capability (configuration + resolver)
-- **Home code (planned):**
-  - `src/harness/process/sandbox/mask-resolve.ts` (new pure resolver)
-  - `src/harness/tool/builtin/shell-exec-tool.ts` (call resolver)
-  - `src/commands/harness.ts` (same resolver + optional `--auto-mask` / mask mode)
-  - `src/lib/sandbox-config.ts` (new; P1 load/save global defaults)
+- **Home code:**
+  - `src/harness/process/sandbox/mask-resolve.ts` (pure resolver — implemented P0)
+  - `src/harness/tool/builtin/shell-exec-tool.ts` (call resolver — implemented P0)
+  - `src/commands/harness.ts` (same resolver + `--mask-mode auto|manual|off` / `--auto-mask` — implemented)
+  - `src/lib/sandbox-config.ts` (P1 load/save global defaults — implemented)
+  - `src/lib/project-sandbox-policy.ts` (P2 project `.keryx/sandbox-policy.json` + init skeleton — implemented)
   - `src/commands/providers.ts` (read-only source of envKey/baseUrl; no secret storage)
   - `src/lib/shell-config.ts` (existing keys; unchanged secret model)
 - **Related ADRs:** ADR-0006, ADR-0007
-- **Status:** draft — not implemented
+- **Status:** implemented (P0–P0.b)
 
 ## Storage Structure
 

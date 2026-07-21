@@ -1,0 +1,113 @@
+{
+  "updatedAt": "2026-07-21T18:23:52.437Z",
+  "completed": [
+    "architecture/quality-map.md",
+    "architecture/testing-map.md",
+    "components/fixtures-churn-complexity-src.md",
+    "components/src-capability.md",
+    "components/src-harness.md",
+    "components/src-health-metrics.md",
+    "components/src-health-sources.md",
+    "components/src-health.md",
+    "components/src-lib.md",
+    "components/src-mcp-transport.md",
+    "components/src-memory.md",
+    "components/src-security-agent-hooks.md",
+    "components/src-security-detect-pii.md",
+    "components/src-security-detect.md",
+    "components/src-testing.md",
+    "components/src-wiki.md"
+  ],
+  "failed": [
+    {
+      "path": "architecture/os-sandbox.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "architecture/project-map.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/fixtures-change-impacted-test-src.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-agents.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-assets.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-commands.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-ctx.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-flow-tracker.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-flow.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-gdgraph-treesitter.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-gdgraph.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-gdskills.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-mcp.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-memory-embedding.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-review.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-rules.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-security-detect-injection.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-security-eval.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-security.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-standard.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src-sync.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    },
+    {
+      "path": "components/src.md",
+      "reason": "validation: missing YAML frontmatter (must start with ---)"
+    }
+  ],
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash"
+}

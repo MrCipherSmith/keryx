@@ -1,5 +1,5 @@
 # Keryx OS Sandbox — Requirements Package
-Version: 1.0.0
+Version: 1.1.0
 
 ## Status
 
@@ -13,6 +13,19 @@ running with full host network. See [Platform matrix](#platform-matrix).
 
 This package documents what exists in the code today. It does not describe
 planned work except where a section is explicitly labelled as a gap.
+
+### Recent additions (since v1.0.0)
+
+- `src/harness/process/sandbox/mask-resolve.ts` — credential-mask resolver that
+  auto-derives HTTPS masks from the provider registry when `--mask-mode auto`
+  is in effect (built-in default since P0.b; see the
+  `keryx-sandbox-credential-auto-mask` package). Wired into `shell_exec` and
+  `keryx harness exec`; fail-closed under ADR-0007.
+- `src/harness/process/sandbox/dual-axis-report.ts` + `dual-axis-live.smoke.test.ts`
+  — dual-axis verification report and the flag-gated live smoke test
+  (`KERYX_DUAL_AXIS_LIVE=1`, off by default in CI).
+- `keryx harness exec` flag: `--mask-mode auto|manual|off` (+ `--auto-mask`
+  alias). See specification §8.
 
 ## Purpose
 

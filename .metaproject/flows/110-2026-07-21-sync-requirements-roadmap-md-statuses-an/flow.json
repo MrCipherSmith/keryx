@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 2,
+  "id": "110",
+  "slug": "sync-requirements-roadmap-md-statuses-an",
+  "title": "Sync requirements/roadmap.md statuses and bump stale package versions",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T17:22:43.662Z",
+  "updatedAt": "2026-07-21T17:32:40.397Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:13534553e18a03a342a706fd25893041c800f5a261867e68ee1edaad190809da",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T17:32:39.857Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC2": {
+      "at": "2026-07-21T17:32:39.921Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC3": {
+      "at": "2026-07-21T17:32:39.982Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC4": {
+      "at": "2026-07-21T17:32:40.041Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC5": {
+      "at": "2026-07-21T17:32:40.101Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC6": {
+      "at": "2026-07-21T17:32:40.159Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC7": {
+      "at": "2026-07-21T17:32:40.219Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC8": {
+      "at": "2026-07-21T17:32:40.277Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC9": {
+      "at": "2026-07-21T17:32:40.337Z",
+      "note": "verified in journal.md Implementation record section"
+    },
+    "AC10": {
+      "at": "2026-07-21T17:32:40.397Z",
+      "note": "verified in journal.md Implementation record section"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T17:22:43.662Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T17:24:24.924Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T17:24:24.988Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T17:32:04.571Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T17:32:04.634Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T17:32:04.699Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T17:32:04.762Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T17:32:39.857Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:39.921Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:39.982Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.041Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.101Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.159Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.219Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.277Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.337Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-21T17:32:40.397Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: verified in journal.md Implementation record section"
+    }
+  ]
+}

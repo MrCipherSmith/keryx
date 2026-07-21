@@ -1,5 +1,5 @@
 # Keryx OpenTUI Interactive Shell — Requirements Package
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
@@ -40,6 +40,30 @@ layout and UX passes (068–079), persistence and provider work (080–086), and
 **flow 109** — the transcript block model (per-block collapse, copyable markdown
 payloads, structural code/diff rendering). See §9 of `specification.md` for the
 decisions those flows recorded.
+
+### Runtime evidence
+
+- `src/tui/tui-shell.ts` — the OpenTUI renderer. It implements **`AgentIO` only**;
+  `ShellIO` has no implementation under `src/tui/`, which is exactly open item
+  O-1 (flows 060 skeleton + 061 chrome parity).
+- `src/commands/shell.ts:1094` selects OpenTUI when `flags.wantTui && modeFlag
+  !== false && process.stdout.isTTY` — note the middle clause: `--chat` sets
+  `modeFlag = false`, so chat never reaches the TUI.
+- `src/commands/agent-commands.ts` — the promoted command registry with the pure
+  `filterCommands` / `findAgentCommand` helpers (flow 062). It currently has one
+  consumer; PRD F1's "chat and agent share definitions" is open item O-2.
+- `@opentui/core` declared under `optionalDependencies`, loaded via dynamic
+  `import()` with a readline fallback. ADR-0005 is **Accepted (Phase 1)** and its
+  guard update landed — the package is pinned in the optional-dependency set at
+  `src/testing/block-d-no-network.test.ts:82`.
+- Headless render tests: `src/tui/tui-shell.test.ts`.
+
+Beyond the original Phase 0–5 scope, the TUI also gained side-workers
+(`src/tui/side-worker.ts`, `worker-fleet.ts`), multi-agent spawn wiring
+(`subagent-bridge.ts`, `ask-user-bridge.ts`), and dual-store session persistence
+(`/compact`, `/resume`, `/continue`). These were added after the spec was written
+and are not normatively described here; cite the flow numbers if a follow-on
+requirements package is split out.
 
 The foundation this package builds on — the port-based agent driver
 (`src/commands/agent.ts` `runAgentTurn`), the `AgentIO`/`ShellIO` hook surface,

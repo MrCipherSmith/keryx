@@ -70,6 +70,20 @@ before running anything, and `outcome.reason` says why.
 > `403` a perfectly successful HTTP transaction and exits **0**. Without the
 > `decisions` list, a blocked request looks exactly like a successful one.
 
+### Deep probe (one command)
+
+For a full containment matrix (workspace write, outside write + CONTROL, network
+off, allowlist decisions, structural guard, redaction) without multi-hour agent
+thrash, run the portable script from the keryx repo root:
+
+```bash
+./scripts/sandbox-deep-probe.sh
+```
+
+It writes `.metaproject/tmp/sandbox-probe-<utc>/REPORT.md`. Details and agent
+rules live in
+[keryx-sandbox-harness-hardening](../keryx-sandbox-harness-hardening/README.md).
+
 ---
 
 ## 4. What a denial actually looks like

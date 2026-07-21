@@ -1,5 +1,5 @@
 # Keryx Project Agent Harness Requirements Package
-Version: 0.7.0
+Version: 0.8.0
 
 ## Purpose
 
@@ -19,13 +19,48 @@ project brain.
 
 ## Status
 
-`specification ready — implementation handoff`. The package is contract-complete
-for a later implementation flow: managed review iteration 2 reports zero
-BLOCKER/P0/P1 findings and all documentation/fixture gates pass. No runtime
-implementation is claimed by this package; all runtime behavior is future work.
+`implemented (Release 0 + most of Release 1/2)`. The package was originally
+authored as `specification ready — implementation handoff`; since then the
+runtime has shipped and grown well beyond the Release 0 slice. As of this
+revision, `src/harness/` is a substantial runtime (~175 files across 30
+subdirectories) covering Release 0 plus most of Release 1 and parts of Release 2.
+
+Runtime evidence (selected):
+
+- **Session / policy / tool registry / provider port / startup:**
+  `src/harness/session/session.ts` (`AppendOnlySession`),
+  `src/harness/policy/engine.ts` (`decide` → allow/ask/deny),
+  `src/harness/tool/registry.ts` (`ToolRegistry`),
+  `src/harness/provider/types.ts` (`ProviderPort`),
+  `src/harness/startup.ts` (`startRun`), `src/harness/run/run.ts` (`runOffline`).
+- **Release 1 capabilities landed:** `src/harness/resume/` (resume, recovery,
+  fingerprint, store), `src/harness/branch/` (branch + compaction),
+  `src/harness/mutation/` (guard, approval, execute, fingerprint; SSRF/loopback
+  hardening tests), `src/harness/child/` (child-agent isolation + budget +
+  contracts — see the `keryx-multi-agent-engine` package), and bounded parallel
+  scheduling (`src/harness/parallel/scheduler.ts`).
+- **Real provider adapters (not just fake):** `src/harness/provider/anthropic/`
+  and `src/harness/provider/ollama/`, plus the original fake-provider path.
+- **Extensions / sandbox / replay / completion / monitor:**
+  `src/harness/extension/` (extensions, capability grants, bound waves),
+  `src/harness/process/sandbox/` (OS sandbox integration; see the
+  `keryx-os-sandbox` package), `src/harness/replay/`, `src/harness/completion/`,
+  `src/harness/budget/`, `src/harness/monitor/`, `src/harness/rpc.ts`.
+- **CLI surface:** `keryx harness run|exec|extension|wave` is wired through
+  `src/cli.ts:175` → `src/commands/harness.ts`, with smoke tests
+  (`harness-exec.smoke.test.ts`, `harness-exec-restricted.smoke.test.ts`,
+  `harness-exec-extension-wave.test.ts`).
+
+Genuinely remaining (Release 2+): an interactive **TUI for the harness** (a
+separate `src/tui/` shell exists for the agent UI and is covered by the
+`keryx-opentui-shell` package, but the harness does not yet have its own TUI);
+**network broker-mediated tools**; full-strength **third-party executable
+extensions with capability grants**; **provider-side session storage**; and
+**external compatibility adapters**. The relocation of the old fixture-corpus
+evaluation concern to `src/eval/` was carried out (see Related Modules below).
 
 The implementation handoff is recorded in
-[flow-orchestrator-handoff](../../../.metaproject/jobs/requirements-remediation--keryx-project-agent-harness/flow-orchestrator-handoff.md)
+[flow-orchestrator-handoff](../../decisions/keryx-harness/flow-orchestrator-handoff.md)
 and remains subject to the runtime evidence gates listed there.
 
 ## Release Boundaries
@@ -254,11 +289,11 @@ These are contract ceilings, not benchmarks — the implementation may be faster
   enforcement.
 - `src/mcp/` — external protocol adapter; it remains an adapter, not the
   execution core.
-- `src/harness/` — currently a fixture-corpus evaluation harness. The
-  implementation must relocate that concern to `src/eval/` (recommended) before
-  reserving `src/harness/` for the agent runtime. This relocation is an explicit
-  prerequisite task in [implementation-plan.md](implementation-plan.md), not an
-  incidental refactor.
+- `src/harness/` — the agent runtime (Release 0 + most of Release 1/2
+  implemented; see Status above). The earlier fixture-corpus evaluation concern
+  that used to live here has been relocated to `src/eval/` as called for in
+  [implementation-plan.md](implementation-plan.md), freeing `src/harness/` for
+  the agent runtime.
 
 ## Source and Assumptions
 

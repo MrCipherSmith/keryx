@@ -130,4 +130,65 @@ describe("SandboxedProcessAdapter", () => {
     expect(obs.kind).toBe("spawn-error");
     expect(inner.received).toBeUndefined();
   });
+
+  test("AC-H2: launcher unavailable surfaces non-empty errorMessage with program path", () => {
+    const inner = new RecordingAdapter();
+    const a = new SandboxedProcessAdapter({
+      profile: { ...profile, required: true },
+      inner,
+      platform: "linux",
+      launcherAvailable: false,
+    });
+    const obs = a.spawn(command);
+    expect(obs.kind).toBe("spawn-error");
+    expect(typeof obs.errorMessage).toBe("string");
+    expect((obs.errorMessage ?? "").length).toBeGreaterThan(0);
+    expect(obs.errorMessage).toContain(command.path);
+  });
+
+  test("AC-H2: clean-exit 71 after wrap ⇒ spawn-error with structured detail", () => {
+    class Exit71Adapter implements ProcessAdapter {
+      spawn(): ProcessObservation {
+        return {
+          kind: "clean-exit",
+          exitCode: 71,
+          outputBytes: 0,
+          observedHash: "f".repeat(64),
+        };
+      }
+    }
+    const a = new SandboxedProcessAdapter({
+      profile,
+      inner: new Exit71Adapter(),
+      platform: "darwin",
+      launcherAvailable: true,
+    });
+    const obs = a.spawn(command);
+    expect(obs.kind).toBe("spawn-error");
+    expect(obs.errorMessage).toMatch(/exit 71|EX_OSERR/i);
+    expect(obs.errorMessage).toContain(command.path);
+  });
+
+  test("AC-H2: inner spawn-error is re-annotated with program path", () => {
+    class InnerSpawnError implements ProcessAdapter {
+      spawn(): ProcessObservation {
+        return {
+          kind: "spawn-error",
+          observedHash: "1".repeat(64),
+          errorMessage: "ENOENT",
+        };
+      }
+    }
+    const a = new SandboxedProcessAdapter({
+      profile,
+      inner: new InnerSpawnError(),
+      platform: "darwin",
+      launcherAvailable: true,
+    });
+    const obs = a.spawn(command);
+    expect(obs.kind).toBe("spawn-error");
+    expect(obs.errorMessage).toMatch(/sandbox spawn failed/);
+    expect(obs.errorMessage).toContain(command.path);
+    expect(obs.errorMessage).toContain("ENOENT");
+  });
 });
