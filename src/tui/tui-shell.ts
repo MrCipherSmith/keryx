@@ -51,6 +51,17 @@ import {
 } from "./side-worker";
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
+import { segmentMarkdown, type MdSegment } from "../lib/md-blocks";
+import {
+  createBlockRegistry,
+  createBlockView,
+  createSegmentView,
+  createStreamSegmenter,
+  markdownToChunks,
+  type BlockState,
+  type BlockView,
+  type SegmentView,
+} from "./transcript-blocks";
 
 /** A resolved provider/model selection. */
 export interface TuiSelection {
@@ -63,67 +74,10 @@ export interface TuiSelection {
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
-type Text = InstanceType<OpenTui["TextRenderable"]>;
-type Chunk = ReturnType<OpenTui["bold"]>;
 type StyledContent = string | ReturnType<OpenTui["t"]>;
 
-// Lightweight markdown → OpenTUI StyledText, mirroring the readline `renderMarkdown`
-// rules (ATX headings, **bold**, `inline code`, fenced blocks, -/* bullets) — but
-// emitting `@opentui/core` text chunks instead of ANSI, so it needs no parser
-// worker (the native `MarkdownRenderable` spins a WASM worker that is unavailable
-// headless) and renders through a plain `TextRenderable`.
-function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
-  const out: Chunk[] = [];
-  const plain = (s: string): void => {
-    if (s.length > 0) {
-      out.push(...otui.stringToStyledText(s).chunks);
-    }
-  };
-  const inline = (text: string): void => {
-    const re = /(`[^`]+`)|(\*\*[^*]+\*\*)/g;
-    let last = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
-      plain(text.slice(last, m.index));
-      if (m[1] !== undefined) {
-        out.push(otui.dim(m[1].slice(1, -1))); // `code` → dim
-      } else if (m[2] !== undefined) {
-        out.push(otui.bold(m[2].slice(2, -2))); // **bold**
-      }
-      last = m.index + m[0].length;
-    }
-    plain(text.slice(last));
-  };
-  const lines = md.split("\n");
-  let inCode = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    if (/^\s*```/.test(line)) {
-      inCode = !inCode; // drop the fence line
-      continue;
-    }
-    if (i > 0) {
-      plain("\n");
-    }
-    if (inCode) {
-      out.push(otui.dim(line));
-      continue;
-    }
-    const heading = /^#{1,6}\s+(.*)$/.exec(line);
-    if (heading !== null) {
-      out.push(otui.cyan(otui.bold(heading[1] ?? "")));
-      continue;
-    }
-    const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
-    if (bullet !== null) {
-      plain(`${bullet[1] ?? ""}• `);
-      inline(bullet[2] ?? "");
-      continue;
-    }
-    inline(line);
-  }
-  return out;
-}
+// `markdownToChunks` now lives in `./transcript-blocks` (flow 109) so the render
+// rules are unit-testable and shared with the block bodies.
 
 /**
  * Build an `AgentIO` that renders into an OpenTUI `transcript` box with chrome
@@ -134,36 +88,83 @@ function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
  */
 export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): AgentIO {
   let seq = 0;
-  let active: Text | undefined;
-  let pending = "";
   const append = (content: StyledContent): void => {
     transcript.add(new otui.TextRenderable(renderer, { id: `n${seq++}`, content }));
   };
-  const render = (md: string): InstanceType<OpenTui["StyledText"]> => new otui.StyledText(markdownToChunks(otui, md));
+
+  // An assistant message is a COLUMN of sibling renderables — one per markdown
+  // segment (flow 109 / AC5) — so a fenced block can be framed with its language
+  // tag instead of being flattened into one dim `TextRenderable`.
+  type Message = {
+    container: Box;
+    segmenter: ReturnType<typeof createStreamSegmenter>;
+    views: SegmentView[];
+    /** Views whose segment is final; never repainted again (risk R1). */
+    frozen: number;
+  };
+  let message: Message | undefined;
+
+  const startMessage = (): Message => {
+    const container = new otui.BoxRenderable(renderer, {
+      id: `msg${seq++}`,
+      flexDirection: "column",
+      flexShrink: 0,
+    });
+    transcript.add(container);
+    return { container, segmenter: createStreamSegmenter(), views: [], frozen: 0 };
+  };
+
+  // Repaint from `frozen` onwards only: earlier segments are settled, so a token
+  // costs the trailing segment's render and nothing else.
+  const paint = (m: Message, segments: readonly MdSegment[], frozen: number): void => {
+    for (let i = m.frozen; i < segments.length; i++) {
+      const segment = segments[i];
+      if (segment === undefined) {
+        continue;
+      }
+      const existing = m.views[i];
+      if (existing !== undefined && existing.kind === segment.kind) {
+        existing.update(segment);
+        continue;
+      }
+      existing?.destroy();
+      m.views[i] = createSegmentView(otui, renderer, m.container, segment);
+    }
+    for (const stale of m.views.splice(segments.length)) {
+      stale.destroy();
+    }
+    m.frozen = frozen;
+  };
+
   return {
-    // Assistant text streams into a TextRenderable whose StyledText is our
-    // worker-free markdown render (bold/headings/lists/code) — parity with the
-    // readline `renderMarkdown`.
+    // Assistant text streams into per-segment renderables: worker-free markdown
+    // chunks for prose (parity with the readline `renderMarkdown`) and a framed
+    // language-tagged box per fence.
     write: (s) => {
       if (s.length === 0) {
         return;
       }
-      pending += s;
-      if (active === undefined) {
-        active = new otui.TextRenderable(renderer, { id: `a${seq++}`, content: render(pending) });
-        transcript.add(active);
-      } else {
-        active.content = render(pending);
-      }
+      const m = (message ??= startMessage());
+      const { segments, frozen } = m.segmenter.push(s);
+      paint(m, segments, frozen);
     },
     onAssistantText: (text) => {
-      if (active !== undefined) {
-        active.content = render(text);
-        active = undefined;
-      } else {
-        append(render(text));
+      const m = message ?? startMessage();
+      // The authoritative final text: re-segment ONCE (not per token) and rebuild.
+      for (const view of m.views.splice(0)) {
+        view.destroy();
       }
-      pending = "";
+      m.frozen = 0;
+      const segments = segmentMarkdown(text);
+      paint(m, segments, segments.length);
+      if (segments.length === 0) {
+        try {
+          transcript.remove(m.container);
+        } catch {
+          // best-effort teardown
+        }
+      }
+      message = undefined;
     },
     // Reasoning is COLLAPSED to a one-line marker (grok/opencode style) instead of
     // dumping the whole chain-of-thought; `line count` hints at its length.
@@ -850,13 +851,123 @@ export async function launchTuiAgentShell(opts: {
     let totalOut = 0;
     let hasExactUsage = false;
     const baseWrite = io.write.bind(io);
-    const baseOnToolCall = io.onToolCall?.bind(io);
-    const baseOnToolResult = io.onToolResult?.bind(io);
     const baseOnSystem = io.onSystem?.bind(io);
     // Live phase updates (footer spinner + in-transcript status) — defined after
     // footer chrome below; assigned no-ops until then, then rewired.
     let setBusyPhase: (phase: string) => void = () => {};
     // setMainAgent is already defined above (Workers fleet); hooks close over it.
+
+    // --- collapsible transcript blocks (flow 109) --------------------------
+    // Reasoning, tool calls and tool results become addressable blocks that
+    // RETAIN their full text (bounded — D-4) instead of discarding it, so they
+    // can be expanded in place, navigated with the keyboard and copied.
+    const blocks = createBlockRegistry();
+    const blockViews = new Map<string, BlockView>();
+    /**
+     * THE focus guard (risk R3): who owns the keyboard right now. Block-nav mode
+     * is `"blocks"`, everything else `"composer"`. A turn finishing while the
+     * user is navigating must not yank focus back to the composer, so every
+     * turn-end refocus goes through `focusComposer`.
+     */
+    let focusOwner: "composer" | "blocks" = "composer";
+    const navMode = (): boolean => focusOwner === "blocks";
+    const focusComposer = (): void => {
+      if (focusOwner === "composer") {
+        input.focus();
+      }
+    };
+    /** Scroll offset saved on entering nav mode, restored on exit (AC12). */
+    let savedScrollTop = 0;
+
+    /** Repaint one block from registry state (focus highlight included). */
+    const paintBlock = (id: string): void => {
+      const state = blocks.get(id);
+      const view = blockViews.get(id);
+      if (state === undefined || view === undefined) {
+        return;
+      }
+      view.render(state, { focused: navMode() && blocks.focused()?.id === id, body: blocks.bodyText(id) });
+    };
+
+    const paintAllBlocks = (): void => {
+      for (const state of blocks.list()) {
+        paintBlock(state.id);
+      }
+    };
+
+    /** Register + render a new collapsed block at the end of the transcript. */
+    const addBlock = (
+      input: { kind: string; summary: string; fullText: string; lineCount: number },
+      options: { hint?: string; tone?: "dim" | "cyan" | "red" } = {},
+    ): string => {
+      const id = blocks.register(input);
+      const state = blocks.get(id);
+      if (state === undefined) {
+        return id;
+      }
+      blockViews.set(id, createBlockView(otui, r, transcript, state, options));
+      paintBlock(id);
+      return id;
+    };
+
+    /**
+     * Toggle/expand one block. Expanding anything but the NEWEST block suspends
+     * sticky scroll and restores the offset (D-5 / AC12): the alternate screen
+     * has no scrollback, so a jump to the bottom would lose the user's place.
+     */
+    const setBlockCollapsed = (id: string, collapsed: boolean): void => {
+      const state = blocks.get(id);
+      if (state === undefined || state.collapsed === collapsed) {
+        return;
+      }
+      const isNewest = blocks.list().at(-1)?.id === id;
+      const before = scroll.scrollTop;
+      blocks.toggle(id);
+      paintBlock(id);
+      if (isNewest) {
+        return;
+      }
+      scroll.stickyScroll = false;
+      scroll.scrollTop = before;
+      // Layout runs on the next frame; re-assert once the new height is known.
+      setTimeout(() => {
+        try {
+          scroll.scrollTop = before;
+        } catch {
+          // best-effort
+        }
+      }, 0);
+    };
+
+    const toggleBlock = (id: string): void => {
+      const state = blocks.get(id);
+      if (state !== undefined) {
+        setBlockCollapsed(id, !state.collapsed);
+      }
+    };
+
+    /** The newest block of `kind` (or the newest block of any kind). */
+    const newestBlock = (kind?: string): BlockState | undefined => {
+      const all = blocks.list();
+      for (let i = all.length - 1; i >= 0; i--) {
+        const block = all[i];
+        if (block !== undefined && (kind === undefined || block.kind === kind)) {
+          return block;
+        }
+      }
+      return undefined;
+    };
+
+    /** Copy a block's retained body to the system clipboard (OSC52) — AC6. */
+    const copyBlock = (id: string): boolean => {
+      try {
+        r.copyToClipboardOSC52(blocks.bodyText(id));
+        showToast("Copied to clipboard");
+        return true;
+      } catch {
+        return false; // clipboard access not permitted — ignore
+      }
+    };
 
     io.write = (s: string) => {
       if (s.length > 0) {
@@ -875,19 +986,17 @@ export async function launchTuiAgentShell(opts: {
       tokenText.content = otui.t`${otui.dim(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`)}`;
       sbContext.content = otui.t`${otui.dim(`${(totalIn + totalOut).toLocaleString()} tokens`)}`;
     };
-    // Reasoning: store the full text (for `/think`) and render a collapsed marker.
-    // Do NOT call createTuiAgentIo's default onReasoning — it would double-print.
-    let lastReasoning = "";
+    // Reasoning / tool call / tool result all render as collapsed BLOCKS whose
+    // full text is retained (AC1). Do NOT call createTuiAgentIo's defaults — they
+    // append their own one-line renderable and would double-print.
     io.onReasoning = (text) => {
       setBusyPhase("thinking");
       setMainAgent("running", "thinking");
-      lastReasoning = text;
-      const n = text.trim().split("\n").filter((l) => l.trim().length > 0).length;
-      transcript.add(
-        new otui.TextRenderable(r, {
-          id: `th${uid++}`,
-          content: otui.t`${otui.dim(`◆ thought (${n} line${n === 1 ? "" : "s"}) · /think to expand`)}`,
-        }),
+      const body = text.trim();
+      const n = body.split("\n").filter((l) => l.trim().length > 0).length;
+      addBlock(
+        { kind: "thought", summary: "", fullText: body, lineCount: n },
+        { hint: "/think · ctrl+o" },
       );
     };
     io.onToolCall = (name, input) => {
@@ -896,13 +1005,32 @@ export async function launchTuiAgentShell(opts: {
       setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
       // Keep tool names intact for humanFleetPhase ("tool: shell_exec").
       setMainAgent("running", name.length > 20 ? `${name.slice(0, 18)}…` : name);
-      baseOnToolCall?.(name, input);
+      // The block retains the RAW input json; the header keeps the compact call.
+      addBlock(
+        {
+          kind: "tool",
+          summary: `⚙ ${args.length > 0 ? `${name}(${args})` : `${name}()`}`,
+          fullText: input,
+          lineCount: input.split("\n").length,
+        },
+        { hint: "ctrl+o", tone: "cyan" },
+      );
     };
     io.onToolResult = (name, result) => {
       setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
       // Stay "running" between tools (multi-step turn); only terminal on turn end.
       setMainAgent("running", result.isError ? `err:${name.slice(0, 14)}` : "waiting");
-      baseOnToolResult?.(name, result);
+      const { summary, lineCount, hidden } = collapseToolOutput(result.output);
+      const more = hidden > 0 ? ` · +${hidden} more` : "";
+      addBlock(
+        {
+          kind: "output",
+          summary: `${result.isError ? "✗" : "↳"} ${summary}${more}`,
+          fullText: result.output,
+          lineCount,
+        },
+        { hint: "/expand · ctrl+o", ...(result.isError ? { tone: "red" as const } : {}) },
+      );
     };
     io.onSystem = (text) => {
       // Surface budget/stop/errors on the main agent slot.
@@ -930,6 +1058,22 @@ export async function launchTuiAgentShell(opts: {
       paddingBottom: 0,
     });
     main.add(choiceDock);
+
+    // A picker/approval overlay owns the keyboard while it is up, so block-nav
+    // keys must stay inert (AC4). `choiceDock.visible` covers every composer-dock
+    // menu (`showComposerChoice` toggles it); `overlayDepth` covers the
+    // full-screen `/model` and `/connect` pickers, which live on `r.root`.
+    let overlayDepth = 0;
+    const withOverlay = async <T>(run: () => Promise<T>): Promise<T> => {
+      overlayDepth += 1;
+      try {
+        return await run();
+      } finally {
+        overlayDepth -= 1;
+      }
+    };
+    const overlayActive = (): boolean =>
+      overlayDepth > 0 || choiceDock.visible === true || pendingApproval !== undefined;
 
     // Live `/` command dropdown (Pi/grok-style): Select filtered as composer changes.
     const menu = new otui.SelectRenderable(r, {
@@ -1210,7 +1354,8 @@ export async function launchTuiAgentShell(opts: {
       paddingLeft: 1,
       paddingRight: 1,
     });
-    const FOOTER_IDLE = "/ commands · Ctrl+C to exit";
+    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
+    const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
     const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
     const footerLeft = new otui.TextRenderable(r, {
       id: "footer-left",
@@ -1231,6 +1376,12 @@ export async function launchTuiAgentShell(opts: {
     let busy = false;
 
     const paintBusyStatus = (): void => {
+      // Block-nav mode owns the footer hint even mid-turn: the spinner interval
+      // would otherwise repaint over it every 120ms.
+      if (navMode()) {
+        footerLeft.content = otui.t`${otui.yellow(FOOTER_NAV)}`;
+        return;
+      }
       if (!busy) {
         footerLeft.content = otui.t`${otui.dim(FOOTER_IDLE)}`;
         return;
@@ -1286,7 +1437,7 @@ export async function launchTuiAgentShell(opts: {
         }
         liveStatus = undefined;
       }
-      footerLeft.content = otui.t`${otui.dim(FOOTER_IDLE)}`;
+      paintBusyStatus(); // idle hint, or the nav hint when nav mode is active
     };
     clearBusyTimer = () => {
       if (busyTimer !== undefined) {
@@ -1778,8 +1929,34 @@ export async function launchTuiAgentShell(opts: {
           }
           return;
         }
+        // `/think` and `/expand` now expand the newest matching block IN PLACE
+        // (flow 109) instead of appending a second copy of the text as a system
+        // line; `/copy` puts a block's retained payload on the clipboard (AC6).
         if (command.name === "/think") {
-          io.onSystem?.(lastReasoning.trim().length > 0 ? `${lastReasoning.trim()}\n` : "No reasoning yet.\n");
+          const thought = newestBlock("thought");
+          if (thought === undefined) {
+            io.onSystem?.("No reasoning yet.\n");
+            return;
+          }
+          setBlockCollapsed(thought.id, false);
+          return;
+        }
+        if (command.name === "/expand") {
+          const target = newestBlock("output") ?? newestBlock();
+          if (target === undefined) {
+            io.onSystem?.("Nothing to expand — no tool output yet.\n");
+            return;
+          }
+          setBlockCollapsed(target.id, false);
+          return;
+        }
+        if (command.name === "/copy") {
+          // In nav mode the focused block wins; otherwise the newest block —
+          // the markdown payload the user just watched arrive.
+          const target = (navMode() ? blocks.focused() : undefined) ?? newestBlock();
+          if (target === undefined || !copyBlock(target.id)) {
+            io.onSystem?.("Nothing to copy yet.\n");
+          }
           return;
         }
         if (command.name === "/model") {
@@ -1788,7 +1965,7 @@ export async function launchTuiAgentShell(opts: {
             const prov = detected.find((d) => d.name === currentSel.provider);
             // Registered providers fetch their live, filterable list; others use detected.
             const models = prov !== undefined ? await modelsForPicker(prov) : [];
-            const chosen = await pickModelInTui(otui, r, models);
+            const chosen = await withOverlay(() => pickModelInTui(otui, r, models));
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined
@@ -1804,7 +1981,7 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/connect") {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-            const ns = await selectProviderModelInTui(otui, r, detected);
+            const ns = await withOverlay(() => selectProviderModelInTui(otui, r, detected));
             if (ns !== undefined) {
               await switchTo(ns);
             } else {
@@ -2002,7 +2179,7 @@ export async function launchTuiAgentShell(opts: {
               }),
             );
             busy = false;
-            input.focus();
+            focusComposer(); // never steal focus from an active block-nav mode (R3)
           }
         })();
         return;
@@ -2046,7 +2223,7 @@ export async function launchTuiAgentShell(opts: {
           tokenText.content = otui.t`${otui.dim(`~${fmtTokens(est)}`)}`;
           sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
         }
-        input.focus();
+        focusComposer(); // never steal focus from an active block-nav mode (R3)
       });
     };
 
@@ -2098,6 +2275,92 @@ export async function launchTuiAgentShell(opts: {
         key.stopPropagation();
       }
       // ↑/↓/Enter fall through → the focused SelectRenderable handles them.
+    });
+
+    // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
+    // A dedicated modal mode: the single-key namespace is already claimed by the
+    // composer and the `/` menu router, and the composer would otherwise fight
+    // for focus. Registered through the `onKeypress` wrapper rather than by
+    // reaching for the private `_internalKeyInput` symbol directly (risk R2);
+    // the `/`-menu router below is the pre-existing direct consumer.
+    const enterNavMode = (): void => {
+      const newest = newestBlock();
+      if (newest === undefined) {
+        showToast("No transcript blocks yet");
+        return;
+      }
+      focusOwner = "blocks";
+      blocks.focus(newest.id);
+      savedScrollTop = scroll.scrollTop;
+      scroll.stickyScroll = false; // expanding must not yank the viewport (AC12)
+      textarea.blur();
+      paintAllBlocks();
+      paintBusyStatus();
+    };
+
+    const exitNavMode = (): void => {
+      if (!navMode()) {
+        return;
+      }
+      focusOwner = "composer";
+      paintAllBlocks(); // drop the focus highlight
+      scroll.scrollTop = savedScrollTop;
+      scroll.stickyScroll = true;
+      input.focus();
+      paintBusyStatus();
+    };
+
+    /**
+     * Repaint the focus highlight after a registry focus move. `next` is
+     * `undefined` only on an empty registry (the moves clamp otherwise), so a
+     * miss is a no-op. Scroll-into-view is NOT done here: `createBlockView` does
+     * not expose its box, and the transcript is short enough in practice that
+     * the highlight stays visible — revisit if that stops holding.
+     */
+    const moveNavFocus = (next: BlockState | undefined): void => {
+      if (next === undefined) {
+        return;
+      }
+      paintAllBlocks();
+    };
+
+    onKeypress(r, (key) => {
+      // Never fire while the `/` dropdown drives the keyboard, or while a
+      // picker/approval overlay is up (AC4).
+      if ((menu.visible && menuNav) || overlayActive()) {
+        return;
+      }
+      if (!navMode()) {
+        if (key.ctrl && key.name === "o") {
+          enterNavMode();
+          key.preventDefault();
+          key.stopPropagation();
+        }
+        return;
+      }
+      const focused = blocks.focused();
+      const isEnter = key.name === "return" || key.name === "linefeed" || key.name === "kpenter";
+      const isSpace = key.name === "space" || key.sequence === " ";
+      if (key.name === "escape") {
+        exitNavMode();
+      } else if (key.name === "up") {
+        moveNavFocus(blocks.focusPrev());
+      } else if (key.name === "down") {
+        moveNavFocus(blocks.focusNext());
+      } else if (isEnter || isSpace) {
+        if (focused !== undefined) {
+          toggleBlock(focused.id);
+          paintAllBlocks();
+        }
+      } else if (key.name === "y" && !key.ctrl && !key.meta) {
+        if (focused !== undefined) {
+          copyBlock(focused.id);
+        }
+      } else {
+        return; // anything else (incl. Ctrl+C) keeps its normal meaning
+      }
+      key.preventDefault();
+      key.stopPropagation();
     });
 
     const submitComposer = (): void => {

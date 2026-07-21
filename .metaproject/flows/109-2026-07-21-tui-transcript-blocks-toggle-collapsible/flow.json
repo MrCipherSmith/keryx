@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 2,
+  "id": "109",
+  "slug": "tui-transcript-blocks-toggle-collapsible",
+  "title": "TUI transcript blocks: toggle-collapsible reasoning/tool blocks + copyable markdown/prompt renderer + code & diff rendering",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T16:25:49.265Z",
+  "updatedAt": "2026-07-21T17:10:50.638Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2fe692cf9d1b91f9e35f531b9a84750bb612304e93cd70c9ef31b909632aa77b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Headless TUI tests + readline parity + verify/review/docs",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T16:25:49.265Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T16:36:20.839Z",
+      "event": "task-added",
+      "detail": "T5: Headless TUI tests + readline parity + verify/review/docs"
+    },
+    {
+      "at": "2026-07-21T16:36:20.925Z",
+      "event": "frozen",
+      "detail": "14 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T16:36:21.007Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T16:36:25.880Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T16:43:18.612Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T16:49:27.318Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T17:10:50.638Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

@@ -28,7 +28,12 @@ async function loadOpenTui(): Promise<{
   testing: typeof import("@opentui/core/testing");
 } | undefined> {
   try {
-    const [core, testing] = await Promise.all([import("@opentui/core"), import("@opentui/core/testing")]);
+    // SEQUENTIAL, never `Promise.all`: the two entrypoints share a module cycle
+    // (`core-slot.ts` extends `Renderable`), and evaluating them concurrently
+    // hits the cycle mid-initialization — `Cannot access 'Renderable' before
+    // initialization` / `… 'TestWriteStream' …`. Awaiting core first settles it.
+    const core = await import("@opentui/core");
+    const testing = await import("@opentui/core/testing");
     return { core, testing };
   } catch {
     return undefined;
