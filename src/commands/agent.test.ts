@@ -2,8 +2,12 @@ import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import {
   buildAgentSystemInstruction,
+  DEFAULT_MAX_TOOL_CALLS,
+  ENV_AGENT_MAX_TOOL_CALLS,
+  MAX_AGENT_MAX_TOOL_CALLS,
   MAX_ATTEMPTS_PER_HASH,
   reserveToolAttempt,
+  resolveAgentMaxToolCalls,
   runAgentTurn,
   toolCallHash,
 } from "./agent";
@@ -15,6 +19,24 @@ import type {
   NormalizedRequest,
   ProviderDescription,
 } from "../harness/provider/types";
+
+test("resolveAgentMaxToolCalls: default is generous for multi-step prompts", () => {
+  expect(DEFAULT_MAX_TOOL_CALLS).toBeGreaterThanOrEqual(48);
+  expect(resolveAgentMaxToolCalls({})).toBe(DEFAULT_MAX_TOOL_CALLS);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "" })).toBe(DEFAULT_MAX_TOOL_CALLS);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "  " })).toBe(DEFAULT_MAX_TOOL_CALLS);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "nope" })).toBe(DEFAULT_MAX_TOOL_CALLS);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "0" })).toBe(DEFAULT_MAX_TOOL_CALLS);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "-3" })).toBe(DEFAULT_MAX_TOOL_CALLS);
+});
+
+test("resolveAgentMaxToolCalls: env override clamped to ceiling", () => {
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: "12" })).toBe(12);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: " 96 " })).toBe(96);
+  expect(resolveAgentMaxToolCalls({ [ENV_AGENT_MAX_TOOL_CALLS]: String(MAX_AGENT_MAX_TOOL_CALLS + 50) })).toBe(
+    MAX_AGENT_MAX_TOOL_CALLS,
+  );
+});
 
 // A minimal scripted ProviderPort: each `stream()` call replays the next scripted
 // event list and records the request it received (for feed-back assertions).
