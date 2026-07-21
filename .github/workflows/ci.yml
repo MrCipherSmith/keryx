@@ -67,30 +67,6 @@ jobs:
                 --unshare-ipc --unshare-net --die-with-parent --new-session \
                 -- /bin/echo bwrap-can-run
 
-      # Print bwrap's OWN stderr for the exact argument shape our builder
-      # produces — the process adapter deliberately swallows child output, so a
-      # containment failure is otherwise invisible.
-      - name: Diagnose the real bwrap argument shape
-        run: |
-          cat > ./diag.ts <<'EOF'
-          import { mkdtempSync, existsSync, realpathSync } from "node:fs";
-          import { tmpdir } from "node:os";
-          import path from "node:path";
-          import { spawnSync } from "node:child_process";
-          import { buildBwrapArgs } from "./src/harness/process/sandbox/bwrap";
-          import { defaultSandboxProfile } from "./src/harness/process/sandbox/profile";
-          const work = realpathSync(mkdtempSync(path.join(tmpdir(), "diag-work-")));
-          const tmp = realpathSync(mkdtempSync(path.join(tmpdir(), "diag-tmp-")));
-          const profile = defaultSandboxProfile(work, tmp, process.env.HOME!);
-          const args = buildBwrapArgs(profile);
-          console.log("ARGS:", args.join(" "));
-          const r = spawnSync("bwrap", [...args, "--", "/bin/sh", "-c", `echo ok > ${work}/inside.txt`], { encoding: "utf8" });
-          console.log("status:", r.status, "signal:", r.signal);
-          console.log("stderr:", (r.stderr || "").trim());
-          console.log("file created:", existsSync(path.join(work, "inside.txt")));
-          EOF
-          bun ./diag.ts && rm -f ./diag.ts
-
       - name: OS-sandbox live smokes (real subprocesses under bwrap)
         env:
           KERYX_ALLOW_REAL_SUBPROCESS: "1"
