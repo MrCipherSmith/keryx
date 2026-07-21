@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/sandbox-defaults.schema.json",
+  "title": "Keryx global sandbox defaults",
+  "description": "User-global non-secret sandbox defaults (~/.local/share/keryx/sandbox.json). Never contains API key values.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "shell": {
+      "description": "Default KERYX_SANDBOX_SHELL when env unset.",
+      "type": "string",
+      "enum": ["off", "workspace", "strict", "1"]
+    },
+    "tlsTerminate": {
+      "description": "Default preference for TLS terminate when env unset. Auto-mask may still derive true when masks apply.",
+      "type": "boolean"
+    },
+    "maskMode": {
+      "description": "Default mask mode when KERYX_SANDBOX_MASK_MODE unset.",
+      "type": "string",
+      "enum": ["auto", "manual", "off"]
+    }
+  }
+}

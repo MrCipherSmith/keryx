@@ -3,7 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "nod
 import { homedir, tmpdir } from "node:os";
 import http from "node:http";
 import path from "node:path";
-import { type CommandRunner, makeCommandRunner, resolveShellSandboxMode, shellExecTool } from "./shell-exec-tool";
+import {
+  type CommandRunner,
+  makeCommandRunner,
+  resolveShellRestrictedMasks,
+  resolveShellSandboxMode,
+  shellExecTool,
+} from "./shell-exec-tool";
 
 function recordingRunner(result = { output: "done", isError: false }): {
   run: CommandRunner;
@@ -61,6 +67,63 @@ describe("resolveShellSandboxMode", () => {
     expect(
       resolveShellSandboxMode({ KERYX_SANDBOX_SHELL: "strict", KERYX_DANGEROUSLY_DISABLE_SANDBOX: "1" }),
     ).toBe("off");
+  });
+});
+
+const FIXTURE_KEY = "sk-test-fixture-not-real";
+
+describe("resolveShellRestrictedMasks (AC7)", () => {
+  test("P0.a default manual: key present without MASK_ENV → no masks", () => {
+    const r = resolveShellRestrictedMasks({ DEEPSEEK_API_KEY: FIXTURE_KEY });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.masks).toEqual([]);
+    expect(r.tlsTerminate).toBe(false);
+  });
+
+  test("auto mode derives deepseek mask and auto TLS", () => {
+    const r = resolveShellRestrictedMasks({
+      KERYX_SANDBOX_MASK_MODE: "auto",
+      DEEPSEEK_API_KEY: FIXTURE_KEY,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.masks).toEqual([
+      {
+        name: "DEEPSEEK_API_KEY",
+        realValue: FIXTURE_KEY,
+        injectHosts: ["api.deepseek.com"],
+      },
+    ]);
+    expect(r.tlsTerminate).toBe(true);
+  });
+
+  test("manual MASK_ENV without TLS fails closed", () => {
+    const r = resolveShellRestrictedMasks({
+      KERYX_SANDBOX_MASK_ENV: "DEEPSEEK_API_KEY@api.deepseek.com",
+      DEEPSEEK_API_KEY: FIXTURE_KEY,
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  test("manual MASK_ENV with TLS=1 wires masks", () => {
+    const r = resolveShellRestrictedMasks({
+      KERYX_SANDBOX_MASK_ENV: "DEEPSEEK_API_KEY@api.deepseek.com",
+      KERYX_SANDBOX_TLS_TERMINATE: "1",
+      DEEPSEEK_API_KEY: FIXTURE_KEY,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.masks[0]?.name).toBe("DEEPSEEK_API_KEY");
+    expect(r.tlsTerminate).toBe(true);
+  });
+
+  test("invalid MASK_ENV fails closed", () => {
+    const r = resolveShellRestrictedMasks({
+      KERYX_SANDBOX_MASK_ENV: "NOHOST",
+      KERYX_SANDBOX_TLS_TERMINATE: "1",
+    });
+    expect(r.ok).toBe(false);
   });
 });
 

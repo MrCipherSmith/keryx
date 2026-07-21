@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 2,
+  "id": "103",
+  "slug": "p0-sandbox-credential-auto-mask-resolver",
+  "title": "P0 sandbox credential auto-mask resolver + shell/harness wire-up",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T15:04:31.260Z",
+  "updatedAt": "2026-07-21T15:08:54.488Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:efa231cb1541ee5b77fbbd15d4c5d2c76685cea867067ada2aed01aa8ba3864c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T15:08:53.910Z",
+      "note": "mask-resolve.test.ts AC1 deepseek auto"
+    },
+    "AC2": {
+      "at": "2026-07-21T15:08:53.975Z",
+      "note": "mask-resolve.test.ts AC2 manual empty"
+    },
+    "AC3": {
+      "at": "2026-07-21T15:08:54.038Z",
+      "note": "mask-resolve.test.ts AC3 off ignores explicit"
+    },
+    "AC4": {
+      "at": "2026-07-21T15:08:54.103Z",
+      "note": "mask-resolve.test.ts AC4 merge hosts"
+    },
+    "AC5": {
+      "at": "2026-07-21T15:08:54.167Z",
+      "note": "mask-resolve.test.ts AC5 auto-derived tls"
+    },
+    "AC6": {
+      "at": "2026-07-21T15:08:54.232Z",
+      "note": "mask-resolve.test.ts AC6 tls false fail"
+    },
+    "AC7": {
+      "at": "2026-07-21T15:08:54.294Z",
+      "note": "shell-exec-tool.test.ts resolveShellRestrictedMasks"
+    },
+    "AC8": {
+      "at": "2026-07-21T15:08:54.359Z",
+      "note": "mask-resolve.test.ts resolveMasksFromSandboxEnv parity"
+    },
+    "AC9": {
+      "at": "2026-07-21T15:08:54.424Z",
+      "note": "P0.a parseMaskMode default manual; fixture key only"
+    },
+    "AC10": {
+      "at": "2026-07-21T15:08:54.488Z",
+      "note": "package README P0.a note; P1/P2 not claimed"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T15:04:31.260Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T15:08:29.272Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T15:08:29.341Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T15:08:29.410Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T15:08:45.303Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T15:08:45.368Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T15:08:45.434Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T15:08:53.910Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: mask-resolve.test.ts AC1 deepseek auto"
+    },
+    {
+      "at": "2026-07-21T15:08:53.975Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: mask-resolve.test.ts AC2 manual empty"
+    },
+    {
+      "at": "2026-07-21T15:08:54.038Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: mask-resolve.test.ts AC3 off ignores explicit"
+    },
+    {
+      "at": "2026-07-21T15:08:54.103Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: mask-resolve.test.ts AC4 merge hosts"
+    },
+    {
+      "at": "2026-07-21T15:08:54.168Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: mask-resolve.test.ts AC5 auto-derived tls"
+    },
+    {
+      "at": "2026-07-21T15:08:54.232Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: mask-resolve.test.ts AC6 tls false fail"
+    },
+    {
+      "at": "2026-07-21T15:08:54.294Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-exec-tool.test.ts resolveShellRestrictedMasks"
+    },
+    {
+      "at": "2026-07-21T15:08:54.360Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: mask-resolve.test.ts resolveMasksFromSandboxEnv parity"
+    },
+    {
+      "at": "2026-07-21T15:08:54.424Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: P0.a parseMaskMode default manual; fixture key only"
+    },
+    {
+      "at": "2026-07-21T15:08:54.488Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: package README P0.a note; P1/P2 not claimed"
+    }
+  ]
+}
