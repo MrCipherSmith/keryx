@@ -5,7 +5,7 @@ Version: 0.1.0
 
 - **Name:** `keryx-sandbox-harness-hardening`
 - **Kind:** harness / sandbox operator + security edge hardening
-- **Status:** draft (not implemented)
+- **Status:** implemented (H1+H2+H3-light)
 - **Home code (planned touch-points):**
   - `src/commands/harness.ts` — CLI flags, mask/TLS gate before spawn
   - `src/harness/process/sandbox/mask-resolve.ts` — shared fail-closed (already)

@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 2,
+  "id": "111",
+  "slug": "sandbox-harness-hardening-h1-h2-fail-clo",
+  "title": "Sandbox harness hardening H1+H2 (fail-closed + deep probe)",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T17:58:45.329Z",
+  "updatedAt": "2026-07-21T18:08:49.449Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9a1945b3b1c1677725dc265d2e4fcfbf85971f48a89bbcacfdef41ea4fe454d1",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "H1 security: mask-without-TLS fail-closed on harness + unit test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "H1 diagnostics: spawn failure reason/detail + regression test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "H2 portable probe script + REPORT + redaction",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "H2/H3 docs + package/roadmap status",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "code-verifier + focused tests + review before PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T17:58:45.329Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T18:02:15.120Z",
+      "event": "task-added",
+      "detail": "T5: H1 security: mask-without-TLS fail-closed on harness + unit test"
+    },
+    {
+      "at": "2026-07-21T18:02:15.187Z",
+      "event": "task-added",
+      "detail": "T6: H1 diagnostics: spawn failure reason/detail + regression test"
+    },
+    {
+      "at": "2026-07-21T18:02:15.254Z",
+      "event": "task-added",
+      "detail": "T7: H2 portable probe script + REPORT + redaction"
+    },
+    {
+      "at": "2026-07-21T18:02:15.318Z",
+      "event": "task-added",
+      "detail": "T8: H2/H3 docs + package/roadmap status"
+    },
+    {
+      "at": "2026-07-21T18:02:15.382Z",
+      "event": "task-added",
+      "detail": "T9: code-verifier + focused tests + review before PR"
+    },
+    {
+      "at": "2026-07-21T18:02:15.447Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T18:02:15.511Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T18:08:48.932Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T18:08:48.998Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T18:08:49.061Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T18:08:49.125Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T18:08:49.189Z",
+      "event": "task-done",
+      "detail": "T5: H1 security: mask-without-TLS fail-closed on harness + unit test"
+    },
+    {
+      "at": "2026-07-21T18:08:49.254Z",
+      "event": "task-done",
+      "detail": "T6: H1 diagnostics: spawn failure reason/detail + regression test"
+    },
+    {
+      "at": "2026-07-21T18:08:49.319Z",
+      "event": "task-done",
+      "detail": "T7: H2 portable probe script + REPORT + redaction"
+    },
+    {
+      "at": "2026-07-21T18:08:49.384Z",
+      "event": "task-done",
+      "detail": "T8: H2/H3 docs + package/roadmap status"
+    },
+    {
+      "at": "2026-07-21T18:08:49.449Z",
+      "event": "task-done",
+      "detail": "T9: code-verifier + focused tests + review before PR"
+    }
+  ]
+}

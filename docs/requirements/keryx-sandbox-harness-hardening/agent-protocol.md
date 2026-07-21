@@ -4,15 +4,20 @@ Version: 0.1.0
 ## When the user asks to “test the sandbox deeply”
 
 1. Hard gate: project root + `.metaproject/index.md` if required by project rules.
-2. Prefer **one** invocation of the portable probe (when H2 exists):
+2. Prefer **one** invocation of the portable probe:
 
    ```bash
    ./scripts/sandbox-deep-probe.sh
+   # optional: ./scripts/sandbox-deep-probe.sh --live-smokes
    ```
+
+   Output: `RUN_DIR=.metaproject/tmp/sandbox-probe-<utc>/` with `REPORT.md` and
+   `report.json`. Matrix min: A2, B1, B2 (+CONTROL), C1 (+CONTROL), C2
+   (decisions on macOS / Linux fail-closed note), F1, R1.
 
 3. Read only `RUN_DIR/REPORT.md` for the summary. Do not re-run the entire matrix
    tool-by-tool unless the script is missing.
-4. Never print real API key values.
+4. Never print real API key values. Synthetic fixtures only (`sk-fixture-…`).
 
 ## Interpreting harness outcomes
 
@@ -22,7 +27,15 @@ Version: 0.1.0
 | `kind: "completed"`, `exitCode != 0` | Report failure; do not assume sandbox bug without CONTROL |
 | Restricted run, `decisions[].allowed: false` | Report **deny** even if curl exitCode is 0 |
 | `decisions: []` on restricted | Do not claim allowlist was exercised |
-| Exit 71 / empty reason | Report as diagnostic gap (this package); include full JSON |
+| Exit 71 / empty reason | Prefer `outcome.reason` / `sandbox.detail` when present; include full JSON |
+
+### Decisions over exitCode (AC-H6 / P-OPS-2)
+
+For **restricted** allowlist runs, **`network.decisions` is authoritative**.
+HTTP clients (including `curl`) may exit **0** when the proxy returns 403 for a
+denied host. Agents must **not** claim network success or allowlist exercise from
+`exitCode` alone. If `decisions` is missing or empty, report that the allowlist
+was not exercised — do not invent a PASS.
 
 ## Structural guard
 

@@ -1,0 +1,10 @@
+# Acceptance criteria (frozen after freeze)
+
+- AC1: Harness path: non-empty credential masks without TLS → non-success (`blocked`) outcome with reason; unit test green. (AC-H1)
+- AC2: Forced sandbox spawn failure surfaces non-empty `reason` or `sandbox.detail` in at least one automated test. (AC-H2)
+- AC3: `scripts/sandbox-deep-probe.sh` exists, is executable, runs matrix min set on macOS without `date %N`. (AC-H3)
+- AC4: Probe writes REPORT.md with matrix table + overall PASS | PASS_WITH_GAPS | FAIL. (AC-H4)
+- AC5: Redaction: fixture secret under RUN_DIR → overall FAIL. (AC-H5)
+- AC6: Agent-protocol documents decisions-over-exitCode rule. (AC-H6)
+- AC7: Zero new runtime npm deps; ADR-0007 intact. (AC-H7)
+- AC8: Package/roadmap status honest after land. (AC-H8)

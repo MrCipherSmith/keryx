@@ -41,6 +41,12 @@ Close fail-closed and operability gaps without reopening OS sandbox architecture
 
 **Exit:** AC-H6; package status → `implemented` when H1+H2 green.
 
+## Status (honest)
+
+H0–H3-light delivered in one flow (H1 security/diagnostics, H2 probe + docs,
+H3 operator-guide link). Heavy TUI polish deferred. Linux full restricted still
+out of scope.
+
 ## Order
 
 ```text
