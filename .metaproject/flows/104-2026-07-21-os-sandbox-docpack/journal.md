@@ -1,0 +1,28 @@
+# Flow Journal
+
+- 2026-07-21T14:03:48.577Z - flow created
+- 2026-07-21T14:04:15.246Z - frozen: 6 criteria; checksum recorded
+- 2026-07-21T14:04:15.369Z - started
+- 2026-07-21T14:04:15.471Z - task-added: T5: Write README + prd + specification
+- 2026-07-21T14:04:15.577Z - task-added: T6: Write the human operator guide
+- 2026-07-21T14:04:15.676Z - task-added: T7: Write the agent protocol document
+- 2026-07-21T14:04:15.791Z - task-added: T8: Wiki page + index regeneration + metaproject routing
+- 2026-07-21T14:04:15.889Z - task-added: T9: Roadmap entry + package verification pass
+- 2026-07-21T14:13:14.374Z - task-done: T1: Collect remaining context
+- 2026-07-21T14:13:14.496Z - task-done: T2: Implement per plan
+- 2026-07-21T14:13:14.588Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-21T14:13:14.688Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-21T14:13:14.775Z - task-done: T5: Write README + prd + specification
+- 2026-07-21T14:13:14.867Z - task-done: T6: Write the human operator guide
+- 2026-07-21T14:13:14.946Z - task-done: T7: Write the agent protocol document
+- 2026-07-21T14:13:15.045Z - task-done: T8: Wiki page + index regeneration + metaproject routing
+- 2026-07-21T14:13:15.148Z - task-done: T9: Roadmap entry + package verification pass
+- 2026-07-21T14:13:15.225Z - ac-confirmed: AC1: docs/requirements/keryx-os-sandbox/ has README+prd+specification (plus operator-guide, agent-protocol, verification). Script-verified: required files present, Version directly under H1 in all 6, README links every package file, 0 broken relative links.
+- 2026-07-21T14:13:15.312Z - ac-confirmed: AC2: operator-guide.md (human: postures, reading output, denial shapes, troubleshooting) and agent-protocol.md (agent: invariants, posture decision table, platform gate, result decision table, escalation). Different genres, no wholesale duplication.
+- 2026-07-21T14:13:15.431Z - ac-confirmed: AC3: README carries a platform matrix; prd R4 + Gaps, specification section 5, operator-guide section 6, agent-protocol section 3 and wiki page all state that restricted network/masking/TLS are macOS-only and fail closed on Linux.
+- 2026-07-21T14:13:15.523Z - ac-confirmed: AC4: wiki/architecture/os-sandbox.md (accepted) links the whole package; keryx wiki index regenerated (38 pages) and the page appears under Architecture; .metaproject/index.md intent router routes sandbox questions to the agent/human docs and the wiki page.
+- 2026-07-21T14:13:15.609Z - ac-confirmed: AC5: roadmap.md 0.8.0 -> 0.9.0 with an entry whose status names the Linux limitation. Claims re-verified against code: package.json dependencies is {}; the documented reproduce command runs verbatim (8 pass/1 skip/0 fail).
+- 2026-07-21T14:13:15.764Z - ac-confirmed: AC6: tsc --noEmit clean; bun test 1839 tests, 0 fail.
+- 2026-07-21T14:15:18.816Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/173 (warning: PR is not a draft)
+- 2026-07-21T14:15:18.945Z - completing
+- 2026-07-21T14:15:22.236Z - done: all gates passed

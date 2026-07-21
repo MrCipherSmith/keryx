@@ -89,6 +89,7 @@ the registry (`src/standard/command-registry.ts`) is the source of truth.
 | покажи флоу / list flows | `keryx flow list` |
 | проверь на секреты / security scan | `keryx security scan <path>` |
 | проверь песочницу на Linux / verify the sandbox on a real host | runbook: `docs/verification/linux-sandbox-verification.md` |
+| запусти команду в песочнице / как работает sandbox / изоляция, allowlist доменов, маскирование креденшлов | **agents:** `docs/requirements/keryx-os-sandbox/agent-protocol.md` · **humans:** `docs/requirements/keryx-os-sandbox/operator-guide.md` · wiki: `wiki/architecture/os-sandbox.md` |
 
 ## Agent Workflow
 

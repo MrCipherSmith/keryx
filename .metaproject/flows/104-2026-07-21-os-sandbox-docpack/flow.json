@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 2,
+  "id": "104",
+  "slug": "os-sandbox-docpack",
+  "title": "OS sandbox documentation package + human/agent guides + wiki integration",
+  "status": "done",
+  "createdAt": "2026-07-21T14:03:48.577Z",
+  "updatedAt": "2026-07-21T14:15:22.236Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:698f83c3705d44a13de5d200be62d44bdeb2c2adf56a0bd533e53a593ce3569c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T14:13:15.225Z",
+      "note": "docs/requirements/keryx-os-sandbox/ has README+prd+specification (plus operator-guide, agent-protocol, verification). Script-verified: required files present, Version directly under H1 in all 6, README links every package file, 0 broken relative links."
+    },
+    "AC2": {
+      "at": "2026-07-21T14:13:15.312Z",
+      "note": "operator-guide.md (human: postures, reading output, denial shapes, troubleshooting) and agent-protocol.md (agent: invariants, posture decision table, platform gate, result decision table, escalation). Different genres, no wholesale duplication."
+    },
+    "AC3": {
+      "at": "2026-07-21T14:13:15.431Z",
+      "note": "README carries a platform matrix; prd R4 + Gaps, specification section 5, operator-guide section 6, agent-protocol section 3 and wiki page all state that restricted network/masking/TLS are macOS-only and fail closed on Linux."
+    },
+    "AC4": {
+      "at": "2026-07-21T14:13:15.523Z",
+      "note": "wiki/architecture/os-sandbox.md (accepted) links the whole package; keryx wiki index regenerated (38 pages) and the page appears under Architecture; .metaproject/index.md intent router routes sandbox questions to the agent/human docs and the wiki page."
+    },
+    "AC5": {
+      "at": "2026-07-21T14:13:15.609Z",
+      "note": "roadmap.md 0.8.0 -> 0.9.0 with an entry whose status names the Linux limitation. Claims re-verified against code: package.json dependencies is {}; the documented reproduce command runs verbatim (8 pass/1 skip/0 fail)."
+    },
+    "AC6": {
+      "at": "2026-07-21T14:13:15.764Z",
+      "note": "tsc --noEmit clean; bun test 1839 tests, 0 fail."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/173"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Write README + prd + specification",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Write the human operator guide",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Write the agent protocol document",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Wiki page + index regeneration + metaproject routing",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Roadmap entry + package verification pass",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T14:03:48.577Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T14:04:15.246Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T14:04:15.369Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T14:04:15.471Z",
+      "event": "task-added",
+      "detail": "T5: Write README + prd + specification"
+    },
+    {
+      "at": "2026-07-21T14:04:15.577Z",
+      "event": "task-added",
+      "detail": "T6: Write the human operator guide"
+    },
+    {
+      "at": "2026-07-21T14:04:15.676Z",
+      "event": "task-added",
+      "detail": "T7: Write the agent protocol document"
+    },
+    {
+      "at": "2026-07-21T14:04:15.791Z",
+      "event": "task-added",
+      "detail": "T8: Wiki page + index regeneration + metaproject routing"
+    },
+    {
+      "at": "2026-07-21T14:04:15.889Z",
+      "event": "task-added",
+      "detail": "T9: Roadmap entry + package verification pass"
+    },
+    {
+      "at": "2026-07-21T14:13:14.374Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T14:13:14.496Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T14:13:14.588Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T14:13:14.688Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T14:13:14.775Z",
+      "event": "task-done",
+      "detail": "T5: Write README + prd + specification"
+    },
+    {
+      "at": "2026-07-21T14:13:14.867Z",
+      "event": "task-done",
+      "detail": "T6: Write the human operator guide"
+    },
+    {
+      "at": "2026-07-21T14:13:14.946Z",
+      "event": "task-done",
+      "detail": "T7: Write the agent protocol document"
+    },
+    {
+      "at": "2026-07-21T14:13:15.045Z",
+      "event": "task-done",
+      "detail": "T8: Wiki page + index regeneration + metaproject routing"
+    },
+    {
+      "at": "2026-07-21T14:13:15.148Z",
+      "event": "task-done",
+      "detail": "T9: Roadmap entry + package verification pass"
+    },
+    {
+      "at": "2026-07-21T14:13:15.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: docs/requirements/keryx-os-sandbox/ has README+prd+specification (plus operator-guide, agent-protocol, verification). Script-verified: required files present, Version directly under H1 in all 6, README links every package file, 0 broken relative links."
+    },
+    {
+      "at": "2026-07-21T14:13:15.312Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: operator-guide.md (human: postures, reading output, denial shapes, troubleshooting) and agent-protocol.md (agent: invariants, posture decision table, platform gate, result decision table, escalation). Different genres, no wholesale duplication."
+    },
+    {
+      "at": "2026-07-21T14:13:15.431Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: README carries a platform matrix; prd R4 + Gaps, specification section 5, operator-guide section 6, agent-protocol section 3 and wiki page all state that restricted network/masking/TLS are macOS-only and fail closed on Linux."
+    },
+    {
+      "at": "2026-07-21T14:13:15.523Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: wiki/architecture/os-sandbox.md (accepted) links the whole package; keryx wiki index regenerated (38 pages) and the page appears under Architecture; .metaproject/index.md intent router routes sandbox questions to the agent/human docs and the wiki page."
+    },
+    {
+      "at": "2026-07-21T14:13:15.609Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: roadmap.md 0.8.0 -> 0.9.0 with an entry whose status names the Linux limitation. Claims re-verified against code: package.json dependencies is {}; the documented reproduce command runs verbatim (8 pass/1 skip/0 fail)."
+    },
+    {
+      "at": "2026-07-21T14:13:15.764Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: tsc --noEmit clean; bun test 1839 tests, 0 fail."
+    },
+    {
+      "at": "2026-07-21T14:15:18.816Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/173 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T14:15:18.945Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T14:15:22.236Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}
