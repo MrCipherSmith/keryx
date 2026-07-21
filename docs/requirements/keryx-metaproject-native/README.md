@@ -1,15 +1,65 @@
 # Keryx Metaproject-Native Harness Requirements Package
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
-`draft` — requirements gathering. This package specifies making the keryx harness
-work DIRECTLY with the metaproject layer (graph, wiki, memory, context, and the
-Task Manager) through a single typed port and schema-driven tools, rather than the
-current mix of subprocess wrappers and hardcoded MCP adapters. No new runtime is
-implemented yet; the harness, agent shell (`src/commands/agent.ts`), `src/mcp/`
-tool/resource surface, and the metaproject module facades already exist and are
-cited as the foundation.
+`implemented (Phases 1–3; Phase 4 + harness-core in-process wiring pending)`.
+This package specifies making the keryx harness work DIRECTLY with the
+metaproject layer (graph, wiki, memory, context, and the Task Manager) through a
+single typed port and schema-driven tools, rather than the prior mix of
+subprocess wrappers and hardcoded MCP adapters. **Phases 1–3 have shipped**;
+Phase 4 (policy-context enrichment) and the harness-core `RunDeps.metaprojectPort`
+seam (integration S1) are still open.
+
+Runtime evidence (Phases 1–3):
+
+- **Phase 1 — port + reference adapter (MP-1, MP-2):** `src/harness/tool/metaproject-port.ts`
+  defines the typed `MetaprojectPort` interface (`searchCode`, `graphAffected`,
+  `graphQuery`, `memorySearch`, `readWiki`, `describeContext` + additive optional
+  operations `graphPath`, `testRelated`, `healthStatus`, `graphSymbol`, `repomap`,
+  `wikiAsk` from flows 043/044). `src/harness/tool/metaproject-adapter.ts`
+  (`createMetaprojectAdapter(cwd, deps?)`) delegates to the existing
+  `createGdgraphService` / `createMemoryService` facades (flow 037).
+- **Phase 2 — single-source operation descriptors (MP-3):**
+  `src/harness/tool/metaproject-operations.ts` exports `METAPROJECT_OPERATIONS`,
+  `toInteractiveTools`, `toToolDefinitions`, and shared formatters (flow 038).
+- **Phase 3 — universal Task Manager schema (MP-4):** `src/flow/schema.ts`
+  `flowStateSchema()` is the runtime source of truth and is asserted
+  byte-consistent with this package's
+  `schemas/flow-state.schema.json` by `src/flow/schema.test.ts`; the
+  `keryx flow schema [--out <path>]` CLI subcommand is implemented at
+  `src/commands/flow.ts:88`.
+- **Projections (one definition, three consumers):**
+  - Agent shell: `src/harness/tool/builtin/metaproject-tools.ts`
+    `builtinMetaprojectTools(root, runner, port?)` — called from
+    `src/commands/shell.ts:1085` with `createMetaprojectAdapter(cwd)`; the legacy
+    subprocess path (`makeKeryxRunner`, `Bun.spawn(["keryx", ...])`) is demoted
+    to a fallback used only when `port` is omitted.
+  - MCP: `src/mcp/metaproject-tools.ts` `toMcpTools()` (flow 040), spread into
+    `buildToolRegistry()` at `src/mcp/tools.ts:80`. All unified entries are
+    read-only (`mutating: false`), preserving the M-10 read-only contract.
+
+Still pending (Phase 4 + retirement):
+
+- **S1 outstanding:** `metaprojectPort?: MetaprojectPort` is NOT yet a field of
+  `RunDeps` (`src/harness/run/run.ts:101-109`). The agent shell consumes the port
+  in-process, but the harness core itself does not yet.
+- **Phase 4 (MP-6) policy-context enrichment** — `PolicyContext.metaprojectContext`
+  does not exist.
+- **Legacy MCP adapter retirement** — old hardcoded adapters in
+  `src/mcp/tools.ts:81+` remain registered (deduped by name with the unified
+  surface) pending a separate retirement pass.
+- **Subprocess wrapper retirement** — `metaproject-tools.ts` still ships the
+  subprocess fallback path; `searchCode` degrades to it because gdctx has no
+  in-process API yet.
+- **Minor schema drift:** `schemas/memory-search-result.schema.json` defines
+  filter keys `module/entity/status/class/asOf`; the TS `MemorySearchFilters`
+  only has `module?/status?` (spec ahead of implementation).
+
+This package's schemas are complete and consistent
+(`metaproject-operation.schema.json`, `graph-affected-result.schema.json`,
+`memory-search-result.schema.json`, `flow-state.schema.json` v1+v2 additive,
+Draft-07). The D-02 invariant is preserved (no runtime hand-edits `flow.json`).
 
 ## Purpose
 

@@ -1,5 +1,11 @@
 # Multi-Agent Engine — Specification
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** **implemented** as flows 088–101; see `README.md` for the
+> runtime evidence. The original CLI surface `keryx agents --json` sketched in
+> this document shipped as `keryx agents monitor <events-file> [--json]` (an
+> offline fold over a captured events file); the prose below is retained as the
+> design record.
 
 ## Module Identity
 

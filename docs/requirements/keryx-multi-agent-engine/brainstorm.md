@@ -1,5 +1,9 @@
 # Multi-Agent Engine — Brainstorm & Decision History
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** the design decisions recorded here have been **implemented**
+> (flows 088–101). This brainstorm is retained as decision history; it is not a
+> runtime artifact.
 
 ## Reference designs studied (open source)
 

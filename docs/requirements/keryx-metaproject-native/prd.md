@@ -1,5 +1,13 @@
 # Keryx Metaproject-Native Harness PRD
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** Phases 1–3 of the design below have been **implemented**
+> (MetaprojectPort + reference adapter, single-source operation descriptors, and
+> the universal `flow-state` schema + `keryx flow schema` CLI), with three
+> projections live (agent shell, MCP, CLI). Phase 4 (policy-context enrichment)
+> and the harness-core `RunDeps.metaprojectPort` seam are still pending; see
+> `README.md` for the per-file runtime evidence. This PRD is retained as the
+> original requirements record.
 
 ## Problem
 

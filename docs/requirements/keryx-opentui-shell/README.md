@@ -1,20 +1,42 @@
 # Keryx OpenTUI Interactive Shell — Requirements Package
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
-`draft` — requirements gathering. This package specifies migrating the keryx
-interactive shell/agent UI from the current line-based `node:readline` renderer to
-a full-screen **OpenTUI** (`@opentui/core`) terminal UI, to gain a live,
-Pi/grok-style command composer (an as-you-type `/` command dropdown), a persistent
-input area, and a component-based rendering model — WITHOUT rewriting the
-deterministic agent driver or the pure render helpers already in place.
+`implemented` — Phases 0–5 landed; the OpenTUI shell is the **default interactive
+shell** when `process.stdout.isTTY`. The migration from `node:readline` to a
+full-screen **OpenTUI** (`@opentui/core`) terminal UI described by this package is
+shipped: live `/` command composer, persistent composer region, and component-based
+rendering, WITHOUT rewriting the deterministic agent driver or the pure render
+helpers.
 
-No new runtime is implemented yet. The port-based agent driver
-(`src/commands/agent.ts` `runAgentTurn`), the `AgentIO`/`ShellIO` hook surface, and
-the pure render helpers (`renderMarkdown`, `live-render.ts`, `indentBlock`,
-`collapseToolOutput`, `summarizeToolArgs`, reasoning capture) already exist
-(flows 033, 048–057) and are cited as the foundation that carries over unchanged.
+Runtime evidence (flows 059–066):
+
+- `src/tui/tui-shell.ts` (~80 KB) — the OpenTUI renderer implementing `AgentIO` /
+  `ShellIO` (flows 060 skeleton + 061 chrome parity).
+- `src/commands/shell.ts:1043-1049` selects OpenTUI when `stdout.isTTY` and the
+  `--tui`/`--no-tui` flag allows it; comment at `shell.ts:1026`: "TUI is already
+  the default".
+- `src/commands/agent-commands.ts` — promoted shared command registry with the
+  pure `filterCommands` / `findAgentCommand` helpers (flow 062).
+- `@opentui/core ^0.4.5` declared as an `optionalDependencies` entry
+  (`package.json:48`); loaded via dynamic `import()` with graceful readline
+  fallback. ADR-0005 (`docs/decisions/keryx-harness/ADR-0005-opentui-shell-dependency.md`)
+  is **Accepted (Phase 1)**.
+- Headless render tests: `src/tui/tui-shell.test.ts`.
+
+Beyond the original Phase 0–5 scope, the TUI also gained side-workers
+(`src/tui/side-worker.ts`, `worker-fleet.ts`), multi-agent spawn wiring
+(`subagent-bridge.ts`, `ask-user-bridge.ts`, flow 065/066 + commits `9b0ca29`,
+`816e8f0`), and dual-store session persistence (`/compact`, `/resume`, `/continue`).
+These were added after the spec was written and are not normatively described
+here; cite the flow numbers if a follow-on requirements package is split out.
+
+The original `draft` design (port-based agent driver `runAgentTurn`, the
+`AgentIO`/`ShellIO` hook surface, and the pure render helpers `renderMarkdown`,
+`live-render.ts`, `indentBlock`, `collapseToolOutput`, `summarizeToolArgs`,
+reasoning capture — flows 033, 048–057) remains the foundation and carries over
+unchanged, as specified.
 
 ## Why
 
