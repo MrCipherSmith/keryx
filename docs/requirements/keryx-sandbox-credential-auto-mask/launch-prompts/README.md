@@ -9,7 +9,7 @@ flow unless the operator explicitly expands scope.
 | **P0** | [P0-flow-orchestrator.md](P0-flow-orchestrator.md) | ✅ Done — PR #175, flow 103 |
 | **Verify** | [Verify-flow-orchestrator.md](Verify-flow-orchestrator.md) | ✅ Done — PR #176, flow 105 |
 | **P1** | [P1-flow-orchestrator.md](P1-flow-orchestrator.md) | ✅ Done — global `sandbox.json` |
-| **P2** | [P2-flow-orchestrator.md](P2-flow-orchestrator.md) | Next — project policy + init skeleton |
+| **P2** | [P2-flow-orchestrator.md](P2-flow-orchestrator.md) | ✅ Done — project policy + init skeleton |
 
 **Operator protocol**
 

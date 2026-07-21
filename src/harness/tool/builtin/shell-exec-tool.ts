@@ -24,6 +24,7 @@ import { setupNetworkRun } from "../../process/sandbox/network-run";
 import type { MaskedCredential } from "../../process/sandbox/network-run";
 import {
   buildDefaultMaskProviders,
+  resolveAllowedDomains,
   resolveMasksFromSandboxEnv,
 } from "../../process/sandbox/mask-resolve";
 import { OPENAI_COMPAT_PROVIDERS } from "../../../commands/providers";
@@ -81,22 +82,15 @@ function extraWritableRoots(env: Record<string, string | undefined>): string[] {
     .map((p) => canonical(p.startsWith("~/") ? p.replace(/^~/, homedir()) : p));
 }
 
-/** Allowed domains from `KERYX_SANDBOX_ALLOWED_DOMAINS` (comma-separated). */
-function allowedDomainsFromEnv(env: Record<string, string | undefined>): string[] {
-  const raw = env.KERYX_SANDBOX_ALLOWED_DOMAINS;
-  if (!raw) return [];
-  return raw.split(",").map((d) => d.trim()).filter((d) => d.length > 0);
-}
-
 /**
  * Build the agent-shell sandbox profile for `mode` (never `off`). A domain
- * allowlist (`KERYX_SANDBOX_ALLOWED_DOMAINS`) switches network to `restricted`
+ * allowlist (env or project policy) switches network to `restricted`
  * (only those hosts via the loopback proxy), overriding the mode's on/off.
  */
 function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off">, env: Record<string, string | undefined>): SandboxProfile {
   const base = defaultSandboxProfile(canonical(root), canonical(tmpdir()), homedir());
   const writableRoots = [...base.writableRoots, ...extraWritableRoots(env)];
-  const domains = allowedDomainsFromEnv(env);
+  const domains = resolveAllowedDomains(env, root);
   if (domains.length > 0) {
     return { ...base, writableRoots, network: "restricted", allowedDomains: domains };
   }
@@ -106,10 +100,12 @@ function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off"
 /**
  * Resolve credential masks for a restricted-network shell_exec run (AC7 surface).
  * Uses the shared resolver so harness can match outcomes (AC8).
+ * `projectRoot` enables P2 `.keryx/sandbox-policy.json` when provided.
  */
 export function resolveShellRestrictedMasks(
   env: Record<string, string | undefined>,
   sandboxConfigDir?: string,
+  projectRoot?: string,
 ):
   | { ok: true; masks: MaskedCredential[]; tlsTerminate: boolean }
   | { ok: false; reason: string } {
@@ -118,6 +114,7 @@ export function resolveShellRestrictedMasks(
     env,
     providers,
     ...(sandboxConfigDir !== undefined ? { sandboxConfigDir } : {}),
+    ...(projectRoot !== undefined ? { projectRoot } : {}),
   });
   if (!result.ok) {
     return { ok: false, reason: result.reason };
@@ -176,7 +173,7 @@ export function makeCommandRunner(root: string): CommandRunner {
           // Credential masking via shared resolver (P0). Manual: KERYX_SANDBOX_MASK_ENV.
           // Auto: KERYX_SANDBOX_MASK_MODE=auto derives NAME@host from provider registry
           // for non-empty keys (after applySavedApiKeys). Fail-closed TLS (ADR-0007).
-          const resolved = resolveShellRestrictedMasks(env);
+          const resolved = resolveShellRestrictedMasks(env, undefined, root);
           if (!resolved.ok) {
             return { output: `shell_exec: ${resolved.reason}`, isError: true };
           }

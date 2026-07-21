@@ -9,6 +9,7 @@
 // P1: when env unset, maskMode/tls may come from ~/.local/share/keryx/sandbox.json.
 
 import { envVarIsSet, loadSandboxDefaults } from "../../../lib/sandbox-config";
+import { loadProjectSandboxPolicy } from "../../../lib/project-sandbox-policy";
 import { parseMaskSpec } from "./network-run";
 
 export type MaskMode = "auto" | "manual" | "off";
@@ -284,8 +285,9 @@ export function resolveCredentialMasks(input: {
  * Shared input builder used by shell_exec and harness so AC8 can compare
  * equivalent env + explicit specs + mode → same MaskResolution.
  *
- * Resolution order for mode / tls (P1):
- *   CLI override → process env → global sandbox.json → built-in (manual / unset).
+ * Resolution order for mode / tls (P1 + P2):
+ *   CLI override → process env → project policy → global sandbox.json → built-in.
+ * Project `extraMasks` merge into explicitSpecs (after env MASK_ENV / CLI).
  */
 export function resolveMasksFromSandboxEnv(input: {
   env: Record<string, string | undefined>;
@@ -301,14 +303,24 @@ export function resolveMasksFromSandboxEnv(input: {
    * instead of the user home. Production callers omit this.
    */
   sandboxConfigDir?: string;
+  /**
+   * Project cwd/root for `.keryx/sandbox-policy.json` (P2). When omitted,
+   * project policy is not loaded (P1-only behavior) — tests that only cover
+   * global defaults should omit this; production shell/harness pass the root.
+   */
+  projectRoot?: string;
 }): MaskResolveResult {
   const defaults = loadSandboxDefaults(input.sandboxConfigDir);
+  const project =
+    input.projectRoot !== undefined ? loadProjectSandboxPolicy(input.projectRoot) : {};
 
   let mode: MaskMode;
   if (input.modeOverride !== undefined) {
     mode = input.modeOverride;
   } else if (envVarIsSet(input.env.KERYX_SANDBOX_MASK_MODE)) {
     mode = parseMaskMode(input.env.KERYX_SANDBOX_MASK_MODE);
+  } else if (project.maskMode !== undefined) {
+    mode = project.maskMode;
   } else if (defaults.maskMode !== undefined) {
     mode = defaults.maskMode;
   } else {
@@ -318,17 +330,22 @@ export function resolveMasksFromSandboxEnv(input: {
   const explicitSpecs = [
     ...splitMaskEnvSpecs(input.env.KERYX_SANDBOX_MASK_ENV),
     ...(input.extraExplicitSpecs ?? []),
+    ...(project.extraMasks ?? []),
   ];
 
   let tlsExplicit = tlsExplicitFromEnv(input.env);
-  let tlsFromDefaults = false;
+  let tlsFromFile = false;
+  if (tlsExplicit === undefined && typeof project.tlsTerminate === "boolean") {
+    tlsExplicit = project.tlsTerminate;
+    tlsFromFile = true;
+  }
   if (tlsExplicit === undefined && typeof defaults.tlsTerminate === "boolean") {
     tlsExplicit = defaults.tlsTerminate;
-    tlsFromDefaults = true;
+    tlsFromFile = true;
   }
   if (input.tlsFlag === true) {
     tlsExplicit = true;
-    tlsFromDefaults = false;
+    tlsFromFile = false;
   }
 
   const allowAutoTls = mode === "auto";
@@ -340,10 +357,10 @@ export function resolveMasksFromSandboxEnv(input: {
     tlsExplicit,
     allowAutoTls,
   });
-  if (!result.ok || !tlsFromDefaults) {
+  if (!result.ok || !tlsFromFile) {
     return result;
   }
-  // Relabel tlsSource when the explicit TLS preference came from sandbox.json.
+  // Relabel tlsSource when the explicit TLS preference came from policy/file.
   if (result.resolution.tlsTerminate && result.resolution.tlsSource === "env") {
     return {
       ok: true,
@@ -351,4 +368,24 @@ export function resolveMasksFromSandboxEnv(input: {
     };
   }
   return result;
+}
+
+/**
+ * Allowed domains for restricted network: env wins if set; else project policy.
+ * Pure helper for shell_exec profile building (P2).
+ */
+export function resolveAllowedDomains(
+  env: Record<string, string | undefined>,
+  projectRoot?: string,
+): string[] {
+  const raw = env.KERYX_SANDBOX_ALLOWED_DOMAINS;
+  if (raw !== undefined && raw.trim().length > 0) {
+    return raw
+      .split(",")
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
+  }
+  if (projectRoot === undefined) return [];
+  const project = loadProjectSandboxPolicy(projectRoot);
+  return project.allowedDomains ?? [];
 }

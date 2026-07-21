@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { saveSandboxDefaults } from "../../../lib/sandbox-config";
 import {
   buildDefaultMaskProviders,
   parseMaskMode,
+  resolveAllowedDomains,
   resolveCredentialMasks,
   resolveMasksFromSandboxEnv,
   type ProviderMaskSource,
@@ -292,5 +293,102 @@ describe("P1 sandbox.json defaults (AC-P1-2/3/6)", () => {
     if (!r.ok) return;
     expect(r.resolution.tlsTerminate).toBe(true);
     expect(r.resolution.tlsSource).toBe("defaults");
+  });
+});
+
+describe("P2 project policy (AC-P2-1/2/3/6)", () => {
+  function projectWithPolicy(policy: Record<string, unknown>): string {
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-p2-proj-"));
+    mkdirSync(path.join(root, ".git"));
+    mkdirSync(path.join(root, ".keryx"), { recursive: true });
+    writeFileSync(path.join(root, ".keryx", "sandbox-policy.json"), JSON.stringify(policy, null, 2));
+    return root;
+  }
+
+  test("AC-P2-1: missing project policy → same as no projectRoot (manual empty)", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-p2-empty-"));
+    mkdirSync(path.join(root, ".git"));
+    const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-global-"));
+    const withRoot = resolveMasksFromSandboxEnv({
+      env: { DEEPSEEK_API_KEY: FIXTURE_KEY },
+      providers,
+      sandboxConfigDir: globalDir,
+      projectRoot: root,
+    });
+    const without = resolveMasksFromSandboxEnv({
+      env: { DEEPSEEK_API_KEY: FIXTURE_KEY },
+      providers,
+      sandboxConfigDir: globalDir,
+    });
+    expect(withRoot.ok && without.ok).toBe(true);
+    if (!withRoot.ok || !without.ok) return;
+    expect(withRoot.resolution).toEqual(without.resolution);
+  });
+
+  test("AC-P2-2: project extraMasks merge as explicit", () => {
+    const root = projectWithPolicy({
+      maskMode: "manual",
+      tlsTerminate: true,
+      extraMasks: ["DEEPSEEK_API_KEY@api.deepseek.com"],
+    });
+    const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-g-"));
+    const r = resolveMasksFromSandboxEnv({
+      env: { DEEPSEEK_API_KEY: FIXTURE_KEY },
+      providers,
+      sandboxConfigDir: globalDir,
+      projectRoot: root,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.resolution.masks).toEqual([
+      {
+        name: "DEEPSEEK_API_KEY",
+        injectHosts: ["api.deepseek.com"],
+        source: "explicit",
+      },
+    ]);
+  });
+
+  test("AC-P2-3: env overrides project and global", () => {
+    const root = projectWithPolicy({ maskMode: "auto" });
+    const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-g2-"));
+    saveSandboxDefaults({ maskMode: "auto" }, globalDir);
+    const r = resolveMasksFromSandboxEnv({
+      env: {
+        KERYX_SANDBOX_MASK_MODE: "manual",
+        DEEPSEEK_API_KEY: FIXTURE_KEY,
+      },
+      providers,
+      sandboxConfigDir: globalDir,
+      projectRoot: root,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.resolution.mode).toBe("manual");
+    expect(r.resolution.masks).toEqual([]);
+  });
+
+  test("project maskMode beats global when env unset", () => {
+    const root = projectWithPolicy({ maskMode: "auto" });
+    const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-g3-"));
+    saveSandboxDefaults({ maskMode: "manual" }, globalDir);
+    const r = resolveMasksFromSandboxEnv({
+      env: { DEEPSEEK_API_KEY: FIXTURE_KEY },
+      providers,
+      sandboxConfigDir: globalDir,
+      projectRoot: root,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.resolution.mode).toBe("auto");
+    expect(r.resolution.masks[0]?.source).toBe("auto");
+  });
+
+  test("resolveAllowedDomains: env wins over project", () => {
+    const root = projectWithPolicy({ allowedDomains: ["from.project.com"] });
+    expect(resolveAllowedDomains({}, root)).toEqual(["from.project.com"]);
+    expect(
+      resolveAllowedDomains({ KERYX_SANDBOX_ALLOWED_DOMAINS: "from.env.com, other.com" }, root),
+    ).toEqual(["from.env.com", "other.com"]);
   });
 });

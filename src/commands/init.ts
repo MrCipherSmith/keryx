@@ -26,6 +26,7 @@ import {
   symbols,
   nextSteps,
 } from "../lib/ui";
+import { writeProjectSandboxPolicySkeletonIfMissing } from "../lib/project-sandbox-policy";
 import {
   GDSKILLS_PROFILES,
   type GdskillsProfile,
@@ -954,6 +955,12 @@ export async function initCommand(args: string[]): Promise<void> {
     }
   }
 
+  // P2: non-secret project sandbox policy skeleton (never overwrites; no API keys).
+  const wroteSandboxPolicy = writeProjectSandboxPolicySkeletonIfMissing(projectRoot);
+  if (wroteSandboxPolicy) {
+    statusLine(".keryx/sandbox-policy.json", true, "sandbox policy skeleton (no secrets)");
+  }
+
   const steps = [
     `Read ${style.cyan(".metaproject/index.md")} - the agent entrypoint and module map.`,
   ];
@@ -963,6 +970,9 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableTasks) {
     steps.push(`Start a managed flow: ${style.cyan('keryx flow init --title "..."')}.`);
   }
+  steps.push(
+    `API keys: ${style.cyan("keryx shell")} → ${style.cyan("/connect")} (user-global auth.json) — never put keys in .keryx/sandbox-policy.json.`,
+  );
   steps.push(`Open ${style.cyan(".metaproject/keryx-dashboard.html")} for the human dashboard.`);
   steps.push(`After pulling changes, run ${style.cyan("keryx update")} to refresh service files.`);
   nextSteps(steps);

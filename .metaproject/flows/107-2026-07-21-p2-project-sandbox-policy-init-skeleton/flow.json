@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "107",
+  "slug": "p2-project-sandbox-policy-init-skeleton",
+  "title": "P2 project sandbox policy + init skeleton",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T15:43:17.316Z",
+  "updatedAt": "2026-07-21T15:46:20.919Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fd0eafd9371b8f1f1005156a7831c3bfc9bc434671eecca2a9d0e296fabcde3d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T15:46:20.602Z",
+      "note": "P2 unit tests + wiring"
+    },
+    "AC2": {
+      "at": "2026-07-21T15:46:20.666Z",
+      "note": "P2 unit tests + wiring"
+    },
+    "AC3": {
+      "at": "2026-07-21T15:46:20.729Z",
+      "note": "P2 unit tests + wiring"
+    },
+    "AC4": {
+      "at": "2026-07-21T15:46:20.793Z",
+      "note": "P2 unit tests + wiring"
+    },
+    "AC5": {
+      "at": "2026-07-21T15:46:20.856Z",
+      "note": "P2 unit tests + wiring"
+    },
+    "AC6": {
+      "at": "2026-07-21T15:46:20.919Z",
+      "note": "P2 unit tests + wiring"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T15:43:17.316Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T15:46:20.220Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T15:46:20.282Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T15:46:20.345Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T15:46:20.407Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T15:46:20.469Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T15:46:20.533Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T15:46:20.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: P2 unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:46:20.667Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: P2 unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:46:20.729Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: P2 unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:46:20.793Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: P2 unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:46:20.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: P2 unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:46:20.919Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: P2 unit tests + wiring"
+    }
+  ]
+}

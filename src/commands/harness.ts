@@ -44,6 +44,7 @@ import type { ProxyDecision } from "../harness/process/sandbox/proxy";
 import {
   buildDefaultMaskProviders,
   parseMaskModeStrict,
+  resolveAllowedDomains,
   resolveMasksFromSandboxEnv,
   type MaskMode,
 } from "../harness/process/sandbox/mask-resolve";
@@ -579,15 +580,14 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     if (value !== undefined) commandEnv[key] = value;
   }
 
-  // Restricted-network opt-in: `--allowed-domains a,b` or
-  // KERYX_SANDBOX_ALLOWED_DOMAINS. Starts the loopback allowlist proxy (worker),
-  // points the contained command at it via HTTP(S)_PROXY, and constrains the OS
-  // sandbox to allow only that loopback socket. Only for real (non-injected) runs.
-  const envDomains = env.KERYX_SANDBOX_ALLOWED_DOMAINS
-    ? env.KERYX_SANDBOX_ALLOWED_DOMAINS.split(",").map((d) => d.trim()).filter((d) => d.length > 0)
-    : undefined;
+  // Restricted-network opt-in: `--allowed-domains a,b`, env, or project policy
+  // (P2). Starts the loopback allowlist proxy (worker), points the contained
+  // command at it via HTTP(S)_PROXY, and constrains the OS sandbox to allow only
+  // that loopback socket. Only for real (non-injected) runs.
+  const policyDomains = resolveAllowedDomains(env, cwd);
+  const envOrPolicyDomains = policyDomains.length > 0 ? policyDomains : undefined;
 
-  // Credential masking via shared resolver (P0). Keys from auth.json participate
+  // Credential masking via shared resolver (P0–P2). Keys from auth.json participate
   // in auto-mask (envWithSavedApiKeys); real values never logged.
   const envForMask = envWithSavedApiKeys(env);
   const providers = buildDefaultMaskProviders(OPENAI_COMPAT_PROVIDERS);
@@ -597,6 +597,7 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     ...(maskMode !== undefined ? { modeOverride: maskMode } : {}),
     ...(tlsTerminate ? { tlsFlag: true } : {}),
     providers,
+    projectRoot: cwd,
   });
   if (!maskResult.ok) {
     console.log(`keryx harness exec: ${maskResult.reason}`);
@@ -611,7 +612,7 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
 
   // Inject hosts must be reachable, so they join the allowlist automatically.
   const maskHosts = masks.flatMap((m) => m.injectHosts);
-  const baseDomains = allowedDomains ?? envDomains;
+  const baseDomains = allowedDomains ?? envOrPolicyDomains;
   const restrictedDomains =
     baseDomains === undefined && maskHosts.length === 0
       ? undefined
