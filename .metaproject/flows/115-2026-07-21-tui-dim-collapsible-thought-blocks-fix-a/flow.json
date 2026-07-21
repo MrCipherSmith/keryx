@@ -5,15 +5,48 @@
   "title": "TUI: dim/collapsible thought blocks + fix alignSelf height-measurement breaking transcript layout and scroll",
   "status": "in-progress",
   "createdAt": "2026-07-21T23:04:33.052Z",
-  "updatedAt": "2026-07-21T23:28:50.599Z",
+  "updatedAt": "2026-07-21T23:33:54.941Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:9a2a19c588df28f259795c237484679592845c0b597c024c54ce8f1236bd3582",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T23:33:35.931Z",
+      "note": "src/capability/tui-layout.test.ts bans alignSelf in src/tui/** runtime sources; green (was RED with the six sites listed)"
+    },
+    "AC2": {
+      "at": "2026-07-21T23:33:36.079Z",
+      "note": "tui-shell.test.ts 'AC2: a bordered transcript box keeps its natural height even when the transcript overflows' — both echo boxes measure 3 rows with a 30-line block expanded"
+    },
+    "AC3": {
+      "at": "2026-07-21T23:33:36.222Z",
+      "note": "tui-shell.test.ts 'AC3: an expanded block reports its real height' — summed child heights >= 32, scrollHeight >= summed, MARKER-AFTER-BLOCK visible after scrolling to bottom"
+    },
+    "AC4": {
+      "at": "2026-07-21T23:33:36.350Z",
+      "note": "tui-shell.test.ts AC4 — captured spans: reasoning body carries TextAttributes.DIM, tool output body does not"
+    },
+    "AC5": {
+      "at": "2026-07-21T23:33:48.213Z",
+      "note": "tui-shell.test.ts AC5 — body clipped at MAX_THOUGHT_LINES=12 with the 'more lines not shown' notice; registry.bodyText and nav.copy still return line 60"
+    },
+    "AC6": {
+      "at": "2026-07-21T23:33:48.365Z",
+      "note": "tui-shell.test.ts AC6 — nav.toggleNewest('thought') expands then collapses; expanded header shows '/think collapse · y copy'; /think and /expand call it in tui-shell.ts"
+    },
+    "AC7": {
+      "at": "2026-07-21T23:33:48.497Z",
+      "note": "tsc --noEmit clean; keryx health run --changed PASS (score 93). bun test: 2095 pass, 1 fail = scripts/install-global.test.ts beforeEach timeout, reproduced identically on stashed main, unrelated to TUI"
+    },
+    "AC8": {
+      "at": "2026-07-21T23:33:48.620Z",
+      "note": "memory/lessons/tui-alignself-height-collapse.md (accepted, indexed) + flow-109 plan R4 marked SUPERSEDED + OpenTUI specification layout invariant"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/193"
   },
   "tasks": [
     {
@@ -160,6 +193,60 @@
       "at": "2026-07-21T23:28:50.599Z",
       "event": "task-done",
       "detail": "T6: Docs: memory lesson, flow-109 R4 correction, OpenTUI spec + journal"
+    },
+    {
+      "at": "2026-07-21T23:33:28.388Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/193"
+    },
+    {
+      "at": "2026-07-21T23:33:35.931Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/capability/tui-layout.test.ts bans alignSelf in src/tui/** runtime sources; green (was RED with the six sites listed)"
+    },
+    {
+      "at": "2026-07-21T23:33:36.079Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tui-shell.test.ts 'AC2: a bordered transcript box keeps its natural height even when the transcript overflows' — both echo boxes measure 3 rows with a 30-line block expanded"
+    },
+    {
+      "at": "2026-07-21T23:33:36.222Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tui-shell.test.ts 'AC3: an expanded block reports its real height' — summed child heights >= 32, scrollHeight >= summed, MARKER-AFTER-BLOCK visible after scrolling to bottom"
+    },
+    {
+      "at": "2026-07-21T23:33:36.350Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tui-shell.test.ts AC4 — captured spans: reasoning body carries TextAttributes.DIM, tool output body does not"
+    },
+    {
+      "at": "2026-07-21T23:33:48.213Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tui-shell.test.ts AC5 — body clipped at MAX_THOUGHT_LINES=12 with the 'more lines not shown' notice; registry.bodyText and nav.copy still return line 60"
+    },
+    {
+      "at": "2026-07-21T23:33:48.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: tui-shell.test.ts AC6 — nav.toggleNewest('thought') expands then collapses; expanded header shows '/think collapse · y copy'; /think and /expand call it in tui-shell.ts"
+    },
+    {
+      "at": "2026-07-21T23:33:48.497Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: tsc --noEmit clean; keryx health run --changed PASS (score 93). bun test: 2095 pass, 1 fail = scripts/install-global.test.ts beforeEach timeout, reproduced identically on stashed main, unrelated to TUI"
+    },
+    {
+      "at": "2026-07-21T23:33:48.620Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: memory/lessons/tui-alignself-height-collapse.md (accepted, indexed) + flow-109 plan R4 marked SUPERSEDED + OpenTUI specification layout invariant"
+    },
+    {
+      "at": "2026-07-21T23:33:53.022Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T23:33:54.941Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
     }
   ]
 }
