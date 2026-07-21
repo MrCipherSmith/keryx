@@ -42,6 +42,8 @@ import { saveApiKey, saveShellConfig } from "../lib/shell-config";
 import {
   allowShellPattern,
   isShellCommandAllowed,
+  loadShellPermissionsWithAudit,
+  shellPermissionsPath,
   loadShellPermissions,
   parseShellExecCommand,
   suggestShellPatterns,
@@ -321,42 +323,55 @@ export async function pickShellApproval(
   dock: Box,
   command: string,
   loadContext: ApprovalContextLoader,
+  destructive = false,
 ): Promise<ShellApprovalChoice> {
-  const { exact, prefix } = suggestShellPatterns(command);
   let context: Promise<string> | undefined;
   try {
     context = loadContext(command);
   } catch {
     context = undefined; // a loader that throws synchronously simply has no context
   }
+  const { exact, prefix, offerExact, offerPrefix } = suggestShellPatterns(command);
+  // A grant that cannot be given safely is not shown at all: an "always" option
+  // the user picks and that is then silently refused would be worse than absent.
+  // Destructive commands offer neither (ADR-0008).
+  const options = [
+    {
+      id: "once",
+      label: "Allow once",
+      description: "Run only this time",
+      recommended: true,
+    },
+    ...(offerExact
+      ? [
+          {
+            id: "always-exact",
+            label: `Always allow “${exact.length > 40 ? `${exact.slice(0, 37)}…` : exact}”`,
+            description: "Remember exact command (permissions.json)",
+          },
+        ]
+      : []),
+    ...(offerPrefix
+      ? [
+          {
+            id: "always-prefix",
+            label: `Always allow “${prefix}”`,
+            description: "Remember this prefix (permissions.json)",
+          },
+        ]
+      : []),
+    {
+      id: "deny",
+      label: "Deny",
+      description: "Do not run",
+    },
+  ];
   const id = await showComposerChoice(otui, r, dock, {
-    title: "Allow shell command?",
+    title: destructive ? "⚠ DESTRUCTIVE command — allow?" : "Allow shell command?",
     subtitle: command.length > 120 ? `${command.slice(0, 117)}…` : command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
-    options: [
-      {
-        id: "once",
-        label: "Allow once",
-        description: "Run only this time",
-        recommended: true,
-      },
-      {
-        id: "always-exact",
-        label: `Always allow “${exact.length > 40 ? `${exact.slice(0, 37)}…` : exact}”`,
-        description: "Remember exact command (permissions.json)",
-      },
-      {
-        id: "always-prefix",
-        label: `Always allow “${prefix}”`,
-        description: "Remember this prefix (permissions.json)",
-      },
-      {
-        id: "deny",
-        label: "Deny",
-        description: "Do not run",
-      },
-    ],
+    options,
   });
   if (id === "once" || id === "always-exact" || id === "always-prefix" || id === "deny") {
     return id;
@@ -722,6 +737,8 @@ export async function launchTuiAgentShell(opts: {
   let uid = 0;
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  /** The stored-permission migration warning is shown at most once per session. */
+  let permissionMigrationShown = false;
   // The chrome can only be mounted once a provider/model is chosen (the startup
   // picker runs on the bare renderer), yet `onDestroy` may fire before that —
   // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
@@ -960,7 +977,7 @@ export async function launchTuiAgentShell(opts: {
     // The flow-041 advisory context (blast radius + memory note) is loaded through
     // this loader — the same information the readline shell shows above its prompt.
     const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
-    io.requestApproval = async (tool, inputJson) => {
+    io.requestApproval = async (tool, inputJson, meta) => {
       // Multi-agent spawn: auto-allow read_only; ask for general.
       if (tool === "spawn_subagent") {
         let mode = "read_only";
@@ -1019,11 +1036,43 @@ export async function launchTuiAgentShell(opts: {
       }
 
       const cmd = parseShellExecCommand(inputJson);
+      const destructive = meta?.destructive === true;
       // Auto-allow from session + disk (re-read disk so external edits apply).
-      for (const p of loadShellPermissions().allow) {
+      // The audit surfaces stored patterns the current rules refuse — once per
+      // session, BEFORE the first auto-approve, so a grant that silently stopped
+      // applying is never mistaken for one that still does.
+      const audit = loadShellPermissionsWithAudit();
+      for (const p of audit.permissions.allow) {
         sessionShellAllow.add(p);
       }
-      if (isShellCommandAllowed(cmd, [...sessionShellAllow])) {
+      if (!permissionMigrationShown && audit.rejected.length > 0) {
+        permissionMigrationShown = true;
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: otui.t`${otui.yellow(
+              `⚠ ${audit.rejected.length} saved shell permission(s) are no longer honoured — they granted arbitrary execution:`,
+            )}`,
+          }),
+        );
+        for (const rej of audit.rejected) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.dim(`    “${rej.pattern}” — ${rej.reason}`)}`,
+            }),
+          );
+        }
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: otui.t`${otui.dim(
+              `    They are still in ${shellPermissionsPath()} — edit or remove them there.`,
+            )}`,
+          }),
+        );
+      }
+      if (!destructive && isShellCommandAllowed(cmd, [...sessionShellAllow])) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
@@ -1042,7 +1091,7 @@ export async function launchTuiAgentShell(opts: {
       setMainAgent("blocked", "approval");
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const choice = await pickShellApproval(otui, r, chrome.dock, cmd, approvalContext);
+      const choice = await pickShellApproval(otui, r, chrome.dock, cmd, approvalContext, destructive);
       input.focus();
 
       if (choice === "deny") {
@@ -1060,12 +1109,19 @@ export async function launchTuiAgentShell(opts: {
       if (choice === "always-exact" || choice === "always-prefix") {
         const { exact, prefix } = suggestShellPatterns(cmd);
         const pattern = choice === "always-exact" ? exact : prefix;
-        allowShellPattern(pattern);
-        sessionShellAllow.add(pattern);
+        // Refused grants return "" — the command still runs this once, but the
+        // transcript must never claim a grant that was not stored.
+        const stored = allowShellPattern(pattern);
+        if (stored.length > 0) {
+          sessionShellAllow.add(stored);
+        }
         transcript.add(
           new otui.TextRenderable(r, {
             id: `av${uid++}`,
-            content: otui.t`${otui.green(`approved · remembered “${pattern}”`)}`,
+            content:
+              stored.length > 0
+                ? otui.t`${otui.green(`approved · remembered “${stored}”`)}`
+                : otui.t`${otui.yellow(`approved once · “${pattern}” cannot be remembered`)}`,
           }),
         );
         setMainAgent("running", "shell");

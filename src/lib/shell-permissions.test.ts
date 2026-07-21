@@ -48,9 +48,16 @@ test("matchShellPattern: * matches newlines (heredoc / multiline shell_exec)", (
   expect(matchShellPattern("bash *", heredoc)).toBe(false);
   // exact full multiline
   expect(matchShellPattern(heredoc, heredoc)).toBe(true);
-  // second similar heredoc still matches prefix after always-allow cat *
+
+  // The raw glob still matches — matchShellPattern is only string matching.
+  // The GATE no longer accepts it: since flow 115 a command carrying unquoted
+  // metacharacters (`>` and `<<` here) is never auto-approved, so a heredoc asks
+  // every time. Deliberate fail-closed trade: separating a redirect from a
+  // heredoc body needs a shell parser, a worse failure surface than one extra
+  // confirmation. See shell-permissions-hardening.test.ts.
   const heredoc2 = "cat > /tmp/run_all_probes.sh << 'SCRIPT'\n#!/bin/bash\necho B-F\nSCRIPT";
-  expect(isShellCommandAllowed(heredoc2, ["cat *"])).toBe(true);
+  expect(matchShellPattern("cat *", heredoc2)).toBe(true);
+  expect(isShellCommandAllowed(heredoc2, ["cat *"])).toBe(false);
 });
 
 test("isShellCommandAllowed scans allow list", () => {
@@ -62,18 +69,28 @@ test("isShellCommandAllowed scans allow list", () => {
 });
 
 test("suggestShellPatterns: exact + first-token prefix", () => {
+  // Since flow 115 each suggestion also says whether it may be OFFERED.
   expect(suggestShellPatterns("keryx wiki index")).toEqual({
     exact: "keryx wiki index",
     prefix: "keryx *",
+    offerExact: true,
+    offerPrefix: true,
   });
+  // `git *` is no longer offerable (git -c/-exec run arbitrary commands), but
+  // the exact command still is.
   expect(suggestShellPatterns("  git   status  --short ")).toEqual({
     exact: "git status --short",
     prefix: "git *",
+    offerExact: true,
+    offerPrefix: false,
   });
+  // A heredoc carries metacharacters ⇒ neither grant is offerable.
   const multi = "cat > /tmp/x.sh << 'EOF'\nline2\nEOF";
   expect(suggestShellPatterns(multi)).toEqual({
     exact: multi,
     prefix: "cat *",
+    offerExact: false,
+    offerPrefix: true,
   });
 });
 
