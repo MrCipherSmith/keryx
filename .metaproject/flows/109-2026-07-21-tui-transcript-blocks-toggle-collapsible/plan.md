@@ -90,6 +90,15 @@ Two independently testable halves:
 - **D-4 — Bounded retention.** Full text is retained for at most `maxBlocks`
   blocks / `maxRetainedChars` total; evicted blocks keep their summary and show
   `(output no longer retained)` on expand. Prevents an unbounded session leak.
+  **Refined in T6 (review F2):** a SINGLE payload larger than
+  `maxRetainedChars` is clipped to its head on `register` (`truncated: true`,
+  body suffixed with `… (output truncated at the retention cap)`) instead of
+  being admitted whole. Eviction alone could not enforce the char cap, because
+  the newest retained block is deliberately never evicted — so one oversized
+  tool result used to escape the bound entirely and stay resident for the
+  process lifetime. Clipping keeps the head visible (a user expanding a huge
+  output still sees its beginning) AND makes the cap a hard bound; the registry
+  now exposes `retainedChars()` so it can be asserted.
 - **D-5 — Sticky-scroll suspension.** Expanding a non-newest block suspends
   `stickyScroll` and restores the prior scroll offset, so the viewport does not
   jump to the bottom (alternate-screen mode has no scrollback to recover from).

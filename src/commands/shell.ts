@@ -471,9 +471,11 @@ export const EXPAND_MAX_LINES = 200;
  * The readline shell's `/expand` rendering (AC10). Lifted out of the
  * `runAgentRepl` closure so it is unit-testable, and routed through the SAME
  * `src/lib` helpers the TUI transcript uses so the two shells cannot drift:
- * the header comes from `blockLabel` (identical `▾ <kind> (n lines)` wording as
- * a expanded TUI block) and a body that sniffs as a unified diff goes through
- * `renderDiff` instead of being flatly dimmed.
+ * the header comes from `blockLabel` — the same `▾ <kind> (n lines)` FORM as an
+ * expanded TUI block, though the wording differs by design: readline passes the
+ * tool name as `kind` (`▾ read_file (3 lines)`) while the TUI passes the block
+ * class (`▾ output (3 lines)`) — and a body that sniffs as a unified diff goes
+ * through `renderDiff` instead of being flatly dimmed.
  *
  * Returns the gutter-indented, newline-terminated text to print, or `undefined`
  * when there is nothing to expand — the caller keeps owning the "Nothing to

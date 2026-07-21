@@ -7,7 +7,10 @@
 // via dynamic import; the tests skip when it is absent.
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
+  attachBlockIo,
   composerHeightForLines,
   COMPOSER_MAX_ROWS,
   COMPOSER_MIN_ROWS,
@@ -17,8 +20,9 @@ import {
   isShellApproved,
   onKeypress,
   selectBoxHeight,
+  type BlockSink,
 } from "./tui-shell";
-import { createBlockNavController, createBlockRegistry, createBlockView, type BlockView } from "./transcript-blocks";
+import { createBlockMount, createBlockNavController, createBlockRegistry } from "./transcript-blocks";
 import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
@@ -361,6 +365,10 @@ function fgOf(frame: SpanFrame, needle: string): [number, number, number, number
  * Mount the shell's block wiring headlessly. `schedule` runs inline so the
  * controller's post-layout scroll re-assert is deterministic instead of racing a
  * `setTimeout`; every other port is the real renderable the shell passes.
+ *
+ * `add` is NOT a replica any more (T6/F3): it is the shell's own `addBlock`
+ * composition — the real `createBlockMount` plus `nav.paint` — so a regression
+ * in register → mount → paint fails here.
  */
 async function mountBlockHarness(
   otui: OtuiBundle,
@@ -373,6 +381,7 @@ async function mountBlockHarness(
     registry: ReturnType<typeof createBlockRegistry>;
     nav: ReturnType<typeof createBlockNavController>;
     add: (input: { kind: string; summary: string; fullText: string }) => string;
+    addBlock: BlockSink;
     copied: string[];
     toasts: string[];
     state: { menuNav: boolean; overlay: boolean; composerFocusCalls: number };
@@ -429,13 +438,13 @@ async function mountBlockHarness(
   textarea.focus();
 
   const registry = createBlockRegistry();
-  const views = new Map<string, BlockView>();
+  const mount = createBlockMount(otui.core, renderer, scroll.content, registry);
   const copied: string[] = [];
   const toasts: string[] = [];
   const state = { menuNav: false, overlay: false, composerFocusCalls: 0 };
   const nav = createBlockNavController({
     registry,
-    view: (id) => views.get(id),
+    view: (id) => mount.view(id),
     scroll,
     // The shell's own guard expression: `(menu.visible && menuNav) || overlayActive()`.
     isBlocked: () => (menu.visible && state.menuNav) || state.overlay,
@@ -453,16 +462,14 @@ async function mountBlockHarness(
     schedule: (run) => run(),
   });
   const unsubscribe = onKeypress(renderer, nav.handleKey);
-  const add = (input: { kind: string; summary: string; fullText: string }): string => {
-    const id = registry.register({ ...input, lineCount: input.fullText.split("\n").length });
-    const registered = registry.get(id);
-    if (registered === undefined) {
-      throw new Error(`block ${id} vanished from the registry`);
-    }
-    views.set(id, createBlockView(otui.core, renderer, scroll.content, registered, { hint: "ctrl+o" }));
+  // The shell's own `addBlock` (tui-shell.ts): mount, then paint through nav.
+  const addBlock: BlockSink = (input, options = {}) => {
+    const id = mount.add(input, options);
     nav.paint(id);
     return id;
   };
+  const add = (input: { kind: string; summary: string; fullText: string }): string =>
+    addBlock({ ...input, lineCount: input.fullText.split("\n").length }, { hint: "ctrl+o" });
 
   return {
     ...setup,
@@ -472,6 +479,7 @@ async function mountBlockHarness(
     registry,
     nav,
     add,
+    addBlock,
     copied,
     toasts,
     state,
@@ -481,6 +489,80 @@ async function mountBlockHarness(
     },
   };
 }
+
+test("AC1: the REAL io wiring retains a tool result's full output (headless, through runAgentTurn)", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  // The shipped path end to end: `createTuiAgentIo` + `attachBlockIo` + the real
+  // `createBlockMount`, driven by `runAgentTurn`. No hand-written IO handlers —
+  // a wrong field / wrong lineCount / missing fullText in `attachBlockIo` fails
+  // here (T6/F3: the previous proof went through a harness replica).
+  const root = await mkdtemp(join(tmpdir(), "keryx-tui-blocks-"));
+  const body = ["line one", "line two", "line three", "line four"].join("\n");
+  await writeFile(join(root, "notes.txt"), body, "utf8");
+
+  const h = await mountBlockHarness(otui, { width: 80, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  const chrome = { reasoning: 0, calls: 0, results: 0 };
+  attachBlockIo(io, h.addBlock, {
+    onReasoning: () => {
+      chrome.reasoning += 1;
+    },
+    onToolCall: () => {
+      chrome.calls += 1;
+    },
+    onToolResult: () => {
+      chrome.results += 1;
+    },
+  });
+
+  const provider = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "step one\nstep two" },
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "read_file" },
+      { kind: "tool_call_end", toolCallId: "c1", input: '{"path":"notes.txt"}' },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(root),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+
+  await runAgentTurn(io, deps, [], "read the notes");
+  await h.flush();
+
+  const blocks = h.registry.list();
+  const output = blocks.find((b) => b.kind === "output");
+  const call = blocks.find((b) => b.kind === "tool");
+  expect(output).toBeDefined();
+  expect(call).toBeDefined();
+  if (output === undefined || call === undefined) {
+    throw new Error(`no tool blocks registered: ${blocks.map((b) => b.kind).join(",")}`);
+  }
+
+  // AC1: the payload the shell used to DISCARD is recoverable after render.
+  expect(h.registry.bodyText(output.id)).toBe(body);
+  expect(output.lineCount).toBe(4);
+  expect(output.summary).toContain("line one"); // collapsed header keeps the preview
+  expect(output.collapsed).toBe(true);
+  expect(h.registry.bodyText(call.id)).toBe('{"path":"notes.txt"}'); // raw input json
+  expect(chrome).toEqual({ reasoning: 1, calls: 1, results: 1 }); // shell chrome still ran
+
+  // …and expanding it through the real nav path paints the retained text.
+  h.nav.setCollapsed(output.id, false);
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("line four");
+  h.destroy();
+  await rm(root, { recursive: true, force: true });
+});
 
 test("AC3: Ctrl+O enters block-nav, ↑/↓ move focus, Enter expands, y copies, Esc restores the composer", async () => {
   const otui = await loadOpenTui();

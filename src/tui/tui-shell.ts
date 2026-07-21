@@ -4,7 +4,9 @@
 // agent.ts): it renders into an OpenTUI transcript and drives `runAgentTurn` from
 // a `split-footer` composer (a fixed footer input over a scrolling main region —
 // the Pi/grok layout). Chrome parity with the readline shell: assistant text →
-// native `MarkdownRenderable`; `● keryx` role header; `⚙ tool(args)` (via the pure
+// one sibling renderable per markdown segment, styled by the worker-free
+// `markdownToChunks` (the native `MarkdownRenderable` is deliberately NOT used —
+// flow 109 decision D-2); `● keryx` role header; `⚙ tool(args)` (via the pure
 // `summarizeToolArgs`); collapsed tool output (`collapseToolOutput`); dim
 // `⋯ thinking` reasoning; dim `↑in ↓out tokens`. The deterministic driver and the
 // pure helpers are unchanged. Gutter = the transcript box `padding`.
@@ -53,14 +55,13 @@ import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import { segmentMarkdown, type MdSegment } from "../lib/md-blocks";
 import {
+  createBlockMount,
   createBlockNavController,
   createBlockRegistry,
-  createBlockView,
   createSegmentView,
   createStreamSegmenter,
   markdownToChunks,
   type BlockState,
-  type BlockView,
   type SegmentView,
 } from "./transcript-blocks";
 
@@ -82,10 +83,13 @@ type StyledContent = string | ReturnType<OpenTui["t"]>;
 
 /**
  * Build an `AgentIO` that renders into an OpenTUI `transcript` box with chrome
- * parity: streamed tokens (`write`) accumulate into a native `MarkdownRenderable`;
- * tool calls/results, reasoning, usage, and system lines append styled blocks.
+ * parity: streamed tokens (`write`) go through `createStreamSegmenter` and paint
+ * one `SegmentView` per markdown segment (prose via `markdownToChunks`, a fence
+ * as a framed language-tagged box — no `MarkdownRenderable`, D-2); tool
+ * calls/results, reasoning, usage, and system lines append styled one-liners.
  * Exported so the headless test can drive the same render path through
- * `runAgentTurn` without a real TTY.
+ * `runAgentTurn` without a real TTY. Pass the reasoning/tool hooks through
+ * {@link attachBlockIo} to upgrade those one-liners into retained blocks (AC1).
  */
 export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: Box): AgentIO {
   let seq = 0;
@@ -198,6 +202,68 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     },
     onSystem: (text) => append(text.includes("[error]") ? otui.t`${otui.red(text)}` : otui.t`${otui.dim(text)}`),
   };
+}
+
+/** Registers a block and mounts its view; returns the new block id. */
+export type BlockSink = (
+  input: { kind: string; summary: string; fullText: string; lineCount: number },
+  options?: { hint?: string; tone?: "dim" | "cyan" | "red" },
+) => string;
+
+/** Shell chrome that runs BEFORE each block is registered (busy phase, fleet). */
+export interface BlockIoChrome {
+  onReasoning?: (text: string) => void;
+  onToolCall?: (name: string, input: string) => void;
+  onToolResult?: AgentIO["onToolResult"];
+}
+
+/**
+ * Upgrade the reasoning / tool-call / tool-result hooks of `io` so each one is
+ * registered as a RETAINED, addressable block instead of a one-line renderable
+ * whose text is discarded (AC1). This is the real wiring the shell installs —
+ * it lives here, exported, so a headless test can drive `runAgentTurn` through
+ * it and assert the recovered payload, rather than proving a replica.
+ *
+ * The `createTuiAgentIo` defaults are REPLACED, not chained: they append their
+ * own line and would double-print. `chrome` keeps the shell's per-event side
+ * effects (busy phase, fleet status) out of this mapping.
+ */
+export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoChrome = {}): AgentIO {
+  io.onReasoning = (text) => {
+    chrome.onReasoning?.(text);
+    const body = text.trim();
+    const lineCount = body.split("\n").filter((l) => l.trim().length > 0).length;
+    addBlock({ kind: "thought", summary: "", fullText: body, lineCount }, { hint: "/think · ctrl+o" });
+  };
+  io.onToolCall = (name, input) => {
+    chrome.onToolCall?.(name, input);
+    const args = summarizeToolArgs(input);
+    // The block retains the RAW input json; the header keeps the compact call.
+    addBlock(
+      {
+        kind: "tool",
+        summary: `⚙ ${args.length > 0 ? `${name}(${args})` : `${name}()`}`,
+        fullText: input,
+        lineCount: input.split("\n").length,
+      },
+      { hint: "ctrl+o", tone: "cyan" },
+    );
+  };
+  io.onToolResult = (name, result) => {
+    chrome.onToolResult?.(name, result);
+    const { summary, lineCount, hidden } = collapseToolOutput(result.output);
+    const more = hidden > 0 ? ` · +${hidden} more` : "";
+    addBlock(
+      {
+        kind: "output",
+        summary: `${result.isError ? "✗" : "↳"} ${summary}${more}`,
+        fullText: result.output,
+        lineCount,
+      },
+      { hint: "/expand · ctrl+o", ...(result.isError ? { tone: "red" as const } : {}) },
+    );
+  };
+  return io;
 }
 
 /** True only for an explicit `y`/`yes` (case-insensitive). Default-deny otherwise. */
@@ -867,7 +933,7 @@ export async function launchTuiAgentShell(opts: {
     // RETAIN their full text (bounded — D-4) instead of discarding it, so they
     // can be expanded in place, navigated with the keyboard and copied.
     const blocks = createBlockRegistry();
-    const blockViews = new Map<string, BlockView>();
+    const blockMount = createBlockMount(otui, r, transcript, blocks);
     // The whole modal navigation mode (focus guard, key dispatch, sticky-scroll
     // suspension) lives in `transcript-blocks.ts` so it is reachable from a
     // headless test; the closure keeps only wiring (risk R5). `overlayActive`,
@@ -875,7 +941,7 @@ export async function launchTuiAgentShell(opts: {
     // callbacks below are only ever invoked from a keypress, long after.
     const nav = createBlockNavController({
       registry: blocks,
-      view: (id) => blockViews.get(id),
+      view: (id) => blockMount.view(id),
       scroll,
       isBlocked: () => (menu.visible && menuNav) || overlayActive(),
       focusComposer: () => input.focus(),
@@ -891,16 +957,8 @@ export async function launchTuiAgentShell(opts: {
     const copyBlock = (id: string): boolean => nav.copy(id);
 
     /** Register + render a new collapsed block at the end of the transcript. */
-    const addBlock = (
-      input: { kind: string; summary: string; fullText: string; lineCount: number },
-      options: { hint?: string; tone?: "dim" | "cyan" | "red" } = {},
-    ): string => {
-      const id = blocks.register(input);
-      const state = blocks.get(id);
-      if (state === undefined) {
-        return id;
-      }
-      blockViews.set(id, createBlockView(otui, r, transcript, state, options));
+    const addBlock: BlockSink = (input, options = {}) => {
+      const id = blockMount.add(input, options);
       nav.paint(id);
       return id;
     };
@@ -923,51 +981,27 @@ export async function launchTuiAgentShell(opts: {
       sbContext.content = otui.t`${otui.dim(`${(totalIn + totalOut).toLocaleString()} tokens`)}`;
     };
     // Reasoning / tool call / tool result all render as collapsed BLOCKS whose
-    // full text is retained (AC1). Do NOT call createTuiAgentIo's defaults — they
-    // append their own one-line renderable and would double-print.
-    io.onReasoning = (text) => {
-      setBusyPhase("thinking");
-      setMainAgent("running", "thinking");
-      const body = text.trim();
-      const n = body.split("\n").filter((l) => l.trim().length > 0).length;
-      addBlock(
-        { kind: "thought", summary: "", fullText: body, lineCount: n },
-        { hint: "/think · ctrl+o" },
-      );
-    };
-    io.onToolCall = (name, input) => {
-      const args = summarizeToolArgs(input);
-      const short = args.length > 40 ? `${args.slice(0, 37)}…` : args;
-      setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
-      // Keep tool names intact for humanFleetPhase ("tool: shell_exec").
-      setMainAgent("running", name.length > 20 ? `${name.slice(0, 18)}…` : name);
-      // The block retains the RAW input json; the header keeps the compact call.
-      addBlock(
-        {
-          kind: "tool",
-          summary: `⚙ ${args.length > 0 ? `${name}(${args})` : `${name}()`}`,
-          fullText: input,
-          lineCount: input.split("\n").length,
-        },
-        { hint: "ctrl+o", tone: "cyan" },
-      );
-    };
-    io.onToolResult = (name, result) => {
-      setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
-      // Stay "running" between tools (multi-step turn); only terminal on turn end.
-      setMainAgent("running", result.isError ? `err:${name.slice(0, 14)}` : "waiting");
-      const { summary, lineCount, hidden } = collapseToolOutput(result.output);
-      const more = hidden > 0 ? ` · +${hidden} more` : "";
-      addBlock(
-        {
-          kind: "output",
-          summary: `${result.isError ? "✗" : "↳"} ${summary}${more}`,
-          fullText: result.output,
-          lineCount,
-        },
-        { hint: "/expand · ctrl+o", ...(result.isError ? { tone: "red" as const } : {}) },
-      );
-    };
+    // full text is retained (AC1). The event → block mapping itself lives in the
+    // exported `attachBlockIo` (headlessly testable); the closure contributes
+    // only the busy-phase / fleet chrome that needs these locals.
+    attachBlockIo(io, addBlock, {
+      onReasoning: () => {
+        setBusyPhase("thinking");
+        setMainAgent("running", "thinking");
+      },
+      onToolCall: (name, toolInput) => {
+        const args = summarizeToolArgs(toolInput);
+        const short = args.length > 40 ? `${args.slice(0, 37)}…` : args;
+        setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
+        // Keep tool names intact for humanFleetPhase ("tool: shell_exec").
+        setMainAgent("running", name.length > 20 ? `${name.slice(0, 18)}…` : name);
+      },
+      onToolResult: (name, result) => {
+        setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
+        // Stay "running" between tools (multi-step turn); only terminal on turn end.
+        setMainAgent("running", result.isError ? `err:${name.slice(0, 14)}` : "waiting");
+      },
+    });
     io.onSystem = (text) => {
       // Surface budget/stop/errors on the main agent slot.
       if (/\[error\]|\[budget\]|\[stopped\]/i.test(text)) {
@@ -1887,9 +1921,10 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/copy") {
-          // In nav mode the focused block wins; otherwise the newest block —
-          // the markdown payload the user just watched arrive.
-          const target = (navMode() ? blocks.focused() : undefined) ?? newestBlock();
+          // Always the newest block: a slash command can only be submitted from
+          // the composer, and in nav mode the composer is blurred — so there is
+          // no reachable "focused block wins" case to honor here (`y` covers it).
+          const target = newestBlock();
           if (target === undefined || !copyBlock(target.id)) {
             io.onSystem?.("Nothing to copy yet.\n");
           }

@@ -103,8 +103,11 @@ CliRenderer.root
     focus back.
     `/expand` is **not** replaced: it remains in both shells (it expands the
     newest tool output without entering nav mode), and `/copy` copies the newest
-    markdown-payload block. Both shells render the header through the shared
-    `blockLabel` helper, so the TUI and readline forms cannot drift.
+    block — a thought / tool / output block, since assistant markdown renders as
+    segment views and is never registered as a block. Both shells render the
+    header through the shared `blockLabel` helper (same form; the readline
+    `/expand` header names the tool, the TUI names the block class), so the two
+    cannot drift structurally.
   - reasoning → dim `⋯ thinking` block (from `onReasoning`).
   - system/usage → dim lines (`↑in ↓out tokens`, `[stopped] …`, errors).
 

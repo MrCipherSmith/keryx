@@ -23,6 +23,8 @@ import {
   fenceInfo,
   looksLikeUnifiedDiff,
   payloadKind,
+  splitLines,
+  stripTrailingCr,
   type MdSegment,
 } from "../lib/md-blocks";
 
@@ -30,6 +32,12 @@ import {
 
 /** Shown instead of a block's body once bounded retention has dropped it. */
 export const EVICTED_BLOCK_TEXT = "(output no longer retained)";
+
+/** Shown for an id the registry has never seen — distinct from an eviction. */
+export const UNKNOWN_BLOCK_TEXT = "(no such block)";
+
+/** Appended to a body that was clipped to fit `maxRetainedChars` on register. */
+export const TRUNCATED_BLOCK_NOTICE = "… (output truncated at the retention cap)";
 
 /** What a caller hands to `register`. */
 export interface BlockInput {
@@ -48,16 +56,26 @@ export interface BlockState {
   id: string;
   kind: string;
   summary: string;
+  /**
+   * The retained payload — a PREFIX of the registered text when `truncated`.
+   * Absent once the block has been evicted.
+   */
   fullText?: string | undefined;
   lineCount: number;
   collapsed: boolean;
   retained: boolean;
+  /** True when the payload exceeded `maxRetainedChars` and was clipped (D-4). */
+  truncated: boolean;
 }
 
 export interface BlockRegistryOptions {
   /** Max blocks holding their `fullText` at once. */
   maxBlocks?: number;
-  /** Max total retained characters across all blocks. */
+  /**
+   * Hard cap on total retained characters across all blocks. A single payload
+   * larger than the cap is CLIPPED on register (never admitted whole), so the
+   * cap is a real bound rather than a best effort.
+   */
   maxRetainedChars?: number;
 }
 
@@ -77,8 +95,15 @@ export interface BlockRegistry {
   focused(): BlockState | undefined;
   /** Every block, oldest first — evicted ones included. */
   list(): BlockState[];
-  /** The body to show/copy: the payload, or the evicted marker. */
+  /**
+   * The body to show/copy: the payload (plus a truncation notice when it was
+   * clipped), the evicted marker, or the unknown-id marker. The three are
+   * distinct strings so a caller can tell "dropped by retention" from "never
+   * existed" and never report a marker as a successful copy.
+   */
   bodyText(id: string): string;
+  /** Total retained characters right now — never above `maxRetainedChars`. */
+  retainedChars(): number;
 }
 
 // Defaults sized for a long session: a few dozen blocks, a few hundred KB. Both
@@ -113,8 +138,10 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
   };
 
   // Evict oldest-first until BOTH bounds hold. The newest retained block is
-  // never evicted: a single oversized payload would otherwise be dropped the
-  // instant it arrived, which reads as a bug rather than as a retention policy.
+  // never evicted wholesale: a single oversized payload would otherwise be
+  // dropped the instant it arrived, which reads as a bug rather than as a
+  // retention policy. It does not weaken the char bound — `register` already
+  // clipped that payload to the cap, so "keep only the newest" always fits.
   const enforceBounds = (): void => {
     for (;;) {
       if (retainedCount() <= maxBlocks && retainedChars() <= maxRetainedChars) {
@@ -133,14 +160,19 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
     register: (block) => {
       seq += 1;
       const id = `blk${seq}`;
+      // A payload larger than the whole cap is clipped to its HEAD rather than
+      // rejected: expanding a huge tool output must still show its beginning,
+      // and the cap must still hold afterwards (AC8 / D-4).
+      const truncated = block.fullText.length > maxRetainedChars;
       blocks.push({
         id,
         kind: block.kind,
         summary: block.summary,
-        fullText: block.fullText,
+        fullText: truncated ? block.fullText.slice(0, maxRetainedChars) : block.fullText,
         lineCount: block.lineCount,
         collapsed: true,
         retained: true,
+        truncated,
       });
       // The FIRST block takes focus; later registrations never move it, so a
       // turn finishing mid-navigation cannot yank the user somewhere else.
@@ -190,7 +222,17 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
       return block === undefined ? undefined : snapshot(block);
     },
     list: () => blocks.map(snapshot),
-    bodyText: (id) => find(id)?.fullText ?? EVICTED_BLOCK_TEXT,
+    bodyText: (id) => {
+      const block = find(id);
+      if (block === undefined) {
+        return UNKNOWN_BLOCK_TEXT;
+      }
+      if (block.fullText === undefined) {
+        return EVICTED_BLOCK_TEXT;
+      }
+      return block.truncated ? `${block.fullText}\n${TRUNCATED_BLOCK_NOTICE}` : block.fullText;
+    },
+    retainedChars,
   };
 }
 
@@ -220,6 +262,14 @@ export interface StreamSegmenter {
  * fence arrives and is never revisited, and the caller only has to repaint the
  * single trailing segment. Fence rules come from `fenceInfo`, so this and
  * `segmentMarkdown` cannot drift.
+ *
+ * DELIBERATE divergence from `segmentMarkdown` (pinned by test): a trailing
+ * PARTIAL line is not fence-tested, so mid-stream `push("a\n```ts")` reports one
+ * text segment `"a\n```ts"` where `segmentMarkdown` of the same string reports
+ * text + an open code segment. A partial line is not yet knowable — `` ``` ``
+ * may still grow into inline prose — and the marker is replaced by the framed
+ * block on the very next token that completes the line. Freezing a segment on a
+ * guess would mean un-freezing it, which is exactly what R1 forbids.
  */
 export function createStreamSegmenter(): StreamSegmenter {
   let frozen: MdSegment[] = [];
@@ -258,7 +308,7 @@ export function createStreamSegmenter(): StreamSegmenter {
   };
 
   const state = (): StreamSegments => {
-    const pendingLines = partial.length > 0 ? [...lines, partial] : lines;
+    const pendingLines = partial.length > 0 ? [...lines, stripTrailingCr(partial)] : lines;
     const pending = pendingLines.join("\n");
     if (inCode) {
       return { segments: [...frozen, { kind: "code", lang, body: pending }], frozen: frozen.length };
@@ -275,7 +325,7 @@ export function createStreamSegmenter(): StreamSegmenter {
       const parts = partial.split("\n");
       partial = parts.pop() ?? "";
       for (const line of parts) {
-        consume(line);
+        consume(stripTrailingCr(line)); // CRLF chunks segment like LF ones
       }
       return state();
     },
@@ -314,7 +364,7 @@ function lineCountOf(text: string): number {
 
 /** `body` clipped to `MAX_BODY_LINES` with a trailing "N more lines" notice. */
 function clipBody(text: string): string {
-  const lines = text.replace(/\n+$/, "").split("\n");
+  const lines = splitLines(text.replace(/\n+$/, ""));
   if (lines.length <= MAX_BODY_LINES) {
     return lines.join("\n");
   }
@@ -352,7 +402,7 @@ export function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
     }
     plain(text.slice(last));
   };
-  const lines = md.split("\n");
+  const lines = splitLines(md);
   let inCode = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
@@ -388,7 +438,7 @@ export function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
 /** Unified diff → chunks: green add, red del, cyan hunk, dim file headers. */
 export function diffChunks(otui: OpenTui, text: string): Chunk[] {
   const out: Chunk[] = [];
-  const lines = text.split("\n");
+  const lines = splitLines(text);
   for (const [index, line] of lines.entries()) {
     if (index > 0) {
       out.push(...otui.stringToStyledText("\n").chunks);
@@ -416,7 +466,7 @@ export function diffChunks(otui: OpenTui, text: string): Chunk[] {
 /** Flat dim body — the code payload, with no tree-sitter highlighting (D-2). */
 function codeChunks(otui: OpenTui, text: string): Chunk[] {
   const out: Chunk[] = [];
-  for (const [index, line] of text.split("\n").entries()) {
+  for (const [index, line] of splitLines(text).entries()) {
     if (index > 0) {
       out.push(...otui.stringToStyledText("\n").chunks);
     }
@@ -652,6 +702,39 @@ export function createBlockView(
   };
 }
 
+/** Registry + mounted views for one transcript: what the shell's IO writes to. */
+export interface BlockMount {
+  /** Register `input` and mount its (collapsed) view; returns the block id. */
+  add(input: BlockInput, options?: BlockViewOptions): string;
+  /** The mounted view for a block id — the nav controller's `view` port. */
+  view(id: string): BlockView | undefined;
+}
+
+/**
+ * The register → mount step of the shell's block wiring, extracted so a headless
+ * test drives the SAME code the shell does instead of a hand-written replica.
+ * Painting stays with the caller (the nav controller owns the focus highlight).
+ */
+export function createBlockMount(
+  otui: OpenTui,
+  renderer: Renderer,
+  parent: Box,
+  registry: BlockRegistry,
+): BlockMount {
+  const views = new Map<string, BlockView>();
+  return {
+    add: (input, options = {}) => {
+      const id = registry.register(input);
+      const state = registry.get(id);
+      if (state !== undefined) {
+        views.set(id, createBlockView(otui, renderer, parent, state, options));
+      }
+      return id;
+    },
+    view: (id) => views.get(id),
+  };
+}
+
 // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 --------------------
 //
 // Extracted from the `launchTuiAgentShell` closure in flow 109/T5 so the mode is
@@ -719,7 +802,11 @@ export interface BlockNavController {
   /** Collapse/expand one block, preserving the viewport for non-newest ones. */
   setCollapsed(id: string, collapsed: boolean): void;
   toggle(id: string): void;
-  /** Copy a block's retained body; `false` when clipboard access is refused. */
+  /**
+   * Copy a block's retained body. `false` — with no success toast — when the id
+   * is unknown, when retention already dropped the payload, or when clipboard
+   * access is refused.
+   */
   copy(id: string): boolean;
   /** The newest block of `kind` (or the newest block of any kind). */
   newest(kind?: string): BlockState | undefined;
@@ -809,10 +896,20 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     }
   };
 
+  // Never report a marker string as a successful copy: an evicted or unknown
+  // block has nothing to put on the clipboard, so it toasts the truth and fails.
   const copy = (id: string): boolean => {
+    const state = registry.get(id);
+    if (state === undefined) {
+      return false;
+    }
+    if (!state.retained) {
+      toast("Output no longer retained");
+      return false;
+    }
     try {
       copyText(registry.bodyText(id));
-      toast("Copied to clipboard");
+      toast(state.truncated ? "Copied to clipboard (truncated)" : "Copied to clipboard");
       return true;
     } catch {
       return false; // clipboard access not permitted — ignore
