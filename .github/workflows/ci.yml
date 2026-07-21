@@ -28,3 +28,36 @@ jobs:
 
       - name: Security red-team FN-rate gate (Block E / E6)
         run: bun ./src/cli.ts security eval --corpus all
+
+  linux-sandbox:
+    # Live validation of the LINUX OS-sandbox path (bubblewrap). The `check` job
+    # skips every sandbox smoke because they are gated behind
+    # KERYX_ALLOW_REAL_SUBPROCESS=1 — without this job the bwrap path is covered
+    # only by unit tests of argv construction, never by a real contained spawn.
+    name: linux sandbox (bubblewrap) live smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
+      - name: Confirm the launcher is present
+        run: bwrap --version
+
+      - name: OS-sandbox live smokes (real subprocesses under bwrap)
+        env:
+          KERYX_ALLOW_REAL_SUBPROCESS: "1"
+        run: |
+          bun test \
+            src/harness/process/sandbox/sandbox.smoke.test.ts \
+            src/harness/process/real-process-adapter.smoke.test.ts \
+            src/commands/harness-exec.smoke.test.ts
