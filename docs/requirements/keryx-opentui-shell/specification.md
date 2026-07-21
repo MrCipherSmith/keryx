@@ -333,3 +333,64 @@ also PRD N2); the OpenTUI layer stays thin presentation. A helper may change whe
 both shells change with it and the pure tests are updated in the same commit.
 Anything that would alter driver, port, provider or policy behavior is still out
 of bounds and needs its own ADR.
+
+## 10. Open items
+
+Recorded 2026-07-21 after auditing the package against the code. Phases 0-5
+shipped for the **agent** shell, which is why the package reads as delivered —
+but "implemented" was too strong for the scope as written. Each item below was
+verified in the source, not inferred from the roadmap.
+
+### O-1 — the chat shell has no OpenTUI renderer (scope gap, blocks Phase 5)
+
+The package scope is "the interactive shell (chat + agent)", and §1 above names
+`runShell` / `ShellIO` as the chat analogue of `runAgentTurn` / `AgentIO`. Only
+the agent half was built. `ShellIO` has **zero** references under `src/tui/` — it
+appears only in `src/commands/shell.ts` and `src/commands/select.ts` — and the
+launch guard is `if (flags.wantTui && modeFlag !== false && process.stdout.isTTY)`
+(`src/commands/shell.ts:1094`), where `--chat` sets `modeFlag = false`. So chat
+unconditionally uses readline.
+
+Consequence: Phase 5's second half ("retire the readline path only once at
+parity") is unreachable, because readline is chat's only implementation. Anyone
+reading "TUI is the default" should understand it as *agent mode is the default
+and is a TUI*; chat is unchanged from before this package.
+
+### O-2 — F1's shared command registry has only one consumer
+
+F1 requires the `/` dropdown to reuse a shared registry "so chat and agent share
+definitions". Only `AGENT_SLASH_COMMANDS` exists (`src/commands/agent-commands.ts:15`).
+There is no chat command set, so the sharing requirement is vacuous rather than
+met. It becomes real work the moment O-1 is addressed.
+
+### O-3 — N1 platform coverage is unvalidated beyond darwin-arm64
+
+N1 lists "darwin-arm64, darwin-x64, linux-x64, linux-arm64 at minimum". Only
+darwin-arm64 has been exercised; ADR-0005 says as much ("linux-x64/arm64 to
+confirm as the migration proceeds"). `linux-x64` appears in this repository only
+in the three documents that name it as a target, never as a confirmed result.
+Because the dependency is optional, dynamically imported and fallback-guarded, an
+unsupported platform degrades to readline rather than breaking — so this is a
+coverage gap, not a correctness risk.
+
+### O-4 — the no-TTY fallback is implemented but untested
+
+The success criterion is "`keryx shell` with no TTY / on an unsupported platform
+falls back to the readline shell with **byte-identical plain output**". The guard
+exists (`src/tui/tui-shell.ts:708`, returning `false` so the caller falls
+through), but `isTTY` occurs exactly once across the whole test surface — in that
+guard. There is no test asserting output parity between the two renderers, and no
+check that a global install via `scripts/install.sh --global` launches the TUI.
+The claim is currently believed, not demonstrated.
+
+### O-5 — R5 cold-start latency was never measured
+
+"Measure cold-start of the TUI vs the current instant readline shell" was a
+Phase 0 exit criterion. No number is recorded here, in ADR-0005, or in the flow
+package. The gate passed on the other four criteria.
+
+### Not an open item, listed to prevent confusion
+
+`collapseToolOutput` does not normalize CRLF, so a CRLF tool result's one-line
+readline summary can carry a stray `\r`. That is a defect deferred by flow 109
+and tracked in its journal — it is not a requirement of this package.

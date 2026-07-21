@@ -3,12 +3,17 @@ Version: 0.1.0
 
 ## Status
 
-`implemented` — Phases 0–5 shipped. This package specified migrating the keryx
-interactive shell/agent UI from the line-based `node:readline` renderer to a
-full-screen **OpenTUI** (`@opentui/core`) terminal UI, to gain a live,
-Pi/grok-style command composer (an as-you-type `/` command dropdown), a persistent
-input area, and a component-based rendering model — WITHOUT rewriting the
-deterministic agent driver or the pure render helpers already in place.
+`implemented (agent mode) — chat renderer outstanding`. Phases 0–5 shipped for
+the **agent** shell. The scope below says "chat + agent", and the chat half was
+never built: `--chat` still runs the readline renderer. See **§10 Open items**
+in `specification.md` for the full list of what remains.
+
+This package specified migrating the keryx interactive shell/agent UI from the
+line-based `node:readline` renderer to a full-screen **OpenTUI**
+(`@opentui/core`) terminal UI, to gain a live, Pi/grok-style command composer (an
+as-you-type `/` command dropdown), a persistent input area, and a component-based
+rendering model — WITHOUT rewriting the deterministic agent driver or the pure
+render helpers already in place.
 
 The renderer now lives in `src/tui/` and **the TUI is the default** on an
 interactive TTY (`parseShellCliFlags` defaults `wantTui = true`); `--no-tui`
@@ -25,6 +30,10 @@ the optional dependency is absent, or the renderer fails to initialise.
 | 3 | Live `/` command dropdown + shared command registry | 062 |
 | 4 | Scrollable transcript, default-deny approval, resize | 063 |
 | 5 | TUI default on TTY, `--no-tui` opt-out | 064; reverted by 065 over a stdin-handoff leak, root-caused in 066 and re-landed in 067 |
+
+Phase 5's second half — "retire the readline path once at parity" — is **not**
+done and cannot be until the chat renderer exists, because chat has no other
+home. Readline is therefore load-bearing, not merely a fallback.
 
 Post-migration work that amends this package rather than extending the roadmap:
 layout and UX passes (068–079), persistence and provider work (080–086), and
