@@ -651,3 +651,267 @@ export function createBlockView(
     },
   };
 }
+
+// --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 --------------------
+//
+// Extracted from the `launchTuiAgentShell` closure in flow 109/T5 so the mode is
+// reachable from a headless test: a test can mount real `createBlockView`s, hand
+// the controller the same registry/scroll/guard callbacks the shell hands it, and
+// drive REAL keys through `onKeypress`. The closure keeps only the wiring.
+//
+// Deliberately free of `otui`/`renderer`: everything it touches is expressed as a
+// narrow structural port (`NavScroll`) or a callback, which is also what makes it
+// testable with a real `ScrollBoxRenderable` OR a plain object.
+
+/** The slice of `ScrollBoxRenderable` the nav mode drives (AC12 / D-5). */
+export interface NavScroll {
+  scrollTop: number;
+  stickyScroll: boolean;
+}
+
+/** The keypress event fields nav mode reads (OpenTUI's internal keypress shape). */
+export interface NavKeyEvent {
+  name: string;
+  ctrl: boolean;
+  meta: boolean;
+  sequence: string;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}
+
+export interface BlockNavOptions {
+  registry: BlockRegistry;
+  /** The mounted view for a block id, or `undefined` if it has none. */
+  view: (id: string) => BlockView | undefined;
+  scroll: NavScroll;
+  /**
+   * True while some other surface owns the keyboard — the `/` dropdown in nav
+   * state, a picker/approval overlay (AC4). Nav keys stay completely inert.
+   */
+  isBlocked: () => boolean;
+  /** Give the keyboard back to the composer (`input.focus()`). */
+  focusComposer: () => void;
+  /** Take the keyboard away from the composer (`textarea.blur()`). */
+  blurComposer: () => void;
+  /** Put text on the system clipboard; a throw means "not permitted". */
+  copyText: (text: string) => void;
+  toast: (message: string) => void;
+  /** Chrome that depends on the mode (the footer hint) repaints here. */
+  onChange?: () => void;
+  /** Defers the post-layout scroll re-assert; overridable for determinism. */
+  schedule?: (run: () => void) => void;
+}
+
+export interface BlockNavController {
+  /** True while block-nav owns the keyboard. */
+  active(): boolean;
+  enter(): void;
+  exit(): void;
+  /**
+   * Refocus the composer UNLESS block-nav owns the keyboard (risk R3). Every
+   * turn-end refocus goes through this, so a turn finishing mid-navigation
+   * cannot yank the user out of nav mode.
+   */
+  restoreComposerFocus(): void;
+  /** Repaint one block from registry state (focus highlight included). */
+  paint(id: string): void;
+  paintAll(): void;
+  /** Collapse/expand one block, preserving the viewport for non-newest ones. */
+  setCollapsed(id: string, collapsed: boolean): void;
+  toggle(id: string): void;
+  /** Copy a block's retained body; `false` when clipboard access is refused. */
+  copy(id: string): boolean;
+  /** The newest block of `kind` (or the newest block of any kind). */
+  newest(kind?: string): BlockState | undefined;
+  /** The keypress handler — wire it through the shell's `onKeypress` helper. */
+  handleKey(key: NavKeyEvent): void;
+}
+
+/**
+ * Modal, keyboard-only block navigation: `Ctrl+O` enters (composer blurs, newest
+ * block focused, sticky scroll suspended), `↑`/`↓` move focus, `Enter`/`Space`
+ * toggle collapse, `y` copies, `Esc` exits and restores composer focus + the
+ * saved scroll offset. A dedicated mode rather than bare single keys because the
+ * printable/Esc/Backspace namespace is already claimed by the composer and the
+ * `/`-menu router (D-3).
+ */
+export function createBlockNavController(options: BlockNavOptions): BlockNavController {
+  const { registry, view, scroll, isBlocked, focusComposer, blurComposer, copyText, toast } = options;
+  const schedule = options.schedule ?? ((run: () => void) => void setTimeout(run, 0));
+  const onChange = options.onChange ?? ((): void => {});
+
+  /** THE focus guard (risk R3): who owns the keyboard right now. */
+  let focusOwner: "composer" | "blocks" = "composer";
+  /** Scroll offset saved on entering nav mode, restored on exit. */
+  let savedScrollTop = 0;
+
+  const active = (): boolean => focusOwner === "blocks";
+
+  const paint = (id: string): void => {
+    const state = registry.get(id);
+    const mounted = view(id);
+    if (state === undefined || mounted === undefined) {
+      return;
+    }
+    mounted.render(state, { focused: active() && registry.focused()?.id === id, body: registry.bodyText(id) });
+  };
+
+  const paintAll = (): void => {
+    for (const state of registry.list()) {
+      paint(state.id);
+    }
+  };
+
+  const newest = (kind?: string): BlockState | undefined => {
+    const all = registry.list();
+    for (let i = all.length - 1; i >= 0; i--) {
+      const block = all[i];
+      if (block !== undefined && (kind === undefined || block.kind === kind)) {
+        return block;
+      }
+    }
+    return undefined;
+  };
+
+  /**
+   * Expanding anything but the NEWEST block suspends sticky scroll and restores
+   * the offset (D-5 / AC12): the alternate screen has no scrollback, so a jump to
+   * the bottom would lose the user's place.
+   */
+  const setCollapsed = (id: string, collapsed: boolean): void => {
+    const state = registry.get(id);
+    if (state === undefined || state.collapsed === collapsed) {
+      return;
+    }
+    const isNewest = registry.list().at(-1)?.id === id;
+    const before = scroll.scrollTop;
+    registry.toggle(id);
+    paint(id);
+    if (isNewest) {
+      return;
+    }
+    scroll.stickyScroll = false;
+    scroll.scrollTop = before;
+    // Layout runs on the next frame; re-assert once the new height is known.
+    schedule(() => {
+      try {
+        scroll.scrollTop = before;
+      } catch {
+        // best-effort
+      }
+    });
+  };
+
+  const toggle = (id: string): void => {
+    const state = registry.get(id);
+    if (state !== undefined) {
+      setCollapsed(id, !state.collapsed);
+    }
+  };
+
+  const copy = (id: string): boolean => {
+    try {
+      copyText(registry.bodyText(id));
+      toast("Copied to clipboard");
+      return true;
+    } catch {
+      return false; // clipboard access not permitted — ignore
+    }
+  };
+
+  const enter = (): void => {
+    const target = newest();
+    if (target === undefined) {
+      toast("No transcript blocks yet");
+      return;
+    }
+    focusOwner = "blocks";
+    registry.focus(target.id);
+    savedScrollTop = scroll.scrollTop;
+    scroll.stickyScroll = false; // expanding must not yank the viewport (AC12)
+    blurComposer();
+    paintAll();
+    onChange();
+  };
+
+  const exit = (): void => {
+    if (!active()) {
+      return;
+    }
+    focusOwner = "composer";
+    paintAll(); // drop the focus highlight
+    scroll.scrollTop = savedScrollTop;
+    scroll.stickyScroll = true;
+    focusComposer();
+    onChange();
+  };
+
+  /**
+   * Repaint the focus highlight after a registry focus move. `next` is
+   * `undefined` only on an empty registry (the moves clamp otherwise), so a miss
+   * is a no-op. Scroll-into-view is NOT done here: `createBlockView` does not
+   * expose its box, and the transcript is short enough in practice that the
+   * highlight stays visible — revisit if that stops holding.
+   */
+  const moveFocus = (next: BlockState | undefined): void => {
+    if (next === undefined) {
+      return;
+    }
+    paintAll();
+  };
+
+  return {
+    active,
+    enter,
+    exit,
+    restoreComposerFocus: () => {
+      if (focusOwner === "composer") {
+        focusComposer();
+      }
+    },
+    paint,
+    paintAll,
+    setCollapsed,
+    toggle,
+    copy,
+    newest,
+    handleKey: (key) => {
+      // Never fire while the `/` dropdown drives the keyboard, or while a
+      // picker/approval overlay is up (AC4).
+      if (isBlocked()) {
+        return;
+      }
+      if (!active()) {
+        if (key.ctrl && key.name === "o") {
+          enter();
+          key.preventDefault();
+          key.stopPropagation();
+        }
+        return;
+      }
+      const focused = registry.focused();
+      const isEnter = key.name === "return" || key.name === "linefeed" || key.name === "kpenter";
+      const isSpace = key.name === "space" || key.sequence === " ";
+      if (key.name === "escape") {
+        exit();
+      } else if (key.name === "up") {
+        moveFocus(registry.focusPrev());
+      } else if (key.name === "down") {
+        moveFocus(registry.focusNext());
+      } else if (isEnter || isSpace) {
+        if (focused !== undefined) {
+          toggle(focused.id);
+          paintAll();
+        }
+      } else if (key.name === "y" && !key.ctrl && !key.meta) {
+        if (focused !== undefined) {
+          copy(focused.id);
+        }
+      } else {
+        return; // anything else (incl. Ctrl+C) keeps its normal meaning
+      }
+      key.preventDefault();
+      key.stopPropagation();
+    },
+  };
+}

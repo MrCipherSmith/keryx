@@ -53,6 +53,7 @@ import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import { segmentMarkdown, type MdSegment } from "../lib/md-blocks";
 import {
+  createBlockNavController,
   createBlockRegistry,
   createBlockView,
   createSegmentView,
@@ -356,7 +357,7 @@ function overlayBox(otui: OpenTui, r: Renderer, id: string): Box {
 }
 
 /** OpenTUI keypress event fields the overlay steps read. */
-type KeypressEvent = {
+export type KeypressEvent = {
   name: string;
   ctrl: boolean;
   meta: boolean;
@@ -369,8 +370,12 @@ type KeypressEvent = {
  * Subscribe `handler` to OpenTUI's internal keypress stream and return an unsubscribe
  * fn. The single place that reaches into the private `_internalKeyInput` API, so the
  * overlay steps don't each duplicate the on/off wiring (flow 086).
+ *
+ * Exported for the flow-109 headless nav-mode tests: they subscribe the REAL
+ * `createBlockNavController` through this exact wrapper and drive real keys, so
+ * the test exercises the shell's own subscription path rather than a replica.
  */
-function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => void {
+export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => void {
   r._internalKeyInput.onInternal("keypress", handler);
   return () => r._internalKeyInput.offInternal("keypress", handler);
 }
@@ -863,37 +868,27 @@ export async function launchTuiAgentShell(opts: {
     // can be expanded in place, navigated with the keyboard and copied.
     const blocks = createBlockRegistry();
     const blockViews = new Map<string, BlockView>();
-    /**
-     * THE focus guard (risk R3): who owns the keyboard right now. Block-nav mode
-     * is `"blocks"`, everything else `"composer"`. A turn finishing while the
-     * user is navigating must not yank focus back to the composer, so every
-     * turn-end refocus goes through `focusComposer`.
-     */
-    let focusOwner: "composer" | "blocks" = "composer";
-    const navMode = (): boolean => focusOwner === "blocks";
-    const focusComposer = (): void => {
-      if (focusOwner === "composer") {
-        input.focus();
-      }
-    };
-    /** Scroll offset saved on entering nav mode, restored on exit (AC12). */
-    let savedScrollTop = 0;
-
-    /** Repaint one block from registry state (focus highlight included). */
-    const paintBlock = (id: string): void => {
-      const state = blocks.get(id);
-      const view = blockViews.get(id);
-      if (state === undefined || view === undefined) {
-        return;
-      }
-      view.render(state, { focused: navMode() && blocks.focused()?.id === id, body: blocks.bodyText(id) });
-    };
-
-    const paintAllBlocks = (): void => {
-      for (const state of blocks.list()) {
-        paintBlock(state.id);
-      }
-    };
+    // The whole modal navigation mode (focus guard, key dispatch, sticky-scroll
+    // suspension) lives in `transcript-blocks.ts` so it is reachable from a
+    // headless test; the closure keeps only wiring (risk R5). `overlayActive`,
+    // `menu`/`menuNav` and `paintBusyStatus` are declared further down — the
+    // callbacks below are only ever invoked from a keypress, long after.
+    const nav = createBlockNavController({
+      registry: blocks,
+      view: (id) => blockViews.get(id),
+      scroll,
+      isBlocked: () => (menu.visible && menuNav) || overlayActive(),
+      focusComposer: () => input.focus(),
+      blurComposer: () => textarea.blur(),
+      copyText: (text) => r.copyToClipboardOSC52(text),
+      toast: (message) => showToast(message),
+      onChange: () => paintBusyStatus(),
+    });
+    const navMode = (): boolean => nav.active();
+    const focusComposer = (): void => nav.restoreComposerFocus();
+    const setBlockCollapsed = (id: string, collapsed: boolean): void => nav.setCollapsed(id, collapsed);
+    const newestBlock = (kind?: string): BlockState | undefined => nav.newest(kind);
+    const copyBlock = (id: string): boolean => nav.copy(id);
 
     /** Register + render a new collapsed block at the end of the transcript. */
     const addBlock = (
@@ -906,67 +901,8 @@ export async function launchTuiAgentShell(opts: {
         return id;
       }
       blockViews.set(id, createBlockView(otui, r, transcript, state, options));
-      paintBlock(id);
+      nav.paint(id);
       return id;
-    };
-
-    /**
-     * Toggle/expand one block. Expanding anything but the NEWEST block suspends
-     * sticky scroll and restores the offset (D-5 / AC12): the alternate screen
-     * has no scrollback, so a jump to the bottom would lose the user's place.
-     */
-    const setBlockCollapsed = (id: string, collapsed: boolean): void => {
-      const state = blocks.get(id);
-      if (state === undefined || state.collapsed === collapsed) {
-        return;
-      }
-      const isNewest = blocks.list().at(-1)?.id === id;
-      const before = scroll.scrollTop;
-      blocks.toggle(id);
-      paintBlock(id);
-      if (isNewest) {
-        return;
-      }
-      scroll.stickyScroll = false;
-      scroll.scrollTop = before;
-      // Layout runs on the next frame; re-assert once the new height is known.
-      setTimeout(() => {
-        try {
-          scroll.scrollTop = before;
-        } catch {
-          // best-effort
-        }
-      }, 0);
-    };
-
-    const toggleBlock = (id: string): void => {
-      const state = blocks.get(id);
-      if (state !== undefined) {
-        setBlockCollapsed(id, !state.collapsed);
-      }
-    };
-
-    /** The newest block of `kind` (or the newest block of any kind). */
-    const newestBlock = (kind?: string): BlockState | undefined => {
-      const all = blocks.list();
-      for (let i = all.length - 1; i >= 0; i--) {
-        const block = all[i];
-        if (block !== undefined && (kind === undefined || block.kind === kind)) {
-          return block;
-        }
-      }
-      return undefined;
-    };
-
-    /** Copy a block's retained body to the system clipboard (OSC52) — AC6. */
-    const copyBlock = (id: string): boolean => {
-      try {
-        r.copyToClipboardOSC52(blocks.bodyText(id));
-        showToast("Copied to clipboard");
-        return true;
-      } catch {
-        return false; // clipboard access not permitted — ignore
-      }
     };
 
     io.write = (s: string) => {
@@ -2278,89 +2214,13 @@ export async function launchTuiAgentShell(opts: {
     });
 
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
-    // A dedicated modal mode: the single-key namespace is already claimed by the
-    // composer and the `/` menu router, and the composer would otherwise fight
-    // for focus. Registered through the `onKeypress` wrapper rather than by
-    // reaching for the private `_internalKeyInput` symbol directly (risk R2);
-    // the `/`-menu router below is the pre-existing direct consumer.
-    const enterNavMode = (): void => {
-      const newest = newestBlock();
-      if (newest === undefined) {
-        showToast("No transcript blocks yet");
-        return;
-      }
-      focusOwner = "blocks";
-      blocks.focus(newest.id);
-      savedScrollTop = scroll.scrollTop;
-      scroll.stickyScroll = false; // expanding must not yank the viewport (AC12)
-      textarea.blur();
-      paintAllBlocks();
-      paintBusyStatus();
-    };
-
-    const exitNavMode = (): void => {
-      if (!navMode()) {
-        return;
-      }
-      focusOwner = "composer";
-      paintAllBlocks(); // drop the focus highlight
-      scroll.scrollTop = savedScrollTop;
-      scroll.stickyScroll = true;
-      input.focus();
-      paintBusyStatus();
-    };
-
-    /**
-     * Repaint the focus highlight after a registry focus move. `next` is
-     * `undefined` only on an empty registry (the moves clamp otherwise), so a
-     * miss is a no-op. Scroll-into-view is NOT done here: `createBlockView` does
-     * not expose its box, and the transcript is short enough in practice that
-     * the highlight stays visible — revisit if that stops holding.
-     */
-    const moveNavFocus = (next: BlockState | undefined): void => {
-      if (next === undefined) {
-        return;
-      }
-      paintAllBlocks();
-    };
-
+    // The mode itself is `createBlockNavController` (transcript-blocks.ts); all
+    // that is left here is subscribing it. Registered through the `onKeypress`
+    // wrapper rather than by reaching for the private `_internalKeyInput` symbol
+    // directly (risk R2); the `/`-menu router above is the pre-existing direct
+    // consumer.
     onKeypress(r, (key) => {
-      // Never fire while the `/` dropdown drives the keyboard, or while a
-      // picker/approval overlay is up (AC4).
-      if ((menu.visible && menuNav) || overlayActive()) {
-        return;
-      }
-      if (!navMode()) {
-        if (key.ctrl && key.name === "o") {
-          enterNavMode();
-          key.preventDefault();
-          key.stopPropagation();
-        }
-        return;
-      }
-      const focused = blocks.focused();
-      const isEnter = key.name === "return" || key.name === "linefeed" || key.name === "kpenter";
-      const isSpace = key.name === "space" || key.sequence === " ";
-      if (key.name === "escape") {
-        exitNavMode();
-      } else if (key.name === "up") {
-        moveNavFocus(blocks.focusPrev());
-      } else if (key.name === "down") {
-        moveNavFocus(blocks.focusNext());
-      } else if (isEnter || isSpace) {
-        if (focused !== undefined) {
-          toggleBlock(focused.id);
-          paintAllBlocks();
-        }
-      } else if (key.name === "y" && !key.ctrl && !key.meta) {
-        if (focused !== undefined) {
-          copyBlock(focused.id);
-        }
-      } else {
-        return; // anything else (incl. Ctrl+C) keeps its normal meaning
-      }
-      key.preventDefault();
-      key.stopPropagation();
+      nav.handleKey(key);
     });
 
     const submitComposer = (): void => {

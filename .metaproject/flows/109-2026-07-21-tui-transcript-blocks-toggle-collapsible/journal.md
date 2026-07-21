@@ -127,4 +127,56 @@ adds: `tdd-workflow.mdc` assumes the implementer authors the failing test and
 has no guidance for an implementer inheriting a *partially complete*
 implementation against pre-written RED tests. The verify-don't-rewrite decision
 was unguided.
+
+### T5 attempt 1 — BLOCKED, working tree lost (second incident)
+
+A concurrent session stashed the entire flow-109 working tree
+(`stash@{0}: On feat/tui-transcript-blocks: wip-tui-transcript`) and checked out
+`fix/shell-allow-pattern-multiline` mid-task. The flow package itself vanished
+from disk, so `keryx flow` could not see flow 109. The worker correctly refused
+to pop a stash onto a foreign branch carrying another session's in-flight edits,
+reported the recovery sequence, and **declined to report verification numbers it
+had not earned**. Good judgement — recorded as such.
+
+Recovery by the orchestrator: `git checkout feat/tui-transcript-blocks` →
+`git merge --ff-only main` (picking up PR #181, `44818a6`) → `git stash pop`.
+Conflict-free; the stash touched no file PR #181 changed. Re-verified:
+`bun test src/tui src/lib src/commands` → **327 pass / 3 skip / 0 fail**.
+
+**Root cause of both incidents: T1-T4 output was passed between workers as an
+uncommitted working tree in a repo with concurrent sessions.** Fixed by
+committing immediately on restore — `83d0cdc feat(tui): per-block collapse,
+framed markdown payloads, code/diff rendering` (T1-T4, rebased on
+`main@44818a6`). Every subsequent task boundary must also commit.
+
+**skill_drift (T5a), accepted:** the flow-orchestrator dispatch protocol pins a
+branch and has the worker verify it once at the hard gate. That is insufficient
+under concurrent sessions — this worker's branch check passed and the branch was
+gone ~90 seconds later. Proposed rules: (a) workers re-assert
+`git branch --show-current` immediately before their first *write*, not only at
+the gate; (b) orchestrators commit at every task boundary rather than handing an
+uncommitted tree to the next worker.
+
+### Findings carried into T5 attempt 2
+
+The blocked worker finished reading the implementation before it vanished:
+
+1. **AC3 / AC4 / AC12 are not reachable from the headless harness as
+   structured.** The whole nav mode — `enterNavMode`, `exitNavMode`,
+   `moveNavFocus`, the `onKeypress` dispatch with the
+   `(menu.visible && menuNav) || overlayActive()` guard, `setBlockCollapsed`'s
+   sticky-scroll suspend/restore, and the `focusOwner` guard — lives inside the
+   `launchTuiAgentShell` closure (`tui-shell.ts:2280-2364`, `:860-947`), which
+   no test invokes. `onKeypress` (`:373`) is module-private. A headless test
+   could only re-implement that wiring, i.e. be tautological.
+   **Orchestrator decision: approve the enabling refactor** — extract the nav
+   controller into `src/tui/transcript-blocks.ts` so a headless test can mount
+   real block views and drive real keys. AC3 demands a genuine
+   `createTestRenderer` + `mockInput.pressKeys` drive-through, so a pure
+   key-mapping unit test alone does not discharge it.
+2. **AC7 colors are assertable**: `createTestRenderer` also returns
+   `captureSpans(): CapturedFrame` whose `CapturedSpan` carries `fg: RGBA`.
+   Diff line classes can be proven by comparing span foreground colors rather
+   than settling for a substring check.
+3. The load-bearing `loadOpenTui()` sequential-import fix is now committed.
 - 2026-07-21T17:10:50.638Z - task-done: T4: Self-review and prepare draft PR
