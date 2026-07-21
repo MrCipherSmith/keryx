@@ -40,6 +40,7 @@ import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { launchTuiAgentShell } from "../tui/tui-shell";
+import { launchTuiChatShell } from "../tui/chat-shell";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import {
   collapseToolOutput,
@@ -51,6 +52,7 @@ import {
   summarizeToolArgs,
 } from "../lib/ui";
 import { blockLabel, looksLikeUnifiedDiff } from "../lib/md-blocks";
+import { describeUnavailableCommand, renderCommandHelp } from "./agent-commands";
 import {
   type AgentDeps,
   type AgentIO,
@@ -140,22 +142,41 @@ const CONNECT_GUIDANCE = [
   "",
 ].join("\n");
 
-/** Help text listing the slash commands (must mention /model, /clear, /exit). */
+/**
+ * Help text for chat mode. The command list is DERIVED from the shared registry
+ * (`agent-commands.ts`) rather than duplicated here, so chat's menu and the TUI's
+ * can never drift; only the session footer is chat-specific.
+ */
 const HELP_TEXT = [
-  "Commands:",
-  "  /help              Show this help",
-  "  /model <name>      Switch the active model for subsequent turns",
-  "  /models            Pick a model for the current provider (numbered menu)",
-  "  /provider [name]   Switch provider by name, or (no arg) re-run full selection",
-  "  /connect           Show how to set ANTHROPIC_API_KEY for anthropic models",
-  "  /new               Start a new per-project session (old kept on disk)",
-  "  /clear             Alias of /new",
-  "  /compact [focus]   Compact model context (full archive kept)",
-  "  /exit, /quit       Leave the shell",
-  "",
+  renderCommandHelp("chat"),
   "Sessions are per-project. Resume: keryx shell -c | -r [id]",
   "",
 ].join("\n");
+
+/**
+ * Commands the readline AGENT REPL actually implements. Agent mode as a whole
+ * offers more (`/model`, `/connect`, `/think`, `/copy`, `/resume` — all TUI
+ * pickers or block operations that have no readline equivalent), so this surface
+ * advertises its own subset while still taking the WORDING from the registry.
+ */
+const READLINE_AGENT_COMMANDS: readonly string[] = [
+  "/help",
+  "/expand",
+  "/new",
+  "/clear",
+  "/compact",
+  "/exit",
+];
+
+/** Agent-REPL help: registry-derived command list + the agent-specific preamble. */
+export function readlineAgentHelpText(): string {
+  return (
+    "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
+    "graph_affected, memory_search, shell_exec (approval).\n" +
+    renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
+    "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
+  );
+}
 
 /**
  * The injectable REPL core. Iterates `io.lines`; slash commands are handled
@@ -329,6 +350,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       }
       if (command === "/connect") {
         system(CONNECT_GUIDANCE);
+        continue;
+      }
+      // A real command that belongs to the OTHER mode (`/expand`, `/think`,
+      // `/copy`, `/resume`) fails with a reason, not a bare "unknown command".
+      const wrongMode = describeUnavailableCommand(command, "chat");
+      if (wrongMode !== undefined) {
+        system(wrongMode);
         continue;
       }
       system(`Unknown command: ${command}. Type /help for commands.\n`);
@@ -902,12 +930,7 @@ async function runAgentRepl(
         return;
       }
       if (command === "/help") {
-        agentIo.onSystem?.(
-          "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
-            "graph_affected, memory_search, shell_exec (approval). " +
-            "/expand last tool output · /new|/clear new session · /compact [focus] · /exit.\n" +
-            "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n",
-        );
+        agentIo.onSystem?.(readlineAgentHelpText());
       } else if (command === "/expand") {
         const expanded = expandedToolOutput(lastToolName, lastToolOutput);
         if (expanded !== undefined) {
@@ -954,7 +977,12 @@ async function runAgentRepl(
           }
         }
       } else {
-        agentIo.onSystem?.(`Unknown command: ${command}. Type /help.\n`);
+        // `/models` / `/provider` are chat-mode commands: say so instead of
+        // calling them unknown. Anything else falls back to the old message.
+        agentIo.onSystem?.(
+          describeUnavailableCommand(command, "agent") ??
+            `Unknown command: ${command}. Type /help.\n`,
+        );
       }
       rich.printPrompt();
       continue;
@@ -988,6 +1016,69 @@ async function runAgentRepl(
     out(`\n${GUTTER}${turnSeparator()}\n\n`);
     rich.printPrompt();
   }
+}
+
+/** Persisted defaults + provider detection resolved once for a TUI launch. */
+export interface TuiStartup {
+  /** The initial provider/model, from flags or the persisted config. */
+  initial?: { provider: string; model: string; baseUrl?: string };
+  /** Detected providers — populated ONLY when there is nothing to reuse. */
+  detected: DetectedProvider[];
+  /** Env var names populated from the persisted `auth.json` (never the values). */
+  appliedKeys: string[];
+}
+
+/**
+ * The persisted-credential + last-selection bootstrap for a TUI launch.
+ *
+ * Until flow 112 this lived inside the agent-only TUI branch, so `keryx shell
+ * --chat` never called `loadShellConfig()` / `applySavedApiKeys()` at all: a
+ * provider key entered through `/connect` was written to `auth.json` and then
+ * invisible to chat, which fell back to the offline no-op provider (AC12). It is
+ * now shared by BOTH modes.
+ *
+ * `detect` and `configDir` are injected so the credential path is testable
+ * against a temp config directory without touching the user's real one.
+ */
+export async function resolveTuiStartup(opts: {
+  providerArg?: string | undefined;
+  modelArg?: string | undefined;
+  baseUrl?: string | undefined;
+  detect: () => Promise<DetectedProvider[]>;
+  configDir?: string | undefined;
+}): Promise<TuiStartup> {
+  // Saved keys populate the env (env always wins); the saved provider+model
+  // become the default selection when no `--provider` flag is given.
+  const savedCfg = loadShellConfig(opts.configDir);
+  const appliedKeys = applySavedApiKeys(opts.configDir);
+  const { providerArg, modelArg, baseUrl } = opts;
+  if (providerArg !== undefined && modelArg !== undefined) {
+    return {
+      initial:
+        baseUrl === undefined
+          ? { provider: providerArg, model: modelArg }
+          : { provider: providerArg, model: modelArg, baseUrl },
+      detected: [],
+      appliedKeys,
+    };
+  }
+  if (
+    typeof savedCfg.provider === "string" &&
+    savedCfg.provider.length > 0 &&
+    typeof savedCfg.model === "string" &&
+    savedCfg.model.length > 0
+  ) {
+    const savedBase = savedCfg.baseUrl ?? baseUrl;
+    return {
+      initial:
+        savedBase === undefined
+          ? { provider: savedCfg.provider, model: savedCfg.model }
+          : { provider: savedCfg.provider, model: savedCfg.model, baseUrl: savedBase },
+      detected: [],
+      appliedKeys,
+    };
+  }
+  return { detected: await opts.detect(), appliedKeys };
 }
 
 /** Parsed flags for the interactive shell entrypoint. */
@@ -1061,13 +1152,42 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   };
 }
 
+/** Which surface `shellCommand` should run for a given set of flags. */
+export type ShellSurface =
+  /** The OpenTUI agent shell (`launchTuiAgentShell`). */
+  | "tui-agent"
+  /** The OpenTUI chat shell (`launchTuiChatShell`) — flow 112. */
+  | "tui-chat"
+  /** The classic readline shell (also the fallback when a TUI launch declines). */
+  | "readline";
+
+/**
+ * Pure: pick the surface from the parsed flags and whether stdout is a TTY.
+ *
+ * Extracted from the launch guard because the guard's own shape is the AC12
+ * change: it used to read `flags.wantTui && isTty && modeFlag !== false`, so
+ * `--chat` never reached the TUI at all. `parseShellCliFlags` was never the
+ * thing that excluded chat — it always returned `wantTui: true` for `--chat` —
+ * so asserting on its output cannot tell the old behaviour from the new one.
+ * This function can.
+ */
+export function chooseShellSurface(
+  flags: Pick<ShellCliFlags, "wantTui" | "modeFlag">,
+  isTty: boolean,
+): ShellSurface {
+  if (!flags.wantTui || !isTty) {
+    return "readline";
+  }
+  return flags.modeFlag === false ? "tui-chat" : "tui-agent";
+}
+
 /**
  * Thin TTY wrapper (NOT unit-tested end-to-end): parses flags, wires IO, and
  * runs the deterministic core.
  *
  * Defaults: **TUI + agent** when stdout is a TTY. Escape hatches:
  * - `--no-tui` → classic readline shell
- * - `--chat` → chat mode (no tools; also forces readline, not TUI)
+ * - `--chat` → chat mode (no tools) — in the TUI too since flow 112
  * - `--tui` is accepted for compatibility (TUI is already the default)
  *
  * When `--provider` is ABSENT, providers are detected and the user picks one
@@ -1085,13 +1205,19 @@ export async function shellCommand(args: string[]): Promise<void> {
   // defaults to agent. `undefined` = "no explicit flag given".
   let modeFlag = flags.modeFlag;
 
-  // OpenTUI agent path (default when TTY): OpenTUI owns the terminal from the
-  // START — NO readline is created here, so it cannot consume the terminal's
-  // responses to OpenTUI's capability queries (the flows 065/066 corruption).
-  // Provider/model come from flags or an in-TUI picker. On no-TTY / absent
-  // optional dep / init failure / `--no-tui` / `--chat` it falls through to the
-  // readline shell below. Agent mode only (not `--chat`).
-  if (flags.wantTui && modeFlag !== false && process.stdout.isTTY) {
+  // OpenTUI path (default when TTY): OpenTUI owns the terminal from the START —
+  // NO readline is created here, so it cannot consume the terminal's responses
+  // to OpenTUI's capability queries (the flows 065/066 corruption).
+  // Provider/model come from flags, the persisted config, or an in-TUI picker.
+  // On no-TTY / absent optional dep / init failure / `--no-tui` it falls through
+  // to the readline shell below.
+  //
+  // BOTH modes since flow 112 (AC12): the guard no longer excludes `--chat`, it
+  // dispatches on the mode — agent → `launchTuiAgentShell`, chat → the chat
+  // driver, which renders `ShellIO` through the same chrome and is driven by the
+  // very `runShell` the readline fallback runs.
+  const surface = chooseShellSurface(flags, process.stdout.isTTY === true);
+  if (surface !== "readline") {
     const cwd = process.cwd();
     const tuiProviderFactory = realMakeProvider(() => {});
     const makeAgentDeps = async (sel: { provider: string; model: string; baseUrl?: string }): Promise<AgentDeps> => {
@@ -1142,45 +1268,61 @@ export async function shellCommand(args: string[]): Promise<void> {
         idSeq: () => randomUUID(),
       };
     };
-    // Persisted config (flow 080/085, opencode-style): reuse the last provider/model
-    // and every saved provider API key so the user need not re-enter them. Saved keys
-    // populate the env (unless already set); saved provider+model become the default
-    // initial selection when no `--provider` flag is given.
-    const savedCfg = loadShellConfig();
-    applySavedApiKeys();
-    let tuiInitial: { provider: string; model: string; baseUrl?: string } | undefined;
-    let tuiDetected: DetectedProvider[] = [];
-    if (providerArg !== undefined && modelArg !== undefined) {
-      tuiInitial = baseUrl === undefined ? { provider: providerArg, model: modelArg } : { provider: providerArg, model: modelArg, baseUrl };
-    } else if (
-      typeof savedCfg.provider === "string" &&
-      savedCfg.provider.length > 0 &&
-      typeof savedCfg.model === "string" &&
-      savedCfg.model.length > 0
-    ) {
-      const savedBase = savedCfg.baseUrl ?? baseUrl;
-      tuiInitial =
-        savedBase === undefined
-          ? { provider: savedCfg.provider, model: savedCfg.model }
-          : { provider: savedCfg.provider, model: savedCfg.model, baseUrl: savedBase };
-    } else {
-      tuiDetected = await detectProviders({
+    const redetect = (): Promise<DetectedProvider[]> =>
+      detectProviders({
         fetch: globalThis.fetch,
         env: process.env,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
       });
-    }
-    if (
+    // Persisted config (flow 080/085, opencode-style): reuse the last
+    // provider/model and every saved provider API key so the user need not
+    // re-enter them. Applied in BOTH modes since flow 112 — chat used to skip
+    // this entirely (AC12).
+    const startup = await resolveTuiStartup({
+      providerArg,
+      modelArg,
+      baseUrl,
+      detect: redetect,
+    });
+    const tuiInitial = startup.initial;
+    const tuiDetected = startup.detected;
+
+    if (surface === "tui-chat") {
+      // Chat: the SAME `runShell` the readline fallback below runs, rendered
+      // through the shared chrome.
+      const chatFactory = realMakeProvider(() => {});
+      let chatResumeId = flags.resumeId;
+      if (flags.resumePick === true && chatResumeId === undefined) {
+        chatResumeId = latestSession(cwd)?.id;
+      }
+      if (
+        await launchTuiChatShell({
+          detected: tuiDetected,
+          redetect,
+          ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
+          runShell,
+          makeShellDeps: (sel) => ({
+            makeProvider: chatFactory,
+            clock: () => new Date().toISOString(),
+            idSeq: () => randomUUID(),
+            initial: sel,
+            session: {
+              cwd,
+              ...(flags.continueLast === true ? { continueLast: true } : {}),
+              ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
+            },
+          }),
+        })
+      ) {
+        return;
+      }
+      // else: optional dep absent / init failed → readline chat below.
+    } else if (
       await launchTuiAgentShell({
         detected: tuiDetected,
         makeAgentDeps,
         // `/connect` and `/model` re-probe providers fresh.
-        redetect: () =>
-          detectProviders({
-            fetch: globalThis.fetch,
-            env: process.env,
-            ...(baseUrl !== undefined ? { baseUrl } : {}),
-          }),
+        redetect,
         ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
         session: {
           cwd,

@@ -11,6 +11,12 @@
 // `⋯ thinking` reasoning; dim `↑in ↓out tokens`. The deterministic driver and the
 // pure helpers are unchanged. Gutter = the transcript box `padding`.
 //
+// Since flow 112 the LAYOUT itself is not built here: `launchTuiAgentShell`
+// mounts `createShellChrome` (./shell-chrome) and keeps only what knows what a
+// tool is — approval, ask_user, the worker fleet, side workers, the wiki-enrich
+// pre-router, the block registry/nav and the `runAgentTurn` call site. The chat
+// driver mounts the same chrome, so the two surfaces cannot drift apart.
+//
 // `@opentui/core` is an OPTIONAL dependency (ADR-0005) loaded ONLY via a dynamic
 // `import()` — never a top-level import (keryx's zero-`dependencies` floor + lazy
 // optional-import guard, src/capability/no-optional-imports). `launchTuiAgentShell`
@@ -19,7 +25,13 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { AGENT_SLASH_COMMANDS, filterCommands, findAgentCommand } from "../commands/agent-commands";
+import {
+  commandsForMode,
+  describeUnavailableCommand,
+  filterCommands,
+  findAgentCommand,
+  renderCommandHelp,
+} from "../commands/agent-commands";
 import type { DetectedProvider } from "../commands/select";
 import { resolveModelsForPicker } from "../commands/providers";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
@@ -44,6 +56,7 @@ import {
 } from "../session";
 import { setAskUserHost } from "./ask-user-bridge";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -53,16 +66,12 @@ import {
 } from "./side-worker";
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
-import { segmentMarkdown, type MdSegment } from "../lib/md-blocks";
 import {
+  createAssistantMessageStream,
   createBlockMount,
   createBlockNavController,
   createBlockRegistry,
-  createSegmentView,
-  createStreamSegmenter,
-  markdownToChunks,
   type BlockState,
-  type SegmentView,
 } from "./transcript-blocks";
 
 /** A resolved provider/model selection. */
@@ -99,77 +108,20 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
 
   // An assistant message is a COLUMN of sibling renderables — one per markdown
   // segment (flow 109 / AC5) — so a fenced block can be framed with its language
-  // tag instead of being flattened into one dim `TextRenderable`.
-  type Message = {
-    container: Box;
-    segmenter: ReturnType<typeof createStreamSegmenter>;
-    views: SegmentView[];
-    /** Views whose segment is final; never repainted again (risk R1). */
-    frozen: number;
-  };
-  let message: Message | undefined;
-
-  const startMessage = (): Message => {
-    const container = new otui.BoxRenderable(renderer, {
-      id: `msg${seq++}`,
-      flexDirection: "column",
-      flexShrink: 0,
-    });
-    transcript.add(container);
-    return { container, segmenter: createStreamSegmenter(), views: [], frozen: 0 };
-  };
-
-  // Repaint from `frozen` onwards only: earlier segments are settled, so a token
-  // costs the trailing segment's render and nothing else.
-  const paint = (m: Message, segments: readonly MdSegment[], frozen: number): void => {
-    for (let i = m.frozen; i < segments.length; i++) {
-      const segment = segments[i];
-      if (segment === undefined) {
-        continue;
-      }
-      const existing = m.views[i];
-      if (existing !== undefined && existing.kind === segment.kind) {
-        existing.update(segment);
-        continue;
-      }
-      existing?.destroy();
-      m.views[i] = createSegmentView(otui, renderer, m.container, segment);
-    }
-    for (const stale of m.views.splice(segments.length)) {
-      stale.destroy();
-    }
-    m.frozen = frozen;
-  };
+  // tag instead of being flattened into one dim `TextRenderable`. The mechanism
+  // itself lives in `transcript-blocks.ts` (flow 112) so the chat driver renders
+  // replies through the SAME object rather than a lookalike.
+  const messages = createAssistantMessageStream(otui, renderer, transcript);
 
   return {
     // Assistant text streams into per-segment renderables: worker-free markdown
     // chunks for prose (parity with the readline `renderMarkdown`) and a framed
     // language-tagged box per fence.
     write: (s) => {
-      if (s.length === 0) {
-        return;
-      }
-      const m = (message ??= startMessage());
-      const { segments, frozen } = m.segmenter.push(s);
-      paint(m, segments, frozen);
+      messages.push(s);
     },
     onAssistantText: (text) => {
-      const m = message ?? startMessage();
-      // The authoritative final text: re-segment ONCE (not per token) and rebuild.
-      for (const view of m.views.splice(0)) {
-        view.destroy();
-      }
-      m.frozen = 0;
-      const segments = segmentMarkdown(text);
-      paint(m, segments, segments.length);
-      if (segments.length === 0) {
-        try {
-          transcript.remove(m.container);
-        } catch {
-          // best-effort teardown
-        }
-      }
-      message = undefined;
+      messages.finalize(text);
     },
     // Reasoning is COLLAPSED to a one-line marker (grok/opencode style) instead of
     // dumping the whole chain-of-thought; `line count` hints at its length.
@@ -266,7 +218,12 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
   return io;
 }
 
-/** True only for an explicit `y`/`yes` (case-insensitive). Default-deny otherwise. */
+/**
+ * True only for an explicit `y`/`yes` (case-insensitive). Default-deny otherwise.
+ * The TUI itself no longer has a typed y/N approval path — every approval goes
+ * through the interactive dock picker — so this is kept as the shared
+ * default-deny predicate (and its test) rather than as live shell wiring.
+ */
 export function isShellApproved(answer: string): boolean {
   return /^y(es)?$/i.test(answer.trim());
 }
@@ -360,20 +317,6 @@ async function pickShellApproval(
 /** Compact token count for the header counter: 1234 → "1.2K", else the number. */
 export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
-}
-
-/** Composer grows 1…max rows with wrap; beyond max the textarea scrolls vertically. */
-export const COMPOSER_MIN_ROWS = 1;
-export const COMPOSER_MAX_ROWS = 6;
-
-/** Pure: clamp visual line count into the composer height band. */
-export function composerHeightForLines(
-  visualLines: number,
-  min = COMPOSER_MIN_ROWS,
-  max = COMPOSER_MAX_ROWS,
-): number {
-  const n = Number.isFinite(visualLines) ? Math.floor(visualLines) : min;
-  return Math.min(max, Math.max(min, n < 1 ? min : n));
 }
 
 /**
@@ -495,7 +438,7 @@ function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; env
  * the provider is OpenAI-compat (network available + optional Bearer key);
  * curated registry list is offline/401 fallback only.
  */
-async function modelsForPicker(prov: DetectedProvider): Promise<string[]> {
+export async function modelsForPicker(prov: DetectedProvider): Promise<string[]> {
   const result = await resolveModelsForPicker(globalThis.fetch, prov, process.env);
   return result.models;
 }
@@ -548,8 +491,13 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
  * Cerebras, Groq, Moonshot, …) fetch their LIVE model list and prompt + persist a key
  * when missing. Absolute overlay (works at startup AND for `/connect`). Resolves the
  * selection or `undefined`.
+ *
+ * Exported since flow 112 so the CHAT shell injects this very wizard as
+ * `ShellDeps.selectProviderModel`: `/provider` must open an overlay instead of
+ * `pickProviderModel`'s numbered text menu, which would read the next composer
+ * submissions as its answers.
  */
-function selectProviderModelInTui(
+export function selectProviderModelInTui(
   otui: OpenTui,
   r: Renderer,
   detected: DetectedProvider[],
@@ -611,8 +559,9 @@ function selectProviderModelInTui(
  * overlay; the SelectRenderable is focused (↑/↓/Enter native) while printable keys
  * and Backspace edit a live filter over the (potentially large) model list. Resolves
  * the chosen model, or `undefined` on Esc / no match. Removes its key handler on close.
+ * Exported since flow 112: chat's `/models` opens this same picker.
  */
-function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
+export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
     const all = models.length > 0 ? models : ["fake-echo"];
     const box = overlayBox(otui, r, "model-picker");
@@ -720,55 +669,25 @@ export async function launchTuiAgentShell(opts: {
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
-  // Pending `shell_exec` approval (legacy y/N path + interactive picker teardown).
   let uid = 0;
-  let pendingApproval: ((ok: boolean) => void) | undefined;
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  // The chrome can only be mounted once a provider/model is chosen (the startup
+  // picker runs on the bare renderer), yet `onDestroy` may fire before that —
+  // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
+  // it is never rebound to a placeholder no-op (flow 112, AC2).
+  let mountedChrome: ShellChrome | undefined;
   try {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
-    const r = (renderer = await otui.createCliRenderer({
-      exitOnCtrlC: true,
-      // Full-screen (grok/opencode style): own the alternate screen buffer so the
-      // shell's prior scrollback is cleared on launch and restored on exit, and
-      // the layout fills the terminal (composer anchored to the bottom). The
-      // earlier `split-footer` left the launch output on screen and floated the
-      // composer mid-screen.
-      screenMode: "alternate-screen",
-      clearOnShutdown: true,
-      // Enable mouse so OpenTUI tracks drag-selection (the alternate screen would
-      // otherwise disable the terminal's native selection). Copy-on-select is
-      // wired below (OSC52), matching grok/opencode.
-      useMouse: true,
+    const r = (renderer = await createShellRenderer(otui, {
       onDestroy: () => {
-        pendingApproval?.(false); // deny any in-flight approval on exit
-        pendingApproval = undefined;
-        clearBusyTimer?.(); // stop live spinner if a turn is mid-flight
+        mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
         resolveDone();
       },
     }));
-    // Assigned once the sidebar toast is built (below); the copy handler may fire
-    // before then, so start with a safe no-op.
-    let showToast: (msg: string) => void = () => {};
-    let clearBusyTimer: (() => void) | undefined;
-    // Copy-on-select (grok/opencode): when a mouse selection changes, copy the
-    // selected text to the SYSTEM clipboard via OSC52 (works locally and over SSH;
-    // the terminal must permit clipboard access — e.g. iTerm2's "Applications may
-    // access the clipboard"). Best-effort: any failure is ignored.
-    r.on(otui.CliRenderEvents.SELECTION, () => {
-      try {
-        const text = r.getSelection()?.getSelectedText() ?? "";
-        if (text.length > 0) {
-          r.copyToClipboardOSC52(text);
-          showToast("Copied to clipboard");
-        }
-      } catch {
-        // clipboard access not permitted — ignore
-      }
-    });
 
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
@@ -782,24 +701,49 @@ export async function launchTuiAgentShell(opts: {
     let currentSel: TuiSelection = sel;
     let deps = await opts.makeAgentDeps(sel);
 
-    // opencode-style layout: a main chat column on the left + a right status
-    // sidebar (model, context, tools).
-    const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
-    r.root.add(rootRow);
-    const main = new otui.BoxRenderable(r, { id: "main", flexGrow: 1, minWidth: 0, flexDirection: "column" });
-    rootRow.add(main);
-    const sidebar = new otui.BoxRenderable(r, {
-      id: "sidebar",
-      width: 30,
-      flexShrink: 0,
-      flexDirection: "column",
-      border: ["left"],
-      borderColor: "#22333b",
-      paddingLeft: 2,
-      paddingRight: 1,
-      paddingTop: 1,
+    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
+    const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
+
+    // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
+    // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard and
+    // copy-on-select. Everything below is agent-specific and mounts ON it.
+    const chrome = await createShellChrome(otui, r, {
+      title: `keryx · agent · ${sel.provider}/${sel.model}`,
+      status: `${sel.provider}/${sel.model}`,
+      footerHint: FOOTER_IDLE,
+      placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
+      commands: commandsForMode("agent"),
+      headerMeta: "↑0 ↓0",
+      // The shared registry stays the single source of truth for the dropdown,
+      // resolved through THIS surface's mode so the wording is agent-mode's.
+      filterCommands: (query) => filterCommands(query, "agent"),
     });
-    rootRow.add(sidebar);
+    mountedChrome = chrome;
+    const transcript = chrome.transcript;
+    const input = chrome.input;
+
+    // The chrome owns the spinner; the closure mirrors only the phase and the
+    // start time, which it still needs for the side-worker context snapshot and
+    // which the chrome deliberately does not expose.
+    let busyPhase = "waiting for model";
+    let busyStartedAt = 0;
+    const setBusyPhase = (phase: string): void => {
+      busyPhase = phase;
+      chrome.setBusyPhase(phase);
+    };
+    const startBusy = (phase = "waiting for model"): void => {
+      busyPhase = phase;
+      busyStartedAt = Date.now();
+      chrome.startBusy(phase);
+    };
+    const stopBusy = (): void => {
+      chrome.stopBusy();
+    };
+
+    // Sidebar panels (model, context, tools, workers) go in `sidebarTop`, NOT
+    // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
+    // so anything added to `sidebar` itself would land beside the toast.
+    const sidebar = chrome.sidebarTop;
     sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${otui.bold("keryx")}` }));
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
@@ -864,55 +808,6 @@ export async function launchTuiAgentShell(opts: {
     };
     // Idle main agent visible from launch.
     setMainAgent("queued", "ready");
-    // Toast area pinned to the bottom of the sidebar (spacer pushes it down).
-    sidebar.add(new otui.BoxRenderable(r, { id: "sb-spacer", flexGrow: 1 }));
-    const toastText = new otui.TextRenderable(r, { id: "sb-toast", content: "" });
-    sidebar.add(toastText);
-    // A transient toast: `✓ <msg>`, cleared after 5s or replaced by the next toast.
-    let toastTimer: ReturnType<typeof setTimeout> | undefined;
-    showToast = (msg: string): void => {
-      toastText.content = otui.t`${otui.green(`✓ ${msg}`)}`;
-      if (toastTimer !== undefined) {
-        clearTimeout(toastTimer);
-      }
-      toastTimer = setTimeout(() => {
-        toastText.content = "";
-        toastTimer = undefined;
-      }, 5000);
-    };
-
-    // Header bar (grok-style): identity on the left, cumulative token counter on
-    // the right (updated from usage).
-    const header = new otui.BoxRenderable(r, {
-      id: "header",
-      flexShrink: 0,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      paddingLeft: 1,
-      paddingRight: 1,
-    });
-    const headerLeft = new otui.TextRenderable(r, {
-      id: "header-left",
-      content: otui.t`${otui.dim(`keryx · agent · ${sel.provider}/${sel.model}`)}`,
-    });
-    header.add(headerLeft);
-    const tokenText = new otui.TextRenderable(r, { id: "header-tokens", content: otui.t`${otui.dim("↑0 ↓0")}` });
-    header.add(tokenText);
-    main.add(header);
-
-    // A scrollable, sticky-to-bottom transcript so long conversations scroll and
-    // auto-follow the newest output; the AgentIO renders into its `.content`.
-    const scroll = new otui.ScrollBoxRenderable(r, {
-      id: "transcript",
-      flexGrow: 1,
-      minHeight: 0,
-      scrollY: true,
-      stickyScroll: true,
-      stickyStart: "bottom",
-      contentOptions: { flexDirection: "column", paddingLeft: 1, paddingRight: 1 },
-    });
-    main.add(scroll);
-    const transcript = scroll.content;
 
     const io = createTuiAgentIo(otui, r, transcript);
     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
@@ -923,10 +818,8 @@ export async function launchTuiAgentShell(opts: {
     let hasExactUsage = false;
     const baseWrite = io.write.bind(io);
     const baseOnSystem = io.onSystem?.bind(io);
-    // Live phase updates (footer spinner + in-transcript status) — defined after
-    // footer chrome below; assigned no-ops until then, then rewired.
-    let setBusyPhase: (phase: string) => void = () => {};
-    // setMainAgent is already defined above (Workers fleet); hooks close over it.
+    // `setBusyPhase` / `setMainAgent` are both defined above, so the hooks below
+    // close over live bindings rather than placeholders that get rewired later.
 
     // --- collapsible transcript blocks (flow 109) --------------------------
     // Reasoning, tool calls and tool results become addressable blocks that
@@ -936,21 +829,23 @@ export async function launchTuiAgentShell(opts: {
     const blockMount = createBlockMount(otui, r, transcript, blocks);
     // The whole modal navigation mode (focus guard, key dispatch, sticky-scroll
     // suspension) lives in `transcript-blocks.ts` so it is reachable from a
-    // headless test; the closure keeps only wiring (risk R5). `overlayActive`,
-    // `menu`/`menuNav` and `paintBusyStatus` are declared further down — the
-    // callbacks below are only ever invoked from a keypress, long after.
+    // headless test; the closure keeps only wiring (risk R5). Everything the
+    // controller needs from the chrome — the menu/overlay guard, the composer,
+    // the status repaint — is already mounted above.
     const nav = createBlockNavController({
       registry: blocks,
       view: (id) => blockMount.view(id),
-      scroll,
-      isBlocked: () => (menu.visible && menuNav) || overlayActive(),
+      scroll: chrome.scroll,
+      isBlocked: () => chrome.menuActive() || chrome.overlayActive(),
       focusComposer: () => input.focus(),
-      blurComposer: () => textarea.blur(),
+      blurComposer: () => chrome.blurComposer(),
       copyText: (text) => r.copyToClipboardOSC52(text),
-      toast: (message) => showToast(message),
-      onChange: () => paintBusyStatus(),
+      toast: (message) => chrome.showToast(message),
+      onChange: () => chrome.repaintStatus(),
     });
-    const navMode = (): boolean => nav.active();
+    // Block-nav mode owns the footer hint even mid-turn: the chrome's 120ms
+    // spinner interval would otherwise repaint over it.
+    chrome.setFooterOverride(() => (nav.active() ? otui.t`${otui.yellow(FOOTER_NAV)}` : undefined));
     const focusComposer = (): void => nav.restoreComposerFocus();
     const setBlockCollapsed = (id: string, collapsed: boolean): void => nav.setCollapsed(id, collapsed);
     const newestBlock = (kind?: string): BlockState | undefined => nav.newest(kind);
@@ -977,7 +872,7 @@ export async function launchTuiAgentShell(opts: {
       hasExactUsage = true;
       totalIn += u.inputTokens ?? 0;
       totalOut += u.outputTokens ?? 0;
-      tokenText.content = otui.t`${otui.dim(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`)}`;
+      chrome.setHeaderMeta(`↑${fmtTokens(totalIn)} ↓${fmtTokens(totalOut)}`);
       sbContext.content = otui.t`${otui.dim(`${(totalIn + totalOut).toLocaleString()} tokens`)}`;
     };
     // Reasoning / tool call / tool result all render as collapsed BLOCKS whose
@@ -1010,133 +905,6 @@ export async function launchTuiAgentShell(opts: {
       baseOnSystem?.(text);
     };
 
-    // Bottom chrome (above footer): choice dock + slash menu + composer.
-    // Layout order = visual bottom stack: dock/menu open *upward* into transcript.
-    // Declared before requestApproval / ask_user so closures capture real bindings.
-    const choiceDock = new otui.BoxRenderable(r, {
-      id: "choice-dock",
-      flexShrink: 0,
-      flexDirection: "column",
-      visible: false,
-      backgroundColor: "#0f1b1b",
-      borderStyle: "rounded",
-      border: true,
-      borderColor: "#3a4a4a",
-      paddingLeft: 1,
-      paddingRight: 1,
-      paddingTop: 0,
-      paddingBottom: 0,
-    });
-    main.add(choiceDock);
-
-    // A picker/approval overlay owns the keyboard while it is up, so block-nav
-    // keys must stay inert (AC4). `choiceDock.visible` covers every composer-dock
-    // menu (`showComposerChoice` toggles it); `overlayDepth` covers the
-    // full-screen `/model` and `/connect` pickers, which live on `r.root`.
-    let overlayDepth = 0;
-    const withOverlay = async <T>(run: () => Promise<T>): Promise<T> => {
-      overlayDepth += 1;
-      try {
-        return await run();
-      } finally {
-        overlayDepth -= 1;
-      }
-    };
-    const overlayActive = (): boolean =>
-      overlayDepth > 0 || choiceDock.visible === true || pendingApproval !== undefined;
-
-    // Live `/` command dropdown (Pi/grok-style): Select filtered as composer changes.
-    const menu = new otui.SelectRenderable(r, {
-      id: "menu",
-      flexShrink: 0,
-      height: 10,
-      visible: false,
-      options: [...AGENT_SLASH_COMMANDS],
-      showScrollIndicator: true,
-      wrapSelection: true,
-      backgroundColor: "#0f1b1b",
-      focusedBackgroundColor: "#0f1b1b",
-      selectedBackgroundColor: "#22333b",
-      textColor: "#c8d0d0",
-      focusedTextColor: "#c8d0d0",
-      selectedTextColor: "#ffd166",
-      descriptionColor: "#6b7a7a",
-      selectedDescriptionColor: "#8b9a9a",
-    });
-    main.add(menu);
-
-    // Bordered composer: multi-line wrap, grows 1→6 rows, then vertical scroll.
-    // Enter submits (Shift/Alt+Enter insert newline). Not a single-line Input.
-    const composer = new otui.BoxRenderable(r, {
-      id: "composer",
-      flexShrink: 0,
-      borderStyle: "rounded",
-      border: true,
-      paddingLeft: 1,
-      paddingRight: 1,
-    });
-    const textarea = new otui.TextareaRenderable(r, {
-      id: "prompt",
-      placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
-      wrapMode: "word",
-      minHeight: COMPOSER_MIN_ROWS,
-      maxHeight: COMPOSER_MAX_ROWS,
-      height: COMPOSER_MIN_ROWS,
-      width: "100%",
-      // Enter = submit; Shift/Meta+Enter = newline (default Textarea is inverted).
-      keyBindings: [
-        { name: "return", action: "submit" },
-        { name: "linefeed", action: "submit" },
-        { name: "kpenter", action: "submit" },
-        { name: "return", shift: true, action: "newline" },
-        { name: "linefeed", shift: true, action: "newline" },
-        { name: "kpenter", shift: true, action: "newline" },
-        { name: "return", meta: true, action: "newline" },
-        { name: "linefeed", meta: true, action: "newline" },
-      ],
-    });
-    composer.add(textarea);
-    main.add(composer);
-
-    /** Adapter so the rest of the shell can keep using `.value` / `.focus()`. */
-    const input = {
-      get value(): string {
-        return textarea.plainText;
-      },
-      set value(v: string) {
-        const next = v ?? "";
-        if (textarea.plainText !== next) {
-          textarea.setText(next);
-          try {
-            textarea.cursorOffset = next.length;
-          } catch {
-            // best-effort
-          }
-        }
-        syncComposerHeight();
-      },
-      focus(): void {
-        textarea.focus();
-      },
-    };
-
-    const syncComposerHeight = (): void => {
-      let lines = 1;
-      try {
-        // Prefer visual (wrapped) lines so long single-line text grows vertically.
-        lines = Math.max(textarea.virtualLineCount || 0, textarea.lineCount || 0, 1);
-      } catch {
-        lines = Math.max(1, (textarea.plainText.match(/\n/g)?.length ?? 0) + 1);
-      }
-      const h = composerHeightForLines(lines);
-      if (textarea.height !== h) {
-        textarea.height = h;
-      }
-    };
-    // Content-change → height + slash menu: wired after `refilter` is defined.
-    textarea.focus();
-    syncComposerHeight();
-
     // Approval gate: `shell_exec` (remembered patterns) + `spawn_subagent` (MAE).
     // Default-deny for shell on cancel; read_only subagents auto-approve.
     io.requestApproval = async (tool, inputJson) => {
@@ -1167,9 +935,9 @@ export async function launchTuiAgentShell(opts: {
           );
           return true;
         }
-        menu.visible = false;
+        chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
-        const id = await showComposerChoice(otui, r, choiceDock, {
+        const id = await showComposerChoice(otui, r, chrome.dock, {
           title: "Spawn general subagent?",
           subtitle: taskPreview,
           cancelId: "deny",
@@ -1220,8 +988,8 @@ export async function launchTuiAgentShell(opts: {
       );
       setMainAgent("blocked", "approval");
       setBusyPhase("waiting for your approval (menu above input)");
-      menu.visible = false;
-      const choice = await pickShellApproval(otui, r, choiceDock, cmd);
+      chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+      const choice = await pickShellApproval(otui, r, chrome.dock, cmd);
       input.focus();
 
       if (choice === "deny") {
@@ -1269,7 +1037,7 @@ export async function launchTuiAgentShell(opts: {
       question: string;
       options: Array<{ id: string; label: string; description: string; recommended?: boolean }>;
     }): Promise<string> => {
-      menu.visible = false;
+      chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask");
       setBusyPhase("waiting for your answer (menu above input)");
       // Keep a short transcript breadcrumb; the interactive picker is at the input.
@@ -1280,7 +1048,7 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${otui.yellow("? ")} ${otui.dim(qShort)}`,
         }),
       );
-      const chosen = await showComposerChoice(otui, r, choiceDock, {
+      const chosen = await showComposerChoice(otui, r, chrome.dock, {
         title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
         subtitle: "Pick an option · Esc cancels",
         cancelId: "__cancel__",
@@ -1315,136 +1083,7 @@ export async function launchTuiAgentShell(opts: {
     };
     setAskUserHost(askUserInteractive);
 
-    // Footer: live status (spinner + phase + elapsed) while busy; idle hints.
-    const footer = new otui.BoxRenderable(r, {
-      id: "footer",
-      flexShrink: 0,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      paddingLeft: 1,
-      paddingRight: 1,
-    });
-    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
-    const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
-    const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-    const footerLeft = new otui.TextRenderable(r, {
-      id: "footer-left",
-      content: otui.t`${otui.dim(FOOTER_IDLE)}`,
-    });
-    footer.add(footerLeft);
-    const footerRight = new otui.TextRenderable(r, { id: "footer-right", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
-    footer.add(footerRight);
-    main.add(footer);
-
-    // In-transcript live status line (updated in place while the agent works).
-    let liveStatus: InstanceType<OpenTui["TextRenderable"]> | undefined;
-    let busyPhase = "waiting for model";
-    let busyStartedAt = 0;
-    let spinIdx = 0;
-    let busyTimer: ReturnType<typeof setInterval> | undefined;
-    // Declared early so paintBusyStatus can read it; toggled in runLine.
-    let busy = false;
-
-    const paintBusyStatus = (): void => {
-      // Block-nav mode owns the footer hint even mid-turn: the spinner interval
-      // would otherwise repaint over it every 120ms.
-      if (navMode()) {
-        footerLeft.content = otui.t`${otui.yellow(FOOTER_NAV)}`;
-        return;
-      }
-      if (!busy) {
-        footerLeft.content = otui.t`${otui.dim(FOOTER_IDLE)}`;
-        return;
-      }
-      const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
-      const secs = ((Date.now() - busyStartedAt) / 1000).toFixed(1);
-      const line = `${frame} ${busyPhase} · ${secs}s`;
-      footerLeft.content = otui.t`${otui.yellow(line)}`;
-      if (liveStatus !== undefined) {
-        liveStatus.content = otui.t`${otui.dim(line)}`;
-      }
-    };
-
-    // Wire the outer setBusyPhase used by AgentIO hooks (defined earlier as a no-op).
-    setBusyPhase = (phase: string): void => {
-      busyPhase = phase;
-      paintBusyStatus();
-    };
-
-    const startBusy = (phase = "waiting for model"): void => {
-      busy = true;
-      busyPhase = phase;
-      busyStartedAt = Date.now();
-      spinIdx = 0;
-      liveStatus = new otui.TextRenderable(r, {
-        id: `ls${uid++}`,
-        content: otui.t`${otui.dim(`⠋ ${phase} · 0.0s`)}`,
-        marginTop: 1,
-      });
-      transcript.add(liveStatus);
-      if (busyTimer !== undefined) {
-        clearInterval(busyTimer);
-      }
-      busyTimer = setInterval(() => {
-        spinIdx += 1;
-        paintBusyStatus();
-      }, 120);
-      paintBusyStatus();
-    };
-
-    const stopBusy = (): void => {
-      busy = false;
-      if (busyTimer !== undefined) {
-        clearInterval(busyTimer);
-        busyTimer = undefined;
-      }
-      // Remove the in-transcript spinner line; "worked for Ns" replaces it.
-      if (liveStatus !== undefined) {
-        try {
-          transcript.remove(liveStatus);
-        } catch {
-          // best-effort
-        }
-        liveStatus = undefined;
-      }
-      paintBusyStatus(); // idle hint, or the nav hint when nav mode is active
-    };
-    clearBusyTimer = () => {
-      if (busyTimer !== undefined) {
-        clearInterval(busyTimer);
-        busyTimer = undefined;
-      }
-    };
-
-    // `menuNav` = the `/` dropdown (not the Input) currently owns the keyboard.
-    // The dropdown is FOCUSED as soon as it opens, so ↑/↓/Enter work immediately;
-    // printable keys / Backspace are re-routed to the composer value (below) so
-    // typing still filters live.
-    let menuNav = false;
-    const refilter = (): void => {
-      const matches = filterCommands(input.value);
-      if (matches.length > 0 && input.value.startsWith("/")) {
-        menu.options = matches;
-        menu.visible = true;
-        if (!menuNav) {
-          menu.focus();
-          menuNav = true;
-        }
-      } else {
-        menu.visible = false;
-        if (menuNav) {
-          menuNav = false;
-          input.focus();
-        }
-      }
-    };
-    textarea.onContentChange = () => {
-      syncComposerHeight();
-      refilter();
-    };
-
-    const helpText = (): string =>
-      ["Commands:", ...AGENT_SLASH_COMMANDS.map((c) => `  ${c.name}  ${c.description}`)].join("\n") + "\n";
+    const helpText = (): string => renderCommandHelp("agent");
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
@@ -1478,8 +1117,8 @@ export async function launchTuiAgentShell(opts: {
             }),
           );
         } else {
-          menu.visible = false;
-          const pickId = await showComposerChoice(otui, r, choiceDock, {
+          chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+          const pickId = await showComposerChoice(otui, r, chrome.dock, {
             title: "Resume session (this project)",
             subtitle: "Esc = new session",
             cancelId: "__new__",
@@ -1572,7 +1211,7 @@ export async function launchTuiAgentShell(opts: {
           ? `${liveSession.summary.title.slice(0, 21)}…`
           : liveSession.summary.title;
       const cx = liveSession.summary.compactCount > 0 ? ` · c×${liveSession.summary.compactCount}` : "";
-      headerLeft.content = otui.t`${otui.dim(`keryx · ${title} · ${sid}${cx} · ${label}`)}`;
+      chrome.setTitle(`keryx · ${title} · ${sid}${cx} · ${label}`);
     };
 
     const saveSession = (): void => {
@@ -1605,8 +1244,8 @@ export async function launchTuiAgentShell(opts: {
         input.focus();
         return;
       }
-      menu.visible = false;
-      const pickId = await showComposerChoice(otui, r, choiceDock, {
+      chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+      const pickId = await showComposerChoice(otui, r, chrome.dock, {
         title: "Resume session (this project only)",
         subtitle: "Esc cancels",
         cancelId: "__cancel__",
@@ -1647,7 +1286,7 @@ export async function launchTuiAgentShell(opts: {
       paintSessionHeader();
       const label = `${currentSel.provider}/${currentSel.model}`;
       sbModelV.content = otui.t`${otui.dim(label)}`;
-      footerRight.content = otui.t`${otui.dim(label)}`;
+      chrome.setStatus(label);
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
@@ -1657,7 +1296,7 @@ export async function launchTuiAgentShell(opts: {
       );
       updateModelLabels();
       input.focus();
-      showToast(`Switched to ${ns.provider}/${ns.model}`);
+      chrome.showToast(`Switched to ${ns.provider}/${ns.model}`);
     };
 
     // Side workers while main is busy (automatic — no special slash command).
@@ -1813,8 +1452,10 @@ export async function launchTuiAgentShell(opts: {
       }
 
       // While main is in progress: control slash still works; anything else → side worker.
-      if (busy) {
-        const command = findAgentCommand(line);
+      // "In progress" is the chrome's own spinner state, which `startBusy` /
+      // `stopBusy` below are the only things that move.
+      if (chrome.isBusy()) {
+        const command = findAgentCommand(line, "agent");
         if (command?.name === "/exit") {
           r.destroy();
           return;
@@ -1861,7 +1502,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      const command = findAgentCommand(line);
+      const command = findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
           r.destroy();
@@ -1936,7 +1577,7 @@ export async function launchTuiAgentShell(opts: {
             const prov = detected.find((d) => d.name === currentSel.provider);
             // Registered providers fetch their live, filterable list; others use detected.
             const models = prov !== undefined ? await modelsForPicker(prov) : [];
-            const chosen = await withOverlay(() => pickModelInTui(otui, r, models));
+            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, models));
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined
@@ -1952,7 +1593,7 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/connect") {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-            const ns = await withOverlay(() => selectProviderModelInTui(otui, r, detected));
+            const ns = await chrome.withOverlay(() => selectProviderModelInTui(otui, r, detected));
             if (ns !== undefined) {
               await switchTo(ns);
             } else {
@@ -1965,7 +1606,10 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       if (line.startsWith("/")) {
-        io.onSystem?.(`Unknown command: ${line}\n`);
+        // A real command belonging to the OTHER mode (`/models`, `/provider`)
+        // says so; only a genuinely unknown token is "unknown" (S4 parity with
+        // the readline surfaces).
+        io.onSystem?.(describeUnavailableCommand(line, "agent") ?? `Unknown command: ${line}\n`);
         io.onSystem?.(helpText());
         return;
       }
@@ -1993,7 +1637,9 @@ export async function launchTuiAgentShell(opts: {
       // wikiEnrich in-process (no model thrash on search_code).
       if (isWikiEnrichIntent(line)) {
         const startedAt = Date.now();
-        busy = true;
+        // The busy flag is `startBusy`/`stopBusy` now (the chrome owns it); the
+        // first statement of the IIFE below runs synchronously, so the shell is
+        // marked busy before `runLine` returns, exactly as it was.
         void (async () => {
           try {
             startBusy("planning wiki enrich…");
@@ -2030,7 +1676,7 @@ export async function launchTuiAgentShell(opts: {
               return;
             }
 
-            const choice = await pickWikiEnrichMode(otui, r, choiceDock, {
+            const choice = await pickWikiEnrichMode(otui, r, chrome.dock, {
               draftCount: plan.drafts.length,
               acceptedCount: plan.accepted.length,
               total: plan.forceTargets.length,
@@ -2149,7 +1795,10 @@ export async function launchTuiAgentShell(opts: {
                 marginTop: 1,
               }),
             );
-            busy = false;
+            // Belt and braces: the paths above are believed to have stopped the
+            // spinner already, but `stopBusy()` is idempotent and a missed one
+            // leaves a live 120ms interval painting over an idle shell.
+            stopBusy();
             focusComposer(); // never steal focus from an active block-nav mode (R3)
           }
         })();
@@ -2191,100 +1840,27 @@ export async function launchTuiAgentShell(opts: {
         // No exact provider usage → show an estimated context size (never stuck at 0).
         if (!hasExactUsage) {
           const est = estimateContextTokens(history);
-          tokenText.content = otui.t`${otui.dim(`~${fmtTokens(est)}`)}`;
+          chrome.setHeaderMeta(`~${fmtTokens(est)}`);
           sbContext.content = otui.t`${otui.dim(`~${est.toLocaleString()} tokens (est)`)}`;
         }
         focusComposer(); // never steal focus from an active block-nav mode (R3)
       });
     };
 
-    // Route ↑/↓/Enter/Esc to the `/` command dropdown when it is open — via the
-    // GLOBAL internal key handler, which runs BEFORE the focused Input, so a
-    // handled key does not also move the Input's cursor / submit a turn.
-    // Selecting a command from the dropdown (Enter on the focused menu) runs it
-    // and returns focus to the composer.
-    menu.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-      const opt = menu.getSelectedOption();
-      menuNav = false;
-      menu.visible = false;
-      input.value = "";
-      input.focus();
-      if (opt !== null) {
-        runLine(opt.name);
-      }
-    });
-    // The dropdown is FOCUSED from the moment it opens (`refilter`), so the native
-    // SelectRenderable handles ↑/↓/Enter immediately. Here we only re-route
-    // printable keys / Backspace back into the composer value so typing still
-    // filters live, and Esc to close. Runs before the focused menu via onInternal.
-    r._internalKeyInput.onInternal("keypress", (key) => {
-      if (!menu.visible || !menuNav) {
-        return;
-      }
-      if (key.name === "escape") {
-        menu.visible = false;
-        menuNav = false;
-        input.value = "";
-        input.focus();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      if (key.name === "backspace") {
-        input.value = input.value.slice(0, -1);
-        refilter();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      // A printable single character (no modifiers) → append to the filter query.
-      const ch = key.sequence;
-      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
-        input.value += ch;
-        refilter();
-        key.preventDefault();
-        key.stopPropagation();
-      }
-      // ↑/↓/Enter fall through → the focused SelectRenderable handles them.
-    });
-
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
     // The mode itself is `createBlockNavController` (transcript-blocks.ts); all
     // that is left here is subscribing it. Registered through the `onKeypress`
     // wrapper rather than by reaching for the private `_internalKeyInput` symbol
-    // directly (risk R2); the `/`-menu router above is the pre-existing direct
-    // consumer.
+    // directly (risk R2); the chrome's `/`-menu router is the other consumer.
     onKeypress(r, (key) => {
       nav.handleKey(key);
     });
 
-    const submitComposer = (): void => {
-      // Legacy y/N fallback if an approval is still pending on the composer
-      // (interactive picker is the primary path and resolves itself).
-      if (pendingApproval !== undefined) {
-        const ok = isShellApproved(input.value);
-        input.value = "";
-        menu.visible = false;
-        const resolve = pendingApproval;
-        pendingApproval = undefined;
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `av${uid++}`,
-            content: ok ? otui.t`${otui.green("approved")}` : otui.t`${otui.red("denied")}`,
-          }),
-        );
-        resolve(ok);
-        return;
-      }
-      const line = input.value.trim();
-      input.value = "";
-      menu.visible = false;
-      syncComposerHeight();
+    // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
+    // already trimmed the line, cleared the composer and closed the dropdown.
+    chrome.onSubmit((line) => {
       runLine(line);
-    };
-    textarea.onSubmit = () => {
-      submitComposer();
-    };
+    });
 
     await done;
     return true;

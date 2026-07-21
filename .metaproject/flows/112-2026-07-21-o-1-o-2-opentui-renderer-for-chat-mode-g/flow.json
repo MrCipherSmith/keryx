@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 2,
+  "id": "112",
+  "slug": "o-1-o-2-opentui-renderer-for-chat-mode-g",
+  "title": "O-1/O-2: OpenTUI renderer for chat mode + genuinely shared slash-command registry",
+  "status": "done",
+  "createdAt": "2026-07-21T19:17:37.552Z",
+  "updatedAt": "2026-07-21T21:10:57.529Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b3226c81bc28c879710f3063cf70ccb3c28c84275dcef177e24321a692d11375",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T21:10:20.001Z",
+      "note": "src/tui/shell-chrome.ts mounted by shell-chrome.test.ts:110-159 via the shipped createShellChrome; asserts row ORDERING of header/transcript/composer/footer plus textarea.focused. The T2 worker proved it non-vacuous by prototyping the implementation (8 pass, clean typecheck) then deleting it."
+    },
+    "AC2": {
+      "at": "2026-07-21T21:10:20.066Z",
+      "note": "All four forward-declared bindings resolved by construction order: toast slot built before the SELECTION handler that can call it; clearBusyTimer deleted as a binding and owned by destroy(); setBusyPhase real before the factory returns; nav controller now closes over chrome fields. Two genuine cycles are explicit registration points - addOverlaySource and setFooterOverride - each commented with why. Reviewer confirmed no placeholder is rebound."
+    },
+    "AC3": {
+      "at": "2026-07-21T21:10:20.129Z",
+      "note": "shell-chrome.test.ts:181-235 and :237-290 - / opens, printable keys filter, Esc closes and returns focus (via pressEscapeAndSettle for the 20ms bare-Esc timeout), and overlayActive() suppresses the router including proof it re-arms after release. Reviewer called this the strongest test in the set."
+    },
+    "AC4": {
+      "at": "2026-07-21T21:10:20.193Z",
+      "note": "shell-chrome.test.ts:292-317 toast render, replace and auto-clear; :319-360 asserts the footer ROW specifically for setBusyPhase and the idle-hint restore. Frame-based, not state-based."
+    },
+    "AC5": {
+      "at": "2026-07-21T21:10:20.256Z",
+      "note": "shell-chrome.test.ts:362-404 at four terminal sizes (90x24, 70x18, 120x30, 60x12) with 60 transcript lines and a draft preserved; transcript children are plain TextRenderables so the pinned scrollTop===2 overdraw defect cannot be depended on."
+    },
+    "AC6": {
+      "at": "2026-07-21T21:10:20.318Z",
+      "note": "launchTuiAgentShell 1610 to 1254 lines, keeping only the S2 agent set. src/tui kept EXACTLY 630 expect() calls across the extraction - no assertion lost. Seven behavioural differences were self-reported and all are recorded in journal.md rather than made silently; the reviewer diffed the chrome line-by-line against base 35f96c1 and confirmed layout order, ids, flex properties, keyBindings, menu colours, MENU_HEIGHT, SPINNER_MS, TOAST_MS and menu order faithful."
+    },
+    "AC7": {
+      "at": "2026-07-21T21:10:40.087Z",
+      "note": "AgentSlashCommand carries modes plus optional modeDescriptions; describeCommand/commandsForMode/filterCommands all require a mode, so the flattened option shape a menu needs is unobtainable without naming one. /expand /think /copy /resume agent-only; /models /provider chat-only. Three entries carry per-mode wording (/model argument vs picker, /connect guidance vs key entry, /exit). agent-commands.test.ts:42-103 pins per-mode descriptions and that agent order reproduces the pre-112 menu."
+    },
+    "AC8": {
+      "at": "2026-07-21T21:10:40.153Z",
+      "note": "shell.ts:355-359 plus shell-slash-registry.test.ts:155-171 - /expand /think /copy /resume in chat produce 'only available in agent mode' and 'this is chat mode', never 'Unknown command', and start no provider turn. A genuinely unknown token still gets the plain Unknown command. Symmetric guard added for /models and /provider in agent readline."
+    },
+    "AC9": {
+      "at": "2026-07-21T21:10:40.219Z",
+      "note": "Three production consumers where there was one: the TUI (tui-shell.ts), chat readline and agent readline (both in shell.ts, via renderCommandHelp and describeUnavailableCommand). shell-slash-registry.test.ts:74-117 iterates commandsForMode('chat') and asserts each description appears in real runShell output, so a hand-written literal fails the moment the registry is edited; :121-152 proves chat help carries chat wording and NOT agent wording for /model and /connect."
+    },
+    "AC10": {
+      "at": "2026-07-21T21:10:40.284Z",
+      "note": "chat-shell.test.ts:112-116 passes the real imported runShell (not a stub) with a fake provider; :146-151 asserts the streamed reply on captureCharFrame(). Also covers /help, the wrong-mode message and /exit teardown."
+    },
+    "AC11": {
+      "at": "2026-07-21T21:10:40.349Z",
+      "note": "chat-shell.test.ts:245-349 - submissions become lines in order including while a turn runs, the iterator ends cleanly on /exit both during and between turns, return() is safe, and the '\\n\\n' separator never reaches the transcript as content. F7 refined the rule: an ambiguous leading separator is held and flushed only if more output follows, because setting streaming in onTurnStart would have regressed the no-output-turn case."
+    },
+    "AC12": {
+      "at": "2026-07-21T21:10:40.422Z",
+      "note": "chooseShellSurface(flags, isTty) at shell.ts:1155-1182 returns tui-agent/tui-chat/readline; guard at :1218, dispatch at :1288. Credential path shared via resolveTuiStartup so a key saved by /connect is applied in chat - shell-launch.test.ts:56-92 asserts it lands in env, that a user-set env var still wins, and that a saved selection suppresses detection. The original AC12 test was a TAUTOLOGY caught in review (it asserted wantTui===true for --chat, already true before the fix); the replacement was verified to fail against the old guard, returning 'readline' for --chat."
+    },
+    "AC13": {
+      "at": "2026-07-21T21:10:40.484Z",
+      "note": "chat-shell.test.ts:185-228 asserts a ts fence renders its language tag and that diff add/remove lines carry distinct span foreground colours via captureSpans().fg.toInts() - colour cannot be proven by a substring check."
+    },
+    "AC14": {
+      "at": "2026-07-21T21:10:55.117Z",
+      "note": "package.json absent from the flow diff; no onUsage added to ShellIO - chat's header uses the existing estimateContextTokens and labels it an estimate (D-A2). @opentui/core reached only via typeof import(...) and dynamic await import(): shell-chrome.ts:47, chat-shell.ts:53 and :452, with no top-level import and no forbidden literal in a comment. The src/capability/no-optional-imports guard passes."
+    },
+    "AC15": {
+      "at": "2026-07-21T21:10:55.181Z",
+      "note": "git diff --stat on src/commands/shell.test.ts is EMPTY across every commit of this flow, verified again after T8. Its ~600 lines pinning runShell all pass unmodified. readline still runs chat when there is no TTY, the optional dependency is absent, or the renderer fails to initialise - chooseShellSurface returns 'readline' and both TUI surfaces fall through on a false return."
+    },
+    "AC16": {
+      "at": "2026-07-21T21:10:55.244Z",
+      "note": "bun run typecheck clean; bun test 2072 pass / 11 skip / 0 fail (baseline 2024 before the flow, plus 48 new tests, none lost). keryx health run: gate WARN, score 92, regression 3 vs the stale 2026-07-06 baseline - the same pre-existing warning flow 109 investigated; neither shell-chrome.ts nor chat-shell.ts appears in the findings, and the only flow-related entry is tui-shell.ts's long-standing churn hotspot whose size this flow reduced. review-orchestrator raised 5 MEDIUM and 6 LOW; all eleven are fixed and dispositioned in journal.md, with the reviewer explicitly told T3/T4 moved untested code."
+    },
+    "AC17": {
+      "at": "2026-07-21T21:10:55.308Z",
+      "note": "specification.md: O-1 and O-2 closed in section 10 with the original finding kept above each resolution; status line is plain 'implemented'; section 1's diagram now shows the two drivers, the two IO implementations and the shared chrome, and names the pull/push asymmetry - it had claimed AgentIO/ShellIO since before either was true. D-A1..D-A4 recorded in section 9. README status, runtime evidence and the Phase 5 note updated. Deferred items remain listed: D-A3 (replies as blocks), D-A2, and O-3/O-4/O-5."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/188"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "S4 — mode-aware shared command registry, readline surfaces included",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "S3 — chat driver + --chat launch path",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Verify, review, update the docpack and journal",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Fix review findings: helper duplication, menu focus/menuNav desync, tautological AC12 test, dead pendingApproval",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T19:17:37.552Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T19:33:56.309Z",
+      "event": "task-added",
+      "detail": "T5: S4 — mode-aware shared command registry, readline surfaces included"
+    },
+    {
+      "at": "2026-07-21T19:33:56.376Z",
+      "event": "task-added",
+      "detail": "T6: S3 — chat driver + --chat launch path"
+    },
+    {
+      "at": "2026-07-21T19:33:56.443Z",
+      "event": "task-added",
+      "detail": "T7: Verify, review, update the docpack and journal"
+    },
+    {
+      "at": "2026-07-21T19:33:56.508Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T19:33:56.574Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T19:33:56.642Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T19:44:04.304Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T19:56:46.786Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T20:11:24.899Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T20:21:26.304Z",
+      "event": "task-done",
+      "detail": "T5: S4 — mode-aware shared command registry, readline surfaces included"
+    },
+    {
+      "at": "2026-07-21T20:36:23.017Z",
+      "event": "task-done",
+      "detail": "T6: S3 — chat driver + --chat launch path"
+    },
+    {
+      "at": "2026-07-21T20:46:39.242Z",
+      "event": "task-added",
+      "detail": "T8: Fix review findings: helper duplication, menu focus/menuNav desync, tautological AC12 test, dead pendingApproval"
+    },
+    {
+      "at": "2026-07-21T21:01:03.771Z",
+      "event": "task-done",
+      "detail": "T8: Fix review findings: helper duplication, menu focus/menuNav desync, tautological AC12 test, dead pendingApproval"
+    },
+    {
+      "at": "2026-07-21T21:05:07.132Z",
+      "event": "task-done",
+      "detail": "T7: Verify, review, update the docpack and journal"
+    },
+    {
+      "at": "2026-07-21T21:10:19.906Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/188"
+    },
+    {
+      "at": "2026-07-21T21:10:20.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/tui/shell-chrome.ts mounted by shell-chrome.test.ts:110-159 via the shipped createShellChrome; asserts row ORDERING of header/transcript/composer/footer plus textarea.focused. The T2 worker proved it non-vacuous by prototyping the implementation (8 pass, clean typecheck) then deleting it."
+    },
+    {
+      "at": "2026-07-21T21:10:20.066Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: All four forward-declared bindings resolved by construction order: toast slot built before the SELECTION handler that can call it; clearBusyTimer deleted as a binding and owned by destroy(); setBusyPhase real before the factory returns; nav controller now closes over chrome fields. Two genuine cycles are explicit registration points - addOverlaySource and setFooterOverride - each commented with why. Reviewer confirmed no placeholder is rebound."
+    },
+    {
+      "at": "2026-07-21T21:10:20.129Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell-chrome.test.ts:181-235 and :237-290 - / opens, printable keys filter, Esc closes and returns focus (via pressEscapeAndSettle for the 20ms bare-Esc timeout), and overlayActive() suppresses the router including proof it re-arms after release. Reviewer called this the strongest test in the set."
+    },
+    {
+      "at": "2026-07-21T21:10:20.193Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: shell-chrome.test.ts:292-317 toast render, replace and auto-clear; :319-360 asserts the footer ROW specifically for setBusyPhase and the idle-hint restore. Frame-based, not state-based."
+    },
+    {
+      "at": "2026-07-21T21:10:20.257Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: shell-chrome.test.ts:362-404 at four terminal sizes (90x24, 70x18, 120x30, 60x12) with 60 transcript lines and a draft preserved; transcript children are plain TextRenderables so the pinned scrollTop===2 overdraw defect cannot be depended on."
+    },
+    {
+      "at": "2026-07-21T21:10:20.318Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: launchTuiAgentShell 1610 to 1254 lines, keeping only the S2 agent set. src/tui kept EXACTLY 630 expect() calls across the extraction - no assertion lost. Seven behavioural differences were self-reported and all are recorded in journal.md rather than made silently; the reviewer diffed the chrome line-by-line against base 35f96c1 and confirmed layout order, ids, flex properties, keyBindings, menu colours, MENU_HEIGHT, SPINNER_MS, TOAST_MS and menu order faithful."
+    },
+    {
+      "at": "2026-07-21T21:10:40.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: AgentSlashCommand carries modes plus optional modeDescriptions; describeCommand/commandsForMode/filterCommands all require a mode, so the flattened option shape a menu needs is unobtainable without naming one. /expand /think /copy /resume agent-only; /models /provider chat-only. Three entries carry per-mode wording (/model argument vs picker, /connect guidance vs key entry, /exit). agent-commands.test.ts:42-103 pins per-mode descriptions and that agent order reproduces the pre-112 menu."
+    },
+    {
+      "at": "2026-07-21T21:10:40.153Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: shell.ts:355-359 plus shell-slash-registry.test.ts:155-171 - /expand /think /copy /resume in chat produce 'only available in agent mode' and 'this is chat mode', never 'Unknown command', and start no provider turn. A genuinely unknown token still gets the plain Unknown command. Symmetric guard added for /models and /provider in agent readline."
+    },
+    {
+      "at": "2026-07-21T21:10:40.220Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Three production consumers where there was one: the TUI (tui-shell.ts), chat readline and agent readline (both in shell.ts, via renderCommandHelp and describeUnavailableCommand). shell-slash-registry.test.ts:74-117 iterates commandsForMode('chat') and asserts each description appears in real runShell output, so a hand-written literal fails the moment the registry is edited; :121-152 proves chat help carries chat wording and NOT agent wording for /model and /connect."
+    },
+    {
+      "at": "2026-07-21T21:10:40.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: chat-shell.test.ts:112-116 passes the real imported runShell (not a stub) with a fake provider; :146-151 asserts the streamed reply on captureCharFrame(). Also covers /help, the wrong-mode message and /exit teardown."
+    },
+    {
+      "at": "2026-07-21T21:10:40.349Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: chat-shell.test.ts:245-349 - submissions become lines in order including while a turn runs, the iterator ends cleanly on /exit both during and between turns, return() is safe, and the '\\n\\n' separator never reaches the transcript as content. F7 refined the rule: an ambiguous leading separator is held and flushed only if more output follows, because setting streaming in onTurnStart would have regressed the no-output-turn case."
+    },
+    {
+      "at": "2026-07-21T21:10:40.422Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: chooseShellSurface(flags, isTty) at shell.ts:1155-1182 returns tui-agent/tui-chat/readline; guard at :1218, dispatch at :1288. Credential path shared via resolveTuiStartup so a key saved by /connect is applied in chat - shell-launch.test.ts:56-92 asserts it lands in env, that a user-set env var still wins, and that a saved selection suppresses detection. The original AC12 test was a TAUTOLOGY caught in review (it asserted wantTui===true for --chat, already true before the fix); the replacement was verified to fail against the old guard, returning 'readline' for --chat."
+    },
+    {
+      "at": "2026-07-21T21:10:40.484Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: chat-shell.test.ts:185-228 asserts a ts fence renders its language tag and that diff add/remove lines carry distinct span foreground colours via captureSpans().fg.toInts() - colour cannot be proven by a substring check."
+    },
+    {
+      "at": "2026-07-21T21:10:55.117Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: package.json absent from the flow diff; no onUsage added to ShellIO - chat's header uses the existing estimateContextTokens and labels it an estimate (D-A2). @opentui/core reached only via typeof import(...) and dynamic await import(): shell-chrome.ts:47, chat-shell.ts:53 and :452, with no top-level import and no forbidden literal in a comment. The src/capability/no-optional-imports guard passes."
+    },
+    {
+      "at": "2026-07-21T21:10:55.181Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: git diff --stat on src/commands/shell.test.ts is EMPTY across every commit of this flow, verified again after T8. Its ~600 lines pinning runShell all pass unmodified. readline still runs chat when there is no TTY, the optional dependency is absent, or the renderer fails to initialise - chooseShellSurface returns 'readline' and both TUI surfaces fall through on a false return."
+    },
+    {
+      "at": "2026-07-21T21:10:55.244Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: bun run typecheck clean; bun test 2072 pass / 11 skip / 0 fail (baseline 2024 before the flow, plus 48 new tests, none lost). keryx health run: gate WARN, score 92, regression 3 vs the stale 2026-07-06 baseline - the same pre-existing warning flow 109 investigated; neither shell-chrome.ts nor chat-shell.ts appears in the findings, and the only flow-related entry is tui-shell.ts's long-standing churn hotspot whose size this flow reduced. review-orchestrator raised 5 MEDIUM and 6 LOW; all eleven are fixed and dispositioned in journal.md, with the reviewer explicitly told T3/T4 moved untested code."
+    },
+    {
+      "at": "2026-07-21T21:10:55.308Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: specification.md: O-1 and O-2 closed in section 10 with the original finding kept above each resolution; status line is plain 'implemented'; section 1's diagram now shows the two drivers, the two IO implementations and the shared chrome, and names the pull/push asymmetry - it had claimed AgentIO/ShellIO since before either was true. D-A1..D-A4 recorded in section 9. README status, runtime evidence and the Phase 5 note updated. Deferred items remain listed: D-A3 (replies as blocks), D-A2, and O-3/O-4/O-5."
+    },
+    {
+      "at": "2026-07-21T21:10:55.370Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T21:10:57.529Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

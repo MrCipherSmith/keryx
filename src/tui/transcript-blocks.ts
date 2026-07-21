@@ -23,6 +23,7 @@ import {
   fenceInfo,
   looksLikeUnifiedDiff,
   payloadKind,
+  segmentMarkdown,
   splitLines,
   stripTrailingCr,
   type MdSegment,
@@ -576,6 +577,110 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
         // best-effort teardown
       }
     },
+  };
+}
+
+/** An assistant reply rendered as a column of per-segment sibling views. */
+export interface AssistantMessageStream {
+  /** Append a streamed chunk; the container is created on the first content. */
+  push(chunk: string): void;
+  /**
+   * The authoritative final text: re-segment ONCE (not per token) and rebuild.
+   * A message that segments to nothing is removed rather than left as an empty
+   * container.
+   */
+  finalize(text: string): void;
+  /** True while a message container is open (content streamed, not finalized). */
+  open(): boolean;
+}
+
+let messageSeq = 0;
+
+/**
+ * A streaming assistant message: one `SegmentView` per markdown segment, so a
+ * fence can be framed with its language tag instead of being flattened into one
+ * dim line (flow 109 / AC5).
+ *
+ * Extracted in flow 112 (T6) so BOTH shells render assistant text through the
+ * same object: `createTuiAgentIo`'s `write`/`onAssistantText` (agent) and the
+ * chat driver's `ShellIO.write`/`onTurnEnd` (chat) are the same two calls under
+ * different hook names, and the two surfaces cannot drift apart by construction.
+ *
+ * Repaints run from `frozen` onwards only: earlier segments are settled, so a
+ * token costs the trailing segment's render and nothing else (risk R1).
+ */
+export function createAssistantMessageStream(
+  otui: OpenTui,
+  renderer: Renderer,
+  parent: Box,
+): AssistantMessageStream {
+  type Message = {
+    container: Box;
+    segmenter: StreamSegmenter;
+    views: SegmentView[];
+    /** Views whose segment is final; never repainted again. */
+    frozen: number;
+  };
+  let message: Message | undefined;
+
+  const start = (): Message => {
+    messageSeq += 1;
+    const container = new otui.BoxRenderable(renderer, {
+      id: `msg${messageSeq}`,
+      flexDirection: "column",
+      flexShrink: 0,
+    });
+    parent.add(container);
+    return { container, segmenter: createStreamSegmenter(), views: [], frozen: 0 };
+  };
+
+  const paint = (m: Message, segments: readonly MdSegment[], frozen: number): void => {
+    for (let i = m.frozen; i < segments.length; i++) {
+      const segment = segments[i];
+      if (segment === undefined) {
+        continue;
+      }
+      const existing = m.views[i];
+      if (existing !== undefined && existing.kind === segment.kind) {
+        existing.update(segment);
+        continue;
+      }
+      existing?.destroy();
+      m.views[i] = createSegmentView(otui, renderer, m.container, segment);
+    }
+    for (const stale of m.views.splice(segments.length)) {
+      stale.destroy();
+    }
+    m.frozen = frozen;
+  };
+
+  return {
+    push: (chunk) => {
+      if (chunk.length === 0) {
+        return;
+      }
+      const m = (message ??= start());
+      const { segments, frozen } = m.segmenter.push(chunk);
+      paint(m, segments, frozen);
+    },
+    finalize: (text) => {
+      const m = message ?? start();
+      for (const view of m.views.splice(0)) {
+        view.destroy();
+      }
+      m.frozen = 0;
+      const segments = segmentMarkdown(text);
+      paint(m, segments, segments.length);
+      if (segments.length === 0) {
+        try {
+          parent.remove(m.container);
+        } catch {
+          // best-effort teardown
+        }
+      }
+      message = undefined;
+    },
+    open: () => message !== undefined,
   };
 }
 

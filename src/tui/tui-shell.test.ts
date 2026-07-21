@@ -10,10 +10,12 @@ import { tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  attachBlockIo,
   composerHeightForLines,
   COMPOSER_MAX_ROWS,
   COMPOSER_MIN_ROWS,
+} from "./shell-chrome";
+import {
+  attachBlockIo,
   createTuiAgentIo,
   estimateContextTokens,
   fmtTokens,
@@ -30,7 +32,7 @@ import {
   EVICTED_BLOCK_TEXT,
   type BlockState,
 } from "./transcript-blocks";
-import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
+import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
@@ -168,14 +170,14 @@ test("live /-dropdown filters commands as you type (headless reactivity)", async
     width: 80,
     height: 6,
     visible: false,
-    options: [...AGENT_SLASH_COMMANDS],
+    options: commandsForMode("agent"),
   });
   renderer.root.add(menu);
   const input = new otui.core.InputRenderable(renderer, { id: "prompt" });
   renderer.root.add(input);
   input.focus();
   input.on(otui.core.InputRenderableEvents.INPUT, () => {
-    const matches = filterCommands(input.value);
+    const matches = filterCommands(input.value, "agent");
     if (matches.length > 0) {
       menu.options = matches;
       menu.visible = true;
@@ -219,6 +221,9 @@ test("fmtTokens: compact K formatting", () => {
   expect(fmtTokens(22000)).toBe("22.0K");
 });
 
+// The clamp under test is `shell-chrome.ts`'s — the one the shipped chrome's
+// `syncComposerHeight` calls. A duplicate used to live in `tui-shell.ts` with no
+// production caller left, so this test guarded an orphan.
 test("composerHeightForLines: grow 1..6 then clamp (vertical scroll above max)", () => {
   expect(composerHeightForLines(0)).toBe(COMPOSER_MIN_ROWS);
   expect(composerHeightForLines(1)).toBe(1);
@@ -417,7 +422,7 @@ async function mountBlockHarness(
     width: 40,
     height: 4,
     visible: false,
-    options: [...AGENT_SLASH_COMMANDS],
+    options: commandsForMode("agent"),
   });
   main.add(menu);
   const composer = new otui.core.BoxRenderable(renderer, {
