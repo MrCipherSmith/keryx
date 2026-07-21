@@ -3,9 +3,9 @@
   "id": "106",
   "slug": "p1-global-sandbox-json-defaults-for-mask",
   "title": "P1 global sandbox.json defaults for mask/shell/tls",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T15:37:05.325Z",
-  "updatedAt": "2026-07-21T15:40:06.885Z",
+  "updatedAt": "2026-07-21T15:41:14.350Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/177"
   },
   "tasks": [
     {
@@ -165,6 +165,20 @@
       "at": "2026-07-21T15:40:06.885Z",
       "event": "ac-confirmed",
       "detail": "AC6: unit tests + wiring"
+    },
+    {
+      "at": "2026-07-21T15:41:11.975Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/177 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T15:41:12.071Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T15:41:14.350Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
