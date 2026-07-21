@@ -25,11 +25,13 @@ import {
   type BlockSink,
 } from "./tui-shell";
 import {
+  appendUserEcho,
   createBlockMount,
   createBlockNavController,
   createBlockRegistry,
   createBlockView,
   EVICTED_BLOCK_TEXT,
+  MAX_THOUGHT_LINES,
   type BlockState,
 } from "./transcript-blocks";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
@@ -1089,3 +1091,175 @@ otuiTest("AC12: expanding a non-newest block preserves the scroll offset instead
   h.destroy();
 });
 
+// --- flow 115: transcript measurement, secondary reasoning, /think toggle ---
+//
+// RED before T2/T5. The defect these pin: a transcript box carrying
+// `alignSelf: "flex-start"` stops measuring its intrinsic height, collapses to
+// the viewport, squeezes bordered children so their border rows paint over the
+// content row, and makes the ScrollBox under-report `scrollHeight` — which puts
+// every row below a large expanded block permanently out of reach.
+
+/** Every descendant of `node`, itself excluded. */
+function descendants(node: { getChildren?: () => unknown[] }): { id: string; height: number }[] {
+  const out: { id: string; height: number }[] = [];
+  for (const child of (node.getChildren?.() ?? []) as { id: string; height: number }[]) {
+    out.push(child);
+    out.push(...descendants(child as unknown as { getChildren?: () => unknown[] }));
+  }
+  return out;
+}
+
+/** The captured span carrying `needle`, searched across every line. */
+function spanWith(frame: SpanFrame, needle: string): { attributes: number } | undefined {
+  for (const line of frame.lines) {
+    const span = line.spans.find((s) => s.text.includes(needle));
+    if (span !== undefined) {
+      return span;
+    }
+  }
+  return undefined;
+}
+
+test("AC2: a bordered transcript box keeps its natural height even when the transcript overflows", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const h = await mountBlockHarness(otui, { width: 70, height: 16 });
+  // The shipped user-echo box, shared by the agent and chat shells.
+  appendUserEcho(otui.core, h.renderer, h.scroll.content, { id: "ub-1", line: "первый вопрос" });
+  const big = h.add({
+    kind: "thought",
+    summary: "",
+    fullText: Array.from({ length: 30 }, (_, i) => `reasoning line ${i + 1}`).join("\n"),
+  });
+  appendUserEcho(otui.core, h.renderer, h.scroll.content, { id: "ub-2", line: "добавляй" });
+  h.nav.setCollapsed(big, false);
+  await h.flush();
+  await h.flush();
+
+  // A rounded box with one content row is 3 rows tall. Squeezed to 2, OpenTUI
+  // paints its borders over the text — the corruption users reported.
+  const boxes = descendants(h.scroll.content);
+  for (const id of ["ub-1", "ub-2"]) {
+    const box = boxes.find((b) => b.id === id);
+    expect(`${id}: ${box?.height}`).toBe(`${id}: 3`);
+  }
+  h.destroy();
+});
+
+test("AC3: an expanded block reports its real height, so rows below it stay reachable", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const h = await mountBlockHarness(otui, { width: 70, height: 16 });
+  const big = h.add({
+    kind: "output",
+    summary: "big-summary",
+    fullText: Array.from({ length: 30 }, (_, i) => `payload line ${i + 1}`).join("\n"),
+  });
+  h.scroll.content.add(
+    new otui.core.TextRenderable(h.renderer, { id: "after", content: "MARKER-AFTER-BLOCK" }),
+  );
+  h.nav.setCollapsed(big, false);
+  await h.flush();
+  await h.flush();
+
+  // 30 payload lines + the frame's two border rows must all be measured.
+  const children = h.scroll.content.getChildren() as unknown as { height: number }[];
+  const summed = children.reduce((n, c) => n + c.height, 0);
+  expect(summed).toBeGreaterThanOrEqual(32);
+  expect(h.scroll.scrollHeight).toBeGreaterThanOrEqual(summed);
+
+  // …and the row registered AFTER the block can actually be scrolled to.
+  h.scroll.stickyScroll = false;
+  h.scroll.scrollTop = h.scroll.scrollHeight;
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("MARKER-AFTER-BLOCK");
+  h.destroy();
+});
+
+test("AC4: an expanded reasoning body is dim; tool output on the same frame is not", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+  io.onReasoning?.("REASONING-BODY-LINE");
+  io.onToolResult?.("read_file", { output: "TOOL-OUTPUT-LINE", isError: false });
+  for (const state of h.registry.list()) {
+    h.nav.setCollapsed(state.id, false);
+  }
+  await h.flush();
+  await h.flush();
+
+  const spans = h.captureSpans();
+  const dim = otui.core.TextAttributes.DIM;
+  const reasoning = spanWith(spans, "REASONING-BODY-LINE");
+  const output = spanWith(spans, "TOOL-OUTPUT-LINE");
+  expect(reasoning).toBeDefined();
+  expect(output).toBeDefined();
+  expect((reasoning?.attributes ?? 0) & dim).toBe(dim); // secondary
+  expect((output?.attributes ?? 0) & dim).toBe(0); // unchanged
+  h.destroy();
+});
+
+test("AC5: an expanded reasoning body is bounded, while the retained payload stays whole", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const h = await mountBlockHarness(otui, { width: 70, height: 40 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+  const lines = Array.from({ length: 60 }, (_, i) => `thought line ${i + 1}`);
+  io.onReasoning?.(lines.join("\n"));
+  const id = h.registry.list().at(-1)?.id ?? "";
+  h.nav.setCollapsed(id, false);
+  await h.flush();
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("thought line 1");
+  expect(frame).not.toContain(`thought line ${MAX_THOUGHT_LINES + 1}`);
+  expect(frame).toContain("more lines not shown");
+  // Retention is untouched: copy still gets everything (flow 109 D-4).
+  expect(h.registry.bodyText(id)).toContain("thought line 60");
+  expect(h.nav.copy(id)).toBe(true);
+  expect(h.copied.at(-1)).toContain("thought line 60");
+  h.destroy();
+});
+
+test("AC6: toggleNewest expands then collapses the newest reasoning block, and the header says how", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+  io.onToolResult?.("read_file", { output: "unrelated output", isError: false });
+  io.onReasoning?.("REASONING-BODY-LINE\nsecond line");
+
+  // What `/think` calls (the shell closure keeps only the command dispatch).
+  const expanded = h.nav.toggleNewest("thought");
+  await h.flush();
+  expect(expanded?.kind).toBe("thought");
+  expect(expanded?.collapsed).toBe(false);
+  expect(h.captureCharFrame()).toContain("REASONING-BODY-LINE");
+  // While expanded the header advertises the way back.
+  expect(h.captureCharFrame()).toContain("collapse");
+
+  const collapsed = h.nav.toggleNewest("thought");
+  await h.flush();
+  expect(collapsed?.collapsed).toBe(true);
+  expect(h.captureCharFrame()).not.toContain("REASONING-BODY-LINE");
+
+  // An unrelated tool block is never the target of `/think`.
+  expect(h.registry.list().find((b) => b.kind === "output")?.collapsed).toBe(true);
+  expect(h.nav.toggleNewest("no-such-kind")).toBeUndefined();
+  h.destroy();
+});

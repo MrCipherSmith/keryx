@@ -4,11 +4,13 @@ import {
   blockLabel,
   classifyDiffLine,
   fenceInfo,
+  hugWidth,
   looksLikeUnifiedDiff,
   payloadKind,
   segmentMarkdown,
   splitLines,
   stripTrailingCr,
+  visualWidth,
 } from "./md-blocks";
 
 // flow 109 / T2 — RED phase. `src/lib/md-blocks.ts` does not exist yet.
@@ -336,8 +338,56 @@ describe("blockLabel", () => {
     expect(blockLabel({ kind: "code", lineCount: 3, collapsed: true, hint: "" })).toBe("▸ code (3 lines)");
   });
 
-  test("the label is plain text so callers own the styling", () => {
+  test("the label is plain text so callers own the styling (flow 115 anchor)", () => {
     const label = blockLabel({ kind: "thought", lineCount: 9, collapsed: true, hint: "ctrl+r" });
     expect(label).not.toContain("");
+  });
+});
+
+// --- visualWidth / hugWidth (flow 115) -------------------------------------
+//
+// The hug width feeds `maxWidth` on transcript boxes. It replaces
+// `alignSelf: "flex-start"`, which collapses a box's intrinsic HEIGHT to the
+// viewport (measured in flow 115) and makes bordered boxes draw their border
+// rows over their content. Under-measuring here only costs extra wrapping and
+// over-measuring costs nothing (the parent clamps `maxWidth`), so the helper is
+// deliberately simple and total.
+
+describe("visualWidth", () => {
+  test("counts terminal columns, not UTF-16 code units", () => {
+    expect(visualWidth("")).toBe(0);
+    expect(visualWidth("abc")).toBe(3);
+    expect(visualWidth("привет")).toBe(6); // non-ASCII, still one column each
+  });
+
+  test("wide characters (CJK, emoji) count as two columns", () => {
+    expect(visualWidth("日本語")).toBe(6);
+    expect(visualWidth("a日")).toBe(3);
+    expect(visualWidth("✓")).toBe(1); // narrow symbol stays 1
+    expect(visualWidth("🙂")).toBe(2); // one wide glyph, not two UTF-16 units
+  });
+
+  test("zero-width marks add nothing", () => {
+    expect(visualWidth("é")).toBe(1); // combining acute
+    expect(visualWidth("a​b")).toBe(2); // zero-width space
+  });
+});
+
+describe("hugWidth", () => {
+  test("is the widest line plus the caller's chrome allowance", () => {
+    expect(hugWidth("ab\nabcd\nabc", 4)).toBe(8); // widest 4 + border/padding 4
+    expect(hugWidth("", 4)).toBe(4);
+  });
+
+  test("measures visual columns so a wide-character line is not clipped", () => {
+    expect(hugWidth("日本語", 4)).toBe(10);
+  });
+
+  test("ignores a trailing newline instead of counting an empty last line", () => {
+    expect(hugWidth("abcd\n", 0)).toBe(4);
+  });
+
+  test("never returns less than the chrome allowance", () => {
+    expect(hugWidth("\n\n", 4)).toBe(4);
   });
 });
