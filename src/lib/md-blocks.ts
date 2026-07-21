@@ -16,7 +16,12 @@ export type BlockLabelInput = { kind: string; lineCount: number; collapsed: bool
 // indentation so a fence nested in a list item still opens a block (4+ would be
 // an indented code block). `~~~` behaves exactly like ```` ``` ````. Inline
 // backticks in prose therefore never open a block.
-const FENCE_LINE = /^[ \t]{0,3}(```|~~~)(.*)$/;
+//
+// The trailing `\r?` is load-bearing: JS treats CR as a line terminator, so with
+// a CRLF payload (Windows tool output, a CRLF file read, a model emitting CRLF)
+// `.` refuses to match the `\r` AND `$` refuses to match before it — without it
+// `"```ts\r"` is not a fence and the whole payload degrades to raw prose.
+const FENCE_LINE = /^[ \t]{0,3}(```|~~~)(.*)\r?$/;
 
 // `@@ -a[,b] +c[,d] @@` — the only prefix strong enough to call a text a diff on
 // its own. A bare `-`/`+` line is far more likely to be a markdown bullet.
@@ -24,6 +29,21 @@ const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/;
 
 const MARKDOWN_LANGS = new Set(["md", "markdown", "prompt", "txt", "text"]);
 const DIFF_LANGS = new Set(["diff", "patch"]);
+
+/**
+ * Drop the CR of a CRLF pair from an already-split line. Every line-oriented
+ * helper here funnels through it so a CRLF payload behaves exactly like an LF
+ * one and no stray CR survives into a rendered body (it would print as a control
+ * character and desync the frame).
+ */
+export function stripTrailingCr(line: string): string {
+  return line.endsWith("\r") ? line.slice(0, -1) : line;
+}
+
+/** Split on LF and normalize CRLF away. The line splitter for both shells. */
+export function splitLines(text: string): string[] {
+  return text.split("\n").map(stripTrailingCr);
+}
 
 /**
  * Fence marker + info-string language of `line`, or `undefined` when the line is
@@ -43,7 +63,8 @@ export function fenceInfo(line: string): { marker: string; lang: string } | unde
 // Split markdown into text and fenced-code segments. Fence lines are dropped;
 // only the first token of the info string survives as `lang` (case preserved).
 // An unterminated fence — the normal case while a response is still streaming —
-// yields a code segment carrying the partial body. Pure + deterministic.
+// yields a code segment carrying the partial body. CRLF input is normalized to
+// LF, so segment bodies never carry a stray CR. Pure + deterministic.
 export function segmentMarkdown(md: string): MdSegment[] {
   const segments: MdSegment[] = [];
   let text: string[] = [];
@@ -61,7 +82,7 @@ export function segmentMarkdown(md: string): MdSegment[] {
     }
   };
 
-  for (const line of md.split("\n")) {
+  for (const line of splitLines(md)) {
     const fence = fenceInfo(line);
     if (code === undefined) {
       if (fence === undefined) {
@@ -112,7 +133,7 @@ export function classifyDiffLine(line: string): DiffLineKind {
 // or an adjacent `--- ` / `+++ ` file-header pair, so a markdown bullet list
 // starting with `-` is never misdetected (AC7).
 export function looksLikeUnifiedDiff(text: string): boolean {
-  const lines = text.split("\n");
+  const lines = splitLines(text);
   for (const [index, line] of lines.entries()) {
     if (HUNK_HEADER.test(line)) {
       return true;

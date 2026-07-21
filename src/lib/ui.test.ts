@@ -144,6 +144,27 @@ test("renderMarkdown (AC7) does not colorize a bullet list inside a fence as a d
   expect(rendered).toContain(`${ESC}[90m`); // plain dimmed code body
 });
 
+test("renderMarkdown (FORCE_COLOR) segments a CRLF fence exactly like an LF one", () => {
+  forceColor();
+  // Regression (T6/F1): the fence regex used to reject `"```ts\r"`, so a CRLF
+  // payload rendered the raw fence markers as prose with no language tag.
+  const rendered = renderMarkdown("intro\r\n```ts\r\nconst x = 1;\r\n```\r\ntail");
+  expect(rendered).toBe(renderMarkdown("intro\n```ts\nconst x = 1;\n```\ntail"));
+  expect(rendered).not.toContain("```");
+  expect(rendered).not.toContain("\r");
+  expect(rendered).toContain("ts"); // language tag survived
+  expect(rendered).toContain("const x = 1;");
+});
+
+test("renderDiff (FORCE_COLOR) colorizes a CRLF diff and drops the stray CR", () => {
+  forceColor();
+  const rendered = renderDiff("@@ -1 +1 @@\r\n-old\r\n+new");
+  expect(rendered).not.toContain("\r");
+  expect(rendered).toContain(`${ESC}[36m@@ -1 +1 @@`);
+  expect(rendered).toContain(`${ESC}[31m-old`);
+  expect(rendered).toContain(`${ESC}[32m+new`);
+});
+
 test("renderDiff (NO_COLOR) returns the input unchanged with no escape codes", () => {
   process.env.NO_COLOR = "1";
   const diff = "--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n context";

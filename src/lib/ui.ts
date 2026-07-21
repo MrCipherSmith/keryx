@@ -1,5 +1,5 @@
 import { stdout } from "node:process";
-import { classifyDiffLine, looksLikeUnifiedDiff, payloadKind, segmentMarkdown } from "./md-blocks";
+import { classifyDiffLine, looksLikeUnifiedDiff, payloadKind, segmentMarkdown, splitLines } from "./md-blocks";
 
 // Terminal styling helpers. Colors are emitted only for an interactive TTY and
 // are suppressed when `NO_COLOR` is set; `FORCE_COLOR` forces them on (useful in
@@ -104,8 +104,7 @@ export function renderDiff(text: string): string {
   if (!colorEnabled()) {
     return text;
   }
-  return text
-    .split("\n")
+  return splitLines(text)
     .map((line) => {
       switch (classifyDiffLine(line)) {
         case "add":
