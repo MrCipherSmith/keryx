@@ -51,6 +51,7 @@ import {
   summarizeToolArgs,
 } from "../lib/ui";
 import { blockLabel, looksLikeUnifiedDiff } from "../lib/md-blocks";
+import { describeUnavailableCommand, renderCommandHelp } from "./agent-commands";
 import {
   type AgentDeps,
   type AgentIO,
@@ -140,22 +141,41 @@ const CONNECT_GUIDANCE = [
   "",
 ].join("\n");
 
-/** Help text listing the slash commands (must mention /model, /clear, /exit). */
+/**
+ * Help text for chat mode. The command list is DERIVED from the shared registry
+ * (`agent-commands.ts`) rather than duplicated here, so chat's menu and the TUI's
+ * can never drift; only the session footer is chat-specific.
+ */
 const HELP_TEXT = [
-  "Commands:",
-  "  /help              Show this help",
-  "  /model <name>      Switch the active model for subsequent turns",
-  "  /models            Pick a model for the current provider (numbered menu)",
-  "  /provider [name]   Switch provider by name, or (no arg) re-run full selection",
-  "  /connect           Show how to set ANTHROPIC_API_KEY for anthropic models",
-  "  /new               Start a new per-project session (old kept on disk)",
-  "  /clear             Alias of /new",
-  "  /compact [focus]   Compact model context (full archive kept)",
-  "  /exit, /quit       Leave the shell",
-  "",
+  renderCommandHelp("chat"),
   "Sessions are per-project. Resume: keryx shell -c | -r [id]",
   "",
 ].join("\n");
+
+/**
+ * Commands the readline AGENT REPL actually implements. Agent mode as a whole
+ * offers more (`/model`, `/connect`, `/think`, `/copy`, `/resume` — all TUI
+ * pickers or block operations that have no readline equivalent), so this surface
+ * advertises its own subset while still taking the WORDING from the registry.
+ */
+const READLINE_AGENT_COMMANDS: readonly string[] = [
+  "/help",
+  "/expand",
+  "/new",
+  "/clear",
+  "/compact",
+  "/exit",
+];
+
+/** Agent-REPL help: registry-derived command list + the agent-specific preamble. */
+export function readlineAgentHelpText(): string {
+  return (
+    "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
+    "graph_affected, memory_search, shell_exec (approval).\n" +
+    renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
+    "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
+  );
+}
 
 /**
  * The injectable REPL core. Iterates `io.lines`; slash commands are handled
@@ -329,6 +349,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       }
       if (command === "/connect") {
         system(CONNECT_GUIDANCE);
+        continue;
+      }
+      // A real command that belongs to the OTHER mode (`/expand`, `/think`,
+      // `/copy`, `/resume`) fails with a reason, not a bare "unknown command".
+      const wrongMode = describeUnavailableCommand(command, "chat");
+      if (wrongMode !== undefined) {
+        system(wrongMode);
         continue;
       }
       system(`Unknown command: ${command}. Type /help for commands.\n`);
@@ -902,12 +929,7 @@ async function runAgentRepl(
         return;
       }
       if (command === "/help") {
-        agentIo.onSystem?.(
-          "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
-            "graph_affected, memory_search, shell_exec (approval). " +
-            "/expand last tool output · /new|/clear new session · /compact [focus] · /exit.\n" +
-            "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n",
-        );
+        agentIo.onSystem?.(readlineAgentHelpText());
       } else if (command === "/expand") {
         const expanded = expandedToolOutput(lastToolName, lastToolOutput);
         if (expanded !== undefined) {
@@ -954,7 +976,12 @@ async function runAgentRepl(
           }
         }
       } else {
-        agentIo.onSystem?.(`Unknown command: ${command}. Type /help.\n`);
+        // `/models` / `/provider` are chat-mode commands: say so instead of
+        // calling them unknown. Anything else falls back to the old message.
+        agentIo.onSystem?.(
+          describeUnavailableCommand(command, "agent") ??
+            `Unknown command: ${command}. Type /help.\n`,
+        );
       }
       rich.printPrompt();
       continue;

@@ -30,7 +30,7 @@ import {
   EVICTED_BLOCK_TEXT,
   type BlockState,
 } from "./transcript-blocks";
-import { AGENT_SLASH_COMMANDS, filterCommands } from "../commands/agent-commands";
+import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
@@ -168,14 +168,14 @@ test("live /-dropdown filters commands as you type (headless reactivity)", async
     width: 80,
     height: 6,
     visible: false,
-    options: [...AGENT_SLASH_COMMANDS],
+    options: commandsForMode("agent"),
   });
   renderer.root.add(menu);
   const input = new otui.core.InputRenderable(renderer, { id: "prompt" });
   renderer.root.add(input);
   input.focus();
   input.on(otui.core.InputRenderableEvents.INPUT, () => {
-    const matches = filterCommands(input.value);
+    const matches = filterCommands(input.value, "agent");
     if (matches.length > 0) {
       menu.options = matches;
       menu.visible = true;
@@ -417,7 +417,7 @@ async function mountBlockHarness(
     width: 40,
     height: 4,
     visible: false,
-    options: [...AGENT_SLASH_COMMANDS],
+    options: commandsForMode("agent"),
   });
   main.add(menu);
   const composer = new otui.core.BoxRenderable(renderer, {

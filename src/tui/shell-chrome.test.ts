@@ -15,7 +15,7 @@
 // `src/capability/no-optional-imports` is a regex over file TEXT, so the
 // forbidden import form must not be spelled out in a comment here either.
 import { expect, test } from "bun:test";
-import { AGENT_SLASH_COMMANDS } from "../commands/agent-commands";
+import { commandsForMode } from "../commands/agent-commands";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<{
@@ -92,7 +92,7 @@ async function mountChrome(
     status: STATUS,
     footerHint: FOOTER_HINT,
     placeholder: PLACEHOLDER,
-    commands: [...AGENT_SLASH_COMMANDS],
+    commands: commandsForMode("agent"),
     toastMs: TOAST_MS,
     ...opts.chrome,
   });
@@ -199,7 +199,7 @@ test("AC3: `/` opens the menu, printable keys filter it, Esc closes it and retur
   // (`/clear` is further down than the menu's visible window — a described
   // option costs two rows — so it is not a usable frame marker.)
   expect(opened).toContain("/model");
-  expect(h.chrome.menu.options.length).toBe(AGENT_SLASH_COMMANDS.length);
+  expect(h.chrome.menu.options.length).toBe(commandsForMode("agent").length);
 
   // A printable key is re-routed back into the composer value so typing still
   // filters live, even though the composer is not the focused renderable.
@@ -217,7 +217,7 @@ test("AC3: `/` opens the menu, printable keys filter it, Esc closes it and retur
   await h.flush();
   expect(h.chrome.input.value).toBe("/");
   expect(h.captureCharFrame()).toContain("/model");
-  expect(h.chrome.menu.options.length).toBe(AGENT_SLASH_COMMANDS.length);
+  expect(h.chrome.menu.options.length).toBe(commandsForMode("agent").length);
 
   // Esc closes the menu, clears the query and hands the keyboard back.
   await pressEscapeAndSettle(h);
@@ -256,7 +256,7 @@ test("AC3: an active overlay suppresses the `/`-menu key router", async () => {
   await h.flush();
   expect(h.chrome.input.value).toBe("/"); // NOT "/h" — the router stayed out of it
   expect(h.captureCharFrame()).toContain("/model"); // …so the menu never refiltered
-  expect(h.chrome.menu.options.length).toBe(AGENT_SLASH_COMMANDS.length);
+  expect(h.chrome.menu.options.length).toBe(commandsForMode("agent").length);
 
   // Same for Esc: the overlay, not the menu, decides what Esc means.
   await pressEscapeAndSettle(h);

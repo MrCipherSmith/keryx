@@ -25,7 +25,12 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { AGENT_SLASH_COMMANDS, filterCommands, findAgentCommand } from "../commands/agent-commands";
+import {
+  commandsForMode,
+  filterCommands,
+  findAgentCommand,
+  renderCommandHelp,
+} from "../commands/agent-commands";
 import type { DetectedProvider } from "../commands/select";
 import { resolveModelsForPicker } from "../commands/providers";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
@@ -774,10 +779,11 @@ export async function launchTuiAgentShell(opts: {
       status: `${sel.provider}/${sel.model}`,
       footerHint: FOOTER_IDLE,
       placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
-      commands: AGENT_SLASH_COMMANDS,
+      commands: commandsForMode("agent"),
       headerMeta: "↑0 ↓0",
-      // The shared registry stays the single source of truth for the dropdown.
-      filterCommands: (query) => filterCommands(query),
+      // The shared registry stays the single source of truth for the dropdown,
+      // resolved through THIS surface's mode so the wording is agent-mode's.
+      filterCommands: (query) => filterCommands(query, "agent"),
     });
     mountedChrome = chrome;
     const transcript = chrome.transcript;
@@ -1147,8 +1153,7 @@ export async function launchTuiAgentShell(opts: {
     };
     setAskUserHost(askUserInteractive);
 
-    const helpText = (): string =>
-      ["Commands:", ...AGENT_SLASH_COMMANDS.map((c) => `  ${c.name}  ${c.description}`)].join("\n") + "\n";
+    const helpText = (): string => renderCommandHelp("agent");
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
@@ -1520,7 +1525,7 @@ export async function launchTuiAgentShell(opts: {
       // "In progress" is the chrome's own spinner state, which `startBusy` /
       // `stopBusy` below are the only things that move.
       if (chrome.isBusy()) {
-        const command = findAgentCommand(line);
+        const command = findAgentCommand(line, "agent");
         if (command?.name === "/exit") {
           r.destroy();
           return;
@@ -1567,7 +1572,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      const command = findAgentCommand(line);
+      const command = findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
           r.destroy();

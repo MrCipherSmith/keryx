@@ -41,7 +41,7 @@
 // module object arrive as parameters. There is no top-level import of it (the
 // static guard in `src/capability/no-optional-imports` is a regex over file
 // text, so the forbidden form must not appear in a comment either).
-import type { AgentSlashCommand } from "../commands/agent-commands";
+import type { SlashCommandOption } from "../commands/agent-commands";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -96,11 +96,11 @@ function composerHeightForLines(visualLines: number): number {
  * Prefix-filter `commands` by a composer query. `[]` when the query is not a
  * slash query; `/` alone returns all of them. Mirrors `filterCommands`
  * (`commands/agent-commands.ts`) but over the chrome's OWN list, because the
- * chrome may be mounted with a mode's subset. Overridable through
- * {@link ShellChromeOptions.filterCommands} so S4's mode-aware registry can take
- * the job back without touching this module. Pure.
+ * chrome may be mounted with a mode's subset. The real shells override it via
+ * {@link ShellChromeOptions.filterCommands} with the mode-aware registry (S4);
+ * this fallback keeps the chrome mountable on its own in tests. Pure.
  */
-function prefixFilter(commands: readonly AgentSlashCommand[], query: string): AgentSlashCommand[] {
+function prefixFilter(commands: readonly SlashCommandOption[], query: string): SlashCommandOption[] {
   const q = query.trim().toLowerCase();
   if (!q.startsWith("/")) {
     return [];
@@ -126,13 +126,13 @@ export interface ShellChromeOptions {
   /** Composer placeholder. */
   placeholder: string;
   /** Slash commands offered by the `/` dropdown, in menu order. */
-  commands: readonly AgentSlashCommand[];
+  commands: readonly SlashCommandOption[];
   /** Header right-hand slot (token counter). Empty by default. */
   headerMeta?: string | undefined;
   /** Toast auto-clear window in ms (default 5000). */
   toastMs?: number | undefined;
   /** Menu filter override; defaults to a prefix match over `commands`. */
-  filterCommands?: ((query: string) => readonly AgentSlashCommand[]) | undefined;
+  filterCommands?: ((query: string) => readonly SlashCommandOption[]) | undefined;
 }
 
 /**
