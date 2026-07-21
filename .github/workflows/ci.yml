@@ -91,10 +91,20 @@ jobs:
     # skips (a skip == the binary did not resolve == vacuous coverage).
     #
     # ONGOING COST (AC12): this adds FOUR hosted runners to every future PR and
-    # push to main — two Ubuntu (x64 + arm64) and two macOS (arm64 + Intel), the
-    # macOS legs billed at the higher macOS minute multiplier. Whoever next edits
-    # CI is trading that recurring cost for continuous proof of N1's platform
-    # claim; drop a leg only by also reopening O-3 in the specification.
+    # push to main — two Ubuntu (x64 + arm64) and two macOS (arm64 + Intel).
+    # The cost is NOT money: this repository is public, and standard hosted
+    # runners are free with no minute limit for public repos, macOS included.
+    # What it actually costs is (a) ~30s of extra wall-clock per PR — the legs
+    # run in parallel and each takes 11-28s — (b) queue time, since the free
+    # tier's concurrency ceiling for macOS is lower than for Linux, so two
+    # macOS legs can wait when several PRs land at once, and (c) four more
+    # places that can go red for reasons unrelated to the change under review,
+    # e.g. a runner-image or label change upstream (macos-13 was retired
+    # mid-flight while this matrix was being written).
+    # These legs are deliberately NOT required status checks — only
+    # "typecheck, tests, standard" is — so a red leg informs without blocking.
+    # Whoever next edits CI is trading the above for continuous proof of N1's
+    # platform claim; drop a leg only by also reopening O-3 in the specification.
     name: opentui native (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     strategy:

@@ -529,8 +529,18 @@ terminal that a hosted runner lacks, so a CI invocation takes the readline
 fallback by design. That is the same pty gap that bounds O-4's install clause;
 closing it is a shared follow-up, not part of this flow.
 
-**Cost.** The matrix runs four hosted runners on every future PR. Stated in the
-job comment so whoever next edits CI sees the trade-off.
+**Cost.** The matrix runs four hosted runners on every future PR — but not for
+money: this repository is public, and standard hosted runners are free with no
+minute limit for public repos, macOS included. The real costs are ~30 s of extra
+wall-clock (the legs run in parallel, 11-28 s each), queue time when several PRs
+land at once (the free tier's macOS concurrency ceiling is lower than Linux's),
+and four more places that can go red for reasons unrelated to the change under
+review — `macos-13` was retired mid-flight while this matrix was being written.
+
+The legs are deliberately **not** required status checks: `main`'s branch
+protection requires only `typecheck, tests, standard`, so a red leg informs
+without blocking a merge. Both trade-offs are repeated in the `ci.yml` job
+comment for whoever next edits CI.
 
 ### O-4 — the fallback was implemented but untested — **CLOSED in part** (flow 113)
 
