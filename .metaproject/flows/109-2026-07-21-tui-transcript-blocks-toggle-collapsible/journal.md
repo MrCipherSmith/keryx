@@ -274,3 +274,39 @@ matches what is actually shown.
 **skill_drift:** none beyond the T5a entry above, whose recommendation (a) the
 isolated worktree fully addresses and (b) this run followed — three commits, one
 per deliverable.
+
+### T5 verification — health gate is WARN, and it is pre-existing
+
+`keryx health run` reports **gate WARN, project score 92**, on the single reason
+`health regression 3 vs baseline`. The T5 dispatch recorded the baseline as
+`pass`, so this was investigated rather than waved through.
+
+It is not attributable to flow 109, let alone T5:
+
+- The baseline being compared against is `.metaproject/health/baselines/scores.json`,
+  `generatedAt` **2026-07-06**, committed in `fd43d35` (the repo's initial
+  `keryx 0.1.0` commit) with project `health_score: 95`. It has never been
+  re-recorded, so every flow since is measured against a two-week-old number.
+- The WARN is long-standing: flow 001's verification report
+  (`.metaproject/flows/001-2026-07-09-managed-review-feedback-loop/verification-report.md`)
+  already records `gate: WARN`, `reason: existing health regression 5 vs
+  baseline`. The current regression of **3 is smaller than the 5** recorded
+  there — the trend since is an improvement, not a decline.
+- There are **zero P0 and zero P1 findings**. All 108 findings are P2
+  cyclomatic-complexity warnings.
+- A changed-scope run (`keryx health run --changed --since b2c25e6`) attributes
+  no new finding to T5. The only two findings touching flow-109 production files
+  are pre-existing complexity warnings on `src/commands/shell.ts` and
+  `src/tui/tui-shell.ts`, both of which exceeded the threshold before this flow.
+- T5's entire production delta is one new ~20-line pure function
+  (`expandedToolOutput`, cyclomatic ≈5, well under the threshold of 10) that
+  *removed* inline branching from `runAgentRepl`. Everything else T5 touched is
+  test files and markdown, which are not scored for complexity.
+
+A direct A/B (running health against the base commit's file contents) was
+attempted and blocked by the sandbox's command classifier, so this rests on the
+changed-scope run and the historical record rather than a re-measured `pass`.
+**Nothing in this flow was found to move the gate**, but the "baseline: pass"
+premise in the dispatch could not be reproduced and looks stale. Refreshing
+`.metaproject/health/baselines/scores.json` is a separate call for the
+orchestrator, not something a task worker should do silently.
