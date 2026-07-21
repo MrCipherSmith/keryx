@@ -283,6 +283,12 @@ async function runShellCommand(env: Record<string, string>): Promise<ChildRun> {
   return await runChild({ argv: SHELL_ARGS, stdin: ONE_TURN, env });
 }
 
+// The no-TTY chain has TWO layers — `chooseShellSurface` and the guard inside
+// each launch function — and either one alone suffices. So this test only turns
+// red when BOTH are removed; deleting `chooseShellSurface`'s `isTty` term on its
+// own is caught by `src/commands/shell-launch.test.ts`, and deleting a launch
+// guard on its own by the AC1 tests above. That is what the three of them
+// together pin: the chain, and each link.
 test("AC2: with no TTY, `keryx shell` runs the readline shell and mounts no renderer", async () => {
   const run = await runShellCommand({ KERYX_FLOW113_TTY: "0" });
 
@@ -309,9 +315,9 @@ test("AC5: the readline fallback's bytes carry no ANSI escapes under NO_COLOR", 
 
   for (const run of [noTty, ttyPlain]) {
     expect(run.exitCode).toBe(0);
-    expect(run.stdout).toContain("keryx — fake/fake-echo");
     expect(run.stdout).not.toContain("\x1b[");
     expect(run.stdout).not.toContain("\x1b");
+    expect(run.stdout).toContain("keryx — fake/fake-echo"); // it really did run
   }
 
   // The PRD's actual wording — "byte-identical plain output" — modulo the one
