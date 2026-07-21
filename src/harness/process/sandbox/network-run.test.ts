@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { X509Certificate } from "node:crypto";
 import { setupNetworkRun } from "./network-run";
 import type { SandboxProfile } from "./profile";
 
@@ -43,6 +45,43 @@ describe("setupNetworkRun", () => {
       expect(setup.envAdditions.GH_TOKEN).toStartWith("keryx-sentinel-");
       expect(setup.envAdditions.GH_TOKEN).not.toBe("ghp_realsecret");
       expect(JSON.stringify(setup.envAdditions)).not.toContain("ghp_realsecret");
+    } finally {
+      await setup.close();
+    }
+  });
+
+  test("tlsTerminate ⇒ writes the run CA PEM and sets CA-trust env; close removes it", async () => {
+    const setup = await setupNetworkRun(
+      { ...base, network: "restricted", allowedDomains: ["example.test"] },
+      { tlsTerminate: true },
+    );
+    const caPath = setup.envAdditions.SSL_CERT_FILE as string;
+    try {
+      expect(caPath).toBeDefined();
+      // Every standard CA-trust var points at the same PEM.
+      expect(setup.envAdditions.CURL_CA_BUNDLE).toBe(caPath);
+      expect(setup.envAdditions.NODE_EXTRA_CA_CERTS).toBe(caPath);
+      expect(setup.envAdditions.REQUESTS_CA_BUNDLE).toBe(caPath);
+      expect(setup.envAdditions.GIT_SSL_CAINFO).toBe(caPath);
+
+      const pem = readFileSync(caPath, "utf8");
+      expect(pem).toContain("BEGIN CERTIFICATE");
+      expect(new X509Certificate(pem).ca).toBe(true); // a real CA cert
+    } finally {
+      await setup.close();
+    }
+    expect(existsSync(caPath)).toBe(false); // cleaned up on close
+  });
+
+  test("without tlsTerminate no CA-trust env is set", async () => {
+    const setup = await setupNetworkRun({
+      ...base,
+      network: "restricted",
+      allowedDomains: ["example.test"],
+    });
+    try {
+      expect(setup.envAdditions.SSL_CERT_FILE).toBeUndefined();
+      expect(setup.envAdditions.NODE_EXTRA_CA_CERTS).toBeUndefined();
     } finally {
       await setup.close();
     }

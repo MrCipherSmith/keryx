@@ -10,6 +10,9 @@
 
 import { Worker } from "node:worker_threads";
 import { randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { SandboxProfile } from "./profile";
 import type { CredentialMask } from "./proxy";
 
@@ -27,6 +30,15 @@ export interface MaskedCredential {
 
 export interface NetworkRunOptions {
   masks?: MaskedCredential[];
+  /**
+   * OPT-IN TLS termination (MITM) for allowlisted HTTPS — required for credential
+   * masking over HTTPS. The run CA is created inside the proxy worker (its
+   * private key never leaves it); the CA CERTIFICATE is written to a temp file
+   * and the contained process is pointed at it via the standard CA-trust env
+   * vars. Not every tool honors those (Go-based tools like `gh`/`terraform` use
+   * the system pool and will fail TLS under termination).
+   */
+  tlsTerminate?: boolean;
 }
 
 export interface NetworkRunSetup {
@@ -44,10 +56,11 @@ const NOOP_CLOSE = async (): Promise<void> => {};
 function startProxyWorker(
   allowedDomains: string[],
   masks: CredentialMask[],
-): Promise<{ port: number; close: () => Promise<void> }> {
+  tlsTerminate: boolean,
+): Promise<{ port: number; caCertPem?: string; close: () => Promise<void> }> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./proxy-worker.ts", import.meta.url), {
-      workerData: { allowedDomains, masks },
+      workerData: { allowedDomains, masks, tlsTerminate },
     });
     let settled = false;
     const timer = setTimeout(() => {
@@ -58,7 +71,7 @@ function startProxyWorker(
       }
     }, 5000);
 
-    worker.on("message", (msg: { type?: string; port?: number }) => {
+    worker.on("message", (msg: { type?: string; port?: number; caCertPem?: string }) => {
       if (settled || msg?.type !== "ready" || typeof msg.port !== "number") {
         return;
       }
@@ -66,6 +79,7 @@ function startProxyWorker(
       clearTimeout(timer);
       resolve({
         port: msg.port,
+        ...(typeof msg.caCertPem === "string" ? { caCertPem: msg.caCertPem } : {}),
         close: () =>
           new Promise<void>((res) => {
             worker.once("exit", () => res());
@@ -111,7 +125,28 @@ export async function setupNetworkRun(
     proxyMasks.push({ sentinel, realValue: cred.realValue, injectHosts: cred.injectHosts });
   }
 
-  const { port, close } = await startProxyWorker(profile.allowedDomains, proxyMasks);
+  const tlsTerminate = options.tlsTerminate === true;
+  const { port, caCertPem, close } = await startProxyWorker(
+    profile.allowedDomains,
+    proxyMasks,
+    tlsTerminate,
+  );
+
+  // When terminating TLS the contained process must trust the run CA. Deliver it
+  // through the standard CA-trust env vars pointing at a temp PEM — never by
+  // touching the system trust store.
+  const trustEnv: Record<string, string> = {};
+  let caPemPath: string | undefined;
+  if (tlsTerminate && caCertPem) {
+    caPemPath = path.join(tmpdir(), `keryx-run-ca-${randomUUID()}.pem`);
+    await writeFile(caPemPath, caCertPem, { mode: 0o644 });
+    trustEnv.SSL_CERT_FILE = caPemPath; // openssl / curl
+    trustEnv.CURL_CA_BUNDLE = caPemPath; // curl
+    trustEnv.NODE_EXTRA_CA_CERTS = caPemPath; // node / bun
+    trustEnv.REQUESTS_CA_BUNDLE = caPemPath; // python requests
+    trustEnv.GIT_SSL_CAINFO = caPemPath; // git
+  }
+
   // The env URL uses `localhost` (not the bind IP) so it matches the launcher's
   // loopback network rule — macOS Seatbelt's `remote ip` host must be `localhost`.
   const url = `http://localhost:${port}`;
@@ -123,9 +158,16 @@ export async function setupNetworkRun(
       http_proxy: url,
       https_proxy: url,
       ALL_PROXY: url,
+      // CA trust for the terminated TLS (only when terminating).
+      ...trustEnv,
       // Masked credentials: contained process sees only the sentinel.
       ...maskedEnv,
     },
-    close,
+    close: async () => {
+      await close();
+      if (caPemPath) {
+        await rm(caPemPath, { force: true });
+      }
+    },
   };
 }
