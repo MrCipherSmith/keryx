@@ -58,14 +58,50 @@ export interface AgentDeps {
   systemInstruction: string;
   idSeq: () => string;
   /**
-   * Max **unique** tool signatures per user turn (loop-safety guard). Default 8.
+   * Max **unique** tool signatures per user turn (loop-safety guard).
+   * Default {@link DEFAULT_MAX_TOOL_CALLS} (overridable via
+   * {@link resolveAgentMaxToolCalls} / `KERYX_AGENT_MAX_TOOL_CALLS`).
    * The same call (name + normalized input hash) may be retried up to
    * {@link MAX_ATTEMPTS_PER_HASH} times and still counts as **one** budget slot.
    */
   maxToolCalls?: number;
 }
 
-const DEFAULT_MAX_TOOL_CALLS = 8;
+/**
+ * Default unique tool-signature budget per user turn for interactive agent
+ * (`keryx shell` / TUI). Sized so multi-step operator prompts (read several
+ * docs, run a probe matrix, write a report) complete without the user needing
+ * "budget mode" wording or one-shot script workarounds.
+ * Still a finite loop-safety guard — not unlimited.
+ */
+export const DEFAULT_MAX_TOOL_CALLS = 48;
+
+/** Env override for {@link DEFAULT_MAX_TOOL_CALLS} (positive integer). */
+export const ENV_AGENT_MAX_TOOL_CALLS = "KERYX_AGENT_MAX_TOOL_CALLS";
+
+/** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
+export const MAX_AGENT_MAX_TOOL_CALLS = 256;
+
+/**
+ * Resolve unique tool-signature budget for an interactive agent turn.
+ * - unset / empty / invalid env → {@link DEFAULT_MAX_TOOL_CALLS}
+ * - valid integer ≥ 1 → clamped to {@link MAX_AGENT_MAX_TOOL_CALLS}
+ *
+ * Callers pass `process.env` in production; tests inject a stub map.
+ */
+export function resolveAgentMaxToolCalls(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const raw = env[ENV_AGENT_MAX_TOOL_CALLS];
+  if (raw === undefined || raw.trim().length === 0) {
+    return DEFAULT_MAX_TOOL_CALLS;
+  }
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n) || n < 1) {
+    return DEFAULT_MAX_TOOL_CALLS;
+  }
+  return Math.min(n, MAX_AGENT_MAX_TOOL_CALLS);
+}
 
 /**
  * Max attempts for the same tool signature (name + input hash). All attempts of
@@ -245,7 +281,7 @@ export async function runAgentTurn(
 
   const toolByName = new Map(deps.tools.map((t) => [t.definition.name, t]));
   const toolDefs = deps.tools.map((t) => t.definition);
-  const maxToolCalls = deps.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
+  const maxToolCalls = deps.maxToolCalls ?? resolveAgentMaxToolCalls();
   const parentRunId = deps.idSeq();
   const budget: ToolBudgetState = {
     charged: new Set(),

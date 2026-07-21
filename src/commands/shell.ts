@@ -42,7 +42,13 @@ import { LiveMarkdownBlock } from "../lib/live-render";
 import { launchTuiAgentShell } from "../tui/tui-shell";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { collapseToolOutput, colorEnabled, indentBlock, renderMarkdown, style, summarizeToolArgs } from "../lib/ui";
-import { type AgentDeps, type AgentIO, buildAgentSystemInstruction, runAgentTurn } from "./agent";
+import {
+  type AgentDeps,
+  type AgentIO,
+  buildAgentSystemInstruction,
+  resolveAgentMaxToolCalls,
+  runAgentTurn,
+} from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import {
   compactSession,
@@ -1091,6 +1097,9 @@ export async function shellCommand(args: string[]): Promise<void> {
           providerId: sel.provider,
           modelId: sel.model,
         }),
+        // Generous default (48) so multi-step operator prompts do not hit the
+        // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
+        maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
       };
     };
@@ -1249,6 +1258,7 @@ export async function shellCommand(args: string[]): Promise<void> {
           providerId: provider,
           modelId: model,
         }),
+        maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
