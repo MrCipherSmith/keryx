@@ -3,9 +3,9 @@
   "id": "105",
   "slug": "verify-dual-axis-sandbox-credential-mask",
   "title": "Verify dual-axis sandbox credential masking",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T15:32:52.488Z",
-  "updatedAt": "2026-07-21T15:34:55.093Z",
+  "updatedAt": "2026-07-21T15:36:13.961Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/176"
   },
   "tasks": [
     {
@@ -165,6 +165,20 @@
       "at": "2026-07-21T15:34:55.093Z",
       "event": "ac-confirmed",
       "detail": "AC6: unit-only dual-axis-report tests; no live CI"
+    },
+    {
+      "at": "2026-07-21T15:36:11.771Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/176 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T15:36:11.865Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T15:36:13.961Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
