@@ -42,3 +42,4 @@ export {
   type DetectOptions,
   type ResolveSandboxOptions,
 } from "./detect";
+export { createRunCa, type RunCa, type LeafCertificate, type CreateRunCaOptions } from "./tls-ca";
