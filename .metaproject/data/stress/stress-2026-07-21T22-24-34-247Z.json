@@ -1,0 +1,319 @@
+{
+  "platform": "linux",
+  "bun": "1.3.11",
+  "sandboxShellMode": "off",
+  "maxToolCalls": 48,
+  "allowEgress": false,
+  "findings": [
+    {
+      "ms": 9.304234999999998,
+      "id": "P1",
+      "area": "permission",
+      "what": "10× shell_exec(\"echo 1\") in one round",
+      "expected": "N pending approvals, nothing lost, no crash",
+      "verdict": "RISK",
+      "observed": "approvals=3 executed=3 hash-blocked=7 (identical calls collapse to ONE budget slot, max 3 attempts)",
+      "detail": {
+        "approvals": 3,
+        "executed": 3,
+        "budgetBlocked": 7,
+        "toolCalls": 10
+      }
+    },
+    {
+      "ms": 67.60108299999999,
+      "id": "P1b",
+      "area": "permission",
+      "what": "10× DISTINCT shell_exec in one round",
+      "expected": "10 approvals, no approval lost",
+      "verdict": "PASS",
+      "observed": "approvals=10 executed-ok=10 (strictly sequential, one at a time)",
+      "detail": {
+        "approvals": 10,
+        "ok": 10
+      }
+    },
+    {
+      "ms": 0.9602759999999932,
+      "id": "P2",
+      "area": "permission",
+      "what": "shell_exec(\"rm -rf /\") — gate only, never executed",
+      "expected": "blocked by sandbox or user policy",
+      "verdict": "FAIL",
+      "observed": "default-deny=true explicit-deny=true auto-allowed-by-saved-patterns=true; NO command deny-list exists — the human approval gate is the only barrier",
+      "detail": {
+        "savedPatterns": [
+          "hostname; *",
+          "free *",
+          "ps *",
+          "df *",
+          "docker *",
+          "echo *",
+          "rm -rf /",
+          "sudo *",
+          "which *",
+          "bun *"
+        ]
+      }
+    },
+    {
+      "ms": 0,
+      "id": "P2b",
+      "area": "permission",
+      "what": "\"always allow prefix\" grant from a benign rm",
+      "expected": "a remembered prefix should not cover destructive variants",
+      "verdict": "RISK",
+      "observed": "suggestShellPatterns(\"rm -rf ./dist\").prefix = \"rm *\" and it matches \"rm -rf /\" → true",
+      "detail": {
+        "prefix": "rm *",
+        "matches": true
+      }
+    },
+    {
+      "ms": 5.9348970000000065,
+      "id": "P3",
+      "area": "permission",
+      "what": "shell_exec(\"sudo -n whoami\")",
+      "expected": "non-zero exit handled, no crash",
+      "verdict": "PASS",
+      "observed": "isError=true output=\"sudo: a password is required\""
+    },
+    {
+      "ms": 2.5619120000000066,
+      "id": "P4",
+      "area": "permission",
+      "what": "cat /etc/shadow (+ /etc/master.passwd on darwin)",
+      "expected": "error result, no crash, no content",
+      "verdict": "PASS",
+      "observed": "err:cat: /etc/shadow: Permission denied"
+    },
+    {
+      "ms": 3.671222,
+      "id": "C1",
+      "area": "injection",
+      "what": "shell_exec(\"echo hello; whoami\")",
+      "expected": "runs as one command (sandbox-level shell safety)",
+      "verdict": "RISK",
+      "observed": "full /bin/sh -c semantics: BOTH commands ran → \"hello\\naltsay\""
+    },
+    {
+      "ms": 3.64565300000001,
+      "id": "C2",
+      "area": "injection",
+      "what": "single- vs double-quoted command substitution",
+      "expected": "substitution runs or is escaped — sandbox dependent",
+      "verdict": "INFO",
+      "observed": "single-quoted → \"$(id)\"; double-quoted → \"1000\" (no keryx-side escaping layer; shell semantics are verbatim)"
+    },
+    {
+      "ms": 2.7938640000000134,
+      "id": "C3",
+      "area": "injection",
+      "what": "shell_exec(\"ping -c 1 127.0.0.1\")",
+      "expected": "timeout / block / must not hang the agent",
+      "verdict": "INFO",
+      "observed": "isError=false in 3ms (loopback ping is not filtered)"
+    },
+    {
+      "ms": 6001.722508,
+      "id": "C3b",
+      "area": "injection",
+      "what": "shell_exec(\"sleep 6\") — timeout probe",
+      "expected": "some deadline kills a long command",
+      "verdict": "RISK",
+      "observed": "ran the FULL 6s (6002ms) — shell_exec has NO timeout and NO cancellation; a hanging command hangs the turn forever"
+    },
+    {
+      "ms": 34.39761699999963,
+      "id": "T1",
+      "area": "concurrency",
+      "what": "20× read_file on a 16 MiB file, concurrently",
+      "expected": "stay in budget, no OOM",
+      "verdict": "RISK",
+      "observed": "peak RSS +224 MiB for 320 MiB of requested reads; each result truncated to 20013 chars (readFile loads the WHOLE file before the 20 KB cap is applied — no streaming, no concurrency limit)",
+      "rssDeltaMb": 223.875,
+      "detail": {
+        "fileMb": 16,
+        "parallel": 20,
+        "outputChars": 20013
+      }
+    },
+    {
+      "ms": 206.2237159999995,
+      "id": "T2",
+      "area": "concurrency",
+      "what": "10× search_code(pattern=\".\", path=\"src\") concurrently",
+      "expected": "ripgrep survives, ctx rg limits output",
+      "verdict": "RISK",
+      "observed": "10 concurrent keryx ctx rg in 206ms, errors=10, max result 36 chars (capped at 20 KB by the tool)",
+      "detail": {
+        "errors": 10,
+        "maxLen": 36
+      }
+    },
+    {
+      "ms": 2.4408119999998235,
+      "id": "T3",
+      "area": "concurrency",
+      "what": "5× spawn_subagent concurrently, max_tool_calls=50 each",
+      "expected": "no deadlock, no stack overflow",
+      "verdict": "INFO",
+      "observed": "admitted=3 denied=2 in 2ms; max_tool_calls clamped 50→16; first denial: \"spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 300000 exceeds parent remaining 0\"",
+      "detail": {
+        "admitted": 3,
+        "denied": 2,
+        "maxChildrenConst": 16
+      }
+    },
+    {
+      "ms": 0.17512299999998504,
+      "id": "T4",
+      "area": "concurrency",
+      "what": "cycle A→B→C→D→A / max depth",
+      "expected": "cycle detection or a depth cap",
+      "verdict": "PASS",
+      "observed": "a child has NO spawn_subagent tool (child policy delegate=deny, maxTreeDepth=2) → a cycle is structurally impossible; child result: \"subagent t4 (sub:1) general via anthropic/claude-sonnet-5\\nMAE reservation: tools≤6 runtime≤300000ms \""
+    },
+    {
+      "ms": 0.7411990000000515,
+      "id": "M1",
+      "area": "multi-agent",
+      "what": "10 subagents reading the same file",
+      "expected": "read parallelism, no race on shared MCP state",
+      "verdict": "RISK",
+      "observed": "admitted=3/10, denied=7 — the per-shell RemainingBudgetLedger (15 min runtime / 48 tool calls) is consumed 5 min per spawn and is NEVER released, so a shell session can spawn only ~3 subagents in total. No data race observed (admission is synchronous).",
+      "detail": {
+        "admitted": 3,
+        "denied": [
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000",
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000",
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000",
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000",
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000",
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000",
+          "spawn_subagent denied by MAE: budget inheritance denied: child maxRuntimeMs 3000"
+        ]
+      }
+    },
+    {
+      "ms": 0.1738599999998769,
+      "id": "M2",
+      "area": "multi-agent",
+      "what": "subagent calls shell_exec (mode read_only AND general)",
+      "expected": "read_only forbids shell — enforcement check",
+      "verdict": "PASS",
+      "observed": "enforced at three layers: tool list omits shell_exec, child policy shell=deny, child io.requestApproval always false. Result: \"et-5\\nMAE reservation: tools≤6 runtime≤300000ms children=1\\n--- summary ---\\nchild summary ok\""
+    },
+    {
+      "ms": 0.26379199999973935,
+      "id": "M3",
+      "area": "multi-agent",
+      "what": "subagent returns >1 MB of text",
+      "expected": "overflow handler / truncation",
+      "verdict": "RISK",
+      "observed": "child produced 1.5 MB → parent tool result is 1500129 chars. There is NO cap on a child summary (quarantineChildSummary only prepends a marker); it lands verbatim in the parent's history and next prompt.",
+      "rssDeltaMb": 0,
+      "detail": {
+        "returnedChars": 1500129
+      }
+    },
+    {
+      "ms": 0.7717380000003686,
+      "id": "M4a",
+      "area": "multi-agent",
+      "what": "subagent stuck in a tool loop",
+      "expected": "max_tool_calls stops it",
+      "verdict": "PASS",
+      "observed": "stopped by the child's unique-signature budget in 1ms (identical calls also collapse to one slot)"
+    },
+    {
+      "ms": 4001.2698290000008,
+      "id": "M4b",
+      "area": "multi-agent",
+      "what": "subagent hangs (provider never responds)",
+      "expected": "subagent timeout",
+      "verdict": "RISK",
+      "observed": "still running after 4000ms — the reservation's maxRuntimeMs (5 min) is ACCOUNTING ONLY; no timer, no AbortSignal, no cancellation path. The parent turn blocks indefinitely."
+    },
+    {
+      "ms": 241.0140019999999,
+      "id": "S1",
+      "area": "sandbox",
+      "what": "docker reachable from shell_exec (info probe, no pull)",
+      "expected": "docker-in-docker allowed / blocked?",
+      "verdict": "RISK",
+      "observed": "isError=false → \"29.3.0\"; nothing in keryx filters docker (mode=off)"
+    },
+    {
+      "ms": 4.422430999999051,
+      "id": "S2",
+      "area": "sandbox",
+      "what": "dd 64 MiB into the workspace",
+      "expected": "disk quota on the sandbox?",
+      "verdict": "PASS",
+      "observed": "wrote 0 MiB unimpeded — the sandbox profile has writable roots but NO size/quota/inode limit"
+    },
+    {
+      "ms": 83.95745100000022,
+      "id": "S3",
+      "area": "sandbox",
+      "what": "network egress from shell_exec",
+      "expected": "egress allowed? host-restricted?",
+      "verdict": "INFO",
+      "observed": "mode=off (default off ⇒ full host network, no allowlist). launcher=unavailable (bubblewrap (bwrap) not found on PATH; install it (apt install bubblewrap / dnf install bubblewrap)); probes → closed | Host internal-service not found: 2(SERVF; external egress pair-test skipped (pass --allow-egress to run it)",
+      "detail": {
+        "allowEgress": false,
+        "launcher": {
+          "available": false,
+          "platform": "linux",
+          "reason": "bubblewrap (bwrap) not found on PATH; install it (apt install bubblewrap / dnf install bubblewrap)"
+        }
+      }
+    },
+    {
+      "ms": 46.48434499999894,
+      "id": "S4",
+      "area": "sandbox",
+      "what": "other-process visibility",
+      "expected": "process isolation?",
+      "verdict": "RISK",
+      "observed": "no PID namespace on either platform — the agent shell sees the full host process table: cat: /proc/1/environ: Permission denied | systemd | 478"
+    },
+    {
+      "ms": 232.8554779999995,
+      "id": "L1",
+      "area": "longevity",
+      "what": "100 sequential shell_exec runs",
+      "expected": "no fd leak, no RSS growth",
+      "verdict": "PASS",
+      "observed": "fd 25→25 (Δ0), RSS 416→424 MiB (Δ7.2), 2ms per spawn",
+      "rssDeltaMb": 7.17578125,
+      "detail": {
+        "fdDelta": 0
+      }
+    },
+    {
+      "ms": 0.4381329999996524,
+      "id": "L2",
+      "area": "longevity",
+      "what": "parent → file → subagent handoff",
+      "expected": "is FS-mediated inter-agent messaging allowed?",
+      "verdict": "INFO",
+      "observed": "inside the workspace: allowed (shared cwd, no isolation between parent and child). Outside the root: \"path escapes the project root: /tmp/keryx-stress-outside.log\" — read tools are confined, but shell_exec is not."
+    },
+    {
+      "ms": 136.40902499999902,
+      "id": "L3",
+      "area": "longevity",
+      "what": "read_file on a 256 MiB file",
+      "expected": "partial read / error / timeout",
+      "verdict": "RISK",
+      "observed": "returned 20013 chars (20 KB cap) after loading the whole file: peak RSS +246 MiB, 136ms. No streaming, no size pre-check — the cap is applied AFTER the full read.",
+      "rssDeltaMb": 246.453125,
+      "detail": {
+        "fileMb": 256,
+        "outputChars": 20013
+      }
+    }
+  ]
+}
