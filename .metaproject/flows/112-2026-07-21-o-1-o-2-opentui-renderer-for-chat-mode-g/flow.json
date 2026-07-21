@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 2,
+  "id": "112",
+  "slug": "o-1-o-2-opentui-renderer-for-chat-mode-g",
+  "title": "O-1/O-2: OpenTUI renderer for chat mode + genuinely shared slash-command registry",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T19:17:37.552Z",
+  "updatedAt": "2026-07-21T19:33:56.642Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b3226c81bc28c879710f3063cf70ccb3c28c84275dcef177e24321a692d11375",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "S4 — mode-aware shared command registry, readline surfaces included",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "S3 — chat driver + --chat launch path",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Verify, review, update the docpack and journal",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T19:17:37.552Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T19:33:56.309Z",
+      "event": "task-added",
+      "detail": "T5: S4 — mode-aware shared command registry, readline surfaces included"
+    },
+    {
+      "at": "2026-07-21T19:33:56.376Z",
+      "event": "task-added",
+      "detail": "T6: S3 — chat driver + --chat launch path"
+    },
+    {
+      "at": "2026-07-21T19:33:56.443Z",
+      "event": "task-added",
+      "detail": "T7: Verify, review, update the docpack and journal"
+    },
+    {
+      "at": "2026-07-21T19:33:56.508Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T19:33:56.574Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T19:33:56.642Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    }
+  ]
+}
