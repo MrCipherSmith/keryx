@@ -21,6 +21,7 @@ import {
   blockLabel,
   classifyDiffLine,
   fenceInfo,
+  hugWidth,
   looksLikeUnifiedDiff,
   payloadKind,
   segmentMarkdown,
@@ -354,8 +355,23 @@ type Chunk = ReturnType<OpenTui["bold"]>;
 /** Frame color shared with the user-echo and side-worker boxes. */
 const FRAME_COLOR = "#3a4a4a";
 
+/**
+ * Columns a rounded, 1-column-padded frame costs on top of its content: two
+ * border columns plus two padding columns. Feeds `hugWidth` (flow 115 D-1) —
+ * boxes hug with `maxWidth`, never `alignSelf`.
+ */
+const FRAME_CHROME = 4;
+
 /** Expanded bodies are clipped for the viewport; `y` / `/copy` still get it all. */
 export const MAX_BODY_LINES = 200;
+
+/**
+ * Reasoning gets a much tighter cap than tool output: a chain-of-thought is
+ * secondary context, and 200 lines of it buries the answer the user is actually
+ * reading. The registry still retains the FULL payload, so `y` / `/copy` are
+ * lossless (flow 109 D-4 is untouched).
+ */
+export const MAX_THOUGHT_LINES = 12;
 
 let viewSeq = 0;
 
@@ -363,14 +379,14 @@ function lineCountOf(text: string): number {
   return text.length === 0 ? 0 : text.split("\n").length;
 }
 
-/** `body` clipped to `MAX_BODY_LINES` with a trailing "N more lines" notice. */
-function clipBody(text: string): string {
+/** `body` clipped to `maxLines` with a trailing "N more lines" notice. */
+function clipBody(text: string, maxLines = MAX_BODY_LINES): string {
   const lines = splitLines(text.replace(/\n+$/, ""));
-  if (lines.length <= MAX_BODY_LINES) {
+  if (lines.length <= maxLines) {
     return lines.join("\n");
   }
-  const hidden = lines.length - MAX_BODY_LINES;
-  return [...lines.slice(0, MAX_BODY_LINES), `… (${hidden} more line${hidden === 1 ? "" : "s"} not shown)`].join("\n");
+  const hidden = lines.length - maxLines;
+  return [...lines.slice(0, maxLines), `… (${hidden} more line${hidden === 1 ? "" : "s"} not shown)`].join("\n");
 }
 
 /**
@@ -504,8 +520,8 @@ export interface SegmentView {
  * Render one markdown segment as a sibling renderable inside `parent` (AC5).
  * Prose is a plain `TextRenderable` so it keeps wrapping at the transcript
  * width; a fenced segment is a framed box whose header carries the language tag
- * and the line count. Frames never grow: `flexShrink: 0` + `alignSelf:
- * "flex-start"` and no `flexGrow` (AC11 / flow 075).
+ * and the line count. Frames never grow: `flexShrink: 0`, no `flexGrow`, and a
+ * `maxWidth` that hugs the payload (AC11 / flow 075, flow 115 D-1).
  */
 export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box, segment: MdSegment): SegmentView {
   viewSeq += 1;
@@ -534,21 +550,23 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
     };
   }
 
+  const tag = (lang: string, body: string): string => {
+    const n = lineCountOf(body);
+    return `${lang.length > 0 ? lang : "text"} · ${n} ${n === 1 ? "line" : "lines"}`;
+  };
+  const frameWidth = (lang: string, body: string): number =>
+    Math.max(hugWidth(body, FRAME_CHROME), hugWidth(tag(lang, body), FRAME_CHROME));
   const frame = new otui.BoxRenderable(renderer, {
     id,
     flexDirection: "column",
     flexShrink: 0,
-    alignSelf: "flex-start",
+    maxWidth: frameWidth(segment.lang, segment.body),
     borderStyle: "rounded",
     border: true,
     borderColor: FRAME_COLOR,
     paddingLeft: 1,
     paddingRight: 1,
   });
-  const tag = (lang: string, body: string): string => {
-    const n = lineCountOf(body);
-    return `${lang.length > 0 ? lang : "text"} · ${n} ${n === 1 ? "line" : "lines"}`;
-  };
   const header = new otui.TextRenderable(renderer, {
     id: `${id}-tag`,
     content: otui.t`${otui.dim(tag(segment.lang, segment.body))}`,
@@ -568,6 +586,8 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
       }
       header.content = otui.t`${otui.dim(tag(next.lang, next.body))}`;
       body.content = new otui.StyledText(payloadChunks(otui, next.body, next.lang));
+      // A streamed fence grows line by line; the hug width grows with it.
+      frame.maxWidth = frameWidth(next.lang, next.body);
     },
     destroy: () => {
       try {
@@ -688,9 +708,23 @@ export function createAssistantMessageStream(
 export type BlockTone = "dim" | "cyan" | "red";
 
 export interface BlockViewOptions {
-  /** Trailing hint in the header, e.g. `ctrl+o`. */
+  /** Trailing hint in the header while the block is COLLAPSED, e.g. `ctrl+o`. */
   hint?: string;
+  /**
+   * Trailing hint while the block is EXPANDED. A block that can be reopened
+   * from the composer says so here (`/think collapse · y copy`), because the
+   * only other way back is `ctrl+o` → Enter, which nothing advertises.
+   * Falls back to `hint`.
+   */
+  expandedHint?: string;
   tone?: BlockTone;
+  /**
+   * Render the expanded body dim (secondary). Reasoning uses it: a
+   * chain-of-thought must not compete with the answer for attention.
+   */
+  dim?: boolean;
+  /** Body lines shown when expanded; defaults to {@link MAX_BODY_LINES}. */
+  maxLines?: number;
 }
 
 export interface BlockView {
@@ -729,7 +763,6 @@ export function createBlockView(
     id,
     flexDirection: "column",
     flexShrink: 0,
-    alignSelf: "flex-start",
   });
   const header = new otui.TextRenderable(renderer, { id: `${id}-h`, content: "" });
   box.add(header);
@@ -740,11 +773,12 @@ export function createBlockView(
   let painted: string | undefined;
 
   const paintHeader = (state: BlockState, focused: boolean): void => {
+    const hint = state.collapsed ? options.hint : (options.expandedHint ?? options.hint);
     const label = blockLabel({
       kind: state.kind,
       lineCount: state.lineCount,
       collapsed: state.collapsed,
-      ...(options.hint !== undefined ? { hint: options.hint } : {}),
+      ...(hint !== undefined ? { hint } : {}),
     });
     const line = state.summary.length > 0 ? `${label}  ${state.summary}` : label;
     if (focused) {
@@ -786,17 +820,25 @@ export function createBlockView(
     if (body !== undefined && painted === text) {
       return;
     }
-    const content = new otui.StyledText(payloadChunks(otui, clipBody(text)));
+    const shown = clipBody(text, options.maxLines ?? MAX_BODY_LINES);
+    // `codeChunks` is the one dim-per-line renderer; reusing it keeps a single
+    // dim implementation rather than a second styling path (flow 115 D-4).
+    const content = new otui.StyledText(
+      options.dim === true ? codeChunks(otui, shown) : payloadChunks(otui, shown),
+    );
     painted = text;
     if (bodyText !== undefined) {
       bodyText.content = content;
+      if (body !== undefined) {
+        body.maxWidth = hugWidth(shown, FRAME_CHROME);
+      }
       return;
     }
     const frame = new otui.BoxRenderable(renderer, {
       id: `${id}-b`,
       flexDirection: "column",
       flexShrink: 0,
-      alignSelf: "flex-start",
+      maxWidth: hugWidth(shown, FRAME_CHROME),
       borderStyle: "rounded",
       border: true,
       borderColor: FRAME_COLOR,
@@ -830,6 +872,51 @@ export function createBlockView(
       }
     },
   };
+}
+
+/** What {@link appendUserEcho} needs to draw one echo box. */
+export interface UserEchoOptions {
+  /** Renderable id; the caller owns uniqueness. */
+  id: string;
+  /** The submitted line, rendered after a `❯` marker. */
+  line: string;
+  /** Frame color; defaults to the shared muted frame color. */
+  borderColor?: string;
+  /** Rows of separation from whatever precedes it (default 1). */
+  marginTop?: number;
+}
+
+/**
+ * Append the framed echo of a submitted line to `parent` and return the box.
+ *
+ * Extracted in flow 115 because THREE call sites (the agent shell's user echo,
+ * the chat shell's user echo, the side-worker question box) had drifted into
+ * copies of the same renderable — and every copy carried the
+ * `alignSelf: "flex-start"` that stops a box measuring its height. One
+ * implementation means the hug now happens in exactly one place, via
+ * `maxWidth` (D-1).
+ */
+export function appendUserEcho(
+  otui: OpenTui,
+  renderer: Renderer,
+  parent: Box,
+  options: UserEchoOptions,
+): Box {
+  const text = `❯ ${options.line}`;
+  const box = new otui.BoxRenderable(renderer, {
+    id: options.id,
+    borderStyle: "rounded",
+    border: true,
+    borderColor: options.borderColor ?? FRAME_COLOR,
+    paddingLeft: 1,
+    paddingRight: 1,
+    marginTop: options.marginTop ?? 1,
+    flexShrink: 0,
+    maxWidth: hugWidth(text, FRAME_CHROME),
+  });
+  box.add(new otui.TextRenderable(renderer, { id: `${options.id}-t`, content: otui.t`${otui.dim(text)}` }));
+  parent.add(box);
+  return box;
 }
 
 /** Registry + mounted views for one transcript: what the shell's IO writes to. */
@@ -940,6 +1027,13 @@ export interface BlockNavController {
   copy(id: string): boolean;
   /** The newest block of `kind` (or the newest block of any kind). */
   newest(kind?: string): BlockState | undefined;
+  /**
+   * Toggle the newest block of `kind` and return its state AFTER the toggle, or
+   * `undefined` when there is no such block. This is what `/think` and
+   * `/expand` call: a slash command that only ever expands leaves the user with
+   * a screenful of reasoning and no advertised way back (flow 115).
+   */
+  toggleNewest(kind?: string): BlockState | undefined;
   /** The keypress handler — wire it through the shell's `onKeypress` helper. */
   handleKey(key: NavKeyEvent): void;
 }
@@ -1109,6 +1203,14 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     toggle,
     copy,
     newest,
+    toggleNewest: (kind) => {
+      const target = newest(kind);
+      if (target === undefined) {
+        return undefined;
+      }
+      toggle(target.id);
+      return registry.get(target.id);
+    },
     handleKey: (key) => {
       // Never fire while the `/` dropdown drives the keyboard, or while a
       // picker/approval overlay is up (AC4).

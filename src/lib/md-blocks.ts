@@ -169,3 +169,79 @@ export function blockLabel({ kind, lineCount, collapsed, hint }: BlockLabelInput
   const suffix = hint !== undefined && hint.length > 0 ? ` · ${hint}` : "";
   return `${marker} ${kind} (${lineCount} ${unit})${suffix}`;
 }
+
+// --- terminal width (flow 115) ---------------------------------------------
+//
+// A transcript box that must hug its content sets `maxWidth` — NOT
+// `alignSelf: "flex-start"`, which stops the node measuring its intrinsic
+// height, collapses it to the viewport and makes a bordered box paint its
+// border rows over its content (see `src/capability/tui-layout.test.ts` for the
+// measurements). `maxWidth` is clamped by the parent, so a value that is too
+// large simply yields a full-width box and a value that is too small only costs
+// extra wrapping — neither can corrupt the layout. That tolerance is why this
+// width model is deliberately small instead of a full Unicode width table.
+
+/** Combining marks and other zero-width code points. */
+const ZERO_WIDTH = /^[̀-ͯ​-‏︀-️⁠-⁤]$/u;
+
+/**
+ * Ranges that terminals render two columns wide: CJK, Hangul, Kana, fullwidth
+ * forms, and the emoji planes. Enough for the shell's payloads (prose, code,
+ * tool output); anything exotic degrades to one column and costs a wrap.
+ */
+const WIDE_RANGES: readonly [number, number][] = [
+  [0x1100, 0x115f], // Hangul Jamo
+  [0x2e80, 0x303e], // CJK radicals, Kangxi, punctuation
+  [0x3041, 0x33ff], // Kana, CJK compatibility
+  [0x3400, 0x4dbf], // CJK ext A
+  [0x4e00, 0x9fff], // CJK unified
+  [0xa000, 0xa4cf], // Yi
+  [0xac00, 0xd7a3], // Hangul syllables
+  [0xf900, 0xfaff], // CJK compatibility ideographs
+  [0xfe30, 0xfe6f], // CJK compatibility forms
+  [0xff00, 0xff60], // Fullwidth forms
+  [0xffe0, 0xffe6],
+  [0x1f300, 0x1f64f], // emoji
+  [0x1f900, 0x1f9ff],
+  [0x20000, 0x3fffd], // CJK ext B+
+];
+
+function codePointWidth(cp: number): number {
+  for (const [lo, hi] of WIDE_RANGES) {
+    if (cp >= lo && cp <= hi) {
+      return 2;
+    }
+  }
+  return 1;
+}
+
+/**
+ * Terminal columns `text` occupies: one per code point, two for the wide
+ * ranges, zero for combining marks. Iterates code POINTS, so an astral glyph
+ * counts once rather than twice for its surrogate pair.
+ */
+export function visualWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    if (ZERO_WIDTH.test(ch)) {
+      continue;
+    }
+    width += codePointWidth(ch.codePointAt(0) ?? 0);
+  }
+  return width;
+}
+
+/**
+ * The `maxWidth` a box needs to hug `text`: its widest line plus `chrome` —
+ * the caller's own borders and horizontal padding (2 + 2 for a bordered box
+ * with `paddingLeft: 1` / `paddingRight: 1`). A trailing newline is ignored so
+ * it does not read as an empty last line.
+ */
+export function hugWidth(text: string, chrome: number): number {
+  const lines = splitLines(text.replace(/\n+$/, ""));
+  let widest = 0;
+  for (const line of lines) {
+    widest = Math.max(widest, visualWidth(line));
+  }
+  return widest + chrome;
+}
