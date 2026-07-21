@@ -302,9 +302,12 @@ test("OpenTUI Input accepts typed keys (composer primitive)", async () => {
 // nav controller was extracted in T5 precisely so everything below its wiring
 // line is reachable here.
 //
-// `@opentui/core` types are only ever reached STRUCTURALLY (via `loadOpenTui`'s
-// inferred return type) — a static `import type … from "@opentui/core"` would
-// trip the optional-dependency guard in `src/capability/no-optional-imports`.
+// `@opentui/core` types are only ever reached STRUCTURALLY, via `loadOpenTui`'s
+// inferred return type. A top-level type-only import of the package would trip
+// the optional-dependency guard in `src/capability/no-optional-imports`.
+// That guard is a regex over file TEXT, so it cannot tell code from prose: do
+// not spell the forbidden `import … from "<the package>"` form out in a comment
+// here either, or this file fails the guard while containing no such import.
 
 type OtuiBundle = NonNullable<Awaited<ReturnType<typeof loadOpenTui>>>;
 type TestSetup = Awaited<ReturnType<OtuiBundle["testing"]["createTestRenderer"]>>;
