@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx-sandbox-harness-hardening/probe-report.schema.json",
+  "title": "SandboxDeepProbeReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "platform", "overall", "rows", "redactionHits"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "platform": {
+      "type": "string",
+      "description": "darwin | linux | win32"
+    },
+    "keryxVersion": {
+      "type": "string"
+    },
+    "runDir": {
+      "type": "string",
+      "description": "Workspace-relative or absolute RUN_DIR path"
+    },
+    "overall": {
+      "type": "string",
+      "enum": ["PASS", "PASS_WITH_GAPS", "FAIL"]
+    },
+    "redactionHits": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "verdict", "notes"],
+        "properties": {
+          "id": { "type": "string" },
+          "verdict": {
+            "type": "string",
+            "enum": ["PASS", "FAIL", "SKIP", "UNKNOWN"]
+          },
+          "notes": { "type": "string" },
+          "evidence": { "type": "string" },
+          "control": {
+            "type": "string",
+            "enum": ["ok", "failed", "n/a", "missing"]
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "matrixPass": { "type": "integer" },
+        "matrixFail": { "type": "integer" },
+        "matrixSkip": { "type": "integer" },
+        "matrixUnknown": { "type": "integer" }
+      }
+    }
+  }
+}

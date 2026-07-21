@@ -1,5 +1,11 @@
 # Multi-Agent Engine — Implementation Plan
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** **all phases A → B → C shipped** as flows 088–101, including
+> the originally-deferred cost-dimension hook in the budget ledger (flow 101).
+> The plan below is retained as the original phased record; see `README.md` for
+> the per-phase runtime evidence and the two minor items still open (live
+> `keryx agents` snapshot; dedicated `orchestrator-state` fold).
 
 Phased plan. **Phases 1–3 are the recommended first slice (Option B + caps);
 Phases 4–6 are the roadmap (Option C).** No runtime is implemented yet; this is a

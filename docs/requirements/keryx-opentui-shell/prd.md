@@ -1,5 +1,14 @@
 # Keryx OpenTUI Interactive Shell PRD
-Version: 0.1.0
+Version: 0.2.0
+
+## Status note
+
+The phased roadmap below (Phases 0–5) has been **implemented**: the OpenTUI shell
+is the default interactive shell on a TTY (`src/commands/shell.ts:1043-1049`,
+flows 059–066, ADR-0005 Accepted). This PRD is retained as the original design
+record; see `README.md` for the implemented-status summary and the list of
+additive features (side-workers, multi-agent wiring) that landed beyond this
+PRD's scope.
 
 ## Problem
 

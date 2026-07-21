@@ -1,5 +1,9 @@
 # Multi-Agent Engine — Agent Protocol
-Version: 0.1.0
+Version: 0.2.0
+
+> **Status note:** **implemented** (flows 088–101). The protocol below is the
+> shipped behavior; runtime sources live under `src/harness/child/` and
+> `src/harness/monitor/`.
 
 Defines how a parent orchestrator and its subagents behave. Complements the
 existing `.metaproject/rules/core/subagent-status-protocol.md` and

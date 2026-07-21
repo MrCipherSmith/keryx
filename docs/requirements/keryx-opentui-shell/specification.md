@@ -1,9 +1,14 @@
 # Keryx OpenTUI Interactive Shell — Technical Specification
-Version: 0.1.0
+Version: 0.2.0
 
-Status: `draft`. Concrete OpenTUI API names below marked `(SPIKE)` are to be
-confirmed in Phase 0 against `@opentui/core`; the architecture does not depend on
-their exact spelling.
+Status: `implemented`. The architecture described below — swap the IO layer for an
+OpenTUI renderer, keep the deterministic driver and pure helpers unchanged — has
+shipped (flows 059–066; `src/tui/tui-shell.ts`, `src/commands/agent-commands.ts`,
+ADR-0005 Accepted). The TUI is the default interactive shell on a TTY; the
+readline path remains as a fallback. Concrete OpenTUI API names below marked
+`(SPIKE)` were resolved during the Phase 0 spike (flow 059) and may diverge in
+spelling from the prose here; the runtime source under `src/tui/` is the source
+of truth for the current component API.
 
 ## 1. Guiding principle — swap the IO layer, keep the brain
 
