@@ -10,7 +10,9 @@
 
 import { Worker } from "node:worker_threads";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SandboxProfile } from "./profile";
@@ -70,6 +72,25 @@ export interface NetworkRunSetup {
 
 const NOOP_CLOSE = async (): Promise<void> => {};
 
+/**
+ * Resolve the proxy-worker entry for BOTH execution modes.
+ *
+ * Running from source the worker sits next to this file as `proxy-worker.ts`; in
+ * a bundled build (`bun build`) the emitted sibling is `proxy-worker.js`.
+ * Without this fallback a bundled `keryx` fails every restricted-network run
+ * with `ModuleNotFound resolving <dist>/proxy-worker.ts` — the bundler does not
+ * follow this dynamic worker reference, so the worker is a separate build entry.
+ */
+export function proxyWorkerUrl(): URL {
+  const ts = new URL("./proxy-worker.ts", import.meta.url);
+  try {
+    if (existsSync(fileURLToPath(ts))) return ts;
+  } catch {
+    // not a file: URL (or unreadable) — fall through to the bundled sibling
+  }
+  return new URL("./proxy-worker.js", import.meta.url);
+}
+
 /** Spawn the proxy worker and resolve once it reports its listening port. */
 function startProxyWorker(
   allowedDomains: string[],
@@ -77,7 +98,7 @@ function startProxyWorker(
   tlsTerminate: boolean,
 ): Promise<{ port: number; caCertPem?: string; close: () => Promise<void> }> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL("./proxy-worker.ts", import.meta.url), {
+    const worker = new Worker(proxyWorkerUrl(), {
       workerData: { allowedDomains, masks, tlsTerminate },
     });
     let settled = false;
