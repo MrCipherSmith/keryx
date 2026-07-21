@@ -75,9 +75,14 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
   return () => r._internalKeyInput.offInternal("keypress", handler);
 }
 
-/** Composer grows 1…max rows with wrap; beyond max the textarea scrolls. */
-const COMPOSER_MIN_ROWS = 1;
-const COMPOSER_MAX_ROWS = 6;
+/**
+ * Composer grows 1…max rows with wrap; beyond max the textarea scrolls.
+ * Exported because {@link composerHeightForLines} is: the clamp that ships is
+ * the one the tests must pin (a second copy in `tui-shell.ts` used to be the
+ * tested one while THIS one — the only live caller — went unguarded).
+ */
+export const COMPOSER_MIN_ROWS = 1;
+export const COMPOSER_MAX_ROWS = 6;
 /** Rows the `/` dropdown occupies when open (a described option costs two). */
 const MENU_HEIGHT = 10;
 /** Sidebar is a fixed column so the transcript width does not jump. */
@@ -86,8 +91,12 @@ const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", 
 const SPINNER_MS = 120;
 const TOAST_MS = 5000;
 
-/** Pure: clamp visual line count into the composer height band. */
-function composerHeightForLines(visualLines: number): number {
+/**
+ * Pure: clamp visual line count into the composer height band. Exported so the
+ * clamp {@link ShellChrome.syncComposerHeight} actually calls is the one under
+ * test.
+ */
+export function composerHeightForLines(visualLines: number): number {
   const n = Number.isFinite(visualLines) ? Math.floor(visualLines) : COMPOSER_MIN_ROWS;
   return Math.min(COMPOSER_MAX_ROWS, Math.max(COMPOSER_MIN_ROWS, n < 1 ? COMPOSER_MIN_ROWS : n));
 }

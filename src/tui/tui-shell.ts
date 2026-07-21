@@ -314,20 +314,6 @@ export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 }
 
-/** Composer grows 1…max rows with wrap; beyond max the textarea scrolls vertically. */
-export const COMPOSER_MIN_ROWS = 1;
-export const COMPOSER_MAX_ROWS = 6;
-
-/** Pure: clamp visual line count into the composer height band. */
-export function composerHeightForLines(
-  visualLines: number,
-  min = COMPOSER_MIN_ROWS,
-  max = COMPOSER_MAX_ROWS,
-): number {
-  const n = Number.isFinite(visualLines) ? Math.floor(visualLines) : min;
-  return Math.min(max, Math.max(min, n < 1 ? min : n));
-}
-
 /**
  * Rough token estimate of the conversation (≈ 4 chars/token) — a fallback for the
  * context counter when the provider does not report exact `usage` (e.g. local

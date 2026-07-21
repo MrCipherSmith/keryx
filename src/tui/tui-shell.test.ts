@@ -10,10 +10,12 @@ import { tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  attachBlockIo,
   composerHeightForLines,
   COMPOSER_MAX_ROWS,
   COMPOSER_MIN_ROWS,
+} from "./shell-chrome";
+import {
+  attachBlockIo,
   createTuiAgentIo,
   estimateContextTokens,
   fmtTokens,
@@ -219,6 +221,9 @@ test("fmtTokens: compact K formatting", () => {
   expect(fmtTokens(22000)).toBe("22.0K");
 });
 
+// The clamp under test is `shell-chrome.ts`'s — the one the shipped chrome's
+// `syncComposerHeight` calls. A duplicate used to live in `tui-shell.ts` with no
+// production caller left, so this test guarded an orphan.
 test("composerHeightForLines: grow 1..6 then clamp (vertical scroll above max)", () => {
   expect(composerHeightForLines(0)).toBe(COMPOSER_MIN_ROWS);
   expect(composerHeightForLines(1)).toBe(1);
