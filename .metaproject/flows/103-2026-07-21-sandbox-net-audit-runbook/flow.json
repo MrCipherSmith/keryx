@@ -3,9 +3,9 @@
   "id": "103",
   "slug": "sandbox-net-audit-runbook",
   "title": "sandbox v1.x: network decision audit + Linux verification runbook",
-  "status": "implemented",
+  "status": "in-progress",
   "createdAt": "2026-07-21T13:34:09.676Z",
-  "updatedAt": "2026-07-21T13:58:07.713Z",
+  "updatedAt": "2026-07-21T13:59:26.324Z",
   "source": {
     "type": "description",
     "ref": null
@@ -261,6 +261,15 @@
       "at": "2026-07-21T13:58:07.713Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T13:59:23.179Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T13:59:26.324Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
     }
   ]
 }
