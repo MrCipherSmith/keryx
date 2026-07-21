@@ -422,11 +422,15 @@ Recorded 2026-07-21 after auditing the package against the code, because "Phases
 0-5 shipped" was true of the roadmap and too strong for the scope as written.
 Each item was verified in the source, not inferred from the roadmap.
 
-**O-1 and O-2 were closed by flow 112**, and **O-4 was closed in part by flow
-113** — the fallback is proven, the install-launches-TUI clause is not and cannot
-be under the current CI. Entries keep the original finding above the resolution,
-so the audit trail survives. **O-3 and O-5 remain open**, along with O-4's
-install clause.
+Closure history: **O-1 and O-2** by flow 112; **O-4's fallback body** by flow
+113; **O-3, O-5, and O-4's install clause** by flow 114. Entries keep the original
+finding above each resolution, so the audit trail survives. What remains is a
+single shared gap, not a whole open item: **a rendered TUI first frame cannot be
+evidenced in CI**, because `createCliRenderer` needs a controlling terminal that
+hosted runners lack. That one pty limitation bounds the last clause of O-3 ("the
+TUI launches there"), the last clause of O-4 ("...launches the TUI"), and the
+rendered-frame half of O-5. Closing it needs an allocated-pty harness — a
+deliberate future decision, tracked below as **O-6**.
 
 ### O-1 — chat has no OpenTUI renderer — **CLOSED** (flow 112)
 
@@ -482,15 +486,51 @@ An agent-only command typed in chat fails with an explanatory message instead of
 This also fixed a live bug the audit had not spotted: the agent TUI's `/help` was
 printing the *chat* description of `/connect`.
 
-### O-3 — N1 platform coverage is unvalidated beyond darwin-arm64
+### O-3 — N1 platform coverage — **CLOSED for the native layer** (flow 114)
 
-N1 lists "darwin-arm64, darwin-x64, linux-x64, linux-arm64 at minimum". Only
-darwin-arm64 has been exercised; ADR-0005 says as much ("linux-x64/arm64 to
-confirm as the migration proceeds"). `linux-x64` appears in this repository only
-in the three documents that name it as a target, never as a confirmed result.
-Because the dependency is optional, dynamically imported and fallback-guarded, an
-unsupported platform degrades to readline rather than breaking — so this is a
-coverage gap, not a correctness risk.
+*Was:* N1 lists "darwin-arm64, darwin-x64, linux-x64, linux-arm64 at minimum",
+and only darwin-arm64 had ever been exercised. `linux-x64` appeared in this
+repository only in the documents that named it as a target, never as a result.
+
+*Now:* `.github/workflows/ci.yml` has an `opentui-native-matrix` job on all four,
+enabled by the repository being public (free arm64 runners). Runner labels were
+verified against GitHub's current hosted-runner offering on 2026-07-22, not
+assumed — and one assumption was wrong: `macos-13` retired 2025-12-04, so
+darwin-x64 uses **`macos-15-intel`** (the current and last hosted x86_64 macOS
+image). No target was dropped.
+
+| N1 target | Runner |
+|---|---|
+| linux-x64 | `ubuntu-latest` |
+| linux-arm64 | `ubuntu-24.04-arm` |
+| darwin-arm64 | `macos-latest` |
+| darwin-x64 | `macos-15-intel` |
+
+Per leg the job proves two things, both **positively**:
+
+- **The native binary actually loaded.** Absence-of-error is not evidence here —
+  the dependency is fallback-guarded, so a missing binary degrades to readline
+  silently, which is exactly what an unsupported platform looks like.
+  `scripts/verify-opentui-native.ts` resolves the platform dylib (>512 KB),
+  confirms `resolveRenderLib()` dlopens an `FFIRenderLib`, and round-trips a
+  JS-written byte back out of Zig memory via `drawText` / `getRealCharBytes` —
+  unforgeable by a stub or the readline fallback. It also fails if `zig` is on
+  PATH, evidencing N1's "no Zig toolchain at end-user install".
+- **Zero skips.** `scripts/opentui-tests-no-skips.ts` reads bun's JUnit counts
+  and fails loudly on `skipped>0`, `tests==0`, or a missing report, because a
+  skip means the optional dependency did not resolve and a green-with-skips run
+  would be vacuous. This caught three `tui-shell.test.ts` renderer tests that used
+  early-`return` — which bun counts as PASS — and moved them to `test.skipIf`.
+
+**What is covered, and what is not.** N1's wording — binaries cover the
+platforms, the install path pulls them, no Zig — is proven on all four. "The TUI
+*launches* there" is not, and cannot be: `createCliRenderer` needs a controlling
+terminal that a hosted runner lacks, so a CI invocation takes the readline
+fallback by design. That is the same pty gap that bounds O-4's install clause;
+closing it is a shared follow-up, not part of this flow.
+
+**Cost.** The matrix runs four hosted runners on every future PR. Stated in the
+job comment so whoever next edits CI sees the trade-off.
 
 ### O-4 — the fallback was implemented but untested — **CLOSED in part** (flow 113)
 
@@ -533,34 +573,71 @@ by `shell-fallback.test.ts` plus `shell-launch.test.ts` together.
 #### The install half — testable in part, and honestly not in CI as it stands
 
 The criterion's second clause ("a global install via `scripts/install.sh
---global` launches the TUI on a supported platform") is two claims, and they
-differ:
+--global` launches the TUI on a supported platform") is two claims:
 
-- **"the global install produces a working CLI" — testable, not yet tested.**
-  `install.sh` honours `KERYX_REPO_URL`, `KERYX_REF`, `KERYX_HOME` and
-  `KERYX_BIN_DIR`, so CI could install from the checkout into a temp directory
-  and assert the wrapper exists and `keryx --version` runs. Flow 113 did not add
-  this: it is an installer concern rather than a fallback one, and expanding an
-  O-4 flow into the install path would have been scope creep. It is a reasonable
-  follow-up.
-- **"...launches the TUI" — not testable in CI as the repository stands.** The
-  TUI declines whenever `process.stdout.isTTY` is falsy, and a GitHub Actions
-  step has no controlling terminal, so a CI invocation takes the readline
-  fallback *by design* — the very behaviour O-4 now pins. Proving the TUI
-  actually launches needs an allocated pty (`script`, `unbuffer`, or a
-  `node-pty`-style harness); no such harness exists here, and adding one is a
-  larger decision than this flow.
+- **"the global install produces a working CLI" — CLOSED (flow 114).**
+  `scripts/install-global.test.ts` drives `install.sh --global` into a temporary
+  prefix via `KERYX_HOME` / `KERYX_BIN_DIR` / `KERYX_REPO_URL` / `KERYX_REF`,
+  against a local bare clone — no network to the published repo — and asserts the
+  produced wrapper is executable and actually runs the CLI, while the real
+  `~/.keryx` and `~/.local/bin` are left untouched. It runs in the main `check`
+  job and is falsifiable: breaking the wrapper step yields installer exit 1, an
+  empty bin dir, and wrapper exit 127.
+- **"...launches the TUI" — still not testable in CI, by design.** The TUI
+  declines whenever `process.stdout.isTTY` is falsy, and a hosted runner has no
+  controlling terminal, so a CI invocation takes the readline fallback — the
+  behaviour O-4's body already pins. Proving a real launch needs an allocated pty
+  (`script`, `unbuffer`, or a `node-pty`-style harness); none exists here, and
+  adding one is a shared follow-up with O-3's rendered-frame gap, not part of any
+  flow so far.
 
-Compounding it, `.github/workflows/ci.yml` runs `ubuntu-latest` only, so even a
-pty harness would evidence one platform — which is open item **O-3**, not this
-one. **The claim should therefore be read as: the fallback is proven; the
-install-launches-TUI clause is unproven and cannot be proven by the current CI.**
+**Read the whole of O-4 as:** the fallback triggers and output parity are proven
+(flow 113); the global install produces a working CLI on the four N1 platforms
+(flow 114, via O-3's matrix plus this install test); a rendered TUI launch is the
+one remaining unproven clause, bounded by the pty gap.
 
-### O-5 — R5 cold-start latency was never measured
+### O-5 — R5 cold-start latency — **MEASURED** (flow 114)
 
-"Measure cold-start of the TUI vs the current instant readline shell" was a
-Phase 0 exit criterion. No number is recorded here, in ADR-0005, or in the flow
-package. The gate passed on the other four criteria.
+*Was:* "measure cold-start of the TUI vs the current instant readline shell" was
+a Phase 0 exit criterion (R5), and no number existed here, in ADR-0005, or in any
+flow package.
+
+*Now:* `scripts/measure-cold-start.ts` is a reproducible measurement. Median of
+11 runs on an Apple M1 Pro (16 GiB, darwin-arm64, bun 1.3.12):
+
+| Path | Median |
+|---|---|
+| runtime floor (bare `bun` process) | 12.0 ms |
+| readline start-up | 61.2 ms |
+| readline + `@opentui/core` native import | 170.7 ms |
+
+**So the TUI adds ~109.5 ms (≈2.79×) over the readline shell** at start-up, on
+this machine. Numbers are per-machine; re-run the script to record another.
+
+**What this does not measure, stated so R5 is not over-claimed:** a rendered
+first frame. `createCliRenderer` needs a controlling terminal, which neither CI
+nor a scripted measurement has, so the figure is the dominant start-up term —
+process start, module graph, and the native `@opentui/core` import — not the time
+to a drawn UI. That is the term R5 was asking about ("cold start … vs the instant
+readline shell"); the rendered-frame delta remains behind the same pty gap that
+bounds O-3 and O-4.
+
+### O-6 — a rendered TUI first frame is not evidenced anywhere — OPEN
+
+The single limitation left by flows 112-114. Every automated check that touches
+the TUI runs without a controlling terminal, so `createCliRenderer` declines and
+the shell takes the readline path. As a result three narrow clauses stay unproven
+by machine: that the TUI *renders* on each N1 platform (O-3), that a global
+install *launches* it (O-4), and the time-to-first-frame delta (O-5). The block
+model, chrome, nav mode, code/diff rendering and every other behaviour are proven
+headlessly via `@opentui/core/testing`'s `createTestRenderer`; what is missing is
+a real terminal.
+
+Closing O-6 means an allocated-pty harness — `script` / `unbuffer` / `node-pty`
+driving `keryx shell` in a pseudo-terminal and asserting on the emitted escape
+stream — added to CI on at least one N1 platform. It is scoped as its own future
+flow rather than folded into any of the above, because a pty harness is a
+non-trivial piece of test infrastructure with its own flakiness surface.
 
 ### Not an open item, listed to prevent confusion
 
