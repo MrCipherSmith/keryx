@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { wikiCollect } from "./service";
 import {
+  ensureWikiFrontmatter,
   hasCredential,
+  hasYamlFrontmatter,
   isWikiEnrichIntent,
   planWikiEnrich,
+  repairEnrichedFrontmatter,
+  validateEnrichedMarkdown,
   wikiEnrich,
   type ProviderFactory,
 } from "./enrich";
@@ -200,10 +204,114 @@ test("force enrich includes accepted pages; default batch is drafts only", async
   }
 });
 
-test("validateEnrichedMarkdown rejects missing frontmatter", async () => {
-  const { validateEnrichedMarkdown } = await import("./enrich");
+test("validateEnrichedMarkdown rejects missing frontmatter", () => {
   expect(validateEnrichedMarkdown("x".repeat(100), "no frontmatter here")).toMatch(/frontmatter/i);
   expect(validateEnrichedMarkdown("x".repeat(100), GOOD_PAGE)).toBeNull();
+});
+
+test("ensureWikiFrontmatter synthesizes YAML from legacy H1 + pseudo-meta (os-sandbox style)", () => {
+  const legacy = `# OS Sandbox
+
+Version: 1.0.0
+Type: architecture
+Status: accepted
+
+## Summary
+
+The OS sandbox is a kernel-enforced containment layer under the policy engine.
+It constrains what a process can write and reach after it starts.
+
+## Details
+
+More prose here so the body is substantial enough for enrich validation.
+`;
+  expect(hasYamlFrontmatter(legacy)).toBe(false);
+  const { markdown, normalized } = ensureWikiFrontmatter(legacy, { pageType: "architecture" });
+  expect(normalized).toBe(true);
+  expect(markdown.startsWith("---")).toBe(true);
+  expect(markdown).toMatch(/Title:\s*OS Sandbox/);
+  expect(markdown).toMatch(/Status:\s*accepted/);
+  expect(markdown).toMatch(/Type:\s*architecture/);
+  expect(markdown).toContain("# OS Sandbox");
+  expect(markdown).toContain("kernel-enforced containment");
+  // Idempotent when already normalized.
+  const again = ensureWikiFrontmatter(markdown);
+  expect(again.normalized).toBe(false);
+  expect(again.markdown.startsWith("---")).toBe(true);
+  expect(validateEnrichedMarkdown(markdown, markdown)).toBeNull();
+});
+
+test("ensureWikiFrontmatter is a no-op for pages that already have YAML frontmatter", () => {
+  const { markdown, normalized } = ensureWikiFrontmatter(GOOD_PAGE);
+  expect(normalized).toBe(false);
+  expect(markdown).toBe(GOOD_PAGE);
+});
+
+test("repairEnrichedFrontmatter re-attaches original FM when model returns body-only", () => {
+  const original = ensureWikiFrontmatter(`# Module src/commands
+
+Version: 1.0.0
+Type: component
+Status: accepted
+
+## Summary
+
+CLI command layer of keryx with enough body text for validation checks.
+`).markdown;
+  const bodyOnly = `# Module src/commands
+
+Enriched prose about the CLI command layer with enough length to pass
+body-length validation after frontmatter is re-attached by repair.
+`;
+  expect(hasYamlFrontmatter(bodyOnly)).toBe(false);
+  const repaired = repairEnrichedFrontmatter(original, bodyOnly);
+  expect(repaired.startsWith("---")).toBe(true);
+  expect(repaired).toMatch(/Title:/);
+  expect(repaired).toContain("Enriched prose about the CLI");
+  expect(validateEnrichedMarkdown(original, repaired)).toBeNull();
+});
+
+test("enrich accepts legacy page when model omits frontmatter (pre-normalize + repair)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-enrich-legacy-"));
+  try {
+    const wikiDir = path.join(root, ".metaproject", "wiki", "architecture");
+    await mkdir(wikiDir, { recursive: true });
+    const legacy = `# OS Sandbox
+
+Version: 1.0.0
+Type: architecture
+Status: accepted
+
+## Summary
+
+Legacy stub without YAML fences. Enough text for the collect/enrich pipeline.
+`;
+    await writeFile(path.join(wikiDir, "os-sandbox.md"), legacy, "utf8");
+
+    // Model returns body without frontmatter — repair must save the run.
+    const bodyOnly = `# OS Sandbox
+
+The OS sandbox is kernel-enforced containment under the policy engine.
+Workspace-write and network-off are the default harness posture.
+This prose is long enough to pass structural validation after repair.
+`;
+    const factory: ProviderFactory = () => stubProvider(bodyOnly);
+    const result = await wikiEnrich({
+      cwd: root,
+      page: "architecture/os-sandbox",
+      providerFactory: factory,
+      validate: true,
+    });
+
+    expect(result.failed).toBe(0);
+    expect(result.enriched).toBe(1);
+    const written = await readFile(path.join(wikiDir, "os-sandbox.md"), "utf8");
+    expect(written.startsWith("---")).toBe(true);
+    expect(written).toMatch(/Status:\s*accepted/i);
+    expect(written).toContain("kernel-enforced containment");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("mapPool runs with concurrency > 1", async () => {
