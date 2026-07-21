@@ -422,9 +422,11 @@ Recorded 2026-07-21 after auditing the package against the code, because "Phases
 0-5 shipped" was true of the roadmap and too strong for the scope as written.
 Each item was verified in the source, not inferred from the roadmap.
 
-**O-1 and O-2 were closed by flow 112**; their entries are kept with the original
-finding above the resolution, so the audit trail survives. **O-3, O-4 and O-5
-remain open.**
+**O-1 and O-2 were closed by flow 112**, and **O-4 was closed in part by flow
+113** — the fallback is proven, the install-launches-TUI clause is not and cannot
+be under the current CI. Entries keep the original finding above the resolution,
+so the audit trail survives. **O-3 and O-5 remain open**, along with O-4's
+install clause.
 
 ### O-1 — chat has no OpenTUI renderer — **CLOSED** (flow 112)
 
@@ -490,15 +492,69 @@ Because the dependency is optional, dynamically imported and fallback-guarded, a
 unsupported platform degrades to readline rather than breaking — so this is a
 coverage gap, not a correctness risk.
 
-### O-4 — the no-TTY fallback is implemented but untested
+### O-4 — the fallback was implemented but untested — **CLOSED in part** (flow 113)
 
-The success criterion is "`keryx shell` with no TTY / on an unsupported platform
-falls back to the readline shell with **byte-identical plain output**". The guard
-exists (`src/tui/tui-shell.ts:708`, returning `false` so the caller falls
-through), but `isTTY` occurs exactly once across the whole test surface — in that
-guard. There is no test asserting output parity between the two renderers, and no
-check that a global install via `scripts/install.sh --global` launches the TUI.
-The claim is currently believed, not demonstrated.
+*Was:* the success criterion is "`keryx shell` with no TTY / on an unsupported
+platform falls back to the readline shell with **byte-identical plain output**",
+and a global install launches the TUI on a supported platform. The guard existed
+and returned `false` so the caller fell through, but no test touched
+`process.stdout.isTTY` at all, nothing asserted output parity, and nothing
+checked the install path. The claim was believed, not demonstrated.
+
+*Now:* `src/tui/shell-fallback.test.ts` proves each trigger and the parity claim.
+
+**The mechanism that made this hard, recorded because it will recur.** Every
+failing path in both launch functions ends in `return false`, so *the return
+value cannot distinguish a working guard from a deleted one* — strip the no-TTY
+check and the renderer merely fails later and returns `false` anyway. A test
+asserting `=== false` would therefore pass against broken code. The tests instead
+run the real code in a child `bun` process whose `--preload` plugin substitutes
+`@opentui/core` with a probe recording `imported` / `mountAttempted`, and can
+also fail to resolve (dependency-absent) or throw from `createCliRenderer`
+(init-failure). Assertions hang on the probe, not the return value. A subprocess
+additionally avoids poisoning the process-wide module registry that `bun test`
+shares, and lets `isTTY` / `NO_COLOR` / `FORCE_COLOR` vary per run.
+
+Covered: both launch guards decline before loading the optional dependency
+(`tui-shell.ts:657`, `chat-shell.ts:493`); an unresolvable optional dependency
+declines rather than throwing; a throwing renderer constructor declines rather
+than propagating; with no TTY the real CLI runs the readline shell and mounts no
+renderer; and readline's bytes carry **no ANSI escapes** under `NO_COLOR`, with a
+control asserting the same run *with* colour does emit them — so the property
+belongs to `NO_COLOR` and not to a sink that could never be coloured. Each test
+was falsified against deliberately broken code before being accepted; the
+evidence is in flow 113's journal.
+
+**Noted, not a defect:** the no-TTY path has two independent layers —
+`chooseShellSurface` and the per-shell guard — and either alone suffices. Defence
+in depth, but it means no single test pins the whole chain; the chain is pinned
+by `shell-fallback.test.ts` plus `shell-launch.test.ts` together.
+
+#### The install half — testable in part, and honestly not in CI as it stands
+
+The criterion's second clause ("a global install via `scripts/install.sh
+--global` launches the TUI on a supported platform") is two claims, and they
+differ:
+
+- **"the global install produces a working CLI" — testable, not yet tested.**
+  `install.sh` honours `KERYX_REPO_URL`, `KERYX_REF`, `KERYX_HOME` and
+  `KERYX_BIN_DIR`, so CI could install from the checkout into a temp directory
+  and assert the wrapper exists and `keryx --version` runs. Flow 113 did not add
+  this: it is an installer concern rather than a fallback one, and expanding an
+  O-4 flow into the install path would have been scope creep. It is a reasonable
+  follow-up.
+- **"...launches the TUI" — not testable in CI as the repository stands.** The
+  TUI declines whenever `process.stdout.isTTY` is falsy, and a GitHub Actions
+  step has no controlling terminal, so a CI invocation takes the readline
+  fallback *by design* — the very behaviour O-4 now pins. Proving the TUI
+  actually launches needs an allocated pty (`script`, `unbuffer`, or a
+  `node-pty`-style harness); no such harness exists here, and adding one is a
+  larger decision than this flow.
+
+Compounding it, `.github/workflows/ci.yml` runs `ubuntu-latest` only, so even a
+pty harness would evidence one platform — which is open item **O-3**, not this
+one. **The claim should therefore be read as: the fallback is proven; the
+install-launches-TUI clause is unproven and cannot be proven by the current CI.**
 
 ### O-5 — R5 cold-start latency was never measured
 
