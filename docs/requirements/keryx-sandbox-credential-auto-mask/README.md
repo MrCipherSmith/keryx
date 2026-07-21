@@ -1,5 +1,5 @@
 # Keryx Sandbox Credential Auto-Mask
-Version: 0.1.2
+Version: 0.2.0
 
 ## Purpose
 
@@ -30,21 +30,26 @@ Recommended delivery order (this package):
 
 ## Status
 
-**draft (P0 runtime slice in progress / land with AC1–AC8)** — product decisions
-and specification are ready. **P0** adds a shared pure mask resolver and wires
-`shell_exec` + `harness exec`. **P0.a default:** unset
-`KERYX_SANDBOX_MASK_MODE` ⇒ `manual` (explicit mask only, same as before).
+**draft (P0 + Verify landed; P1/P2 future)**
+
+| Phase | Status |
+|-------|--------|
+| **P0** | **landed** (PR #175) — shared resolver + shell/harness wire-up; P0.a default `maskMode=manual` |
+| **Verify** | **landed** — dual-axis contract tests, REPORT/redaction helpers, operator [verification.md](verification.md) |
+| **P1** | not implemented — global `sandbox.json` |
+| **P2** | not implemented — project policy + init skeleton |
+| **P0.b** | not implemented — product default flip to `auto` |
+
 Opt in to auto-mask:
 
 ```bash
 export KERYX_SANDBOX_MASK_MODE=auto
-# optional: KERYX_SANDBOX_TLS_TERMINATE auto-derived when masks apply under auto
+# TLS auto-derived when masks apply under auto
 ```
 
 Harness: `--mask-mode auto` or `--auto-mask`.
 
-**Not implemented yet:** P1 global `sandbox.json`, P2 project policy/init, full
-dual-axis operator Verify phase, P0.b product default flip to `auto`.
+Live dual-axis network checks are **operator-run / flag-gated** — not required on default CI (see verification.md).
 
 ## Document Index
 
@@ -61,6 +66,7 @@ dual-axis operator Verify phase, P0.b product default flip to `auto`.
 | [schemas/mask-resolution.schema.json](schemas/mask-resolution.schema.json) | Resolved mask set + provenance for logging/tests. |
 | [schemas/project-sandbox-policy.schema.json](schemas/project-sandbox-policy.schema.json) | Optional project policy (P2). |
 | [launch-prompts/](launch-prompts/README.md) | Per-phase flow-orchestrator launch prompts (operator-run). |
+| [verification.md](verification.md) | Dual-axis operator runbook (Preflight + A/B/C + RUN_DIR + redaction). |
 
 ## Scope
 

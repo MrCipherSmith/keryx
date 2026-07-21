@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "105",
+  "slug": "verify-dual-axis-sandbox-credential-mask",
+  "title": "Verify dual-axis sandbox credential masking",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T15:32:52.488Z",
+  "updatedAt": "2026-07-21T15:34:55.093Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:57bd807df3d2817251715a4c09f9ddec3aff4274c9852788636808d33a34afab",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T15:34:54.780Z",
+      "note": "dual-axis-report.test.ts contract + overall verdict"
+    },
+    "AC2": {
+      "at": "2026-07-21T15:34:54.842Z",
+      "note": "S1-S4 reassert in dual-axis-report.test.ts"
+    },
+    "AC3": {
+      "at": "2026-07-21T15:34:54.905Z",
+      "note": "redaction gate tests fixture key"
+    },
+    "AC4": {
+      "at": "2026-07-21T15:34:54.967Z",
+      "note": "docs/.../verification.md runbook"
+    },
+    "AC5": {
+      "at": "2026-07-21T15:34:55.031Z",
+      "note": "no P1/P2 files in this commit"
+    },
+    "AC6": {
+      "at": "2026-07-21T15:34:55.093Z",
+      "note": "unit-only dual-axis-report tests; no live CI"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T15:32:52.488Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T15:34:54.404Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T15:34:54.467Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T15:34:54.531Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T15:34:54.592Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T15:34:54.655Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T15:34:54.717Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T15:34:54.780Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: dual-axis-report.test.ts contract + overall verdict"
+    },
+    {
+      "at": "2026-07-21T15:34:54.842Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: S1-S4 reassert in dual-axis-report.test.ts"
+    },
+    {
+      "at": "2026-07-21T15:34:54.905Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: redaction gate tests fixture key"
+    },
+    {
+      "at": "2026-07-21T15:34:54.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: docs/.../verification.md runbook"
+    },
+    {
+      "at": "2026-07-21T15:34:55.031Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: no P1/P2 files in this commit"
+    },
+    {
+      "at": "2026-07-21T15:34:55.093Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: unit-only dual-axis-report tests; no live CI"
+    }
+  ]
+}
