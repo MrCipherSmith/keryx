@@ -121,6 +121,12 @@ export interface WikiEnrichResult {
   pages: WikiEnrichPageResult[];
   enriched: number;
   dryRun: number;
+  /**
+   * Pages skipped without contacting the provider. Today that is only the
+   * fail-closed no-credential case, where every selected page is skipped and
+   * the run returns early; a normal run leaves this at 0. Pages dropped by
+   * `resume` or `limit` are never selected, so they are not counted here.
+   */
   skipped: number;
   failed: number;
 }
@@ -420,6 +426,9 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
     return result;
   }
 
+  // Fail-closed: the only path that produces `action: "skipped"`. It counts
+  // `result.skipped` here and returns early, so the per-page worker below never
+  // has to emit (or tally) a skipped entry.
   if (!credentialAvailable && input.providerFactory === undefined) {
     for (const page of pages) {
       result.pages.push({
@@ -520,6 +529,9 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   const resumeState = resumeStateEarly ?? loadResumeState(input.cwd);
   const completed = new Set(resumeState.completed);
 
+  // `pageResults` is only "enriched" | "dry-run" | "failed" — "skipped" is
+  // accounted for in the fail-closed early return above, so a `skipped` branch
+  // here would be unreachable (and TS2367 on the narrowed union).
   for (const entry of pageResults) {
     result.pages.push(entry);
     if (entry.action === "enriched") {
