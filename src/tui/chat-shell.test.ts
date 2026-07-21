@@ -38,6 +38,23 @@ type OtuiBundle = NonNullable<Awaited<ReturnType<typeof loadOpenTui>>>;
 type TestSetup = Awaited<ReturnType<OtuiBundle["testing"]["createTestRenderer"]>>;
 type SpanFrame = ReturnType<TestSetup["captureSpans"]>;
 
+/**
+ * Loaded ONCE, at module scope, so an absent optional dependency SKIPS the
+ * renderer tests instead of passing them. Each used to `return` early, which bun
+ * reports as a pass — AC10/AC13 could silently become green no-ops. (The AC11
+ * adapter tests need no renderer and always run.)
+ */
+const OTUI = await loadOpenTui();
+const otuiTest = test.skipIf(OTUI === undefined);
+
+/** The bundle, inside a body that only runs when it is present. */
+function requireOtui(): OtuiBundle {
+  if (OTUI === undefined) {
+    throw new Error("unreachable: otuiTest skips without @opentui/core");
+  }
+  return OTUI;
+}
+
 /** The foreground colour (as `[r,g,b,a]`) of the span carrying `needle`. */
 function fgOf(frame: SpanFrame, needle: string): [number, number, number, number] | undefined {
   for (const line of frame.lines) {
@@ -125,11 +142,8 @@ async function mountChat(
   };
 }
 
-test("AC10: a chat turn runs end to end through the real runShell and the reply is on the frame", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return; // optional dependency absent — skip
-  }
+otuiTest("AC10: a chat turn runs end to end through the real runShell and the reply is on the frame", async () => {
+  const otui = requireOtui();
   const h = await mountChat(otui, { replies: ["Keryx is a metaproject CLI.", "Second answer here."] });
 
   // Mount state: the chat chrome, its own mode label, and a focused composer.
@@ -182,11 +196,8 @@ test("AC10: a chat turn runs end to end through the real runShell and the reply 
   h.destroy();
 });
 
-test("a turn settling never steals focus from a `/` dropdown opened while it streamed", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("a turn settling never steals focus from a `/` dropdown opened while it streamed", async () => {
+  const otui = requireOtui();
   // A driver whose turn is held open by the test, so the `/` menu can be opened
   // in the middle of it. The scripted provider finishes far too fast for that.
   let releaseTurn: () => void = () => {};
@@ -239,11 +250,8 @@ test("a turn settling never steals focus from a `/` dropdown opened while it str
   setup.renderer.destroy();
 });
 
-test("/new resets the estimated context counter instead of letting it keep climbing", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("/new resets the estimated context counter instead of letting it keep climbing", async () => {
+  const otui = requireOtui();
   const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."] });
   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
 
@@ -263,11 +271,8 @@ test("/new resets the estimated context counter instead of letting it keep climb
   h.destroy();
 });
 
-test("AC13: chat renders a ts fence with its language tag and a diff with distinct colours", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC13: chat renders a ts fence with its language tag and a diff with distinct colours", async () => {
+  const otui = requireOtui();
   const reply = [
     "Try this:",
     "```ts",

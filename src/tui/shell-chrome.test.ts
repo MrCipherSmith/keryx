@@ -39,6 +39,23 @@ type OtuiBundle = NonNullable<Awaited<ReturnType<typeof loadOpenTui>>>;
 type TestSetup = Awaited<ReturnType<OtuiBundle["testing"]["createTestRenderer"]>>;
 
 /**
+ * Loaded ONCE, at module scope, so an absent optional dependency SKIPS these
+ * tests instead of passing them. Each test used to `return` early, which bun
+ * reports as a pass — the refactor's only safety net could evaporate into green
+ * no-ops without anyone noticing.
+ */
+const OTUI = await loadOpenTui();
+const otuiTest = test.skipIf(OTUI === undefined);
+
+/** The bundle, inside a body that only runs when it is present. */
+function requireOtui(): OtuiBundle {
+  if (OTUI === undefined) {
+    throw new Error("unreachable: otuiTest skips without @opentui/core");
+  }
+  return OTUI;
+}
+
+/**
  * OpenTUI's stdin parser holds a lone `\x1b` in its pending buffer for
  * `DEFAULT_TIMEOUT_MS` (20ms on the real clock) to tell a bare Esc apart from the
  * START of an escape sequence. `flush()` only awaits a render frame, not wall
@@ -107,11 +124,8 @@ async function mountChrome(
   };
 }
 
-test("AC1: mounting the chrome renders header, transcript, composer and footer, with the composer focused", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return; // optional dependency absent — skip
-  }
+otuiTest("AC1: mounting the chrome renders header, transcript, composer and footer, with the composer focused", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
 
   // The transcript handle is the real scrollbox content the IO renders into.
@@ -158,11 +172,8 @@ test("AC1: mounting the chrome renders header, transcript, composer and footer, 
   h.destroy();
 });
 
-test("AC2: showToast and the busy status are live at mount, not placeholder no-ops rebound later", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC2: showToast and the busy status are live at mount, not placeholder no-ops rebound later", async () => {
+  const otui = requireOtui();
   // The pre-extraction closure assigned `showToast` / `setBusyPhase` as no-ops
   // and rebound them 100-400 lines later; anything firing in between was
   // silently dropped. Here both are the FIRST calls after mount.
@@ -178,11 +189,8 @@ test("AC2: showToast and the busy status are live at mount, not placeholder no-o
   h.destroy();
 });
 
-test("AC3: `/` opens the menu, printable keys filter it, Esc closes it and returns focus to the composer", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC3: `/` opens the menu, printable keys filter it, Esc closes it and returns focus to the composer", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   expect(h.chrome.menu.visible).toBe(false);
 
@@ -234,11 +242,8 @@ test("AC3: `/` opens the menu, printable keys filter it, Esc closes it and retur
   h.destroy();
 });
 
-test("hideMenu: dropping the dropdown for an overlay keeps the draft and re-arms a FOCUSED reopen", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("hideMenu: dropping the dropdown for an overlay keeps the draft and re-arms a FOCUSED reopen", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
 
   // The user typed a `/…` query, then an approval dock / ask_user / resume
@@ -272,11 +277,8 @@ test("hideMenu: dropping the dropdown for an overlay keeps the draft and re-arms
   h.destroy();
 });
 
-test("AC3: an active overlay suppresses the `/`-menu key router", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC3: an active overlay suppresses the `/`-menu key router", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   await h.mockInput.pressKeys(["/"]);
   await h.flush();
@@ -327,11 +329,8 @@ test("AC3: an active overlay suppresses the `/`-menu key router", async () => {
   h.destroy();
 });
 
-test("AC4: showToast renders and auto-clears", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC4: showToast renders and auto-clears", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20, chrome: { toastMs: TOAST_MS } });
   h.chrome.showToast("Copied to clipboard");
   await h.flush();
@@ -354,11 +353,8 @@ test("AC4: showToast renders and auto-clears", async () => {
   h.destroy();
 });
 
-test("AC4: setBusyPhase is reflected in the footer, and stopBusy restores the idle hint", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC4: setBusyPhase is reflected in the footer, and stopBusy restores the idle hint", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   const footerRow = (): string => {
     const lines = nonEmptyLines(h.captureCharFrame());
@@ -397,11 +393,8 @@ test("AC4: setBusyPhase is reflected in the footer, and stopBusy restores the id
   h.destroy();
 });
 
-test("AC5: resize keeps the composer and footer on screen at four terminal sizes (flow-075 guard)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC5: resize keeps the composer and footer on screen at four terminal sizes (flow-075 guard)", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });
   // Enough transcript to overflow every viewport below. Deliberately PLAIN text
   // renderables: the pinned upstream defect (a BORDERED child in a ScrollBox at
@@ -441,11 +434,8 @@ test("AC5: resize keeps the composer and footer on screen at four terminal sizes
   h.destroy();
 });
 
-test("AC1: composer submissions and `/`-menu selections both reach the submit hook", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("AC1: composer submissions and `/`-menu selections both reach the submit hook", async () => {
+  const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   const submitted: string[] = [];
   h.chrome.onSubmit((line) => {
