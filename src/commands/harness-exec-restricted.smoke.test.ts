@@ -15,10 +15,14 @@ import path from "node:path";
 import { detectSandboxLauncher } from "../harness/process/sandbox/detect";
 
 const flag = process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1";
-const supported =
-  (process.platform === "darwin" || process.platform === "linux") && detectSandboxLauncher().available;
+const launcherAvailable = detectSandboxLauncher().available;
+// `network: restricted` is enforced on macOS only. On Linux the launcher cannot
+// express "deny all network except this one loopback socket" (that needs a
+// network namespace plus a relay), so wrapWithSandbox fails CLOSED there — which
+// is its own assertion, below.
+const supported = process.platform === "darwin" && launcherAvailable;
 
-describe.skipIf(!flag || !supported)("harness exec --allowed-domains restricted network", () => {
+describe.skipIf(!flag || !supported)("harness exec --allowed-domains restricted network (macOS)", () => {
   test("a non-allowlisted host is refused by the loopback proxy, not reached", async () => {
     const { harnessCommand } = await import("./harness");
     // Write curl's output under the session tmp (a sandbox writable root).
@@ -70,3 +74,42 @@ describe.skipIf(!flag || !supported)("harness exec --allowed-domains restricted 
     }
   });
 });
+
+// The other half of the same contract: on Linux a restricted-network run must
+// refuse with an explicit reason rather than quietly running with FULL host
+// network. Silently downgrading "only these domains" to "everything" would be
+// the worst possible failure mode, so it is asserted, not assumed.
+describe.skipIf(!flag || process.platform !== "linux" || !launcherAvailable)(
+  "harness exec --allowed-domains fails closed on Linux",
+  () => {
+    test("a restricted-network run is blocked with a reason, never silently unrestricted", async () => {
+      const { harnessCommand } = await import("./harness");
+      const logs: string[] = [];
+      const original = console.log;
+      // biome-ignore lint: capture console for this test only.
+      console.log = (...v: unknown[]) =>
+        logs.push(v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(" "));
+      try {
+        await harnessCommand([
+          "exec",
+          "--allow-real-subprocess",
+          "--allow-env",
+          "PATH",
+          "--allowed-domains",
+          "example.com",
+          "--",
+          "/bin/echo",
+          "hi",
+        ]);
+      } finally {
+        console.log = original;
+      }
+
+      const blob = JSON.parse(logs[logs.length - 1] as string) as {
+        outcome?: { kind?: string; reason?: string };
+      };
+      expect(blob.outcome?.kind).toBe("blocked");
+      expect(blob.outcome?.reason).toContain("not yet enforced on Linux");
+    });
+  },
+);

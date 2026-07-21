@@ -17,6 +17,25 @@ The CLI contract is identical and the expected results should match, but they ar
 predictions for Linux, not recordings. If something differs, trust what you
 observe and report it — a mismatch here is a finding, not your mistake.
 
+## Scope on Linux — read this before §6
+
+| Capability | Linux (bubblewrap) | macOS (Seatbelt) |
+|------------|--------------------|------------------|
+| Filesystem containment (§4) | **yes** | yes |
+| Network OFF (§5) | **yes** | yes |
+| Domain allowlist, `--allowed-domains` (§6) | **not implemented — fails closed** | yes |
+| Credential masking, `--mask-env` (§7) | **not implemented — fails closed** | yes |
+
+`network: restricted` needs "deny all network except this one loopback socket".
+Seatbelt can express that directly; bubblewrap cannot — `--unshare-net` gives the
+process its *own* loopback, which is not the one the proxy listens on, so
+reaching it requires a network namespace plus a relay. That work is not done.
+
+Rather than silently downgrading "only these domains" to "the whole internet",
+a restricted run on Linux **refuses to start**. On Linux, §6 and §7 therefore
+verify *that refusal* — which is the security-relevant behaviour today — and
+their full functionality is verifiable on macOS only.
+
 ---
 
 ## 0. The rule that makes this worth doing
@@ -169,6 +188,30 @@ rm -f ./net-sandboxed.txt ./net-control.txt
 
 ## 6. Network RESTRICTED — the domain allowlist
 
+### 6-Linux. The check that applies on your server
+
+On Linux this must **fail closed**. That is the whole check:
+
+```bash
+KERYX_ALLOW_REAL_SUBPROCESS=1 bun src/cli.ts harness exec \
+  --allow-real-subprocess --allow-env PATH \
+  --allowed-domains example.com \
+  -- /bin/echo hi
+```
+
+- **PASS:**
+  `"outcome":{"kind":"blocked","reason":"... network=restricted is not yet
+  enforced on Linux ..."}` — nothing was spawned.
+- **FAIL (and this would be serious):** `"kind":"completed"`. That would mean the
+  run proceeded with **full host network** while the caller asked for a
+  single-domain allowlist — a silent downgrade from "only these domains" to
+  "everything".
+
+Report §6 and §7 as `PASS (fails closed)` and stop here; the rest of this section
+documents the macOS behaviour for reference.
+
+### 6-macOS. Full allowlist behaviour (reference)
+
 `--allowed-domains` switches the run to `restricted`: the OS layer denies all
 network except a loopback proxy, and the contained process is pointed at that
 proxy. Only listed domains get through.
@@ -221,6 +264,11 @@ KERYX_ALLOW_REAL_SUBPROCESS=1 bun src/cli.ts harness exec \
 ---
 
 ## 7. Credential masking over HTTPS
+
+> **On Linux:** masking rides on the restricted-network proxy, so it fails closed
+> for the same reason as §6. The one thing worth running there is the argument
+> guard at the end of this section (it is platform-independent). The rest is
+> macOS reference.
 
 The contained process receives a **sentinel** in the env var, never the real
 secret. The proxy substitutes the real value on the wire, and only for the hosts
@@ -306,6 +354,10 @@ KERYX_ALLOW_REAL_SUBPROCESS=1 bun src/cli.ts harness exec \
 
 ## 8. Known limitation — Go-based tools under TLS termination
 
+> **On Linux:** TLS termination also rides on the restricted-network proxy, so
+> this section is macOS-only reference material. Skip it and report §8 as `N/A`.
+
+
 The run CA is delivered through env vars (`SSL_CERT_FILE`, `CURL_CA_BUNDLE`,
 `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`) and never
 installed into the system trust store — deliberately, because a run-scoped MITM
@@ -349,17 +401,18 @@ For each section, one line: `PASS`, `FAIL`, or `INCONCLUSIVE` with the reason.
 not a passing sandbox.
 
 ```
-§2  launcher sanity        :
-§3  automated smokes       :
-§4  filesystem containment :
-§5  network off            :
-§6  domain allowlist       :
-§7  credential masking     :
-§8  Go tools under MITM    :
+§2  launcher sanity            :
+§3  automated smokes           :
+§4  filesystem containment     :
+§5  network off                :
+§6  allowlist fails closed     :
+§7  mask-env argument guard    :
+§8  Go tools under MITM        : N/A on Linux
 ```
 
-Paste the `network` JSON from §6 and the `printenv` output from §7 — those two
-are the load-bearing evidence.
+The load-bearing evidence on Linux is: the two differing results in §4, the
+sandboxed-vs-control pair in §5, and the exact `blocked` reason string from §6.
+Paste those verbatim.
 
 ---
 
