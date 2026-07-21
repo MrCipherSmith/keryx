@@ -5,7 +5,7 @@
   "title": "O-4: prove the readline fallback — no-TTY, missing optional dep, renderer init failure, and escape-free output parity",
   "status": "in-progress",
   "createdAt": "2026-07-21T21:19:45.624Z",
-  "updatedAt": "2026-07-21T21:20:39.001Z",
+  "updatedAt": "2026-07-21T21:36:50.798Z",
   "source": {
     "type": "description",
     "ref": null
@@ -35,7 +35,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -43,13 +43,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,7 +58,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -92,6 +94,16 @@
       "at": "2026-07-21T21:20:39.001Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T21:35:03.212Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T21:36:50.798Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }
