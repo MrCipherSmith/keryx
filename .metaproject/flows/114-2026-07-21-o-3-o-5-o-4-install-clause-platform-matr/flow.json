@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 2,
+  "id": "114",
+  "slug": "o-3-o-5-o-4-install-clause-platform-matr",
+  "title": "O-3/O-5 + O-4 install clause: platform matrix in CI, global-install smoke, and a recorded cold-start measurement",
+  "status": "in-progress",
+  "createdAt": "2026-07-21T21:42:58.491Z",
+  "updatedAt": "2026-07-21T21:44:14.176Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f13b9114700532d3aa31e1be421e9e7b910691829ab1b534fd05869efd1f794c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T21:42:58.491Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T21:44:14.030Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T21:44:14.099Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T21:44:14.176Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    }
+  ]
+}
