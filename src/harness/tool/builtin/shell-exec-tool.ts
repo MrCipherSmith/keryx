@@ -20,8 +20,13 @@ import { defaultSandboxProfile } from "../../process/sandbox/profile";
 import type { SandboxProfile } from "../../process/sandbox/profile";
 import { detectSandboxLauncher } from "../../process/sandbox/detect";
 import { wrapWithSandbox } from "../../process/sandbox/wrap";
-import { parseMaskSpec, setupNetworkRun } from "../../process/sandbox/network-run";
+import { setupNetworkRun } from "../../process/sandbox/network-run";
 import type { MaskedCredential } from "../../process/sandbox/network-run";
+import {
+  buildDefaultMaskProviders,
+  resolveMasksFromSandboxEnv,
+} from "../../process/sandbox/mask-resolve";
+import { OPENAI_COMPAT_PROVIDERS } from "../../../commands/providers";
 
 /** Runs a shell command string and returns bounded output (or an error result). */
 export type CommandRunner = (command: string) => Promise<InteractiveToolResult>;
@@ -87,6 +92,32 @@ function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off"
 }
 
 /**
+ * Resolve credential masks for a restricted-network shell_exec run (AC7 surface).
+ * Uses the shared resolver so harness can match outcomes (AC8).
+ */
+export function resolveShellRestrictedMasks(
+  env: Record<string, string | undefined>,
+):
+  | { ok: true; masks: MaskedCredential[]; tlsTerminate: boolean }
+  | { ok: false; reason: string } {
+  const providers = buildDefaultMaskProviders(OPENAI_COMPAT_PROVIDERS);
+  const result = resolveMasksFromSandboxEnv({ env, providers });
+  if (!result.ok) {
+    return { ok: false, reason: result.reason };
+  }
+  const masks: MaskedCredential[] = result.resolution.masks.map((m) => ({
+    name: m.name,
+    realValue: env[m.name] ?? "",
+    injectHosts: m.injectHosts,
+  }));
+  return {
+    ok: true,
+    masks,
+    tlsTerminate: result.resolution.tlsTerminate,
+  };
+}
+
+/**
  * The default runner: execute `command` in `cwd = root` via `sh -c`, capturing
  * bounded stdout/stderr. Never throws — a non-zero exit or a spawn failure becomes
  * `{ isError: ... }`. OS-contained when `KERYX_SANDBOX_SHELL` opts in.
@@ -125,40 +156,17 @@ export function makeCommandRunner(root: string): CommandRunner {
         // Restricted network: start the loopback allowlist proxy, point the
         // command at it (HTTP_PROXY), and constrain the sandbox to that socket.
         if (profile.network === "restricted") {
-          // Credential masking: KERYX_SANDBOX_MASK_ENV="NAME@host;OTHER@host".
-          // Requires TLS termination — otherwise an HTTPS sentinel leaves the
-          // sandbox unchanged (auth fails), so refuse rather than half-work.
-          const specs = (process.env.KERYX_SANDBOX_MASK_ENV ?? "")
-            .split(";")
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0);
-          const masks: MaskedCredential[] = [];
-          for (const spec of specs) {
-            const parsed = parseMaskSpec(spec);
-            if (!parsed) {
-              return {
-                output: `shell_exec: invalid KERYX_SANDBOX_MASK_ENV spec "${spec}" (expected NAME@host[,host]).`,
-                isError: true,
-              };
-            }
-            masks.push({
-              name: parsed.name,
-              realValue: process.env[parsed.name] ?? "",
-              injectHosts: parsed.injectHosts,
-            });
+          // Credential masking via shared resolver (P0). Manual: KERYX_SANDBOX_MASK_ENV.
+          // Auto: KERYX_SANDBOX_MASK_MODE=auto derives NAME@host from provider registry
+          // for non-empty keys (after applySavedApiKeys). Fail-closed TLS (ADR-0007).
+          const resolved = resolveShellRestrictedMasks(env);
+          if (!resolved.ok) {
+            return { output: `shell_exec: ${resolved.reason}`, isError: true };
           }
-          const wantsTls = process.env.KERYX_SANDBOX_TLS_TERMINATE === "1";
-          if (masks.length > 0 && !wantsTls) {
-            return {
-              output:
-                "shell_exec: KERYX_SANDBOX_MASK_ENV requires KERYX_SANDBOX_TLS_TERMINATE=1 — without TLS " +
-                "termination the proxy cannot rewrite encrypted requests, so an HTTPS sentinel would not be replaced.",
-              isError: true,
-            };
-          }
+          const { masks, tlsTerminate } = resolved;
           const net = await setupNetworkRun(profile, {
             ...(masks.length > 0 ? { masks } : {}),
-            ...(wantsTls ? { tlsTerminate: true } : {}),
+            ...(tlsTerminate ? { tlsTerminate: true } : {}),
           });
           profile = net.profile;
           netClose = net.close;

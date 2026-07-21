@@ -38,9 +38,17 @@ import { RealProcessAdapter } from "../harness/process/real-process-adapter";
 import { defaultSandboxProfile } from "../harness/process/sandbox/profile";
 import type { SandboxProfile } from "../harness/process/sandbox/profile";
 import { resolveSandboxAdapter } from "../harness/process/sandbox/detect";
-import { parseMaskSpec, setupNetworkRun, summarizeDecisions } from "../harness/process/sandbox/network-run";
-import type { ProxyDecision } from "../harness/process/sandbox/proxy";
+import { setupNetworkRun, summarizeDecisions } from "../harness/process/sandbox/network-run";
 import type { MaskedCredential } from "../harness/process/sandbox/network-run";
+import type { ProxyDecision } from "../harness/process/sandbox/proxy";
+import {
+  buildDefaultMaskProviders,
+  parseMaskModeStrict,
+  resolveMasksFromSandboxEnv,
+  type MaskMode,
+} from "../harness/process/sandbox/mask-resolve";
+import { OPENAI_COMPAT_PROVIDERS } from "./providers";
+import { envWithSavedApiKeys } from "../lib/shell-config";
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import type { BudgetReservation, ParentRemainingBudget } from "../harness/child/isolation";
@@ -220,7 +228,9 @@ interface ParsedArgs {
 /** The usage text, printed on an unknown subcommand or invalid args. */
 const USAGE = [
   'Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"',
-  "       keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess] -- <path> [args...]",
+  "       keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]",
+      "         [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask]",
+      "         -- <path> [args...]",
   "       keryx harness extension --spec <path>",
   "       keryx harness wave --spec <path>",
 ].join("\n");
@@ -425,6 +435,13 @@ interface ParsedExecArgs {
   maskEnv: string[];
   /** `--tls-terminate` ⇒ MITM allowlisted HTTPS (required for HTTPS masking). */
   tlsTerminate: boolean;
+  /**
+   * `--mask-mode auto|manual|off` or `--auto-mask` (alias for auto).
+   * When unset, resolver uses KERYX_SANDBOX_MASK_MODE (P0.a default: manual).
+   */
+  maskMode?: MaskMode;
+  /** Set when `--mask-mode` received an invalid value. */
+  maskModeError?: string;
   commandPath: string;
   commandArgs: string[];
 }
@@ -437,6 +454,8 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
   let allowedDomains: string[] | undefined;
   const maskEnv: string[] = [];
   let tlsTerminate = false;
+  let maskMode: MaskMode | undefined;
+  let maskModeError: string | undefined;
   let commandPath = "";
   let commandArgs: string[] = [];
 
@@ -467,6 +486,18 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
       if (raw !== undefined) maskEnv.push(raw);
     } else if (arg === "--tls-terminate") {
       tlsTerminate = true;
+    } else if (arg === "--auto-mask") {
+      maskMode = "auto";
+    } else if (arg === "--mask-mode") {
+      const raw = args[++i];
+      if (raw !== undefined) {
+        const parsedMode = parseMaskModeStrict(raw);
+        if (parsedMode === undefined) {
+          maskModeError = raw;
+        } else {
+          maskMode = parsedMode;
+        }
+      }
     }
   }
 
@@ -480,6 +511,8 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
   };
   if (maxRuntimeMs !== undefined) parsed.maxRuntimeMs = maxRuntimeMs;
   if (allowedDomains !== undefined) parsed.allowedDomains = allowedDomains;
+  if (maskMode !== undefined) parsed.maskMode = maskMode;
+  if (maskModeError !== undefined) parsed.maskModeError = maskModeError;
   return parsed;
 }
 
@@ -494,8 +527,26 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
  */
 async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<void> {
   const { env, clock, idSeq } = resolveRuntime(deps);
-  const { allowEnvKeys, maxRuntimeMs, allowRealSubprocess, allowedDomains, maskEnv, tlsTerminate, commandPath, commandArgs } =
-    parseExecArgs(args);
+  const parsedArgs = parseExecArgs(args);
+  const {
+    allowEnvKeys,
+    maxRuntimeMs,
+    allowRealSubprocess,
+    allowedDomains,
+    maskEnv,
+    tlsTerminate,
+    maskMode,
+    maskModeError,
+    commandPath,
+    commandArgs,
+  } = parsedArgs;
+
+  if (maskModeError !== undefined) {
+    console.log(
+      `keryx harness exec: invalid --mask-mode "${maskModeError}" (expected auto|manual|off).`,
+    );
+    return;
+  }
 
   // A missing `-- <path>` used to sail through as an empty command path and only
   // surface as an opaque exit 71 from the sandbox launcher failing to exec "".
@@ -535,37 +586,28 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   const envDomains = env.KERYX_SANDBOX_ALLOWED_DOMAINS
     ? env.KERYX_SANDBOX_ALLOWED_DOMAINS.split(",").map((d) => d.trim()).filter((d) => d.length > 0)
     : undefined;
-  // Credential masking: `--mask-env NAME@host[,host]` (or KERYX_SANDBOX_MASK_ENV).
-  // The contained process only ever sees a sentinel; the proxy substitutes the
-  // real value on the wire to the inject hosts.
-  const maskSpecs = [
-    ...maskEnv,
-    ...(env.KERYX_SANDBOX_MASK_ENV ? env.KERYX_SANDBOX_MASK_ENV.split(";") : []),
-  ]
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  const masks: MaskedCredential[] = [];
-  for (const spec of maskSpecs) {
-    const parsed = parseMaskSpec(spec);
-    if (!parsed) {
-      console.log(`keryx harness exec: invalid --mask-env spec "${spec}" (expected NAME@host[,host]).`);
-      return;
-    }
-    masks.push({ name: parsed.name, realValue: env[parsed.name] ?? "", injectHosts: parsed.injectHosts });
-  }
 
-  const wantsTlsTerminate = tlsTerminate || env.KERYX_SANDBOX_TLS_TERMINATE === "1";
-  // Masking a credential that travels over HTTPS only works when TLS is
-  // terminated; otherwise the sentinel leaves the sandbox unchanged and auth
-  // fails. Require the MITM opt-in explicitly rather than silently half-working.
-  if (masks.length > 0 && !wantsTlsTerminate) {
-    console.log(
-      "keryx harness exec: --mask-env requires --tls-terminate (or KERYX_SANDBOX_TLS_TERMINATE=1). " +
-        "Without TLS termination the proxy cannot rewrite encrypted requests, so an HTTPS sentinel " +
-        "would leave the sandbox unchanged.",
-    );
+  // Credential masking via shared resolver (P0). Keys from auth.json participate
+  // in auto-mask (envWithSavedApiKeys); real values never logged.
+  const envForMask = envWithSavedApiKeys(env);
+  const providers = buildDefaultMaskProviders(OPENAI_COMPAT_PROVIDERS);
+  const maskResult = resolveMasksFromSandboxEnv({
+    env: envForMask,
+    extraExplicitSpecs: maskEnv,
+    ...(maskMode !== undefined ? { modeOverride: maskMode } : {}),
+    ...(tlsTerminate ? { tlsFlag: true } : {}),
+    providers,
+  });
+  if (!maskResult.ok) {
+    console.log(`keryx harness exec: ${maskResult.reason}`);
     return;
   }
+  const masks: MaskedCredential[] = maskResult.resolution.masks.map((m) => ({
+    name: m.name,
+    realValue: (typeof envForMask[m.name] === "string" ? envForMask[m.name] : "") as string,
+    injectHosts: m.injectHosts,
+  }));
+  const wantsTlsTerminate = maskResult.resolution.tlsTerminate;
 
   // Inject hosts must be reachable, so they join the allowlist automatically.
   const maskHosts = masks.flatMap((m) => m.injectHosts);

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.local/schemas/project-sandbox-policy.schema.json",
+  "title": "Keryx project sandbox policy",
+  "description": "Optional project-level non-secret sandbox policy. Must never contain API key values.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "maskMode": {
+      "type": "string",
+      "enum": ["auto", "manual", "off"]
+    },
+    "extraMasks": {
+      "type": "array",
+      "description": "Additional NAME@host[,host] specs merged as explicit masks. Values are never stored here.",
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "pattern": "^[^@\\s]+@[^@\\s]+$"
+      }
+    },
+    "allowedDomains": {
+      "type": "array",
+      "description": "Optional allowlist domain hints for restricted network (product may merge with runtime profile).",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "tlsTerminate": {
+      "type": "boolean",
+      "description": "Project preference when env unset; still subject to fail-closed mask+TLS rules."
+    }
+  }
+}
