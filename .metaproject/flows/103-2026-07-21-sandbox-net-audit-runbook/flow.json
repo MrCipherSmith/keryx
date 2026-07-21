@@ -3,9 +3,9 @@
   "id": "103",
   "slug": "sandbox-net-audit-runbook",
   "title": "sandbox v1.x: network decision audit + Linux verification runbook",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-07-21T13:34:09.676Z",
-  "updatedAt": "2026-07-21T13:52:06.849Z",
+  "updatedAt": "2026-07-21T13:58:07.713Z",
   "source": {
     "type": "description",
     "ref": null
@@ -34,7 +34,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/172"
   },
   "tasks": [
     {
@@ -256,6 +256,11 @@
       "at": "2026-07-21T13:52:06.849Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T13:58:07.713Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/172 (warning: PR is not a draft)"
     }
   ]
 }
