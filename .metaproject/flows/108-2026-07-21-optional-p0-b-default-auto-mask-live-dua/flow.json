@@ -3,24 +3,53 @@
   "id": "108",
   "slug": "optional-p0-b-default-auto-mask-live-dua",
   "title": "Optional P0.b default auto-mask + live dual-axis + UX",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T15:51:21.955Z",
-  "updatedAt": "2026-07-21T15:53:26.902Z",
+  "updatedAt": "2026-07-21T15:57:29.106Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:948e8c3915cc5ae5560a7367619cbe4c4d2aff5d219d6d720296f7fe971b225a",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T15:56:57.545Z",
+      "note": "unit: fully unset → mode auto + masks (mask-resolve.test AC-O1)"
+    },
+    "AC2": {
+      "at": "2026-07-21T15:56:57.613Z",
+      "note": "unit: env and file maskMode=manual still empty masks"
+    },
+    "AC3": {
+      "at": "2026-07-21T15:56:57.678Z",
+      "note": "README + implementation-plan migration restore steps"
+    },
+    "AC4": {
+      "at": "2026-07-21T15:56:57.746Z",
+      "note": "dual-axis-live.smoke.test.ts skipUnless KERYX_DUAL_AXIS_LIVE=1"
+    },
+    "AC5": {
+      "at": "2026-07-21T15:56:57.811Z",
+      "note": "redaction scan → overall FAIL when fixture secret in REPORT"
+    },
+    "AC6": {
+      "at": "2026-07-21T15:56:57.877Z",
+      "note": "fixture-only secrets; package.json deps unchanged"
+    },
+    "AC7": {
+      "at": "2026-07-21T15:56:57.944Z",
+      "note": "P1/P2 override tests still green; built-in now auto"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/179"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +57,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +72,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +87,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,7 +102,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -86,6 +119,89 @@
     {
       "at": "2026-07-21T15:53:26.902Z",
       "event": "started"
+    },
+    {
+      "at": "2026-07-21T15:56:57.272Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T15:56:57.340Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T15:56:57.407Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T15:56:57.477Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T15:56:57.545Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: unit: fully unset → mode auto + masks (mask-resolve.test AC-O1)"
+    },
+    {
+      "at": "2026-07-21T15:56:57.613Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: unit: env and file maskMode=manual still empty masks"
+    },
+    {
+      "at": "2026-07-21T15:56:57.678Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: README + implementation-plan migration restore steps"
+    },
+    {
+      "at": "2026-07-21T15:56:57.746Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: dual-axis-live.smoke.test.ts skipUnless KERYX_DUAL_AXIS_LIVE=1"
+    },
+    {
+      "at": "2026-07-21T15:56:57.811Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: redaction scan → overall FAIL when fixture secret in REPORT"
+    },
+    {
+      "at": "2026-07-21T15:56:57.877Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: fixture-only secrets; package.json deps unchanged"
+    },
+    {
+      "at": "2026-07-21T15:56:57.944Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: P1/P2 override tests still green; built-in now auto"
+    },
+    {
+      "at": "2026-07-21T15:57:00.026Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/179 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T15:57:00.095Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T15:57:01.989Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-07-21T15:57:27.039Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/179 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-21T15:57:27.118Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T15:57:29.106Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
