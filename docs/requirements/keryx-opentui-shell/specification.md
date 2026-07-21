@@ -165,16 +165,18 @@ CliRenderer.root
     `MAX_THOUGHT_LINES` (12) with a `… (n more lines not shown)` notice; the
     registry still retains the whole payload, so `y` / `/copy` are lossless.
 
-  **Transcript layout invariant (flow 115, D-1).** A box mounted in the
-  transcript ScrollBox hugs its content with `maxWidth: hugWidth(text, chrome)`
-  and **never** with `alignSelf`. `alignSelf` stops a node measuring its
-  intrinsic height: it collapses to the viewport height, squeezes bordered
-  children until their border rows paint over the content row, and makes the
-  ScrollBox under-report `scrollHeight` so every row below a large expanded
-  block becomes unreachable. `flexShrink: 0` and "never `flexGrow`" (flow 075)
-  still hold. Enforced statically by `src/capability/tui-layout.test.ts` and by
-  measurement regressions in `src/tui/tui-shell.test.ts`.
   - system/usage → dim lines (`↑in ↓out tokens`, `[stopped] …`, errors).
+
+**Transcript layout invariant (flow 115, D-1).** A box mounted in the transcript
+ScrollBox hugs its content with `maxWidth: hugWidth(text, chrome)` and **never**
+with `alignSelf`. `alignSelf` stops a node measuring its intrinsic height: it
+collapses to the viewport height, squeezes bordered children until their border
+rows paint over the content row, and makes the ScrollBox under-report
+`scrollHeight` so every row below a large expanded block becomes unreachable —
+which is also what §7.1's "known `@opentui/core` defect at `scrollTop === 2`"
+actually was. `flexShrink: 0` and "never `flexGrow`" (flow 075) still hold.
+Enforced statically by `src/capability/tui-layout.test.ts` and by measurement
+regressions in `src/tui/tui-shell.test.ts`.
 
 ## 4. AgentIO → OpenTUI mapping
 
@@ -275,18 +277,19 @@ real debugging time, so they are recorded here.
   only awaits a render frame, so `pressEscape()` + `flush()` observes nothing at
   all. Tests wait the timeout out (`pressEscapeAndSettle`). Real terminals pay
   the identical 20ms, so this is a harness accommodation, not a workaround.
-- **Known upstream defect — bordered child in a ScrollBox at `scrollTop === 2`.**
-  The child's bottom border is painted one row past the viewport clip, over
-  whatever sits below (in the shell, the composer's interior row:
-  `│─draft─prompt─────╯`). It reproduces from pure OpenTUI primitives with no
-  keryx code, is a pure function of the offset (0, 1 and 3 are clean), survives
-  `overflow: "hidden"` on the scrollbox, its content, the child and the column
-  parent, and survives a forced repaint — so it is live overdraw, not stale
-  paint. Keryx cannot fix it from the outside without dropping the frame border
-  that AC5/AC7 require. It is pinned by a dedicated test in
-  `src/tui/tui-shell.test.ts` that asserts the defect, so the test fails loudly
-  when upstream fixes it; delete that test and the corresponding carve-out in
-  the AC11 layout test at that point.
+- **~~Known upstream defect~~ — bordered child in a ScrollBox at
+  `scrollTop === 2`. NOT upstream; fixed in flow 115.** The symptom was real: a
+  bordered child's bottom border painted one row past the viewport clip, over
+  the composer's interior row (`│─draft─prompt─────╯`), as a pure function of
+  the offset, surviving `overflow: "hidden"` everywhere and a forced repaint.
+  The attribution was wrong. The repro's own boxes carried
+  `alignSelf: "flex-start"`, which stops a node measuring its intrinsic height —
+  it collapses to the viewport and paints outside its own box. Flow 115 re-ran
+  the identical repro with `maxWidth` in place of `alignSelf`: no bleed at any
+  offset. The test in `src/tui/tui-shell.test.ts` now runs BOTH arms (it pins
+  the cause and the fix instead of a phantom upstream bug), the AC11 carve-out
+  is gone, and the ban is enforced by `src/capability/tui-layout.test.ts`. See
+  the transcript layout invariant in §3.
 
 ## 8. Phase 0 spike — exit criteria (**passed**, flow 059)
 
@@ -588,6 +591,11 @@ Per leg the job proves two things, both **positively**:
   enough to fail `opentui-tests-no-skips.ts` — but the hazard was *sampled*, not
   removed. Treat any `if (otui === undefined) return;` in a test as a silent pass,
   and prefer `test.skipIf`.
+
+  **Closed (flow 115).** The remaining guards — the thirteen above plus the five
+  regressions flow 115 added — now all go through `otuiTest`/`requireOtui`, so
+  `src/tui/tui-shell.test.ts` contains no early-`return` guard at all and
+  `opentui-tests-no-skips.ts` sees every renderer test.
 
 **What is covered, and what is not.** N1's wording — binaries cover the
 platforms, the install path pulls them, no Zig — is proven on all four. "The TUI
