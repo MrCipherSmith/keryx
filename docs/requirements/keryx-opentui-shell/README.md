@@ -9,11 +9,13 @@ half of the scope was closed later by **flow 112**, which extracted a shared
 renders `ShellIO` through the same chrome using the real `runShell`. Both modes
 are now TUI by default on a TTY.
 
-O-3, O-4 and O-5 were subsequently closed by flows 113 and 114. **§10 Open items**
-in `specification.md` now lists exactly one: **O-6** — no automated check can
-evidence a rendered TUI frame, because `createCliRenderer` needs a controlling
-terminal that hosted CI runners lack. Consult §10 rather than this paragraph; it
-is the authority.
+O-3, O-4 and O-5 were subsequently closed by flows 113 and 114 — in part rather
+than outright in some cases, which is why **§10 in `specification.md` is the
+authority and this paragraph is not**. The one open item is **O-6**, and it has
+since been **narrowed**: a pty smoke now runs the real shell on a pseudo-terminal
+in CI on macOS and asserts a frame was actually drawn. What remains open is
+Linux and darwin-x64, the global-install clause, time-to-first-frame, and
+anything past the first frame.
 
 This package specified migrating the keryx interactive shell/agent UI from the
 line-based `node:readline` renderer to a full-screen **OpenTUI**
