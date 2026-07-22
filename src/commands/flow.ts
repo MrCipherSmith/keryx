@@ -83,6 +83,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runSimple(args.slice(1), "unblock");
       case "check":
         return await runCheck();
+      case "renumber":
+        return await runRenumber(args.slice(1));
       case "plan":
         return await runPlan(args.slice(1));
       case "schema":
@@ -188,12 +190,23 @@ async function runList(args: string[] = []): Promise<void> {
     console.log(`  ${style.dim("No flows yet.")} Start one: ${style.cyan('keryx flow init --title "..."')}`);
     return;
   }
+  // A number shared by two packages makes every bare-id command ambiguous —
+  // say so here, where the listing is what usually reveals it.
+  const shared = new Set(
+    flows.map((flow) => flow.id).filter((id, index, all) => all.indexOf(id) !== index),
+  );
   heading(`Flows (${flows.length})`);
   for (const flow of flows) {
+    const marker = shared.has(flow.id) ? ` ${style.red("⚠ duplicate id")}` : "";
     console.log(
-      `  ${style.bold(flow.id)} ${style.dim("[")}${flowStatusLabel(flow.status)}${style.dim("]")} ${flow.title} ${style.dim(`(tasks ${flow.tasksDone}/${flow.tasksTotal})`)}`,
+      `  ${style.bold(flow.id)}${marker} ${style.dim("[")}${flowStatusLabel(flow.status)}${style.dim("]")} ${flow.title} ${style.dim(`(tasks ${flow.tasksDone}/${flow.tasksTotal})`)}`,
     );
     console.log(`     ${style.dim(flow.dir)}`);
+  }
+  if (shared.size > 0) {
+    note(
+      `${shared.size} duplicated id(s). Repair with: keryx flow renumber <dir> --to <free id> --reason "<why>"`,
+    );
   }
 }
 
@@ -389,6 +402,24 @@ async function runCheck(): Promise<void> {
   process.exitCode = 1;
 }
 
+async function runRenumber(args: string[]): Promise<void> {
+  const ref = requireId(args);
+  const to = optionValue(args, "--to");
+  const reason = optionValue(args, "--reason");
+  if (!to || !reason) {
+    throw new Error('Usage: keryx flow renumber <dir> --to <id> --reason "<why>"');
+  }
+  const result = await getService().renumber({ cwd: process.cwd(), ref, to, reason });
+  console.log(
+    `  ${style.green(symbols.ok)} Flow ${style.bold(result.from)} ${style.cyan(symbols.arrow)} ${style.bold(result.to)}`,
+  );
+  note(`${result.fromDir} ${symbols.arrow} ${result.toDir}`);
+  nextSteps([
+    `Commit the move together with ${style.cyan(".metaproject/flows/id-map.json")}.`,
+    `Old references to flow ${result.from} stay valid through the id map.`,
+  ]);
+}
+
 function requireId(args: string[]): string {
   const id = args.find((arg) => !arg.startsWith("--"));
   if (!id) {
@@ -413,6 +444,7 @@ function printHelp(): void {
     "keryx flow complete <id> [--comment] [--merged <commit>]",
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
     "keryx flow check",
+    'keryx flow renumber <dir> --to <id> --reason "<why>"   (repair a duplicate id)',
     "keryx flow plan <id> [--provider <p>] [--json]   (model-suggested task breakdown)",
     "keryx flow schema [--out <path>]",
   ]);

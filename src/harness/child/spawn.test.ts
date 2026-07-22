@@ -398,6 +398,7 @@ function makeSpyFlowService(
     block: notImplemented("block", calls),
     unblock: notImplemented("unblock", calls),
     check: notImplemented("check", calls),
+    renumber: notImplemented("renumber", calls),
   };
   return { service, calls };
 }

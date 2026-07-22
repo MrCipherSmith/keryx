@@ -405,6 +405,7 @@ describe("no duplicate coordinator — completeFromGate calls exactly one state-
       block: notImplemented("block", calls),
       unblock: notImplemented("unblock", calls),
       check: notImplemented("check", calls),
+      renumber: notImplemented("renumber", calls),
     };
 
     const port = createTaskManagerFlowPort(service);

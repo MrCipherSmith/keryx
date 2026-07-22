@@ -1,11 +1,17 @@
 import { test, expect } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
 import type { FlowServiceDeps, TrackerAdapter } from "./types";
 import { uniqueTestRoot } from "../lib/test-tmp";
 
-const ROOT = uniqueTestRoot(path.join(import.meta.dir, "..", ".."), ".tmp-flow-security-test");
+// Unique per run (concurrent bun-test isolation) AND rooted in the OS tmpdir,
+// deliberately outside the git checkout: a fixture inside the repo would share
+// this clone's flow-id allocation scope (git-common-dir ledger, see
+// flow/allocation.ts), which is neither what this test exercises nor safe to
+// mutate from a test run.
+const ROOT = uniqueTestRoot(tmpdir(), "keryx-flow-sec");
 
 function fakeTracker(): TrackerAdapter & { commented: string[] } {
   const commented: string[] = [];
@@ -49,9 +55,8 @@ async function writeAc(dir: string, criteria: string[]): Promise<void> {
 // Drive a flow to the point where `complete` runs its gates.
 async function driveToComplete(deps: FlowServiceDeps): Promise<ReturnType<ReturnType<typeof createFlowService>["complete"]>> {
   const service = createFlowService(deps);
-  const { flow } = await service.init({ cwd: ROOT, title: "Security gate flow" });
-  const dir = "001-2026-07-07-security-gate-flow";
-  await writeAc(dir, ["Criterion one"]);
+  const { flow, dir: created } = await service.init({ cwd: ROOT, title: "Security gate flow" });
+  await writeAc(path.basename(created), ["Criterion one"]);
   await service.freeze({ cwd: ROOT, id: flow.id });
   await service.start({ cwd: ROOT, id: flow.id });
   await service.implemented({ cwd: ROOT, id: flow.id, prUrl: "https://github.com/acme/app/pull/1" });

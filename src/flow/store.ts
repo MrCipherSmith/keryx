@@ -20,26 +20,66 @@ export async function listFlowDirs(cwd: string): Promise<string[]> {
     .sort();
 }
 
-export async function nextFlowId(cwd: string): Promise<string> {
+export function flowIdOf(dir: string): string {
+  return dir.slice(0, 3);
+}
+
+/** Flow dirs grouped by their numeric id; groups of >1 are collisions. */
+export function groupFlowDirsById(dirs: string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const dir of dirs) {
+    const id = flowIdOf(dir);
+    groups.set(id, [...(groups.get(id) ?? []), dir]);
+  }
+  return groups;
+}
+
+// `reserved` carries ids handed out by this clone that are not (or no longer)
+// visible in the local listing — see allocation.ts. Without it the high-water
+// mark is per working copy, which is what let parallel worktrees collide.
+export async function nextFlowId(cwd: string, reserved: number[] = []): Promise<string> {
   const dirs = await listFlowDirs(cwd);
-  const max = dirs.reduce((acc, dir) => {
-    const num = Number(dir.slice(0, 3));
-    return Number.isNaN(num) ? acc : Math.max(acc, num);
-  }, 0);
+  const local = dirs.map((dir) => Number(flowIdOf(dir)));
+  const max = [...local, ...reserved].reduce(
+    (acc, num) => (Number.isNaN(num) ? acc : Math.max(acc, num)),
+    0,
+  );
   return String(max + 1).padStart(3, "0");
 }
 
 // Accepts "001", a full dir name, or a slug; returns the flow directory name.
+// A bare id that matches several flows is NEVER resolved to the first match:
+// acting on a guessed package is how harness evidence and AC confirmations end
+// up in the wrong flow. The caller must disambiguate or repair the collision.
 export async function resolveFlowDir(cwd: string, id: string): Promise<string> {
   const dirs = await listFlowDirs(cwd);
-  const match =
-    dirs.find((dir) => dir === id) ??
-    dirs.find((dir) => dir.startsWith(`${id.padStart(3, "0")}-`)) ??
-    dirs.find((dir) => dir.slice(15) === id || dir.endsWith(`-${id}`));
-  if (!match) {
-    throw new Error(`Flow not found: ${id}. Run: keryx flow list`);
+  const exact = dirs.find((dir) => dir === id);
+  if (exact) {
+    return exact;
   }
-  return match;
+  const byId = dirs.filter((dir) => dir.startsWith(`${id.padStart(3, "0")}-`));
+  assertUnambiguous(id, byId);
+  if (byId[0]) {
+    return byId[0];
+  }
+  const bySlug = dirs.filter((dir) => dir.slice(15) === id || dir.endsWith(`-${id}`));
+  assertUnambiguous(id, bySlug);
+  if (bySlug[0]) {
+    return bySlug[0];
+  }
+  throw new Error(`Flow not found: ${id}. Run: keryx flow list`);
+}
+
+function assertUnambiguous(id: string, candidates: string[]): void {
+  if (candidates.length < 2) {
+    return;
+  }
+  throw new Error(
+    `Flow reference "${id}" is ambiguous — ${candidates.length} flows match it:\n` +
+      candidates.map((dir) => `  - ${dir}`).join("\n") +
+      "\nUse the full directory name, or repair the collision with: " +
+      'keryx flow renumber <dir> --to <id> --reason "<why>"',
+  );
 }
 
 export async function readFlow(cwd: string, dir: string): Promise<FlowState> {

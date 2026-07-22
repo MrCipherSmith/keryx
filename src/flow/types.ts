@@ -178,10 +178,28 @@ export type FlowCompleteResult = {
 
 export type FlowCheckIssue = {
   flow: string;
-  kind: "structure" | "checksum" | "schema" | "state";
+  kind: "structure" | "checksum" | "schema" | "state" | "duplicate-id";
   message: string;
 };
 export type FlowCheckResult = { ok: boolean; issues: FlowCheckIssue[] };
+
+/** One recorded `flow renumber`, kept in .metaproject/flows/id-map.json. */
+export type FlowIdMapEntry = {
+  from: string;
+  to: string;
+  fromDir: string;
+  toDir: string;
+  at: string;
+  reason: string;
+};
+
+export type FlowRenumberResult = {
+  flow: FlowState;
+  from: string;
+  to: string;
+  fromDir: string;
+  toDir: string;
+};
 
 export interface FlowService {
   init(input: FlowInitInput): Promise<FlowInitResult>;
@@ -218,4 +236,14 @@ export interface FlowService {
   block(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
   unblock(input: { cwd: string; id: string }): Promise<FlowState>;
   check(input: { cwd: string }): Promise<FlowCheckResult>;
+  /**
+   * Change a flow's number. The only sanctioned way to do it: `flow.json` is
+   * CLI-owned and the move must be recorded so old references stay traceable.
+   */
+  renumber(input: {
+    cwd: string;
+    ref: string;
+    to: string;
+    reason: string;
+  }): Promise<FlowRenumberResult>;
 }
