@@ -108,13 +108,14 @@ try {
     loud([
       `OPENTUI TEST GUARD: ${totals.skipped} test(s) SKIPPED on ${process.platform}-${process.arch}.`,
       "",
-      "  These suites skip their renderer tests when the optional TUI dependency's",
-      "  prebuilt native binary does not resolve. A skip here therefore means the",
-      "  platform-specific binary is MISSING on this runner — the exact failure this",
-      "  job exists to catch. Reporting green with skips would record a platform as",
-      "  covered while nothing on it was ever exercised.",
+      "  A skip means the environment could not run the thing under test, so",
+      "  reporting green would record a platform as covered while nothing on it",
+      "  was ever exercised. The two gates that produce a skip here:",
       "",
-      "  Check the preceding native-binary verification step for the reason.",
+      "    * src/tui — the optional TUI dependency's prebuilt native binary did",
+      "      not resolve. Check the preceding native-binary verification step.",
+      "    * the pty launch smoke — no `/usr/bin/script`, a non-darwin host, or",
+      "      KERYX_ALLOW_REAL_SUBPROCESS was not set to 1.",
     ]);
     process.exit(1);
   }
