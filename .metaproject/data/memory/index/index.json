@@ -1,7 +1,22 @@
 {
-  "generatedAt": "2026-07-21T23:27:30.781Z",
-  "entryCount": 1,
+  "generatedAt": "2026-07-22T10:19:19.661Z",
+  "entryCount": 2,
   "entries": [
+    {
+      "path": "lessons/allowlist-not-a-boundary.md",
+      "type": "lesson",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "A shell allowlist matched against the raw command string is not a security boundary",
+      "updated": "2026-07-22",
+      "tags": [],
+      "scopes": {
+        "module": "src/lib, src/commands, src/tui",
+        "entity": "shell-permissions, command-risk, approval gate",
+        "files": [],
+        "skills": []
+      }
+    },
     {
       "path": "lessons/tui-alignself-height-collapse.md",
       "type": "lesson",

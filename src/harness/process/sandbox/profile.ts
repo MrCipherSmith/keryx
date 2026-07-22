@@ -70,13 +70,25 @@ export interface SandboxProfileInput {
   dangerFullAccess?: boolean;
 }
 
-/** Secret paths (relative to home) whose reads are denied by default. */
+/**
+ * Secret paths (relative to home) whose reads are denied by default.
+ *
+ * `.local/share/keryx` holds `auth.json` AND `permissions.json` — the agent's
+ * own credentials and its approval allowlist. It was missing here while
+ * `.config/keryx` was listed, so the file that governs the approval gate was
+ * readable and writable by a contained command (flow 115).
+ *
+ * This is defence in depth only: it applies to a CONTAINED child, and shell
+ * containment is opt-in (ADR-0006). The barrier that holds in the default
+ * configuration is `touchesAgentCredentials` in the approval gate.
+ */
 const DEFAULT_SECRET_SUBPATHS = [
   ".ssh",
   ".aws",
   ".gnupg",
   ".config/gh",
   ".config/keryx",
+  ".local/share/keryx",
   ".netrc",
 ];
 

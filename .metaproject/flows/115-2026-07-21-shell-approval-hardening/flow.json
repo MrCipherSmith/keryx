@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 2,
+  "id": "115",
+  "slug": "shell-approval-hardening",
+  "title": "Harden shell_exec approval gate: allowlist validation, destructive classifier, self-grant prevention",
+  "status": "implemented",
+  "createdAt": "2026-07-21T22:48:39.562Z",
+  "updatedAt": "2026-07-22T06:31:59.924Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:94133276b62230ccc1592b99bee9eed3119a49df75d6bf2001b5a0e538297903",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-22T06:31:34.128Z",
+      "note": "src/lib/shell-permissions-hardening.test.ts: B1 save/match tests; quoted metacharacter case explicitly asserted"
+    },
+    "AC2": {
+      "at": "2026-07-22T06:31:34.259Z",
+      "note": "B2 tests: isShellCommandAllowed('rm -rf /', ['rm -rf /']) === false; suggestShellPatterns('rm -rf /') offers neither grant; stress P2b PASS"
+    },
+    "AC3": {
+      "at": "2026-07-22T06:31:34.419Z",
+      "note": "B3 tests over 15 interpreter/wrapper commands; 'bun test*' still valid (existing round-trip test unchanged)"
+    },
+    "AC4": {
+      "at": "2026-07-22T06:31:34.536Z",
+      "note": "migration test asserts kept/rejected partition and non-destructive load; TUI prints the audit once per session (tui-shell.ts)"
+    },
+    "AC5": {
+      "at": "2026-07-22T06:31:49.869Z",
+      "note": "src/lib/self-grant.test.ts: touchesAgentCredentials tables, gate + pattern refusal, fingerprint change detection; stress P6 PASS"
+    },
+    "AC6": {
+      "at": "2026-07-22T06:31:50.080Z",
+      "note": "src/commands/agent-destructive-gate.test.ts: 5 tests, incl. default-deny preserved for a destructive tool"
+    },
+    "AC7": {
+      "at": "2026-07-22T06:31:50.195Z",
+      "note": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts: 7 tests; isolation passed pre-existing code (recorded, no change), summary cap added; stress M3 RISK->PASS"
+    },
+    "AC8": {
+      "at": "2026-07-22T06:31:50.323Z",
+      "note": "src/commands/agent-approval-binding.test.ts: fingerprint delivered, mismatched answer denies, bare boolean still works"
+    },
+    "AC9": {
+      "at": "2026-07-22T06:31:50.446Z",
+      "note": "bun test 2125 pass/0 fail; tsc clean; keryx health run PASS score 93 after each of the 6 commits"
+    },
+    "AC10": {
+      "at": "2026-07-22T06:31:50.573Z",
+      "note": "harness updated: P2b now asserts the gate not the raw glob, M3 asserts the cap, new P5/P6; re-run shows 9 PASS / 1 RISK (P1, out of scope)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/194"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T22:48:39.562Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-22T06:31:18.146Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-22T06:31:18.285Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-22T06:31:23.961Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-22T06:31:24.109Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-22T06:31:24.235Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-22T06:31:24.411Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-22T06:31:34.128Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/lib/shell-permissions-hardening.test.ts: B1 save/match tests; quoted metacharacter case explicitly asserted"
+    },
+    {
+      "at": "2026-07-22T06:31:34.259Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: B2 tests: isShellCommandAllowed('rm -rf /', ['rm -rf /']) === false; suggestShellPatterns('rm -rf /') offers neither grant; stress P2b PASS"
+    },
+    {
+      "at": "2026-07-22T06:31:34.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: B3 tests over 15 interpreter/wrapper commands; 'bun test*' still valid (existing round-trip test unchanged)"
+    },
+    {
+      "at": "2026-07-22T06:31:34.536Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: migration test asserts kept/rejected partition and non-destructive load; TUI prints the audit once per session (tui-shell.ts)"
+    },
+    {
+      "at": "2026-07-22T06:31:49.870Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/lib/self-grant.test.ts: touchesAgentCredentials tables, gate + pattern refusal, fingerprint change detection; stress P6 PASS"
+    },
+    {
+      "at": "2026-07-22T06:31:50.080Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/commands/agent-destructive-gate.test.ts: 5 tests, incl. default-deny preserved for a destructive tool"
+    },
+    {
+      "at": "2026-07-22T06:31:50.195Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/harness/tool/builtin/spawn-subagent-isolation.test.ts: 7 tests; isolation passed pre-existing code (recorded, no change), summary cap added; stress M3 RISK->PASS"
+    },
+    {
+      "at": "2026-07-22T06:31:50.323Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/commands/agent-approval-binding.test.ts: fingerprint delivered, mismatched answer denies, bare boolean still works"
+    },
+    {
+      "at": "2026-07-22T06:31:50.446Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun test 2125 pass/0 fail; tsc clean; keryx health run PASS score 93 after each of the 6 commits"
+    },
+    {
+      "at": "2026-07-22T06:31:50.573Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: harness updated: P2b now asserts the gate not the raw glob, M3 asserts the cap, new P5/P6; re-run shows 9 PASS / 1 RISK (P1, out of scope)"
+    },
+    {
+      "at": "2026-07-22T06:31:59.924Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/194 (warning: PR is not a draft)"
+    }
+  ]
+}

@@ -13,8 +13,46 @@
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
+import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
+
+/**
+ * Extra context handed to an approver alongside the raw tool input.
+ *
+ * `destructive` is a per-COMMAND judgement (see `lib/command-risk.ts`): the tool's
+ * static risk cannot tell `ls` from `rm -rf /`. It asks the approver to escalate —
+ * always prompt, never auto-approve from a saved allowlist, never offer "always".
+ * It is NOT a block signal: the classifier is incomplete by construction and must
+ * never be treated as a security boundary (ADR-0009).
+ */
+export interface ApprovalMeta {
+  /**
+   * Identity of the exact action being approved (tool name + canonical input).
+   * An approver that persists or replays a decision MUST key it on this, and an
+   * approver that answers for a specific action should echo it back (see
+   * {@link ApprovalResponse}) so the driver can refuse a mismatched answer.
+   */
+  fingerprint: string;
+  destructive: boolean;
+  /**
+   * The command mentions the agent's own permission/credential files. Approving
+   * it may hand the agent authority it did not have; it is never auto-approved
+   * and never remembered, whatever the user picks.
+   */
+  credentials?: boolean;
+}
+
+/**
+ * What an approver may answer.
+ *
+ * A bare `boolean` is the historical form and still works. The object form
+ * BINDS the answer to an action: when `fingerprint` is present it must equal the
+ * fingerprint the approver was given, otherwise the driver treats the answer as
+ * a denial. That closes the gap where "the user said yes" and "this is what
+ * runs" are two independent facts that merely happen to line up.
+ */
+export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string };
 
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
@@ -41,11 +79,13 @@ export interface AgentIO {
   /** Non-token system/error text. */
   onSystem?: (text: string) => void;
   /**
-   * Approve a mutating (risk `shell`) tool call before it runs. DEFAULT-DENY:
-   * when this is absent the driver denies the call and never executes it. `input`
-   * is the raw JSON input string the model proposed.
+   * Approve a mutating (risk `shell`/`destructive`) tool call before it runs.
+   * DEFAULT-DENY: when this is absent the driver denies the call and never
+   * executes it. `input` is the raw JSON input string the model proposed.
+   * `meta.destructive` asks the approver to ESCALATE (never auto-approve from an
+   * allowlist, never offer "always") — see {@link ApprovalMeta}.
    */
-  requestApproval?: (tool: string, input: string) => Promise<boolean>;
+  requestApproval?: (tool: string, input: string, meta?: ApprovalMeta) => Promise<ApprovalResponse>;
 }
 
 /** Injected dependencies keeping `runAgentTurn` deterministic + offline. */
@@ -518,6 +558,22 @@ async function finishWithBudgetSummary(
   }
 }
 
+/**
+ * True when `response` authorises THIS action. A bare `true` is accepted (the
+ * historical contract); an object form must either omit the fingerprint or echo
+ * the one it was given. A mismatch is a denial, never a pass — an approver that
+ * answers about a different action has not approved this one.
+ */
+function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean {
+  if (typeof response === "boolean") {
+    return response;
+  }
+  if (!response.approved) {
+    return false;
+  }
+  return response.fingerprint === undefined || response.fingerprint === fingerprint;
+}
+
 /** Resolve, gate (risk + approval), validate, and invoke a call → a content result. */
 async function executeCall(
   call: PendingCall,
@@ -541,20 +597,36 @@ async function executeCall(
 
   // Risk gate:
   // - `read` auto-allows
-  // - `shell` requires approval (DEFAULT-DENY when no approver)
+  // - `shell` / `destructive` require approval (DEFAULT-DENY when no approver)
   // - `delegate` (spawn_subagent): auto-allow when no approver; when an approver
   //   is present, ask (TUI may auto-approve read_only subagents)
   // - anything else is denied
   const risk = tool.definition.risk;
-  if (risk === "shell") {
-    const approved = requestApproval !== undefined && (await requestApproval(call.name, call.input));
-    if (!approved) {
+  if (risk === "shell" || risk === "destructive") {
+    // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
+    // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
+    // missing dimension. Escalation only — it never denies on its own (ADR-0009),
+    // because a "safe" verdict from an incomplete list must never read as a grant.
+    const command = typeof input.command === "string" ? input.command : "";
+    const destructive = risk === "destructive" || isDestructiveCommand(command);
+    const credentials = touchesAgentCredentials(command);
+    const fingerprint = toolCallHash(call.name, call.input);
+    const response =
+      requestApproval === undefined
+        ? false
+        : await requestApproval(call.name, call.input, {
+            fingerprint,
+            destructive,
+            ...(credentials ? { credentials } : {}),
+          });
+    if (!isApprovalFor(response, fingerprint)) {
       return { output: `command not approved by the user; not executed`, isError: true };
     }
   } else if (risk === "delegate") {
     if (requestApproval !== undefined) {
-      const approved = await requestApproval(call.name, call.input);
-      if (!approved) {
+      const fingerprint = toolCallHash(call.name, call.input);
+      const response = await requestApproval(call.name, call.input, { fingerprint, destructive: false });
+      if (!isApprovalFor(response, fingerprint)) {
         return { output: `subagent spawn not approved by the user; not executed`, isError: true };
       }
     }

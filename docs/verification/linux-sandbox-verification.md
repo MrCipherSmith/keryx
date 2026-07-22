@@ -445,3 +445,62 @@ Environment escape hatches (all opt-in, all off by default):
 
 Without `KERYX_SANDBOX_ALLOW_UNSANDBOXED=1`, a missing launcher makes the run
 **fail closed**: it refuses to start rather than silently running uncontained.
+
+---
+
+## 10. PID namespace (`--unshare-pid`)
+
+**Status: implemented and verified by the pair, in CI.**
+
+`buildBwrapArgs` sets `--unshare-pid` alongside `--unshare-net`,
+`--unshare-ipc`, `--die-with-parent` and `--new-session`. Before that a
+contained command shared the host PID namespace: it could enumerate every
+process on the machine and signal any owned by the same user.
+
+Measured before the change (flow 115, `scripts/stress/keryx-shell-stress.ts`,
+check S4): 478 processes with `systemd` as PID 1 on the Linux host, 714 with
+`launchd` on macOS.
+
+### Why it is safe here
+
+A new PID namespace needs a fresh `/proc`, or the contained process keeps
+reading the HOST's and the flag is cosmetic. `--proc /proc` was already in the
+argument list, and a unit test now pins both the flag's presence and its
+ordering after `--proc`. bwrap becomes PID 1 inside the namespace and reaps
+children — the documented pairing with `--die-with-parent`, which was already
+set.
+
+### How the pair is verified
+
+Automatically, in the `linux sandbox (bubblewrap) live smoke` CI job, by
+`sandbox.smoke.test.ts` → "the contained process cannot see the host process
+table". Both halves run in one test:
+
+- **CONTROL / allowed half** — the same `ps -e` runs uncontained
+  (`danger-full-access`, so the adapter skips containment) and must see the
+  whole machine. Without it, "few processes" could equally mean the sandbox
+  never launched or `ps` is missing — the failure mode that makes a broken
+  sandbox indistinguishable from a perfect one (§0).
+- **DENIED half** — the same command under the default profile must see a
+  handful, strictly fewer than the control, and **more than zero**: `ps` has to
+  have actually run.
+
+The job's `Sanity-check that bwrap can actually contain a process` step mirrors
+the same flag set, so a runner or kernel that cannot create a PID namespace
+fails there, with bwrap's own stderr, rather than inside a test.
+
+To reproduce by hand on a Linux host with bubblewrap:
+
+```bash
+KERYX_ALLOW_REAL_SUBPROCESS=1 bun test src/harness/process/sandbox/sandbox.smoke.test.ts
+```
+
+macOS is not covered: `--unshare-pid` is a bubblewrap capability and Seatbelt
+has no equivalent, so the host process table stays visible there. The smoke
+skips on darwin rather than asserting something that is not true.
+
+### Watch for
+
+- A tool that reads `/proc/<pid>` of a process outside the namespace will now
+  fail. Nothing in keryx does this; a user command might.
+- Orphans: confirm none survive a cancelled run, since bwrap now owns reaping.

@@ -64,6 +64,8 @@ export class RemainingBudgetLedger {
   private readonly maxChildren: number | undefined;
   /** Remaining cost budget; `undefined` when cost is not tracked (no ceiling). */
   private costUnitsRemaining: number | undefined;
+  /** Live grants, keyed by reservation id, so a release can be bounded by them. */
+  private readonly outstanding = new Map<string, BudgetReservation>();
 
   constructor(initial: ParentRemainingBudget, limits: LedgerLimits = {}) {
     this.remainingBudget =
@@ -118,6 +120,7 @@ export class RemainingBudgetLedger {
 
     this.remainingBudget = decrement(this.remainingBudget, granted.reservation);
     this.admittedChildren += 1;
+    this.outstanding.set(granted.reservation.reservationId, granted.reservation);
     if (this.costUnitsRemaining !== undefined) {
       this.costUnitsRemaining -= cost;
     }
@@ -128,6 +131,57 @@ export class RemainingBudgetLedger {
           ? { ...granted.reservation, costUnits: request.costUnits }
           : granted.reservation,
     };
+  }
+
+  /**
+   * Return the UNUSED remainder of a finished child's reservation.
+   *
+   * Without this, a reservation is a permanent debit rather than a reservation:
+   * a child that ran for two seconds still held its whole five-minute grant, so
+   * an interactive session could start only three children before the runtime
+   * budget was exhausted — with the child-count cap never approached (stress
+   * finding M1).
+   *
+   * Bounded and fail-closed in both directions:
+   * - the refund never exceeds what was granted, so an under-reported `used`
+   *   cannot inflate the parent's budget beyond its original total;
+   * - a negative `used` is clamped to zero;
+   * - the reservation is dropped after the first release, so a repeated or
+   *   duplicated call cannot refund twice;
+   * - an unknown reservation id is a no-op.
+   *
+   * `maxChildren` is a LIFETIME cap on children started and is deliberately not
+   * undone: finishing a child does not buy the right to start another.
+   *
+   * Deterministic — the caller measures the actual consumption and passes it;
+   * the ledger still reads no clock.
+   */
+  release(reservationId: string, used: { maxRuntimeMs?: number; maxToolCalls?: number }): void {
+    const granted = this.outstanding.get(reservationId);
+    if (granted === undefined) {
+      return;
+    }
+    this.outstanding.delete(reservationId);
+
+    const usedRuntime = Math.max(0, used.maxRuntimeMs ?? granted.maxRuntimeMs);
+    const refundRuntime = Math.max(0, granted.maxRuntimeMs - usedRuntime);
+
+    if (this.remainingBudget.maxToolCalls !== undefined && granted.maxToolCalls !== undefined) {
+      const usedCalls = Math.max(0, used.maxToolCalls ?? granted.maxToolCalls);
+      const refundCalls = Math.max(0, granted.maxToolCalls - usedCalls);
+      this.remainingBudget = {
+        maxRuntimeMs: this.remainingBudget.maxRuntimeMs + refundRuntime,
+        maxToolCalls: this.remainingBudget.maxToolCalls + refundCalls,
+      };
+      return;
+    }
+    this.remainingBudget =
+      this.remainingBudget.maxToolCalls !== undefined
+        ? {
+            maxRuntimeMs: this.remainingBudget.maxRuntimeMs + refundRuntime,
+            maxToolCalls: this.remainingBudget.maxToolCalls,
+          }
+        : { maxRuntimeMs: this.remainingBudget.maxRuntimeMs + refundRuntime };
   }
 
   /**

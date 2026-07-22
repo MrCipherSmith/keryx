@@ -23,6 +23,52 @@ import { emitSubagentFleet } from "../../../tui/subagent-bridge";
 
 export type SubagentMode = "read_only" | "general";
 
+/**
+ * Hard cap on a child summary before it enters the parent's history.
+ *
+ * A child's text is `trustLevel: "derived"` and lands verbatim in the parent's
+ * next prompt. Uncapped, a child (or a provider echoing attacker-controlled
+ * text) can flood the parent's context: the flow-115 stress run returned
+ * 1.5 MB this way. `quarantineChildSummary` flags instruction-shaped text but
+ * deliberately never shortens it, so the bound has to be applied here.
+ */
+const MAX_CHILD_SUMMARY_CHARS = 16_000;
+
+/**
+ * Env override for the child wall-clock deadline, in ms. The effective deadline
+ * is the SMALLER of this and the granted reservation, so an operator can tighten
+ * it but never widen it past what MAE reserved. `0` disables it.
+ */
+export const ENV_SUBAGENT_TIMEOUT_MS = "KERYX_SUBAGENT_TIMEOUT_MS";
+
+/** Resolve the child deadline: `min(reservation, env override)`; `0` = disabled. */
+export function resolveSubagentTimeoutMs(
+  reservationMs: number,
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const raw = env[ENV_SUBAGENT_TIMEOUT_MS];
+  if (raw === undefined || raw.trim().length === 0) {
+    return reservationMs;
+  }
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n) || n < 0) {
+    return reservationMs;
+  }
+  if (n === 0) {
+    return 0;
+  }
+  return Math.min(n, reservationMs);
+}
+
+/** Bound a child summary, marking the cut so the parent can see it happened. */
+function boundSummary(text: string): string {
+  if (text.length <= MAX_CHILD_SUMMARY_CHARS) {
+    return text;
+  }
+  const dropped = text.length - MAX_CHILD_SUMMARY_CHARS;
+  return `${text.slice(0, MAX_CHILD_SUMMARY_CHARS)}\n…(truncated: ${dropped} more characters from the subagent)`;
+}
+
 export interface SpawnSubagentToolDeps {
   cwd: string;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
@@ -251,6 +297,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
       };
 
       let assistant = "";
+      let childToolCalls = 0;
       const io: AgentIO = {
         write: (s) => {
           assistant += s;
@@ -259,6 +306,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           assistant = text;
         },
         onToolCall: (name) => {
+          childToolCalls += 1;
           emitSubagentFleet({
             kind: "upsert",
             id: workerId,
@@ -268,7 +316,30 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             model: `${runModel.provider}/${runModel.model}`,
           });
         },
-        requestApproval: async () => false, // children never run shell
+        // SECURITY-CRITICAL INVARIANT — do not relax without an ADR.
+        // `mode` is chosen by the MODEL and `read_only` is auto-approved with no
+        // prompt, so a child's privilege level is effectively self-selected.
+        // That is only sound because a child can never execute shell: the tool
+        // list omits shell_exec, the child policy sets shell/write/delegate to
+        // deny, and this approver refuses unconditionally. Removing any one of
+        // the three turns a model-chosen field into a privilege escalation.
+        // Pinned by spawn-subagent-isolation.test.ts.
+        requestApproval: async () => false,
+      };
+
+      // Wall-clock deadline. Until now `maxRuntimeMs` was ledger ACCOUNTING
+      // only: nothing enforced it, so a child whose provider never answered
+      // blocked the parent turn forever (stress finding M4b). The turn is
+      // abandoned at the deadline — `runAgentTurn` has no cancellation seam, so
+      // the orphaned promise may still settle later; its result is ignored.
+      const deadlineMs = resolveSubagentTimeoutMs(spawned.reservation.maxRuntimeMs);
+      const startedAt = performance.now();
+      /** Give the reservation back so a finished child stops holding the budget. */
+      const releaseBudget = (): void => {
+        ledger.release(spawned.reservation.reservationId, {
+          maxRuntimeMs: Math.round(performance.now() - startedAt),
+          maxToolCalls: childToolCalls,
+        });
       };
 
       try {
@@ -277,7 +348,31 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
           `## Subagent task (${mode})\n` +
           `${task}\n\n` +
           `Return a concise summary of findings and any recommended next steps for the parent agent.`;
-        await runAgentTurn(io, childDeps, history, userLine);
+        const turn = runAgentTurn(io, childDeps, history, userLine);
+        if (deadlineMs > 0) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const expired = new Promise<"timeout">((resolve) => {
+            timer = setTimeout(() => resolve("timeout"), deadlineMs);
+          });
+          const outcome = await Promise.race([turn.then(() => "done" as const), expired]);
+          if (timer !== undefined) clearTimeout(timer);
+          if (outcome === "timeout") {
+            releaseBudget();
+            emitSubagentFleet({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout" });
+            setTimeout(() => emitSubagentFleet({ kind: "remove", id: workerId }), 15_000);
+            const partial = assistant.trim();
+            return {
+              output:
+                `subagent ${label} (${workerId}) timed out after ${deadlineMs}ms and was abandoned ` +
+                `(tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS})` +
+                (partial.length > 0 ? `\n--- partial output ---\n${boundSummary(partial)}` : ""),
+              isError: true,
+            };
+          }
+        } else {
+          await turn;
+        }
+        releaseBudget();
         const raw =
           assistant.trim().length > 0
             ? assistant.trim()
@@ -302,10 +397,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
             `MAE reservation: tools≤${spawned.reservation.maxToolCalls ?? maxToolCalls} ` +
             `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
-            `--- summary ---\n${folded.text}`,
+            `--- summary ---\n${boundSummary(folded.text)}`,
           isError: false,
         };
       } catch (cause) {
+        releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
         emitSubagentFleet({
           kind: "upsert",

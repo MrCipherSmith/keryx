@@ -106,10 +106,14 @@ jobs:
 
       # Fail LOUDLY (with bwrap's own stderr) if containment cannot run here,
       # instead of letting the smokes fail with a bare "file was not created".
+      # Mirrors buildBwrapArgs' flag set, `--unshare-pid` included: a kernel or
+      # runner that cannot create a PID namespace then fails HERE, with bwrap's
+      # own stderr, instead of surfacing as an inscrutable assertion inside a
+      # smoke test.
       - name: Sanity-check that bwrap can actually contain a process
         run: |
           bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
-                --unshare-ipc --unshare-net --die-with-parent --new-session \
+                --unshare-pid --unshare-ipc --unshare-net --die-with-parent --new-session \
                 -- /bin/echo bwrap-can-run
 
       - name: OS-sandbox live smokes (real subprocesses under bwrap)

@@ -72,6 +72,21 @@ describe("buildBwrapArgs", () => {
     expect(args).toContain("--unshare-ipc");
   });
 
+  test("a PID namespace is unshared, so the host process table is not visible", () => {
+    // Without --unshare-pid a contained command enumerates every process on the
+    // machine and can signal any owned by the same user (stress finding S4).
+    const args = buildBwrapArgs(workspaceWrite, asDir);
+    expect(args).toContain("--unshare-pid");
+  });
+
+  test("--unshare-pid is paired with --proc, which a new PID namespace requires", () => {
+    // A PID namespace without a fresh /proc mount leaves the contained process
+    // reading the HOST's /proc — the flag would then be cosmetic.
+    const args = buildBwrapArgs(workspaceWrite, asDir);
+    expect(hasPair(args, "--proc", "/proc")).toBe(true);
+    expect(args.indexOf("--proc")).toBeLessThan(args.indexOf("--unshare-pid"));
+  });
+
   test("deterministic", () => {
     expect(buildBwrapArgs(workspaceWrite, asDir)).toEqual(buildBwrapArgs(workspaceWrite, asDir));
   });
