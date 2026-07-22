@@ -9,10 +9,11 @@ an OpenTUI renderer, keep the deterministic driver unchanged — has shipped for
 interactive shell on a TTY in both modes; readline remains the mandatory fallback
 for no-TTY, a missing optional dependency, or renderer init failure.
 
-**§10** records O-1 through O-5 as closed (flows 112-114) and **O-6 as narrowed**:
-a rendered TUI frame is now evidenced by an allocated-pty smoke on macOS, and on
-no other platform. Read §10 rather than this paragraph — it is the authority, and
-this sentence has already been stale once.
+**§10** records O-1 and O-2 as closed, O-3 as closed **for the native layer**,
+O-4 as closed **in part**, O-5 as **measured**, and **O-6 as narrowed**: a
+rendered TUI frame is now evidenced by an allocated-pty smoke on macOS, and on no
+other platform. Those qualifiers are load-bearing — read §10 rather than this
+paragraph, which is a signpost and has already been stale twice.
 
 Two reading notes. The `(SPIKE)` names below were resolved by the Phase 0 spike
 (flow 059) and are recorded as answered in §2, but may diverge in spelling from
@@ -424,8 +425,10 @@ spinner, toast, overlay guard, copy-on-select — and is returned as a plain
 was data, not behaviour. `launchTuiAgentShell` keeps only agent concerns
 (approval, ask-user, worker fleet, side workers, the wiki router, the block
 registry and nav, the `runAgentTurn` call site) and shrank from 1610 to 1254
-lines at the flow-112 re-land — 1237 as of the 2026-07-22 audit, in a file of
-1876. `src/tui/chat-shell.ts` mounts the same chrome.
+lines at the flow-112 re-land. It has grown again since — ~1285 in a file of
+~1995 as of the 2026-07-22 re-audit — so treat the figure as evidence that the
+extraction happened, not as a live measurement. `src/tui/chat-shell.ts` mounts
+the same chrome.
 
 A second chat shell beside the agent one was rejected for the reason D-6 exists:
 three surfaces drift, and the readline `/expand` had already proved it.
@@ -640,7 +643,8 @@ additionally avoids poisoning the process-wide module registry that `bun test`
 shares, and lets `isTTY` / `NO_COLOR` / `FORCE_COLOR` vary per run.
 
 Covered: both launch guards decline before loading the optional dependency
-(`tui-shell.ts:657`, `chat-shell.ts:493`); an unresolvable optional dependency
+(the `!process.stdout.isTTY` guard in both `tui-shell.ts` and `chat-shell.ts`);
+an unresolvable optional dependency
 declines rather than throwing; a throwing renderer constructor declines rather
 than propagating; with no TTY the real CLI runs the readline shell and mounts no
 renderer; and readline's bytes carry **no ANSI escapes** under `NO_COLOR`, with a
