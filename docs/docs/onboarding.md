@@ -132,7 +132,7 @@ non-zero if any run failed.
 One known residual, unrelated to shared state: the live-loopback TLS tests in
 `src/harness/process/sandbox/proxy-tls.test.ts` do real TLS handshakes and
 shell out to `openssl`, so they are load-sensitive and can time out on a
-saturated machine (observed once in 24 concurrent runs). They use ephemeral
+saturated machine (observed once in 48 concurrent runs). They use ephemeral
 ports and an `mkdtemp` CA workspace, so this is machine load, not a collision.
 
 ## First-run walkthrough

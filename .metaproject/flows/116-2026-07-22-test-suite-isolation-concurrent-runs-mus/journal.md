@@ -10,7 +10,9 @@ Measured with `scripts/stress/concurrent-suite-stress.ts` (AC1), N=6 concurrent
 full suites in one worktree, on `test/suite-isolation`.
 
 - **Before:** 25 failures across 6 runs (per-run: 6, 7, 7, 0, 5, 0).
-- **After:** 0 failures across 3 waves of 6 (18 runs), plus a 4th wave below.
+- **After:** 8 waves of 6 = 48 concurrent runs, 1 failure total — and that one
+  is the unrelated live-TLS flake described below, not a collision. Every
+  collision-class failure is gone. The last 6 waves (36 runs) were clean.
 - Sequential baseline unchanged throughout: 2101 pass / 11 skip / 0 fail.
 
 ### The shared resource (AC2)
@@ -69,7 +71,7 @@ weakened (AC7): the diff changes only how each root is *named*.
 ### Residual, reported rather than hidden (AC7)
 
 `src/harness/process/sandbox/proxy-tls.test.ts` —
-`no HTTPS substitution for a host outside injectHosts` failed once in 24
+`no HTTPS substitution for a host outside injectHosts` failed once in 48
 post-fix concurrent runs. It is **not** a shared-resource collision: the proxy
 and upstream both bind ephemeral ports (`listen(0)`) and the run CA uses
 `mkdtemp`. It does real TLS handshakes and shells out to `openssl`, so it is
