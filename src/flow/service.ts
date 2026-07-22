@@ -514,9 +514,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
 
         const toDir = `${to}${fromDir.slice(3)}`;
         const flowsDir = flowsRoot(cwd);
-        await rename(path.join(flowsDir, fromDir), path.join(flowsDir, toDir));
-
-        const flow = await readFlow(cwd, toDir);
+        // Also hold the per-flow lock: a concurrent taskDone/acConfirm resolves
+        // the OLD directory and would write flow.json back into the path we
+        // just moved away, recreating a half-empty package.
+        const flow = await withFileLock(flowLockPath(cwd, fromDir), async () => {
+          await rename(path.join(flowsDir, fromDir), path.join(flowsDir, toDir));
+          return readFlow(cwd, toDir);
+        });
         flow.id = to;
         const at = now();
         await save(cwd, toDir, flow, "renumbered", `${from} -> ${to}: ${reason}`);

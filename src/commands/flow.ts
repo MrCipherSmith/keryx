@@ -196,7 +196,7 @@ async function runList(args: string[] = []): Promise<void> {
   const shared = duplicateFlowIds(flows.map((flow) => flow.id));
   heading(`Flows (${flows.length})`);
   for (const flow of flows) {
-    const marker = shared.has(flow.id) ? ` ${style.red("⚠ duplicate id")}` : "";
+    const marker = shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "";
     console.log(
       `  ${style.bold(flow.id)}${marker} ${style.dim("[")}${flowStatusLabel(flow.status)}${style.dim("]")} ${flow.title} ${style.dim(`(tasks ${flow.tasksDone}/${flow.tasksTotal})`)}`,
     );

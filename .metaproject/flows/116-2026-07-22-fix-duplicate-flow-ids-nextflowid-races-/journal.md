@@ -18,3 +18,7 @@
 - 2026-07-22 - T9 repair: the later-created member of each colliding pair was renumbered (createdAt from flow.json decides "later", since the 002 pair entered git in a single import commit). 002 -> 117 (implement-keryx-execution-observability, created 11:40 vs 10:18), 084 -> 118 (provider-picker, 15:02 vs 14:53), 103 -> 119 (p0-sandbox-credential-auto-mask, 07-21 15:04 vs 13:34). Mapping in .metaproject/flows/id-map.json; `flow check` now reports zero duplicate-id issues.
 - 2026-07-22 - AC8 disposition: the acceptance-criteria checksum mismatch on `002-2026-07-10-gdgraph-java-python-import-resolution` is left UNTOUCHED, knowingly. It predates this branch (`keryx flow check` fails on it on main at b6b4ed0) and 002 is `done`, so the sanctioned repair — `keryx flow ac update` — would re-freeze the criteria and clear the AC confirmations that are the completed flow's own evidence. Losing that record is worse than the stale checksum. Renumbering did not touch the file: 002 kept its number, and no acceptance-criteria.md was rewritten anywhere.
 - 2026-07-22T18:59:56.765Z - task-done: T9: Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly
+- 2026-07-22T19:03:05.578Z - task-done: T10: Document repo-wide allocation + worktree rule in flow skill and project memory
+- 2026-07-22T19:03:05.745Z - task-done: T1: Collect remaining context
+- 2026-07-22T19:03:05.898Z - task-done: T2: Implement per plan
+- 2026-07-22T19:03:06.057Z - task-done: T3: Add/adjust tests and make them pass

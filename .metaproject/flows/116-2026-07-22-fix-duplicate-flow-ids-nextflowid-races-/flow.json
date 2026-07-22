@@ -5,7 +5,7 @@
   "title": "Fix duplicate flow ids: nextFlowId races on concurrent init and resolveFlowDir silently picks one of the colliding flows",
   "status": "in-progress",
   "createdAt": "2026-07-22T12:05:44.354Z",
-  "updatedAt": "2026-07-22T18:59:56.765Z",
+  "updatedAt": "2026-07-22T19:03:06.057Z",
   "source": {
     "type": "description",
     "ref": null
@@ -20,7 +20,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +28,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +43,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,7 +58,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -161,7 +164,7 @@
       "id": "T10",
       "title": "Document repo-wide allocation + worktree rule in flow skill and project memory",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -171,7 +174,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -242,6 +246,26 @@
       "at": "2026-07-22T18:59:56.765Z",
       "event": "task-done",
       "detail": "T9: Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly"
+    },
+    {
+      "at": "2026-07-22T19:03:05.578Z",
+      "event": "task-done",
+      "detail": "T10: Document repo-wide allocation + worktree rule in flow skill and project memory"
+    },
+    {
+      "at": "2026-07-22T19:03:05.745Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-22T19:03:05.898Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-22T19:03:06.057Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }
