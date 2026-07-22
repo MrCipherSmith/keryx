@@ -336,7 +336,7 @@ export async function pickShellApproval(
   const { exact, prefix, offerExact, offerPrefix } = suggestShellPatterns(command);
   // A grant that cannot be given safely is not shown at all: an "always" option
   // the user picks and that is then silently refused would be worse than absent.
-  // Destructive commands offer neither (ADR-0008).
+  // Destructive commands offer neither (ADR-0009).
   const options = [
     {
       id: "once",

@@ -14,7 +14,7 @@
 // unbounded ways to express the same destruction, and treating an "it passed the
 // classifier" result as "this command is safe" would create exactly the false
 // confidence this module is meant to avoid. See
-// docs/decisions/keryx-harness/ADR-0008-destructive-command-escalation.md.
+// docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md.
 //
 // The real boundaries are, in order:
 //   1. the human approval gate (default-deny),

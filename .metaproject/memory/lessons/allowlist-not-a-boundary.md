@@ -40,7 +40,7 @@ containment when it is enabled at all.
 What does not hold: a blocklist of interpreter names. It is an expedient. Any
 list of dangerous commands or dangerous binaries is incomplete by construction,
 which is why the classifier **escalates confirmation and never blocks** — a
-check that reads as a grant is worse than no check (ADR-0008).
+check that reads as a grant is worse than no check (ADR-0009).
 
 Second-order lesson: the gate's own state file lived in `~/.local/share/keryx/`
 while the sandbox read-deny list covered `~/.config/keryx` — a different path. A
@@ -52,7 +52,7 @@ shell containment is off by default and unavailable on hosts without a launcher.
 ## Provenance
 
 - Source: flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/`
-- Link: docs/decisions/keryx-harness/ADR-0008-destructive-command-escalation.md
+- Link: docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md
 - Created: 2026-07-22
 - Updated: 2026-07-22
 

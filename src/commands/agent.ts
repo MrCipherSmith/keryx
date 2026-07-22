@@ -24,7 +24,7 @@ import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPor
  * static risk cannot tell `ls` from `rm -rf /`. It asks the approver to escalate —
  * always prompt, never auto-approve from a saved allowlist, never offer "always".
  * It is NOT a block signal: the classifier is incomplete by construction and must
- * never be treated as a security boundary (ADR-0008).
+ * never be treated as a security boundary (ADR-0009).
  */
 export interface ApprovalMeta {
   /**
@@ -605,7 +605,7 @@ async function executeCall(
   if (risk === "shell" || risk === "destructive") {
     // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
     // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
-    // missing dimension. Escalation only — it never denies on its own (ADR-0008),
+    // missing dimension. Escalation only — it never denies on its own (ADR-0009),
     // because a "safe" verdict from an incomplete list must never read as a grant.
     const command = typeof input.command === "string" ? input.command : "";
     const destructive = risk === "destructive" || isDestructiveCommand(command);

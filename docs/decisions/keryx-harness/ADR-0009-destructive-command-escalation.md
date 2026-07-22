@@ -1,4 +1,4 @@
-# ADR-0008: A destructive-command classifier escalates confirmation, it does not block
+# ADR-0009: A destructive-command classifier escalates confirmation, it does not block
 
 - **Status:** Accepted (flow 115)
 - **Date:** 2026-07-21

@@ -117,7 +117,7 @@ ones instead of deleting them; the session also fingerprints the file and warns
 if it changes underneath.
 
 Two limits are worth stating plainly. The destructive classifier
-**escalates confirmation, it never blocks** ([ADR-0008](../../../docs/decisions/keryx-harness/ADR-0008-destructive-command-escalation.md)):
+**escalates confirmation, it never blocks** ([ADR-0009](../../../docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md)):
 any list of dangerous commands is incomplete, and a check that reads as a grant
 is worse than no check. And the interpreter list is an expedient, not a
 boundary — the metacharacter rule and the classifier are what hold.
