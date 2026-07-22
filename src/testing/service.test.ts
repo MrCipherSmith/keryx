@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
+import { uniqueTestRoot } from "../lib/test-tmp";
 import {
   analyzeTestingProject,
   findRelatedTests,
@@ -10,7 +11,7 @@ import {
 } from "./service";
 
 test("analyzes testing context without mutating project tests", async () => {
-  const root = path.join(tmpdir(), "keryx-testing-analyze");
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-analyze");
   await reset(root);
   await writeFile(
     path.join(root, "package.json"),
@@ -36,7 +37,7 @@ test("analyzes testing context without mutating project tests", async () => {
 });
 
 test("finds related tests by naming convention", async () => {
-  const root = path.join(tmpdir(), "keryx-testing-related");
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-related");
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
   await mkdir(path.join(root, "src", "feature"), { recursive: true });
@@ -50,7 +51,7 @@ test("finds related tests by naming convention", async () => {
 });
 
 test("runTesting writes normalized report", async () => {
-  const root = path.join(tmpdir(), "keryx-testing-run");
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-run");
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
   await mkdir(path.join(root, "src"), { recursive: true });
@@ -70,7 +71,7 @@ test("runTesting writes normalized report", async () => {
 });
 
 test("runTesting writes immutable provenance-aware evidence when a run id is supplied", async () => {
-  const root = path.join(tmpdir(), "keryx-testing-provenance-run");
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-provenance-run");
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
   await mkdir(path.join(root, "src"), { recursive: true });
@@ -94,7 +95,7 @@ test("runTesting writes immutable provenance-aware evidence when a run id is sup
 });
 
 test("strict changed run fails when no related tests are selected", async () => {
-  const root = path.join(tmpdir(), "keryx-testing-strict-empty");
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-strict-empty");
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
   await mkdir(path.join(root, "src"), { recursive: true });
@@ -118,7 +119,7 @@ test("strict changed run fails when no related tests are selected", async () => 
 });
 
 test("strict changed run does not fail when only docs/artifacts changed", async () => {
-  const root = path.join(tmpdir(), "keryx-testing-strict-docs");
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-strict-docs");
   await reset(root);
   await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
   await mkdir(path.join(root, "src"), { recursive: true });

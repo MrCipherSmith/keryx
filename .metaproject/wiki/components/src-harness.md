@@ -1,8 +1,12 @@
-# Module src/harness
-
+---
+Title: Module src/harness
 Version: 1.0.0
 Type: component
 Status: accepted
+Summary: `src/harness` groups 4 file(s). Depends on `fixtures/churn-complexity`, `src/health/metrics`, `src/health`. Exposes 5 public symbol(s).
+---
+
+# Module src/harness
 
 ## Summary
 
@@ -10,11 +14,11 @@ Status: accepted
 
 ## Overview
 
-`src/harness` is a fixture-corpora acceptance harness: a shared, detector-agnostic runner that proves quality against labeled data rather than asserted prose. It loads a committed `cases.json` file from any named corpus directory, runs a caller-supplied `DetectorFn` over each labeled case, and computes a deterministic `CorpusReport` of precision, recall, and false-negative rate. A thin gate layer (`gate.ts`) converts that report into a CI pass/fail signal by comparing the false-negative rate against a configurable threshold.
+`src/harness` is a fixture-corpora acceptance harness: a shared, detector-agnostic runner that validates quality against labeled data rather than asserted prose. It loads a committed `cases.json` file from any named corpus directory, runs a caller-supplied `DetectorFn` over each labeled case, and computes a deterministic `CorpusReport` of precision, recall, and false-negative rate. A thin gate layer (`gate.ts`) converts that report into a CI pass/fail signal by comparing the false-negative rate against a configurable threshold.
 
 ## How it works
 
-`corpus.ts` owns the full runner logic. `loadCorpusCases` reads and normalises a `cases.json` file from a given directory — it accepts either a bare JSON array or a `{ cases: [...] }` envelope, drops malformed entries, and sorts survivors by `id` to guarantee a stable, re-runnable output (`F-2`). `runCorpus` calls `loadCorpusCases`, iterates every case through the caller-supplied `DetectorFn` (which may be sync or async), accumulates true/false positive/negative counts, and derives `fnRate`, `precision`, and `recall` from those counts, guarding against division by zero throughout.
+`corpus.ts` owns the full runner logic. `loadCorpusCases` reads and normalises a `cases.json` file from a given directory — it accepts either a bare JSON array or a `{ cases: [...] }` envelope, drops malformed entries, and sorts survivors by `id` to guarantee a stable, re‑runnable output. `runCorpus` calls `loadCorpusCases`, iterates every case through the caller-supplied `DetectorFn` (which may be sync or async), accumulates true/false positive/negative counts, and derives `fnRate`, `precision`, and `recall` from those counts, guarding against division by zero throughout.
 
 `gate.ts` is intentionally minimal: `gateCorpus` receives a finished `CorpusReport` and a `maxFnRate` threshold and returns a `GateResult` of `"pass"` or `"fail"` with a human-readable reason string. The gate owns no I/O and no detection logic — it is a pure decision boundary on top of the report.
 
@@ -31,13 +35,13 @@ This two-layer split means any detection block anywhere in the codebase can plug
 
 ## Main flows
 
-**1. Seed-corpus acceptance run (corpus.test.ts)**
-A test calls `runCorpus(path.join(FIXTURES, "seed-secrets"), secretDetector)`. `corpus.ts` reads `fixtures/seed-secrets/cases.json`, normalises and sorts the six labeled cases, runs each through the regex-based `secretDetector`, and returns a `CorpusReport` with `total=6`, `fnRate=0`, `precision=1`, `recall=1`. The same call is repeated in a second test to assert that `JSON.stringify` of both results is identical — proving the determinism guarantee.
+**1. Seed-corpus acceptance run (corpus.test.ts)**  
+A test calls `runCorpus(path.join(FIXTURES, "seed-secrets"), secretDetector)`. `corpus.ts` reads `fixtures/seed-secrets/cases.json`, normalises and sorts the six labeled cases, runs each through the regex‑based `secretDetector`, and returns a `CorpusReport` with `total=6`, `fnRate=0`, `precision=1`, `recall=1`. A second test repeats the same call and asserts that `JSON.stringify` of both results is identical — proving the determinism guarantee.
 
-**2. CI gate evaluation (corpus.test.ts → gate.ts)**
+**2. CI gate evaluation (corpus.test.ts → gate.ts)**  
 After `runCorpus` returns a report, the test calls `gateCorpus(report, { maxFnRate: 0.1 })`. `gate.ts` compares `report.fnRate` against `0.1`; because the seed detector is perfect, `reasons` is empty and `status` is `"pass"`. A second call with a deliberately lossy detector produces `fnRate ≈ 0.667`, which exceeds the threshold, so `gate.ts` appends a reason string and returns `status: "fail"`.
 
-**3. Block D capability acceptance (block-d-corpora.test.ts)**
+**3. Block D capability acceptance (block-d-corpora.test.ts)**  
 A more complex consumer builds a real detector for hotspot ranking (`rankHotspots` from `src/health/metrics`) and passes it as a `DetectorFn` to `runCorpus` against the `fixtures/churn-complexity` corpus. The harness runs without any block-specific code — the caller provides the detector and the corpus directory; `corpus.ts` handles loading and scoring. The resulting report is then fed into `gateCorpus` with `maxFnRate: 0`, confirming zero false negatives as the hard acceptance criterion (AC17).
 
 ---

@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { relevantAcceptedMemory } from "./relevant";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 function entryMd(title: string, type: string, status: string, moduleName: string): string {
   return `# ${title}
@@ -26,7 +27,7 @@ ${title} summary.
 }
 
 test("returns accepted decisions/constraints for the module; ignores drafts, lessons, and other modules", async () => {
-  const root = path.join(import.meta.dir, "..", "..", ".tmp-relevant-test");
+  const root = uniqueTestRoot(path.join(import.meta.dir, "..", ".."), ".tmp-relevant-test");
   await rm(root, { recursive: true, force: true });
   const mem = path.join(root, ".metaproject", "memory");
   await mkdir(path.join(mem, "decisions"), { recursive: true });

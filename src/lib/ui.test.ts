@@ -1,8 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
-import { collapseToolOutput, colorEnabled, indentBlock, renderMarkdown, roleLabel, style, summarizeToolArgs, symbols } from "./ui";
+import {
+  collapseToolOutput,
+  colorEnabled,
+  indentBlock,
+  renderDiff,
+  renderMarkdown,
+  roleLabel,
+  style,
+  summarizeToolArgs,
+  symbols,
+} from "./ui";
 
 const savedNoColor = process.env.NO_COLOR;
 const savedForceColor = process.env.FORCE_COLOR;
+const ESC = "\x1b";
 
 afterEach(() => {
   restore("NO_COLOR", savedNoColor);
@@ -93,6 +104,84 @@ test("renderMarkdown (FORCE_COLOR) dims fenced code block lines and drops the fe
   expect(rendered).toContain("const x = 1;");
   expect(rendered).not.toContain("```");
   expect(rendered).toContain("[90m"); // gray/dim code line
+});
+
+// --- flow 109: fence-aware renderMarkdown + renderDiff (pure) ---
+
+test("renderMarkdown (FORCE_COLOR) emits the fence language tag above the dimmed body", () => {
+  forceColor();
+  const rendered = renderMarkdown("```ts\nconst x = 1;\n```");
+  const lines = rendered.split("\n");
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toContain("ts"); // info string is no longer discarded
+  expect(lines[0]).toContain(`${ESC}[2m`); // dim language tag
+  expect(lines[1]).toContain("const x = 1;");
+  expect(lines[1]).toContain(`${ESC}[90m`);
+  expect(rendered).not.toContain("```");
+});
+
+test("renderMarkdown (FORCE_COLOR) treats a ~~~ fence like a ``` fence", () => {
+  forceColor();
+  const rendered = renderMarkdown("~~~py\nprint(1)\n~~~");
+  expect(rendered).not.toContain("~~~");
+  expect(rendered).toContain("py");
+  expect(rendered).toContain("print(1)");
+});
+
+test("renderMarkdown (FORCE_COLOR) colorizes a diff fence instead of flatly dimming it", () => {
+  forceColor();
+  const rendered = renderMarkdown("```diff\n@@ -1 +1 @@\n-old\n+new\n```");
+  expect(rendered).toContain(`${ESC}[36m@@ -1 +1 @@`); // cyan hunk header
+  expect(rendered).toContain(`${ESC}[31m-old`); // red deletion
+  expect(rendered).toContain(`${ESC}[32m+new`); // green addition
+  expect(rendered).not.toContain(`${ESC}[90m`); // body is not gray-dimmed
+});
+
+test("renderMarkdown (AC7) does not colorize a bullet list inside a fence as a diff", () => {
+  forceColor();
+  const rendered = renderMarkdown("```\n- one\n- two\n```");
+  expect(rendered).not.toContain(`${ESC}[31m`); // "- one" is not a deletion
+  expect(rendered).toContain(`${ESC}[90m`); // plain dimmed code body
+});
+
+test("renderMarkdown (FORCE_COLOR) segments a CRLF fence exactly like an LF one", () => {
+  forceColor();
+  // Regression (T6/F1): the fence regex used to reject `"```ts\r"`, so a CRLF
+  // payload rendered the raw fence markers as prose with no language tag.
+  const rendered = renderMarkdown("intro\r\n```ts\r\nconst x = 1;\r\n```\r\ntail");
+  expect(rendered).toBe(renderMarkdown("intro\n```ts\nconst x = 1;\n```\ntail"));
+  expect(rendered).not.toContain("```");
+  expect(rendered).not.toContain("\r");
+  expect(rendered).toContain("ts"); // language tag survived
+  expect(rendered).toContain("const x = 1;");
+});
+
+test("renderDiff (FORCE_COLOR) colorizes a CRLF diff and drops the stray CR", () => {
+  forceColor();
+  const rendered = renderDiff("@@ -1 +1 @@\r\n-old\r\n+new");
+  expect(rendered).not.toContain("\r");
+  expect(rendered).toContain(`${ESC}[36m@@ -1 +1 @@`);
+  expect(rendered).toContain(`${ESC}[31m-old`);
+  expect(rendered).toContain(`${ESC}[32m+new`);
+});
+
+test("renderDiff (NO_COLOR) returns the input unchanged with no escape codes", () => {
+  process.env.NO_COLOR = "1";
+  const diff = "--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n context";
+  const rendered = renderDiff(diff);
+  expect(rendered).toBe(diff);
+  expect(rendered).not.toContain(ESC);
+});
+
+test("renderDiff (FORCE_COLOR) styles add/del/hunk/meta lines and leaves context plain", () => {
+  forceColor();
+  const lines = renderDiff("--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n context").split("\n");
+  expect(lines[0]).toContain(`${ESC}[2m`); // dim file header
+  expect(lines[1]).toContain(`${ESC}[2m`);
+  expect(lines[2]).toContain(`${ESC}[36m`); // cyan hunk header
+  expect(lines[3]).toContain(`${ESC}[31m`); // red deletion
+  expect(lines[4]).toContain(`${ESC}[32m`); // green addition
+  expect(lines[5]).toBe(" context"); // untouched context line stays plain
 });
 
 // --- flow 055: collapseToolOutput (pure) ---

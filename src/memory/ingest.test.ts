@@ -3,6 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ingestMemory } from "./ingest";
 import { DEFAULT_MEMORY_CONFIG } from "./config";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 const EXISTING = `# Avoid any in the wiki service loader
 
@@ -27,7 +28,7 @@ Avoid using any in the loader.
 `;
 
 test("ingest reconciles a near-duplicate instead of creating a twin", async () => {
-  const root = path.join(import.meta.dir, "..", "..", ".tmp-ingest-test");
+  const root = uniqueTestRoot(path.join(import.meta.dir, "..", ".."), ".tmp-ingest-test");
   await rm(root, { recursive: true, force: true });
   const dir = path.join(root, ".metaproject", "memory", "known-mistakes");
   await mkdir(dir, { recursive: true });

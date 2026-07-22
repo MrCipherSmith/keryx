@@ -14,6 +14,7 @@ import type { BaselineEntry } from "../baseline";
 import type { HealthConfig } from "../types";
 import expected from "../../../fixtures/churn-complexity/expected.json";
 import seededChurn from "../../../fixtures/churn-complexity/churn.json";
+import { uniqueTestRoot } from "../../lib/test-tmp";
 
 const FIXTURE_DIR = path.join(import.meta.dir, "..", "..", "..", "fixtures", "churn-complexity");
 const FIXTURE_FILES = [
@@ -171,7 +172,7 @@ test("AC6: a positive hotspotWeight measurably lowers the score and escalates th
 // --- AC1: the churn seam is real git (no new dependency) -----------------
 
 test("AC1: getChurn drives the hotspot ranking end-to-end on a seeded git history", async () => {
-  const root = path.join(tmpdir(), "keryx-hotspot-churn");
+  const root = uniqueTestRoot(tmpdir(), "keryx-hotspot-churn");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, "src"), { recursive: true });
   const run = (argv: string[]) => Bun.spawn(argv, { cwd: root, stdout: "pipe", stderr: "pipe" }).exited;

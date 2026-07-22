@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import { resolveGitHooksRoot } from "./git-hooks";
+import { uniqueTestRoot } from "./test-tmp";
 
 async function run(cwd: string, args: string[]): Promise<void> {
   const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -12,8 +13,8 @@ async function run(cwd: string, args: string[]): Promise<void> {
 }
 
 test("resolves the common hooks directory from a linked worktree", async () => {
-  const root = path.join(tmpdir(), "keryx-hook-root");
-  const linked = path.join(tmpdir(), "keryx-hook-linked");
+  const root = uniqueTestRoot(tmpdir(), "keryx-hook-root");
+  const linked = uniqueTestRoot(tmpdir(), "keryx-hook-linked");
   await rm(root, { recursive: true, force: true });
   await rm(linked, { recursive: true, force: true });
   await mkdir(root, { recursive: true });

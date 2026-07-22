@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { uniqueTestRoot } from "./test-tmp";
 import {
   applySavedApiKeys,
   envWithSavedApiKeys,
@@ -44,7 +45,7 @@ test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)",
     return; // Windows uses %APPDATA%; skip the XDG assertion
   }
   const saved = process.env.XDG_DATA_HOME;
-  process.env.XDG_DATA_HOME = path.join(tmpdir(), "xdg-keryx-test");
+  process.env.XDG_DATA_HOME = uniqueTestRoot(tmpdir(), "xdg-keryx-test");
   try {
     expect(shellConfigPath()).toBe(path.join(process.env.XDG_DATA_HOME, "keryx", "auth.json"));
   } finally {

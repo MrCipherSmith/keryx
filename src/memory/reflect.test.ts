@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { reflectMemory } from "./reflect";
 import { DEFAULT_MEMORY_CONFIG } from "./config";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 function lesson(n: number, tag: string): string {
   return `# Lesson ${n}
@@ -23,7 +24,7 @@ Summary ${n} about ${tag}.
 }
 
 test("consolidates a tag cluster into a pattern draft and is idempotent", async () => {
-  const root = path.join(import.meta.dir, "..", "..", ".tmp-reflect-test");
+  const root = uniqueTestRoot(path.join(import.meta.dir, "..", ".."), ".tmp-reflect-test");
   await rm(root, { recursive: true, force: true });
   const lessons = path.join(root, ".metaproject", "memory", "lessons");
   await mkdir(lessons, { recursive: true });

@@ -4,9 +4,10 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { buildGraph } from "./build";
 import { loadGraph } from "./query";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 test("buildGraph ignores generated frontend outputs and resolves imported assets", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-build");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-build");
   await reset(root);
   await mkdir(path.join(root, "src", "feature"), { recursive: true });
   await mkdir(path.join(root, "public"), { recursive: true });
@@ -51,7 +52,7 @@ test("buildGraph ignores generated frontend outputs and resolves imported assets
 });
 
 test("buildGraph resolves tsconfig path aliases and parser-scanned imports", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-aliases");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-aliases");
   await reset(root);
   await mkdir(path.join(root, "src", "components"), { recursive: true });
   await mkdir(path.join(root, "src", "utils"), { recursive: true });

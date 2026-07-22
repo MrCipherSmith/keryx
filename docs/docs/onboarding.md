@@ -98,6 +98,43 @@ bun run check            # quality gate: tsc --noEmit && bun test
 
 `bun run typecheck` (`tsc --noEmit`) is available on its own, and `bun run keryx` is a shortcut for `bun ./src/cli.ts`.
 
+#### Running the suite concurrently (several worktrees at once)
+
+The suite is safe to run concurrently — several agent sessions routinely run
+`bun test` at the same time from different worktrees. That only holds because
+**every test fixture root is unique per run**. A fixture rooted at a fixed path
+is not private to one run: `tmpdir()/keryx-foo` resolves to the same directory
+for every checkout on the machine, and `<repo>/.tmp-foo` for every process in
+one worktree. One run's `rm -rf` then deletes another run's fixture mid-test.
+
+So when you add a test that needs a directory on disk, build its root with
+`uniqueTestRoot(parent, prefix)` from `src/lib/test-tmp.ts` — never
+`path.join(tmpdir(), "fixed-name")`. The same applies to any other externally
+visible identity a test claims: ports (`listen(0)`), and artifact run ids, which
+are only safe because they live under a root that is already unique.
+
+Collisions are silent and look like unrelated bugs, so they are worth
+recognising: an `ENOENT` for a file the test just wrote, an
+`immutable … run already exists` error from another run's leftover artifact, or
+`ENOENT: no such file or directory, posix_spawn 'git'` — which reports the
+*binary* but actually means the spawn's **cwd** was deleted underneath it.
+
+To verify concurrency safety after a change, run the stress harness:
+
+```bash
+bun scripts/stress/concurrent-suite-stress.ts --runs 6 --repeat 2
+```
+
+It runs N full suites at once and reports per-run tallies plus failing test
+names; transcripts of failing runs are kept in `.tmp-stress-logs/`. It exits
+non-zero if any run failed.
+
+One known residual, unrelated to shared state: the live-loopback TLS tests in
+`src/harness/process/sandbox/proxy-tls.test.ts` do real TLS handshakes and
+shell out to `openssl`, so they are load-sensitive and can time out on a
+saturated machine (observed once in 48 concurrent runs). They use ephemeral
+ports and an `mkdtemp` CA workspace, so this is machine load, not a collision.
+
 ## First-run walkthrough
 
 ### Step 1 — Initialize the workspace

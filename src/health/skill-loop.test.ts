@@ -2,12 +2,13 @@ import { test, expect } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { learnProjectSkill } from "../gdskills/learn";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 // End-to-end check of the Code Health -> gdskills feedback loop: a health report
 // tagged with scope.skill should auto-resolve the owning skill and scope the
 // learned lessons to that skill only.
 test("learn --from-health resolves the owning skill and scopes lessons", async () => {
-  const root = path.join(import.meta.dir, "..", "..", ".tmp-skill-loop-test");
+  const root = uniqueTestRoot(path.join(import.meta.dir, "..", ".."), ".tmp-skill-loop-test");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, ".metaproject"), { recursive: true });
 

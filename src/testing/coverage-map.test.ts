@@ -16,6 +16,7 @@ import { staticChangedSelection } from "./selection";
 import { selectChangedTests, loadTestingConfig } from "./service";
 import type { TestingConfig, TestingContext } from "./types";
 import expected from "../../fixtures/change-impacted-test/expected.json";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 const FIXTURE_DIR = path.join(import.meta.dir, "..", "..", "fixtures", "change-impacted-test");
 
@@ -153,7 +154,7 @@ async function enableCapability(root: string): Promise<void> {
 const TEST_FILES = ["src/alpha.extra.test.ts", "src/alpha.test.ts", "src/beta.test.ts", "src/gamma.test.ts"];
 
 test("AC8: with capability ON + map present, selectChangedTests uses the coverage map", async () => {
-  const root = path.join(tmpdir(), "keryx-tia-on");
+  const root = uniqueTestRoot(tmpdir(), "keryx-tia-on");
   await seedRepo(root);
   await enableCapability(root);
   // Change alpha.ts.
@@ -168,7 +169,7 @@ test("AC8: with capability ON + map present, selectChangedTests uses the coverag
 });
 
 test("AC11: with capability OFF (no manifest), selectChangedTests is byte-identical static selection", async () => {
-  const root = path.join(tmpdir(), "keryx-tia-off");
+  const root = uniqueTestRoot(tmpdir(), "keryx-tia-off");
   await seedRepo(root);
   // No manifest ⇒ capability off. Change alpha.ts.
   await writeFile(path.join(root, "src", "alpha.ts"), "export function alpha(n: number): number {\n  return n + 100;\n}\n");
@@ -184,7 +185,7 @@ test("AC11: with capability OFF (no manifest), selectChangedTests is byte-identi
 });
 
 test("AC9: capability ON, a map-absent changed file unions in its naming-related test", async () => {
-  const root = path.join(tmpdir(), "keryx-tia-absent");
+  const root = uniqueTestRoot(tmpdir(), "keryx-tia-absent");
   await seedRepo(root);
   await enableCapability(root);
   await writeFile(path.join(root, "src", "alpha.ts"), "export function alpha(n: number): number {\n  return n + 100;\n}\n");
@@ -202,7 +203,7 @@ test("AC9: capability ON, a map-absent changed file unions in its naming-related
 // --- AC7 build determinism + AC10 malformed config → defaults --------------
 
 test("AC7: buildCoverageMap (import) writes a deterministic map; re-build is identical", async () => {
-  const root = path.join(tmpdir(), "keryx-tia-build");
+  const root = uniqueTestRoot(tmpdir(), "keryx-tia-build");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, "coverage"), { recursive: true });
   await writeFile(
@@ -220,7 +221,7 @@ test("AC7: buildCoverageMap (import) writes a deterministic map; re-build is ide
 });
 
 test("AC10: malformed testing.config.json falls back to defaults (coverageMap off)", async () => {
-  const root = path.join(tmpdir(), "keryx-tia-malformed");
+  const root = uniqueTestRoot(tmpdir(), "keryx-tia-malformed");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, ".metaproject"), { recursive: true });
   await writeFile(path.join(root, ".metaproject", "testing.config.json"), "{ not json");

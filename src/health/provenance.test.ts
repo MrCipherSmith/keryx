@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import { runHealth } from "./run";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 // Write a hermetic no-op `tsc` into <root>/node_modules/.bin so the health
 // runner resolves a compiler deterministically, independent of whether the host
@@ -16,7 +17,7 @@ async function stubLocalBin(root: string, name: string): Promise<void> {
 }
 
 test("runHealth writes immutable provenance-aware evidence and latest pointer", async () => {
-  const root = path.join(tmpdir(), "keryx-health-provenance-run");
+  const root = uniqueTestRoot(tmpdir(), "keryx-health-provenance-run");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, ".metaproject"), { recursive: true });
 
@@ -37,7 +38,7 @@ test("runHealth writes immutable provenance-aware evidence and latest pointer", 
 });
 
 test("strict health runs an available compiler instead of treating missing import format as missing source", async () => {
-  const root = path.join(tmpdir(), "keryx-health-strict-typescript");
+  const root = uniqueTestRoot(tmpdir(), "keryx-health-strict-typescript");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, ".metaproject"), { recursive: true });
   await writeFile(path.join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: { noEmit: true, strict: true }, include: ["src/**/*.ts"] }));

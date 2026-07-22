@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-07-21T23:27:30.781Z",
+  "entryCount": 1,
+  "entries": [
+    {
+      "path": "lessons/tui-alignself-height-collapse.md",
+      "type": "lesson",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "OpenTUI: alignSelf on a transcript box collapses its intrinsic height",
+      "updated": "2026-07-21",
+      "tags": [],
+      "scopes": {
+        "module": "tui",
+        "entity": "transcript-blocks, shell-chrome",
+        "files": [],
+        "skills": []
+      }
+    }
+  ]
+}

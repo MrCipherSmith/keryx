@@ -6,90 +6,28 @@ Status: draft
 
 ## Summary
 
-Deterministic map of 304 code files, 4 assets, and 691 import edges across 35 top-level modules. Enrich each module page with the gdwiki skill.
+Deterministic map of 555 code files, 4 assets, and 1167 import edges across 64 top-level modules. Enrich each module page with the gdwiki skill.
 
 ## Graph snapshot
 
-- Nodes: 308
-- Code files: 304
+- Nodes: 559
+- Code files: 555
 - Assets: 4
-- Edges: 691
-- Imports: 686
+- Edges: 1167
+- Imports: 1162
 - Unresolved edges: 0
 
 ## Largest modules
 
-- `src/commands` - 32 files, 159 cross-module imports
-- `src/memory` - 25 files, 14 cross-module imports
-- `src/gdgraph` - 24 files, 5 cross-module imports
-- `src/health` - 22 files, 21 cross-module imports
-- `src/security` - 16 files, 14 cross-module imports
-- `src/gdskills` - 14 files, 17 cross-module imports
-- `src/mcp` - 13 files, 20 cross-module imports
-- `src/security/detect` - 12 files, 8 cross-module imports
-- `src/testing` - 11 files, 10 cross-module imports
-- `src/ctx` - 11 files, 3 cross-module imports
-- `src/lib` - 11 files, 1 cross-module imports
-- `src/capability` - 10 files, 11 cross-module imports
-- `src/flow` - 10 files, 7 cross-module imports
-- `src/wiki` - 9 files, 10 cross-module imports
-- `src/standard` - 9 files, 6 cross-module imports
-- `src/health/metrics` - 8 files, 12 cross-module imports
-- `src/health/sources` - 8 files, 6 cross-module imports
-- `src/assets` - 8 files, 4 cross-module imports
-- `src/gdgraph/treesitter` - 7 files, 3 cross-module imports
-- `fixtures/change-impacted-test/src` - 6 files, 0 cross-module imports
-- `src/sync` - 5 files, 2 cross-module imports
-- `src/harness` - 4 files, 5 cross-module imports
-- `fixtures/churn-complexity/src` - 4 files, 0 cross-module imports
-- `src/memory/embedding` - 3 files, 8 cross-module imports
-- `src/review` - 3 files, 4 cross-module imports
-- `src` - 2 files, 22 cross-module imports
-- `src/security/detect/injection` - 2 files, 5 cross-module imports
-- `src/security/eval` - 2 files, 5 cross-module imports
-- `src/rules` - 2 files, 4 cross-module imports
-- `src/security/detect/pii` - 2 files, 3 cross-module imports
-- `src/agents` - 2 files, 2 cross-module imports
-- `src/security/agent-hooks` - 2 files, 1 cross-module imports
-- `src/flow/tracker` - 2 files, 0 cross-module imports
-- `src/mcp/transport` - 2 files, 0 cross-module imports
+- `src/commands` - 54 files, 214 cross-module imports
+- `src/lib` - 29 files, 5 cross-module imports
+- `src/tui` - 11 files, 16 cross-module imports
 
 ## Module dependencies
 
 - `src/commands` -> `src/lib`, `src/gdskills`, `src/security`, `src/gdgraph`, `src/memory`
-- `src/memory` -> `src/lib`, `src/security`, `src/memory/embedding`, `src/wiki`, `src/capability`
-- `src/gdgraph` -> `src/lib`, `src/capability`, `src/gdgraph/treesitter`
-- `src/health` -> `src/lib`, `src/health/metrics`, `src/health/sources`, `src/gdskills`
-- `src/security` -> `src/lib`, `src/security/detect`, `src/security/agent-hooks`, `src/capability`
-- `src/gdskills` -> `src/lib`, `src/wiki`, `src/memory`
-- `src/mcp` -> `src/lib`, `src/gdgraph`, `src/standard`, `src/security`, `src/mcp/transport`
-- `src/security/detect` -> `src/security`, `src/harness`, `src/capability`, `src/security/detect/injection`, `src/security/detect/pii`
-- `src/testing` -> `src/lib`, `src/security`, `src/health`, `fixtures/change-impacted-test`
-- `src/ctx` -> `src/lib`
-- `src/lib` -> `src/testing`
-- `src/capability` -> `src/lib`, `src/commands`, `src/assets`
-- `src/flow` -> `src/memory`, `src/lib`
-- `src/wiki` -> `src/memory`, `src/memory/embedding`, `src/lib`, `src/capability`, `src/security`
-- `src/standard` -> `src/lib`, `src/commands`
-- `src/health/metrics` -> `src/health`, `fixtures/churn-complexity`, `src/health/sources`
-- `src/health/sources` -> `src/health`, `src/testing`
-- `src/assets` -> `src/lib`
-- `src/gdgraph/treesitter` -> `src/assets`, `src/gdgraph`
-- `fixtures/change-impacted-test/src` -> (no cross-module imports)
-- `src/sync` -> `src/lib`
-- `src/harness` -> `fixtures/churn-complexity`, `src/health/metrics`, `src/health`, `src/testing`, `src/lib`
-- `fixtures/churn-complexity/src` -> (no cross-module imports)
-- `src/memory/embedding` -> `src/memory`, `src/capability`, `src/lib`
-- `src/review` -> `src/flow`, `src/commands`, `src/lib`
-- `src` -> `src/commands`, `root`
-- `src/security/detect/injection` -> `src/security`, `src/security/detect`, `src/capability`
-- `src/security/eval` -> `src/security`, `src/security/detect`, `src/lib`
-- `src/rules` -> `src/lib`
-- `src/security/detect/pii` -> `src/capability`, `src/security`, `src/security/detect`
-- `src/agents` -> `src/lib`
-- `src/security/agent-hooks` -> `src/security`
-- `src/flow/tracker` -> (no cross-module imports)
-- `src/mcp/transport` -> (no cross-module imports)
+- `src/lib` -> `src/commands`, `src/harness/provider`, `src/harness/process/sandbox`, `src/session`, `src/testing`
+- `src/tui` -> `src/lib`, `src/commands`, `src/harness/tool/builtin`, `src/harness/provider`, `src/session`
 
 ## Related Wiki
 
@@ -97,4 +35,4 @@ Deterministic map of 304 code files, 4 assets, and 691 import edges across 35 to
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z.
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-21T18:34:17.412Z.

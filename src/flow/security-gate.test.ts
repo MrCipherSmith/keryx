@@ -3,8 +3,9 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createFlowService } from "./service";
 import type { FlowServiceDeps, TrackerAdapter } from "./types";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
-const ROOT = path.join(import.meta.dir, "..", "..", ".tmp-flow-security-test");
+const ROOT = uniqueTestRoot(path.join(import.meta.dir, "..", ".."), ".tmp-flow-security-test");
 
 function fakeTracker(): TrackerAdapter & { commented: string[] } {
   const commented: string[] = [];

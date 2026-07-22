@@ -36,6 +36,7 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { buildGraph } from "./build";
 import { loadGraph } from "./query";
+import { uniqueTestRoot } from "../lib/test-tmp";
 
 // Parser API under contract — resolved from ./build at runtime (see PARSER
 // CONTRACT above). We load these lazily rather than via a top-level
@@ -69,7 +70,7 @@ const parseGradleSourceRoots = (gradle: string): Promise<string[]> =>
 // ---------------------------------------------------------------------------
 
 test("buildGraph resolves Maven Java FQN imports to files and emits imports edges", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-lang-maven");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-lang-maven");
   await reset(root);
   const javaRoot = path.join(root, "src", "main", "java", "com", "example", "admin");
   await mkdir(path.join(javaRoot, "dto"), { recursive: true });
@@ -130,7 +131,7 @@ test("buildGraph resolves Maven Java FQN imports to files and emits imports edge
 // ---------------------------------------------------------------------------
 
 test("buildGraph resolves Python absolute, relative, and __init__.py imports", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-lang-python");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-lang-python");
   await reset(root);
   await mkdir(path.join(root, "pkg", "sub"), { recursive: true });
 
@@ -201,7 +202,7 @@ const GOLDEN_EDGES_JSONL =
   `{"id":"edge:3","from":"src/feature/index.ts","to":"src/feature/value.ts","kind":"imports","specifier":"./value"}\n`;
 
 test("buildGraph output is byte-identical for a TS/JS-only project (AC4 guard)", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-lang-regression");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-lang-regression");
   await reset(root);
   await mkdir(path.join(root, "src", "feature"), { recursive: true });
 
@@ -238,7 +239,7 @@ test("buildGraph output is byte-identical for a TS/JS-only project (AC4 guard)",
 // ---------------------------------------------------------------------------
 
 test("summary reports n/a (not 100%) when zero imports are extracted", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-lang-metric-na");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-lang-metric-na");
   await reset(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   // A source file with no extractable imports at all.
@@ -252,7 +253,7 @@ test("summary reports n/a (not 100%) when zero imports are extracted", async () 
 });
 
 test("non-relative unresolved import is recorded as an unresolved edge, not dropped", async () => {
-  const root = path.join(tmpdir(), "keryx-gdgraph-lang-unresolved");
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-lang-unresolved");
   await reset(root);
   const javaRoot = path.join(root, "src", "main", "java", "com", "example", "admin");
   await mkdir(javaRoot, { recursive: true });

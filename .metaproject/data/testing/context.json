@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-21T14:13:32.590Z",
+  "generatedAt": "2026-07-21T18:34:11.201Z",
   "frameworks": [
     "bun"
   ],
@@ -131,6 +131,9 @@
     "src/harness/process/real-process-adapter.smoke.test.ts",
     "src/harness/process/sandbox/bwrap.test.ts",
     "src/harness/process/sandbox/detect.test.ts",
+    "src/harness/process/sandbox/dual-axis-live.smoke.test.ts",
+    "src/harness/process/sandbox/dual-axis-report.test.ts",
+    "src/harness/process/sandbox/mask-resolve.test.ts",
     "src/harness/process/sandbox/network-restricted.smoke.test.ts",
     "src/harness/process/sandbox/network-run.test.ts",
     "src/harness/process/sandbox/profile.test.ts",
@@ -183,6 +186,9 @@
     "src/lib/args.test.ts",
     "src/lib/git-hooks.test.ts",
     "src/lib/live-render.test.ts",
+    "src/lib/md-blocks.test.ts",
+    "src/lib/project-sandbox-policy.test.ts",
+    "src/lib/sandbox-config.test.ts",
     "src/lib/security-pre-push.test.ts",
     "src/lib/shell-config.test.ts",
     "src/lib/shell-permissions.test.ts",
@@ -235,6 +241,7 @@
     "src/testing/service.test.ts",
     "src/testing/smoke.test.ts",
     "src/tui/side-worker.test.ts",
+    "src/tui/transcript-blocks.test.ts",
     "src/tui/tui-shell.test.ts",
     "src/tui/worker-fleet.test.ts",
     "src/wiki/ask.test.ts",

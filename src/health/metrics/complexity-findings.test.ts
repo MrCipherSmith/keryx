@@ -4,9 +4,10 @@ import path from "node:path";
 import { getComplexityFindings } from "./complexity-findings";
 import { DEFAULT_HEALTH_CONFIG } from "../config";
 import { listSourceFiles } from "../util";
+import { uniqueTestRoot } from "../../lib/test-tmp";
 
 test("emits one P2 finding per file with functions over the threshold", async () => {
-  const root = path.join(import.meta.dir, "..", "..", "..", ".tmp-cx-findings");
+  const root = uniqueTestRoot(path.join(import.meta.dir, "..", "..", ".."), ".tmp-cx-findings");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, "src"), { recursive: true });
 
@@ -34,7 +35,7 @@ test("emits one P2 finding per file with functions over the threshold", async ()
 });
 
 test("source file discovery ignores generated and static output paths", async () => {
-  const root = path.join(import.meta.dir, "..", "..", "..", ".tmp-health-ignore");
+  const root = uniqueTestRoot(path.join(import.meta.dir, "..", "..", ".."), ".tmp-health-ignore");
   await rm(root, { recursive: true, force: true });
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "storybook-static", "assets"), { recursive: true });

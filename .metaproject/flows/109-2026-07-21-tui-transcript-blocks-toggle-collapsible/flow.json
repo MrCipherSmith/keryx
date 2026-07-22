@@ -1,0 +1,306 @@
+{
+  "schemaVersion": 2,
+  "id": "109",
+  "slug": "tui-transcript-blocks-toggle-collapsible",
+  "title": "TUI transcript blocks: toggle-collapsible reasoning/tool blocks + copyable markdown/prompt renderer + code & diff rendering",
+  "status": "done",
+  "createdAt": "2026-07-21T16:25:49.265Z",
+  "updatedAt": "2026-07-21T18:30:31.024Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2fe692cf9d1b91f9e35f531b9a84750bb612304e93cd70c9ef31b909632aa77b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-21T18:30:02.674Z",
+      "note": "attachBlockIo (tui-shell.ts) makes the real IO wiring reachable; test 'AC1: the REAL io wiring retains a tool result full output' drives runAgentTurn through createTuiAgentIo + attachBlockIo and asserts registry.bodyText(id) equals the tool output. The mountBlockHarness replica was retired in 7ca9421."
+    },
+    "AC2": {
+      "at": "2026-07-21T18:30:02.745Z",
+      "note": "createBlockRegistry.toggle is per block: transcript-blocks.test.ts registers 3 blocks, toggles the middle one, asserts the others unchanged. Markers pinned by blockLabel tests in md-blocks.test.ts and asserted in a captured frame in tui-shell.test.ts."
+    },
+    "AC3": {
+      "at": "2026-07-21T18:30:02.812Z",
+      "note": "tui-shell.test.ts drive-through via real createTestRenderer + mockInput through the real onKeypress: Ctrl+O enters, arrows move, Enter expands (body visible, marker flips), Esc exits and the composer regains focus. Frame-level assertions, not state-only."
+    },
+    "AC4": {
+      "at": "2026-07-21T18:30:02.876Z",
+      "note": "tui-shell.test.ts asserts the frame is byte-identical while isBlocked() is true (menu/overlay), and that a turn completing mid-nav does not steal focus (focusOwner guard, focusComposer no-ops)."
+    },
+    "AC5": {
+      "at": "2026-07-21T18:30:02.946Z",
+      "note": "Assistant markdown is segmented via segmentMarkdown; a fenced segment renders framed with a language tag and line count. Test asserts 'ts - 2 lines' in the captured frame and no backticks, driven through runAgentTurn."
+    },
+    "AC6": {
+      "at": "2026-07-21T18:30:03.014Z",
+      "note": "y copies the focused block bodyText via copyToClipboardOSC52 with the Copied to clipboard toast; copy refuses and toasts truthfully for evicted/unknown blocks (F5 fix). /expand and /copy registered in src/commands/agent-commands.ts."
+    },
+    "AC7": {
+      "at": "2026-07-21T18:30:18.978Z",
+      "note": "Diff line classes asserted on captureSpans() foreground RGBA toInts(), not substrings, for a diff fence; the '- ' bullet-list negative is proven both in md-blocks.test.ts (looksLikeUnifiedDiff false) and in the TUI and readline render tests."
+    },
+    "AC8": {
+      "at": "2026-07-21T18:30:19.048Z",
+      "note": "Retention bounded by maxBlocks and maxRetainedChars; the review found the newest-block exemption made the char cap escapable, fixed in 7ca9421 by clip-on-register (prefix retained, marked truncated). Four tests incl. a 5000-char payload against a 100-char cap asserting retainedChars() <= cap. Evicted blocks keep their summary and expand to EVICTED_BLOCK_TEXT. Plan D-4 amended to the delivered semantics."
+    },
+    "AC9": {
+      "at": "2026-07-21T18:30:19.114Z",
+      "note": "package.json and bun.lock diffs are empty. keryx ctx rg CodeRenderable|DiffRenderable|MarkdownRenderable|TreeSitterClient over src/** returns 4 matches, all comments. keryx ctx rg @opentui over src/lib/** returns 0. src/lib/md-blocks.ts has zero imports. No tree-sitter worker and no render-time grammar fetch introduced."
+    },
+    "AC10": {
+      "at": "2026-07-21T18:30:19.185Z",
+      "note": "Readline /expand keeps its behavior but is now built on the exported expandedToolOutput, which takes its header from blockLabel and routes a looksLikeUnifiedDiff body through renderDiff - the same src/lib helpers the TUI uses, so the two cannot drift. Eight tests in shell.test.ts incl. the shared-blockLabel case, the AC7 bullet negative and a NO_COLOR case."
+    },
+    "AC11": {
+      "at": "2026-07-21T18:30:19.253Z",
+      "note": "Every new transcript container uses flexShrink 0 with alignSelf flex-start and no unconstrained flexGrow. Tested structurally at four terminal sizes after expanding a 120-line block: footer is the last row, the composer box occupies the three rows above it, the draft survives. One carve-out at scrollTop === 2 for an upstream OpenTUI ScrollBox border-clipping defect, reproduced from pure OpenTUI primitives with zero keryx code and pinned by a test that fails when upstream fixes it. Recorded in specification 7.1."
+    },
+    "AC12": {
+      "at": "2026-07-21T18:30:19.319Z",
+      "note": "Expanding a non-newest block asserts scrollHeight grew, scrollTop is unchanged and stickyScroll is false, with a newest-block control case. Determinism via the injectable schedule introduced in b2c25e6."
+    },
+    "AC13": {
+      "at": "2026-07-21T18:30:28.607Z",
+      "note": "bun test full suite: 2012 pass / 11 skip / 0 fail across 231 files. bun run typecheck clean. review-orchestrator produced 1 HIGH, 3 MEDIUM, 5 LOW; all fixed in d523e8e and 7ca9421, with every disposition and two deliberate deferrals (paint performance, collapseToolOutput CRLF) recorded in journal.md. Code Health gate WARN at score 92 is pre-existing against a stale 2026-07-06 baseline: zero P0/P1, regression 3 vs the 5 already recorded in flow 001, and a changed-scope run attributes nothing to this branch."
+    },
+    "AC14": {
+      "at": "2026-07-21T18:30:28.672Z",
+      "note": "specification.md section 3 replaces the stale inline-expand bullet with the delivered behavior and the full key table; new section 7.1 records the harness facts (sequential @opentui import, the 20ms Esc timeout, the ScrollBox bleed); new section 9 records D-2 with claims verified against the vendored package (new Worker -> parser.worker.js, grammar loader fetches a URL, five bundled grammars) plus the revisit condition, alongside D-3 and D-5."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/185"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Headless TUI tests + readline parity + verify/review/docs",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Fix review findings: CRLF fence regression, unbounded maxRetainedChars, AC1 wiring tautology",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-21T16:25:49.265Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-21T16:36:20.839Z",
+      "event": "task-added",
+      "detail": "T5: Headless TUI tests + readline parity + verify/review/docs"
+    },
+    {
+      "at": "2026-07-21T16:36:20.925Z",
+      "event": "frozen",
+      "detail": "14 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-21T16:36:21.007Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-21T16:36:25.880Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-21T16:43:18.612Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-21T16:49:27.318Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-21T17:10:50.638Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-21T18:10:23.997Z",
+      "event": "task-added",
+      "detail": "T6: Fix review findings: CRLF fence regression, unbounded maxRetainedChars, AC1 wiring tautology"
+    },
+    {
+      "at": "2026-07-21T18:10:52.291Z",
+      "event": "task-done",
+      "detail": "T5: Headless TUI tests + readline parity + verify/review/docs"
+    },
+    {
+      "at": "2026-07-21T18:26:03.480Z",
+      "event": "task-done",
+      "detail": "T6: Fix review findings: CRLF fence regression, unbounded maxRetainedChars, AC1 wiring tautology"
+    },
+    {
+      "at": "2026-07-21T18:29:43.393Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/185"
+    },
+    {
+      "at": "2026-07-21T18:30:02.674Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: attachBlockIo (tui-shell.ts) makes the real IO wiring reachable; test 'AC1: the REAL io wiring retains a tool result full output' drives runAgentTurn through createTuiAgentIo + attachBlockIo and asserts registry.bodyText(id) equals the tool output. The mountBlockHarness replica was retired in 7ca9421."
+    },
+    {
+      "at": "2026-07-21T18:30:02.745Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: createBlockRegistry.toggle is per block: transcript-blocks.test.ts registers 3 blocks, toggles the middle one, asserts the others unchanged. Markers pinned by blockLabel tests in md-blocks.test.ts and asserted in a captured frame in tui-shell.test.ts."
+    },
+    {
+      "at": "2026-07-21T18:30:02.812Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tui-shell.test.ts drive-through via real createTestRenderer + mockInput through the real onKeypress: Ctrl+O enters, arrows move, Enter expands (body visible, marker flips), Esc exits and the composer regains focus. Frame-level assertions, not state-only."
+    },
+    {
+      "at": "2026-07-21T18:30:02.876Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tui-shell.test.ts asserts the frame is byte-identical while isBlocked() is true (menu/overlay), and that a turn completing mid-nav does not steal focus (focusOwner guard, focusComposer no-ops)."
+    },
+    {
+      "at": "2026-07-21T18:30:02.946Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Assistant markdown is segmented via segmentMarkdown; a fenced segment renders framed with a language tag and line count. Test asserts 'ts - 2 lines' in the captured frame and no backticks, driven through runAgentTurn."
+    },
+    {
+      "at": "2026-07-21T18:30:03.014Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: y copies the focused block bodyText via copyToClipboardOSC52 with the Copied to clipboard toast; copy refuses and toasts truthfully for evicted/unknown blocks (F5 fix). /expand and /copy registered in src/commands/agent-commands.ts."
+    },
+    {
+      "at": "2026-07-21T18:30:18.978Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Diff line classes asserted on captureSpans() foreground RGBA toInts(), not substrings, for a diff fence; the '- ' bullet-list negative is proven both in md-blocks.test.ts (looksLikeUnifiedDiff false) and in the TUI and readline render tests."
+    },
+    {
+      "at": "2026-07-21T18:30:19.048Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Retention bounded by maxBlocks and maxRetainedChars; the review found the newest-block exemption made the char cap escapable, fixed in 7ca9421 by clip-on-register (prefix retained, marked truncated). Four tests incl. a 5000-char payload against a 100-char cap asserting retainedChars() <= cap. Evicted blocks keep their summary and expand to EVICTED_BLOCK_TEXT. Plan D-4 amended to the delivered semantics."
+    },
+    {
+      "at": "2026-07-21T18:30:19.114Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: package.json and bun.lock diffs are empty. keryx ctx rg CodeRenderable|DiffRenderable|MarkdownRenderable|TreeSitterClient over src/** returns 4 matches, all comments. keryx ctx rg @opentui over src/lib/** returns 0. src/lib/md-blocks.ts has zero imports. No tree-sitter worker and no render-time grammar fetch introduced."
+    },
+    {
+      "at": "2026-07-21T18:30:19.185Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Readline /expand keeps its behavior but is now built on the exported expandedToolOutput, which takes its header from blockLabel and routes a looksLikeUnifiedDiff body through renderDiff - the same src/lib helpers the TUI uses, so the two cannot drift. Eight tests in shell.test.ts incl. the shared-blockLabel case, the AC7 bullet negative and a NO_COLOR case."
+    },
+    {
+      "at": "2026-07-21T18:30:19.253Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Every new transcript container uses flexShrink 0 with alignSelf flex-start and no unconstrained flexGrow. Tested structurally at four terminal sizes after expanding a 120-line block: footer is the last row, the composer box occupies the three rows above it, the draft survives. One carve-out at scrollTop === 2 for an upstream OpenTUI ScrollBox border-clipping defect, reproduced from pure OpenTUI primitives with zero keryx code and pinned by a test that fails when upstream fixes it. Recorded in specification 7.1."
+    },
+    {
+      "at": "2026-07-21T18:30:19.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Expanding a non-newest block asserts scrollHeight grew, scrollTop is unchanged and stickyScroll is false, with a newest-block control case. Determinism via the injectable schedule introduced in b2c25e6."
+    },
+    {
+      "at": "2026-07-21T18:30:28.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: bun test full suite: 2012 pass / 11 skip / 0 fail across 231 files. bun run typecheck clean. review-orchestrator produced 1 HIGH, 3 MEDIUM, 5 LOW; all fixed in d523e8e and 7ca9421, with every disposition and two deliberate deferrals (paint performance, collapseToolOutput CRLF) recorded in journal.md. Code Health gate WARN at score 92 is pre-existing against a stale 2026-07-06 baseline: zero P0/P1, regression 3 vs the 5 already recorded in flow 001, and a changed-scope run attributes nothing to this branch."
+    },
+    {
+      "at": "2026-07-21T18:30:28.672Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: specification.md section 3 replaces the stale inline-expand bullet with the delivered behavior and the full key table; new section 7.1 records the harness facts (sequential @opentui import, the 20ms Esc timeout, the ScrollBox bleed); new section 9 records D-2 with claims verified against the vendored package (new Worker -> parser.worker.js, grammar loader fetches a URL, five bundled grammars) plus the revisit condition, alongside D-3 and D-5."
+    },
+    {
+      "at": "2026-07-21T18:30:28.738Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-21T18:30:31.024Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

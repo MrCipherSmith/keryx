@@ -4,11 +4,33 @@ Version: 0.2.0
 ## Status note
 
 The phased roadmap below (Phases 0–5) has been **implemented**: the OpenTUI shell
-is the default interactive shell on a TTY (`src/commands/shell.ts:1043-1049`,
-flows 059–066, ADR-0005 Accepted). This PRD is retained as the original design
-record; see `README.md` for the implemented-status summary and the list of
-additive features (side-workers, multi-agent wiring) that landed beyond this
-PRD's scope.
+is the default interactive shell on a TTY (`let wantTui = true` at
+`src/commands/shell.ts:1111`, the decision in `chooseShellSurface` at
+`:1174-1182`, applied at `:1219`; flows 059–067, ADR-0005 Accepted). This PRD is
+retained as the original design record; see `README.md` for the implemented-status
+summary and the additive features (side-workers, multi-agent wiring) that landed
+beyond this PRD's scope.
+
+### Where this PRD no longer describes the code (audit, 2026-07-22)
+
+The requirements below are **kept as written** — they are the original intent and
+the audit trail matters. These five are not true of `main` as it ships, and each
+is annotated in place:
+
+| Item | Divergence |
+|---|---|
+| **G3** / success criterion | "unchanged by diff" is false: `src/commands/agent.ts` has grown ~374 lines since the Phase-1 baseline and `src/lib/ui.ts` ~91. The `AgentIO` **interface** is byte-identical; the driver's body is not. The helper layer was deliberately reopened — see specification D-6. |
+| **N4** | "the approval/default-deny path … untouched" is false. The risk gate gained a third class: `delegate` (`spawn_subagent`) **auto-allows when no approver is present**, where `shell` stays default-deny (`agent.ts:542-563`). Now recorded in **[ADR-0008](../../decisions/keryx-harness/ADR-0008-interactive-shell-delegate-risk-gate.md)**, which keeps the behaviour and states why it does not expand authority: the child gets no `shell_exec`, no `spawn_subagent` (so recursion is structurally impossible, not prompt-dependent), and an approver hard-wired to deny. Note ADR-0008 governs the *interactive shell's* gate; ADR-0003's `defaults.delegate` governs the harness policy engine, which is a different mechanism. |
+| **N2** | "OpenTUI components are thin presentation" is false as worded: `launchTuiAgentShell` is ~1237 lines with one caller. Rendering *logic* genuinely does live in pure helpers (`src/lib/md-blocks.ts`, `ui.ts`) and headless tests genuinely exist; the "thin" half does not hold. |
+| **G1 / F1** | "Enter/**Tab** selects/accepts" (both say it) — `Tab` is bound nowhere. ↑/↓, Enter and Esc work. |
+| **F4** | "preserving the flow-041 blast-radius context" — `buildApprovalContext` is called only from the readline path (`shell.ts:825`) and never under `src/tui/`. Since the TUI is now the default, the **default** approval surface shows the command without blast radius or the memory note. |
+
+Two further criteria are weaker than they read. "Byte-identical plain output" is
+pinned by comparing **two readline runs** (no-TTY vs `--no-tui`, both `NO_COLOR`),
+not TUI output against readline output — escape-freedom and the fallback itself
+are genuinely proven, the cross-renderer comparison is not. And the "feature-parity
+checklist" named in the success criteria has no artifact in the repository; parity
+was asserted in flow 061's task titles only.
 
 ## Problem
 

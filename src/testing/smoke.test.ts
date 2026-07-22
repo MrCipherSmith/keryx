@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { resolveSmokeSet, staticChangedSelection } from "./selection";
 import { analyzeTestingProject, runTesting } from "./service";
+import { uniqueTestRoot } from "../lib/test-tmp";
 const TEST_FILES = ["src/a.test.ts", "src/b.test.ts", "src/smoke.test.ts", "e2e/smoke.test.ts"];
 
 // --- resolveSmokeSet unit --------------------------------------------------
@@ -61,7 +62,7 @@ async function seedRepo(root: string, smokeSelectors: string[]): Promise<void> {
 }
 
 test("AC12: smoke tier is recorded and composed in project + scope modes", async () => {
-  const root = path.join(tmpdir(), "keryx-smoke-modes");
+  const root = uniqueTestRoot(tmpdir(), "keryx-smoke-modes");
   await seedRepo(root, ["src/smoke.test.ts"]);
 
   const project = await runTesting({ cwd: root });
@@ -78,7 +79,7 @@ test("AC12: smoke tier is recorded and composed in project + scope modes", async
 });
 
 test("AC14: with no smoke block, smokeTests is [] and selection is byte-identical", async () => {
-  const root = path.join(tmpdir(), "keryx-smoke-empty");
+  const root = uniqueTestRoot(tmpdir(), "keryx-smoke-empty");
   await seedRepo(root, []);
 
   const scope = await runTesting({ cwd: root, scope: "src/a" });

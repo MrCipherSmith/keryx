@@ -1,4 +1,5 @@
 import { stdout } from "node:process";
+import { classifyDiffLine, looksLikeUnifiedDiff, payloadKind, segmentMarkdown, splitLines } from "./md-blocks";
 
 // Terminal styling helpers. Colors are emitted only for an interactive TTY and
 // are suppressed when `NO_COLOR` is set; `FORCE_COLOR` forces them on (useful in
@@ -82,37 +83,83 @@ function renderInline(text: string): string {
   return withCode.replace(/\*\*([^*]+)\*\*/g, (_match, bold: string) => style.bold(bold));
 }
 
+// One prose line: ATX heading (`#`..`######`), -/* bullet, or inline spans.
+function renderTextLine(line: string): string {
+  const heading = /^#{1,6}\s+(.*)$/.exec(line);
+  if (heading !== null) {
+    return style.bold(style.cyan(heading[1] ?? ""));
+  }
+  const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
+  if (bullet !== null) {
+    return `${bullet[1] ?? ""}${style.cyan(symbols.bullet)} ${renderInline(bullet[2] ?? "")}`;
+  }
+  return renderInline(line);
+}
+
+// Unified diff → ANSI: green additions, red deletions, cyan `@@` hunk headers,
+// dim `---`/`+++` file headers, plain context. Line classification is shared
+// with the TUI via `classifyDiffLine`, so the two shells cannot drift. Pure;
+// returns the input unchanged when color is disabled.
+export function renderDiff(text: string): string {
+  if (!colorEnabled()) {
+    return text;
+  }
+  return splitLines(text)
+    .map((line) => {
+      switch (classifyDiffLine(line)) {
+        case "add":
+          return style.green(line);
+        case "del":
+          return style.red(line);
+        case "hunk":
+          return style.cyan(line);
+        case "meta":
+          return style.dim(line);
+        default:
+          return line;
+      }
+    })
+    .join("\n");
+}
+
+// A fenced block: a dim language tag (when the fence carried an info string)
+// above the body. Diff payloads — either a `diff`/`patch` fence or a body that
+// sniffs as a unified diff — are colorized instead of flatly dimmed.
+function renderCodeSegment(lang: string, body: string): string[] {
+  const lines = body.split("\n");
+  const out: string[] = [];
+  if (lang.length > 0) {
+    out.push(style.dim(lang));
+  }
+  if (payloadKind(lang, lines.length) === "diff" || looksLikeUnifiedDiff(body)) {
+    out.push(renderDiff(body));
+    return out;
+  }
+  for (const line of lines) {
+    out.push(style.gray(line));
+  }
+  return out;
+}
+
 // Lightweight markdown → styled terminal text: ATX headings (`#`..`######`),
-// **bold**, `inline code`, fenced ``` code blocks, and -/* bullet lists. Pure,
-// deterministic (no IO / clock / randomness). When color is disabled (NO_COLOR
-// or a non-TTY sink) the input is returned unchanged — already plain,
-// structurally faithful text with no escape codes.
+// **bold**, `inline code`, fenced ``` / ~~~ code blocks, and -/* bullet lists.
+// Fence handling goes through `segmentMarkdown` so the readline renderer and the
+// TUI segment identically. Pure, deterministic (no IO / clock / randomness).
+// When color is disabled (NO_COLOR or a non-TTY sink) the input is returned
+// unchanged — already plain, structurally faithful text with no escape codes.
 export function renderMarkdown(md: string): string {
   if (!colorEnabled()) {
     return md;
   }
   const out: string[] = [];
-  let inCode = false;
-  for (const line of md.split("\n")) {
-    if (/^\s*```/.test(line)) {
-      inCode = !inCode; // drop the fence line itself
+  for (const segment of segmentMarkdown(md)) {
+    if (segment.kind === "code") {
+      out.push(...renderCodeSegment(segment.lang, segment.body));
       continue;
     }
-    if (inCode) {
-      out.push(style.gray(line));
-      continue;
+    for (const line of segment.text.split("\n")) {
+      out.push(renderTextLine(line));
     }
-    const heading = /^#{1,6}\s+(.*)$/.exec(line);
-    if (heading !== null) {
-      out.push(style.bold(style.cyan(heading[1] ?? "")));
-      continue;
-    }
-    const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
-    if (bullet !== null) {
-      out.push(`${bullet[1] ?? ""}${style.cyan(symbols.bullet)} ${renderInline(bullet[2] ?? "")}`);
-      continue;
-    }
-    out.push(renderInline(line));
   }
   return out.join("\n");
 }

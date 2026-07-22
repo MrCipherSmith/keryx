@@ -118,7 +118,8 @@ import type {
 } from "../harness/provider/types";
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
-import { parseShellCliFlags, runShell } from "./shell";
+import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell } from "./shell";
+import { blockLabel } from "../lib/md-blocks";
 
 const NO_CAPS: ProviderCapabilities = {
   streaming: false,
@@ -743,5 +744,87 @@ describe("parseShellCliFlags — default TUI agent shell", () => {
     expect(parseShellCliFlags(["--resume", "my-title"]).resumeId).toBe("my-title");
     expect(parseShellCliFlags(["-r"]).resumePick).toBe(true);
     expect(parseShellCliFlags(["-r"]).resumeId).toBeUndefined();
+  });
+});
+
+// --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----
+
+describe("expandedToolOutput (readline /expand, AC10)", () => {
+  /** ANSI introducer, spelled out so the literal control byte never lands in source. */
+  const ESC = String.fromCharCode(27);
+  function forceColor(): void {
+    delete process.env.NO_COLOR;
+    process.env.FORCE_COLOR = "1";
+  }
+  function noColor(): void {
+    delete process.env.FORCE_COLOR;
+    process.env.NO_COLOR = "1";
+  }
+
+  test("nothing to expand: undefined for missing, empty and whitespace-only output", () => {
+    expect(expandedToolOutput("read_file", undefined)).toBeUndefined();
+    expect(expandedToolOutput("read_file", "")).toBeUndefined();
+    expect(expandedToolOutput("read_file", "   \n\t\n ")).toBeUndefined();
+  });
+
+  test("header is the SHARED blockLabel, so readline and the TUI cannot drift", () => {
+    noColor();
+    const out = expandedToolOutput("read_file", "a\nb\nc") ?? "";
+    // Byte-identical to what an expanded TUI block header renders.
+    expect(out).toContain(blockLabel({ kind: "read_file", lineCount: 3, collapsed: false }));
+    expect(out).toContain("▾ read_file (3 lines)");
+    // Singular/plural comes from the shared helper too.
+    expect(expandedToolOutput("read_file", "only one") ?? "").toContain("▾ read_file (1 line)");
+    // An unnamed tool still labels as `tool`, as before.
+    expect(expandedToolOutput(undefined, "x") ?? "").toContain("▾ tool (1 line)");
+  });
+
+  test("body is indented under the gutter and keeps its content", () => {
+    noColor();
+    const out = expandedToolOutput("list_dir", "alpha\nbeta") ?? "";
+    expect(out.startsWith("\n")).toBe(true); // leading blank line, as before
+    expect(out.endsWith("\n")).toBe(true);
+    expect(out).toContain("  alpha\n");
+    expect(out).toContain("  beta\n");
+  });
+
+  test("truncates past the cap and says how many lines were dropped (unchanged behavior)", () => {
+    noColor();
+    const many = Array.from({ length: EXPAND_MAX_LINES + 25 }, (_, i) => `line ${i}`).join("\n");
+    const out = expandedToolOutput("shell_exec", many) ?? "";
+    expect(out).toContain(`line ${EXPAND_MAX_LINES - 1}`);
+    expect(out).not.toContain(`line ${EXPAND_MAX_LINES}\n`);
+    expect(out).toContain("… (25 more lines truncated)");
+    // The count in the header is the FULL line count, not the shown one.
+    expect(out).toContain(`▾ shell_exec (${EXPAND_MAX_LINES + 25} lines)`);
+  });
+
+  test("trailing newlines are trimmed before counting, so the label is not inflated", () => {
+    noColor();
+    expect(expandedToolOutput("read_file", "a\nb\n\n\n") ?? "").toContain("▾ read_file (2 lines)");
+  });
+
+  test("a unified diff is colorized through the SHARED renderDiff, not flatly dimmed", () => {
+    forceColor();
+    const out = expandedToolOutput("apply_patch", "@@ -1,2 +1,2 @@\n-gone\n+here\n stays") ?? "";
+    // Green add, red delete, cyan hunk — the same helper `renderDiff` gives the TUI.
+    expect(out).toContain(`${ESC}[32m+here`);
+    expect(out).toContain(`${ESC}[31m-gone`);
+    expect(out).toContain(`${ESC}[36m@@ -1,2 +1,2 @@`);
+  });
+
+  test("non-diff output stays dim, and a `- ` bullet list is never mistaken for a diff", () => {
+    forceColor();
+    const bullets = expandedToolOutput("read_file", "- first bullet\n- second bullet") ?? "";
+    expect(bullets).not.toContain(`${ESC}[31m`); // no red: not a deletion
+    expect(bullets).toContain(`${ESC}[2m`); // dim body, as before
+    expect(bullets).toContain("- first bullet");
+  });
+
+  test("NO_COLOR emits no escape codes at all", () => {
+    noColor();
+    const out = expandedToolOutput("apply_patch", "@@ -1,2 +1,2 @@\n-gone\n+here") ?? "";
+    expect(out).not.toContain(ESC);
+    expect(out).toContain("@@ -1,2 +1,2 @@");
   });
 });

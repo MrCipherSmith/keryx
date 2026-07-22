@@ -1,47 +1,53 @@
-# Module fixtures/churn-complexity/src
-
+---
+Title: Module fixtures/churn-complexity/src
 Version: 1.0.0
 Type: component
 Status: accepted
 
-## Summary
-
-`fixtures/churn-complexity/src` groups 4 file(s). Exposes 2 public symbol(s).
+# Module fixtures/churn-complexity/src
 
 ## Overview
 
-This module is a test fixture, not production code. It provides a small, deliberately labeled set of TypeScript source files used by keryx's hotspot-detection tests (Block D, acceptance criteria AC1–AC6 and AC17). Its purpose is to supply four files that cover the four quadrants of the churn-vs-complexity space — high/low churn crossed with high/low cyclomatic complexity — so the hotspot detector can be validated against known ground truth without relying on a live git repository or real project code.
+`fixtures/churn-complexity/src` is a test fixture — not production code. It contains four small TypeScript files that cover the four quadrants of the churn-vs-complexity space: high/low churn crossed with high/low cyclomatic complexity. These files are used by Block D acceptance tests (AC1–AC6, AC17) in `keryx`’s hotspot-detection suite. The fixture provides known ground truth so the hotspot detector can be validated without a live git repository.
 
 ## How it works
 
-Each of the four `.ts` files in `src/` is annotated with a comment stating its intended quadrant and its cyclomatic complexity, making the fixture self-documenting. The files are pure TypeScript with no internal imports and no dependencies on one another (0 cross-module imports). Alongside the source files, three JSON sidecar files complete the fixture: `churn.json` provides a seeded churn count per file (substituting for `git log` counts), `expected.json` records the pre-computed score and expected ranking for every file, and `cases.json` labels each file as `positive` (a true hotspot) or `negative` so the corpus harness (`runCorpus`/`gateCorpus`) can measure precision and recall. Tests load the sidecar JSON directly and pass the churn data to `rankHotspots` instead of calling `getChurn` against a real repository, which keeps the suite fast and deterministic.
+Each `.ts` file in `src/` is annotated with a comment stating its intended quadrant and cyclomatic complexity, making the fixture self-documenting. The files are pure TypeScript — no internal imports and no dependencies on one another (0 cross-module imports).
+
+Three JSON sidecar files complete the fixture:
+
+- **`churn.json`** — seeded churn count per file (substituted for real `git log` counts).
+- **`expected.json`** — pre-computed score and expected ranking for every file.
+- **`cases.json`** — labels each file as `positive` (a true hotspot) or `negative`, so the corpus harness (`runCorpus`/`gateCorpus`) can measure precision and recall.
+
+Tests load the sidecar JSON directly and pass the churn data to `rankHotspots` instead of calling `getChurn` against a real repository. This keeps the suite fast and deterministic.
 
 ## Key concepts
 
-**Churn** — the number of git commits that touched a file. Here it is seeded artificially via `churn.json` rather than derived from git history. Values range from 2 (cold) to 100 (hot).
-
-**Cyclomatic complexity** — the number of independent paths through a function's control flow: `1 + decision_points`. A straight-line function scores 1; the five-branch `classify` and `grade` functions score 6 each.
-
-**Hotspot score** — the product `churn × complexity`. Only the combination of high churn and high complexity indicates a true maintenance hotspot; either factor alone is not sufficient.
-
-**Quadrant labeling** — the four files represent the four cases: `hot.ts` (high churn × high complexity = top hotspot, score 600), `churny-simple.ts` (high churn × low complexity = high rank but not a hotspot, score 80), `complex-stable.ts` (low churn × high complexity = low rank despite complexity, score 60), `cold.ts` (low churn × low complexity = lowest rank, score 2). A score threshold of 100 distinguishes the single true positive (`hot.ts`) from the three negatives.
-
-**Corpus cases** — `cases.json` marks each file with an `expected` label (`positive` or `negative`) that the Block D acceptance harness uses to compute false-negative rate and precision.
+- **Churn** — number of git commits that touched a file. Seeded artificially (values range from 2 to 100).
+- **Cyclomatic complexity** — number of independent paths: `1 + decision_points`. Straight-line functions score 1; the five-branch functions `classify` and `grade` score 6 each.
+- **Hotspot score** — product `churn × complexity`. Only high churn *and* high complexity indicates a true maintenance hotspot.
+- **Quadrant labeling** — four files represent four cases:
+  - `hot.ts` — high churn (100) × high complexity (6) → top hotspot, score 600.
+  - `churny-simple.ts` — high churn (40) × low complexity (2) → high rank but not a hotspot, score 80.
+  - `complex-stable.ts` — low churn (10) × high complexity (6) → low rank despite complexity, score 60.
+  - `cold.ts` — low churn (2) × low complexity (1) → lowest rank, score 2.
+- **Threshold** — score > 100 distinguishes the single true positive (`hot.ts`) from the three negatives.
+- **Corpus cases** — `cases.json` marks each file as `positive` or `negative` so the harness computes false-negative rate and precision.
 
 ## Main flows
 
-**Hotspot ranking test (AC2/AC3):** `hotspot.test.ts` reads `churn.json` into a `Map`, calls `analyzeSourceFiles` on the four `src/` files to compute cyclomatic complexity, then passes both to `rankHotspots`. The returned ranking is compared against `expected.json` for exact file order and per-file `{ churn, complexity, score }` values. Running the same call twice (AC3) asserts byte-identical output, verifying determinism.
+- **Hotspot ranking test (AC2/AC3):** `hotspot.test.ts` reads `churn.json` into a `Map`, calls `analyzeSourceFiles` on the four `src/` files to compute complexity, then passes both to `rankHotspots`. The returned ranking is compared against `expected.json` for exact file order and per-file `{ churn, complexity, score }`. Running the same call twice (AC3) asserts byte-identical output, verifying determinism.
 
-**Corpus precision/recall test (AC17):** `block-d-corpora.test.ts` builds the hotspot score map from the same inputs, then feeds it into `runCorpus` using `cases.json` from the fixture directory. The harness evaluates whether each file is correctly flagged (`score > 100`) against its `positive`/`negative` label, then asserts zero false-negative rate and perfect precision before calling `gateCorpus`.
+- **Corpus precision/recall test (AC17):** `block-d-corpora.test.ts` builds the hotspot score map from the same inputs, then feeds it into `runCorpus` using `cases.json`. The harness checks whether each file is correctly flagged (`score > 100`) against its `positive`/`negative` label, then asserts zero false-negative rate and perfect precision before calling `gateCorpus`.
 
-**End-to-end gate invariance test (AC5/AC6):** `hotspot.test.ts` passes the fixture files to `computeMetrics` with a real `HealthConfig`, verifying that the hotspot penalty term is zero at the default weight of 0 (the score equals the pre-D1 formula), and that a non-zero weight produces a measurable penalty and triggers a gate failure — confirming that the fixture exercises the full scoring and gate pipeline.
+- **End-to-end gate invariance test (AC5/AC6):** `hotspot.test.ts` passes the fixture files to `computeMetrics` with a real `HealthConfig`. It verifies that the hotspot penalty term is zero at the default weight of 0 (score equals pre-D1 formula) and that a non-zero weight produces a measurable penalty and triggers a gate failure, confirming the fixture exercises the full scoring and gate pipeline.
 
 ---
 
 ## Reference (from code graph)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
@@ -62,11 +68,9 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
-
 
 ## Changelog
 

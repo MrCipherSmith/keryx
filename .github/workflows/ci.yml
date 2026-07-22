@@ -76,3 +76,78 @@ jobs:
             src/harness/process/real-process-adapter.smoke.test.ts \
             src/commands/harness-exec.smoke.test.ts \
             src/commands/harness-exec-restricted.smoke.test.ts
+
+  opentui-native-matrix:
+    # O-3 (flow 114). PRD N1 claims prebuilt `@opentui/core` native binaries
+    # cover keryx's four target platforms, the install path pulls them, and no
+    # Zig toolchain is needed. Only darwin-arm64 had ever been exercised
+    # (ADR-0005). This matrix exercises all four as hosted runners.
+    #
+    # The dependency is optional, dynamically imported and fallback-guarded, so a
+    # MISSING binary does not error — `keryx shell` silently degrades to readline
+    # and every suite still passes. "No error" is therefore not evidence. Both
+    # steps below are POSITIVE: one dlopen's the native library and round-trips a
+    # byte through Zig-owned memory; the other fails the job if any OpenTUI test
+    # skips (a skip == the binary did not resolve == vacuous coverage).
+    #
+    # ONGOING COST (AC12): this adds FOUR hosted runners to every future PR and
+    # push to main — two Ubuntu (x64 + arm64) and two macOS (arm64 + Intel).
+    # The cost is NOT money: this repository is public, and standard hosted
+    # runners are free with no minute limit for public repos, macOS included.
+    # What it actually costs is (a) ~30s of extra wall-clock per PR — the legs
+    # run in parallel and each takes 11-28s — (b) queue time, since the free
+    # tier's concurrency ceiling for macOS is lower than for Linux, so two
+    # macOS legs can wait when several PRs land at once, and (c) four more
+    # places that can go red for reasons unrelated to the change under review,
+    # e.g. a runner-image or label change upstream (macos-13 was retired
+    # mid-flight while this matrix was being written).
+    # These legs are deliberately NOT required status checks — only
+    # "typecheck, tests, standard" is — so a red leg informs without blocking.
+    # Whoever next edits CI is trading the above for continuous proof of N1's
+    # platform claim; drop a leg only by also reopening O-3 in the specification.
+    name: opentui native (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One platform's missing binary must not cancel the others' evidence.
+      fail-fast: false
+      matrix:
+        include:
+          # Runner labels verified against GitHub's hosted-runner offering on
+          # 2026-07-22 (docs.github.com "GitHub-hosted runners" + actions/
+          # runner-images). arm64 Linux is free/unlimited on public repos.
+          - target: linux-x64
+            runner: ubuntu-latest # ubuntu-24.04, x64 (GA)
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm # arm64 (GA for public repos)
+          - target: darwin-arm64
+            runner: macos-latest # macos-15, arm64 (GA)
+          # macos-13 (the description's proposed Intel label) RETIRED 2025-12-04.
+          # macos-15-intel is the current — and last — hosted x86_64 macOS image
+          # (available through Aug 2027 per actions/runner-images#13027/#13045).
+          - target: darwin-x64
+            runner: macos-15-intel # macos-15, x64/Intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # No Zig toolchain is installed anywhere in this job — that absence is part
+      # of the N1 claim, and the verifier below asserts `zig` is not on PATH.
+      - name: Install dependencies (pulls the prebuilt native binary, no toolchain)
+        run: bun install
+
+      # AC2 — POSITIVE proof the platform-specific prebuilt binary resolved:
+      # imports `@opentui/core-<platform>-<arch>`, dlopen's it via the FFI loader,
+      # and round-trips a byte through native memory. Fails LOUDLY (in the spirit
+      # of the linux-sandbox job) if the native layer is not really there.
+      - name: Assert the @opentui/core native binary resolved (positive check)
+        run: bun ./scripts/verify-opentui-native.ts
+
+      # AC3 — run the OpenTUI-dependent suites and FAIL if any test skips. A skip
+      # means the optional dependency did not resolve on this runner, so a
+      # green-with-skips run would be vacuous evidence of the platform claim.
+      - name: Run OpenTUI-dependent tests with zero skips (fail on skip)
+        run: bun ./scripts/opentui-tests-no-skips.ts src/tui
