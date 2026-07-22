@@ -1409,11 +1409,8 @@ otuiTest("a context loader that never settles neither delays nor blocks the appr
   h.renderer.destroy();
 });
 
-test("a streamed fence widens its frame as the payload grows (maxWidth is recomputed, flow 115)", async () => {
-  const otui = await loadOpenTui();
-  if (otui === undefined) {
-    return;
-  }
+otuiTest("a streamed fence widens its frame as the payload grows (maxWidth is recomputed, flow 115)", async () => {
+  const otui = requireOtui();
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 60, height: 12 });
   const parent = new otui.core.BoxRenderable(renderer, { id: "p", flexDirection: "column" });
   renderer.root.add(parent);
