@@ -10,6 +10,8 @@
 //   --ro-bind /dev/null <secret-file>  mask each secret FILE as empty
 //   --unshare-net        no network namespace ⇒ network OFF (when profile off)
 //   --dev /dev --proc /proc  minimal device + proc for tool compatibility
+//   --unshare-pid        own PID namespace ⇒ the host process table is neither
+//                        visible nor signalable (requires the --proc mount above)
 //   --die-with-parent --new-session --unshare-ipc  hardening (no orphan, no
 //                        TIOCSTI tty injection, ipc isolation)
 //
@@ -87,7 +89,15 @@ export function buildBwrapArgs(
     args.push("--unshare-net");
   }
 
-  args.push("--unshare-ipc", "--die-with-parent", "--new-session");
+  // `--unshare-pid` gives the contained process its own PID namespace, so it
+  // cannot enumerate — or signal — processes on the host. Without it the whole
+  // host process table was visible from inside containment (stress finding S4).
+  //
+  // It is safe here only because `--proc /proc` is mounted above: a new PID
+  // namespace without a fresh /proc leaves the process reading the HOST's, which
+  // would make the flag cosmetic. bwrap becomes PID 1 in the namespace and reaps
+  // children, which is the documented pairing with `--die-with-parent`.
+  args.push("--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session");
   return args;
 }
 

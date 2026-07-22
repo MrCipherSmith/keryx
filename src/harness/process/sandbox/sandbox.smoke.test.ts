@@ -8,7 +8,7 @@
 // asserting DNS failure in CI is environment-fragile.)
 
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { detectSandboxLauncher } from "./detect";
@@ -112,4 +112,67 @@ describe.skipIf(!flag || !supported)("OS-sandbox live smoke", () => {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  // PID namespace (flow 115, finding 6 / stress finding S4). Linux only —
+  // `--unshare-pid` is a bubblewrap capability; Seatbelt has no equivalent, so
+  // on macOS the host process table stays visible and this is not asserted.
+  test.skipIf(process.platform !== "linux")(
+    "the contained process cannot see the host process table (verified against an unsandboxed control)",
+    async () => {
+      const { RealProcessAdapter } = await import("../real-process-adapter");
+      const { SandboxedProcessAdapter } = await import("./adapter");
+      const { defaultSandboxProfile } = await import("./profile");
+
+      const work = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-pid-")));
+      const tmp = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-pidtmp-")));
+      const out = path.join(work, "pids.txt");
+      const env = { PATH: "/usr/bin:/bin", HOME: homedir() };
+      const inner = new RealProcessAdapter({ allowRealSubprocess: true, timeoutMs: 8000 });
+
+      /** Count the processes visible to a command run under `mode`. */
+      const visibleProcesses = (mode: "sandboxed" | "control"): number => {
+        if (existsSync(out)) rmSync(out);
+        const base = defaultSandboxProfile(work, tmp, homedir());
+        const profile =
+          mode === "control"
+            ? { ...base, mode: "danger-full-access" as const } // adapter skips containment
+            : base;
+        const adapter = new SandboxedProcessAdapter({
+          profile,
+          inner,
+          platform: process.platform,
+          launcherAvailable: launcher.available,
+          ...(launcher.path ? { bwrapPath: launcher.path } : {}),
+        });
+        adapter.spawn({
+          path: "/bin/sh",
+          argv: ["sh", "-c", `ps -e -o pid= | wc -l > ${out}`],
+          env,
+          cwd: work,
+        });
+        if (!existsSync(out)) return -1;
+        return Number.parseInt(readFileSync(out, "utf8").trim(), 10);
+      };
+
+      try {
+        // CONTROL (the allowed half of the pair): uncontained, `ps` works and
+        // sees the whole machine. Without this, "few processes" could equally
+        // mean the sandbox never launched or `ps` is missing — the failure mode
+        // that makes a broken sandbox look like a perfect one.
+        const host = visibleProcesses("control");
+        expect(host).toBeGreaterThan(10);
+
+        // DENIED half: inside the PID namespace only the namespace's own
+        // processes exist (the shell, ps, wc — a handful).
+        const contained = visibleProcesses("sandboxed");
+        expect(contained).toBeGreaterThan(0); // ps still RAN — not a silent failure
+        expect(contained).toBeLessThan(host);
+        expect(contained).toBeLessThan(10);
+      } finally {
+        if (existsSync(out)) rmSync(out);
+        rmSync(work, { recursive: true, force: true });
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 });
