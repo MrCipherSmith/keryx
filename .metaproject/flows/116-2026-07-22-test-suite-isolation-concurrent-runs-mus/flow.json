@@ -3,17 +3,54 @@
   "id": "116",
   "slug": "test-suite-isolation-concurrent-runs-mus",
   "title": "Test suite isolation: concurrent runs must not collide (shared artifacts + git spawn under load)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-22T06:35:14.040Z",
-  "updatedAt": "2026-07-22T06:36:20.052Z",
+  "updatedAt": "2026-07-22T07:04:43.806Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e24038a0e43301952f284eb3811b7c0a2bb276355756e78e35848fda53117968",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-22T07:04:10.922Z",
+      "note": "scripts/stress/concurrent-suite-stress.ts runs N suites concurrently and reports per-run tallies, failing names, aggregated errors and retained transcripts, exiting non-zero on any failure. Pre-fix at N=6: 25 failures (6,7,7,0,5,0)."
+    },
+    "AC2": {
+      "at": "2026-07-22T07:04:11.203Z",
+      "note": "Every failing family traced to one named resource and recorded in the journal: fixed fixture roots under tmpdir() (keryx-testing-*, keryx-health-*, keryx-tia-*, keryx-gdgraph-*, keryx-smoke-*, keryx-hotspot-churn, keryx-hook-*, xdg-keryx-test) and fixed roots inside the repo (.tmp-cx-findings, .tmp-ingest-test, .tmp-reflect-test, .tmp-relevant-test, .tmp-skill-loop-test, .tmp-flow-security-test). Each test begins with rm -rf on that root, so one run's teardown deletes another's tree."
+    },
+    "AC3": {
+      "at": "2026-07-22T07:04:11.377Z",
+      "note": "Fixed by uniqueTestRoot(parent, prefix) - an mkdtemp under the SAME parent the fixture already used, so nothing path-sensitive changes and only the identity becomes private. 33 roots across 15 files. No serialisation, no --concurrency 1, no retry. The suspected fixed runId was checked and found NOT to be the defect: it is namespaced under the root and was only ambiguous because the root was shared."
+    },
+    "AC4": {
+      "at": "2026-07-22T07:04:11.530Z",
+      "note": "Diagnosed, not worked around: spawning git with a non-existent cwd reproduces the exact string ENOENT ... posix_spawn 'git' - the error names the binary while the missing path is the cwd, which is why it read as environmental. Bun.which resolves git and thousands of sibling spawns succeeded (PATH excluded); fd/process exhaustion surfaces as EMFILE/EAGAIN not ENOENT (excluded). It only hit tests spawning git inside a fixture cwd and vanished when roots became unique - the same root cause, not a separate one."
+    },
+    "AC5": {
+      "at": "2026-07-22T07:04:11.746Z",
+      "note": "Post-fix 48 runs across 8 waves of 6: 1 failure total, and the last 36 runs were 0. Zero-failure waves repeated well past twice. Independently re-run by the orchestrator at N=6: 0 failures, every run 2101 pass / 0 fail / 11 skip."
+    },
+    "AC6": {
+      "at": "2026-07-22T07:04:11.932Z",
+      "note": "bun test 2101 pass / 11 skip / 0 fail - identical to the branch baseline; bun run typecheck clean. Sequential behaviour unchanged."
+    },
+    "AC7": {
+      "at": "2026-07-22T07:04:12.222Z",
+      "note": "No assertion weakened: git diff origin/main..HEAD over src/**/*.test.ts touching expect returns 0 lines. The only non-declaration change in the test diff is an XDG_DATA_HOME assignment, itself a root declaration. One residual was REPORTED rather than silenced: proxy-tls.test.ts failed once in 48 post-fix runs - not a collision (ephemeral ports, mkdtemp CA) but load-sensitive because it does real TLS handshakes and shells out to openssl. Left with no timeout bump and no retry."
+    },
+    "AC8": {
+      "at": "2026-07-22T07:04:12.365Z",
+      "note": "The last if (otui === undefined) return; (the flow-115 streamed-fence test) converted to otuiTest + requireOtui. All 30 renderer tests in tui-shell.test.ts now skip rather than silently pass when the optional dependency is absent; scripts/opentui-tests-no-skips.ts reports 103 tests, 0 skipped."
+    },
+    "AC9": {
+      "at": "2026-07-22T07:04:12.513Z",
+      "note": "Recorded in the flow journal (full causal analysis, both families, the ENOENT diagnosis, the residual) and in docs/docs/onboarding.md under a new 'Running the suite concurrently' section: the rule (uniqueTestRoot, never a fixed tmpdir path), the three symptom shapes, the harness command, and the known TLS residual."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/196"
   },
   "tasks": [
     {
@@ -86,6 +123,79 @@
     {
       "at": "2026-07-22T06:36:20.052Z",
       "event": "started"
+    },
+    {
+      "at": "2026-07-22T07:03:47.616Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/196 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-22T07:04:10.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: scripts/stress/concurrent-suite-stress.ts runs N suites concurrently and reports per-run tallies, failing names, aggregated errors and retained transcripts, exiting non-zero on any failure. Pre-fix at N=6: 25 failures (6,7,7,0,5,0)."
+    },
+    {
+      "at": "2026-07-22T07:04:11.203Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Every failing family traced to one named resource and recorded in the journal: fixed fixture roots under tmpdir() (keryx-testing-*, keryx-health-*, keryx-tia-*, keryx-gdgraph-*, keryx-smoke-*, keryx-hotspot-churn, keryx-hook-*, xdg-keryx-test) and fixed roots inside the repo (.tmp-cx-findings, .tmp-ingest-test, .tmp-reflect-test, .tmp-relevant-test, .tmp-skill-loop-test, .tmp-flow-security-test). Each test begins with rm -rf on that root, so one run's teardown deletes another's tree."
+    },
+    {
+      "at": "2026-07-22T07:04:11.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Fixed by uniqueTestRoot(parent, prefix) - an mkdtemp under the SAME parent the fixture already used, so nothing path-sensitive changes and only the identity becomes private. 33 roots across 15 files. No serialisation, no --concurrency 1, no retry. The suspected fixed runId was checked and found NOT to be the defect: it is namespaced under the root and was only ambiguous because the root was shared."
+    },
+    {
+      "at": "2026-07-22T07:04:11.530Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Diagnosed, not worked around: spawning git with a non-existent cwd reproduces the exact string ENOENT ... posix_spawn 'git' - the error names the binary while the missing path is the cwd, which is why it read as environmental. Bun.which resolves git and thousands of sibling spawns succeeded (PATH excluded); fd/process exhaustion surfaces as EMFILE/EAGAIN not ENOENT (excluded). It only hit tests spawning git inside a fixture cwd and vanished when roots became unique - the same root cause, not a separate one."
+    },
+    {
+      "at": "2026-07-22T07:04:11.746Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Post-fix 48 runs across 8 waves of 6: 1 failure total, and the last 36 runs were 0. Zero-failure waves repeated well past twice. Independently re-run by the orchestrator at N=6: 0 failures, every run 2101 pass / 0 fail / 11 skip."
+    },
+    {
+      "at": "2026-07-22T07:04:11.932Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test 2101 pass / 11 skip / 0 fail - identical to the branch baseline; bun run typecheck clean. Sequential behaviour unchanged."
+    },
+    {
+      "at": "2026-07-22T07:04:12.222Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: No assertion weakened: git diff origin/main..HEAD over src/**/*.test.ts touching expect returns 0 lines. The only non-declaration change in the test diff is an XDG_DATA_HOME assignment, itself a root declaration. One residual was REPORTED rather than silenced: proxy-tls.test.ts failed once in 48 post-fix runs - not a collision (ephemeral ports, mkdtemp CA) but load-sensitive because it does real TLS handshakes and shells out to openssl. Left with no timeout bump and no retry."
+    },
+    {
+      "at": "2026-07-22T07:04:12.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: The last if (otui === undefined) return; (the flow-115 streamed-fence test) converted to otuiTest + requireOtui. All 30 renderer tests in tui-shell.test.ts now skip rather than silently pass when the optional dependency is absent; scripts/opentui-tests-no-skips.ts reports 103 tests, 0 skipped."
+    },
+    {
+      "at": "2026-07-22T07:04:12.513Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Recorded in the flow journal (full causal analysis, both families, the ENOENT diagnosis, the residual) and in docs/docs/onboarding.md under a new 'Running the suite concurrently' section: the rule (uniqueTestRoot, never a fixed tmpdir path), the three symptom shapes, the harness command, and the known TLS residual."
+    },
+    {
+      "at": "2026-07-22T07:04:12.682Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-22T07:04:15.027Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-07-22T07:04:41.581Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/196 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-22T07:04:41.735Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-22T07:04:43.806Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
