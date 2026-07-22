@@ -1011,10 +1011,14 @@ export async function launchTuiAgentShell(opts: {
           // raw
         }
         if (mode === "read_only") {
+          // Auto-approved without a prompt, so the transcript line is the ONLY
+          // record that a child was started and at what privilege. It is not
+          // dimmed: an auto-approval the user cannot notice is an auto-approval
+          // they cannot object to.
           transcript.add(
             new otui.TextRenderable(r, {
               id: `ap${uid++}`,
-              content: otui.t`${otui.dim(`◇ spawn_subagent (read_only): ${taskPreview}`)}`,
+              content: otui.t`${otui.cyan("◇ subagent auto-approved")} ${otui.dim(`mode=read_only (no shell) · ${taskPreview}`)}`,
             }),
           );
           return true;

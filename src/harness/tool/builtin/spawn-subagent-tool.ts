@@ -23,6 +23,26 @@ import { emitSubagentFleet } from "../../../tui/subagent-bridge";
 
 export type SubagentMode = "read_only" | "general";
 
+/**
+ * Hard cap on a child summary before it enters the parent's history.
+ *
+ * A child's text is `trustLevel: "derived"` and lands verbatim in the parent's
+ * next prompt. Uncapped, a child (or a provider echoing attacker-controlled
+ * text) can flood the parent's context: the flow-115 stress run returned
+ * 1.5 MB this way. `quarantineChildSummary` flags instruction-shaped text but
+ * deliberately never shortens it, so the bound has to be applied here.
+ */
+const MAX_CHILD_SUMMARY_CHARS = 16_000;
+
+/** Bound a child summary, marking the cut so the parent can see it happened. */
+function boundSummary(text: string): string {
+  if (text.length <= MAX_CHILD_SUMMARY_CHARS) {
+    return text;
+  }
+  const dropped = text.length - MAX_CHILD_SUMMARY_CHARS;
+  return `${text.slice(0, MAX_CHILD_SUMMARY_CHARS)}\n…(truncated: ${dropped} more characters from the subagent)`;
+}
+
 export interface SpawnSubagentToolDeps {
   cwd: string;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
@@ -268,7 +288,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             model: `${runModel.provider}/${runModel.model}`,
           });
         },
-        requestApproval: async () => false, // children never run shell
+        // SECURITY-CRITICAL INVARIANT — do not relax without an ADR.
+        // `mode` is chosen by the MODEL and `read_only` is auto-approved with no
+        // prompt, so a child's privilege level is effectively self-selected.
+        // That is only sound because a child can never execute shell: the tool
+        // list omits shell_exec, the child policy sets shell/write/delegate to
+        // deny, and this approver refuses unconditionally. Removing any one of
+        // the three turns a model-chosen field into a privilege escalation.
+        // Pinned by spawn-subagent-isolation.test.ts.
+        requestApproval: async () => false,
       };
 
       try {
@@ -302,7 +330,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): Interactiv
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
             `MAE reservation: tools≤${spawned.reservation.maxToolCalls ?? maxToolCalls} ` +
             `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
-            `--- summary ---\n${folded.text}`,
+            `--- summary ---\n${boundSummary(folded.text)}`,
           isError: false,
         };
       } catch (cause) {
