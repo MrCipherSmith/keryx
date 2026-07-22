@@ -25,13 +25,17 @@ import {
   type BlockSink,
 } from "./tui-shell";
 import {
+  appendUserEcho,
   createBlockMount,
   createBlockNavController,
   createBlockRegistry,
   createBlockView,
+  createSegmentView,
   EVICTED_BLOCK_TEXT,
+  MAX_THOUGHT_LINES,
   type BlockState,
 } from "./transcript-blocks";
+import { hugWidth } from "../lib/md-blocks";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
@@ -924,7 +928,10 @@ otuiTest("AC11: expanding a large block then resizing never pushes the composer 
   h.textarea.setText("draft prompt");
   h.nav.setCollapsed(big, false);
   await h.flush();
-  expect(h.captureCharFrame()).toContain("payload line 0"); // the block really expanded
+  // The block really expanded. Sticky-bottom shows its TAIL: before flow 115 the
+  // frame was squeezed to the viewport height and stuck on `payload line 0`,
+  // which is exactly the mis-measurement this suite now forbids.
+  expect(h.captureCharFrame()).toContain("payload line 119");
 
   for (const [width, height] of [
     [80, 20],
@@ -947,31 +954,35 @@ otuiTest("AC11: expanding a large block then resizing never pushes the composer 
     // The composer keeps its draft across every resize.
     expect(`${at}: ${h.textarea.plainText}`).toBe(`${at}: draft prompt`);
 
-    // The draft also renders — except at the one scroll offset where @opentui/core
-    // bleeds a bordered child's bottom border over the composer's interior row.
-    // That defect is upstream and reproduces with zero flow-109 code; it is pinned
-    // by "known @opentui/core defect …" below, which will fail loudly once fixed.
-    if (h.scroll.scrollTop !== 2) {
-      expect(`${at}: ${frame.includes("draft prompt")}`).toBe(`${at}: true`);
-    }
+    // The draft renders at EVERY offset. Flow 109 had to carve out
+    // `scrollTop === 2`, where a bordered child bled its bottom border over the
+    // composer's interior row and swallowed the draft. Flow 115 found the cause:
+    // the block frames carried `alignSelf: "flex-start"`, which stops a box
+    // measuring its intrinsic height — the bleed was OUR layout, not an upstream
+    // defect. The carve-out is gone; the ban is enforced by
+    // `src/capability/tui-layout.test.ts`.
+    expect(`${at}: ${frame.includes("draft prompt")}`).toBe(`${at}: true`);
   }
   h.destroy();
 });
 
-otuiTest("known @opentui/core defect: a bordered child in a ScrollBox at scrollTop===2 overdraws the row below the viewport", async () => {
+otuiTest("alignSelf — not @opentui/core — is what overdraws the composer at scrollTop===2 (flow 115 root cause)", async () => {
   const otui = requireOtui();
-  // Built from PURE OpenTUI primitives — no flow-109 code — so this pins the
-  // upstream bug rather than our layout. `createBlockView` renders an expanded
-  // body as a bordered box inside the transcript ScrollBox, so it inherits the
-  // defect: at exactly scrollTop 2 the frame's bottom border is painted one row
-  // past the clip, over the composer's interior row ("│─draft─prompt─────╯").
-  // Neither `overflow:"hidden"` (on the scrollbox, its content, the child, or the
-  // column parent) nor a forced repaint suppresses it, and it is a pure function
-  // of the offset: 0/1/3 are clean, 2 is not.
-  // WHEN THIS TEST FAILS, the upstream fix has landed — delete it and drop the
-  // `scrollTop !== 2` carve-out in the AC11 test above.
+  // Flow 109 recorded this as an UPSTREAM defect ("a bordered child in a
+  // ScrollBox bleeds its bottom border over the composer at exactly scrollTop
+  // 2") and carved it out of the AC11 assertion above. Flow 115 re-ran the same
+  // pure-primitive repro with one option changed and found the real cause: the
+  // frames carried `alignSelf: "flex-start"`, which makes a node stop measuring
+  // its intrinsic height, collapse to the viewport and paint outside its own
+  // box. Swap the hug for `maxWidth` and the bleed disappears at every offset.
+  //
+  // The test now pins BOTH arms, so neither the diagnosis nor the fix can be
+  // quietly lost: `alignSelf` still reproduces the bleed, `maxWidth` never does.
   const observed: Record<number, boolean> = {};
-  for (const headerLines of [0, 1, 2, 3]) {
+  const withMaxWidth: Record<number, boolean> = {};
+  for (const [headerLines, hug] of [0, 1, 2, 3].flatMap((n) =>
+    (["alignSelf", "maxWidth"] as const).map((h) => [n, h] as const),
+  )) {
     const { renderer, flush, captureCharFrame, resize } = await otui.testing.createTestRenderer({
       width: 80,
       height: 20,
@@ -1009,11 +1020,16 @@ otuiTest("known @opentui/core defect: a bordered child in a ScrollBox at scrollT
     main.add(new otui.core.TextRenderable(renderer, { id: "footer", content: "ctrl+o blocks" }));
     textarea.setText("draft prompt");
 
+    // THE variable under test: the same two boxes hug their content either the
+    // flow-109 way (`alignSelf`) or the flow-115 way (`maxWidth`).
+    const payload = Array.from({ length: 120 }, (_, i) => `payload line ${i}`).join("\n");
+    const hugOpts = (text: string, chrome: number): Record<string, unknown> =>
+      hug === "alignSelf" ? { alignSelf: "flex-start" } : { maxWidth: hugWidth(text, chrome) };
     const outer = new otui.core.BoxRenderable(renderer, {
       id: "outer",
       flexDirection: "column",
       flexShrink: 0,
-      alignSelf: "flex-start",
+      ...hugOpts(payload, 4),
     });
     for (let i = 0; i < headerLines; i++) {
       outer.add(new otui.core.TextRenderable(renderer, { id: `hdr${i}`, content: `header ${i}` }));
@@ -1023,33 +1039,36 @@ otuiTest("known @opentui/core defect: a bordered child in a ScrollBox at scrollT
       id: "frame",
       flexDirection: "column",
       flexShrink: 0,
-      alignSelf: "flex-start",
+      ...hugOpts(payload, 4),
       borderStyle: "rounded",
       border: true,
       paddingLeft: 1,
       paddingRight: 1,
     });
-    frameBox.add(
-      new otui.core.TextRenderable(renderer, {
-        id: "ft",
-        content: Array.from({ length: 120 }, (_, i) => `payload line ${i}`).join("\n"),
-      }),
-    );
+    frameBox.add(new otui.core.TextRenderable(renderer, { id: "ft", content: payload }));
     outer.add(frameBox);
 
     await flush();
     resize(40, 8);
     await flush();
-    observed[scroll.scrollTop] = captureCharFrame().includes("draft prompt");
+    const visible = captureCharFrame().includes("draft prompt");
+    if (hug === "alignSelf") {
+      observed[scroll.scrollTop] = visible;
+    } else {
+      withMaxWidth[scroll.scrollTop] = visible;
+    }
     renderer.destroy();
   }
 
-  // One header line per offset, so the sweep lands on 0..3.
+  // One header line per offset, so each sweep lands on 0..3.
   expect(Object.keys(observed).map(Number).sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);
   expect(observed[0]).toBe(true);
   expect(observed[1]).toBe(true);
-  expect(observed[2]).toBe(false); // ← the defect
+  expect(observed[2]).toBe(false); // ← the bleed, caused by `alignSelf`
   expect(observed[3]).toBe(true);
+
+  // The shipped hug never bleeds — at any offset the sweep reaches.
+  expect(Object.values(withMaxWidth).every((v) => v)).toBe(true);
 });
 
 otuiTest("AC12: expanding a non-newest block preserves the scroll offset instead of jumping to the bottom", async () => {
@@ -1089,3 +1108,192 @@ otuiTest("AC12: expanding a non-newest block preserves the scroll offset instead
   h.destroy();
 });
 
+// --- flow 115: transcript measurement, secondary reasoning, /think toggle ---
+//
+// RED before T2/T5. The defect these pin: a transcript box carrying
+// `alignSelf: "flex-start"` stops measuring its intrinsic height, collapses to
+// the viewport, squeezes bordered children so their border rows paint over the
+// content row, and makes the ScrollBox under-report `scrollHeight` — which puts
+// every row below a large expanded block permanently out of reach.
+
+/** Every descendant of `node`, itself excluded. */
+function descendants(node: { getChildren?: () => unknown[] }): { id: string; height: number }[] {
+  const out: { id: string; height: number }[] = [];
+  for (const child of (node.getChildren?.() ?? []) as { id: string; height: number }[]) {
+    out.push(child);
+    out.push(...descendants(child as unknown as { getChildren?: () => unknown[] }));
+  }
+  return out;
+}
+
+/** The captured span carrying `needle`, searched across every line. */
+function spanWith(frame: SpanFrame, needle: string): { attributes: number } | undefined {
+  for (const line of frame.lines) {
+    const span = line.spans.find((s) => s.text.includes(needle));
+    if (span !== undefined) {
+      return span;
+    }
+  }
+  return undefined;
+}
+
+otuiTest("AC2: a bordered transcript box keeps its natural height even when the transcript overflows", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 16 });
+  // The shipped user-echo box, shared by the agent and chat shells.
+  appendUserEcho(otui.core, h.renderer, h.scroll.content, { id: "ub-1", line: "первый вопрос" });
+  const big = h.add({
+    kind: "thought",
+    summary: "",
+    fullText: Array.from({ length: 30 }, (_, i) => `reasoning line ${i + 1}`).join("\n"),
+  });
+  appendUserEcho(otui.core, h.renderer, h.scroll.content, { id: "ub-2", line: "добавляй" });
+  h.nav.setCollapsed(big, false);
+  await h.flush();
+  await h.flush();
+
+  // A rounded box with one content row is 3 rows tall. Squeezed to 2, OpenTUI
+  // paints its borders over the text — the corruption users reported.
+  const boxes = descendants(h.scroll.content);
+  for (const id of ["ub-1", "ub-2"]) {
+    const box = boxes.find((b) => b.id === id);
+    expect(`${id}: ${box?.height}`).toBe(`${id}: 3`);
+  }
+  h.destroy();
+});
+
+otuiTest("AC3: an expanded block reports its real height, so rows below it stay reachable", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 16 });
+  const big = h.add({
+    kind: "output",
+    summary: "big-summary",
+    fullText: Array.from({ length: 30 }, (_, i) => `payload line ${i + 1}`).join("\n"),
+  });
+  h.scroll.content.add(
+    new otui.core.TextRenderable(h.renderer, { id: "after", content: "MARKER-AFTER-BLOCK" }),
+  );
+  h.nav.setCollapsed(big, false);
+  await h.flush();
+  await h.flush();
+
+  // 30 payload lines + the frame's two border rows must all be measured.
+  const children = h.scroll.content.getChildren() as unknown as { height: number }[];
+  const summed = children.reduce((n, c) => n + c.height, 0);
+  expect(summed).toBeGreaterThanOrEqual(32);
+  expect(h.scroll.scrollHeight).toBeGreaterThanOrEqual(summed);
+
+  // …and the row registered AFTER the block can actually be scrolled to.
+  h.scroll.stickyScroll = false;
+  h.scroll.scrollTop = h.scroll.scrollHeight;
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("MARKER-AFTER-BLOCK");
+  h.destroy();
+});
+
+otuiTest("AC4: an expanded reasoning body is dim; tool output on the same frame is not", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+  io.onReasoning?.("REASONING-BODY-LINE");
+  // Two lines: the first becomes the collapsed SUMMARY in the (always dim)
+  // header, so the body assertion below must target a line the header never
+  // shows.
+  io.onToolResult?.("read_file", { output: "tool summary\nTOOL-OUTPUT-LINE", isError: false });
+  for (const state of h.registry.list()) {
+    h.nav.setCollapsed(state.id, false);
+  }
+  await h.flush();
+  await h.flush();
+
+  const spans = h.captureSpans();
+  const dim = otui.core.TextAttributes.DIM;
+  const reasoning = spanWith(spans, "REASONING-BODY-LINE");
+  const output = spanWith(spans, "TOOL-OUTPUT-LINE");
+  expect(reasoning).toBeDefined();
+  expect(output).toBeDefined();
+  expect((reasoning?.attributes ?? 0) & dim).toBe(dim); // secondary
+  expect((output?.attributes ?? 0) & dim).toBe(0); // unchanged
+  h.destroy();
+});
+
+otuiTest("AC5: an expanded reasoning body is bounded, while the retained payload stays whole", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 40 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+  const lines = Array.from({ length: 60 }, (_, i) => `thought line ${i + 1}`);
+  io.onReasoning?.(lines.join("\n"));
+  const id = h.registry.list().at(-1)?.id ?? "";
+  h.nav.setCollapsed(id, false);
+  await h.flush();
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("thought line 1");
+  expect(frame).not.toContain(`thought line ${MAX_THOUGHT_LINES + 1}`);
+  expect(frame).toContain("more lines not shown");
+  // Retention is untouched: copy still gets everything (flow 109 D-4).
+  expect(h.registry.bodyText(id)).toContain("thought line 60");
+  expect(h.nav.copy(id)).toBe(true);
+  expect(h.copied.at(-1)).toContain("thought line 60");
+  h.destroy();
+});
+
+otuiTest("AC6: toggleNewest expands then collapses the newest reasoning block, and the header says how", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+  io.onToolResult?.("read_file", { output: "unrelated output", isError: false });
+  io.onReasoning?.("REASONING-BODY-LINE\nsecond line");
+
+  // What `/think` calls (the shell closure keeps only the command dispatch).
+  const expanded = h.nav.toggleNewest("thought");
+  await h.flush();
+  expect(expanded?.kind).toBe("thought");
+  expect(expanded?.collapsed).toBe(false);
+  expect(h.captureCharFrame()).toContain("REASONING-BODY-LINE");
+  // While expanded the header advertises the way back.
+  expect(h.captureCharFrame()).toContain("collapse");
+
+  const collapsed = h.nav.toggleNewest("thought");
+  await h.flush();
+  expect(collapsed?.collapsed).toBe(true);
+  expect(h.captureCharFrame()).not.toContain("REASONING-BODY-LINE");
+
+  // An unrelated tool block is never the target of `/think`.
+  expect(h.registry.list().find((b) => b.kind === "output")?.collapsed).toBe(true);
+  expect(h.nav.toggleNewest("no-such-kind")).toBeUndefined();
+  h.destroy();
+});
+
+test("a streamed fence widens its frame as the payload grows (maxWidth is recomputed, flow 115)", async () => {
+  const otui = await loadOpenTui();
+  if (otui === undefined) {
+    return;
+  }
+  const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 60, height: 12 });
+  const parent = new otui.core.BoxRenderable(renderer, { id: "p", flexDirection: "column" });
+  renderer.root.add(parent);
+
+  const view = createSegmentView(otui.core, renderer, parent, { kind: "code", lang: "ts", body: "const a = 1" });
+  await flush();
+  const frame = parent.getChildren()[0] as unknown as { width: number; height: number };
+  const narrow = frame.width;
+
+  view.update({
+    kind: "code",
+    lang: "ts",
+    body: "const a = 1\nconst bbbbbbbbbbbbbbbbbbbbbbbbbb = 2\nconst c = 3",
+  });
+  await flush();
+  await flush();
+
+  // A frame frozen at its first hug width would wrap the longer line instead of
+  // growing — the whole point of recomputing `maxWidth` on repaint.
+  expect(frame.width).toBeGreaterThan(narrow);
+  expect(captureCharFrame()).toContain("const bbbbbbbbbbbbbbbbbbbbbbbbbb = 2");
+  renderer.destroy();
+});

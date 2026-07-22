@@ -1,4 +1,4 @@
-# Memory search: execution metrics provenance flow artifact latest baseline lightweight benchmark
+# Memory search: OpenTUI layout scroll composer
 
 Results: 0
 

@@ -67,11 +67,14 @@ import {
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import {
+  appendUserEcho,
   createAssistantMessageStream,
   createBlockMount,
   createBlockNavController,
   createBlockRegistry,
+  MAX_THOUGHT_LINES,
   type BlockState,
+  type BlockViewOptions,
 } from "./transcript-blocks";
 
 /** A resolved provider/model selection. */
@@ -159,7 +162,7 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
 /** Registers a block and mounts its view; returns the new block id. */
 export type BlockSink = (
   input: { kind: string; summary: string; fullText: string; lineCount: number },
-  options?: { hint?: string; tone?: "dim" | "cyan" | "red" },
+  options?: BlockViewOptions,
 ) => string;
 
 /** Shell chrome that runs BEFORE each block is registered (busy phase, fleet). */
@@ -185,7 +188,18 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
     chrome.onReasoning?.(text);
     const body = text.trim();
     const lineCount = body.split("\n").filter((l) => l.trim().length > 0).length;
-    addBlock({ kind: "thought", summary: "", fullText: body, lineCount }, { hint: "/think · ctrl+o" });
+    // Reasoning is SECONDARY: dim, bounded to a short preview, and reversible
+    // from the composer (flow 115). The registry still holds the whole payload,
+    // so `y` / `/copy` remain lossless.
+    addBlock(
+      { kind: "thought", summary: "", fullText: body, lineCount },
+      {
+        hint: "/think · ctrl+o",
+        expandedHint: "/think collapse · y copy",
+        dim: true,
+        maxLines: MAX_THOUGHT_LINES,
+      },
+    );
   };
   io.onToolCall = (name, input) => {
     chrome.onToolCall?.(name, input);
@@ -847,8 +861,8 @@ export async function launchTuiAgentShell(opts: {
     // spinner interval would otherwise repaint over it.
     chrome.setFooterOverride(() => (nav.active() ? otui.t`${otui.yellow(FOOTER_NAV)}` : undefined));
     const focusComposer = (): void => nav.restoreComposerFocus();
-    const setBlockCollapsed = (id: string, collapsed: boolean): void => nav.setCollapsed(id, collapsed);
     const newestBlock = (kind?: string): BlockState | undefined => nav.newest(kind);
+    const toggleNewestBlock = (kind?: string): BlockState | undefined => nav.toggleNewest(kind);
     const copyBlock = (id: string): boolean => nav.copy(id);
 
     /** Register + render a new collapsed block at the end of the transcript. */
@@ -1340,23 +1354,12 @@ export async function launchTuiAgentShell(opts: {
           marginTop: 1,
         }),
       );
-      const qBox = new otui.BoxRenderable(r, {
+      appendUserEcho(otui, r, transcript, {
         id: `side-q${uid++}`,
-        borderStyle: "rounded",
-        border: true,
+        line: question,
         borderColor: "#5a3a6a",
-        paddingLeft: 1,
-        paddingRight: 1,
         marginTop: 0,
-        alignSelf: "flex-start",
       });
-      qBox.add(
-        new otui.TextRenderable(r, {
-          id: `side-qt${uid++}`,
-          content: otui.t`${otui.dim(`❯ ${question}`)}`,
-        }),
-      );
-      transcript.add(qBox);
 
       const prompt = buildSideWorkerPrompt({
         question,
@@ -1540,25 +1543,20 @@ export async function launchTuiAgentShell(opts: {
           }
           return;
         }
-        // `/think` and `/expand` now expand the newest matching block IN PLACE
-        // (flow 109) instead of appending a second copy of the text as a system
-        // line; `/copy` puts a block's retained payload on the clipboard (AC6).
+        // `/think` and `/expand` TOGGLE the newest matching block in place
+        // (flow 109 expanded it; flow 115 made it reversible — a one-way expand
+        // leaves a screenful of reasoning with no advertised way back). `/copy`
+        // puts a block's retained payload on the clipboard (AC6).
         if (command.name === "/think") {
-          const thought = newestBlock("thought");
-          if (thought === undefined) {
+          if (toggleNewestBlock("thought") === undefined) {
             io.onSystem?.("No reasoning yet.\n");
-            return;
           }
-          setBlockCollapsed(thought.id, false);
           return;
         }
         if (command.name === "/expand") {
-          const target = newestBlock("output") ?? newestBlock();
-          if (target === undefined) {
+          if (toggleNewestBlock("output") === undefined && toggleNewestBlock() === undefined) {
             io.onSystem?.("Nothing to expand — no tool output yet.\n");
-            return;
           }
-          setBlockCollapsed(target.id, false);
           return;
         }
         if (command.name === "/copy") {
@@ -1613,18 +1611,7 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(helpText());
         return;
       }
-      const userBox = new otui.BoxRenderable(r, {
-        id: `ub${uid++}`,
-        borderStyle: "rounded",
-        border: true,
-        borderColor: "#3a4a4a", // muted (was bright cyan)
-        paddingLeft: 1,
-        paddingRight: 1,
-        marginTop: 1,
-        alignSelf: "flex-start",
-      });
-      userBox.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.dim(`❯ ${line}`)}` }));
-      transcript.add(userBox);
+      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line });
       transcript.add(
         new otui.TextRenderable(r, {
           id: `h${uid++}`,

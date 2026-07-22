@@ -132,6 +132,15 @@ Two independently testable halves:
   being inactive. Covered by a headless test.
 - **R4** Layout regression (flow 075). Mitigation: every new box gets
   `flexShrink:0` + `alignSelf:"flex-start"`, never `flexGrow`; add a resize test.
+  **SUPERSEDED by flow 115 (D-1): the `alignSelf:"flex-start"` half of this
+  mitigation was itself the defect.** A transcript box carrying `alignSelf`
+  stops measuring its intrinsic height, collapses to the viewport, squeezes
+  bordered children so their border rows paint over the content row, and makes
+  the ScrollBox under-report `scrollHeight` — putting every row below a large
+  expanded block out of reach. It is also what flow 109 recorded as the
+  "known @opentui/core defect" at `scrollTop === 2`. Hug with
+  `maxWidth: hugWidth(text, chrome)` instead; `flexShrink: 0` and "never
+  `flexGrow`" still stand. Enforced by `src/capability/tui-layout.test.ts`.
 - **R5** `launchTuiAgentShell` grows further. Mitigation: net new logic lands in
   `transcript-blocks.ts`; the closure only gains wiring calls.
 - **R6** Optional-dep guard (`src/capability/no-optional-imports`) — the new TUI

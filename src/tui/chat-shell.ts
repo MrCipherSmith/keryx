@@ -39,7 +39,7 @@ import type { DetectedProvider } from "../commands/select";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { saveShellConfig } from "../lib/shell-config";
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
-import { createAssistantMessageStream } from "./transcript-blocks";
+import { appendUserEcho, createAssistantMessageStream } from "./transcript-blocks";
 import {
   estimateContextTokens,
   fmtTokens,
@@ -363,18 +363,7 @@ export async function mountChatShell(
 
   const bridge = createChatBridge({
     onAccepted: (line) => {
-      const box = new otui.BoxRenderable(r, {
-        id: `ub${uid++}`,
-        borderStyle: "rounded",
-        border: true,
-        borderColor: "#3a4a4a",
-        paddingLeft: 1,
-        paddingRight: 1,
-        marginTop: 1,
-        alignSelf: "flex-start",
-      });
-      box.add(new otui.TextRenderable(r, { id: `u${uid++}`, content: otui.t`${otui.dim(`❯ ${line}`)}` }));
-      transcript.add(box);
+      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line });
       if (!line.startsWith("/")) {
         seen.push({ content: line });
         paintContext();
