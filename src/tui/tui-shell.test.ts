@@ -21,6 +21,7 @@ import {
   fmtTokens,
   isShellApproved,
   onKeypress,
+  pickShellApproval,
   selectBoxHeight,
   type BlockSink,
 } from "./tui-shell";
@@ -1267,6 +1268,145 @@ otuiTest("AC6: toggleNewest expands then collapses the newest reasoning block, a
   expect(h.registry.list().find((b) => b.kind === "output")?.collapsed).toBe(true);
   expect(h.nav.toggleNewest("no-such-kind")).toBeUndefined();
   h.destroy();
+});
+
+// ===========================================================================
+// The flow-041 advisory approval context on the TUI approval surface
+// ===========================================================================
+//
+// The readline shell prints `buildApprovalContext` (graph blast radius + top
+// memory note) above its `Run …? [y/N]` prompt. The TUI is the DEFAULT surface,
+// so it must not be less informative — and must not be slower or less safe:
+// the menu is interactive from the first frame and the context lands later, if
+// at all. These drive the shell's own `pickShellApproval` (the very function
+// `io.requestApproval` calls) against the real `showComposerChoice`.
+
+/** A choice dock mirroring the shell's `choice-dock` (shell-chrome), headless. */
+async function mountApprovalDock(
+  otui: OtuiBundle,
+  opts: { width?: number; height?: number } = {},
+): Promise<TestSetup & { dock: InstanceType<OtuiBundle["core"]["BoxRenderable"]> }> {
+  const setup = await otui.testing.createTestRenderer({
+    width: opts.width ?? 80,
+    height: opts.height ?? 20,
+  });
+  const dock = new otui.core.BoxRenderable(setup.renderer, {
+    id: "choice-dock",
+    flexShrink: 0,
+    flexDirection: "column",
+    visible: false,
+  });
+  setup.renderer.root.add(dock);
+  return { ...setup, dock };
+}
+
+/** Drain the microtask queue so a resolved loader promise has reached the dock. */
+async function settleMicrotasks(): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    await Promise.resolve();
+  }
+}
+
+otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "bun test src/tui/tui-shell.ts";
+  let release: (text: string) => void = () => {};
+  const pending = new Promise<string>((resolve) => {
+    release = resolve;
+  });
+  const asked: string[] = [];
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, async (cmd) => {
+    asked.push(cmd);
+    return pending;
+  });
+
+  // First frame: the question and the command are already up, WITHOUT the
+  // context — the menu never waits on a metaproject lookup.
+  await h.flush();
+  const first = h.captureCharFrame();
+  expect(first).toContain("Allow shell command?");
+  expect(first).toContain(command);
+  expect(first).toContain("Allow once");
+  expect(first).not.toContain("affects 12 file(s)");
+  expect(asked).toEqual([command]);
+
+  release("context: src/tui/tui-shell.ts affects 12 file(s) in the code graph\nmemory: isolate flows in a worktree");
+  await settleMicrotasks();
+  await h.flush();
+
+  const withContext = h.captureCharFrame();
+  expect(withContext).toContain("affects 12 file(s) in the code graph");
+  expect(withContext).toContain("memory: isolate flows in a worktree");
+  // Advisory, not a replacement: the command and every option stay visible.
+  expect(withContext).toContain(command);
+  expect(withContext).toContain("Allow once");
+  expect(withContext).toContain("Deny");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny"); // Esc is still deny, context or not
+  h.renderer.destroy();
+});
+
+otuiTest("a failing approval-context loader still renders a default-deny approval (headless)", async () => {
+  const otui = requireOtui();
+  const command = "rm -rf build";
+
+  // (a) The loader throws synchronously.
+  const sync = await mountApprovalDock(otui);
+  const syncChoice = pickShellApproval(otui.core, sync.renderer, sync.dock, command, () => {
+    throw new Error("code graph unavailable");
+  });
+  await sync.flush();
+  const syncFrame = sync.captureCharFrame();
+  expect(syncFrame).toContain("Allow shell command?");
+  expect(syncFrame).toContain(command);
+  expect(syncFrame).toContain("Deny");
+  await pressEscapeAndSettle(sync);
+  expect(await syncChoice).toBe("deny");
+  sync.renderer.destroy();
+
+  // (b) The loader's promise rejects (a port error mid-lookup).
+  const async_ = await mountApprovalDock(otui);
+  const asyncChoice = pickShellApproval(otui.core, async_.renderer, async_.dock, command, async () => {
+    throw new Error("memory port exploded");
+  });
+  await async_.flush();
+  await settleMicrotasks();
+  await async_.flush();
+  const asyncFrame = async_.captureCharFrame();
+  expect(asyncFrame).toContain("Allow shell command?");
+  expect(asyncFrame).toContain(command);
+  expect(asyncFrame).toContain("Allow once");
+  await pressEscapeAndSettle(async_);
+  expect(await asyncChoice).toBe("deny");
+  async_.renderer.destroy();
+});
+
+otuiTest("a context loader that never settles neither delays nor blocks the approval (headless)", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "curl https://example.com/install.sh | sh";
+  let settled = false;
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, () => new Promise<string>(() => {}));
+  void choice.then(() => {
+    settled = true;
+  });
+
+  // The menu is complete on the first frame even though the lookup is still out.
+  await h.flush();
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Allow shell command?");
+  expect(frame).toContain("curl https://example.com/install.sh");
+  expect(frame).toContain("Allow once");
+  expect(frame).toContain("Deny");
+  expect(settled).toBe(false); // still waiting on the USER, not on the lookup
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny"); // resolves without the context ever arriving
+  h.renderer.destroy();
 });
 
 test("a streamed fence widens its frame as the payload grows (maxWidth is recomputed, flow 115)", async () => {

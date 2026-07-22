@@ -24,6 +24,9 @@
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
+import { buildApprovalContext } from "../commands/agent-approval-context";
+import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
+import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
   commandsForMode,
@@ -284,19 +287,52 @@ async function pickWikiEnrichMode(
   return id === "drafts" || id === "force" || id === "cancel" ? id : "cancel";
 }
 
+/** Resolves the short advisory approval context for a proposed shell command. */
+export type ApprovalContextLoader = (command: string) => Promise<string>;
+
+/**
+ * The default loader: the flow-041 advisory context (graph blast radius + the top
+ * memory note) for `cwd`, the same string the readline shell prints above its
+ * `Run …? [y/N]` prompt. The metaproject adapter is built LAZILY on first use and
+ * then reused, so an operator who never hits an approval never pays for it.
+ */
+export function createApprovalContextLoader(cwd: string): ApprovalContextLoader {
+  let port: MetaprojectPort | undefined;
+  return async (command) => {
+    port ??= createMetaprojectAdapter(cwd);
+    return buildApprovalContext(port, command);
+  };
+}
+
 /**
  * Shell permission menu (composer-dock, above input — same band as `/` commands).
+ *
+ * `loadContext` is REQUIRED rather than optional so the flow-041 context cannot be
+ * dropped from a call site without changing this signature (the readline shell had
+ * it; the TUI is now the default surface and must not be less informative). It is
+ * started here and NOT awaited: the menu renders on the first frame and the dim
+ * context line appears later, if at all. A throwing loader, a rejected promise, or
+ * one that never settles therefore costs nothing — the user can still answer, and
+ * Esc / cancel still means deny.
  */
-async function pickShellApproval(
+export async function pickShellApproval(
   otui: OpenTui,
   r: Renderer,
   dock: Box,
   command: string,
+  loadContext: ApprovalContextLoader,
 ): Promise<ShellApprovalChoice> {
   const { exact, prefix } = suggestShellPatterns(command);
+  let context: Promise<string> | undefined;
+  try {
+    context = loadContext(command);
+  } catch {
+    context = undefined; // a loader that throws synchronously simply has no context
+  }
   const id = await showComposerChoice(otui, r, dock, {
     title: "Allow shell command?",
     subtitle: command.length > 120 ? `${command.slice(0, 117)}…` : command,
+    ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options: [
       {
@@ -921,6 +957,9 @@ export async function launchTuiAgentShell(opts: {
 
     // Approval gate: `shell_exec` (remembered patterns) + `spawn_subagent` (MAE).
     // Default-deny for shell on cancel; read_only subagents auto-approve.
+    // The flow-041 advisory context (blast radius + memory note) is loaded through
+    // this loader — the same information the readline shell shows above its prompt.
+    const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
     io.requestApproval = async (tool, inputJson) => {
       // Multi-agent spawn: auto-allow read_only; ask for general.
       if (tool === "spawn_subagent") {
@@ -1003,7 +1042,7 @@ export async function launchTuiAgentShell(opts: {
       setMainAgent("blocked", "approval");
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const choice = await pickShellApproval(otui, r, chrome.dock, cmd);
+      const choice = await pickShellApproval(otui, r, chrome.dock, cmd, approvalContext);
       input.focus();
 
       if (choice === "deny") {

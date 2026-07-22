@@ -18,6 +18,14 @@ export interface ChoiceOption {
 export interface ComposerChoiceRequest {
   title: string;
   subtitle?: string;
+  /**
+   * Short advisory context (one renderable per line) mounted between subtitle and
+   * options WHEN IT RESOLVES — the menu is interactive from the first frame, so a
+   * slow lookup can never delay the decision. A rejected promise, an empty string,
+   * or a resolution that arrives after the menu closed simply shows nothing: the
+   * context is advisory and must never gate, alter, or delay an answer.
+   */
+  context?: Promise<string>;
   options: ChoiceOption[];
   /** Returned when the user presses Esc. */
   cancelId: string;
@@ -114,12 +122,44 @@ export function showComposerChoice(
     dock.add(sel);
     sel.focus();
 
+    // Late-arriving advisory context. It is mounted ABOVE the options (so the
+    // command stays the first thing read) but AFTER the menu is already usable.
+    let closed = false;
+    const contextLines: InstanceType<OpenTui["TextRenderable"]>[] = [];
+    const mountContext = (text: string): void => {
+      if (closed || contextLines.length > 0) {
+        return;
+      }
+      const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+      for (const [i, line] of lines.entries()) {
+        const renderable = new otui.TextRenderable(r, {
+          id: `ch-ctx-${i}-${Date.now()}`,
+          content: otui.t`${otui.dim(line)}`,
+        });
+        contextLines.push(renderable);
+        try {
+          dock.insertBefore(renderable, sel);
+        } catch {
+          dock.add(renderable); // best-effort: still visible, just below the options
+        }
+      }
+    };
+    if (request.context !== undefined) {
+      void request.context.then(mountContext).catch(() => {
+        // Advisory only: a failed lookup shows no context and no error.
+      });
+    }
+
     const cleanup = (): void => {
+      closed = true;
       unsub();
       try {
         dock.remove(title);
         if (subtitle !== undefined) {
           dock.remove(subtitle);
+        }
+        for (const line of contextLines) {
+          dock.remove(line);
         }
         dock.remove(sel);
       } catch {
