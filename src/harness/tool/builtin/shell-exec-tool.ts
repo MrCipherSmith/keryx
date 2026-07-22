@@ -35,6 +35,37 @@ export type CommandRunner = (command: string) => Promise<InteractiveToolResult>;
 
 const MAX_OUTPUT_BYTES = 20_000;
 
+/**
+ * Deadline for one approved command. Without it `await proc.exited` waits
+ * forever: a single hanging command blocks the agent turn permanently and there
+ * is no cancellation path to interrupt it (stress finding C3b).
+ *
+ * Two minutes is chosen to sit above ordinary interactive work (`git`, `bun
+ * test`, a build step) and well below "the user has given up". A longer job is
+ * the operator's call, via the env override.
+ */
+export const DEFAULT_SHELL_TIMEOUT_MS = 120_000;
+
+/** Env override for {@link DEFAULT_SHELL_TIMEOUT_MS}; an explicit `0` disables it. */
+export const ENV_SHELL_TIMEOUT_MS = "KERYX_SHELL_TIMEOUT_MS";
+
+/**
+ * Resolve the shell deadline in ms. Unset / empty / non-numeric / negative all
+ * fall back to the default — a malformed value must never silently mean "no
+ * deadline". `0` disables the deadline, but only when set deliberately.
+ */
+export function resolveShellTimeoutMs(env: Record<string, string | undefined> = process.env): number {
+  const raw = env[ENV_SHELL_TIMEOUT_MS];
+  if (raw === undefined || raw.trim().length === 0) {
+    return DEFAULT_SHELL_TIMEOUT_MS;
+  }
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n) || n < 0) {
+    return DEFAULT_SHELL_TIMEOUT_MS;
+  }
+  return n;
+}
+
 /** OS-sandbox posture for the agent shell. `off` = current unsandboxed behavior. */
 export type ShellSandboxMode = "off" | "workspace" | "strict";
 
@@ -203,16 +234,87 @@ export function makeCommandRunner(root: string): CommandRunner {
         stderr: "pipe",
         env,
       });
-      const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ]);
-      const exit = await proc.exited;
+
+      // Deadline. On expiry: SIGTERM, then SIGKILL if the process ignores it,
+      // so a command that traps TERM cannot outlive its deadline either. The
+      // output collected so far is still reported — a timeout with no context
+      // is much harder to act on than a truncated transcript.
+      const timeoutMs = resolveShellTimeoutMs(process.env);
+      let timedOut = false;
+      let killTimer: ReturnType<typeof setTimeout> | undefined;
+      let forceTimer: ReturnType<typeof setTimeout> | undefined;
+      if (timeoutMs > 0) {
+        killTimer = setTimeout(() => {
+          timedOut = true;
+          try {
+            proc.kill("SIGTERM");
+          } catch {
+            // already gone
+          }
+          forceTimer = setTimeout(() => {
+            try {
+              proc.kill("SIGKILL");
+            } catch {
+              // already gone
+            }
+          }, 2_000);
+        }, timeoutMs);
+      }
+
+      // Read incrementally rather than with `Response.text()`, which only
+      // resolves when the pipe CLOSES. Killing `sh` does not necessarily close
+      // it: a grandchild (`sh -c 'echo x; sleep 30'` → the `sleep`) inherits the
+      // write end and can outlive the shell, so waiting on the pipe would hang
+      // past the very deadline we just enforced. Incremental reads also mean the
+      // output produced before the timeout is still available to report.
+      const out = { text: "" };
+      const err = { text: "" };
+      const readInto = async (stream: ReadableStream<Uint8Array> | undefined, sink: { text: string }): Promise<void> => {
+        if (stream === undefined) return;
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+        try {
+          for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            if (chunk.value !== undefined) sink.text += decoder.decode(chunk.value, { stream: true });
+          }
+        } catch {
+          // stream torn down by the kill — keep what we have
+        } finally {
+          reader.releaseLock();
+        }
+      };
+
+      let exit = 0;
+      try {
+        const drained = Promise.all([readInto(proc.stdout, out), readInto(proc.stderr, err)]);
+        exit = await proc.exited;
+        if (timedOut) {
+          // Do not wait on pipes a surviving grandchild may still hold open.
+          await Promise.race([drained, new Promise((r) => setTimeout(r, 200))]);
+        } else {
+          await drained;
+        }
+      } finally {
+        if (killTimer !== undefined) clearTimeout(killTimer);
+        if (forceTimer !== undefined) clearTimeout(forceTimer);
+      }
+      const stdout = out.text;
+      const stderr = err.text;
+
       const combined = `${stdout}${stderr.length > 0 ? `\n${stderr}` : ""}`.trim();
       const bounded =
         combined.length > MAX_OUTPUT_BYTES
           ? `${combined.slice(0, MAX_OUTPUT_BYTES)}\n…(truncated)`
           : combined;
+      if (timedOut) {
+        const notice = `shell_exec: timed out after ${timeoutMs}ms and was killed (raise or disable with ${ENV_SHELL_TIMEOUT_MS})`;
+        return {
+          output: bounded.length > 0 ? `${bounded}\n${notice}` : notice,
+          isError: true,
+        };
+      }
       const output = bounded.length > 0 ? bounded : `(no output; exit ${exit})`;
       return { output, isError: exit !== 0 };
     } catch (cause) {

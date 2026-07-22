@@ -111,10 +111,21 @@ export function builtinReadOnlyTools(root: string): InteractiveTool[] {
         return { output: `path escapes the project root: ${requested}`, isError: true };
       }
       try {
-        const content = await readFile(target, "utf8");
-        const output =
-          content.length > MAX_READ_BYTES ? `${content.slice(0, MAX_READ_BYTES)}\n…(truncated)` : content;
-        return { output, isError: false };
+        // Read AT MOST the cap. The previous implementation read the whole file
+        // and then sliced, so returning 20 KB of a 256 MiB file cost 256 MiB of
+        // RSS — and the model can issue this call freely, in parallel (stress
+        // findings T1/L3). `Bun.file().slice()` is a lazy byte range: nothing
+        // outside it is ever read.
+        const file = Bun.file(target);
+        const size = file.size;
+        if (size > MAX_READ_BYTES) {
+          const head = await file.slice(0, MAX_READ_BYTES).text();
+          return {
+            output: `${head}\n…(truncated: read ${MAX_READ_BYTES} of ${size} bytes)`,
+            isError: false,
+          };
+        }
+        return { output: await file.text(), isError: false };
       } catch (cause) {
         return {
           output: `read_file failed: ${cause instanceof Error ? cause.message : String(cause)}`,
