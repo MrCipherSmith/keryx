@@ -29,6 +29,51 @@ jobs:
       - name: Security red-team FN-rate gate (Block E / E6)
         run: bun ./src/cli.ts security eval --corpus all
 
+  tui-pty-launch:
+    # O-6. Every other check that touches the TUI runs without a controlling
+    # terminal, so `createCliRenderer` declines and the shell takes the readline
+    # path — the renderer is proven only headlessly, and NOTHING proved the
+    # shipped `keryx shell` launches and draws on a real terminal. Flow 065 is
+    # the precedent: a stdin-handoff bug that leaked terminal query responses
+    # ONLY on a real TTY reverted the TUI out of the default, and took flows 066
+    # and 067 to fix. This job is what would have caught it.
+    #
+    # macOS only, deliberately. The suite allocates its pty with BSD `script`,
+    # whose command syntax differs from util-linux's; the Linux form is NOT
+    # exercised, so it is not shipped. Adding a Linux leg means writing and
+    # verifying that branch first — and narrowing O-6 further in
+    # docs/requirements/keryx-opentui-shell/specification.md.
+    #
+    # Not folded into `check` (ubuntu, where it would only ever skip) and not
+    # into the default `bun test` (it spawns real processes, so it follows the
+    # repository's KERYX_ALLOW_REAL_SUBPROCESS convention). ~40s, one runner.
+    name: TUI launches on a real pty (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      # The gate is `darwin` + `/usr/bin/script`. If the runner image ever drops
+      # `script`, the suite would SKIP and this job would go green having proven
+      # nothing — so fail here instead, where the reason is legible.
+      - name: Confirm a pty allocator is present
+        run: test -x /usr/bin/script
+
+      # `bun test` counts a skip as neither pass nor fail, so a gate that
+      # silently closed would leave this job green and vacuous. Reuse the same
+      # zero-skip guard the OpenTUI matrix uses.
+      - name: Launch the real shell on an allocated pty (fail on skip)
+        env:
+          KERYX_ALLOW_REAL_SUBPROCESS: "1"
+        run: bun ./scripts/opentui-tests-no-skips.ts src/commands/shell-pty-launch.smoke.test.ts
+
   linux-sandbox:
     # Live validation of the LINUX OS-sandbox path (bubblewrap). The `check` job
     # skips every sandbox smoke because they are gated behind

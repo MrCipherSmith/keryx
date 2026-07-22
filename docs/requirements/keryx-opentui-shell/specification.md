@@ -9,11 +9,10 @@ an OpenTUI renderer, keep the deterministic driver unchanged — has shipped for
 interactive shell on a TTY in both modes; readline remains the mandatory fallback
 for no-TTY, a missing optional dependency, or renderer init failure.
 
-**§10** now records O-1 through O-5 as closed (flows 112-114) and leaves exactly
-one open item, **O-6**: no automated check can evidence a rendered TUI frame,
-because `createCliRenderer` needs a controlling terminal that hosted runners
-lack. Read §10 rather than this paragraph — it is the authority, and this
-sentence has already been stale once.
+**§10** records O-1 through O-5 as closed (flows 112-114) and **O-6 as narrowed**:
+a rendered TUI frame is now evidenced by an allocated-pty smoke on macOS, and on
+no other platform. Read §10 rather than this paragraph — it is the authority, and
+this sentence has already been stale once.
 
 Two reading notes. The `(SPIKE)` names below were resolved by the Phase 0 spike
 (flow 059) and are recorded as answered in §2, but may diverge in spelling from
@@ -486,12 +485,11 @@ Each item was verified in the source, not inferred from the roadmap.
 Closure history: **O-1 and O-2** by flow 112; **O-4's fallback body** by flow
 113; **O-3, O-5, and O-4's install clause** by flow 114. Entries keep the original
 finding above each resolution, so the audit trail survives. What remains is a
-single shared gap, not a whole open item: **a rendered TUI first frame cannot be
-evidenced in CI**, because `createCliRenderer` needs a controlling terminal that
-hosted runners lack. That one pty limitation bounds the last clause of O-3 ("the
-TUI launches there"), the last clause of O-4 ("...launches the TUI"), and the
-rendered-frame half of O-5. Closing it needs an allocated-pty harness — a
-deliberate future decision, tracked below as **O-6**.
+single shared gap, now **NARROWED to non-darwin platforms**: a rendered TUI first
+frame is evidenced on macOS by an allocated-pty smoke
+(`src/commands/shell-pty-launch.smoke.test.ts`), and nowhere else. That residual
+pty limitation still bounds the last clause of O-3 ("the TUI launches there") on
+Linux, and the rendered-frame half of O-5 everywhere. See **O-6**.
 
 ### O-1 — chat has no OpenTUI renderer — **CLOSED** (flow 112)
 
@@ -599,10 +597,11 @@ Per leg the job proves two things, both **positively**:
 
 **What is covered, and what is not.** N1's wording — binaries cover the
 platforms, the install path pulls them, no Zig — is proven on all four. "The TUI
-*launches* there" is not, and cannot be: `createCliRenderer` needs a controlling
-terminal that a hosted runner lacks, so a CI invocation takes the readline
-fallback by design. That is the same pty gap that bounds O-4's install clause;
-closing it is a shared follow-up, not part of this flow.
+*launches* there" is not proven on all four: `createCliRenderer` needs a
+controlling terminal, which these legs do not allocate, so their invocations take
+the readline fallback by design. Since O-6 that clause IS proven on darwin-arm64,
+by the separate `TUI launches on a real pty (macOS)` job, which allocates one —
+leaving the two Linux legs and darwin-x64 still inferred. See O-6.
 
 **Cost.** The matrix runs four hosted runners on every future PR — but not for
 money: this repository is public, and standard hosted runners are free with no
@@ -678,8 +677,9 @@ The criterion's second clause ("a global install via `scripts/install.sh
 
 **Read the whole of O-4 as:** the fallback triggers and output parity are proven
 (flow 113); the global install produces a working CLI on the four N1 platforms
-(flow 114, via O-3's matrix plus this install test); a rendered TUI launch is the
-one remaining unproven clause, bounded by the pty gap.
+(flow 114, via O-3's matrix plus this install test); a rendered TUI launch from a
+*globally installed* binary is the one remaining unproven clause. O-6's pty smoke
+does not close it — it drives `bun src/cli.ts`, not an installed `keryx`.
 
 ### O-5 — R5 cold-start latency — **MEASURED** (flow 114)
 
@@ -704,25 +704,73 @@ first frame. `createCliRenderer` needs a controlling terminal, which neither CI
 nor a scripted measurement has, so the figure is the dominant start-up term —
 process start, module graph, and the native `@opentui/core` import — not the time
 to a drawn UI. That is the term R5 was asking about ("cold start … vs the instant
-readline shell"); the rendered-frame delta remains behind the same pty gap that
-bounds O-3 and O-4.
+readline shell"); the rendered-frame delta remains unmeasured. O-6's pty smoke
+does not supply it either — it proves a frame arrives, not how fast, and settles
+deliberately before quitting.
 
-### O-6 — a rendered TUI first frame is not evidenced anywhere — OPEN
+### O-6 — a rendered TUI first frame is evidenced on macOS only — NARROWED
 
-The single limitation left by flows 112-114. Every automated check that touches
-the TUI runs without a controlling terminal, so `createCliRenderer` declines and
-the shell takes the readline path. As a result three narrow clauses stay unproven
-by machine: that the TUI *renders* on each N1 platform (O-3), that a global
-install *launches* it (O-4), and the time-to-first-frame delta (O-5). The block
-model, chrome, nav mode, code/diff rendering and every other behaviour are proven
-headlessly via `@opentui/core/testing`'s `createTestRenderer`; what is missing is
-a real terminal.
+*Was:* the single limitation left by flows 112-114. Every automated check that
+touched the TUI ran without a controlling terminal, so `createCliRenderer`
+declined and the shell took the readline path. Three narrow clauses stayed
+unproven by machine: that the TUI *renders* on each N1 platform (O-3), that a
+global install *launches* it (O-4), and the time-to-first-frame delta (O-5). The
+block model, chrome, nav mode, code/diff rendering and every other behaviour were
+proven headlessly via `@opentui/core/testing`'s `createTestRenderer`; what was
+missing was a real terminal.
 
-Closing O-6 means an allocated-pty harness — `script` / `unbuffer` / `node-pty`
-driving `keryx shell` in a pseudo-terminal and asserting on the emitted escape
-stream — added to CI on at least one N1 platform. It is scoped as its own future
-flow rather than folded into any of the above, because a pty harness is a
-non-trivial piece of test infrastructure with its own flakiness surface.
+*Now:* `src/commands/shell-pty-launch.smoke.test.ts` allocates a pseudo-terminal
+with BSD `script(1)`, runs the shipped `bun src/cli.ts shell --provider fake
+--model fake-echo` inside it, and asserts on the bytes that reached the terminal.
+CI job **`TUI launches on a real pty (macOS)`** runs it on `macos-latest` on
+every PR and push to main, through `scripts/opentui-tests-no-skips.ts` so a
+silently-closed gate fails the job instead of passing it green and empty.
+
+**What the smoke now proves, on darwin:**
+
+- `keryx shell` on a real TTY reaches the TUI rather than the readline fallback —
+  the exact regression class of flow 065, which only manifested on a real
+  terminal and needed flows 066 and 067 to fix.
+- The renderer starts with the options the shipped code asks for: it enters the
+  alternate screen (`ESC[?1049h`, from `screenMode: "alternate-screen"`) and
+  enables SGR mouse reporting (`ESC[?1006h`, from `useMouse: true`).
+- **A frame is drawn.** The decoded, escape-stripped stream contains the chrome's
+  own text — `keryx`, and the sidebar's `Model` / `Context` / `Tools` / `Status`
+  / `Ready` — plus box-drawing borders. This is the part escape sequences alone
+  cannot evidence, and the part O-6 was actually about.
+- It gives the terminal back: `ESC[?1049l`, and the shell's own exit status
+  (reported through the pty, not `script`'s) is `0`.
+- A negative control in the same file runs `--no-tui` through the identical
+  pipeline and requires that none of the above appears, so the assertions above
+  cannot be passing on bytes contributed by the harness or the outer terminal.
+- Falsified against the shipped source, both directions: forcing
+  `launchTuiAgentShell`'s launch guard to decline turns the suite red
+  (`ready: false`) in ~49s rather than hanging; changing `screenMode` away from
+  `"alternate-screen"` reddens both the pty assertion and the always-on coupling
+  guard that pins the escape constants to `createShellRenderer`'s real options.
+
+**What it still does not prove — why this is NARROWED, not CLOSED:**
+
+- **Linux, and every non-darwin platform.** `script(1)`'s command syntax differs
+  between BSD (`script -q <file> <cmd>…`) and util-linux (`script -q -c "<cmd>"
+  <file>`). Only the BSD form is implemented and exercised; the util-linux branch
+  was deliberately NOT written, because shipping an unverified branch would
+  repeat the vacuous-evidence mistake this smoke exists to correct. The suite
+  gates on `darwin` + `/usr/bin/script` via `describe.skipIf`, never an early
+  `return`. So O-3's "the TUI launches there" remains unproven on the two Linux
+  N1 legs and on darwin-x64 (the smoke runs on `macos-latest`, arm64, only).
+- **O-4's install clause.** The smoke drives `bun src/cli.ts`, not a globally
+  installed `keryx` binary, so "a global install launches the TUI" is still
+  inferred rather than observed.
+- **O-5's time-to-first-frame.** The smoke asserts that a frame arrives, not how
+  fast. It polls at 100 ms and deliberately settles for 750 ms before quitting,
+  so its timings are not a measurement.
+- **Anything past the first frame.** No input beyond the quit key is driven, so
+  no turn, tool call, or transcript update is exercised on a real terminal.
+
+Narrowing O-6 further means writing and verifying the util-linux `script`
+invocation and adding a Linux leg — at which point the residual scope is O-4's
+install clause and O-5's timing, which are separate concerns.
 
 ### Not an open item, listed to prevent confusion
 
