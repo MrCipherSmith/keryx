@@ -259,7 +259,13 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
 
 /** Deterministic sort key: module then command. */
 function sortKey(descriptor: CommandDescriptor): string {
-  return `${descriptor.module} ${descriptor.command}`;
+  // Separator is a real NUL, written as the escape \u0000 so this source
+  // file stays plain text. A literal NUL byte makes ripgrep classify the
+  // whole file as binary and silently skip it, and this registry is the
+  // command-routing source of truth agents are told to search. NUL sorts
+  // below every real character, giving an unambiguous module|command
+  // boundary even though command values contain spaces (e.g. 'flow plan').
+  return `${descriptor.module}\u0000${descriptor.command}`;
 }
 
 /** Return descriptors sorted deterministically, optionally filtered by module. */
