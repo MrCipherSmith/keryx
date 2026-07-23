@@ -22,3 +22,14 @@
 - 2026-07-22T19:03:05.745Z - task-done: T1: Collect remaining context
 - 2026-07-22T19:03:05.898Z - task-done: T2: Implement per plan
 - 2026-07-22T19:03:06.057Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-23T18:52:33.794Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/205
+- 2026-07-23T18:52:43.472Z - ac-confirmed: AC1: src/flow/allocation.test.ts: worktree-uniqueness + concurrent-init tests; ids allocated via git-common-dir lock+ledger
+- 2026-07-23T18:52:43.604Z - ac-confirmed: AC2: src/flow/allocation.test.ts 'outside a git checkout' test; resolveAllocationScope falls back to local flows listing
+- 2026-07-23T18:52:43.766Z - ac-confirmed: AC3: src/flow/duplicate-ids.test.ts ambiguous-id + exact/slug-resolve tests; resolveFlowDir throws naming candidates
+- 2026-07-23T18:52:43.940Z - ac-confirmed: AC4: duplicate-ids.test.ts: service.get/start reject; harness ManagedFlowPort fails closed and writes nothing
+- 2026-07-23T18:52:44.110Z - ac-confirmed: AC5: duplicate-ids.test.ts flow-check + duplicateFlowIds list-marker tests; kind:duplicate-id hard fail
+- 2026-07-23T18:52:56.173Z - ac-confirmed: AC6: duplicate-ids.test.ts renumber tests; flow renumber moves dir, rewrites flow.json id, renumbered history event, id-map.json; refuses taken/malformed/already-used/empty-reason
+- 2026-07-23T18:52:56.317Z - ac-confirmed: AC7: repaired 002->117, 084->118, 103->119 via renumber; id-map.json committed; keryx flow check reports zero duplicate-id issues
+- 2026-07-23T18:52:56.487Z - ac-confirmed: AC8: 002-gdgraph AC checksum mismatch left untouched (pre-existing on main); documented in flow 116 journal; no acceptance-criteria.md rewritten by renumber
+- 2026-07-23T18:52:56.678Z - ac-confirmed: AC9: keryx health run PASS (score 93); bun test 2111 pass/0 fail; new tests use OS tmpdirs (security-gate fixture moved out of repo)
+- 2026-07-23T18:52:56.832Z - ac-confirmed: AC10: .metaproject/skills/flow/SKILL.md 'Flow ids' section + memory constraint flow-ids-allocated-per-clone.md (accepted, indexed)
