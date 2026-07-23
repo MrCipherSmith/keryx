@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "103",
+  "id": "119",
   "slug": "p0-sandbox-credential-auto-mask-resolver",
   "title": "P0 sandbox credential auto-mask resolver + shell/harness wire-up",
   "status": "done",
   "createdAt": "2026-07-21T15:04:31.260Z",
-  "updatedAt": "2026-07-21T15:22:29.764Z",
+  "updatedAt": "2026-07-22T18:58:46.736Z",
   "source": {
     "type": "description",
     "ref": null
@@ -229,6 +229,11 @@
       "at": "2026-07-21T15:22:29.764Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-07-22T18:58:46.736Z",
+      "event": "renumbered",
+      "detail": "103 -> 119: duplicate of flow 103 (sandbox network audit runbook); ids collided because allocation was per working copy — flow 116"
     }
   ]
 }

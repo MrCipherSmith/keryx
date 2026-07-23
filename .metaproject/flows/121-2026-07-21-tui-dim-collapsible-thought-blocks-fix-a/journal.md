@@ -62,3 +62,4 @@ below the expanded thought could not be scrolled to. Full matrices in
 - 2026-07-21T23:49:41.670Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/193
 - 2026-07-21T23:49:41.823Z - completing
 - 2026-07-21T23:49:44.133Z - done: all gates passed
+- 2026-07-23T19:03:24.158Z - renumbered: 115 -> 121: duplicate of flow 115 (shell-approval-hardening, created earlier); ids collided because allocation was per working copy — flow 120

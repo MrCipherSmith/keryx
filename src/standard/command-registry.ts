@@ -229,6 +229,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  {
+    module: "tasks",
+    command: "flow renumber",
+    summary: "Give a flow a new number and record the move (repairs duplicate ids).",
+    intent: [
+      "переномеруй флоу",
+      "дубликаты номеров флоу",
+      "renumber flow",
+      "duplicate flow id",
+      "fix flow numbering",
+    ],
+    args: [
+      { name: "<dir>", type: "string", required: true, desc: "flow directory name" },
+      { name: "to", type: "string", required: true, desc: "free three-digit id" },
+      { name: "reason", type: "string", required: true, desc: "why the flow is being renumbered" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["renames .metaproject/flows/**", "writes .metaproject/flows/id-map.json"],
+  },
   // ---- security ---------------------------------------------------------
   {
     module: "security",

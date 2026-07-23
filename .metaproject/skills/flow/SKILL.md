@@ -33,6 +33,26 @@ the work.
 - Finishing a flow whose draft PR exists: [complete.md](complete.md) -
   flow-complete.
 
+## Flow ids
+
+Ids are allocated per **clone**, not per checkout: `flow init` locks and records
+the number in the git common directory, so parallel git worktrees cannot mint
+the same one. Do parallel flow work in a worktree of the same clone — a second
+independent clone is outside that scope and can still collide.
+
+A number is spent forever. If a collision does reach the repository (a merge of
+two clones, or history predating this rule), `keryx flow check` fails on it and
+`keryx flow list` marks it. Repair it with
+
+```bash
+keryx flow renumber <dir> --to <free id> --reason "<why>"
+```
+
+which moves the package, rewrites `flow.json`, and records the move in
+`.metaproject/flows/id-map.json`. Never rename a flow directory by hand. While
+a collision exists, commands refuse the bare number — pass the full directory
+name.
+
 ## Hard policy (all roles)
 
 - flow.json is CLI-owned. Never edit it by hand.

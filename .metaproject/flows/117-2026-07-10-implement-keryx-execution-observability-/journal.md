@@ -35,3 +35,4 @@
 - 2026-07-10T16:54:52.205Z - completion-failed: health: no report; run `keryx health run` first
 - 2026-07-10T16:55:13.943Z - completing: merged commit: 7b78ff14
 - 2026-07-10T16:55:13.994Z - done: all gates passed
+- 2026-07-22T18:58:39.348Z - renumbered: 002 -> 117: duplicate of flow 002 (gdgraph java/python import resolution); ids collided because allocation was per working copy — flow 116

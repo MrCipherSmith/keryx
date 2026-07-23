@@ -1,7 +1,22 @@
 {
-  "generatedAt": "2026-07-22T10:19:19.661Z",
-  "entryCount": 2,
+  "generatedAt": "2026-07-23T19:03:52.348Z",
+  "entryCount": 3,
   "entries": [
+    {
+      "path": "constraints/flow-ids-allocated-per-clone.md",
+      "type": "constraint",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "Flow ids are allocated per clone, not per checkout",
+      "updated": "2026-07-22",
+      "tags": [],
+      "scopes": {
+        "module": "tasks",
+        "entity": "flow",
+        "files": [],
+        "skills": []
+      }
+    },
     {
       "path": "lessons/allowlist-not-a-boundary.md",
       "type": "lesson",

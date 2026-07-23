@@ -1,6 +1,48 @@
 {
   "schemaVersion": 1,
-  "query": "OpenTUI layout scroll composer",
-  "generatedAt": "2026-07-21T23:05:02.502Z",
-  "results": []
+  "query": "flow id allocation worktree",
+  "generatedAt": "2026-07-22T19:00:42.318Z",
+  "results": [
+    {
+      "entry": {
+        "absolutePath": "/Users/Goodea/goodea/keryx/.claude/worktrees/flow-116-duplicate-ids/.metaproject/memory/lessons/tui-alignself-height-collapse.md",
+        "relativePath": "lessons/tui-alignself-height-collapse.md",
+        "type": "lesson",
+        "title": "OpenTUI: alignSelf on a transcript box collapses its intrinsic height",
+        "version": "1.0.0",
+        "status": "accepted",
+        "confidence": "high",
+        "summary": "In a `@opentui/core` ScrollBox column, a child `BoxRenderable` carrying `alignSelf: \"flex-start\"` stops measuring its intrinsic HEIGHT: it collapses to the viewport height, squeezes its children, and makes the ScrollBox under-report `scrollHeight`. Hug content with `maxWidth` instead.",
+        "details": "Measured headlessly on a 40x12 test renderer, one 30-line `TextRenderable`\ninside a box inside `scroll.content`:\n\n| box options | content h | box h | text h | scrollHeight |\n|---|---|---|---|---|\n| plain | 30 | 30 | 30 | 30 |\n| `border` | 32 | 32 | 30 | 32 |\n| `border` + `flexShrink: 0` | 32 | 32 | 30 | 32 |\n| `alignSelf: \"flex-start\"` | **12** | **12** | **12** | **12** |\n| `alignSelf` + `flexShrink: 0` | **12** | **12** | **12** | **12** |\n| `alignSelf` + `border` | **12** | **12** | **10** | **12** |\n| `alignSelf` + `width: 20` | 30 | 30 | 30 | 30 |\n| `maxWidth: 11` | 32 | 32 | 30 | 32 |\n| `maxWidth: 100` (> available) | 32 | 32 (w clamped) | 30 | 32 |\n\nThe trigger is `alignSelf` alone — `border` and `flexShrink` are innocent, and\nANY definite cross-axis size restores correct measurement. A row wrapper\n(`flexDirection: \"row\"` parent, so the child hugs in the MAIN axis) does not\nhelp: the height is then the row's cross axis and collapses the same way.\n\nTwo user-visible symptoms, both reported as separate bugs:\n\n1. A bordered box squeezed below its natural height paints its top and bottom\n   border rows over its single content row — the user sees a corrupted\n   `╰─❯ text─╯` instead of a three-row box. It looks like a broken input line.\n2. `scrollHeight` under-reports (23 against ~43 real rows in the shipped\n   chrome), so `scrollTop` clamps early and everything below a large expanded\n   block — the answer itself — is unreachable at any scroll position.\n\nFlow 109 had already hit symptom 1 and recorded it as a \"known `@opentui/core`\ndefect: a bordered child in a ScrollBox at `scrollTop === 2` overdraws the row\nbelow the viewport\", carving it out of an assertion. It was not upstream: the\nrepro's own boxes used `alignSelf`. Replacing the hug with `maxWidth` makes the\nbleed disappear at every offset.\n\n**Rule:** hug with `maxWidth: hugWidth(text, chrome)`\n(`src/lib/md-blocks.ts`), never `alignSelf`. `width` is wrong too — it overflows\na terminal narrower than the value, while `maxWidth` is clamped by the parent\nand therefore resize-safe. `flexShrink: 0` and \"never `flexGrow`\" (flow 075)\nstill stand.\n\nEnforced by `src/capability/tui-layout.test.ts` (static ban over\n`src/tui/**` runtime sources) plus measurement regressions in\n`src/tui/tui-shell.test.ts`.",
+        "tags": [],
+        "scopes": {
+          "module": "tui",
+          "entity": "transcript-blocks, shell-chrome",
+          "files": [],
+          "skills": []
+        },
+        "created": "2026-07-21",
+        "updated": "2026-07-21",
+        "provenance": {
+          "source": "flow 115",
+          "link": ".metaproject/flows/115-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a"
+        },
+        "class": "episodic",
+        "validFrom": null,
+        "validTo": null,
+        "recordedAt": "2026-07-21",
+        "supersedes": null,
+        "supersededBy": null
+      },
+      "score": 1.746,
+      "components": {
+        "relevance": 0.25,
+        "recency": 0.991,
+        "confidence": 1,
+        "status": 1,
+        "scope": 0
+      },
+      "reason": "matched 1/4 terms; status accepted; confidence high"
+    }
+  ]
 }

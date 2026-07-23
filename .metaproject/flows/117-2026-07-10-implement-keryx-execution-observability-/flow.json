@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
-  "id": "002",
+  "schemaVersion": 2,
+  "id": "117",
   "slug": "implement-keryx-execution-observability-",
   "title": "Implement Keryx Execution Observability standard capability",
   "status": "done",
   "createdAt": "2026-07-10T11:40:52.417Z",
-  "updatedAt": "2026-07-10T16:55:13.994Z",
+  "updatedAt": "2026-07-22T18:58:39.348Z",
   "source": {
     "type": "description",
     "ref": null
@@ -69,61 +69,201 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:59.974Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T12:29:46.183Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T12:29:49.149Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T12:33:26.988Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T5",
       "title": "Provenance schema, runtime validation, renderers, and event accounting",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:39.793Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T6",
       "title": "Immutable testing/health evidence and latest-pointer lifecycle",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:42.175Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T7",
       "title": "Worktree hooks, refresh guidance, and baseline/pr classification",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:44.690Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T8",
       "title": "Lightweight profile and paired benchmark harness",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:47.382Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T9",
       "title": "Run focused/full verification and security/documentation checks",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:50.374Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T10",
       "title": "Reconcile requirements package, roadmap, and implementation report",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-10T11:49:53.053Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -299,6 +439,11 @@
       "at": "2026-07-10T16:55:13.994Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-07-22T18:58:39.348Z",
+      "event": "renumbered",
+      "detail": "002 -> 117: duplicate of flow 002 (gdgraph java/python import resolution); ids collided because allocation was per working copy — flow 116"
     }
   ],
   "merged": {

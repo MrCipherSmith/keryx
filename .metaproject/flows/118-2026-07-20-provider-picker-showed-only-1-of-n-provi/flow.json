@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "084",
+  "id": "118",
   "slug": "provider-picker-showed-only-1-of-n-provi",
   "title": "Provider picker showed only 1 of N providers — SelectRenderable height ignored 2-row described items (only floor(height/2) visible)",
   "status": "done",
   "createdAt": "2026-07-20T15:02:23.560Z",
-  "updatedAt": "2026-07-20T15:04:36.694Z",
+  "updatedAt": "2026-07-22T18:58:46.405Z",
   "source": {
     "type": "description",
     "ref": null
@@ -157,6 +157,11 @@
       "at": "2026-07-20T15:04:36.694Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-07-22T18:58:46.405Z",
+      "event": "renumbered",
+      "detail": "084 -> 118: duplicate of flow 084 (CI externalize @opentui/core); ids collided because allocation was per working copy — flow 116"
     }
   ],
   "merged": {

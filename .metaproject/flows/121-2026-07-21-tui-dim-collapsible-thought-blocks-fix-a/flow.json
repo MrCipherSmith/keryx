@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "115",
+  "id": "121",
   "slug": "tui-dim-collapsible-thought-blocks-fix-a",
   "title": "TUI: dim/collapsible thought blocks + fix alignSelf height-measurement breaking transcript layout and scroll",
   "status": "done",
   "createdAt": "2026-07-21T23:04:33.052Z",
-  "updatedAt": "2026-07-21T23:49:44.133Z",
+  "updatedAt": "2026-07-23T19:03:24.158Z",
   "source": {
     "type": "description",
     "ref": null
@@ -261,6 +261,11 @@
       "at": "2026-07-21T23:49:44.133Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-07-23T19:03:24.158Z",
+      "event": "renumbered",
+      "detail": "115 -> 121: duplicate of flow 115 (shell-approval-hardening, created earlier); ids collided because allocation was per working copy — flow 120"
     }
   ]
 }

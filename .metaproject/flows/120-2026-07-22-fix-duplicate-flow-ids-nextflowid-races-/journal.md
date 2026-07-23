@@ -1,0 +1,42 @@
+# Flow Journal
+
+- 2026-07-22T12:05:44.354Z - flow created
+- 2026-07-22T12:09:14.640Z - task-added: T5: Repo-wide id allocation: shared git-common-dir lock + ledger in nextFlowId/init (with non-git fallback)
+- 2026-07-22T12:09:14.810Z - task-added: T6: Ambiguity-safe resolveFlowDir + fail-closed callers (flow CLI, review --flow, ManagedFlowPort)
+- 2026-07-22T12:09:14.998Z - task-added: T7: Duplicate-id rule in keryx flow check + collision marker in flow list
+- 2026-07-22T12:09:15.158Z - task-added: T8: keryx flow renumber command (move dir, rewrite flow.json id, history event, old->new mapping)
+- 2026-07-22T12:09:15.299Z - task-added: T9: Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly
+- 2026-07-22T12:09:15.446Z - task-added: T10: Document repo-wide allocation + worktree rule in flow skill and project memory
+- 2026-07-22T13:43:11.496Z - frozen: 10 criteria; checksum recorded
+- 2026-07-22T13:43:17.203Z - started
+- 2026-07-22 - decisions taken before freeze (user): (1) repair colliding pairs by renumbering the later-created member via the new `keryx flow renumber`; (2) the duplicate-id rule in `keryx flow check` is a hard gate failure, flipped hard only after T9 lands so `main` is never knowingly red.
+- 2026-07-22 - pre-existing, unrelated to this flow's changes: `keryx flow check` already fails on `002-2026-07-10-gdgraph-java-python-import-resolution` (acceptance criteria checksum mismatch). Tracked by AC8 — must not be silently rewritten by the renumbering in T9.
+- 2026-07-22T18:57:56.854Z - task-done: T5: Repo-wide id allocation: shared git-common-dir lock + ledger in nextFlowId/init (with non-git fallback)
+- 2026-07-22T18:57:57.005Z - task-done: T6: Ambiguity-safe resolveFlowDir + fail-closed callers (flow CLI, review --flow, ManagedFlowPort)
+- 2026-07-22T18:57:57.128Z - task-done: T7: Duplicate-id rule in keryx flow check + collision marker in flow list
+- 2026-07-22T18:57:57.283Z - task-done: T8: keryx flow renumber command (move dir, rewrite flow.json id, history event, old->new mapping)
+- 2026-07-22 - T9 repair: the later-created member of each colliding pair was renumbered (createdAt from flow.json decides "later", since the 002 pair entered git in a single import commit). 002 -> 117 (implement-keryx-execution-observability, created 11:40 vs 10:18), 084 -> 118 (provider-picker, 15:02 vs 14:53), 103 -> 119 (p0-sandbox-credential-auto-mask, 07-21 15:04 vs 13:34). Mapping in .metaproject/flows/id-map.json; `flow check` now reports zero duplicate-id issues.
+- 2026-07-22 - AC8 disposition: the acceptance-criteria checksum mismatch on `002-2026-07-10-gdgraph-java-python-import-resolution` is left UNTOUCHED, knowingly. It predates this branch (`keryx flow check` fails on it on main at b6b4ed0) and 002 is `done`, so the sanctioned repair — `keryx flow ac update` — would re-freeze the criteria and clear the AC confirmations that are the completed flow's own evidence. Losing that record is worse than the stale checksum. Renumbering did not touch the file: 002 kept its number, and no acceptance-criteria.md was rewritten anywhere.
+- 2026-07-22T18:59:56.765Z - task-done: T9: Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly
+- 2026-07-22T19:03:05.578Z - task-done: T10: Document repo-wide allocation + worktree rule in flow skill and project memory
+- 2026-07-22T19:03:05.745Z - task-done: T1: Collect remaining context
+- 2026-07-22T19:03:05.898Z - task-done: T2: Implement per plan
+- 2026-07-22T19:03:06.057Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-23T18:52:33.794Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/205
+- 2026-07-23T18:52:43.472Z - ac-confirmed: AC1: src/flow/allocation.test.ts: worktree-uniqueness + concurrent-init tests; ids allocated via git-common-dir lock+ledger
+- 2026-07-23T18:52:43.604Z - ac-confirmed: AC2: src/flow/allocation.test.ts 'outside a git checkout' test; resolveAllocationScope falls back to local flows listing
+- 2026-07-23T18:52:43.766Z - ac-confirmed: AC3: src/flow/duplicate-ids.test.ts ambiguous-id + exact/slug-resolve tests; resolveFlowDir throws naming candidates
+- 2026-07-23T18:52:43.940Z - ac-confirmed: AC4: duplicate-ids.test.ts: service.get/start reject; harness ManagedFlowPort fails closed and writes nothing
+- 2026-07-23T18:52:44.110Z - ac-confirmed: AC5: duplicate-ids.test.ts flow-check + duplicateFlowIds list-marker tests; kind:duplicate-id hard fail
+- 2026-07-23T18:52:56.173Z - ac-confirmed: AC6: duplicate-ids.test.ts renumber tests; flow renumber moves dir, rewrites flow.json id, renumbered history event, id-map.json; refuses taken/malformed/already-used/empty-reason
+- 2026-07-23T18:52:56.317Z - ac-confirmed: AC7: repaired 002->117, 084->118, 103->119 via renumber; id-map.json committed; keryx flow check reports zero duplicate-id issues
+- 2026-07-23T18:52:56.487Z - ac-confirmed: AC8: 002-gdgraph AC checksum mismatch left untouched (pre-existing on main); documented in flow 116 journal; no acceptance-criteria.md rewritten by renumber
+- 2026-07-23T18:52:56.678Z - ac-confirmed: AC9: keryx health run PASS (score 93); bun test 2111 pass/0 fail; new tests use OS tmpdirs (security-gate fixture moved out of repo)
+- 2026-07-23T18:52:56.832Z - ac-confirmed: AC10: .metaproject/skills/flow/SKILL.md 'Flow ids' section + memory constraint flow-ids-allocated-per-clone.md (accepted, indexed)
+- 2026-07-23T18:53:19.052Z - completing
+- 2026-07-23T18:53:21.017Z - completion-failed: pull-request: PR checks not green
+- 2026-07-23T19:03:17.533Z - renumbered: 116 -> 120: collided with main's flow 116 (test-suite-isolation) created earlier; this flow chose 116 before that one was visible in the checkout — the very bug it fixes — flow 116/120
+- 2026-07-23T19:06:24.361Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-23T19:07:34.967Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/205
+- 2026-07-23T19:07:35.311Z - completing
+- 2026-07-23T19:07:37.764Z - done: all gates passed

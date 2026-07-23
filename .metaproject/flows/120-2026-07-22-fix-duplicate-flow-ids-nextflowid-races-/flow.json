@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 2,
+  "id": "120",
+  "slug": "fix-duplicate-flow-ids-nextflowid-races-",
+  "title": "Fix duplicate flow ids: nextFlowId races on concurrent init and resolveFlowDir silently picks one of the colliding flows",
+  "status": "done",
+  "createdAt": "2026-07-22T12:05:44.354Z",
+  "updatedAt": "2026-07-23T19:07:37.764Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1be2c0098b7799f2ceb1b4f878a8b1e5178fb0050e71e830c015a336464fed6e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-23T18:52:43.472Z",
+      "note": "src/flow/allocation.test.ts: worktree-uniqueness + concurrent-init tests; ids allocated via git-common-dir lock+ledger"
+    },
+    "AC2": {
+      "at": "2026-07-23T18:52:43.604Z",
+      "note": "src/flow/allocation.test.ts 'outside a git checkout' test; resolveAllocationScope falls back to local flows listing"
+    },
+    "AC3": {
+      "at": "2026-07-23T18:52:43.766Z",
+      "note": "src/flow/duplicate-ids.test.ts ambiguous-id + exact/slug-resolve tests; resolveFlowDir throws naming candidates"
+    },
+    "AC4": {
+      "at": "2026-07-23T18:52:43.939Z",
+      "note": "duplicate-ids.test.ts: service.get/start reject; harness ManagedFlowPort fails closed and writes nothing"
+    },
+    "AC5": {
+      "at": "2026-07-23T18:52:44.110Z",
+      "note": "duplicate-ids.test.ts flow-check + duplicateFlowIds list-marker tests; kind:duplicate-id hard fail"
+    },
+    "AC6": {
+      "at": "2026-07-23T18:52:56.173Z",
+      "note": "duplicate-ids.test.ts renumber tests; flow renumber moves dir, rewrites flow.json id, renumbered history event, id-map.json; refuses taken/malformed/already-used/empty-reason"
+    },
+    "AC7": {
+      "at": "2026-07-23T18:52:56.316Z",
+      "note": "repaired 002->117, 084->118, 103->119 via renumber; id-map.json committed; keryx flow check reports zero duplicate-id issues"
+    },
+    "AC8": {
+      "at": "2026-07-23T18:52:56.486Z",
+      "note": "002-gdgraph AC checksum mismatch left untouched (pre-existing on main); documented in flow 116 journal; no acceptance-criteria.md rewritten by renumber"
+    },
+    "AC9": {
+      "at": "2026-07-23T18:52:56.678Z",
+      "note": "keryx health run PASS (score 93); bun test 2111 pass/0 fail; new tests use OS tmpdirs (security-gate fixture moved out of repo)"
+    },
+    "AC10": {
+      "at": "2026-07-23T18:52:56.832Z",
+      "note": ".metaproject/skills/flow/SKILL.md 'Flow ids' section + memory constraint flow-ids-allocated-per-clone.md (accepted, indexed)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/205"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Repo-wide id allocation: shared git-common-dir lock + ledger in nextFlowId/init (with non-git fallback)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Ambiguity-safe resolveFlowDir + fail-closed callers (flow CLI, review --flow, ManagedFlowPort)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Duplicate-id rule in keryx flow check + collision marker in flow list",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "keryx flow renumber command (move dir, rewrite flow.json id, history event, old->new mapping)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Document repo-wide allocation + worktree rule in flow skill and project memory",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-22T12:05:44.354Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-22T12:09:14.640Z",
+      "event": "task-added",
+      "detail": "T5: Repo-wide id allocation: shared git-common-dir lock + ledger in nextFlowId/init (with non-git fallback)"
+    },
+    {
+      "at": "2026-07-22T12:09:14.810Z",
+      "event": "task-added",
+      "detail": "T6: Ambiguity-safe resolveFlowDir + fail-closed callers (flow CLI, review --flow, ManagedFlowPort)"
+    },
+    {
+      "at": "2026-07-22T12:09:14.998Z",
+      "event": "task-added",
+      "detail": "T7: Duplicate-id rule in keryx flow check + collision marker in flow list"
+    },
+    {
+      "at": "2026-07-22T12:09:15.158Z",
+      "event": "task-added",
+      "detail": "T8: keryx flow renumber command (move dir, rewrite flow.json id, history event, old->new mapping)"
+    },
+    {
+      "at": "2026-07-22T12:09:15.299Z",
+      "event": "task-added",
+      "detail": "T9: Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly"
+    },
+    {
+      "at": "2026-07-22T12:09:15.446Z",
+      "event": "task-added",
+      "detail": "T10: Document repo-wide allocation + worktree rule in flow skill and project memory"
+    },
+    {
+      "at": "2026-07-22T13:43:11.496Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-22T13:43:17.203Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-22T18:57:56.854Z",
+      "event": "task-done",
+      "detail": "T5: Repo-wide id allocation: shared git-common-dir lock + ledger in nextFlowId/init (with non-git fallback)"
+    },
+    {
+      "at": "2026-07-22T18:57:57.005Z",
+      "event": "task-done",
+      "detail": "T6: Ambiguity-safe resolveFlowDir + fail-closed callers (flow CLI, review --flow, ManagedFlowPort)"
+    },
+    {
+      "at": "2026-07-22T18:57:57.128Z",
+      "event": "task-done",
+      "detail": "T7: Duplicate-id rule in keryx flow check + collision marker in flow list"
+    },
+    {
+      "at": "2026-07-22T18:57:57.283Z",
+      "event": "task-done",
+      "detail": "T8: keryx flow renumber command (move dir, rewrite flow.json id, history event, old->new mapping)"
+    },
+    {
+      "at": "2026-07-22T18:59:56.765Z",
+      "event": "task-done",
+      "detail": "T9: Repair existing collisions 002/084/103 via renumber; handle the 002 AC checksum mismatch explicitly"
+    },
+    {
+      "at": "2026-07-22T19:03:05.578Z",
+      "event": "task-done",
+      "detail": "T10: Document repo-wide allocation + worktree rule in flow skill and project memory"
+    },
+    {
+      "at": "2026-07-22T19:03:05.745Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-22T19:03:05.898Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-22T19:03:06.057Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-23T18:52:33.794Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/205"
+    },
+    {
+      "at": "2026-07-23T18:52:43.472Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/flow/allocation.test.ts: worktree-uniqueness + concurrent-init tests; ids allocated via git-common-dir lock+ledger"
+    },
+    {
+      "at": "2026-07-23T18:52:43.604Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/flow/allocation.test.ts 'outside a git checkout' test; resolveAllocationScope falls back to local flows listing"
+    },
+    {
+      "at": "2026-07-23T18:52:43.766Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/flow/duplicate-ids.test.ts ambiguous-id + exact/slug-resolve tests; resolveFlowDir throws naming candidates"
+    },
+    {
+      "at": "2026-07-23T18:52:43.940Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: duplicate-ids.test.ts: service.get/start reject; harness ManagedFlowPort fails closed and writes nothing"
+    },
+    {
+      "at": "2026-07-23T18:52:44.110Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: duplicate-ids.test.ts flow-check + duplicateFlowIds list-marker tests; kind:duplicate-id hard fail"
+    },
+    {
+      "at": "2026-07-23T18:52:56.173Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: duplicate-ids.test.ts renumber tests; flow renumber moves dir, rewrites flow.json id, renumbered history event, id-map.json; refuses taken/malformed/already-used/empty-reason"
+    },
+    {
+      "at": "2026-07-23T18:52:56.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: repaired 002->117, 084->118, 103->119 via renumber; id-map.json committed; keryx flow check reports zero duplicate-id issues"
+    },
+    {
+      "at": "2026-07-23T18:52:56.487Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: 002-gdgraph AC checksum mismatch left untouched (pre-existing on main); documented in flow 116 journal; no acceptance-criteria.md rewritten by renumber"
+    },
+    {
+      "at": "2026-07-23T18:52:56.678Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: keryx health run PASS (score 93); bun test 2111 pass/0 fail; new tests use OS tmpdirs (security-gate fixture moved out of repo)"
+    },
+    {
+      "at": "2026-07-23T18:52:56.832Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: .metaproject/skills/flow/SKILL.md 'Flow ids' section + memory constraint flow-ids-allocated-per-clone.md (accepted, indexed)"
+    },
+    {
+      "at": "2026-07-23T18:53:19.052Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-23T18:53:21.017Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-07-23T19:03:17.533Z",
+      "event": "renumbered",
+      "detail": "116 -> 120: collided with main's flow 116 (test-suite-isolation) created earlier; this flow chose 116 before that one was visible in the checkout — the very bug it fixes — flow 116/120"
+    },
+    {
+      "at": "2026-07-23T19:06:24.361Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-23T19:07:34.967Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/205"
+    },
+    {
+      "at": "2026-07-23T19:07:35.311Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-23T19:07:37.764Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

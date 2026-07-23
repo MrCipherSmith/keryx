@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -10,7 +10,9 @@ import {
   acPath,
   appendJournal,
   assertAcIntact,
+  flowIdOf,
   flowsRoot,
+  groupFlowDirsById,
   listFlowDirs,
   nextFlowId,
   readAcCriteria,
@@ -19,6 +21,11 @@ import {
   slugify,
   writeFlow,
 } from "./store";
+import {
+  recordAllocation,
+  reservedIds,
+  resolveAllocationScope,
+} from "./allocation";
 import {
   renderAcceptanceCriteria,
   renderDescription,
@@ -29,8 +36,10 @@ import {
 import type {
   FlowCheckResult,
   FlowCompleteResult,
+  FlowIdMapEntry,
   FlowInitInput,
   FlowInitResult,
+  FlowRenumberResult,
   FlowService,
   FlowServiceDeps,
   FlowState,
@@ -130,8 +139,11 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
       const title = input.title ?? context.issueTitle ?? provisionalTitle;
 
-      return withFileLock(path.join(flowsRoot(input.cwd), ".flow-init.lock"), async () => {
-        const id = await nextFlowId(input.cwd);
+      // The lock and the high-water mark live in the clone-wide allocation
+      // scope, so a sibling worktree cannot mint the same id (flow 116).
+      const scope = await resolveAllocationScope(input.cwd);
+      return withFileLock(scope.lockPath, async () => {
+        const id = await nextFlowId(input.cwd, await reservedIds(scope));
         const date = now().slice(0, 10);
         const slug = slugify(input.slug ?? title);
         const dir = `${id}-${date}-${slug}`;
@@ -169,6 +181,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         await writeFileAtomic(path.join(absolute, "acceptance-criteria.md"), renderAcceptanceCriteria());
         await writeFileAtomic(path.join(absolute, "journal.md"), renderJournal(createdAt));
         await writeFlow(input.cwd, dir, flow);
+        await recordAllocation(scope, { id, dir, at: createdAt, project: scope.project });
 
         return { flow, dir: path.relative(input.cwd, absolute), contextNotes: context.notes };
       });
@@ -470,9 +483,81 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
+    async renumber({ cwd, ref, to, reason }): Promise<FlowRenumberResult> {
+      if (!reason.trim()) {
+        throw new Error('flow renumber requires --reason "<why>"');
+      }
+      if (!/^\d{3}$/.test(to)) {
+        throw new Error(`Target flow id must be exactly three digits: got "${to}"`);
+      }
+      const fromDir = await resolveFlowDir(cwd, ref);
+      const from = flowIdOf(fromDir);
+      if (from === to) {
+        throw new Error(`Flow ${fromDir} already has id ${to}`);
+      }
+
+      const scope = await resolveAllocationScope(cwd);
+      return withFileLock(scope.lockPath, async () => {
+        const dirs = await listFlowDirs(cwd);
+        const taken = dirs.filter((dir) => flowIdOf(dir) === to);
+        if (taken.length > 0) {
+          throw new Error(`Flow id ${to} is already taken by ${taken.join(", ")}`);
+        }
+        // A number handed out once stays spent: reusing it would make the
+        // references in merged PRs and journals ambiguous.
+        if ((await reservedIds(scope)).includes(Number(to))) {
+          throw new Error(
+            `Flow id ${to} was already used in this repository and cannot be reused. ` +
+              "Pick a fresh number (see .metaproject/flows/id-map.json).",
+          );
+        }
+
+        const toDir = `${to}${fromDir.slice(3)}`;
+        const flowsDir = flowsRoot(cwd);
+        // Also hold the per-flow lock: a concurrent taskDone/acConfirm resolves
+        // the OLD directory and would write flow.json back into the path we
+        // just moved away, recreating a half-empty package.
+        const flow = await withFileLock(flowLockPath(cwd, fromDir), async () => {
+          await rename(path.join(flowsDir, fromDir), path.join(flowsDir, toDir));
+          return readFlow(cwd, toDir);
+        });
+        flow.id = to;
+        const at = now();
+        await save(cwd, toDir, flow, "renumbered", `${from} -> ${to}: ${reason}`);
+        await appendIdMap(cwd, { from, to, fromDir, toDir, at, reason });
+        await recordAllocation(scope, { id: to, dir: toDir, at, project: scope.project });
+        await recordAllocation(scope, {
+          id: from,
+          dir: fromDir,
+          at,
+          project: scope.project,
+          retired: true,
+        });
+
+        return { flow, from, to, fromDir, toDir };
+      });
+    },
+
     async check({ cwd }): Promise<FlowCheckResult> {
       const issues: FlowCheckResult["issues"] = [];
-      for (const dir of await listFlowDirs(cwd)) {
+      const allDirs = await listFlowDirs(cwd);
+      // Repo-level rule: two packages sharing a number make every bare-id
+      // reference ambiguous, so this is a hard failure like a checksum break.
+      for (const [id, group] of groupFlowDirsById(allDirs)) {
+        if (group.length < 2) {
+          continue;
+        }
+        for (const dir of group) {
+          issues.push({
+            flow: dir,
+            kind: "duplicate-id",
+            message:
+              `duplicate flow id ${id}, shared with ${group.filter((other) => other !== dir).join(", ")}` +
+              ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
+          });
+        }
+      }
+      for (const dir of allDirs) {
         let flow: FlowState;
         try {
           flow = await readFlow(cwd, dir);
@@ -524,6 +609,30 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       return { ok: issues.length === 0, issues };
     },
   };
+}
+
+// Renumbering rewrites a flow's identity, so the old number must stay
+// traceable: merged PRs, journals and evidence refs still name it.
+async function appendIdMap(cwd: string, entry: FlowIdMapEntry): Promise<void> {
+  const file = path.join(flowsRoot(cwd), "id-map.json");
+  let entries: FlowIdMapEntry[] = [];
+  if (await pathExists(file)) {
+    const raw = await readFile(file, "utf8");
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        throw new Error("expected an array");
+      }
+      entries = parsed as FlowIdMapEntry[];
+    } catch (error) {
+      // Never silently drop recorded history — the operator must fix the file.
+      throw new Error(
+        `Cannot read ${path.relative(cwd, file)}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  entries.push(entry);
+  await writeFileAtomic(file, `${JSON.stringify(entries, null, 2)}\n`);
 }
 
 async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {

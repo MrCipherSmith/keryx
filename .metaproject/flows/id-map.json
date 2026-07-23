@@ -1,0 +1,42 @@
+[
+  {
+    "from": "002",
+    "to": "117",
+    "fromDir": "002-2026-07-10-implement-keryx-execution-observability-",
+    "toDir": "117-2026-07-10-implement-keryx-execution-observability-",
+    "at": "2026-07-22T18:58:39.348Z",
+    "reason": "duplicate of flow 002 (gdgraph java/python import resolution); ids collided because allocation was per working copy — flow 116"
+  },
+  {
+    "from": "084",
+    "to": "118",
+    "fromDir": "084-2026-07-20-provider-picker-showed-only-1-of-n-provi",
+    "toDir": "118-2026-07-20-provider-picker-showed-only-1-of-n-provi",
+    "at": "2026-07-22T18:58:46.405Z",
+    "reason": "duplicate of flow 084 (CI externalize @opentui/core); ids collided because allocation was per working copy — flow 116"
+  },
+  {
+    "from": "103",
+    "to": "119",
+    "fromDir": "103-2026-07-21-p0-sandbox-credential-auto-mask-resolver",
+    "toDir": "119-2026-07-21-p0-sandbox-credential-auto-mask-resolver",
+    "at": "2026-07-22T18:58:46.736Z",
+    "reason": "duplicate of flow 103 (sandbox network audit runbook); ids collided because allocation was per working copy — flow 116"
+  },
+  {
+    "from": "116",
+    "to": "120",
+    "fromDir": "116-2026-07-22-fix-duplicate-flow-ids-nextflowid-races-",
+    "toDir": "120-2026-07-22-fix-duplicate-flow-ids-nextflowid-races-",
+    "at": "2026-07-23T19:03:17.533Z",
+    "reason": "collided with main's flow 116 (test-suite-isolation) created earlier; this flow chose 116 before that one was visible in the checkout — the very bug it fixes — flow 116/120"
+  },
+  {
+    "from": "115",
+    "to": "121",
+    "fromDir": "115-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a",
+    "toDir": "121-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a",
+    "at": "2026-07-23T19:03:24.158Z",
+    "reason": "duplicate of flow 115 (shell-approval-hardening, created earlier); ids collided because allocation was per working copy — flow 120"
+  }
+]
