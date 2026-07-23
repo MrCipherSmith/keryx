@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 2,
+  "id": "122",
+  "slug": "metaproject-native-followups",
+  "title": "metaproject-native follow-ups: RunDeps.metaprojectPort seam (S1) + MP-6 blast-radius escalation wiring + MP-5 wikiBacklinks op",
+  "status": "in-progress",
+  "createdAt": "2026-07-23T20:59:09.021Z",
+  "updatedAt": "2026-07-23T21:18:43.218Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b86f9a2bd3471dcdaa274034230abd59c5e55474ced4104177b25817fd09a28a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-23T21:18:42.580Z",
+      "note": "RunDeps.metaprojectPort? optional (run.ts:101-130); run.metaproject.test.ts proves no-port run = deterministic floor"
+    },
+    "AC2": {
+      "at": "2026-07-23T21:18:42.721Z",
+      "note": "escalateForBlastRadius gated at run.ts:323-337 on port+threshold>0, allow->ask only; tests: allow->ask when affected>threshold, unchanged when port/threshold absent"
+    },
+    "AC3": {
+      "at": "2026-07-23T21:18:42.903Z",
+      "note": "wikiBacklinks port method + wiki_backlinks descriptor (module gdwiki, risk read) in all 3 projections; wiki-backlinks-result.schema.json; adapter+operations+mcp tests"
+    },
+    "AC4": {
+      "at": "2026-07-23T21:18:43.054Z",
+      "note": "tsc --noEmit exit 0; touched 41 pass/0 fail; run+policy+mcp regression 89 pass/0 fail; package.json dependencies {}"
+    },
+    "AC5": {
+      "at": "2026-07-23T21:18:43.218Z",
+      "note": "3 deferred items (flow-transition write, legacy MCP adapter retirement, in-process search facade) documented with rationale in journal.md; no partial code left"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped"
+    },
+    {
+      "id": "T5",
+      "title": "Write failing tests for AC1-AC3 (RunDeps seam, MP-6 escalation gating, wikiBacklinks op present in 3 projections)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "S1: add optional RunDeps.metaprojectPort + thread into runOffline (additive, absent=unchanged)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "MP-6: wire escalateForBlastRadius at decide() call-site, gated on port+threshold (default off=unchanged)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "MP-5a: wikiBacklinks MetaprojectPort method + METAPROJECT_OPERATIONS descriptor + result schema",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "code-verifier + review-orchestrator (architecture+logic); fix findings",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Journal deferred items (flow-transition write, adapter retirement, in-process search) with rationale",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-23T20:59:09.021Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-23T21:02:20.237Z",
+      "event": "task-added",
+      "detail": "T5: Write failing tests for AC1-AC3 (RunDeps seam, MP-6 escalation gating, wikiBacklinks op present in 3 projections)"
+    },
+    {
+      "at": "2026-07-23T21:02:20.365Z",
+      "event": "task-added",
+      "detail": "T6: S1: add optional RunDeps.metaprojectPort + thread into runOffline (additive, absent=unchanged)"
+    },
+    {
+      "at": "2026-07-23T21:02:20.536Z",
+      "event": "task-added",
+      "detail": "T7: MP-6: wire escalateForBlastRadius at decide() call-site, gated on port+threshold (default off=unchanged)"
+    },
+    {
+      "at": "2026-07-23T21:02:20.694Z",
+      "event": "task-added",
+      "detail": "T8: MP-5a: wikiBacklinks MetaprojectPort method + METAPROJECT_OPERATIONS descriptor + result schema"
+    },
+    {
+      "at": "2026-07-23T21:02:20.826Z",
+      "event": "task-added",
+      "detail": "T9: code-verifier + review-orchestrator (architecture+logic); fix findings"
+    },
+    {
+      "at": "2026-07-23T21:02:20.955Z",
+      "event": "task-added",
+      "detail": "T10: Journal deferred items (flow-transition write, adapter retirement, in-process search) with rationale"
+    },
+    {
+      "at": "2026-07-23T21:03:03.866Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-23T21:03:04.001Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-23T21:03:04.127Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-23T21:03:04.275Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-23T21:03:04.467Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-23T21:03:04.583Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-23T21:18:41.815Z",
+      "event": "task-done",
+      "detail": "T5: Write failing tests for AC1-AC3 (RunDeps seam, MP-6 escalation gating, wikiBacklinks op present in 3 projections)"
+    },
+    {
+      "at": "2026-07-23T21:18:41.962Z",
+      "event": "task-done",
+      "detail": "T6: S1: add optional RunDeps.metaprojectPort + thread into runOffline (additive, absent=unchanged)"
+    },
+    {
+      "at": "2026-07-23T21:18:42.097Z",
+      "event": "task-done",
+      "detail": "T7: MP-6: wire escalateForBlastRadius at decide() call-site, gated on port+threshold (default off=unchanged)"
+    },
+    {
+      "at": "2026-07-23T21:18:42.208Z",
+      "event": "task-done",
+      "detail": "T8: MP-5a: wikiBacklinks MetaprojectPort method + METAPROJECT_OPERATIONS descriptor + result schema"
+    },
+    {
+      "at": "2026-07-23T21:18:42.309Z",
+      "event": "task-done",
+      "detail": "T9: code-verifier + review-orchestrator (architecture+logic); fix findings"
+    },
+    {
+      "at": "2026-07-23T21:18:42.451Z",
+      "event": "task-done",
+      "detail": "T10: Journal deferred items (flow-transition write, adapter retirement, in-process search) with rationale"
+    },
+    {
+      "at": "2026-07-23T21:18:42.580Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: RunDeps.metaprojectPort? optional (run.ts:101-130); run.metaproject.test.ts proves no-port run = deterministic floor"
+    },
+    {
+      "at": "2026-07-23T21:18:42.721Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: escalateForBlastRadius gated at run.ts:323-337 on port+threshold>0, allow->ask only; tests: allow->ask when affected>threshold, unchanged when port/threshold absent"
+    },
+    {
+      "at": "2026-07-23T21:18:42.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: wikiBacklinks port method + wiki_backlinks descriptor (module gdwiki, risk read) in all 3 projections; wiki-backlinks-result.schema.json; adapter+operations+mcp tests"
+    },
+    {
+      "at": "2026-07-23T21:18:43.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc --noEmit exit 0; touched 41 pass/0 fail; run+policy+mcp regression 89 pass/0 fail; package.json dependencies {}"
+    },
+    {
+      "at": "2026-07-23T21:18:43.218Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: 3 deferred items (flow-transition write, legacy MCP adapter retirement, in-process search facade) documented with rationale in journal.md; no partial code left"
+    }
+  ]
+}

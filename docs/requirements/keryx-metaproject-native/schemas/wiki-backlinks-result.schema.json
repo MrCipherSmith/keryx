@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "wiki-backlinks-result.schema.json",
+  "title": "WikiBacklinksResult",
+  "description": "Structured result of MetaprojectPort.wikiBacklinks — the wiki pages that reference a repo file (the reverse \"documented in\" lookup), backed by the gdwiki wikiPagesForFile facade (buildBacklinkIndex + backlinksFor).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["file", "backlinks"],
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "The repo-relative file whose referencing wiki pages were computed."
+    },
+    "backlinks": {
+      "type": "array",
+      "description": "Repo-relative wiki page paths that reference `file`, sorted.",
+      "items": { "type": "string" }
+    },
+    "error": {
+      "type": "string",
+      "description": "Set when the backing service failed — the result is structured-empty, not thrown."
+    }
+  }
+}

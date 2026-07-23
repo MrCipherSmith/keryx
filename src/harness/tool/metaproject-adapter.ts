@@ -31,6 +31,7 @@ import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
 import { wikiAsk } from "../../wiki/ask";
+import { wikiPagesForFile } from "../../wiki/service";
 import type { WikiAskInput, WikiAskResult as WikiAskFacadeResult } from "../../wiki/types";
 import type {
   ContextSummaryResult,
@@ -45,6 +46,7 @@ import type {
   SearchCodeResult,
   TestRelatedResult,
   WikiAskResult,
+  WikiBacklinksResult,
   WikiPageResult,
 } from "./metaproject-port";
 
@@ -59,6 +61,12 @@ export interface MetaprojectAdapterDeps {
   /** Wiki Q&A resolver (default: the real gdwiki `ask` facade). Injectable for tests. */
   wikiAsk: (input: WikiAskInput) => Promise<WikiAskFacadeResult>;
   /**
+   * Reverse "documented in" lookup: wiki pages referencing a repo file (default:
+   * the real gdwiki `wikiPagesForFile` facade, which builds the backlink index
+   * and delegates to `backlinksFor`). Injectable for tests.
+   */
+  wikiPagesForFile: (cwd: string, targetRepoPath: string) => Promise<string[]>;
+  /**
    * NON-WRITING repomap compute (default: load graph + config + pure
    * `computeRepomap`). It never persists the repomap artifact, so the `repomap`
    * tool is truly read-only. Injectable for tests.
@@ -72,6 +80,7 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   findRelatedTests,
   createCodeHealthService,
   wikiAsk,
+  wikiPagesForFile,
   repomapCompute: async (cwd, options) => {
     const [graph, config] = await Promise.all([loadGraph(cwd), loadGdgraphConfig(cwd)]);
     return computeRepomap(graph, config, options);
@@ -366,6 +375,17 @@ export function createMetaprojectAdapter(
         };
       } catch (cause) {
         return { question: input.question, citations: [], answer: "", error: errorMessage(cause) };
+      }
+    },
+
+    // --- flow 122: reverse "documented in" lookup over the wiki (MP-5a) --------
+
+    async wikiBacklinks(input): Promise<WikiBacklinksResult> {
+      try {
+        const backlinks = await deps.wikiPagesForFile(cwd, input.file);
+        return { file: input.file, backlinks: [...backlinks].sort() };
+      } catch (cause) {
+        return { file: input.file, backlinks: [], error: errorMessage(cause) };
       }
     },
   };

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
+import { toMcpTools } from "../../mcp/metaproject-tools";
 import type { MetaprojectPort } from "./metaproject-port";
 import {
   METAPROJECT_OPERATIONS,
@@ -40,6 +41,7 @@ const EXPECTED_NAMES = [
   "search_code",
   "test_related",
   "wiki_ask",
+  "wiki_backlinks",
 ];
 
 interface PortCalls {
@@ -323,4 +325,66 @@ test("toToolDefinitions includes the batch-2 operation toolIds", () => {
   expect(ids).toContain("metaproject:graph_symbol");
   expect(ids).toContain("metaproject:repomap");
   expect(ids).toContain("metaproject:wiki_ask");
+});
+
+// --- flow 122 (AC3): wiki_backlinks operation --------------------------------
+
+test("wiki_backlinks returns 'unavailable' when the optional port method is absent", async () => {
+  const { port } = recordingPort(); // has no wikiBacklinks
+  const result = await op("wiki_backlinks").invoke(port, { file: "src/x.ts" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toMatch(/not available/);
+});
+
+test("wiki_backlinks formats the structured port result when the method is present", async () => {
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    wikiBacklinks: async ({ file }) => ({
+      file,
+      backlinks: [".metaproject/wiki/architecture/harness.md", ".metaproject/wiki/domain/policy.md"],
+    }),
+  };
+  const result = await op("wiki_backlinks").invoke(port, { file: "src/harness/run/run.ts" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("Wiki pages referencing src/harness/run/run.ts");
+  expect(result.output).toContain(".metaproject/wiki/architecture/harness.md");
+});
+
+test("wiki_backlinks is a wiki-module read op present in all three projections (agent/harness/MCP)", () => {
+  const descriptor = METAPROJECT_OPERATIONS.find((o) => o.name === "wiki_backlinks");
+  expect(descriptor?.module).toBe("gdwiki");
+  expect(descriptor?.risk).toBe("read");
+
+  const { port } = recordingPort();
+  const interactive = toInteractiveTools(METAPROJECT_OPERATIONS, port).map((t) => t.definition.name);
+  expect(interactive).toContain("wiki_backlinks");
+
+  const harness = toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId);
+  expect(harness).toContain("metaproject:wiki_backlinks");
+
+  const mcp = toMcpTools(METAPROJECT_OPERATIONS, () => port).map((t) => t.name);
+  expect(mcp).toContain("wiki_backlinks");
+});
+
+test("a wiki_backlinks result validates against wiki-backlinks-result.schema.json", () => {
+  const schema = JSON.parse(
+    readFileSync(
+      path.join(
+        import.meta.dir,
+        "..",
+        "..",
+        "..",
+        "docs",
+        "requirements",
+        "keryx-metaproject-native",
+        "schemas",
+        "wiki-backlinks-result.schema.json",
+      ),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
+  const result = { file: "src/harness/run/run.ts", backlinks: [".metaproject/wiki/architecture/harness.md"] };
+  const validation = validateAgainstSchemaObject(schema, result);
+  expect(validation.errors).toEqual([]);
+  expect(validation.valid).toBe(true);
 });

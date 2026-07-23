@@ -235,6 +235,16 @@ export interface WikiAskResult {
   error?: string;
 }
 
+/** Structured result of `wikiBacklinks` — wiki pages that reference a repo file. */
+export interface WikiBacklinksResult {
+  /** The repo-relative file whose referencing wiki pages were computed. */
+  file: string;
+  /** Repo-relative wiki page paths that reference `file`, sorted. */
+  backlinks: string[];
+  /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
 /** Structured result of `describeContext` — a lightweight project summary. */
 export interface ContextSummaryResult {
   /** The project root the port is bound to. */
@@ -289,4 +299,11 @@ export interface MetaprojectPort {
   repomap?(input: { budget?: number }): Promise<RepomapResult>;
   /** Deterministic lexical Q&A over the project's wiki + memory (gdwiki). */
   wikiAsk?(input: { question: string }): Promise<WikiAskResult>;
+
+  // --- flow 122: additive OPTIONAL read operation (MP-5a) ---------------------
+  // Same OPTIONAL contract as flows 043/044: an absent method is an
+  // "unavailable" operation (a structured result), never a throw.
+
+  /** Wiki pages that reference a repo file — the reverse "documented in" lookup (gdwiki). */
+  wikiBacklinks?(input: { file: string }): Promise<WikiBacklinksResult>;
 }

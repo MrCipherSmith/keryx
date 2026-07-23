@@ -392,3 +392,34 @@ test("wikiAsk returns a structured error (never throws) when the resolver fails"
   expect(result?.answer).toBe("");
   expect(result?.error).toMatch(/wiki boom/);
 });
+
+// --- flow 122: wikiBacklinks adapter method (MP-5a) ---------------------------
+
+test("wikiBacklinks delegates to the injected wikiPagesForFile facade and sorts the results", async () => {
+  const calls: Array<[string, string]> = [];
+  const adapter = createMetaprojectAdapter(CWD, {
+    wikiPagesForFile: async (cwd, target) => {
+      calls.push([cwd, target]);
+      return [".metaproject/wiki/domain/policy.md", ".metaproject/wiki/architecture/harness.md"];
+    },
+  });
+  const result = await adapter.wikiBacklinks?.({ file: "src/harness/run/run.ts" });
+  expect(calls).toEqual([[CWD, "src/harness/run/run.ts"]]);
+  expect(result?.file).toBe("src/harness/run/run.ts");
+  expect(result?.backlinks).toEqual([
+    ".metaproject/wiki/architecture/harness.md",
+    ".metaproject/wiki/domain/policy.md",
+  ]);
+  expect(result?.error).toBeUndefined();
+});
+
+test("wikiBacklinks returns a structured error (never throws) when the facade fails", async () => {
+  const adapter = createMetaprojectAdapter(CWD, {
+    wikiPagesForFile: async () => {
+      throw new Error("backlinks boom");
+    },
+  });
+  const result = await adapter.wikiBacklinks?.({ file: "src/x.ts" });
+  expect(result?.backlinks).toEqual([]);
+  expect(result?.error).toMatch(/backlinks boom/);
+});

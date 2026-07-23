@@ -23,7 +23,9 @@ import {
 } from "../completion/gate";
 import { redactForPersistence } from "../evidence/redaction";
 import { decide } from "../policy/engine";
+import { escalateForBlastRadius, metaprojectBlastRadius } from "../policy/metaproject-escalation";
 import type { PolicyContext, PolicyDecision, PolicyProfile } from "../policy/types";
+import type { MetaprojectPort } from "../tool/metaproject-port";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort } from "../provider/types";
 import { AppendOnlySession } from "../session/session";
 import type { ArtifactRef, SessionEntry } from "../session/types";
@@ -106,6 +108,22 @@ export interface RunDeps {
   clock: () => string;
   idSeq: () => string;
   interactive: boolean;
+  /**
+   * OPTIONAL metaproject read port (flow 122 / S1). Additive and default-OFF:
+   * when it is `undefined` the run is byte-identical to a run built without the
+   * field (the deterministic floor is preserved). It is consulted ONLY by the
+   * MP-6 blast-radius escalation below, and only alongside a positive
+   * `blastRadiusThreshold`.
+   */
+  metaprojectPort?: MetaprojectPort;
+  /**
+   * OPTIONAL blast-radius escalation threshold (flow 122 / MP-6). When both this
+   * (`> 0`) and `metaprojectPort` are present, an `allow` for a tool call whose
+   * target's affected count meets the threshold is escalated to `ask` via the
+   * pure `escalateForBlastRadius` primitive. Absent / `<= 0` => decisions are
+   * exactly `decide()`'s output.
+   */
+  blastRadiusThreshold?: number;
 }
 
 /**
@@ -297,10 +315,27 @@ export async function runOffline(
       approvals: [],
       actionFingerprint,
     };
-    const decision = decide({ toolCallId, risk }, policyContext, {
+    let decision = decide({ toolCallId, risk }, policyContext, {
       clock: deps.clock,
       idSeq: deps.idSeq,
     });
+
+    // MP-6 (flow 122): OPTIONAL, default-OFF metaproject blast-radius escalation.
+    // Only when the run supplies BOTH a `metaprojectPort` AND a positive
+    // `blastRadiusThreshold` is the existing pure `escalateForBlastRadius`
+    // primitive consulted — it can only TIGHTEN an `allow` to `ask`, never
+    // weaken. No port / no threshold => `decide()`'s output is used unchanged
+    // (the deterministic floor). Deterministic: a pure fold over an injected
+    // `graphAffected` read; no `Date.now`/`Math.random`.
+    const blastRadiusThreshold = deps.blastRadiusThreshold ?? 0;
+    if (deps.metaprojectPort !== undefined && blastRadiusThreshold > 0 && decision.decision === "allow") {
+      const targetPath = toolTargetPath(parsedInput);
+      if (targetPath !== undefined) {
+        const blastRadius = await metaprojectBlastRadius(deps.metaprojectPort, targetPath);
+        decision = escalateForBlastRadius(decision, { blastRadius }, blastRadiusThreshold);
+      }
+    }
+
     decisions.push(decision);
 
     // Persist the policy decision as an append-only session record (S2).
@@ -449,6 +484,22 @@ export async function runOffline(
     transcriptHash,
     expectedStateHash,
   };
+}
+
+/**
+ * The target file path a tool call operates on, for the MP-6 blast-radius read.
+ * Checks the conventional string fields in order and returns the first non-empty
+ * one; `undefined` when the input names no target (escalation is then skipped).
+ * Pure and deterministic.
+ */
+function toolTargetPath(input: Record<string, unknown>): string | undefined {
+  for (const key of ["path", "file", "target"]) {
+    const value = input[key];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 /** Parse a normalized `tool_call_end` input string into a record (fail-safe to `{}`). */

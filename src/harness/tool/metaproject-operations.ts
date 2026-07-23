@@ -27,6 +27,7 @@ import type {
   RepomapResult,
   TestRelatedResult,
   WikiAskResult,
+  WikiBacklinksResult,
   WikiPageResult,
 } from "./metaproject-port";
 import type { ToolDefinition } from "./types";
@@ -288,6 +289,21 @@ export function formatWikiAsk(result: WikiAskResult): InteractiveToolResult {
   return { output: result.answer.length > 0 ? result.answer : "(no answer)", isError: false };
 }
 
+/** Render a `wikiBacklinks` result as readable text. */
+export function formatBacklinks(result: WikiBacklinksResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `wiki_backlinks failed: ${result.error}`, isError: true };
+  }
+  if (result.backlinks.length === 0) {
+    return { output: `No wiki pages reference ${result.file}.`, isError: false };
+  }
+  const lines = result.backlinks.map((page) => `  - ${page}`);
+  return {
+    output: [`Wiki pages referencing ${result.file} (${result.backlinks.length}):`, ...lines].join("\n"),
+    isError: false,
+  };
+}
+
 const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -357,6 +373,16 @@ const WIKI_ASK_OUTPUT_SCHEMA: Record<string, unknown> = {
     error: { type: "string" },
   },
   required: ["question", "citations", "answer"],
+};
+
+const WIKI_BACKLINKS_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    file: { type: "string" },
+    backlinks: { type: "array", items: { type: "string" } },
+    error: { type: "string" },
+  },
+  required: ["file", "backlinks"],
 };
 
 export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
@@ -603,6 +629,30 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return question.error;
       }
       return formatWikiAsk(await port.wikiAsk({ question: question.value }));
+    },
+  },
+  {
+    name: "wiki_backlinks",
+    risk: "read",
+    module: "gdwiki",
+    description:
+      "List the wiki pages that reference a repo file — the reverse \"documented in\" lookup (`keryx wiki backlinks`). Input: { file: string } relative to the project root.",
+    inputSchema: {
+      type: "object",
+      properties: { file: { type: "string" } },
+      required: ["file"],
+      additionalProperties: false,
+    },
+    outputSchema: WIKI_BACKLINKS_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.wikiBacklinks === undefined) {
+        return { output: "wiki_backlinks is not available in this session.", isError: true };
+      }
+      const file = requireString(input, "file", "wiki_backlinks");
+      if ("error" in file) {
+        return file.error;
+      }
+      return formatBacklinks(await port.wikiBacklinks({ file: file.value }));
     },
   },
 ];

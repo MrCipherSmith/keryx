@@ -26,6 +26,7 @@ function fullFakePort(): MetaprojectPort {
     graphSymbol: async ({ name }) => ({ name, definitions: [], callers: [], callees: [] }),
     repomap: async () => ({ budget: 0, files: [], tokens: 0, omitted: 0 }),
     wikiAsk: async ({ question }) => ({ question, answer: "", citations: [] }),
+    wikiBacklinks: async ({ file }) => ({ file, backlinks: [] }),
   };
   return port;
 }
@@ -47,6 +48,7 @@ test("every unified metaproject tool is invocable via MCP (no 'unknown operation
     graph_symbol: { name: "Foo" },
     repomap: {},
     wiki_ask: { question: "how?" },
+    wiki_backlinks: { file: "src/x.ts" },
   };
 
   for (const tool of tools) {
