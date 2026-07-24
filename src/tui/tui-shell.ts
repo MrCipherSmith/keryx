@@ -78,6 +78,7 @@ import {
   type SessionHandle,
 } from "../session";
 import { setAskUserHost } from "./ask-user-bridge";
+import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
 import { createShellChrome, createShellRenderer, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
@@ -881,6 +882,9 @@ export async function launchTuiAgentShell(opts: {
     resolveDone = resolve;
   });
   let uid = 0;
+  // Surfaces this pane's lifecycle to a herdr workspace (working/idle/blocked).
+  // No-op unless the shell was launched inside a herdr pane.
+  const herdr = createHerdrReporter();
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
   /** The stored-permission migration warning is shown at most once per session. */
@@ -1029,6 +1033,7 @@ export async function launchTuiAgentShell(opts: {
         ...(detail !== undefined ? { detail } : {}),
         model: `${currentSel.provider}/${currentSel.model}`,
       });
+      herdr.report(herdrStateFor(status));
     };
     // Idle main agent visible from launch.
     setMainAgent("queued", "ready");
@@ -2129,6 +2134,7 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
+    await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
     try {
       renderer?.destroy();
     } catch {

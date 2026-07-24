@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "id": "124",
+  "slug": "herdr-agent-integration",
+  "title": "herdr agent-state integration for keryx shell: report working/idle/blocked to herdr via pane socket",
+  "status": "in-progress",
+  "createdAt": "2026-07-24T00:19:06.977Z",
+  "updatedAt": "2026-07-24T00:31:14.449Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ec49cf119556ea57440f226f1feba3800a4d5f9b92f71925f4836fa706e5d1a1",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-24T00:19:06.977Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-24T00:20:57.744Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-24T00:20:57.831Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-24T00:31:14.287Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-24T00:31:14.366Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-24T00:31:14.449Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}
