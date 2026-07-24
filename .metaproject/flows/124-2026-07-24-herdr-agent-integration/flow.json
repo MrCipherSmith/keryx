@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "id": "124",
+  "slug": "herdr-agent-integration",
+  "title": "herdr agent-state integration for keryx shell: report working/idle/blocked to herdr via pane socket",
+  "status": "implemented",
+  "createdAt": "2026-07-24T00:19:06.977Z",
+  "updatedAt": "2026-07-24T00:36:06.240Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ec49cf119556ea57440f226f1feba3800a4d5f9b92f71925f4836fa706e5d1a1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-24T00:36:05.928Z",
+      "note": "herdr-report.ts exports createHerdrReporter+herdrStateFor; mapping asserted in test 'herdrStateFor maps...'"
+    },
+    "AC2": {
+      "at": "2026-07-24T00:36:06.005Z",
+      "note": "no-op tests: unset env and partial env produce 0 socket writes"
+    },
+    "AC3": {
+      "at": "2026-07-24T00:36:06.082Z",
+      "note": "payload/dedup/release tests assert source herdr:keryx, agent keryx, pane_id, state; dedup + pane.release_agent"
+    },
+    "AC4": {
+      "at": "2026-07-24T00:36:06.160Z",
+      "note": "tui-shell.ts diff: herdr.report(herdrStateFor(status)) in setMainAgent; await herdr.release() in finally"
+    },
+    "AC5": {
+      "at": "2026-07-24T00:36:06.240Z",
+      "note": "bun test herdr-report 7/7; tui-shell 37/37; tsc --noEmit exit=0, 0 error TS; live socket smoke: keryx working then agent=None"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/209"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-24T00:19:06.977Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-24T00:20:57.744Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-24T00:20:57.831Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-24T00:31:14.287Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-24T00:31:14.366Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-24T00:31:14.449Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-24T00:35:45.460Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-24T00:35:47.734Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/209"
+    },
+    {
+      "at": "2026-07-24T00:36:05.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: herdr-report.ts exports createHerdrReporter+herdrStateFor; mapping asserted in test 'herdrStateFor maps...'"
+    },
+    {
+      "at": "2026-07-24T00:36:06.006Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: no-op tests: unset env and partial env produce 0 socket writes"
+    },
+    {
+      "at": "2026-07-24T00:36:06.082Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: payload/dedup/release tests assert source herdr:keryx, agent keryx, pane_id, state; dedup + pane.release_agent"
+    },
+    {
+      "at": "2026-07-24T00:36:06.160Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tui-shell.ts diff: herdr.report(herdrStateFor(status)) in setMainAgent; await herdr.release() in finally"
+    },
+    {
+      "at": "2026-07-24T00:36:06.240Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test herdr-report 7/7; tui-shell 37/37; tsc --noEmit exit=0, 0 error TS; live socket smoke: keryx working then agent=None"
+    }
+  ]
+}
