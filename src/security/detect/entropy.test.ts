@@ -27,3 +27,40 @@ test("STILL flags a base64-looking token (has = / digits) near a label", () => {
 test("does not flag a high-entropy token with no sensitive label nearby", () => {
   expect(detectEntropy("random blob QWxhZGRpbjpvcGVuIHNlc2FtZTEyMw")).toEqual([]);
 });
+
+// --- review 2026-07-26, finding B-03: redactor false positives on real paths --
+
+test("does NOT flag a filesystem path near a sensitive label (the `/` shape gate)", () => {
+  // `src/security/detect/entropy` is 27 chars of slashes and letters. Accepting
+  // `/` as a secret-shaped character made every path ≥20 chars a candidate.
+  expect(detectEntropy("the key file is src/security/detect/entropy.ts")).toEqual([]);
+  expect(detectEntropy("api docs at docs/decisions/keryx-harness/index")).toEqual([]);
+});
+
+test("does NOT flag an ADR filename slug even with a version-like digit segment", () => {
+  expect(detectEntropy("ADR-0008-interactive-shell-delegate-risk-gate.md")).toEqual([]);
+  expect(detectEntropy("token: ADR-0008-interactive-shell-delegate-risk-gate.md")).toEqual([]);
+});
+
+test("the label window is bounded to the current line", () => {
+  // The reported repro: the SAME second line was masked only when the previous
+  // line happened to contain the word "credential".
+  const withoutLabel = "harmless-line-here.md\ndocs/decisions/0008-shell-gate.md";
+  const withLabel =
+    "ADR-0007-tls-terminate-https-credential-masking.md\ndocs/decisions/0008-shell-gate.md";
+
+  expect(detectEntropy(withoutLabel)).toEqual(detectEntropy(withLabel));
+  expect(detectEntropy(withLabel)).toEqual([]);
+});
+
+test("a label on the current line still applies", () => {
+  const sameLine = "unrelated preamble\napi_key = 'AKIAIOSFODNN7EXAMPLE0123'";
+  expect(detectEntropy(sameLine).length).toBeGreaterThanOrEqual(1);
+});
+
+test("STILL flags a hyphenated token whose segments are alphanumeric, not words", () => {
+  // The word-slug guard must not swallow real credentials that happen to carry
+  // hyphens: every segment here is mixed alphanumeric, so it is not a slug.
+  const input = "secret = xoxb-A1b2C3d4E5f6-G7h8I9j0K1l2-MnOpQ7rStU9vWxYz";
+  expect(detectEntropy(input).length).toBeGreaterThanOrEqual(1);
+});

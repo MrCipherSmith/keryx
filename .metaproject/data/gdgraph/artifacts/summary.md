@@ -2,49 +2,51 @@
 
 ## Stats
 
-- Source files indexed: 555
+- Source files indexed: 593
 - Imported asset files indexed: 4
-- Total nodes: 559
-- Edges: 1167
-- Import edges: 1162
+- Total nodes: 597
+- Edges: 1686
+- Import edges: 1670
 - Asset edges: 5
-- Unresolved imports: 0
-- Import resolution: 100%
-- Skipped generated/static directories: 5
+- Unresolved imports: 11
+- Import resolution: 99.3%
+- Skipped generated/static directories: 6
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 163 |
-| commands | 54 |
+| harness | 169 |
+| commands | 59 |
 | health | 39 |
-| security | 36 |
-| gdgraph | 32 |
-| lib | 29 |
+| security | 37 |
+| lib | 35 |
+| gdgraph | 34 |
 | memory | 28 |
+| flow | 19 |
+| tui | 18 |
 | mcp | 17 |
-| flow | 16 |
 | gdskills | 14 |
 | standard | 13 |
 | metrics | 12 |
 | fixtures | 11 |
+| capability | 11 |
 | ctx | 11 |
 | testing | 11 |
-| tui | 11 |
 | wiki | 11 |
-| capability | 10 |
 | assets | 8 |
-| session | 6 |
+| scripts | 7 |
 
 ## Unresolved By Type
 
 | Type | Count |
 |---|---:|
-| _none_ | 0 |
+| relative-code | 10 |
+| .css | 1 |
 
 ## Skipped Directories
 
+- `.claude`
 - `.metaproject`
 - `dist`
 - `fixtures/paraphrase/.metaproject`

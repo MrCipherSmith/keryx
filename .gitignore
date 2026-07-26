@@ -4,6 +4,14 @@ coverage/
 .DS_Store
 .tmp-*/
 
+# Agent-harness scratch space. `.claude/worktrees/` holds git worktrees — full
+# checkouts of this repository — which must never be committed or source-indexed
+# (see IGNORE_DIRS in src/gdgraph/build.ts). Committed here rather than left in
+# the machine-local .git/info/exclude so every contributor gets it.
+# `.claude/settings.json` stays tracked on purpose, so this is not a blanket
+# `.claude/` ignore.
+.claude/worktrees/
+
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
 .metaproject/runtime/

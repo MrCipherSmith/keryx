@@ -14,6 +14,9 @@
     { "id": "pi52-ssn-area-666", "detector": "pii.ssn", "expected": "negative", "input": "The sample id 666-12-3456 is a reserved placeholder." },
     { "id": "pi53-ssn-area-000", "detector": "pii.ssn", "expected": "negative", "input": "Row key 000-12-3456 comes from the fixture generator." },
     { "id": "pi54-ipv4-out-of-range", "detector": "pii.ip", "expected": "negative", "input": "The build tag 999.1.1.1 is a version marker, not an address." },
-    { "id": "pi55-ipv4-octet-256", "detector": "pii.ip", "expected": "negative", "input": "Malformed 256.256.256.256 should be rejected." }
+    { "id": "pi55-ipv4-octet-256", "detector": "pii.ip", "expected": "negative", "input": "Malformed 256.256.256.256 should be rejected." },
+    { "id": "pi09-phone-intl-spaced", "detector": "pii.phone", "expected": "positive", "input": "Call the on-call rota at +1 415 555 0199 before escalating." },
+    { "id": "pi56-phone-numeric-table", "detector": "pii.phone", "expected": "negative", "input": "prompt-injection               12   12    0    0   0.0000   0.0500   ok" },
+    { "id": "pi57-phone-report-row", "detector": "pii.phone", "expected": "negative", "input": "secret                          6    6    0    0   0.0000   0.0000   ok" }
   ]
 }

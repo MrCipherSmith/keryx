@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { CallEdge, GraphData, GraphEdge, GraphNode, SymbolNode } from "./types";
+import { resolveGraphTarget } from "./target";
 
 export async function loadGraph(projectRoot: string): Promise<GraphData> {
   const storageDir = path.join(projectRoot, ".metaproject", "data", "gdgraph", "storage");
@@ -37,11 +38,9 @@ export function getAffected(
   graph: GraphData,
   target: string,
 ): { target: string; dependencies: string[]; dependents: string[] } {
-  const normalized = normalizeTarget(target);
-  const node = graph.nodes.find(
-    (item) => item.path === normalized || item.path.endsWith(normalized),
-  );
-  const resolvedTarget = node?.path ?? normalized;
+  // Exact-then-suffix, refusing an ambiguous suffix (see ./target.ts). Shared
+  // with `computeAffected` so the two entry points cannot drift apart.
+  const resolvedTarget = resolveGraphTarget(graph, target);
 
   return {
     target: resolvedTarget,
@@ -131,8 +130,4 @@ function canonicalCycle(cycle: string[]): string {
     ...withoutLast.slice(0, index),
   ].join("->"));
   return variants.sort()[0] ?? cycle.join("->");
-}
-
-function normalizeTarget(target: string): string {
-  return target.replace(/^\.\//, "").split(path.sep).join("/");
 }

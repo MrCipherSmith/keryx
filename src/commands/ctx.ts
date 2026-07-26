@@ -176,9 +176,7 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
   // `path:count`), not the `file:line:col:text` the match parser expects — so
   // summarize those as a file list instead of garbled "(unknown) 0:0" matches.
   const listMode = rgListMode(rgArgs);
-  const command = listMode
-    ? ["rg", "--no-heading", ...rgArgs]
-    : ["rg", "--line-number", "--column", "--no-heading", ...rgArgs];
+  const command = buildRgCommand(rgArgs, listMode);
   let result: CommandResult;
   try {
     result = await runCommand(command);
@@ -529,6 +527,22 @@ ${hunks.length > 0 ? hunks.join("\n") : "(no hunk headers)"}
 
 ${errors.length > 0 ? renderTextSection("Errors / Warnings", errors) : ""}
 `;
+}
+
+// Build the rg invocation for `keryx ctx rg`.
+//
+// `--with-filename` is passed UNCONDITIONALLY. rg omits the filename whenever it
+// is given a single explicit file path, which breaks the `file:line:col:text`
+// shape `parseRgMatches` expects — `keryx ctx rg "pattern" src/foo.ts` reported
+// `Top Files: (unknown)` and `0:0` for every hit, handing agents matches they
+// could not locate. `--no-heading` does not restore the filename; only `-H` does.
+// It is a no-op for the multi-path/directory case, so the common path is
+// byte-identical.
+export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | null): string[] {
+  const base = listMode
+    ? ["rg", "--with-filename", "--no-heading"]
+    : ["rg", "--with-filename", "--line-number", "--column", "--no-heading"];
+  return [...base, ...rgArgs];
 }
 
 // rg flags that change output from matches to a file list (or per-file counts).

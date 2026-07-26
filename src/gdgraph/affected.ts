@@ -11,8 +11,8 @@
 // && to === target`), and `dependencies` is the unchanged one-hop forward set,
 // so the default renderer output is byte-for-byte identical.
 
-import path from "node:path";
 import type { GraphData } from "./types";
+import { resolveGraphTarget } from "./target";
 
 export interface RankedDependent {
   path: string;
@@ -44,11 +44,8 @@ export function computeAffected(
   options: AffectedOptions = {},
 ): AffectedResult {
   const depth = normalizeDepth(options.depth);
-  const normalized = normalizeTarget(target);
-  const node = graph.nodes.find(
-    (item) => item.path === normalized || item.path.endsWith(normalized),
-  );
-  const resolvedTarget = node?.path ?? normalized;
+  // Exact-then-suffix, refusing an ambiguous suffix (see ./target.ts).
+  const resolvedTarget = resolveGraphTarget(graph, target);
 
   // Reverse-dependent adjacency: to → [from, ...] over non-unresolved edges,
   // matching today's `getAffected` dependent relation exactly at hop 1.
@@ -133,10 +130,6 @@ function normalizeDepth(depth: number | undefined): number {
   }
   const floored = Math.floor(depth);
   return floored < 1 ? 1 : floored;
-}
-
-function normalizeTarget(target: string): string {
-  return target.replace(/^\.\//, "").split(path.sep).join("/");
 }
 
 // De-duplicated `dedupeDependents` uniqueness guaranteed by the visited set.
