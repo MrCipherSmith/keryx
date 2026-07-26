@@ -83,13 +83,30 @@ export interface SandboxProfileInput {
  * configuration is `touchesAgentCredentials` in the approval gate.
  */
 const DEFAULT_SECRET_SUBPATHS = [
+  // SSH / GPG / generic auth
   ".ssh",
-  ".aws",
   ".gnupg",
+  ".netrc",
+  // cloud provider credentials
+  ".aws",
+  ".azure",
+  ".config/gcloud",
+  ".oci",
+  // container / orchestration credentials
+  ".kube",
+  ".docker/config.json",
+  // package-registry / language tool tokens
+  ".npmrc",
+  ".pypirc",
+  ".cargo/credentials",
+  ".cargo/credentials.toml",
+  ".gem/credentials",
+  // VCS / CI tokens
   ".config/gh",
+  ".git-credentials",
+  // keryx's own auth + approval allowlist
   ".config/keryx",
   ".local/share/keryx",
-  ".netrc",
 ];
 
 /** Build the default secret read-deny list under `home` (absolute paths). */
