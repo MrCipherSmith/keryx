@@ -63,3 +63,5 @@ Recorded here so no partial/broken code is left for them:
 - 2026-07-23T21:18:43.054Z - ac-confirmed: AC4: tsc --noEmit exit 0; touched 41 pass/0 fail; run+policy+mcp regression 89 pass/0 fail; package.json dependencies {}
 - 2026-07-23T21:18:43.218Z - ac-confirmed: AC5: 3 deferred items (flow-transition write, legacy MCP adapter retirement, in-process search facade) documented with rationale in journal.md; no partial code left
 - 2026-07-23T21:40:22.859Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/207 (warning: PR is not a draft)
+- 2026-07-26T07:12:43.552Z - completing
+- 2026-07-26T07:12:43.560Z - done: all gates passed

@@ -6,6 +6,7 @@ import { saveSandboxDefaults } from "../../../lib/sandbox-config";
 import {
   buildDefaultMaskProviders,
   parseMaskMode,
+  projectPolicyTrusted,
   resolveAllowedDomains,
   resolveCredentialMasks,
   resolveMasksFromSandboxEnv,
@@ -375,7 +376,7 @@ describe("P2 project policy (AC-P2-1/2/3/6)", () => {
     expect(withRoot.resolution.masks[0]?.name).toBe("DEEPSEEK_API_KEY");
   });
 
-  test("AC-P2-2: project extraMasks merge as explicit", () => {
+  test("AC-P2-2: project extraMasks merge as explicit (trusted)", () => {
     const root = projectWithPolicy({
       maskMode: "manual",
       tlsTerminate: true,
@@ -383,7 +384,7 @@ describe("P2 project policy (AC-P2-1/2/3/6)", () => {
     });
     const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-g-"));
     const r = resolveMasksFromSandboxEnv({
-      env: { DEEPSEEK_API_KEY: FIXTURE_KEY },
+      env: { DEEPSEEK_API_KEY: FIXTURE_KEY, KERYX_SANDBOX_TRUST_PROJECT_POLICY: "1" },
       providers,
       sandboxConfigDir: globalDir,
       projectRoot: root,
@@ -418,12 +419,12 @@ describe("P2 project policy (AC-P2-1/2/3/6)", () => {
     expect(r.resolution.masks).toEqual([]);
   });
 
-  test("project maskMode beats global when env unset", () => {
+  test("project maskMode beats global when env unset (trusted)", () => {
     const root = projectWithPolicy({ maskMode: "auto" });
     const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-g3-"));
     saveSandboxDefaults({ maskMode: "manual" }, globalDir);
     const r = resolveMasksFromSandboxEnv({
-      env: { DEEPSEEK_API_KEY: FIXTURE_KEY },
+      env: { DEEPSEEK_API_KEY: FIXTURE_KEY, KERYX_SANDBOX_TRUST_PROJECT_POLICY: "1" },
       providers,
       sandboxConfigDir: globalDir,
       projectRoot: root,
@@ -434,11 +435,54 @@ describe("P2 project policy (AC-P2-1/2/3/6)", () => {
     expect(r.resolution.masks[0]?.source).toBe("auto");
   });
 
-  test("resolveAllowedDomains: env wins over project", () => {
+  test("resolveAllowedDomains: env wins; project honoured only when trusted", () => {
     const root = projectWithPolicy({ allowedDomains: ["from.project.com"] });
-    expect(resolveAllowedDomains({}, root)).toEqual(["from.project.com"]);
+    // Trusted opt-in → project domains apply.
+    expect(resolveAllowedDomains({ KERYX_SANDBOX_TRUST_PROJECT_POLICY: "1" }, root)).toEqual([
+      "from.project.com",
+    ]);
+    // Env always wins over project, trust flag or not.
     expect(
-      resolveAllowedDomains({ KERYX_SANDBOX_ALLOWED_DOMAINS: "from.env.com, other.com" }, root),
+      resolveAllowedDomains(
+        { KERYX_SANDBOX_ALLOWED_DOMAINS: "from.env.com, other.com", KERYX_SANDBOX_TRUST_PROJECT_POLICY: "1" },
+        root,
+      ),
     ).toEqual(["from.env.com", "other.com"]);
+  });
+
+  // --- F1: an untrusted in-repo policy cannot widen egress or add inject-hosts ---
+
+  test("F1: project allowedDomains IGNORED without the trust opt-in", () => {
+    const root = projectWithPolicy({ allowedDomains: ["evil.com"] });
+    // No KERYX_SANDBOX_TRUST_PROJECT_POLICY → the repo file contributes nothing,
+    // so a strict (network-off) run stays network-off.
+    expect(resolveAllowedDomains({}, root)).toEqual([]);
+  });
+
+  test("F1: project extraMasks / maskMode IGNORED without the trust opt-in", () => {
+    const root = projectWithPolicy({
+      maskMode: "auto",
+      tlsTerminate: true,
+      extraMasks: ["ANTHROPIC_API_KEY@evil.com"],
+    });
+    const globalDir = mkdtempSync(path.join(tmpdir(), "keryx-p2-untrusted-"));
+    const r = resolveMasksFromSandboxEnv({
+      env: { ANTHROPIC_API_KEY: FIXTURE_KEY },
+      providers,
+      sandboxConfigDir: globalDir,
+      projectRoot: root,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The hostile inject-host never enters the resolution.
+    expect(r.resolution.masks.some((m) => m.injectHosts.includes("evil.com"))).toBe(false);
+  });
+
+  test("F1: projectPolicyTrusted parses the opt-in flag", () => {
+    expect(projectPolicyTrusted({})).toBe(false);
+    expect(projectPolicyTrusted({ KERYX_SANDBOX_TRUST_PROJECT_POLICY: "0" })).toBe(false);
+    expect(projectPolicyTrusted({ KERYX_SANDBOX_TRUST_PROJECT_POLICY: "1" })).toBe(true);
+    expect(projectPolicyTrusted({ KERYX_SANDBOX_TRUST_PROJECT_POLICY: "true" })).toBe(true);
+    expect(projectPolicyTrusted({ KERYX_SANDBOX_TRUST_PROJECT_POLICY: "on" })).toBe(true);
   });
 });

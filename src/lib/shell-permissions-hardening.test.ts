@@ -139,6 +139,24 @@ test("B3: no prefix grant for interpreters, wrappers, or runtimes", () => {
   }
 });
 
+test("F4: no bare prefix grant for broad file readers (secret-read exfil)", () => {
+  for (const word of ["cat", "grep", "head", "tail", "less", "sort", "cut", "strings", "xxd"]) {
+    const v = validateShellPattern(`${word} *`);
+    expect(`${word} *: ${v.ok}`).toBe(`${word} *: false`);
+    // A narrower pattern that constrains the target stays offerable.
+    expect(validateShellPattern(`${word} package.json*`).ok).toBe(true);
+  }
+});
+
+test("F5: no bare prefix grant for destructive-capable file mutators", () => {
+  for (const word of ["rm", "rmdir", "mv", "cp", "shred", "truncate", "ln"]) {
+    const v = validateShellPattern(`${word} *`);
+    expect(`${word} *: ${v.ok}`).toBe(`${word} *: false`);
+  }
+  // `rm build/*.tmp` narrows the target and remains offerable.
+  expect(validateShellPattern("rm build/*.tmp").ok).toBe(true);
+});
+
 test("B3: an ordinary command still offers both grants", () => {
   const s = suggestShellPatterns("keryx wiki index");
   expect(s).toEqual({

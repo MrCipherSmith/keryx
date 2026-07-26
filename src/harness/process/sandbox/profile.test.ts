@@ -94,6 +94,12 @@ describe("sandboxProfileFromPolicy", () => {
     expect(p.readDenyList).toContain("/home/u/.aws");
   });
 
+  test("F2: read-deny list covers the broadened common secret locations", () => {
+    for (const sub of [".kube", ".docker/config.json", ".npmrc", ".config/gcloud", ".git-credentials"]) {
+      expect(defaultReadDenyList("/home/u")).toContain(`/home/u/${sub}`);
+    }
+  });
+
   test("mapping is deterministic", () => {
     const input = { ...base, policy: policy({ write: "allow" }) };
     expect(sandboxProfileFromPolicy(input)).toEqual(sandboxProfileFromPolicy(input));

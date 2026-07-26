@@ -114,18 +114,38 @@ function extraWritableRoots(env: Record<string, string | undefined>): string[] {
 }
 
 /**
+ * Extra read-denied roots from `KERYX_SANDBOX_READ_DENY` (comma-separated). Lets
+ * an operator extend the built-in secret read-deny list with project- or
+ * host-specific secret locations the defaults cannot know about (F2). `~/` is
+ * expanded to the home directory. Trusted env config only — never a repo file.
+ */
+export function extraReadDenyRoots(env: Record<string, string | undefined>): string[] {
+  const raw = env.KERYX_SANDBOX_READ_DENY;
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p) => canonical(p.startsWith("~/") ? p.replace(/^~/, homedir()) : p));
+}
+
+/**
  * Build the agent-shell sandbox profile for `mode` (never `off`). A domain
- * allowlist (env or project policy) switches network to `restricted`
- * (only those hosts via the loopback proxy), overriding the mode's on/off.
+ * allowlist from TRUSTED config (env, or a project policy the operator opted into
+ * via `KERYX_SANDBOX_TRUST_PROJECT_POLICY`) switches network to `restricted`
+ * (only those hosts via the loopback proxy), overriding the mode's on/off. An
+ * untrusted in-repo policy cannot widen egress, so a `strict` request stays
+ * network-off (F1).
  */
 function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off">, env: Record<string, string | undefined>): SandboxProfile {
   const base = defaultSandboxProfile(canonical(root), canonical(tmpdir()), homedir());
   const writableRoots = [...base.writableRoots, ...extraWritableRoots(env)];
+  const readDenyList = [...base.readDenyList, ...extraReadDenyRoots(env)];
   const domains = resolveAllowedDomains(env, root);
   if (domains.length > 0) {
-    return { ...base, writableRoots, network: "restricted", allowedDomains: domains };
+    return { ...base, writableRoots, readDenyList, network: "restricted", allowedDomains: domains };
   }
-  return { ...base, writableRoots, network: mode === "strict" ? "off" : "on" };
+  return { ...base, writableRoots, readDenyList, network: mode === "strict" ? "off" : "on" };
 }
 
 /**

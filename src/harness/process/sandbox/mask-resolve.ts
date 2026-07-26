@@ -15,6 +15,23 @@ import { parseMaskSpec } from "./network-run";
 
 export type MaskMode = "auto" | "manual" | "off";
 
+/**
+ * Whether the in-repo `.keryx/sandbox-policy.json` is TRUSTED for this run.
+ *
+ * The project policy file is attacker-controllable (it ships inside a cloned
+ * repo). Left ungated it could WIDEN network egress (`allowedDomains`) and add
+ * credential inject-hosts (`extraMasks`) — turning credential masking into an
+ * exfiltration channel (finding F1). So its security-sensitive fields apply only
+ * when the operator opts in via `KERYX_SANDBOX_TRUST_PROJECT_POLICY` (1/true/on/
+ * yes). Env and global `sandbox.json` are trusted regardless (user-controlled).
+ */
+export function projectPolicyTrusted(env: Record<string, string | undefined>): boolean {
+  const raw = env.KERYX_SANDBOX_TRUST_PROJECT_POLICY;
+  if (raw === undefined) return false;
+  const v = raw.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "on" || v === "yes";
+}
+
 export interface ProviderMaskSource {
   envKey: string;
   baseUrl: string;
@@ -313,8 +330,13 @@ export function resolveMasksFromSandboxEnv(input: {
   projectRoot?: string;
 }): MaskResolveResult {
   const defaults = loadSandboxDefaults(input.sandboxConfigDir);
+  // The in-repo project policy is only consulted when the operator has opted into
+  // trusting it (F1). Without the opt-in it is ignored entirely, so a hostile repo
+  // cannot inject `extraMasks` (credential inject-hosts) or flip mask mode.
   const project =
-    input.projectRoot !== undefined ? loadProjectSandboxPolicy(input.projectRoot) : {};
+    input.projectRoot !== undefined && projectPolicyTrusted(input.env)
+      ? loadProjectSandboxPolicy(input.projectRoot)
+      : {};
 
   let mode: MaskMode;
   if (input.modeOverride !== undefined) {
@@ -373,8 +395,11 @@ export function resolveMasksFromSandboxEnv(input: {
 }
 
 /**
- * Allowed domains for restricted network: env wins if set; else project policy.
- * Pure helper for shell_exec profile building (P2).
+ * Allowed domains for restricted network: the trusted `KERYX_SANDBOX_ALLOWED_DOMAINS`
+ * env wins if set; else the in-repo project policy, but ONLY when the operator
+ * opted into trusting it (`KERYX_SANDBOX_TRUST_PROJECT_POLICY`). An untrusted repo
+ * policy contributes no domains, so it cannot widen egress or flip a network-off
+ * (`strict`) run to `restricted` (F1). Pure helper for shell_exec profile building.
  */
 export function resolveAllowedDomains(
   env: Record<string, string | undefined>,
@@ -387,7 +412,7 @@ export function resolveAllowedDomains(
       .map((d) => d.trim())
       .filter((d) => d.length > 0);
   }
-  if (projectRoot === undefined) return [];
+  if (projectRoot === undefined || !projectPolicyTrusted(env)) return [];
   const project = loadProjectSandboxPolicy(projectRoot);
   return project.allowedDomains ?? [];
 }

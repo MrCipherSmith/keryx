@@ -84,13 +84,14 @@ test("suggestShellPatterns: exact + first-token prefix", () => {
     offerExact: true,
     offerPrefix: false,
   });
-  // A heredoc carries metacharacters ⇒ neither grant is offerable.
+  // A heredoc carries metacharacters ⇒ the exact grant is not offerable; and
+  // since F4 `cat *` is a banned broad-reader prefix, so neither grant is offered.
   const multi = "cat > /tmp/x.sh << 'EOF'\nline2\nEOF";
   expect(suggestShellPatterns(multi)).toEqual({
     exact: multi,
     prefix: "cat *",
     offerExact: false,
-    offerPrefix: true,
+    offerPrefix: false,
   });
 });
 

@@ -3,9 +3,9 @@
   "id": "122",
   "slug": "metaproject-native-followups",
   "title": "metaproject-native follow-ups: RunDeps.metaprojectPort seam (S1) + MP-6 blast-radius escalation wiring + MP-5 wikiBacklinks op",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-07-23T20:59:09.021Z",
-  "updatedAt": "2026-07-23T21:40:22.859Z",
+  "updatedAt": "2026-07-26T07:12:43.560Z",
   "source": {
     "type": "description",
     "ref": null
@@ -323,6 +323,20 @@
       "at": "2026-07-23T21:40:22.859Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/207 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-26T07:12:43.552Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-26T07:12:43.560Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "7b3accf5cd9a69627f7630ecb08d24f40a7a4d9f",
+    "ref": "origin/main",
+    "at": "2026-07-26T07:12:43.560Z"
+  }
 }

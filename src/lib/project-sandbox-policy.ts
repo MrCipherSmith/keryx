@@ -51,11 +51,9 @@ export function sanitizeProjectSandboxPolicy(raw: unknown): ProjectSandboxPolicy
   const obj = raw as Record<string, unknown>;
   const out: ProjectSandboxPolicy = {};
 
-  for (const key of Object.keys(obj)) {
-    if (SECRET_KEY_PATTERN.test(key)) {
-      continue;
-    }
-  }
+  // Note: unknown/secret-shaped keys need no explicit stripping — `out` is built
+  // by an allowlist below (maskMode / tlsTerminate / extraMasks / allowedDomains
+  // only), so a key like `apiKey` or `token` is never copied in the first place.
 
   if (isMaskMode(obj.maskMode)) {
     out.maskMode = obj.maskMode;

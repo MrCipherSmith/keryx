@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "id": "125",
+  "slug": "harness-shell-security-hardening-fix-f1-",
+  "title": "Harness shell security hardening: fix F1 untrusted repo policy egress-widening, F2/F3 secret leakage into model context, F4/F5 broad-reader & rm prefix grants, F6 delegate fail-open, F7 dead sanitizer loop",
+  "status": "implemented",
+  "createdAt": "2026-07-26T07:52:46.495Z",
+  "updatedAt": "2026-07-26T08:06:53.343Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9ab519cbfac80d7218dde716bd0d98516fa3f49d16aa24f7c1520be370bd7116",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-26T08:05:50.672Z",
+      "note": "mask-resolve.ts: projectPolicyTrusted() gate; resolveAllowedDomains + resolveMasksFromSandboxEnv ignore in-repo policy unless KERYX_SANDBOX_TRUST_PROJECT_POLICY set; tests F1 ignored-by-default + honoured-when-trusted (mask-resolve.test.ts)"
+    },
+    "AC2": {
+      "at": "2026-07-26T08:05:50.751Z",
+      "note": "agent.ts:510 wraps tool output in redactSensitiveText before history.push; security/redact.ts new helper (detectSecrets+detectPii+applyRedaction); redact.test.ts asserts AWS/GH tokens masked"
+    },
+    "AC3": {
+      "at": "2026-07-26T08:05:50.832Z",
+      "note": "profile.ts DEFAULT_SECRET_SUBPATHS broadened (kube/docker/npm/gcloud/git-credentials/...); shell-exec-tool.ts extraReadDenyRoots(KERYX_SANDBOX_READ_DENY); profile.test.ts + shell-exec-tool.test.ts cover both"
+    },
+    "AC4": {
+      "at": "2026-07-26T08:05:50.915Z",
+      "note": "shell-permissions.ts PREFIX_BANNED_READERS + PREFIX_BANNED_MUTATORS; bannedPrefixGrant returns per-category reason; shell-permissions-hardening.test.ts F4/F5 refuse bare word*, allow narrowed"
+    },
+    "AC5": {
+      "at": "2026-07-26T08:05:50.999Z",
+      "note": "agent.ts executeCall delegate branch now default-deny (false) when requestApproval undefined, mirroring shell; agent.test.ts F6 asserts spawn not invoked + not-approved result"
+    },
+    "AC6": {
+      "at": "2026-07-26T08:05:51.081Z",
+      "note": "project-sandbox-policy.ts: removed empty dead loop; allowlist construction already excludes unknown keys; existing sanitizer tests green"
+    },
+    "AC7": {
+      "at": "2026-07-26T08:05:51.163Z",
+      "note": "tsc --noEmit exit 0; full suite 2232 pass/0 fail/14 skip (255 files); keryx health run = PASS score 93"
+    },
+    "AC8": {
+      "at": "2026-07-26T08:06:50.458Z",
+      "note": "draft PR https://github.com/MrCipherSmith/keryx/pull/212 enumerates F1-F7 + residual"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/212"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-26T07:52:46.495Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-26T07:56:27.565Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-26T07:56:27.644Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-26T08:05:50.672Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: mask-resolve.ts: projectPolicyTrusted() gate; resolveAllowedDomains + resolveMasksFromSandboxEnv ignore in-repo policy unless KERYX_SANDBOX_TRUST_PROJECT_POLICY set; tests F1 ignored-by-default + honoured-when-trusted (mask-resolve.test.ts)"
+    },
+    {
+      "at": "2026-07-26T08:05:50.751Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: agent.ts:510 wraps tool output in redactSensitiveText before history.push; security/redact.ts new helper (detectSecrets+detectPii+applyRedaction); redact.test.ts asserts AWS/GH tokens masked"
+    },
+    {
+      "at": "2026-07-26T08:05:50.832Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: profile.ts DEFAULT_SECRET_SUBPATHS broadened (kube/docker/npm/gcloud/git-credentials/...); shell-exec-tool.ts extraReadDenyRoots(KERYX_SANDBOX_READ_DENY); profile.test.ts + shell-exec-tool.test.ts cover both"
+    },
+    {
+      "at": "2026-07-26T08:05:50.915Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: shell-permissions.ts PREFIX_BANNED_READERS + PREFIX_BANNED_MUTATORS; bannedPrefixGrant returns per-category reason; shell-permissions-hardening.test.ts F4/F5 refuse bare word*, allow narrowed"
+    },
+    {
+      "at": "2026-07-26T08:05:51.000Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: agent.ts executeCall delegate branch now default-deny (false) when requestApproval undefined, mirroring shell; agent.test.ts F6 asserts spawn not invoked + not-approved result"
+    },
+    {
+      "at": "2026-07-26T08:05:51.081Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: project-sandbox-policy.ts: removed empty dead loop; allowlist construction already excludes unknown keys; existing sanitizer tests green"
+    },
+    {
+      "at": "2026-07-26T08:05:51.163Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: tsc --noEmit exit 0; full suite 2232 pass/0 fail/14 skip (255 files); keryx health run = PASS score 93"
+    },
+    {
+      "at": "2026-07-26T08:05:55.490Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-26T08:05:55.574Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-26T08:05:55.653Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-26T08:06:50.458Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: draft PR https://github.com/MrCipherSmith/keryx/pull/212 enumerates F1-F7 + residual"
+    },
+    {
+      "at": "2026-07-26T08:06:50.544Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-26T08:06:53.343Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/212"
+    }
+  ]
+}
