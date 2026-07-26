@@ -17,18 +17,23 @@ import net from "node:net";
 import tls from "node:tls";
 import type { RunCa } from "./tls-ca";
 
+/** Canonical host form for comparison: lowercase, no trailing dot. */
+function normalizeHost(host: string): string {
+  return host.toLowerCase().replace(/\.$/, "");
+}
+
 /**
  * Match a host against an allowlist. Exact match, or a `*.example.com` wildcard
  * that covers the apex (`example.com`) and any subdomain. Case/trailing-dot
  * insensitive.
  */
 export function matchesAllowlist(host: string, allowed: string[]): boolean {
-  const h = host.toLowerCase().replace(/\.$/, "");
+  const h = normalizeHost(host);
   if (h.length === 0) {
     return false;
   }
   for (const pattern of allowed) {
-    const p = pattern.toLowerCase().replace(/\.$/, "");
+    const p = normalizeHost(pattern);
     if (p.startsWith("*.")) {
       const base = p.slice(2);
       if (base.length > 0 && (h === base || h.endsWith(`.${base}`))) {
@@ -190,44 +195,72 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
   //   - server-side `new tls.TLSSocket(sock, {isServer:true})` never completes a
   //     handshake, so termination uses a real `https.createServer`.
   //   - `SNICallback` is IGNORED, so we cannot serve every host from one TLS
-  //     listener — instead one internal HTTPS listener is created PER HOST with
+  //     listener — instead one internal HTTPS listener is created PER TARGET with
   //     that host's leaf certificate, cached for the run.
-  const mitmHandler = (req: http.IncomingMessage, res: http.ServerResponse): void => {
-    const hostHeader = req.headers.host ?? "";
-    const [rawHost, rawPort] = hostHeader.split(":");
-    const hostname = rawHost ?? "";
-    const upstreamPort = Number(rawPort) || 443;
-    const headers = applyMasks(req.headers, opts.masks ?? [], hostname);
-    const upstreamReq = https.request(
-      {
-        host: hostname,
-        port: upstreamPort,
-        method: req.method,
-        path: req.url ?? "/",
-        headers,
-        servername: hostname,
-        ...(opts.upstreamCa !== undefined ? { ca: opts.upstreamCa } : {}),
-      },
-      (up) => {
-        res.writeHead(up.statusCode ?? 502, up.headers);
-        up.pipe(res);
-      },
-    );
-    upstreamReq.on("error", () => {
-      if (!res.headersSent) res.writeHead(502);
-      res.end("upstream error");
-    });
-    req.pipe(upstreamReq);
-  };
+  //
+  // The handler is PINNED to the `CONNECT` target it was created for and
+  // re-checks the in-tunnel `Host` header against the allowlist. Both matter:
+  //   - Without the re-check, a contained process could `CONNECT` to an
+  //     allowlisted host and then address an arbitrary destination inside the
+  //     terminated tunnel — the allowlist would see only the allowed CONNECT.
+  //   - Without the pin, each terminator is an open forward proxy on loopback
+  //     for the duration of the run: anything that can reach its ephemeral port
+  //     could relay through it to any allowlisted host.
+  // Every in-tunnel request is reported through `decide`, so the audit trail
+  // records the host actually addressed, not just the tunnel that carried it.
+  const makeMitmHandler =
+    (pinnedHost: string, pinnedPort: number) =>
+    (req: http.IncomingMessage, res: http.ServerResponse): void => {
+      const hostHeader = req.headers.host ?? "";
+      const [rawHost, rawPort] = hostHeader.split(":");
+      const hostname = rawHost ?? "";
+      // An absent port in `Host` means the tunnel's own port, not a bare 443:
+      // the request cannot go anywhere other than where the tunnel points.
+      const upstreamPort = rawPort ? Number(rawPort) : pinnedPort;
+      const permitted =
+        matchesAllowlist(hostname, allowed) &&
+        normalizeHost(hostname) === pinnedHost &&
+        upstreamPort === pinnedPort;
+      if (!decide({ host: hostname, allowed: permitted, kind: "http" })) {
+        res.writeHead(403, { "content-type": "text/plain" });
+        res.end("blocked by keryx sandbox network allowlist");
+        return;
+      }
+      const headers = applyMasks(req.headers, opts.masks ?? [], hostname);
+      const upstreamReq = https.request(
+        {
+          host: hostname,
+          port: upstreamPort,
+          method: req.method,
+          path: req.url ?? "/",
+          headers,
+          servername: hostname,
+          ...(opts.upstreamCa !== undefined ? { ca: opts.upstreamCa } : {}),
+        },
+        (up) => {
+          res.writeHead(up.statusCode ?? 502, up.headers);
+          up.pipe(res);
+        },
+      );
+      upstreamReq.on("error", () => {
+        if (!res.headersSent) res.writeHead(502);
+        res.end("upstream error");
+      });
+      req.pipe(upstreamReq);
+    };
 
-  /** One internal HTTPS terminator per host (Bun ignores SNICallback), cached. */
+  /** One internal HTTPS terminator per CONNECT target (Bun ignores SNICallback), cached. */
   const mitmServers = new Map<string, { server: https.Server; port: number }>();
-  const mitmPortFor = async (hostname: string, ca: RunCa): Promise<number> => {
-    const key = hostname.toLowerCase();
+  const mitmPortFor = async (hostname: string, targetPort: number, ca: RunCa): Promise<number> => {
+    const host = normalizeHost(hostname);
+    const key = `${host}:${targetPort}`;
     const hit = mitmServers.get(key);
     if (hit) return hit.port;
-    const leaf = await ca.issueLeaf(key);
-    const server = https.createServer({ key: leaf.keyPem, cert: leaf.certPem }, mitmHandler);
+    const leaf = await ca.issueLeaf(host);
+    const server = https.createServer(
+      { key: leaf.keyPem, cert: leaf.certPem },
+      makeMitmHandler(host, targetPort),
+    );
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
     const addr = server.address();
     const port = addr && typeof addr === "object" ? addr.port : 0;
@@ -251,7 +284,7 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
     if (ca) {
       void (async () => {
         try {
-          const terminatorPort = await mitmPortFor(hostname, ca);
+          const terminatorPort = await mitmPortFor(hostname, port, ca);
           clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
           // The client now speaks TLS; hand the raw bytes to this host's
           // internal HTTPS terminator, which does the handshake and decrypts.

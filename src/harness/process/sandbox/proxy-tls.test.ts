@@ -9,7 +9,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import https from "node:https";
 import net from "node:net";
 import tls from "node:tls";
-import { createAllowlistProxy, type AllowlistProxy } from "./proxy";
+import { createAllowlistProxy, type AllowlistProxy, type ProxyDecision } from "./proxy";
 import { createRunCa, type RunCa } from "./tls-ca";
 
 describe("createAllowlistProxy TLS terminate (live loopback)", () => {
@@ -39,6 +39,8 @@ describe("createAllowlistProxy TLS terminate (live loopback)", () => {
     port: number,
     caPem: string,
     extraHeaders: Record<string, string> = {},
+    /** In-tunnel `Host` header, when it must differ from the CONNECT target. */
+    hostHeaderOverride?: string,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       // Raw CONNECT over a plain socket — Bun's http client cannot issue CONNECT
@@ -62,7 +64,8 @@ describe("createAllowlistProxy TLS terminate (live loopback)", () => {
           const extra = Object.entries(extraHeaders)
             .map(([k, v]) => `${k}: ${v}\r\n`)
             .join("");
-          tlsSock.write(`GET / HTTP/1.1\r\nHost: ${host}:${port}\r\n${extra}Connection: close\r\n\r\n`);
+          const hostHeader = hostHeaderOverride ?? `${host}:${port}`;
+          tlsSock.write(`GET / HTTP/1.1\r\nHost: ${hostHeader}\r\n${extra}Connection: close\r\n\r\n`);
         });
         let buf = "";
         tlsSock.on("data", (d) => (buf += d.toString("utf8")));
@@ -158,5 +161,79 @@ describe("createAllowlistProxy TLS terminate (live loopback)", () => {
     await expect(
       httpsViaProxy(proxy.host, proxy.port, "blocked.test", 443, ca.caCertPem),
     ).rejects.toThrow();
+  });
+
+  // Regression: the terminated tunnel used to forward to whatever the in-tunnel
+  // `Host` header named, so an allowlisted CONNECT was a usable route to ANY
+  // destination — and the decision log recorded only the allowed CONNECT host.
+  test("in-tunnel Host header cannot reach a NON-allowlisted upstream", async () => {
+    ca = await createRunCa();
+    // A live upstream on loopback (`localhost` is NOT on the allowlist) that
+    // records anything reaching it — so a regression fails loudly, rather than
+    // the assertion passing because the host merely failed to resolve.
+    const evilLeaf = await ca.issueLeaf("localhost");
+    const hits: string[] = [];
+    upstream = https.createServer({ key: evilLeaf.keyPem, cert: evilLeaf.certPem }, (q, r) => {
+      hits.push(q.url ?? "");
+      r.writeHead(200);
+      r.end("EXFIL-RECEIVED");
+    });
+    const evilPort: number = await new Promise((r) =>
+      upstream!.listen(0, "127.0.0.1", () => r((upstream!.address() as { port: number }).port)),
+    );
+
+    const decisions: ProxyDecision[] = [];
+    proxy = await createAllowlistProxy({
+      allowedDomains: ["allowed.test"],
+      tlsTerminate: ca,
+      upstreamCa: ca.caCertPem,
+      onDecision: (d) => decisions.push(d),
+    });
+
+    const body = await httpsViaProxy(
+      proxy.host,
+      proxy.port,
+      "allowed.test",
+      443,
+      ca.caCertPem,
+      {},
+      `localhost:${evilPort}`,
+    );
+
+    expect(body).toContain("403");
+    expect(body).toContain("blocked by keryx sandbox network allowlist");
+    expect(body).not.toContain("EXFIL-RECEIVED");
+    expect(hits).toEqual([]);
+    // The refusal is auditable: the host actually addressed is in the log, not
+    // just the tunnel that carried it.
+    expect(
+      decisions.some((d) => d.host === "localhost" && !d.allowed && d.kind === "http"),
+    ).toBe(true);
+  });
+
+  test("a terminator is pinned to its CONNECT target, not reusable for another allowlisted host", async () => {
+    ca = await createRunCa();
+    const decisions: ProxyDecision[] = [];
+    proxy = await createAllowlistProxy({
+      allowedDomains: ["allowed.test", "other.test"],
+      tlsTerminate: ca,
+      onDecision: (d) => decisions.push(d),
+    });
+
+    // Both hosts pass the allowlist, but this tunnel was opened for allowed.test.
+    const body = await httpsViaProxy(
+      proxy.host,
+      proxy.port,
+      "allowed.test",
+      443,
+      ca.caCertPem,
+      {},
+      "other.test:443",
+    );
+
+    expect(body).toContain("403");
+    expect(decisions.some((d) => d.host === "other.test" && !d.allowed && d.kind === "http")).toBe(
+      true,
+    );
   });
 });
