@@ -3,9 +3,9 @@
   "id": "123",
   "slug": "observability-ci-protocol",
   "title": "execution-observability: wire CI 4-job protocol (typecheck-and-tests / standard-baseline / standard-pr / metrics-contract) feeding keryx standard baseline",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-07-23T21:20:06.495Z",
-  "updatedAt": "2026-07-23T21:40:25.272Z",
+  "updatedAt": "2026-07-26T07:12:46.248Z",
   "source": {
     "type": "description",
     "ref": null
@@ -258,6 +258,20 @@
       "at": "2026-07-23T21:40:25.272Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/207 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-07-26T07:12:46.240Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-26T07:12:46.248Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "7b3accf5cd9a69627f7630ecb08d24f40a7a4d9f",
+    "ref": "origin/main",
+    "at": "2026-07-26T07:12:46.248Z"
+  }
 }
