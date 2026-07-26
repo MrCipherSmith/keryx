@@ -3,9 +3,9 @@
   "id": "125",
   "slug": "harness-shell-security-hardening-fix-f1-",
   "title": "Harness shell security hardening: fix F1 untrusted repo policy egress-widening, F2/F3 secret leakage into model context, F4/F5 broad-reader & rm prefix grants, F6 delegate fail-open, F7 dead sanitizer loop",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-07-26T07:52:46.495Z",
-  "updatedAt": "2026-07-26T08:06:53.343Z",
+  "updatedAt": "2026-07-26T15:27:05.726Z",
   "source": {
     "type": "description",
     "ref": null
@@ -188,6 +188,20 @@
       "at": "2026-07-26T08:06:53.343Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/212"
+    },
+    {
+      "at": "2026-07-26T15:27:05.720Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-26T15:27:05.726Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "1e3c2591eb8a02bad3f75a4068611f0afc92a8c6",
+    "ref": "origin/main",
+    "at": "2026-07-26T15:27:05.726Z"
+  }
 }
