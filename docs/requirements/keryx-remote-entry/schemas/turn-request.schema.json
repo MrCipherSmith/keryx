@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/turn-request/1.0.0",
+  "title": "Turn Request",
+  "description": "Inbound submission of a turn. Every field is untrusted content. Origin is deliberately absent: it is stamped by the server from the authenticated connection and can never be supplied by a caller.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "project", "prompt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute project path the caller means. Resolution is exact-match; the server never infers a session from recency or idleness."
+    },
+    "sessionId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Existing session to continue. Omitted means create for this project when creation is permitted."
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Untrusted text. Scanned by the security boundary before it can become a turn."
+    },
+    "stream": { "type": "boolean", "default": false },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "A repeated key returns the original turnId and starts nothing."
+    }
+  }
+}

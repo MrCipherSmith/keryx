@@ -1,5 +1,5 @@
-# Metrics and Validation: Telegram Companion Transport
-Version: 1.0.0
+# Metrics and Validation: Telegram Transport
+Version: 2.0.0
 
 ## Status
 
@@ -17,6 +17,10 @@ documentation run.
 | Approval integrity | 100% of expired/replayed callbacks and policy-`deny` fixtures cannot confirm an action. |
 | Secret redaction | 100% of token/PII/path/sensitive-output fixtures are absent from rendered notifications and persisted fixture evidence. |
 | Reliability visibility | Every simulated timeout, polling failure, send failure, cancellation, and webhook conflict produces a correlated terminal or retrying status locally. |
+| Submission containment (2.0.0) | 100% of free-text fixtures in an **unbound** chat produce no `task.submit` and no turn. |
+| Declared project (2.0.0) | 100% of `task.submit` fixtures declare the bound project path; none derive it from message content. |
+| Prompt is not a tool call (2.0.0) | 100% of prompts naming a shell command are classified by the policy engine identically to the equivalent TUI turn; none execute on the strength of the message. |
+| Delegated semantics (2.0.0) | The transport defines no allowlist, no auto-approve rule, no approval timeout, and no session-addressing rule of its own; a static check asserts this against [keryx-remote-entry](../keryx-remote-entry/README.md). |
 
 ## Required validation layers
 

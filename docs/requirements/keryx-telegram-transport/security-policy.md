@@ -1,16 +1,41 @@
-# Security Policy: Telegram Companion Transport
-Version: 1.0.0
+# Security Policy: Telegram Transport
+Version: 2.0.0
 
 ## Status
 
 This is a future integration policy. It constrains a future adapter to the
-existing Keryx Security/Policy boundary; it does not claim that the adapter or
-Harness runtime exists today.
+existing Keryx Security/Policy boundary; it does not claim that the adapter
+exists today.
+
+## Relationship to Remote Entry
+
+Caller authentication, the remote policy profile and its non-weakening
+invariant, containment requirements, approval expiry and single-use semantics,
+deny-on-undeliverable, origin stamping, and outbound redaction are defined in
+[keryx-remote-entry/security-policy.md](../keryx-remote-entry/security-policy.md).
+This document adds only Telegram-specific obligations. Where the two could be
+read as conflicting, Remote Entry governs, and the transport may not relax it.
+
+## Boundary change in 2.0.0
+
+`task.submit` is permitted from a bound chat. A Telegram message can therefore
+start agent execution, which version 1.0.0 excluded. The controls that pay for
+this live in Remote Entry; the transport's obligations are:
+
+- never emit `task.submit` from an unbound chat;
+- always declare the bound project path explicitly, never derive it from message
+  content;
+- submit the prompt as untrusted content and abandon conversion on a security
+  finding;
+- never present a submitted prompt as pre-authorized, and never carry a hint,
+  flag, or field that could influence policy classification.
 
 ## Trust model
 
 - Telegram input is untrusted transport content, including commands, text,
-  callback data, sender identifiers, and provider errors.
+  submitted prompts, callback data, sender identifiers, and provider errors.
+  A prompt from a paired user is still untrusted content: pairing establishes
+  *who may ask*, never *what may run*.
 - A bot token authenticates the bot to Telegram; it is not evidence of a user's
   authority in Keryx.
 - Authorization requires an explicit private-chat binding and optional local

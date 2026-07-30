@@ -1,11 +1,17 @@
 # Telegram Transport Protocol
-Version: 1.0.0
+Version: 2.0.0
 
 ## Purpose
 
 This protocol defines the future provider-neutral boundary between Keryx and a
-Telegram adapter. It uses Telegram only as a transport and does not turn inbound
+Telegram adapter. It uses Telegram only as a transport and never turns inbound
 chat text into a provider SDK call, a direct tool call, or a domain command.
+
+From 2.0.0 a bound chat may submit a *prompt* (`task.submit`). That is not an
+exception to the rule above: the prompt reaches the policy-governed run loop
+through [keryx-remote-entry](../keryx-remote-entry/README.md), where every action
+it attempts is classified exactly as it would be for a turn typed into the TUI.
+A message never names an action that skips classification.
 
 ## Ports
 
@@ -34,10 +40,16 @@ redacted before any diagnostic retention.
 | `status.read` | Authorized binding | Requests a safe read-only status projection. |
 | `approval.respond` | Authorized binding, valid callback nonce | Confirms or rejects a pending policy-`ask` action once. |
 | `operation.cancel-own` | Authorized binding and ownership match | Requests cancellation through the Harness. |
+| `task.submit` | Authorized binding **bound to a project**, prompt within bounds, security scan clean | Submits the prompt as a turn against the declared project path. |
 
-Unknown commands, free text, and unsupported intents are rejected with no
-privileged effect. The policy response is authoritative: `allow` may proceed,
-`ask` may create an approval request, and `deny` stops the flow.
+Unknown commands and unsupported intents are rejected with no privileged effect.
+Free text in a **bound** chat maps to `task.submit`; free text in an unbound chat
+maps to nothing. The policy response is authoritative: `allow` may proceed, `ask`
+may create an approval request, and `deny` stops the flow.
+
+`task.submit` declares the bound project path explicitly. The transport never
+lets the entry infer the project, and never derives the path from message
+content.
 
 ## Approval callbacks
 

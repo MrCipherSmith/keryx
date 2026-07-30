@@ -1,25 +1,33 @@
-# Product Requirements Document: Keryx Telegram Companion Transport
-Version: 1.0.0
+# Product Requirements Document: Keryx Telegram Transport
+Version: 2.0.0
 
 ## Status and recommendation
 
 **Specification ready (future).** Build Release 0 as a local long-polling
-private-chat companion transport after the Harness exposes stable typed intent,
-policy, evidence, and notification ports. Do not build a separate Telegram
-agent runtime.
+private-chat transport **on top of
+[keryx-remote-entry](../keryx-remote-entry/README.md)**, once that entry exists.
+Do not build a separate Telegram agent runtime, and do not reach the harness
+directly.
 
 ## Problem
 
-A desktop agent is not always visible while it performs a long-running task.
-Users need a safe companion channel for progress, failures, and time-bounded
-approvals without granting a chat interface authority over local project state.
+A desktop agent is not always visible while it performs a long-running task, and
+it cannot be reached at all when the operator is away from the terminal. Users
+need a safe channel for progress, failures, time-bounded approvals, **and for
+starting small pieces of work**, without granting a chat interface authority
+over local project state.
+
+Version 1.0.0 solved only the first half. Observability without the ability to
+start anything still requires the operator to be at the keyboard, which is the
+actual constraint.
 
 ## Goal
 
-Allow explicitly paired users to receive concise, redacted task status and to
-perform a tightly bounded set of companion actions: status check, approval of a
-policy-`ask` action, cancellation of their own active operation, and access
-revocation through the desktop UI.
+Allow explicitly paired users to receive concise, redacted task status, to
+perform bounded companion actions — status check, approval of a policy-`ask`
+action, cancellation of their own active operation, revocation through the
+desktop UI — and to submit a turn to the project bound to their chat, under a
+policy profile that is never weaker than the local one.
 
 ## Users
 
@@ -39,8 +47,10 @@ revocation through the desktop UI.
 3. Use long polling (`getUpdates`) by default. If an active webhook is detected,
    surface a conflict and require an explicit user choice; never switch modes
    silently.
-4. Permit only status, notifications, progress, redacted error summaries,
-   approval requests, and cancellation of the sender's own active operation.
+4. Permit status, notifications, progress, redacted error summaries, approval
+   requests, cancellation of the sender's own active operation, and submission
+   of a turn from a chat bound to a project. Submission is a prompt to the
+   policy-governed run loop, never a tool call.
 5. Convert every inbound update into a normalized receipt, then validate,
    authorize, scan, redact as needed, and map it to a typed intent. A message is
    never a direct tool call.
@@ -82,8 +92,14 @@ revocation through the desktop UI.
 ## Non-goals
 
 Release 0 excludes group/channel operation, inline mode, Mini Apps, Telegram
-Login/OIDC, webhooks, public remote control, arbitrary free-text agent control,
-and all direct privileged tool execution.
+Login/OIDC, webhooks, public remote control, and all direct privileged tool
+execution.
+
+Free-text submission is no longer excluded — that is the 2.0.0 boundary change —
+but it remains bounded: only from a bound chat, only as a prompt to the run loop,
+and never as a way to name an action that skips policy classification. The
+transport also does not define its own token scope, allowlist, session store, or
+approval semantics; those belong to Remote Entry.
 
 ## Success criteria
 
@@ -106,6 +122,9 @@ and all direct privileged tool execution.
 | Prompt injection or spoofed command | Treat all updates as untrusted, scan first, then allow only typed intents. |
 | Duplicate delivery/replay | Persist idempotency keys and consume pairing/approval nonces atomically. |
 | User over-trusts Telegram control | Restrict scope; desktop remains canonical and `deny` is non-overridable. |
+| The 2.0.0 perimeter expansion is treated as routine | The widening is recorded as a decision with named compensating controls in [keryx-remote-entry PRD](../keryx-remote-entry/prd.md) §Decision, and every one of them is an acceptance criterion, not an aspiration. |
+| A paired user is treated as a trusted input source | Pairing establishes who may ask, never what may run. A prompt from a paired user is scanned as untrusted content and classified by the same policy engine as a TUI turn. |
+| Transport drift from Remote Entry semantics | Approval timeout, allowlist, session addressing, and redaction are delegated, not re-specified; AC-15 asserts the transport defines none of its own. |
 | Polling conflicts with webhook setup | Detect and stop with a clear desktop decision instead of silently changing transport mode. |
 
 ## Release 2+ consideration

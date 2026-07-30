@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/turn-result/1.0.0",
+  "title": "Turn Result",
+  "description": "Terminal, redacted outcome of a turn. Contains no raw tool output, raw provider payload, absolute path, secret, or stack trace.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "turnId", "sessionId", "origin", "outcome", "startedAt", "finishedAt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "turnId": { "type": "string", "format": "uuid" },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "origin": {
+      "type": "string",
+      "pattern": "^(local-tty|remote:[a-z0-9-]+)$",
+      "description": "Assigned by the server from the authenticated connection. Never read from request content."
+    },
+    "outcome": {
+      "enum": ["completed", "denied", "cancelled", "refused", "failed", "expired"],
+      "description": "refused covers preconditions such as unavailable containment; expired covers a turn terminated by an unanswered approval."
+    },
+    "reasonCode": {
+      "type": "string",
+      "description": "Stable slug explaining a non-completed outcome. Safe by construction."
+    },
+    "text": {
+      "type": "string",
+      "description": "Redacted assistant text."
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "costUnits": { "type": "number", "minimum": 0 }
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["approvalId", "resolution"],
+        "properties": {
+          "approvalId": { "type": "string", "format": "uuid" },
+          "resolution": { "enum": ["allowed", "denied", "expired", "undeliverable"] }
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "string",
+      "description": "Opaque reference to the durable evidence record. Never a filesystem path."
+    },
+    "correlationId": { "type": "string", "format": "uuid" }
+  }
+}

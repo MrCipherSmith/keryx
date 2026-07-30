@@ -1,11 +1,12 @@
-# UX Flows: Telegram Companion Transport
-Version: 1.0.0
+# UX Flows: Telegram Transport
+Version: 2.0.0
 
 ## Experience principle
 
-Telegram is a low-friction companion surface. The desktop UI is the authoritative
+Telegram is a low-friction remote surface. The desktop UI is the authoritative
 place for setup, policy inspection, revocation, and recovery; Telegram gives
-brief, safe, time-bounded interactions.
+brief, safe, time-bounded interactions — and, from 2.0.0, the ability to start a
+turn against the project bound to the chat.
 
 ## Connection states
 
@@ -38,8 +39,27 @@ brief, safe, time-bounded interactions.
    `status.read`.
 3. Harness returns a safe status projection; transport redacts and renders a
    short correlated message.
-4. Unsupported text is not treated as an agent instruction and receives a
-   constrained help/fallback response.
+4. Text that is not a supported command is handled per the chat's binding: in a
+   project-bound chat it becomes a `task.submit` prompt (see Turn submission
+   below); in an unbound chat it receives a constrained help/fallback response
+   and starts nothing.
+
+## Turn submission
+
+1. User sends free text in a chat bound to a project.
+2. Transport authenticates the binding, bounds the input, and submits it to the
+   security boundary as untrusted content. A finding stops here: the reply says
+   only that the prompt was rejected.
+3. Transport emits `task.submit` with the bound project path declared
+   explicitly, and receives a turn id.
+4. Progress renders as a single edited message — a placeholder, throttled edits
+   while the turn runs, one final formatted edit — with overflow continuing as
+   further messages rather than being truncated.
+5. Any policy-`ask` raised during the turn appears as an approval card (see
+   Approval below). Unanswered, it denies at expiry; undeliverable, it denies at
+   once.
+6. The terminal outcome is rendered redacted, correlated with the same id the
+   local session records.
 
 ## Progress and failure notification
 

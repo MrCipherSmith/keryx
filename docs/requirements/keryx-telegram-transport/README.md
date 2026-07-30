@@ -1,37 +1,66 @@
-# Keryx Telegram Companion Transport
-Version: 1.0.0
+# Keryx Telegram Transport
+Version: 2.0.0
 
 ## Purpose
 
-This package specifies a future, optional Telegram companion transport for the
-Keryx Project Agent Harness. It lets explicitly paired users observe long-running
-local work and approve or cancel only policy-eligible operations. It is a
-requirements package, not a runtime implementation.
+This package specifies a future, optional Telegram transport for the Keryx
+Project Agent Harness. It lets explicitly paired users observe long-running
+local work, approve or cancel policy-eligible operations, **and submit work to a
+project agent**. It is a requirements package, not a runtime implementation.
+
+From 2.0.0 this transport is a **client of
+[keryx-remote-entry](../keryx-remote-entry/README.md)**, not a parallel path into
+the harness. Authentication scope, session addressing, asynchronous approvals,
+the remote policy profile, and redaction are defined there and are not
+re-specified here. This package owns only what is Telegram-specific.
 
 ## Status
 
-**Specification ready (future).** Neither the Telegram integration nor the
-Project Agent Harness runtime is claimed to be implemented by this package.
+**Specification ready (future).** No Telegram integration is claimed to be
+implemented. The Project Agent Harness it ultimately reaches *is* implemented
+(`src/harness/`); Remote Entry, which this transport requires, is not.
 
 ## Scope
 
-Release 0 is a private-chat companion bot for one or more explicitly paired
-users. A desktop/local process uses long polling by default; it validates a
-locally supplied token, pairs a chat through a one-time deep link, and then
-delivers status, progress, error summaries, approval prompts, and cancellation
-of the user's own active operation.
+Release 0 is a private-chat bot for one or more explicitly paired users. A
+desktop/local process uses long polling by default; it validates a locally
+supplied token, pairs a chat through a one-time deep link, and then delivers
+status, progress, error summaries, approval prompts, cancellation of the user's
+own active operation, and turn submission against a bound project.
 
 The desktop UI remains canonical for connecting, access revocation, policy
 inspection, and emergency disablement. Task Manager remains the only writer of
 managed-flow state; Telegram never writes `flow.json`.
 
+## Boundary change in 2.0.0
+
+Version 1.0.0 scoped Release 0 to a **companion**: `status.read`,
+`operation.cancel-own`, `approval.respond`, and `pairing.start`. Submitting work
+was an explicit non-goal.
+
+**2.0.0 widens the boundary** to include `task.submit`. The reasoning, the
+concerns this raises, and the compensating controls that pay for it are recorded
+once in [keryx-remote-entry PRD](../keryx-remote-entry/prd.md) §Decision. In
+short: a submitted prompt is untrusted content and is scanned before it can
+become a turn; remote turns run under a policy profile that is never weaker than
+local and is stricter by default; origin is stamped by the server and cannot be
+forged; and a turn can never approve its own `ask`.
+
+This is a real perimeter expansion, recorded as a decision rather than left as
+drift.
+
 ## Non-goals
 
 - A second agent runtime, domain-state owner, or remote control plane.
-- Free-form shell execution, filesystem mutation, network access, subagent
-  dispatch, or arbitrary agent tasks initiated from Telegram messages.
-- Groups, channels, inline mode, Mini Apps, Telegram Login/OIDC, webhooks, and
-  a chat-first agent UX in Release 0.
+- Direct shell execution, filesystem mutation, network access, or subagent
+  dispatch initiated from a Telegram message. `task.submit` submits a *prompt*
+  to the policy-governed run loop; it is not a tool call and never bypasses
+  classification.
+- Defining its own token scope, allowlist, session store, or approval semantics —
+  those belong to Remote Entry.
+- Groups, channels, inline mode, Mini Apps, Telegram Login/OIDC, and webhooks in
+  Release 0. Forum topics are deferred to Release 1; see
+  [specification.md](specification.md).
 
 ## Document index
 
@@ -56,12 +85,15 @@ managed-flow state; Telegram never writes `flow.json`.
 
 ## Related modules
 
+- [keryx-remote-entry](../keryx-remote-entry/README.md): the transport-neutral
+  entry this package is a client of. Owns authentication, session addressing,
+  asynchronous approvals, the remote policy profile, streaming, and redaction.
 - `src/flow`: Task Manager is the authoritative managed-flow lifecycle and state
   owner.
 - `src/security`: existing security/policy boundary, input scanning, and
-  redaction seam to be integrated by a future adapter.
-- Future Project Agent Harness: owner of typed intents, policy classification,
-  evidence, and local-session outcomes.
+  redaction seam.
+- `src/harness`: implemented Project Agent Harness — owner of policy
+  classification, evidence, and local-session outcomes.
 - `.metaproject`: source of truth for flow, policy/security, evidence, graph,
   wiki, memory, skills, testing, and health capabilities.
 
