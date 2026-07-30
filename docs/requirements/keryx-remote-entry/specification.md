@@ -168,6 +168,27 @@ the entry issues a one-time link per
 
 Provider and model *selection* carry no secret and are ordinary operations.
 
+### Where the handoff link does not reach
+
+A loopback link is unreachable from a phone. For providers authorized by the
+**device authorization grant**, that limitation does not apply: keryx obtains a
+short user code and a public verification URL, the operator approves on whatever
+device they are holding, and keryx polls for the token. No loopback, and still no
+secret through the transport.
+
+The two mechanisms are complementary and both are kept:
+
+| Situation | Mechanism |
+|---|---|
+| The operator already holds an API key | Credential handoff link — local entry. |
+| keryx must obtain a token from a provider that supports the device grant | Device authorization grant — works remotely. |
+| Provider offers OAuth but no device grant | Authorization code + PKCE with a loopback redirect — local only. |
+
+Methods, the provider registry that declares them, and which vendors permit
+which, are specified in [keryx-provider-auth](../keryx-provider-auth/README.md).
+A method that is not remote-capable must be reported as such rather than issued
+as a link that cannot open.
+
 ## Asynchronous approvals
 
 In the TUI, an `ask` is synchronous: the human is present, and the run loop

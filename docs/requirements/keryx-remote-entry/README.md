@@ -91,6 +91,9 @@ treatment of every remote prompt, and no self-granting of approvals. See
 - `src/standard/command-registry.ts`: the source of truth for which maintenance
   operations exist, whether each is read-only, and whether it costs a model
   call. Remote Entry projects it; it does not maintain a second list.
+- [keryx-provider-auth](../keryx-provider-auth/README.md): the provider registry
+  and its authentication methods. Its device authorization grant covers the
+  remote case the loopback handoff link cannot reach.
 - `src/security`: input scanning, prompt-injection detection, and the redaction
   seam every outbound payload passes through.
 - `src/flow`: Task Manager, read-only projection only.

@@ -117,18 +117,34 @@ turn against the project bound to the chat.
 
 1. Operator picks a provider and a model from the topic. Neither is a secret, so
    both are ordinary commands.
-2. Setting the credential is not. The bot never asks for it in the chat; it
-   returns a one-time link that expires, opening a local page on the machine
-   running keryx.
-3. The operator enters the value there and it goes straight into the credential
-   store. It was never in a message, never in the chat history, never in the
-   bot's update stream.
-4. Away from the machine the local link cannot be opened. Reaching it needs the
-   non-loopback bind, with its explicit flag and acknowledgement.
-5. Direct entry in a private chat exists only as an explicit fallback: never in
+2. What happens next depends on how that provider authorizes.
+
+**Provider using the device grant — works from the phone.**
+
+3. The bot sends a short code and the provider's own verification URL.
+4. The operator opens it in the phone's browser, signs in there, enters the code
+   and approves. keryx never sees the password or the session.
+5. keryx polls in the background and reports when the provider is authorized.
+   Nothing secret was in the chat, and no local page was needed.
+
+**Provider using an API key — needs the machine.**
+
+6. The bot says so plainly and offers the one-time local link for when the
+   operator is at the machine. It does not send a link that cannot open.
+7. At the machine, the operator opens the link and enters the value; it goes
+   straight into the credential store, never through a message.
+8. Reaching that link from elsewhere would need the non-loopback bind, with its
+   explicit flag and acknowledgement.
+9. Direct entry in a private chat exists only as an explicit fallback: never in
    the supergroup, the message deleted immediately, the value kept out of logs,
    evidence and history, and the operator told plainly that it passed through
    Telegram's infrastructure and can be rotated.
+
+**Provider whose subscription cannot be used by a third-party client.**
+
+10. The bot says so at the point of choice, gives the reason, and offers the
+    API-key path. It does not attempt the flow and let the vendor refuse — the
+    cost of that would land on the operator's own account.
 
 ## Working across projects
 

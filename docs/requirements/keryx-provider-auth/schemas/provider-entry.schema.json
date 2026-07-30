@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/provider-entry/1.0.0",
+  "title": "Provider Entry",
+  "description": "One entry in the provider registry (src/commands/providers.ts), extended with its declared authentication method. The registry stays the single source of truth: adding a provider or changing how it authenticates is a registry edit, not a code branch. No entry ever carries a credential value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "label", "auth"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Stable id used as the provider name, e.g. deepseek."
+    },
+    "label": { "type": "string", "minLength": 1 },
+    "note": { "type": "string", "description": "Short picker note, e.g. \"coding plan\"." },
+    "baseUrl": { "type": "string", "description": "API base URL, before the chat/models path. Absent for local runtimes configured elsewhere." },
+    "chatPath": { "type": "string", "default": "/v1/chat/completions" },
+    "modelsPath": { "type": "string", "default": "/v1/models" },
+    "models": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Curated fallback ids, used only when the live models fetch fails."
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method"],
+      "properties": {
+        "method": {
+          "enum": ["none", "api-key", "device-code", "oauth-pkce-loopback", "cloud-credentials"],
+          "description": "Exactly one method per entry."
+        },
+        "remoteCapable": {
+          "type": "boolean",
+          "description": "Whether the method can be completed by an operator holding only a phone. True for device-code and none; false for api-key and oauth-pkce-loopback, which need the machine. Decides what a transport may offer."
+        },
+        "envKey": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "description": "Environment variable carrying the Bearer key, for api-key entries. Names the variable; never holds the value."
+        },
+        "device": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deviceAuthorizationEndpoint", "tokenEndpoint", "clientId"],
+          "description": "Present when method is device-code.",
+          "properties": {
+            "deviceAuthorizationEndpoint": { "type": "string" },
+            "tokenEndpoint": { "type": "string" },
+            "clientId": {
+              "type": "string",
+              "description": "Public client identifier. Not a secret; the device grant is defined for public clients."
+            },
+            "scopes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "oauth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authorizationEndpoint", "tokenEndpoint", "clientId"],
+          "description": "Present when method is oauth-pkce-loopback.",
+          "properties": {
+            "authorizationEndpoint": { "type": "string" },
+            "tokenEndpoint": { "type": "string" },
+            "clientId": { "type": "string" },
+            "scopes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "termsNote": {
+          "type": "string",
+          "description": "Why this entry declares the methods it does, when a vendor restricts third-party clients. Makes the compliance boundary reviewable in the data rather than only in prose."
+        }
+      }
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["apiKey"] },
+      { "required": ["token"] },
+      { "required": ["secret"] },
+      { "required": ["clientSecret"] }
+    ]
+  }
+}

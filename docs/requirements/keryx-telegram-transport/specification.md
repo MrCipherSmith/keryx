@@ -232,10 +232,30 @@ stream.
 
 Provider and model *selection* carry no secret and are ordinary commands.
 
-If the operator is away from the machine the loopback link is unreachable; that
-needs the non-loopback bind, which already requires an explicit flag and
-acknowledgement. Direct entry in a private chat exists only as the explicit,
-constrained fallback described in [security-policy.md](security-policy.md).
+### Authorizing a provider from the phone
+
+For providers using the **device authorization grant**, the loopback limitation
+does not apply at all. The transport renders a short user code and the
+provider's public verification URL; the operator opens it in the phone's
+browser, approves, and keryx obtains the token by polling. Nothing secret is in
+the chat, and no local page is needed.
+
+The transport renders only the user code and the verification URL. The device
+code is confidential and is never sent to Telegram.
+
+For providers authorized by an API key, the loopback link is unreachable from a
+phone; that needs the non-loopback bind, which already requires an explicit flag
+and acknowledgement. In that case the transport says so plainly rather than
+sending a link that cannot open.
+
+Which providers use which method — and which vendors permit subscription login
+to a third-party client at all — is specified in
+[keryx-provider-auth](../keryx-provider-auth/README.md). A request to authorize
+a subscription a vendor restricts to its own clients is declined at the point of
+choice, with the reason and the working alternative.
+
+Direct key entry in a private chat exists only as the explicit, constrained
+fallback described in [security-policy.md](security-policy.md).
 
 ## Voice
 
@@ -406,6 +426,10 @@ Harness, policy, security, evidence, and Task Manager projection ports.
 | AC-45 Handoff is one-time | Given a consumed or expired handoff link, when it is opened again, then it fails and reports expiry, and no credential is set. |
 | AC-46 Selection needs no handoff | Given a provider or model selection command, when it runs from a topic, then it completes without any handoff, because it carries no secret. |
 | AC-47 Fallback is constrained | Given direct secret entry is used as the explicit fallback, when it occurs, then it is refused in a supergroup, accepted only in a private chat, the carrying message is deleted immediately, the value is excluded from logs, evidence and retained history, and the operator is told the value transited the provider's infrastructure. |
+| AC-48 Device grant from the phone | Given a provider using the device authorization grant, when authorization is requested from a topic, then the user code and verification URL are rendered, the operator completes it in a phone browser, and keryx obtains the token without a loopback link or a local page. |
+| AC-49 Device code stays confidential | Given an in-flight device grant, when anything is rendered to Telegram, then the user code and verification URL may appear and the device code never does. |
+| AC-50 Non-remote method is explained | Given a provider requiring an API key, when authorization is requested from a topic, then the transport states that entry requires the machine and issues no loopback link. |
+| AC-51 Restricted subscription declined early | Given a request to authorize a vendor subscription restricted to that vendor's own clients, when it is made, then it is declined at the point of choice with the reason and the alternative, and no vendor endpoint is contacted. |
 
 ## Rendering and delivery
 
