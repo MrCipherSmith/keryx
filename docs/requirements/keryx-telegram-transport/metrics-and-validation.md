@@ -1,5 +1,5 @@
 # Metrics and Validation: Telegram Transport
-Version: 2.0.0
+Version: 2.1.0
 
 ## Status
 
@@ -21,6 +21,17 @@ documentation run.
 | Declared project (2.0.0) | 100% of `task.submit` fixtures declare the bound project path; none derive it from message content. |
 | Prompt is not a tool call (2.0.0) | 100% of prompts naming a shell command are classified by the policy engine identically to the equivalent TUI turn; none execute on the strength of the message. |
 | Delegated semantics (2.0.0) | The transport defines no allowlist, no auto-approve rule, no approval timeout, and no session-addressing rule of its own; a static check asserts this against [keryx-remote-entry](../keryx-remote-entry/README.md). |
+| Cross-project delivery (2.1.0) | **Zero tolerance.** ≥4 concurrent sessions across ≥2 projects with interleaved arrival; no message reaches a session other than the one its binding names. |
+| Unmapped-topic refusal (2.1.0) | 100% of updates in topics mapped to no project are refused; none fall back to a private-chat binding or an active session. |
+| Membership containment (2.1.0) | 100% of updates from unauthorized members of an authorized supergroup produce no privileged effect and no acknowledgement. |
+| Binding validation safety (2.1.0) | **Zero tolerance.** No inconclusive validation result ever clears a binding; deleted-topic fixtures clear exactly the affected binding. |
+| Queue behaviour (2.1.0) | Two updates for one binding run in order; updates for different bindings run concurrently; every queued update reports its position at queueing time; every over-bound update is explicitly refused, none silently dropped. |
+| Voice default-off (2.1.0) | **Zero tolerance.** A fresh configuration, and a configuration carrying a credential but no opt-in, both contact zero voice services. |
+| Voice egress containment (2.1.0) | **Zero tolerance.** Every remote voice call passes the egress policy; a denial produces zero bytes of audio leaving the process in either direction. |
+| Voice loss (2.1.0) | 100% of transcription failures degrade to file delivery; zero messages discarded. |
+| Voice idempotency (2.1.0) | Duplicate audio delivery produces exactly one transcription and one turn. |
+| Speech redaction (2.1.0) | **Zero tolerance.** No secret, path, or PII fixture is audible in synthesized output; synthesis input is always post-redaction text. |
+| Speech qualification (2.1.0) | Short, mostly-code and diff fixtures produce no speech; markdown bullet fixtures are not classified as diffs; no clip exceeds the duration cap; no split falls mid-word. |
 
 ## Required validation layers
 
@@ -28,7 +39,11 @@ documentation run.
    2020-12; reject raw token fields in transport config fixtures.
 2. **Offline fake adapter:** inject updates, callbacks, failures, duplicate and
    reordered `update_id` values, webhook state, and restart checkpoints without
-   network access.
+   network access. It must additionally simulate forum topics — including
+   unmapped topics, deleted topics, and validation that fails transiently —
+   unauthorized supergroup members, interleaved arrival across ≥2 projects, and
+   both voice directions with a fake local engine and a fake remote service that
+   can be denied by policy. No real audio service is contacted.
 3. **Security tests:** cover injection scanning, binding/allowlist, redaction,
    `deny` containment, and no-secret/no-absolute-path output.
 4. **Lifecycle scenarios:** cover the acceptance criteria in
@@ -56,3 +71,13 @@ documentation run.
   implementation-era threat modeling and operational measurement.
 - Server/headless webhook deployment has separate infrastructure and security
   requirements and is not validated by Release 0 local polling scenarios.
+- The Bot API cannot enumerate a forum's topics. Synchronization can create
+  missing topics but cannot discover topics belonging to no project, so orphan
+  detection is limited to bindings the transport already knows about. This is a
+  platform limitation, not a gap to close by implementation effort.
+- Concrete voice engines, their licences, model sizes, and offline availability
+  per operating system are undecided. The specification commits only to
+  local-first ordering and an explicit remote opt-in, not to any particular
+  engine.
+- Speaking-rate estimation used to size clips is a heuristic and must be
+  calibratable without a code change; no accuracy claim is made for it.

@@ -1,5 +1,5 @@
 # Product Requirements Document: Keryx Telegram Transport
-Version: 2.0.0
+Version: 2.1.0
 
 ## Status and recommendation
 
@@ -20,6 +20,17 @@ over local project state.
 Version 1.0.0 solved only the first half. Observability without the ability to
 start anything still requires the operator to be at the keyboard, which is the
 actual constraint.
+
+Two further constraints surfaced from studying a working system (see
+[brainstorm.md](brainstorm.md)):
+
+- **One project is not enough.** An operator works across several projects. A
+  transport that binds one project to one chat is a demonstration, not a tool.
+  Reaching several projects needs a routing key that is not "the user".
+- **Typing is the wrong input away from the desk.** The situations where remote
+  reach matters — walking, driving, away from a keyboard — are exactly the ones
+  where typing a prompt is impractical, and where reading a long reply is worse
+  than hearing it.
 
 ## Goal
 
@@ -51,6 +62,17 @@ policy profile that is never weaker than the local one.
    requests, cancellation of the sender's own active operation, and submission
    of a turn from a chat bound to a project. Submission is a prompt to the
    policy-governed run loop, never a tool call.
+4a. Support a forum supergroup with one project per topic, routed by topic
+   identifier. A topic mapped to no project refuses; it never falls through to
+   another chat's or another project's session. Membership of the supergroup
+   grants nothing — each member is authorized individually.
+4b. Serialize work per project and parallelize across projects: messages for one
+   project run in order, different projects run concurrently, and a sender whose
+   message is queued is told its position.
+4c. Accept an inbound voice message as a prompt, and deliver a qualifying reply
+   additionally as speech. Both directions are local-first and off by default;
+   any remote transcription or synthesis service is opt-in and passes the egress
+   policy.
 5. Convert every inbound update into a normalized receipt, then validate,
    authorize, scan, redact as needed, and map it to a typed intent. A message is
    never a direct tool call.
@@ -79,6 +101,14 @@ policy profile that is never weaker than the local one.
 | Disconnect/revoke | Desktop invalidates binding and the adapter stops delivery and acceptance for that binding. |
 | Failed polling | Adapter exposes degraded state, retries within limits, and gives a final recoverable/terminal status. |
 | Webhook conflict | Polling startup detects configuration conflict and waits for explicit desktop resolution. |
+| Forum setup | Operator configures a forum supergroup; a topic is created per project and the topic↔project mapping is recorded. |
+| Message in a project topic | Routed to that project's session by topic identifier, never by recency or by falling back to another chat. |
+| Message in an unmapped topic | Refused with a clear explanation. No session is reached and no turn is created. |
+| Concurrent projects | Two topics run turns concurrently; two messages in one topic run in order, and the second sender is told its queue position. |
+| Deleted topic | Validation detects the topic is gone and clears the stale mapping. A transient network failure leaves the mapping untouched rather than clearing it. |
+| Inbound voice | Voice is transcribed locally, becomes a prompt, and progress is visible while it happens. |
+| Untranscribable voice | The audio is handed to the agent as a file rather than the message being lost. |
+| Outbound voice | A qualifying reply — long enough, not mostly code, not a diff — is additionally delivered as speech, split so no clip exceeds the cap. |
 
 ## UX requirements
 
@@ -91,9 +121,19 @@ policy profile that is never weaker than the local one.
 
 ## Non-goals
 
-Release 0 excludes group/channel operation, inline mode, Mini Apps, Telegram
-Login/OIDC, webhooks, public remote control, and all direct privileged tool
-execution.
+Release 0 excludes ordinary group and channel operation, inline mode, Mini Apps,
+Telegram Login/OIDC, webhooks, public remote control, and all direct privileged
+tool execution.
+
+Forum supergroups are **not** excluded — that is the 2.1.0 scope change, because
+without them multi-project reach does not exist. What remains excluded is
+treating supergroup membership as authorization: every member is authorized
+individually, and an unauthorized member of an authorized supergroup is a
+stranger.
+
+Cloud transcription and synthesis are not excluded but are never the default:
+they are opt-in per install and pass the egress policy, because sending a user's
+voice to a third party is outbound movement of user content.
 
 Free-text submission is no longer excluded — that is the 2.0.0 boundary change —
 but it remains bounded: only from a bound chat, only as a prompt to the run loop,
@@ -125,6 +165,12 @@ approval semantics; those belong to Remote Entry.
 | The 2.0.0 perimeter expansion is treated as routine | The widening is recorded as a decision with named compensating controls in [keryx-remote-entry PRD](../keryx-remote-entry/prd.md) §Decision, and every one of them is an acceptance criterion, not an aspiration. |
 | A paired user is treated as a trusted input source | Pairing establishes who may ask, never what may run. A prompt from a paired user is scanned as untrusted content and classified by the same policy engine as a TUI turn. |
 | Transport drift from Remote Entry semantics | Approval timeout, allowlist, session addressing, and redaction are delegated, not re-specified; AC-15 asserts the transport defines none of its own. |
+| A message reaches the wrong project | Routing is by topic identifier with an explicit refusal when a topic is unmapped. There is no fallback path that could deliver into another project's session, and a scenario test runs ≥4 concurrent sessions across ≥2 projects. |
+| Supergroup membership mistaken for authorization | Membership grants nothing. Each member is authorized individually, and the authorization check runs before routing, not after. |
+| Voice becomes a silent egress channel | Voice is local-first and off by default; any remote service is opt-in per install, declared in configuration, and passes the egress policy, which is the same boundary that governs every other outbound path. |
+| Transcription error loses a message | An untranscribable voice message is handed to the agent as a file, and the failure is visible to the sender. |
+| Stale topic mappings accumulate | Mappings are validated; a topic that Telegram reports as gone is cleared, while a transient failure leaves the mapping untouched and records the check as inconclusive. |
+| Speech leaks content a text reply would have redacted | Synthesis runs on already-redacted text only. There is no path from raw tool output to audio. |
 | Polling conflicts with webhook setup | Detect and stop with a clear desktop decision instead of silently changing transport mode. |
 
 ## Release 2+ consideration

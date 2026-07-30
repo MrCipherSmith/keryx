@@ -1,5 +1,5 @@
 # Telegram Transport Protocol
-Version: 2.0.0
+Version: 2.1.0
 
 ## Purpose
 
@@ -21,8 +21,12 @@ A message never names an action that skips classification.
 | `IntentPort` | transport core -> Harness | Submit a validated, authorized, scanned typed intent with correlation and actor binding. |
 | `OutcomePort` | Harness -> transport core | Publish a policy/result/evidence projection that is eligible for notification. |
 | `NotificationPort` | transport core -> Telegram adapter | Deliver a bounded, redacted outbound notification. |
-| `BindingPort` | desktop setup -> transport core | Create, revoke, and look up explicitly authorized chat bindings. |
+| `BindingPort` | desktop setup -> transport core | Create, revoke, validate, and look up explicitly authorized chat and topic bindings. |
 | `IdempotencyPort` | transport core -> local store | Atomically record update, pairing, callback, and send receipts. |
+| `RoutingPort` | transport core -> binding store | Resolve an update to exactly one binding, or refuse. Never returns a best guess. |
+| `QueuePort` | transport core -> local scheduler | Serialize per binding, parallelize across bindings, report queue position, refuse beyond the depth bound. |
+| `TranscriptionPort` | transport core -> voice engine | Produce a transcript from bounded audio. Local implementation first; a remote implementation is opt-in and egress-governed. |
+| `SynthesisPort` | transport core -> voice engine | Produce speech from **already-redacted** text. Same opt-in and egress rules. |
 
 ## Normalized inbound receipt
 
@@ -50,6 +54,44 @@ may create an approval request, and `deny` stops the flow.
 `task.submit` declares the bound project path explicitly. The transport never
 lets the entry infer the project, and never derives the path from message
 content.
+
+A voice message that transcribes successfully produces `task.submit` with the
+transcript as its prompt. The transcript is untrusted content and is scanned
+before conversion, exactly like typed text.
+
+## Routing and refusal
+
+`RoutingPort` resolves an update to exactly one binding
+([topic-binding.schema.json](schemas/topic-binding.schema.json)) or refuses.
+There is no result meaning "probably this one". A forum topic mapped to no
+project is a terminal refusal, not a reason to consult the private-chat binding
+or the only active session.
+
+Authorization of the individual sender happens **before** routing. Membership of
+an authorized supergroup is not authorization.
+
+## Queueing
+
+`QueuePort` keys on the binding. Work for one binding runs in order; different
+bindings run concurrently. Position is reported at the moment of queueing.
+Exceeding the depth bound is an explicit refusal with a safe message, never a
+silent drop.
+
+## Voice contracts
+
+Voice is configured by [voice-config.schema.json](schemas/voice-config.schema.json)
+and is disabled by default in both directions.
+
+- Inbound audio is bounded by duration and size before download.
+- `TranscriptionPort` attempts the local engine first. A remote implementation
+  runs only when explicitly opted in for the install and permitted by the egress
+  policy; the presence of a credential is not an opt-in.
+- A failed transcription degrades to delivering the audio as a file marked not
+  transcribed. The message is never discarded.
+- `SynthesisPort` accepts only already-redacted text. There is no path from raw
+  tool output or an unredacted error to audio.
+- Duplicate delivery of one audio message produces one transcription and one
+  turn.
 
 ## Approval callbacks
 

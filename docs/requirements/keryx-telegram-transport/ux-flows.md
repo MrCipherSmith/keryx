@@ -1,5 +1,5 @@
 # UX Flows: Telegram Transport
-Version: 2.0.0
+Version: 2.1.0
 
 ## Experience principle
 
@@ -15,7 +15,7 @@ turn against the project bound to the chat.
 | Disconnected | Connect action and reason, if known | No assumption of availability. |
 | Token validated | Credential check succeeded without exposing token | Not yet paired. |
 | Awaiting pairing | QR/deep link with expiry and cancel action | `/start` pairing handoff. |
-| Paired | Bound chat and test-message result; revoke action | Safe connected confirmation. |
+| Paired | Bound chat or forum, per-project topic mappings and their validation state, revoke action | Safe connected confirmation. |
 | Polling active | Last update/checkpoint and stop action | Status/notification capable. |
 | Degraded | Cause, retry state, desktop recovery options | Short degraded/final status if delivery remains possible. |
 
@@ -79,6 +79,61 @@ turn against the project bound to the chat.
    callback nonce, expiry, deduplication, and policy context.
 4. Valid response is forwarded once. Expired, replayed, and denied actions show
    a safe final state; a `deny` never appears as an approvable card.
+
+## Multi-project setup
+
+1. Operator creates a supergroup with topics enabled and adds the bot with the
+   permission to manage topics. Both conditions are checked before anything is
+   created; a missing permission is named, not reported as a generic failure.
+2. Desktop configures the forum once. A topic is created per project and each
+   topic↔project mapping is recorded.
+3. Later projects are picked up by re-running synchronization, which creates the
+   missing topics. It cannot discover topics belonging to no project — the Bot
+   API cannot enumerate a forum's topics — so the desktop presents what it
+   created and what it could not see.
+4. Bindings are validated periodically. A topic Telegram reports as gone is
+   cleared and named; a check that fails transiently changes nothing and is
+   shown as inconclusive rather than as a removal.
+
+## Working across projects
+
+1. Operator writes in a project's topic. The message routes to that project by
+   topic identifier.
+2. Writing in a topic mapped to no project produces a refusal that says so.
+   Nothing is delivered anywhere, and no other project's session is touched.
+3. Writing in a topic while that project is already busy queues the message and
+   answers immediately with its position. Other projects are unaffected and
+   continue in parallel.
+4. An unauthorized member of the supergroup gets nothing. Their messages produce
+   no privileged effect and no acknowledgement.
+
+## Voice in
+
+1. Operator sends a voice message in a bound topic or private chat.
+2. One status message appears and is edited through its phases: queued with
+   position, downloading, transcribing. There is no silent gap.
+3. Transcription runs locally. A remote service is used only if it was
+   explicitly enabled for this install and the egress policy permits it.
+4. The transcript becomes a prompt and is scanned as untrusted content, exactly
+   as typed text would be.
+5. If transcription produces nothing, the audio is handed to the agent as a file
+   marked not transcribed and the operator is told. The message is not lost.
+6. The same voice message delivered twice produces one transcription and one
+   turn.
+
+## Voice out
+
+1. A reply is produced and redacted.
+2. It is spoken only if it is worth hearing: long enough, not mostly code, not a
+   diff. Bullet lists are not diffs.
+3. Qualifying text is stripped of markup and, optionally, rewritten so it reads
+   naturally aloud. A rewrite that changed the language is discarded.
+4. Long replies become several clips, each within the duration cap, split at a
+   paragraph, sentence, line or word boundary — never mid-word.
+5. A recording indicator runs while synthesis is in progress, so the wait is
+   visible.
+6. Speech is synthesized from the redacted text only. What may not be written
+   may not be spoken.
 
 ## Cancellation
 

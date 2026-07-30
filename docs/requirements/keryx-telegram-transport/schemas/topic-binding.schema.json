@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/topic-binding/1.0.0",
+  "title": "Topic Binding",
+  "description": "Mapping between a Telegram routing target (a forum topic or a private chat) and exactly one project. It is the routing key and the concurrency key. A binding that cannot be resolved is a refusal, never a fallback to another project.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "bindingId", "kind", "chatId", "projectPath", "createdAt", "validation"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "bindingId": { "type": "string", "format": "uuid" },
+    "kind": {
+      "enum": ["private-chat", "forum-topic"],
+      "description": "forum-topic requires topicId; private-chat forbids it."
+    },
+    "chatId": {
+      "type": "string",
+      "description": "Opaque identifier of the private chat or forum supergroup."
+    },
+    "topicId": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Forum topic identifier. The General topic is not a project binding and is excluded by the minimum."
+    },
+    "projectPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute project path this binding routes to. Declared explicitly to Remote Entry on every submission; never inferred."
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "checkedAt"],
+      "properties": {
+        "state": {
+          "enum": ["confirmed", "absent", "inconclusive"],
+          "description": "absent means Telegram reported the topic does not exist and the binding is cleared. inconclusive means the check failed transiently; the binding is left untouched and must not be cleared."
+        },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "detail": {
+          "type": "string",
+          "description": "Safe explanation. No raw provider error body."
+        }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Exceeding this is an explicit refusal, never a silent drop."
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "forum-topic" } }, "required": ["kind"] },
+      "then": { "required": ["topicId"] },
+      "else": { "not": { "required": ["topicId"] } }
+    }
+  ]
+}

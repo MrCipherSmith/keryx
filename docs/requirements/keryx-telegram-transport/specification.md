@@ -1,5 +1,5 @@
 # Specification: Keryx Telegram Transport
-Version: 2.0.0
+Version: 2.1.0
 
 ## Identity and status
 
@@ -107,9 +107,130 @@ that path explicitly to Remote Entry. The transport never lets Remote Entry
 infer the project, and never submits with the project field derived from message
 content. A chat bound to no project can observe and approve but cannot submit.
 
-Forum topics — one project per topic in a supergroup — are the intended
-Release 1 mechanism for reaching several projects from one chat. Release 0 binds
-one project per private chat.
+A private chat binds one project. A forum supergroup binds one project per
+topic; see below.
+
+## Multi-project routing
+
+Reaching several projects from one place is a Release 0 requirement, not a later
+convenience. The routing key is the **topic**, not the user.
+
+### Topic binding
+
+A forum supergroup is configured once. Each project gets a topic, and the
+mapping is recorded as [topic-binding.schema.json](schemas/topic-binding.schema.json).
+Setup requires the supergroup to have topics enabled and the bot to hold the
+permission to manage them; both are checked before any topic is created, and a
+missing permission is reported as such rather than as a generic failure.
+
+### Resolution
+
+```text
+update arrives
+  -> sender authorized individually?        no  -> drop, no privileged effect
+  -> forum topic id present and not General?
+       yes -> project bound to this topic?
+                yes -> that project's session
+                no  -> REFUSE with an explanation
+       no  -> the project bound to this private chat
+                none -> constrained help response
+```
+
+The refusal on an unmapped topic is a hard requirement. There is no fallback
+path — not to a private-chat binding, not to the only active session, not to the
+most recent one. A transport that guesses here delivers one project's prompt
+into another project's session, and the guess is invisible to the operator until
+after the turn has run.
+
+Supergroup membership authorizes nothing. Every member is authorized
+individually, and the check runs **before** routing.
+
+### Binding validation
+
+A topic can be deleted in Telegram without the transport being told. Bindings
+are therefore validated, and validation has three outcomes:
+
+| Outcome | Action |
+|---|---|
+| Topic confirmed present | Binding retained. |
+| Telegram reports the topic does not exist | Binding cleared, recorded, and reported. |
+| Validation inconclusive — rate limit, network failure, unknown error | Binding **left untouched** and the check recorded as inconclusive. A transient failure must never clear a real mapping. |
+
+The Bot API offers no way to enumerate a forum's topics. Synchronization can
+therefore create missing topics but cannot discover topics that belong to no
+project. This is a platform limitation, stated here so it is designed around
+rather than discovered during implementation.
+
+### Concurrency
+
+Work is serialized per binding and parallel across bindings. The queue key is
+the topic binding — private chat or forum topic — so two projects progress
+concurrently while two messages for one project run in order.
+
+A sender whose message is queued behind others is told its position at the
+moment of queueing, not after the wait. Queue depth is bounded; exceeding the
+bound is an explicit refusal, never a silent drop.
+
+## Voice
+
+Voice is Release 0 in both directions. Both directions are **local-first and off
+by default**, configured through
+[voice-config.schema.json](schemas/voice-config.schema.json).
+
+### Inbound
+
+```text
+voice message
+  -> sender authorized, binding resolved (routing rules above)
+  -> bounded duration and size
+  -> transcription: local engine first; a remote service only when explicitly
+     enabled for this install and permitted by the egress policy
+  -> transcript is untrusted content -> security scan
+  -> task.submit
+```
+
+Progress is visible while it happens: one status message, edited through its
+phases — queued with position, downloading, transcribing — rather than silence
+followed by a result. Duplicate delivery of the same message identifier produces
+no second transcription and no second turn.
+
+**Failure degrades, it does not discard.** When transcription cannot produce a
+transcript, the audio is handed to the agent as a file with an explicit
+"not transcribed" marker, and the sender is told. Losing the message is not an
+acceptable outcome.
+
+### Outbound
+
+A reply is additionally delivered as speech only when it is worth hearing.
+Qualification is deterministic and testable:
+
+| Rule | Reason |
+|---|---|
+| Below a minimum length → no speech | A one-line answer is faster read than heard. |
+| Code exceeds a share of the text → no speech | Spoken code is unusable. |
+| The text is a diff → no speech | Same. Markdown bullets must not be mistaken for diff lines. |
+
+Qualifying text is stripped of markup, then split so that no single clip exceeds
+the duration cap. Splitting prefers paragraph, then sentence, then line, then
+word boundaries, and never cuts mid-word.
+
+An optional normalization pass may rewrite the text so it reads naturally aloud
+— path to filename, identifier to words, call syntax removed. It is optional
+because it costs a model call per reply. When normalization is enabled it must
+be verified not to have changed the language of the text; if it has, the
+un-normalized text is used instead.
+
+### Voice is a redaction boundary, not a bypass
+
+Synthesis runs on **already-redacted** reply text. There is no path from raw
+tool output, raw provider payload, or an unredacted error to audio. Everything
+that may not be written may not be spoken.
+
+Remote transcription or synthesis moves user content — a recording of the
+operator's voice, or the content of a redacted reply — to a third party. It is
+therefore treated as egress: opt-in per install, declared in configuration, and
+subject to the same policy boundary as any other outbound path. It is never
+enabled implicitly by the presence of an API key.
 
 ## Transport protocol and data contracts
 
@@ -188,6 +309,22 @@ Harness, policy, security, evidence, and Task Manager projection ports.
 | AC-14 Injected prompt | Given a prompt containing a prompt-injection fixture, when it is scanned, then no turn is created and the reply states only that it was rejected. |
 | AC-15 No local approval semantics | Given an approval prompt, when it is rendered and answered, then expiry, single-use, ownership, and deny-on-undeliverable behaviour come from Remote Entry, and the transport defines no allowlist, no auto-approve, and no alternative timeout. |
 | AC-16 Rate-limit safety | Given a provider rate-limit response during delivery, when the transport retries, then it honours the provider's stated retry interval, and an approval that still cannot be delivered resolves as a denial rather than an indefinite wait. |
+| AC-17 Topic routing | Given a supergroup with topics bound to two different projects, when a message arrives in one topic, then it reaches that project's session and never the other, regardless of which session is more recent, more idle, or currently active. |
+| AC-18 Unmapped topic refuses | Given a topic bound to no project, when any message arrives in it, then the transport refuses with an explanation and no session is reached — in particular it does not fall back to a private-chat binding or to the only active session. |
+| AC-19 Membership is not authorization | Given an authorized supergroup, when an unauthorized member posts in a bound topic, then the update is dropped with no privileged effect, exactly as for a stranger. |
+| AC-20 Per-binding serialization | Given two messages in one topic and one message in another, when all three arrive together, then the two share a queue and run in order while the third runs concurrently. |
+| AC-21 Queue position | Given a message that must wait, when it is queued, then its sender is told its position at the moment of queueing rather than after the wait; and given the queue bound is exceeded, then the message is explicitly refused, never silently dropped. |
+| AC-22 Deleted topic | Given a topic Telegram reports as non-existent, when bindings are validated, then that binding is cleared and reported. |
+| AC-23 Inconclusive validation | Given a rate-limit or network failure during validation, when the check completes, then the binding is left untouched and the result is recorded as inconclusive — never cleared. |
+| AC-24 Voice off by default | Given a fresh configuration, when a voice message arrives, then no transcription is attempted and no remote service is contacted; and given only an API key is present without an explicit opt-in, then a remote service is still not contacted. |
+| AC-25 Local-first transcription | Given voice enabled with both a local engine and an opted-in remote service, when a voice message arrives, then the local engine is attempted first. |
+| AC-26 Voice egress is policy-governed | Given a remote transcription or synthesis service, when it is invoked, then the call passes the egress policy; and when the policy denies it, then no audio leaves the process. |
+| AC-27 Transcription failure degrades | Given transcription that produces no transcript, when the handler completes, then the audio reaches the agent as a file marked not transcribed, the sender is told, and the message is not discarded. |
+| AC-28 Voice idempotency | Given the same voice message delivered twice, when both are handled, then exactly one transcription and one turn occur. |
+| AC-29 Speech qualification | Given a reply that is short, is mostly code, or is a diff, when delivery runs, then no speech is produced; and given a markdown bullet list, then it is not mistaken for a diff. |
+| AC-30 Clip cap | Given a reply whose spoken length exceeds the cap, when speech is produced, then it is split into clips each within the cap, split at a paragraph, sentence, line or word boundary, and never mid-word. |
+| AC-31 Speech redaction | Given a reply containing secret, path or PII fixtures before redaction, when speech is produced, then it is synthesized from the redacted text only, and no raw value is audible. |
+| AC-32 Normalization language guard | Given normalization enabled and a pass that returns text in a different language than the input, when speech is produced, then the un-normalized text is used. |
 
 ## Rendering and delivery
 
