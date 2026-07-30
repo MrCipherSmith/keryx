@@ -79,6 +79,10 @@ describe("command-registry", () => {
 function moduleStem(module: string): string {
   // Command stems use the CLI verb, which differs from the module key for a few
   // modules (gdwiki -> wiki, gdctx -> ctx, tasks -> flow, memory -> memory).
+  //
+  // `core` is the toolkit itself (`keryx status`, `keryx modules status`), and
+  // those commands carry no module prefix by design — the empty stem opts them
+  // out of the prefix rule rather than pretending they satisfy it.
   const map: Record<string, string> = {
     gdwiki: "wiki",
     gdctx: "ctx",
@@ -88,6 +92,7 @@ function moduleStem(module: string): string {
     health: "health",
     testing: "test",
     security: "security",
+    core: "",
   };
   return map[module] ?? module;
 }

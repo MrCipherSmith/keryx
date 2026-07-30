@@ -275,6 +275,101 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  // ---- maintenance ------------------------------------------------------
+  // The "bring a project up" commands. They were absent while the registry
+  // covered only query surfaces, which left an agent no machine-readable way to
+  // learn they exist. `read: false` here is literal: each writes into
+  // `.metaproject/`, and a consumer that classifies write operations as
+  // approval-gated depends on that flag being honest.
+  {
+    module: "gdgraph",
+    command: "gdgraph build",
+    summary: "Build or refresh the code dependency graph for this project.",
+    intent: ["построй граф", "обнови граф", "build the code graph", "rebuild graph", "reindex dependencies"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["writes .metaproject/data/gdgraph/**"],
+  },
+  {
+    module: "gdctx",
+    command: "ctx status",
+    summary: "Compact-context module status: artifact counts and last run.",
+    intent: ["статус ctx", "ctx status", "compact context status"],
+    args: [],
+    json: false,
+    read: true,
+  },
+  {
+    module: "gdwiki",
+    command: "wiki collect",
+    summary: "Collect wiki pages from the codebase into the knowledge base.",
+    intent: ["собери вики", "collect wiki", "wiki collect", "заполни вики"],
+    args: [
+      { name: "force", type: "bool", required: false, desc: "recollect pages that already exist" },
+      { name: "limit", type: "number", required: false, desc: "maximum pages to collect" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes .metaproject/wiki/**"],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki check-links",
+    summary: "Verify every wiki link resolves; reports broken references.",
+    intent: ["проверь ссылки вики", "check wiki links", "broken links", "битые ссылки"],
+    args: [],
+    json: false,
+    read: true,
+  },
+  {
+    module: "memory",
+    command: "memory index",
+    summary: "Rebuild the project memory index.",
+    intent: ["переиндексируй память", "reindex memory", "memory index", "обнови индекс памяти"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["writes .metaproject/data/memory/index/**"],
+  },
+  {
+    module: "testing",
+    command: "test analyze",
+    summary: "Analyze the test suite and refresh the testing context report.",
+    intent: ["проанализируй тесты", "analyze tests", "test analyze", "обнови контекст тестов"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["writes .metaproject/data/testing/**"],
+  },
+  {
+    module: "testing",
+    command: "test status",
+    summary: "Testing module status: last analysis and report freshness.",
+    intent: ["статус тестов", "test status", "testing status"],
+    args: [],
+    json: false,
+    read: true,
+  },
+  // ---- core (toolkit itself) --------------------------------------------
+  {
+    module: "core",
+    command: "status",
+    summary: "Metaproject workspace status: enabled modules and artifact freshness.",
+    intent: ["статус проекта", "project status", "keryx status", "что включено"],
+    args: [],
+    json: false,
+    read: true,
+  },
+  {
+    module: "core",
+    command: "modules status",
+    summary: "Which Metaproject modules are enabled for this project.",
+    intent: ["какие модули включены", "module status", "list modules", "статус модулей"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured module state" }],
+    json: true,
+    read: true,
+  },
 ];
 
 /** Deterministic sort key: module then command. */
