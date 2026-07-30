@@ -3,9 +3,9 @@
   "id": "019",
   "slug": "keryx-harness-release1-boundary",
   "title": "keryx harness Release 1 boundary evidence",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T07:32:58.589Z",
-  "updatedAt": "2026-07-13T08:13:15.111Z",
+  "updatedAt": "2026-07-30T16:12:28.018Z",
   "source": {
     "type": "description",
     "ref": null
@@ -281,6 +281,21 @@
       "at": "2026-07-13T08:13:15.111Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-30T16:12:28.008Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:28.018Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:28.018Z"
+  }
 }

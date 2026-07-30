@@ -44,3 +44,5 @@
 - 2026-07-12T15:53:50.626Z - ac-confirmed: AC3: src/eval corpus+block-D+mcp 15/0; full bun test 554/0 (baseline parity); tsc --noEmit clean.
 - 2026-07-12T15:53:50.676Z - ac-confirmed: AC4: architecture/modules/fixtures README -> src/eval; frozen requirements + ADR-0001 untouched (git empty); OPEN-4 resolved in EV-01-corpus-relocation.md (direct rename).
 - 2026-07-12T15:53:50.726Z - ac-confirmed: AC5: runCorpus/gateCorpus byte-identical (0 ins/0 del); compat-map covers 4 files + 1 importer; no other evaluator ref in code. T7 review CLEAN.
+- 2026-07-30T16:12:26.610Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:26.622Z - done: all gates passed

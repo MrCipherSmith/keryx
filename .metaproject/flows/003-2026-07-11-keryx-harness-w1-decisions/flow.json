@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "003",
   "slug": "keryx-harness-w1-decisions",
   "title": "Freeze Keryx Harness W1 decisions D-01..D-04 (Release 0 boundary, ownership, security, provider/branch/child)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-11T20:08:06.862Z",
-  "updatedAt": "2026-07-11T20:55:49.640Z",
+  "updatedAt": "2026-07-30T16:12:20.769Z",
   "source": {
     "type": "description",
     "ref": null
@@ -41,55 +41,181 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:11:39.064Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:26:21.974Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:26:22.025Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:26:22.076Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T5",
       "title": "D-01: Freeze Release 0 boundary ADR + measurable success criteria + signed decision table",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:09:01.554Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T6",
       "title": "D-02: Freeze single-coordinator ownership/import matrix + contradiction check",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:09:01.608Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T7",
       "title": "D-03: Freeze security profile/isolation matrix + fail-closed decision",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:09:01.658Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T8",
       "title": "D-04: Freeze provider-state/branch/child-wire decision records linked to schemas + research ledger",
       "kind": "docs",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:09:01.709Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T9",
       "title": "W1 verification: consistency/contradiction check + architecture/security/contract review tracks",
       "kind": "review",
-      "status": "done"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-07-11T20:09:01.759Z",
+            "outcome": "completed"
+          }
+        ]
+      },
+      "disposition": "completed",
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -200,6 +326,21 @@
       "at": "2026-07-11T20:55:49.640Z",
       "event": "ac-confirmed",
       "detail": "AC5: decision-registry: D-01..04 SIGNED; four ADRs mutually consistent & consistent with frozen pkg; docs/requirements unmodified (git clean). T9 PASS."
+    },
+    {
+      "at": "2026-07-30T16:12:20.749Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:20.769Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:20.769Z"
+  }
 }

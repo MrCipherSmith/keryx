@@ -3,9 +3,9 @@
   "id": "021",
   "slug": "keryx-interactive-shell",
   "title": "keryx interactive shell (bare keryx REPL)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T10:32:53.652Z",
-  "updatedAt": "2026-07-13T10:57:42.865Z",
+  "updatedAt": "2026-07-30T16:12:42.211Z",
   "source": {
     "type": "description",
     "ref": null
@@ -251,6 +251,21 @@
       "at": "2026-07-13T10:57:42.865Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-30T16:12:42.199Z",
+      "event": "completing",
+      "detail": "merged commit: 03ba6df4bda25a9103b36a67a35003cde36ac822"
+    },
+    {
+      "at": "2026-07-30T16:12:42.211Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "03ba6df4bda25a9103b36a67a35003cde36ac822",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:42.211Z"
+  }
 }

@@ -3,9 +3,9 @@
   "id": "004",
   "slug": "keryx-harness-w2-taskmanager",
   "title": "W2 Task Manager evolution: additive task/run-link fields + migration (TM-01..TM-03)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-11T21:01:35.564Z",
-  "updatedAt": "2026-07-12T15:05:25.449Z",
+  "updatedAt": "2026-07-30T16:12:26.518Z",
   "source": {
     "type": "description",
     "ref": null
@@ -271,6 +271,21 @@
       "at": "2026-07-12T15:05:25.449Z",
       "event": "ac-confirmed",
       "detail": "AC5: tsc --noEmit clean; full bun test 554 pass/0 fail; legacy v1 flow.json byte-untouched (git clean); code-verifier PASS."
+    },
+    {
+      "at": "2026-07-30T16:12:26.505Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:26.518Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:26.518Z"
+  }
 }

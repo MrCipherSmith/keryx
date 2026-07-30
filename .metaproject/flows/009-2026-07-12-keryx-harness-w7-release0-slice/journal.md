@@ -72,3 +72,5 @@
 - 2026-07-13T00:34:36.467Z - ac-confirmed: AC4: S4: completion only on required evidence+gates; evidence-free/undisposed-blocker rejected; redaction-before-persistence (preview+hash+category+provenance, scan-fail blocks); metrics not fabricated; completion-gate-result + evidence-linked output. 21 tests. SC_R10/R11.
 - 2026-07-13T00:34:36.517Z - ac-confirmed: AC5: S5: runOffline assembles full flow; tool malformed/timeout/overflow bounded typed; budget/loop -> typed unresolvedRisks; CLI/JSONL-RPC semantic parity + transport-cannot-change-policy; effect-free replay + typed replay-mismatch. 13 tests. SC_R04/R12/R13. (SC_R16_BUDGET_RESERVATION + SC_R12_TRANSIENT_RETRY deferred - outside AC scope.)
 - 2026-07-13T00:34:36.569Z - ac-confirmed: AC6: tsc clean; full bun test 797/0 (703 baseline + 94); W4/W5/W6 reused unmodified; all durable payloads schema-validated; deps={}; no SDK/network/fs-mutation; new code under src/harness/; frozen pkg+src/eval+src/contracts+ADRs untouched. T15 CLEAN on boundaries.
+- 2026-07-30T16:12:27.017Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:27.027Z - done: all gates passed

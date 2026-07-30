@@ -54,3 +54,5 @@
 - 2026-07-12T22:34:06.924Z - ac-confirmed: AC3: FakeReadOnlyTool + FakeToolExecutor over tool port; ToolResult outputHash=recordedOutputHash(input) stable & instance-independent; gated by validateToolCall (unregistered/invalid REJECT); read-only, no net/fs/mutation.
 - 2026-07-12T22:34:06.979Z - ac-confirmed: AC4: fakes import only W5 ports + node:crypto; W5 source + src/contracts untouched; deps={}; no SDK.
 - 2026-07-12T22:34:07.034Z - ac-confirmed: AC5: tsc --noEmit clean; full bun test 703/0 (677 baseline + 26 new); new code under src/harness/; frozen requirements pkg + src/eval + src/contracts + ADRs untouched (git empty). T10 CLEAN.
+- 2026-07-30T16:12:26.919Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:26.931Z - done: all gates passed

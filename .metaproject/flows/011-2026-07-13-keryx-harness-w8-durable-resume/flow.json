@@ -3,9 +3,9 @@
   "id": "011",
   "slug": "keryx-harness-w8-durable-resume",
   "title": "W8 durable resume (RS-01/RS-02): reconstruct leaf + immutable attempts + fingerprints + crash/torn-write/cancellation recovery",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T01:17:26.519Z",
-  "updatedAt": "2026-07-13T01:49:49.098Z",
+  "updatedAt": "2026-07-30T16:12:27.227Z",
   "source": {
     "type": "description",
     "ref": null
@@ -281,6 +281,21 @@
       "at": "2026-07-13T01:49:49.098Z",
       "event": "ac-confirmed",
       "detail": "AC5: tsc clean; full bun test 817/0 (797+20); W7 run.ts/session + W5/W6 + src/contracts unmodified (run.ts pure wrapper); deps={}; new code under src/harness/resume/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN."
+    },
+    {
+      "at": "2026-07-30T16:12:27.215Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:27.227Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:27.227Z"
+  }
 }

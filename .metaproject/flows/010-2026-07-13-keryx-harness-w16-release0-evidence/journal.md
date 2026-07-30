@@ -43,3 +43,5 @@
 - 2026-07-13T01:11:28.153Z - ac-confirmed: AC2: E-02-release0-review-package.md: 7-lens normalized review (arch/contract/logic/security/testing-replay/perf/Gherkin), severity-ranked, explicit verdict NO BLOCKER/P0/P1 (GO); per-wave reviews untouched.
 - 2026-07-13T01:11:28.205Z - ac-confirmed: AC3: flow-orchestrator-handoff.md: DAG+wave status, frozen AC proposal, gates, constraints, out-of-scope/deferred(3), next=W8; created under met gate (E-02 no BLOCKER/P0/P1).
 - 2026-07-13T01:11:28.260Z - ac-confirmed: AC4: docs-only: no src/**/test change; bun test 797/0; tsc clean; deps={}; frozen requirements + ADR-0001..0004 untouched (git empty); all matrix rows resolve. T8 CLEAN.
+- 2026-07-30T16:12:27.116Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:27.127Z - done: all gates passed

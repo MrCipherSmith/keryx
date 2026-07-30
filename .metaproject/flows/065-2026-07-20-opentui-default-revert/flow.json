@@ -3,15 +3,32 @@
   "id": "065",
   "slug": "opentui-default-revert",
   "title": "Revert OpenTUI default — readline default again, TUI opt-in via --tui (stdin handoff leaks terminal query responses on real TTY)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T10:02:45.139Z",
-  "updatedAt": "2026-07-20T10:04:26.031Z",
+  "updatedAt": "2026-07-30T16:13:14.676Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:0325532761537a0db8a7e20e7c137853b217716330f84fc55793d582bc17f463",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-30T16:13:14.009Z",
+      "note": "Met at merge 95cab284 (PR #102): src/commands/shell.ts launch gating reverted to readline-by-default, TUI behind --tui. Superseded on 2026-07-20 by flow 067 (OpenTUI owns the terminal from start), which re-flipped the default by design."
+    },
+    "AC2": {
+      "at": "2026-07-30T16:13:14.090Z",
+      "note": "Met at merge 95cab284: --tui still reaches the OpenTUI shell; readline fallback on no-TTY / absent dep / init failure preserved; tui-shell.ts untouched in that PR (diff: shell.ts only)."
+    },
+    "AC3": {
+      "at": "2026-07-30T16:13:14.171Z",
+      "note": "Met: .metaproject/flows/065-2026-07-20-opentui-default-revert/report.md records the DA/DSR handoff leak, root cause and the planned fix, which became flow 066."
+    },
+    "AC4": {
+      "at": "2026-07-30T16:13:14.251Z",
+      "note": "Met at merge time (PR #102 CI green). Re-verified today on main: keryx health run = PASS, score 93, no gate conditions."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -65,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped"
     },
     {
       "id": "T5",
@@ -154,6 +172,56 @@
       "at": "2026-07-20T10:04:26.031Z",
       "event": "task-done",
       "detail": "T6: verify + smokes"
+    },
+    {
+      "at": "2026-07-30T16:12:31.701Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-30T16:12:42.576Z",
+      "event": "completing",
+      "detail": "merged commit: 95cab284df636d413c7c04767915f43b191c3754"
+    },
+    {
+      "at": "2026-07-30T16:12:42.585Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4"
+    },
+    {
+      "at": "2026-07-30T16:13:14.009Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Met at merge 95cab284 (PR #102): src/commands/shell.ts launch gating reverted to readline-by-default, TUI behind --tui. Superseded on 2026-07-20 by flow 067 (OpenTUI owns the terminal from start), which re-flipped the default by design."
+    },
+    {
+      "at": "2026-07-30T16:13:14.090Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Met at merge 95cab284: --tui still reaches the OpenTUI shell; readline fallback on no-TTY / absent dep / init failure preserved; tui-shell.ts untouched in that PR (diff: shell.ts only)."
+    },
+    {
+      "at": "2026-07-30T16:13:14.171Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Met: .metaproject/flows/065-2026-07-20-opentui-default-revert/report.md records the DA/DSR handoff leak, root cause and the planned fix, which became flow 066."
+    },
+    {
+      "at": "2026-07-30T16:13:14.251Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Met at merge time (PR #102 CI green). Re-verified today on main: keryx health run = PASS, score 93, no gate conditions."
+    },
+    {
+      "at": "2026-07-30T16:13:14.667Z",
+      "event": "completing",
+      "detail": "merged commit: 95cab284df636d413c7c04767915f43b191c3754"
+    },
+    {
+      "at": "2026-07-30T16:13:14.676Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "95cab284df636d413c7c04767915f43b191c3754",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:13:14.675Z"
+  }
 }

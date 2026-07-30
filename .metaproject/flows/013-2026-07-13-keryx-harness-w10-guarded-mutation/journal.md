@@ -61,3 +61,5 @@
 - 2026-07-13T03:06:11.163Z - ac-confirmed: AC3: M-01 fail-closed scan: scanAvailable=false -> deny FIRST (never silent-allow). SC_R15_FAIL_CLOSED_ISOLATION.
 - 2026-07-13T03:06:11.217Z - ac-confirmed: AC4: M-02 execute: trusted-local+valid approval -> monitored mutation via FAKE adapter + schema-valid execution-receipt+evidence; unattended-untrusted blocked without isolation; indeterminate -> needs-reconciliation -> W8 recoverFrom blocked-unknown-outcome; adapter never called on blocked path. NO real fs. 17 tests.
 - 2026-07-13T03:06:11.272Z - ac-confirmed: AC5: tsc clean; full bun test 899/0 (844+55); W3/W8/W5/W6 + src/contracts reused unmodified; deps={}; deterministic no-real-fs; new code under src/harness/mutation/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN core (2 hardening concerns -> W15).
+- 2026-07-30T16:12:27.412Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:27.423Z - done: all gates passed

@@ -3,9 +3,9 @@
   "id": "023",
   "slug": "keryx-r2-1-extension-exec",
   "title": "keryx Release 2 R2-1 extension execution",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T14:41:09.426Z",
-  "updatedAt": "2026-07-13T15:16:29.500Z",
+  "updatedAt": "2026-07-30T16:12:42.401Z",
   "source": {
     "type": "description",
     "ref": null
@@ -226,6 +226,21 @@
       "at": "2026-07-13T15:16:29.500Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-30T16:12:42.391Z",
+      "event": "completing",
+      "detail": "merged commit: 7e8bc50eb4214be5d990720d194a1caf69341216"
+    },
+    {
+      "at": "2026-07-30T16:12:42.401Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "7e8bc50eb4214be5d990720d194a1caf69341216",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:42.401Z"
+  }
 }

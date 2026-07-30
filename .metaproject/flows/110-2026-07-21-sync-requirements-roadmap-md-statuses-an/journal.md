@@ -91,3 +91,5 @@ touches ONLY `docs/requirements/`.
 - 2026-07-21T17:32:40.277Z - ac-confirmed: AC8: verified in journal.md Implementation record section
 - 2026-07-21T17:32:40.337Z - ac-confirmed: AC9: verified in journal.md Implementation record section
 - 2026-07-21T17:32:40.397Z - ac-confirmed: AC10: verified in journal.md Implementation record section
+- 2026-07-30T16:12:42.757Z - completing: merged commit: c7298e8dde7c96f6cd096d58c1bb4718265aa097
+- 2026-07-30T16:12:42.766Z - done: all gates passed

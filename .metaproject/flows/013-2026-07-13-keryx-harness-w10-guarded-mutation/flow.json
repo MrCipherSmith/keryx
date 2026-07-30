@@ -3,9 +3,9 @@
   "id": "013",
   "slug": "keryx-harness-w10-guarded-mutation",
   "title": "W10 guarded mutation + approval (M-01/M-02): action-fingerprints + single-use approvals + path/argv/env rules + fail-closed + monitored trusted-local mutation",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T02:29:46.470Z",
-  "updatedAt": "2026-07-13T03:06:11.272Z",
+  "updatedAt": "2026-07-30T16:12:27.423Z",
   "source": {
     "type": "description",
     "ref": null
@@ -281,6 +281,21 @@
       "at": "2026-07-13T03:06:11.272Z",
       "event": "ac-confirmed",
       "detail": "AC5: tsc clean; full bun test 899/0 (844+55); W3/W8/W5/W6 + src/contracts reused unmodified; deps={}; deterministic no-real-fs; new code under src/harness/mutation/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN core (2 hardening concerns -> W15)."
+    },
+    {
+      "at": "2026-07-30T16:12:27.412Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:27.423Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:27.423Z"
+  }
 }

@@ -3,9 +3,9 @@
   "id": "012",
   "slug": "keryx-harness-w9-branch-compaction",
   "title": "W9 branching + compaction (B-01/B-02): append-only branch metadata + no-merge-v1 + typed compaction + evidence-preservation",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T01:53:48.587Z",
-  "updatedAt": "2026-07-13T02:24:54.656Z",
+  "updatedAt": "2026-07-30T16:12:27.327Z",
   "source": {
     "type": "description",
     "ref": null
@@ -281,6 +281,21 @@
       "at": "2026-07-13T02:24:54.656Z",
       "event": "ac-confirmed",
       "detail": "AC5: tsc clean; full bun test 844/0 (817+27); W7/W8/W5/W6 + src/contracts unmodified; deps={}; new code under src/harness/branch/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN (4 invariants upheld)."
+    },
+    {
+      "at": "2026-07-30T16:12:27.316Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:27.327Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:27.327Z"
+  }
 }

@@ -3,9 +3,9 @@
   "id": "007",
   "slug": "keryx-harness-w5-ports",
   "title": "W5 ports: provider-neutral port (P-01) + tool definition/registry/call ports (P-02)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-12T16:55:18.547Z",
-  "updatedAt": "2026-07-12T17:52:37.863Z",
+  "updatedAt": "2026-07-30T16:12:26.830Z",
   "source": {
     "type": "description",
     "ref": null
@@ -286,6 +286,21 @@
       "at": "2026-07-12T17:52:37.863Z",
       "event": "ac-confirmed",
       "detail": "AC5: tsc --noEmit clean; full bun test 677/0 (633 baseline + new); new code under src/harness/ + 1 additive src/contracts export; frozen requirements pkg + src/eval + ADRs untouched (git empty)."
+    },
+    {
+      "at": "2026-07-30T16:12:26.819Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:26.830Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:26.830Z"
+  }
 }

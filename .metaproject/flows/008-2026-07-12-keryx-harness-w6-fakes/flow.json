@@ -3,9 +3,9 @@
   "id": "008",
   "slug": "keryx-harness-w6-fakes",
   "title": "W6 fakes: deterministic fake-provider transcripts (F-01) + registered read-only fake tool (F-02)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-12T21:49:39.000Z",
-  "updatedAt": "2026-07-12T22:34:07.034Z",
+  "updatedAt": "2026-07-30T16:12:26.931Z",
   "source": {
     "type": "description",
     "ref": null
@@ -306,6 +306,21 @@
       "at": "2026-07-12T22:34:07.034Z",
       "event": "ac-confirmed",
       "detail": "AC5: tsc --noEmit clean; full bun test 703/0 (677 baseline + 26 new); new code under src/harness/; frozen requirements pkg + src/eval + src/contracts + ADRs untouched (git empty). T10 CLEAN."
+    },
+    {
+      "at": "2026-07-30T16:12:26.919Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:26.931Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:26.931Z"
+  }
 }

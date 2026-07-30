@@ -45,3 +45,5 @@
 - 2026-07-11T20:55:49.535Z - ac-confirmed: AC3: ADR-0003: profile/isolation matrix mapped to policy-profile.schema.json (real profileId enums) + S-04/R1-01/M-02; explicit typed fail-closed. T9 PASS.
 - 2026-07-11T20:55:49.589Z - ac-confirmed: AC4: ADR-0004: provider/branch/child records linked to real schema $id (S-02/S-08/S-09) + research-ledger; OPEN-1..4 preserved, none guessed. T9 PASS.
 - 2026-07-11T20:55:49.640Z - ac-confirmed: AC5: decision-registry: D-01..04 SIGNED; four ADRs mutually consistent & consistent with frozen pkg; docs/requirements unmodified (git clean). T9 PASS.
+- 2026-07-30T16:12:20.749Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:20.769Z - done: all gates passed
