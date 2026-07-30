@@ -1,5 +1,5 @@
 # Security Policy: Telegram Transport
-Version: 2.1.0
+Version: 2.2.0
 
 ## Status
 
@@ -74,6 +74,61 @@ said near the microphone; a synthesized reply carries the reply.
 | Bounds | Inbound audio is bounded by duration and size before download. |
 | Retention | Audio and transcripts are retained only as long as the configured retention allows, and transcripts are redacted like any other retained content. |
 | Failure | A transcription failure degrades to handing the audio to the agent as a file. It never silently discards the message, and it never falls back to a non-opted-in remote service. |
+
+## Additions in 2.2.0
+
+### One operator is not a trusted room
+
+The deployment is a single operator, which makes it tempting to treat the
+supergroup as trusted and skip per-sender checks. The checks stay, because they
+are nearly free and because "the group is mine" stops being true the moment
+anyone is added — deliberately or otherwise. Nothing about the single-operator
+model relaxes the 2.1.0 authorization rules.
+
+### Secrets never travel through Telegram
+
+| Control | Requirement |
+|---|---|
+| No acceptance | The transport never accepts a secret as a message and never stores message content as a credential. |
+| Handoff instead | It requests a link from Remote Entry and renders the opaque identifier and expiry it receives. It never receives credential material itself. |
+| Rendering | The rendered message contains no credential material, no provider secret, and no filesystem path. |
+| Selection | Provider and model selection carry no secret and need no handoff. |
+
+A secret sent as a message traverses Telegram's servers, persists in the
+conversation, enters the bot's update stream, and may reach logs on the way.
+Deleting it removes it from view, not from that infrastructure.
+
+Direct entry is permitted **only** as an explicit fallback, and only under all
+of:
+
+- never in a supergroup — private chat only;
+- the carrying message deleted immediately after use;
+- the value excluded from logs, evidence, retained history, and any
+  transport-side persistence;
+- the operator told at the moment of use that the value transited Telegram's
+  infrastructure and should be rotated if that matters.
+
+### Maintenance is a bounded command surface
+
+Running commands from a chat removes prompt injection from that path and adds a
+command-execution surface in its place. It is bounded by construction, and the
+bounds live in Remote Entry:
+
+- only command-registry entries are invocable — no free-form command, no
+  passthrough;
+- arguments are validated against the registry entry before anything runs;
+- the transport generates its menu from the registry projection and defines no
+  command of its own, so widening the surface means changing reviewed code
+  rather than a bot;
+- registry flags feed classification but never replace it: write operations are
+  `ask`, and model-backed operations disclose their cost.
+
+### The project registry is read, not owned
+
+The transport reads the user-global project registry and keeps no second list.
+A project exists because `keryx init` registered it, never because a topic was
+created. Absolute paths from the registry are operator-facing and are not
+rendered into notifications, which follow the existing redaction rules.
 
 ## Trust model
 
@@ -151,6 +206,10 @@ ownership checks.
 | Update in a topic mapped to no project | Terminal refusal. No binding is substituted and no session is reached. |
 | Binding validation inconclusive | Leave the binding untouched and record the check as inconclusive. A transient failure must never clear a real mapping, and must never be treated as evidence to route elsewhere. |
 | Voice service denied by egress policy | No audio leaves the process. Inbound degrades to delivering the file; outbound simply sends no speech. Neither falls back to a non-opted-in service. |
+| Credential-like material sent as a message | Never stored as a credential. Respond with a handoff link, and treat the message as sensitive: it is not retained, logged, or echoed. |
+| Direct secret entry attempted in a supergroup | Refused outright. The fallback exists only in a private chat. |
+| Maintenance command absent from the registry | Refused. There is no passthrough and no free-form command path. |
+| Topic created for a project that is not registered | Not routable. A project exists because `keryx init` registered it; a topic alone grants nothing. |
 | Prompt injection finding | Stop typed-intent conversion and return a safe, non-revealing response where appropriate. |
 | Replay/duplicate | Return idempotent safe result; never redo approval/action side effects. |
 | Token compromise suspicion | Disconnect transport, revoke bindings, rotate credential through desktop, and preserve only redacted incident evidence. |
@@ -171,5 +230,14 @@ denial on each voice direction; a transcription failure asserting file
 degradation rather than loss; duplicate audio delivery asserting one turn; and
 secret-bearing reply fixtures asserting synthesis runs on redacted text only.
 
-No fixture may contain a real Telegram token, call a live Telegram endpoint, or
-send audio to a real voice service.
+2.2.0 adds: credential-like material sent as a message asserting it is never
+stored, logged, or echoed; direct entry attempted in a supergroup asserting
+refusal; a rendered handoff message asserting it contains no credential
+material; a replayed and an expired handoff link; a maintenance command absent
+from the registry; crafted arguments for a registry entry; a `model: false`
+command asserting no provider call; a registry entry added asserting the menu
+follows without a transport change; and a topic created for an unregistered
+project asserting it is not routable.
+
+No fixture may contain a real Telegram token, a real provider credential, call a
+live Telegram endpoint, or send audio to a real voice service.

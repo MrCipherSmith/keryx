@@ -1,5 +1,5 @@
 # Keryx Remote Entry
-Version: 1.0.0
+Version: 1.1.0
 
 ## Purpose
 
@@ -29,11 +29,20 @@ Release 0 is a loopback-bound HTTP entry for explicitly authorized callers:
 - asynchronous, fail-closed approvals for policy-`ask` actions, because the
   human is no longer sitting at the terminal when the turn runs;
 - streamed turn progress;
+- a **user-global project registry**, so one install knows every project it was
+  initialized in — the addressing keys a transport routes by;
+- **maintenance operations** from the existing command registry, run directly
+  rather than through the model, because a graph rebuild is a deterministic
+  command and paying a model to decide to run it is waste;
+- a **one-time local credential handoff**, so a secret can be set from a remote
+  surface without the secret ever travelling through it;
 - mandatory redaction of everything leaving the process.
 
-The TUI stays canonical for provider/model selection, credential entry, and
-emergency shutdown. Task Manager stays the only writer of managed-flow state;
-Remote Entry never writes `flow.json`.
+The TUI stays canonical for emergency shutdown and for working at the machine.
+Provider and model selection are reachable remotely; **entering a secret is
+not** — a remote surface can only request a handoff link, never carry the secret
+itself. Task Manager stays the only writer of managed-flow state; Remote Entry
+never writes `flow.json`.
 
 ## Boundary decision
 
@@ -69,6 +78,9 @@ treatment of every remote prompt, and no self-granting of approvals. See
 | [Turn result schema](schemas/turn-result.schema.json) | Redacted terminal turn outcome. |
 | [Stream event schema](schemas/stream-event.schema.json) | Provider-neutral progress event. |
 | [Pending approval schema](schemas/pending-approval.schema.json) | Asynchronous, expiring, one-time approval record. |
+| [Project registration schema](schemas/project-registration.schema.json) | User-global record of a project this install was initialized in. |
+| [Maintenance request schema](schemas/maintenance-request.schema.json) | Registry-bounded deterministic command invocation. |
+| [Credential link schema](schemas/credential-link.schema.json) | One-time, expiring, loopback-bound secret-entry handoff. |
 
 ## Related modules
 
@@ -76,6 +88,9 @@ treatment of every remote prompt, and no self-granting of approvals. See
   store Remote Entry reuses unchanged.
 - `src/harness/policy`, `src/harness/mutation`: the single source of allow / ask
   / deny classification and approval gating.
+- `src/standard/command-registry.ts`: the source of truth for which maintenance
+  operations exist, whether each is read-only, and whether it costs a model
+  call. Remote Entry projects it; it does not maintain a second list.
 - `src/security`: input scanning, prompt-injection detection, and the redaction
   seam every outbound payload passes through.
 - `src/flow`: Task Manager, read-only projection only.

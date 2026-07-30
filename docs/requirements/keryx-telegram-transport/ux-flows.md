@@ -1,5 +1,5 @@
 # UX Flows: Telegram Transport
-Version: 2.1.0
+Version: 2.2.0
 
 ## Experience principle
 
@@ -85,15 +85,50 @@ turn against the project bound to the chat.
 1. Operator creates a supergroup with topics enabled and adds the bot with the
    permission to manage topics. Both conditions are checked before anything is
    created; a missing permission is named, not reported as a generic failure.
-2. Desktop configures the forum once. A topic is created per project and each
-   topic↔project mapping is recorded.
-3. Later projects are picked up by re-running synchronization, which creates the
-   missing topics. It cannot discover topics belonging to no project — the Bot
-   API cannot enumerate a forum's topics — so the desktop presents what it
-   created and what it could not see.
-4. Bindings are validated periodically. A topic Telegram reports as gone is
-   cleared and named; a check that fails transiently changes nothing and is
-   shown as inconclusive rather than as a removal.
+2. Desktop configures the forum once. Every project already registered gets a
+   topic; projects registered later get theirs at registration.
+3. From then on the operator does nothing to add a project to Telegram: running
+   `keryx init` in a new project registers it and its topic appears. Re-running
+   init reuses the existing topic.
+4. A project whose directory disappears has its topic closed rather than
+   deleted — the conversation is still there — and reopening is deliberate.
+5. Bindings are validated periodically. A topic Telegram reports as gone is
+   cleared and named, and the project returns to pending so it can be
+   re-provisioned; a check that fails transiently changes nothing and is shown
+   as inconclusive rather than as a removal.
+6. Synchronization cannot discover topics belonging to no project — the Bot API
+   cannot enumerate a forum's topics — so the desktop presents what it created
+   and what it could not see.
+
+## Operating a project from its topic
+
+1. The topic offers the project's commands. The menu is generated from the
+   command registry, so it matches what this keryx install can actually do; a
+   command added to keryx appears here without anyone editing the bot.
+2. Read-only commands are offered directly. Commands that write to the project
+   are marked and ask first. Commands that spend tokens say so in the approval,
+   so cost is a decision rather than something noticed afterwards.
+3. Bringing a fresh project up is a sequence of those commands: build the graph,
+   index the wiki, enrich it, analyze tests, run health.
+4. Free text in the topic is a prompt to the agent. A command is a command. The
+   two are not the same request, and a graph rebuild never costs a model call.
+
+## Setting a provider without a web UI
+
+1. Operator picks a provider and a model from the topic. Neither is a secret, so
+   both are ordinary commands.
+2. Setting the credential is not. The bot never asks for it in the chat; it
+   returns a one-time link that expires, opening a local page on the machine
+   running keryx.
+3. The operator enters the value there and it goes straight into the credential
+   store. It was never in a message, never in the chat history, never in the
+   bot's update stream.
+4. Away from the machine the local link cannot be opened. Reaching it needs the
+   non-loopback bind, with its explicit flag and acknowledgement.
+5. Direct entry in a private chat exists only as an explicit fallback: never in
+   the supergroup, the message deleted immediately, the value kept out of logs,
+   evidence and history, and the operator told plainly that it passed through
+   Telegram's infrastructure and can be rotated.
 
 ## Working across projects
 

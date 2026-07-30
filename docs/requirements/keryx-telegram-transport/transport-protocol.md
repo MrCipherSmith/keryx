@@ -1,5 +1,5 @@
 # Telegram Transport Protocol
-Version: 2.1.0
+Version: 2.2.0
 
 ## Purpose
 
@@ -27,6 +27,9 @@ A message never names an action that skips classification.
 | `QueuePort` | transport core -> local scheduler | Serialize per binding, parallelize across bindings, report queue position, refuse beyond the depth bound. |
 | `TranscriptionPort` | transport core -> voice engine | Produce a transcript from bounded audio. Local implementation first; a remote implementation is opt-in and egress-governed. |
 | `SynthesisPort` | transport core -> voice engine | Produce speech from **already-redacted** text. Same opt-in and egress rules. |
+| `ProjectRegistryPort` | transport core -> Remote Entry | Read the user-global project registry. The transport keeps no second list of projects. |
+| `CommandCatalogPort` | transport core -> Remote Entry | Read the command-registry projection used to generate the topic menu. The transport keeps no second list of commands. |
+| `ProvisioningPort` | transport core -> Telegram adapter | Create, close, and reconcile topics for registered projects. |
 
 ## Normalized inbound receipt
 
@@ -45,6 +48,8 @@ redacted before any diagnostic retention.
 | `approval.respond` | Authorized binding, valid callback nonce | Confirms or rejects a pending policy-`ask` action once. |
 | `operation.cancel-own` | Authorized binding and ownership match | Requests cancellation through the Harness. |
 | `task.submit` | Authorized binding **bound to a project**, prompt within bounds, security scan clean | Submits the prompt as a turn against the declared project path. |
+| `maintenance.run` | Authorized binding bound to a project, operation present in the command registry, arguments valid for that entry | Runs the deterministic command. Not a prompt; no model unless the registry declares the operation model-backed. |
+| `credential.request-handoff` | Authorized binding | Asks Remote Entry for a one-time, expiring, loopback-bound link. Never carries a secret. |
 
 Unknown commands and unsupported intents are rejected with no privileged effect.
 Free text in a **bound** chat maps to `task.submit`; free text in an unbound chat
@@ -92,6 +97,48 @@ and is disabled by default in both directions.
   tool output or an unredacted error to audio.
 - Duplicate delivery of one audio message produces one transcription and one
   turn.
+
+## Provisioning protocol
+
+Topics follow project registration, and ordering between forum configuration and
+project registration must not matter. Provisioning state is recorded per
+[topic-provisioning.schema.json](schemas/topic-provisioning.schema.json).
+
+1. A project registers in the user-global registry through `keryx init`.
+2. If a forum is configured, its preconditions — topics enabled, manage-topics
+   permission — are checked *before* any topic is created. A missing permission
+   is reported as exactly that.
+3. The topic is created and bound. Re-registration is idempotent and reuses the
+   existing topic.
+4. Without a forum the project is recorded `pending`; configuring the forum
+   provisions every pending project.
+5. A project whose path disappears has its topic **closed, not deleted**, and
+   reopening is an explicit operator action.
+6. A topic deleted in Telegram clears its binding and returns the project to
+   `pending`.
+
+## Maintenance protocol
+
+`CommandCatalogPort` supplies the invocable set. It is a projection of
+`src/standard/command-registry.ts`; the transport maintains no list of its own,
+so a command added to the registry appears without a transport change and a
+command absent from it is not invocable.
+
+Arguments are validated against the registry entry before anything runs. There
+is no free-form command path and no passthrough. Registry flags drive both
+presentation and classification: read-only operations are offered directly,
+write operations are marked and classified `ask`, and model-backed operations
+are marked as spending tokens with that cost stated in the approval.
+
+## Credential handoff protocol
+
+The transport never accepts a secret as a message. `credential.request-handoff`
+asks Remote Entry for a link; the transport renders the opaque identifier and
+expiry it receives. It never receives, stores, logs, or echoes credential
+material, and the rendered message contains none.
+
+Provider and model selection carry no secret and are ordinary maintenance
+operations.
 
 ## Approval callbacks
 

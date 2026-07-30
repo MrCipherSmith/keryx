@@ -1,5 +1,5 @@
 # Keryx Telegram Transport
-Version: 2.1.0
+Version: 2.2.0
 
 ## Purpose
 
@@ -20,6 +20,28 @@ re-specified here. This package owns only what is Telegram-specific.
 **Specification ready (future).** No Telegram integration is claimed to be
 implemented. The Project Agent Harness it ultimately reaches *is* implemented
 (`src/harness/`); Remote Entry, which this transport requires, is not.
+
+## Deployment model
+
+The target deployment is **one operator, one keryx install, many projects**:
+keryx installed globally on a workstation or the operator's own server, `keryx
+init` run in each project, and one Telegram supergroup owned by that operator
+where each project has a topic.
+
+This shapes three things in 2.2.0:
+
+- **Topics follow `keryx init`.** A project gets its topic when it is
+  initialized, from the user-global project registry, rather than from a
+  one-time bulk setup that enumerates a database.
+- **A topic is an operating surface, not only a chat.** Maintenance operations —
+  build the graph, index or enrich the wiki, run health, analyze tests — are
+  invoked as commands in the project's topic and run directly, not as prompts.
+- **Setup happens without a web UI.** Provider and model selection are ordinary
+  commands; setting a secret uses a one-time local handoff link, so the secret
+  never travels through Telegram.
+
+One operator does not mean one trusted room: authorization stays per-sender, so
+adding someone to the supergroup grants them nothing.
 
 ## Scope
 
@@ -101,6 +123,7 @@ drift.
 | [Webhook configuration schema](schemas/webhook-configuration.schema.json) | Future server/headless mode configuration. |
 | [Topic binding schema](schemas/topic-binding.schema.json) | Forum topic ↔ project mapping, and its validation state. |
 | [Voice configuration schema](schemas/voice-config.schema.json) | Local-first transcription and synthesis configuration, with explicit remote opt-in. |
+| [Topic provisioning schema](schemas/topic-provisioning.schema.json) | Lifecycle of a topic created for a registered project, including the pending state before a forum exists. |
 
 ## Related modules
 

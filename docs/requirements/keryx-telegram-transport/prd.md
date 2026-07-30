@@ -1,5 +1,5 @@
 # Product Requirements Document: Keryx Telegram Transport
-Version: 2.1.0
+Version: 2.2.0
 
 ## Status and recommendation
 
@@ -73,6 +73,16 @@ policy profile that is never weaker than the local one.
    additionally as speech. Both directions are local-first and off by default;
    any remote transcription or synthesis service is opt-in and passes the egress
    policy.
+4d. Provision a topic when a project registers through `keryx init`, reading the
+   user-global project registry and keeping no second list of projects. Ordering
+   between forum configuration and project registration must not matter.
+4e. Offer the project's maintenance commands in its topic, with the menu
+   generated from the command registry rather than written into the transport.
+   A maintenance command runs the deterministic command; it does not become a
+   prompt.
+4f. Never accept a secret as a message. Setting a credential is done through a
+   one-time, expiring, loopback-bound handoff link requested from Remote Entry.
+   Provider and model selection carry no secret and are ordinary commands.
 5. Convert every inbound update into a normalized receipt, then validate,
    authorize, scan, redact as needed, and map it to a typed intent. A message is
    never a direct tool call.
@@ -109,6 +119,10 @@ policy profile that is never weaker than the local one.
 | Inbound voice | Voice is transcribed locally, becomes a prompt, and progress is visible while it happens. |
 | Untranscribable voice | The audio is handed to the agent as a file rather than the message being lost. |
 | Outbound voice | A qualifying reply — long enough, not mostly code, not a diff — is additionally delivered as speech, split so no clip exceeds the cap. |
+| New project appears | Operator runs `keryx init` in a new project; it registers and its topic appears without any action in Telegram. |
+| Registered before a forum exists | Projects wait as pending; configuring the forum provisions all of them at once. |
+| Bringing a project up from the phone | Operator runs the maintenance commands from the topic — build graph, index wiki, enrich, analyze tests, health — with writes asking first and token-spending commands saying so. |
+| Setting a provider credential | Operator picks provider and model as ordinary commands, then receives a one-time link and enters the secret locally. The secret never appears in Telegram. |
 
 ## UX requirements
 
@@ -171,6 +185,11 @@ approval semantics; those belong to Remote Entry.
 | Transcription error loses a message | An untranscribable voice message is handed to the agent as a file, and the failure is visible to the sender. |
 | Stale topic mappings accumulate | Mappings are validated; a topic that Telegram reports as gone is cleared, while a transient failure leaves the mapping untouched and records the check as inconclusive. |
 | Speech leaks content a text reply would have redacted | Synthesis runs on already-redacted text only. There is no path from raw tool output to audio. |
+| A credential ends up in chat history | No route accepts one. The transport renders a handoff link carrying only an opaque identifier and expiry; the secret is entered locally. Direct entry exists only as an explicit private-chat fallback with named constraints and a rotation warning. |
+| Maintenance becomes a shell | Only command-registry entries are invocable, arguments are validated against the registry entry, and the menu is generated rather than written. Widening the surface means changing reviewed code, not a bot. |
+| Model spend is discovered after the fact | The registry declares which commands are model-backed; those state their cost in the approval before running. |
+| The transport becomes a second project registry | It reads the user-global registry and holds no list of its own. A project exists because `keryx init` registered it, never because a topic was created. |
+| Single-operator framing erodes the authorization checks | The per-sender checks stay. "The group is mine" stops being true the moment anyone is added, and the checks are nearly free. |
 | Polling conflicts with webhook setup | Detect and stop with a clear desktop decision instead of silently changing transport mode. |
 
 ## Release 2+ consideration

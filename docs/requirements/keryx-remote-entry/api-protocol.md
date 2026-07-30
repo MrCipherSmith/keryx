@@ -1,5 +1,5 @@
 # API Protocol: Keryx Remote Entry
-Version: 1.0.0
+Version: 1.1.0
 
 ## Status
 
@@ -115,6 +115,67 @@ An answer cannot broaden scope, alter arguments, or override a policy `deny`.
 Request cancellation of a turn the token owns. Cancellation is a request to the
 harness, not a kill; the turn reaches a terminal state and records that it was
 cancelled. It never edits Task Manager records.
+
+### `GET /v1/projects`
+
+The user-global project registry, per
+[project-registration.schema.json](schemas/project-registration.schema.json).
+Addressing only, and no credential material. Entries marked `missing` are
+returned rather than hidden, so a transport can show the operator what it can no
+longer reach.
+
+### `GET /v1/commands`
+
+The maintenance surface, projected from `src/standard/command-registry.ts`. Each
+entry carries its identifier, its argument shape, whether it is read-only, and
+whether it costs a model call.
+
+This route exists so a transport can build its command menu from the registry
+instead of hard-coding one. A command added to the registry appears here without
+any change to this entry or to the transport.
+
+### `POST /v1/maintenance`
+
+Run one registry operation, per
+[maintenance-request.schema.json](schemas/maintenance-request.schema.json).
+
+This is not `POST /v1/turns` with a different body. No prompt is constructed and
+no model is invoked unless the registry declares the operation model-backed.
+
+| Status | Meaning |
+|---|---|
+| `202` | Accepted. Body carries the invocation id. |
+| `400` | Schema violation, or arguments that do not match the registry entry's declared shape. |
+| `403` | The operation exists but the remote profile denies it. |
+| `404` | No such registry entry. There is no passthrough for unknown operations. |
+| `409` | An equivalent invocation is already running for this project. |
+
+Classification follows the registry: read-only operations may run under `allow`;
+operations that write to the project are `ask`; model-backed operations state
+their cost in the approval so the operator sees what they are approving.
+
+Progress and results use the same event and result contracts as turns, so a
+transport renders both the same way.
+
+### `POST /v1/credential-links`
+
+Request a credential handoff. **No route on this surface accepts a secret**;
+this one asks for a place to enter one.
+
+The response is a [credential-link.schema.json](schemas/credential-link.schema.json)
+record: an opaque identifier, a stated purpose, an expiry, and a loopback URL to
+open. It carries no credential material.
+
+| Rule | Behaviour |
+|---|---|
+| Single use | Consumed atomically on first successful entry; a second use returns `410`. |
+| Expiry | An unused link expires with no effect and returns `410` thereafter. |
+| Binding | Resolves to loopback. Reaching it from elsewhere requires the non-loopback bind, with its existing flag and acknowledgement. |
+| Destination | The entered secret is written directly to the user-global credential store and appears in no response, event, evidence record, or log. |
+| Revocation | Token rotation or revocation invalidates outstanding links. |
+
+Provider and model *selection* carry no secret and are ordinary maintenance
+operations.
 
 ### `GET /v1/flows`, `GET /v1/flows/{id}`
 

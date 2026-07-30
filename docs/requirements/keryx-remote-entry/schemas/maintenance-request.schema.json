@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/maintenance-request/1.0.0",
+  "title": "Maintenance Request",
+  "description": "Invocation of one deterministic operation projected from src/standard/command-registry.ts. This is not a prompt: no model is invoked unless the registry declares the operation model-backed. Only registry entries are invocable; there is no free-form command surface and no argument may turn one entry into a different command.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "project", "operation"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute project path, declared explicitly and resolved by exact match against the project registry."
+    },
+    "operation": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$",
+      "description": "Registry command identifier, for example \"wiki index\". An identifier absent from the registry is refused; shell metacharacters cannot appear by construction of this pattern."
+    },
+    "args": {
+      "type": "object",
+      "description": "Validated against the registry entry's declared argument shape before anything runs. Unknown keys are refused rather than ignored.",
+      "additionalProperties": true
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "A repeated key returns the original invocation and starts nothing."
+    }
+  }
+}

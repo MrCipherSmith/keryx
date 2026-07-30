@@ -1,5 +1,5 @@
 # PRD: Keryx Remote Entry
-Version: 1.0.0
+Version: 1.1.0
 
 ## Problem
 
@@ -58,6 +58,13 @@ policy-governed surface rather than three parallel paths into the agent.
 | FR-08 | Every turn records its origin (`local-tty` or `remote:<transport>`) in evidence. Origin is assigned by the server, never taken from request content. |
 | FR-09 | Remote turns run under a named remote policy profile resolved from the existing policy source, never from a transport-local config. |
 | FR-10 | Task Manager state is exposed read-only. No route writes `flow.json`. |
+| FR-11 | A user-global project registry records every project this install was initialized in. `keryx init` registers; the registry is the addressing key set a transport routes by. It holds no secrets. |
+| FR-12 | Maintenance operations are exposed **from the existing command registry** — never a second hand-maintained list. Each carries its registry-declared read-only and model-cost flags. |
+| FR-13 | A maintenance operation runs the deterministic command directly. It does not become a prompt, and no model is invoked unless the registry declares that operation model-backed. |
+| FR-14 | Maintenance classification follows the registry: read-only operations may run under `allow`; operations that write to the project are `ask`; model-backed operations declare their cost in the approval so the operator sees what they are paying for. |
+| FR-15 | Only registry entries are invocable. There is no free-form command surface, and no argument may turn a registry entry into a different command. |
+| FR-16 | A secret is never accepted over the remote surface. A caller may request a **one-time, expiring, loopback-bound credential link**; the secret is entered locally and written to the user-global credential store directly. |
+| FR-17 | Provider and model *selection* — which are not secrets — are reachable remotely. |
 
 ### Non-functional
 
@@ -95,6 +102,38 @@ The original concern is not dismissed; it is paid for:
 This widening is a real perimeter expansion. It is recorded here so that a later
 reader sees a decision, not a drift.
 
+## Decision: secrets never travel over the remote surface
+
+The deployment this is built for is a single operator running one keryx install
+across many projects, reached from a chat client. That makes it tempting to let
+the operator paste an API key into the chat.
+
+**Rejected.** A secret sent as a message traverses the transport provider's
+servers, persists in conversation history, enters the bot's update stream, and
+may reach logs on the way. Deleting the message removes it from view, not from
+that infrastructure. keryx keeps credentials in a user-global store at mode
+0600 and ships a secret detector; a channel that routes around both is not
+worth the convenience.
+
+**Adopted instead:** the remote surface may *request* a credential handoff. The
+entry issues a one-time, expiring, loopback-bound link; the operator opens it on
+the machine and enters the secret there, and it is written straight to the
+credential store. The secret never exists in a message, and the link carries no
+credential material of its own.
+
+The honest limits of this, stated rather than glossed:
+
+- Away from the machine, a loopback link is unreachable. Reaching it needs a
+  non-loopback bind, which already requires an explicit flag and configuration
+  acknowledgement. That is the same trade-off, not a new one.
+- A transport may still offer secret entry in a direct message as an explicit
+  fallback, subject to the constraints in
+  [security-policy.md](security-policy.md). It is a recorded concession with
+  named risks, never a default and never a silent one.
+
+Everything that is *not* a secret — provider choice, model choice, switching —
+stays freely reachable.
+
 ## Success criteria
 
 | ID | Criterion |
@@ -115,6 +154,11 @@ reader sees a decision, not a drift.
 | Approval fatigue drives blanket auto-approve | Auto-approve is read from the existing policy source only; the transport cannot define its own allowlist. |
 | Streaming leaks raw tool output | Stream events are rendered from structured summary fields through the redaction seam, not from raw payloads. |
 | Scope creep into a hosted product | Public/headless mode is explicitly a separate future release with its own operator-owned credential story. |
+| The project registry becomes a second source of project truth | It records addressing only — path, identity, registration state. Project content, configuration and policy stay in each project's own `.metaproject/`. |
+| The registry accumulates secrets | It is specified to hold none, and its schema forbids them. Credentials stay in the user-global credential store. |
+| Maintenance grows into a free-form command surface | Only registry entries are invocable, arguments are validated against the registry entry, and there is no passthrough. A new operation appears by being added to the command registry, not to the transport. |
+| Model spend happens without the operator noticing | The registry declares which operations are model-backed; those declare their cost in the approval. |
+| A secret leaks through the remote surface | No route accepts one. The handoff link carries no credential material, is one-time, expires, and is bound to loopback. |
 
 ## Recommendation
 

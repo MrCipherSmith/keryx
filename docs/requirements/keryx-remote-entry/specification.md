@@ -1,5 +1,5 @@
 # Specification: Keryx Remote Entry
-Version: 1.0.0
+Version: 1.1.0
 
 ## Identity and status
 
@@ -80,6 +80,94 @@ This rule is not theoretical caution. `helyx` shipped a timing-based pairing
 first and had to replace it after transports cross-linked between projects under
 concurrent sessions; see [brainstorm.md](brainstorm.md).
 
+## Project registry
+
+Today `keryx init` writes a `.metaproject/` into the project it is run in, and
+nothing on the machine knows the set of projects that exist. A transport that
+routes to several projects needs that set, so Remote Entry introduces a
+**user-global project registry**.
+
+| Property | Rule |
+|---|---|
+| Location | The existing user-global config directory — the one already holding `auth.json` (0600), `permissions.json`, `sandbox.json` and `sessions/`, resolved cross-platform. |
+| Content | Addressing only, per [project-registration.schema.json](schemas/project-registration.schema.json): opaque project id, absolute path, display name, registration state, timestamps. |
+| Secrets | None. The schema forbids credential material; credentials stay in the credential store. |
+| Not a second source of truth | Project configuration, policy and content remain in each project's own `.metaproject/`. The registry answers "which projects exist and how are they addressed", nothing else. |
+| Registration | `keryx init` registers the project. Registration is idempotent: re-running init updates the record rather than creating a second one. |
+| Missing path | A registered path that no longer exists is marked `missing`, not deleted. A transport may present it and the operator decides; a registry entry is not silently dropped because a disk was unmounted. |
+| Deregistration | Explicit. Removing a project from the registry is an operator action. |
+
+The registry is the key set a transport binds to. It is also useful on its own:
+it is the first time an install knows where it has been deployed.
+
+## Maintenance operations
+
+Rebuilding a graph, indexing a wiki, running health — these are deterministic
+commands. Routing them through the model means paying a model to decide to run
+something it was already told to run, and introduces a nondeterministic step
+into an operation that had none.
+
+Remote Entry therefore exposes a second, narrower execution path beside
+`task.submit`.
+
+### The registry is the surface
+
+The set of invocable operations is **projected from
+`src/standard/command-registry.ts`**, which already carries, per command, its
+module, its intent phrases, its argument shape, whether it is read-only
+(`read`), and whether it costs a model call (`model`). Remote Entry does not
+maintain a parallel list, and a transport does not either.
+
+Consequences that are requirements, not conveniences:
+
+- A new operation becomes remotely available by being added to the command
+  registry. No transport change, no entry change.
+- An operation absent from the registry is not invocable. There is no
+  passthrough, no free-form argument, and no way for an argument to turn one
+  registry entry into a different command.
+- Arguments are validated against the registry entry's declared shape before
+  anything runs.
+
+### Classification
+
+Classification derives from the registry rather than being restated:
+
+| Registry flag | Treatment |
+|---|---|
+| `read: true` | Reads project state only. Eligible for `allow` under the remote profile. |
+| `read: false` | Writes to the project — artifacts, wiki pages, flow files. Classified `ask`. |
+| `model: true` | Spends tokens. The approval must state that the operation is model-backed, so the operator sees what they are paying for before approving. |
+
+The policy engine remains authoritative. A registry flag is an input to
+classification, never a substitute for it, and a `read: true` operation is still
+subject to the remote profile.
+
+### Known gap
+
+The curated registry does not currently contain every operation this surface
+should expose — `gdgraph build`, for example, is a refresh command and is absent
+from the sixteen curated entries. Extending the registry is therefore a
+**dependency of this capability**, recorded here so it is planned rather than
+discovered during implementation. The correct fix is to extend the registry, not
+to special-case a command inside the transport.
+
+## Credential handoff
+
+No route accepts a secret. A caller that needs one set requests a handoff, and
+the entry issues a one-time link per
+[credential-link.schema.json](schemas/credential-link.schema.json).
+
+| Property | Rule |
+|---|---|
+| Contents | An opaque single-use identifier and an expiry. No credential material, no provider secret, no path. |
+| Binding | The link resolves to a loopback address. Reaching it from elsewhere requires the non-loopback bind, which already demands an explicit flag and acknowledgement. |
+| Single use | Consumed atomically on first successful entry. A second use fails and reports expiry. |
+| Expiry | Short and explicit. An unused link expires without effect. |
+| Destination | The entered secret is written directly to the user-global credential store at mode 0600. It never enters a session, an evidence record, a stream event, a log, or a response body. |
+| Revocation | Outstanding links are invalidated on token rotation or revocation. |
+
+Provider and model *selection* carry no secret and are ordinary operations.
+
 ## Asynchronous approvals
 
 In the TUI, an `ask` is synchronous: the human is present, and the run loop
@@ -145,7 +233,11 @@ notification text.
 keryx serve [--bind <addr>] [--profile <name>] [--no-tui-conflict-check]
 keryx serve status
 keryx serve token issue | revoke | rotate
+keryx projects list | register <path> | forget <id>
 ```
+
+`keryx init` registers the project it initializes; `keryx projects` inspects and
+maintains that registry. Registration is idempotent and holds no secrets.
 
 `keryx serve` with no configuration prints what is missing and exits without
 binding a port. `keryx serve status` reports state, bind address, profile,
@@ -161,6 +253,9 @@ All JSON contracts use Draft 2020-12 and are versioned:
 - [Turn result](schemas/turn-result.schema.json)
 - [Stream event](schemas/stream-event.schema.json)
 - [Pending approval](schemas/pending-approval.schema.json)
+- [Project registration](schemas/project-registration.schema.json)
+- [Maintenance request](schemas/maintenance-request.schema.json)
+- [Credential link](schemas/credential-link.schema.json)
 
 The HTTP surface that carries them is defined in
 [api-protocol.md](api-protocol.md).
@@ -193,3 +288,16 @@ restart, a detach and re-attach, and secret-bearing tool output.
 | AC-14 Task Manager read-only | Given any route on the surface, when it is exercised, then `flow.json` is never written. |
 | AC-15 Single writer | Given a remote turn and a concurrent TUI turn on the same session, when both run, then the append-only session store remains the single writer and no parallel store is created. |
 | AC-16 Non-loopback is explicit | Given a non-loopback bind address without the explicit acknowledgement, when the server starts, then it enters `refused`; when acknowledged, the non-loopback bind is reported in `keryx serve status`. |
+| AC-17 Registration on init | Given `keryx init` in a new project, when it completes, then the project appears once in the user-global registry; and when init is re-run, then the existing record is updated rather than duplicated. |
+| AC-18 Registry holds no secrets | Given any registry state, when it is serialized, then it validates against the registration schema and contains no credential material. |
+| AC-19 Missing project is marked, not dropped | Given a registered project whose path no longer exists, when the registry is read, then the entry is present and marked `missing`, and no entry is deleted without an explicit operator action. |
+| AC-20 Registry-bounded maintenance | Given an operation absent from the command registry, when it is requested, then it is refused; and given a registry entry with crafted arguments intended to reach a different command, then argument validation refuses it. |
+| AC-21 Maintenance runs no model | Given a registry entry with `model: false`, when it runs, then no provider call is made and no prompt is constructed. |
+| AC-22 Maintenance classification | Given `read: true`, when the remote profile permits, then it may run under `allow`; given `read: false`, then it is classified `ask`; given `model: true`, then the approval states that the operation is model-backed. |
+| AC-23 Registry is the single list | Given a new command added to the command registry, when the surface is enumerated, then the command appears without any change to Remote Entry or to a transport. |
+| AC-24 No secret over the wire | Given any route on the surface, when a request carries credential-like material, then it is not accepted as a credential and no route writes it to the credential store. |
+| AC-25 Handoff link carries nothing | Given an issued credential link, when it is inspected, then it contains only an opaque identifier and an expiry — no credential material, no provider secret, no filesystem path. |
+| AC-26 Handoff is one-time and expiring | Given a consumed link, when it is used again, then it fails and reports expiry; and given an unused link past its expiry, then it cannot be used and no credential is set. |
+| AC-27 Handoff destination | Given a secret entered through a valid link, when it is stored, then it is written to the user-global credential store at mode 0600 and appears in no session, evidence record, stream event, log, or response body. |
+| AC-28 Handoff revocation | Given token rotation or revocation, when it completes, then outstanding credential links are invalidated. |
+| AC-29 Selection is not a secret | Given a provider or model selection request, when it runs, then it succeeds remotely without any handoff, because it carries no secret. |

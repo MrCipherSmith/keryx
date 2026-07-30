@@ -1,5 +1,5 @@
 # Specification: Keryx Telegram Transport
-Version: 2.1.0
+Version: 2.2.0
 
 ## Identity and status
 
@@ -115,13 +115,29 @@ topic; see below.
 Reaching several projects from one place is a Release 0 requirement, not a later
 convenience. The routing key is the **topic**, not the user.
 
-### Topic binding
+### Topic provisioning follows project registration
 
-A forum supergroup is configured once. Each project gets a topic, and the
-mapping is recorded as [topic-binding.schema.json](schemas/topic-binding.schema.json).
+The forum is configured once. After that, **topics follow `keryx init`**: a
+project that registers in the user-global project registry gets a topic, and the
+mapping is recorded as [topic-binding.schema.json](schemas/topic-binding.schema.json)
+with its lifecycle in [topic-provisioning.schema.json](schemas/topic-provisioning.schema.json).
+
 Setup requires the supergroup to have topics enabled and the bot to hold the
-permission to manage them; both are checked before any topic is created, and a
-missing permission is reported as such rather than as a generic failure.
+permission to manage them. Both are checked before any topic is created, and a
+missing permission is reported as exactly that rather than as a generic failure.
+
+Ordering must not matter, because it will vary in practice:
+
+| Situation | Behaviour |
+|---|---|
+| Forum configured, then a project registers | The topic is created at registration. |
+| Projects registered before any forum exists | Each is recorded `pending`. Configuring the forum provisions every pending project. |
+| Project re-registered (init re-run) | Idempotent. The existing topic is reused; a second topic is never created for one project. |
+| Registered project's path disappears | The registry marks it `missing`. The topic is **closed, not deleted** — it holds the conversation — and reopening is an explicit operator action. |
+| Topic deleted in Telegram | Binding validation clears the mapping and the project returns to `pending`, so re-provisioning is possible. |
+
+The transport reads the project registry and never keeps a second list of
+projects. A project's presence is decided by `keryx init`, not by Telegram.
 
 ### Resolution
 
@@ -170,6 +186,56 @@ concurrently while two messages for one project run in order.
 A sender whose message is queued behind others is told its position at the
 moment of queueing, not after the wait. Queue depth is bounded; exceeding the
 bound is an explicit refusal, never a silent drop.
+
+## Operating a project from its topic
+
+A topic is where a project is operated, not only where it is discussed. Two
+distinct things can be asked for in it, and conflating them would be expensive:
+
+| | `task.submit` | `maintenance.run` |
+|---|---|---|
+| Input | Free text or a transcript | A command chosen from the registry |
+| Executes | A model turn | A deterministic command |
+| Cost | Tokens, always | Tokens only if the registry says so |
+| Source of truth | — | `src/standard/command-registry.ts` |
+
+Asking a model to decide to rebuild a graph is paying for a decision that was
+already made, and inserting a nondeterministic step into an operation that had
+none. So maintenance is its own intent.
+
+### The menu is generated, not written
+
+The transport renders its command menu from the registry projection Remote Entry
+exposes. It maintains no list of its own. A command added to the command
+registry appears in the topic with no transport change; a command absent from
+the registry is not invocable, and there is no free-form command path.
+
+The registry's per-command flags drive presentation as well as policy:
+
+- read-only operations are offered directly;
+- operations that write to the project are marked as such, and are `ask`;
+- model-backed operations are marked as costing tokens, and the approval says so
+  — spending should be a decision, not a discovery.
+
+### Setup without a web UI
+
+Everything needed to bring a project up is reachable from its topic: register
+what is there, build the graph, index and enrich the wiki, analyze tests, run
+health, choose a provider, choose a model.
+
+**Secrets are the exception.** The transport never accepts a secret as a
+message. It requests a credential handoff from Remote Entry and renders the
+resulting one-time, expiring, loopback-bound link. The operator opens it and
+enters the value locally, and it goes straight to the credential store. Nothing
+secret is ever in a Telegram message, in its history, or in the bot's update
+stream.
+
+Provider and model *selection* carry no secret and are ordinary commands.
+
+If the operator is away from the machine the loopback link is unreachable; that
+needs the non-loopback bind, which already requires an explicit flag and
+acknowledgement. Direct entry in a private chat exists only as the explicit,
+constrained fallback described in [security-policy.md](security-policy.md).
 
 ## Voice
 
@@ -325,6 +391,21 @@ Harness, policy, security, evidence, and Task Manager projection ports.
 | AC-30 Clip cap | Given a reply whose spoken length exceeds the cap, when speech is produced, then it is split into clips each within the cap, split at a paragraph, sentence, line or word boundary, and never mid-word. |
 | AC-31 Speech redaction | Given a reply containing secret, path or PII fixtures before redaction, when speech is produced, then it is synthesized from the redacted text only, and no raw value is audible. |
 | AC-32 Normalization language guard | Given normalization enabled and a pass that returns text in a different language than the input, when speech is produced, then the un-normalized text is used. |
+| AC-33 Topic on registration | Given a configured forum, when a project registers through `keryx init`, then exactly one topic is created and bound to it. |
+| AC-34 Pending provisioning | Given projects registered before any forum exists, when the forum is configured, then every pending project is provisioned, and none is skipped or duplicated. |
+| AC-35 Idempotent provisioning | Given a project whose init is re-run, when registration repeats, then the existing topic is reused and no second topic is created. |
+| AC-36 Missing project | Given a registered project whose path disappears, when the transport reconciles, then its topic is closed rather than deleted, and reopening requires an explicit operator action. |
+| AC-37 Deleted topic re-provisions | Given a topic deleted in Telegram, when validation clears the binding, then the project returns to pending and can be provisioned again. |
+| AC-38 One project list | Given any transport state, when projects are enumerated, then they come from the user-global project registry and the transport holds no second list. |
+| AC-39 Generated menu | Given a command added to the command registry, when the topic menu is rendered, then it appears with no change to the transport; and given a command absent from the registry, then it is not invocable and no free-form command path exists. |
+| AC-40 Maintenance is not a turn | Given a maintenance command the registry marks `model: false`, when it runs, then no prompt is constructed and no provider call is made. |
+| AC-41 Cost disclosure | Given a maintenance command the registry marks `model: true`, when approval is presented, then it states that the operation spends tokens. |
+| AC-42 Write operations ask | Given a maintenance command the registry marks `read: false`, when it is invoked, then it is classified `ask` and does not run unapproved. |
+| AC-43 No secret in a message | Given any message containing credential-like material, when it is handled, then it is never stored as a credential, and the transport offers a handoff link instead. |
+| AC-44 Handoff rendering | Given a credential handoff, when the link is rendered, then it carries only the opaque identifier and expiry, and the message contains no credential material. |
+| AC-45 Handoff is one-time | Given a consumed or expired handoff link, when it is opened again, then it fails and reports expiry, and no credential is set. |
+| AC-46 Selection needs no handoff | Given a provider or model selection command, when it runs from a topic, then it completes without any handoff, because it carries no secret. |
+| AC-47 Fallback is constrained | Given direct secret entry is used as the explicit fallback, when it occurs, then it is refused in a supergroup, accepted only in a private chat, the carrying message is deleted immediately, the value is excluded from logs, evidence and retained history, and the operator is told the value transited the provider's infrastructure. |
 
 ## Rendering and delivery
 

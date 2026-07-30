@@ -1,5 +1,5 @@
 # Brainstorm: Telegram Transport Options
-Version: 2.1.0
+Version: 2.2.0
 
 ## Decision question
 
@@ -94,6 +94,82 @@ language of the text.
 | One private chat per project | Requires a separate bot or a separate chat per project; nothing groups them; approvals from several projects interleave in one conversation with no reliable way to tell which is which. |
 | One chat, a `/switch` command holding current project | A mode that is invisible in the message itself. Sending to the wrong project becomes a one-keystroke mistake with no visible cue, and it serializes everything through a single conversation. Useful as a private-chat convenience, unsafe as the primary mechanism. |
 | Project named in each message | Puts routing into untrusted content, which is exactly what the specification forbids for `task.submit`. |
+
+## 2.2.0: the deployment model made explicit
+
+The target is one operator running one keryx install across many projects,
+reached from a supergroup they own. Naming it settled three things that had been
+left implicit, and reopened one that had been decided wrongly.
+
+### Topics follow `keryx init`, not a bulk setup
+
+helyx enumerates projects from its database and creates topics in a batch. That
+works because it has a central project table. keryx does not: `keryx init`
+writes a `.metaproject/` into a directory and nothing on the machine knows the
+set of projects.
+
+So the dependency runs the other way. Remote Entry gains a user-global project
+registry, `keryx init` registers, and the transport provisions a topic per
+registered project. The transport reads that registry and holds no list of its
+own — a project exists because it was initialized, never because a topic was
+created.
+
+Ordering had to stop mattering, because in practice it will vary: projects
+registered before a forum exists wait as pending and are provisioned when it
+appears.
+
+### Maintenance is not a prompt
+
+Bringing a project up remotely means building a graph, indexing and enriching a
+wiki, analyzing tests, running health. Sending those through the model means
+paying for a decision that was already made, and adding a nondeterministic step
+to an operation that had none.
+
+keryx already had the right source for this and it was not being used:
+`src/standard/command-registry.ts` carries, per command, its argument shape,
+whether it is read-only, and whether it costs a model call — sixteen commands
+today, five of them model-backed. That is exactly a permission and cost model,
+already written.
+
+So the menu is generated from the registry rather than written into the
+transport: a command added to keryx appears in Telegram with no bot change, a
+command absent from the registry is not invocable, read-only commands are
+offered directly, write commands ask, and model-backed commands disclose their
+cost.
+
+The registry does not yet cover everything the menu needs — `gdgraph build` is a
+refresh command outside the curated set — so extending it is recorded as a
+dependency rather than worked around in the transport.
+
+### Rejected: entering an API key in the chat
+
+The obvious way to authorize a provider without a web UI is to paste the key
+into the chat, and helyx-style deployments do keep secrets in ordinary
+configuration.
+
+**Rejected.** A key sent as a message traverses Telegram's servers, persists in
+conversation history, enters the bot's update stream, and may reach logs. Bot-side
+deletion removes it from view, not from that infrastructure. keryx keeps
+credentials at mode 0600 and ships a secret detector; a channel that walks around
+both to save one screen of UI is a bad trade.
+
+| Option | Verdict |
+|---|---|
+| Paste the key in chat, bot deletes the message | Rejected as a default. The value has already left the machine by the time it is deleted. |
+| Model-driven setup — ask the agent to configure the provider | Rejected. It puts a secret into a prompt and therefore into a session, which is worse. |
+| Full web UI for settings | Rejected as scope. The operator explicitly wanted no web application. |
+| **One-time, expiring, loopback-bound handoff link** | **Selected.** Telegram carries a link, never a value. The secret is entered locally and written straight to the credential store. It is "no web UI" in the sense that matters: no application, just one page for one operation. |
+| Direct entry in a private chat | Retained as an explicit fallback with named constraints — never in a supergroup, message deleted at once, excluded from logs, evidence and history, and the operator told it transited Telegram and can be rotated. |
+
+Away from the machine the loopback link is unreachable and a non-loopback bind
+is needed. That is the trade-off already recorded for the entry itself, not a
+new one introduced here.
+
+### Kept despite the single-operator model
+
+Per-sender authorization stays. It is nearly free, and "the group is mine" stops
+being true the moment anyone is added. A single-operator deployment is a reason
+to keep cheap checks, not to drop them.
 
 ## External basis
 

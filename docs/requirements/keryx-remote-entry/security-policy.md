@@ -1,5 +1,5 @@
 # Security Policy: Keryx Remote Entry
-Version: 1.0.0
+Version: 1.1.0
 
 ## Status
 
@@ -70,6 +70,55 @@ A failure at any step produces no privileged effect.
 | Origin integrity | Origin is assigned by the server from the authenticated connection. Content claiming an origin is untrusted text. |
 | Auto-approve source | Resolved only from the existing policy source. Neither Remote Entry nor any transport may define its own allowlist. |
 
+## Secrets never traverse the remote surface
+
+| Control | Requirement |
+|---|---|
+| No acceptance | No route accepts credential material. A request carrying something credential-shaped is not stored as a credential by any path. |
+| Handoff only | A caller may request a one-time, expiring, loopback-bound link. The link carries an opaque identifier, a stated purpose and an expiry — no credential material, no provider secret, no filesystem path. |
+| Entry | The secret is entered against the loopback address and written directly to the user-global credential store at mode 0600. |
+| Exposure | It appears in no response body, stream event, evidence record, session, or log. |
+| Lifetime | Single use, consumed atomically; short expiry; invalidated by token rotation or revocation. |
+| Away from the machine | A loopback link is unreachable remotely. Reaching it requires the non-loopback bind with its existing flag and acknowledgement. This is the same trade-off already recorded, not a new exception. |
+
+A transport may offer direct secret entry as an **explicit fallback** only under
+all of the following, and it is a recorded concession rather than a default:
+
+- never in a shared or multi-member conversation;
+- the carrying message is deleted immediately after use;
+- the value is excluded from logs, evidence, retained history, and any
+  transport-side persistence;
+- the operator is told, at the moment of use, that the value transited the
+  transport provider's infrastructure and should be rotated if that matters.
+
+Selection of a provider or a model carries no secret and needs none of this.
+
+## Maintenance operations
+
+Maintenance runs deterministic commands rather than model turns, which removes
+prompt injection from that path but adds a command-execution surface. It is
+bounded by construction.
+
+| Control | Requirement |
+|---|---|
+| Registry-bounded | Only entries projected from `src/standard/command-registry.ts` are invocable. There is no passthrough and no free-form command. |
+| Argument validation | Arguments are validated against the registry entry's declared shape before anything runs. Unknown keys are refused, not ignored. |
+| No command substitution | No argument may cause a different command to run. The operation identifier is drawn from a constrained alphabet, so shell metacharacters cannot appear in it. |
+| Policy still applies | Registry flags are inputs to classification, never a replacement for it. A read-only operation is still subject to the remote profile. |
+| Write operations | Registry `read: false` means the operation writes to the project; it is classified `ask`. |
+| Model cost is disclosed | Registry `model: true` operations state their cost in the approval, so spending is a decision rather than a surprise. |
+| Growth path | A new operation becomes available by being added to the command registry, which is reviewed like any other code — not by widening the transport. |
+
+## The project registry
+
+| Control | Requirement |
+|---|---|
+| Contents | Addressing only: opaque id, path, display name, state, timestamps. |
+| No secrets | The schema forbids credential material. Credentials live only in the credential store. |
+| Not authority | It records which projects exist and how they are addressed. It does not carry project policy, and a project's own `.metaproject/` remains authoritative for everything else. |
+| Deletion | A path that has disappeared is marked `missing` and retained. Removal is an explicit operator action, so an unmounted disk never silently erases a record. |
+| Exposure | Absolute paths in the registry are operator-facing. They are not rendered into transport notifications, which follow the existing redaction rules. |
+
 ## Approval containment
 
 An approval view states a concise action summary, its scope, its consequence,
@@ -120,6 +169,15 @@ duplicate and expired approvals, self-grant attempts, forged origin fields,
 absolute paths and PII in tool output, denied actions presented as approvable,
 a widening remote profile, an unavailable sandbox launcher, and a mid-turn
 restart with a confirmed action.
+
+1.1.0 adds fixtures for: an operation absent from the command registry; crafted
+arguments attempting to reach a different command; unknown argument keys; a
+`model: false` operation asserting no provider call; a registry entry added
+asserting it appears without a transport change; a request carrying
+credential-shaped material asserting it is never stored as a credential; a
+credential link asserting it carries no credential material; a replayed and an
+expired link; a link outstanding across token rotation; and a registry
+serialization asserting it holds no secrets.
 
 No fixture may contain a real token or open a real listener on a non-loopback
 interface.

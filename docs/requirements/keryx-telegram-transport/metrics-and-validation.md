@@ -1,5 +1,5 @@
 # Metrics and Validation: Telegram Transport
-Version: 2.1.0
+Version: 2.2.0
 
 ## Status
 
@@ -32,6 +32,16 @@ documentation run.
 | Voice idempotency (2.1.0) | Duplicate audio delivery produces exactly one transcription and one turn. |
 | Speech redaction (2.1.0) | **Zero tolerance.** No secret, path, or PII fixture is audible in synthesized output; synthesis input is always post-redaction text. |
 | Speech qualification (2.1.0) | Short, mostly-code and diff fixtures produce no speech; markdown bullet fixtures are not classified as diffs; no clip exceeds the duration cap; no split falls mid-word. |
+| Provisioning idempotence (2.2.0) | **Zero tolerance.** No project ever holds two topics, in any ordering of forum configuration, registration and re-registration. |
+| Pending provisioning (2.2.0) | 100% of projects registered before a forum exists are provisioned when it is configured; none skipped, none duplicated. |
+| Topic retention (2.2.0) | 100% of projects whose path disappears have their topic closed, not deleted; reopening always requires an explicit operator action. |
+| Single project list (2.2.0) | **Zero tolerance.** The transport holds no project list of its own; a static check asserts projects come from the user-global registry. |
+| Unregistered topic (2.2.0) | 100% of topics created for unregistered projects are non-routable. |
+| Generated menu (2.2.0) | **Zero tolerance.** A command added to the command registry appears with no transport change; a command absent from it is not invocable, and no free-form command path exists. |
+| Maintenance is not a turn (2.2.0) | **Zero tolerance.** Commands the registry marks `model: false` make zero provider calls and construct zero prompts. |
+| Cost and write disclosure (2.2.0) | 100% of `model: true` commands state their token cost in the approval; 100% of `read: false` commands are classified `ask`. |
+| Secret containment (2.2.0) | **Zero tolerance.** No credential-like message is stored as a credential, logged, retained, or echoed; no rendered handoff message contains credential material. |
+| Handoff lifecycle (2.2.0) | **Zero tolerance.** No handoff link is usable twice or after expiry; every direct-entry attempt in a supergroup is refused. |
 
 ## Required validation layers
 
@@ -43,7 +53,12 @@ documentation run.
    unmapped topics, deleted topics, and validation that fails transiently —
    unauthorized supergroup members, interleaved arrival across ≥2 projects, and
    both voice directions with a fake local engine and a fake remote service that
-   can be denied by policy. No real audio service is contacted.
+   can be denied by policy. No real audio service is contacted. It must also
+   simulate project registration in every ordering relative to forum
+   configuration, re-registration, a vanished project path, a deleted topic, a
+   command-registry projection that gains an entry, and a credential handoff
+   issued, replayed and expired. No real provider credential appears in any
+   fixture.
 3. **Security tests:** cover injection scanning, binding/allowlist, redaction,
    `deny` containment, and no-secret/no-absolute-path output.
 4. **Lifecycle scenarios:** cover the acceptance criteria in
@@ -81,3 +96,14 @@ documentation run.
   engine.
 - Speaking-rate estimation used to size clips is a heuristic and must be
   calibratable without a code change; no accuracy claim is made for it.
+- The curated command registry does not yet cover every maintenance operation
+  the topic menu should offer — `gdgraph build`, for instance, is a refresh
+  command outside the sixteen curated entries. **Extending the command registry
+  is a dependency of this capability.** The fix is to extend the registry, not
+  to special-case a command inside the transport, and no claim is made that
+  today's registry is sufficient.
+- The user-global project registry is specified in
+  [keryx-remote-entry](../keryx-remote-entry/README.md) and does not exist yet.
+  Topic provisioning depends on it.
+- The credential handoff protects the secret from Telegram. It does not protect
+  it from a compromised local machine, which already holds the credential store.
