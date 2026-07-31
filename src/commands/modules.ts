@@ -40,11 +40,23 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
     return;
   }
 
+  // `--json` only ever describes state. It must never stand in for a
+  // subcommand: `modules enable x --json` previously printed the UNCHANGED
+  // state and exited 0 without enabling anything, which looks exactly like a
+  // successful confirmation.
+  const wantsJson = args.includes("--json") && (sub === undefined || sub === "status" || sub === "list" || sub === "--json");
+
   const metaprojectRoot = path.join(process.cwd(), ".metaproject");
   const manifestPath = path.join(metaprojectRoot, "metaproject.json");
   if (!(await pathExists(manifestPath))) {
-    console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
-    console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("keryx init")} first.`);
+    // A caller that asked for JSON gets JSON, including for the failure. Prose
+    // on stdout would reach it as a parse error rather than a usable signal.
+    if (wantsJson) {
+      console.log(JSON.stringify({ schemaVersion: 1, error: "not-initialized", modules: [] }, null, 2));
+    } else {
+      console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
+      console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("keryx init")} first.`);
+    }
     process.exitCode = 1;
     return;
   }
@@ -58,6 +70,14 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
   const enabled = new Set(
     MODULES.filter((module) => manifest.modules?.[module.name]?.enabled === true).map((module) => module.name),
   );
+
+  // `--json` is a pure projection of the state `printStatus` already renders,
+  // sorted by module name so two runs are byte-identical and diffable — the
+  // determinism `keryx commands --json` also guarantees.
+  if (wantsJson) {
+    console.log(emitModulesJson(enabled));
+    return;
+  }
 
   if (sub === "status" || sub === "list" || (!sub && !stdin.isTTY)) {
     printStatus(enabled);
@@ -119,6 +139,22 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
   await initCommand(flags);
 }
 
+/**
+ * Deterministic machine-readable module state, sorted by module name so the
+ * payload is byte-stable regardless of `MODULES` authoring order — which is
+ * what makes it safe to diff and to consume from a harness.
+ */
+export function emitModulesJson(enabled: Set<string>): string {
+  const modules = [...MODULES]
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map((module) => ({
+      name: module.name,
+      enabled: enabled.has(module.name),
+      description: module.desc,
+    }));
+  return JSON.stringify({ schemaVersion: 1, modules }, null, 2);
+}
+
 function printStatus(enabled: Set<string>): void {
   banner("keryx modules", `${enabled.size} of ${MODULES.length} modules enabled`);
   for (const module of MODULES) {
@@ -147,12 +183,14 @@ function printHelp(): void {
   helpUsage([
     "keryx modules",
     "keryx modules status",
+    "keryx modules --json",
     "keryx modules enable <name>",
     "keryx modules disable <name>",
   ]);
   helpOptions([
     { flag: "(no args)", desc: "Interactive enable/disable in a terminal; status view when piped." },
     { flag: "status, list", desc: "Show which modules are enabled." },
+    { flag: "--json", desc: "Deterministic machine-readable module state." },
     { flag: "enable <name>", desc: `Enable and scaffold a module (${MODULES.map((module) => module.name).join(", ")}).` },
     { flag: "disable <name>", desc: "Disable a module." },
   ]);

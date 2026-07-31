@@ -30,6 +30,54 @@ import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
 
+/**
+ * Every top-level CLI verb, mapped to its handler. Each handler receives the
+ * arguments AFTER the verb.
+ *
+ * This is exported because it is the only honest source for "what commands does
+ * this CLI actually have". The descriptor registry in `src/standard` is
+ * hand-curated, and a coverage test that compares it against another
+ * hand-written list proves nothing — it just compares two copies of the same
+ * belief. Deriving the surface from the dispatch table means a new verb added
+ * here fails the coverage test until it is either described or explicitly
+ * excluded with a reason.
+ *
+ * Limit worth stating: this is verb-level. It cannot see that `wiki` grew a new
+ * subcommand, because subcommand parsing lives inside each handler. It catches
+ * the failure that actually happened twice, not every possible one.
+ */
+export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void> = {
+  init: initCommand,
+  status: () => statusCommand(),
+  modules: modulesCommand,
+  update: updateCommand,
+  dashboard: dashboardCommand,
+  dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
+  gdgraph: gdgraphCommand,
+  ctx: ctxCommand,
+  wiki: wikiCommand,
+  orient: orientCommand,
+  sync: syncCommand,
+  skills: skillsCommand,
+  "skill-verify-skill": skillVerifySkillCommand,
+  health: healthCommand,
+  metrics: metricsCommand,
+  test: testCommand,
+  memory: memoryCommand,
+  flow: flowCommand,
+  review: reviewCommand,
+  rules: rulesCommand,
+  agents: agentsCommand,
+  standard: standardCommand,
+  commands: commandsCommand,
+  security: securityCommand,
+  mcp: mcpCommand,
+  harness: harnessCommand,
+  shell: shellCommand,
+  sessions: sessionsCommand,
+  session: sessionsCommand,
+};
+
 export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -47,143 +95,9 @@ export async function main(): Promise<void> {
   // Bare `keryx` is the CLI surface (help above). The interactive TUI agent
   // harness is only `keryx shell […]`. Do not route stray `--flags` into shell.
 
-  if (command === "init") {
-    await initCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "status") {
-    await statusCommand();
-    return;
-  }
-
-  if (command === "modules") {
-    await modulesCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "update") {
-    await updateCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "dashboard") {
-    await dashboardCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "dash") {
-    await dashboardCommand(args.length > 1 ? args.slice(1) : ["open"]);
-    return;
-  }
-
-  if (command === "gdgraph") {
-    await gdgraphCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "ctx") {
-    await ctxCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "wiki") {
-    await wikiCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "orient") {
-    await orientCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "sync") {
-    await syncCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "skills") {
-    await skillsCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "skill-verify-skill") {
-    await skillVerifySkillCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "health") {
-    await healthCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "metrics") {
-    await metricsCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "test") {
-    await testCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "memory") {
-    await memoryCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "flow") {
-    await flowCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "review") {
-    await reviewCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "rules") {
-    await rulesCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "agents") {
-    await agentsCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "standard") {
-    await standardCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "commands") {
-    await commandsCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "security") {
-    await securityCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "mcp") {
-    await mcpCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "harness") {
-    await harnessCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "shell") {
-    await shellCommand(args.slice(1));
-    return;
-  }
-
-  if (command === "sessions" || command === "session") {
-    await sessionsCommand(args.slice(1));
+  const route = CLI_ROUTES[command];
+  if (route) {
+    await route(args.slice(1));
     return;
   }
 
