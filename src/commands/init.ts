@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { moduleCommands } from "./module-commands";
 import { registerInitializedProject } from "./projects";
+import { sanitizeForDisplay } from "../lib/project-registry";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import { seedAssetsLock } from "../assets/seed";
@@ -229,8 +230,8 @@ export async function initCommand(args: string[]): Promise<void> {
   banner(
     "keryx init",
     alreadyExists
-      ? `Updating the .metaproject workspace in ${path.basename(projectRoot)}/`
-      : `Setting up a .metaproject workspace in ${path.basename(projectRoot)}/`,
+      ? `Updating the .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`
+      : `Setting up a .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`,
   );
   if (!options.yes) {
     note("Press Enter to accept the Recommended default for each question.");

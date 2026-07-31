@@ -32,6 +32,17 @@ export async function projectsCommand(args: string[] = []): Promise<void> {
   // success and produced unparseable stdout.
   const LIST_FLAGS = new Set(["--json"]);
   if (sub === undefined || sub === "list" || LIST_FLAGS.has(sub)) {
+    // Every flag is validated, not just a leading one. Guarding only the
+    // shortcut left the DOCUMENTED form open: `projects list --jsonn` still
+    // printed human output with exit 0, which is the defect this check exists
+    // for, on the form the help text tells people to use.
+    const unknown = args.filter((arg) => arg.startsWith("-") && arg !== "list" && !LIST_FLAGS.has(arg));
+    if (unknown.length > 0) {
+      console.error(`Unknown option: ${sanitizeForDisplay(unknown[0]!)}`);
+      printHelp();
+      process.exitCode = 1;
+      return;
+    }
     runList(args.includes("--json"));
     return;
   }
@@ -46,7 +57,7 @@ export async function projectsCommand(args: string[] = []): Promise<void> {
     return;
   }
 
-  console.error(`Unknown projects command: ${sub}`);
+  console.error(`Unknown projects command: ${sanitizeForDisplay(sub)}`);
   printHelp();
   process.exitCode = 1;
 }
@@ -120,13 +131,13 @@ function runForget(projectId: string | undefined): void {
     console.log(`  ${style.yellow(symbols.bullet)} ${message}`),
   );
   if (outcome === "not-found") {
-    console.error(`  ${style.red(symbols.cross)} No registered project with id ${projectId}.`);
+    console.error(`  ${style.red(symbols.cross)} No registered project with id ${sanitizeForDisplay(projectId)}.`);
     process.exitCode = 1;
     return;
   }
   if (outcome === "write-failed") {
     console.error(
-      `  ${style.red(symbols.cross)} ${projectId} is still registered: the registry could not be written.`,
+      `  ${style.red(symbols.cross)} ${sanitizeForDisplay(projectId)} is still registered: the registry could not be written.`,
     );
     process.exitCode = 1;
     return;

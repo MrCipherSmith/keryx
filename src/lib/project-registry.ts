@@ -24,6 +24,7 @@
 
 import {
   closeSync,
+  copyFileSync,
   existsSync,
   fsyncSync,
   mkdirSync,
@@ -315,9 +316,15 @@ function fieldWords(field: string): string[] {
  * write, permanently and invisibly.
  */
 function isSecretShapedName(field: string): boolean {
-  // Plurals count: `tokens` and `keys` are exactly as sensitive as the singular,
-  // and word-equality alone let them straight through.
-  const words = fieldWords(field).map((word) => (word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word));
+  // Plurals count: `tokens` and `keys` are as sensitive as the singular. But the
+  // depluralized form is an ADDITIONAL candidate, never a replacement — mapping
+  // every word through the stripper rewrote the qualifier `access` to `acces`
+  // and silently lost the whole `accessKey` family.
+  const literal = fieldWords(field);
+  const words = [
+    ...literal,
+    ...literal.filter((word) => word.length > 3 && word.endsWith("s")).map((word) => word.slice(0, -1)),
+  ];
 
   if (words.some((word) => SECRET_WORDS.has(word))) {
     return true;
@@ -333,7 +340,9 @@ function isSecretShapedName(field: string): boolean {
 
   // A field named exactly `key` or `keys` announces nothing but itself, and this
   // schema has no legitimate field by that name — treat it as a credential.
-  if (words.length === 1 && words[0] === "key") {
+  // Checked against the LITERAL words: `words` now also carries depluralized
+  // forms, so its length is not the word count.
+  if (literal.length === 1 && (literal[0] === "key" || literal[0] === "keys")) {
     return true;
   }
 
@@ -435,8 +444,13 @@ function quarantineDamagedRegistry(dir: string | undefined, onWarn?: (message: s
   }
   const backup = `${file}.corrupt-${Date.now()}`;
   try {
-    renameSync(file, backup);
-    onWarn?.(`project registry was damaged; the previous file was kept at ${backup}`);
+    // COPY, not rename. Renaming removed the live registry before the repairing
+    // write, so a write that then failed left nothing in its place — the
+    // operator was told the entry was unchanged while the file had vanished.
+    // A copy is safe in both directions: the write either replaces the original
+    // or leaves it exactly as it was.
+    copyFileSync(file, backup);
+    onWarn?.(`project registry was damaged; a copy of the previous file was kept at ${backup}`);
   } catch {
     onWarn?.("project registry was damaged and could not be preserved before rewriting");
   }
@@ -468,7 +482,7 @@ export function saveProjectRegistry(
       // registration order.
       projects: stripSecretShapedFields(
         [...registry.projects].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
-        (field) => onWarn?.(`project registry: dropped credential-shaped field "${field}"`),
+        (field) => onWarn?.(`project registry: dropped credential-shaped field "${sanitizeForDisplay(field)}"`),
       ),
     };
     const handle = openSync(temp, "wx", 0o600);
