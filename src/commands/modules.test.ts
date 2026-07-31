@@ -86,13 +86,19 @@ describe("modulesCommand --json wiring", () => {
     console.log = (...parts: unknown[]) => {
       logged.push(parts.map(String).join(" "));
     };
-    process.exitCode = undefined;
+    // Assigning `undefined` does NOT clear it in Bun: the process still exits
+    // non-zero, so a green suite reports failure. `modulesCommand` sets the
+    // real `process.exitCode`, so the test must reset it to 0 explicitly.
+    process.exitCode = 0;
   });
 
   afterEach(async () => {
     console.log = originalLog;
     process.chdir(cwd);
-    process.exitCode = undefined;
+    // Assigning `undefined` does NOT clear it in Bun: the process still exits
+    // non-zero, so a green suite reports failure. `modulesCommand` sets the
+    // real `process.exitCode`, so the test must reset it to 0 explicitly.
+    process.exitCode = 0;
     await rm(root, { recursive: true, force: true });
   });
 
