@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "100",
   "slug": "sandbox-v1-x-native-windows-containment-",
   "title": "sandbox v1.x: native Windows containment (needs Windows host)",
-  "status": "initializing",
+  "status": "blocked",
   "createdAt": "2026-07-20T22:09:05.910Z",
-  "updatedAt": "2026-07-20T22:09:05.910Z",
+  "updatedAt": "2026-07-31T09:12:42.559Z",
   "source": {
     "type": "description",
     "ref": null
@@ -20,31 +20,69 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-07-20T22:09:05.910Z",
       "event": "created"
+    },
+    {
+      "at": "2026-07-31T09:12:42.559Z",
+      "event": "blocked",
+      "detail": "Parked: native Windows containment needs a Windows host, which this install does not have. Roadmap phase 4 (R17). The OS sandbox already refuses rather than degrading on unsupported postures, so nothing is silently unprotected meanwhile."
     }
-  ]
+  ],
+  "previousStatus": "initializing"
 }
