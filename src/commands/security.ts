@@ -11,6 +11,7 @@ import {
   symbols,
 } from "../lib/ui";
 import { optionValue } from "../lib/args";
+import { resolveContainedPath } from "../lib/contained-path";
 import { pathExists as fsPathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import {
@@ -194,7 +195,16 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const content = await readFile(file, "utf8");
+  // Contain before opening: the scanner reads whatever it is pointed at and
+  // renders findings from the content, so an uncontained path turns a scanner
+  // into a file reader for anything the process can reach.
+  const contained = await resolveContainedPath(cwd, file);
+  if (!contained.ok) {
+    console.error(contained.message);
+    process.exitCode = 1;
+    return;
+  }
+  const content = await readFile(contained.path, "utf8");
   const source = parseSource(args, "trusted-project");
   const result = await runScan(cwd, { content, source, path: file });
   const asJson = args.includes("--json");
