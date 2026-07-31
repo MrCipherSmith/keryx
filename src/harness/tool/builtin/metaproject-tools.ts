@@ -25,6 +25,7 @@ import type {
   MetaprojectPort,
   SearchCodeResult,
 } from "../metaproject-port";
+import { confineToRoot } from "./interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 
 // Re-export the formatters for backward compatibility with existing importers.
@@ -117,7 +118,7 @@ function requireString(
  * first (preserving the flow-037 behavior/tests); only a failed port result falls
  * back to `keryx ctx rg <pattern> [path]`. All other methods pass through.
  */
-function withSearchFallback(port: MetaprojectPort, run: KeryxRunner): MetaprojectPort {
+function withSearchFallback(port: MetaprojectPort, run: KeryxRunner, root: string): MetaprojectPort {
   return {
     ...port,
     async searchCode(input): Promise<SearchCodeResult> {
@@ -127,7 +128,19 @@ function withSearchFallback(port: MetaprojectPort, run: KeryxRunner): Metaprojec
       }
       const args = ["ctx", "rg", input.pattern];
       if (input.path !== undefined) {
-        args.push(input.path);
+        // Same confinement as the non-port path: this fallback is reachable
+        // from the model whenever the port has no in-process backing, so
+        // leaving it open would defeat the check on the other branch.
+        const confined = confineToRoot(root, input.path);
+        if (confined === null) {
+          return {
+            pattern: input.pattern,
+            path: input.path,
+            output: `search_code: path escapes the project root: ${input.path}`,
+            isError: true,
+          };
+        }
+        args.push(confined);
       }
       const normalized = normalizeSearchResult(await run(args));
       return {
@@ -155,7 +168,7 @@ export function builtinMetaprojectTools(
   port?: MetaprojectPort,
 ): InteractiveTool[] {
   if (port !== undefined) {
-    return toInteractiveTools(METAPROJECT_OPERATIONS, withSearchFallback(port, run));
+    return toInteractiveTools(METAPROJECT_OPERATIONS, withSearchFallback(port, run, root));
   }
 
   const searchCode: InteractiveTool = {
@@ -179,7 +192,18 @@ export function builtinMetaprojectTools(
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
       const args = ["ctx", "rg", pattern.value];
       if (path !== undefined) {
-        args.push(path);
+        // Confine the model-supplied path exactly as `read_file` does. Without
+        // this, `search_code {pattern: ".", path: "<any readable file>"}` returns
+        // every line of that file to the provider — an arbitrary read behind a
+        // tool the policy classifies as read-only and auto-approves.
+        const confined = confineToRoot(root, path);
+        if (confined === null) {
+          return {
+            output: `search_code: path escapes the project root: ${path}`,
+            isError: true,
+          };
+        }
+        args.push(confined);
       }
       return normalizeSearchResult(await run(args));
     },

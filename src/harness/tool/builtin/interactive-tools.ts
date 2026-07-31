@@ -12,7 +12,8 @@
 // nothing outside the root is ever read.
 
 import { readFile, readdir } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
+import { realpathSync } from "node:fs";
 import type { NormalizedToolDefinition } from "../../provider/types";
 
 /** The content-returning result of an interactive tool invocation. */
@@ -32,18 +33,38 @@ const MAX_READ_BYTES = 20_000;
 
 /**
  * Resolve `candidate` (relative to `root`) and confine it to `root`. Returns the
- * absolute path, or `null` when it escapes (via `..` or an absolute path).
+ * absolute path, or `null` when it escapes.
+ *
+ * The check is on the REAL path. A purely lexical comparison — which this was —
+ * is satisfied by a symlink inside the root that points outside it, and then
+ * reads the target anyway. It is also segment-wise, so an in-project file named
+ * `..hidden.ts` is not mistaken for a traversal.
+ *
+ * A path that does not exist yet is still checked lexically and allowed if it
+ * would land inside the root; callers surface their own not-found error.
  */
 export function confineToRoot(root: string, candidate: string | undefined): string | null {
-  const target = resolve(root, candidate ?? ".");
-  const rel = relative(root, target);
-  if (rel === "") {
-    return root; // the root itself
+  const rootReal = realpathOr(root);
+  const target = resolve(rootReal, candidate ?? ".");
+  const effective = realpathOr(target);
+
+  if (effective === rootReal) {
+    return rootReal; // the root itself
   }
-  if (rel.startsWith("..") || isAbsolute(rel)) {
+  const rel = relative(rootReal, effective);
+  if (rel === "" || isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) {
     return null; // escapes the root
   }
-  return target;
+  return effective;
+}
+
+/** Real path when it resolves, the lexical path otherwise (target may not exist yet). */
+function realpathOr(candidate: string): string {
+  try {
+    return realpathSync(candidate);
+  } catch {
+    return resolve(candidate);
+  }
 }
 
 /** The three read-only builtin tools, bound to `root` (the project root). */
