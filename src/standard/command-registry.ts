@@ -85,7 +85,15 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       { name: "json", type: "bool", required: false, desc: "structured matches (our summary, not rg --json)" },
     ],
     json: true,
-    read: true,
+    // Persists a compacted artifact and the raw log on every run, so it is a
+    // writer despite reading as a search. Was declared read-only, which would
+    // have made it auto-allowable on a consumer that gates writes.
+    read: false,
+    sideEffects: [
+      "writes .metaproject/data/gdctx/raw/**",
+      "writes .metaproject/data/gdctx/artifacts/**",
+      "spawns ripgrep with the caller's pattern",
+    ],
   },
   // ---- gdwiki -----------------------------------------------------------
   {
@@ -158,7 +166,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
-    sideEffects: ["writes data/health/artifacts/**"],
+    // The subprocess entry is not padding: an approval rendered from these
+    // effects would otherwise present arbitrary command execution — the lint and
+    // test commands come from the checked-out project's own config — as a
+    // benign artifact write.
+    sideEffects: [
+      "writes data/health/artifacts/**",
+      "executes the project's configured lint / type-check / test commands",
+    ],
   },
   {
     module: "health",
@@ -202,7 +217,10 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
-    sideEffects: ["writes data/testing/artifacts/**"],
+    sideEffects: [
+      "writes data/testing/artifacts/**",
+      "executes the project's configured test command",
+    ],
   },
   // ---- tasks / flow -----------------------------------------------------
   {
@@ -260,7 +278,11 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       { name: "json", type: "bool", required: false, desc: "structured JSON result" },
     ],
     json: true,
-    read: true,
+    read: false,
+    sideEffects: [
+      "writes .metaproject/data/security/artifacts/latest.md",
+      "writes .metaproject/data/security/artifacts/latest.json",
+    ],
   },
   // ---- agents (subagent fleet) ------------------------------------------
   {
@@ -307,6 +329,8 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     intent: ["собери вики", "collect wiki", "wiki collect", "заполни вики"],
     args: [
       { name: "force", type: "bool", required: false, desc: "recollect pages that already exist" },
+      { name: "changed", type: "bool", required: false, desc: "only pages affected by changed files" },
+      { name: "since", type: "string", required: false, desc: "git ref to diff against when --changed is set" },
       { name: "limit", type: "number", required: false, desc: "maximum pages to collect" },
     ],
     json: false,
@@ -320,17 +344,25 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     intent: ["проверь ссылки вики", "check wiki links", "broken links", "битые ссылки"],
     args: [],
     json: false,
-    read: true,
+    // Reads the wiki but persists a report, so it is not read-only. Named as a
+    // writer because a consumer gating writes must gate this one too.
+    read: false,
+    sideEffects: ["writes .metaproject/data/gdwiki/link-check/latest.md"],
   },
   {
     module: "memory",
     command: "memory index",
     summary: "Rebuild the project memory index.",
     intent: ["переиндексируй память", "reindex memory", "memory index", "обнови индекс памяти"],
-    args: [],
+    args: [
+      { name: "embeddings", type: "bool", required: false, desc: "also build local embeddings (requires the model asset)" },
+    ],
     json: false,
     read: false,
-    sideEffects: ["writes .metaproject/data/memory/index/**"],
+    sideEffects: [
+      "writes .metaproject/data/memory/index/**",
+      "writes the memory provenance record",
+    ],
   },
   {
     module: "testing",
@@ -371,6 +403,23 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: true,
   },
 ];
+
+/**
+ * Whether a consumer may run this command without asking the operator.
+ *
+ * `read` answers one question only — does it mutate the workspace. It is NOT
+ * the same question as "is it safe to run unattended", and conflating the two
+ * is how three model-backed commands ended up eligible for silent execution:
+ * `health explain`, `test suggest` and `flow plan` write nothing, so `read` is
+ * legitimately true, but each spends provider tokens and makes an outbound call
+ * carrying the operator's credential. Cost is a consequence the operator is
+ * entitled to approve even when nothing is written.
+ *
+ * So auto-allow requires both: it does not write, and it does not spend.
+ */
+export function isAutoAllowable(descriptor: CommandDescriptor): boolean {
+  return descriptor.read === true && descriptor.model !== true;
+}
 
 /** Deterministic sort key: module then command. */
 function sortKey(descriptor: CommandDescriptor): string {

@@ -5,8 +5,11 @@
 // consumer diffing two runs must see a change only when the state changed, not
 // when authoring order in `MODULES` moved.
 
-import { describe, expect, test } from "bun:test";
-import { emitModulesJson } from "./modules";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { emitModulesJson, modulesCommand } from "./modules";
 
 type ModulesPayload = {
   schemaVersion: number;
@@ -45,14 +48,14 @@ describe("keryx modules --json", () => {
     expect(byName.get("health")).toBe(false);
   });
 
-  test("is byte-identical across two runs with the same state", () => {
-    const enabled = new Set(["gdgraph", "tasks"]);
-    expect(emitModulesJson(enabled)).toBe(emitModulesJson(new Set(["tasks", "gdgraph"])));
-  });
-
   test("sorts modules by name so the payload is diffable", () => {
+    // This is the assertion that carries the byte-stability guarantee: MODULES
+    // is authored in a non-alphabetical order, so deleting the sort makes this
+    // fail. Comparing two calls of a pure function would not — it passes with
+    // or without the sort, and would have read as proof while proving nothing.
     const names = parse(new Set()).modules.map((module) => module.name);
     expect(names).toEqual([...names].sort());
+    expect(names).not.toEqual([]);
   });
 
   test("an empty enabled set still describes every module", () => {
@@ -65,5 +68,71 @@ describe("keryx modules --json", () => {
     for (const module of parse(new Set()).modules) {
       expect(module.description.trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("modulesCommand --json wiring", () => {
+  let root = "";
+  let cwd = "";
+  let logged: string[] = [];
+  let originalLog: typeof console.log;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-modules-"));
+    cwd = process.cwd();
+    process.chdir(root);
+    logged = [];
+    originalLog = console.log;
+    console.log = (...parts: unknown[]) => {
+      logged.push(parts.map(String).join(" "));
+    };
+    process.exitCode = undefined;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    process.chdir(cwd);
+    process.exitCode = undefined;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function writeManifest(enabled: string[]): Promise<void> {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    const modules = Object.fromEntries(enabled.map((name) => [name, { enabled: true }]));
+    await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules }), "utf8");
+  }
+
+  test("emits a structured error, not prose, on an uninitialized workspace", async () => {
+    await modulesCommand(["--json"]);
+    // A harness invoking the descriptor's advertised --json contract must get
+    // JSON even for the failure; prose reaches it as a parse error.
+    const payload = JSON.parse(logged.join("\n")) as { error?: string };
+    expect(payload.error).toBe("not-initialized");
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("status --json emits module state", async () => {
+    await writeManifest(["gdgraph"]);
+    await modulesCommand(["status", "--json"]);
+    const payload = JSON.parse(logged.join("\n")) as { modules: Array<{ name: string; enabled: boolean }> };
+    const byName = new Map(payload.modules.map((module) => [module.name, module.enabled]));
+    expect(byName.get("gdgraph")).toBe(true);
+    expect(byName.get("memory")).toBe(false);
+  });
+
+  test("--json never stands in for a mutating subcommand", async () => {
+    await writeManifest(["gdgraph"]);
+    // The first version took the JSON branch before dispatch, so this printed
+    // the UNCHANGED state and exited 0 — indistinguishable from a successful
+    // enable. Whatever it does now, it must not silently report success.
+    await modulesCommand(["enable", "memory", "--json"]);
+    const printedOnlyState = logged.length === 1 && logged[0]!.trimStart().startsWith("{");
+    expect(printedOnlyState).toBe(false);
+  });
+
+  test("--json does not swallow the unknown-subcommand error", async () => {
+    await writeManifest(["gdgraph"]);
+    await modulesCommand(["bogus", "--json"]);
+    expect(process.exitCode).toBe(1);
   });
 });

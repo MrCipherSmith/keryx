@@ -40,11 +40,23 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
     return;
   }
 
+  // `--json` only ever describes state. It must never stand in for a
+  // subcommand: `modules enable x --json` previously printed the UNCHANGED
+  // state and exited 0 without enabling anything, which looks exactly like a
+  // successful confirmation.
+  const wantsJson = args.includes("--json") && (sub === undefined || sub === "status" || sub === "list" || sub === "--json");
+
   const metaprojectRoot = path.join(process.cwd(), ".metaproject");
   const manifestPath = path.join(metaprojectRoot, "metaproject.json");
   if (!(await pathExists(manifestPath))) {
-    console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
-    console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("keryx init")} first.`);
+    // A caller that asked for JSON gets JSON, including for the failure. Prose
+    // on stdout would reach it as a parse error rather than a usable signal.
+    if (wantsJson) {
+      console.log(JSON.stringify({ schemaVersion: 1, error: "not-initialized", modules: [] }, null, 2));
+    } else {
+      console.log(`  ${style.red(symbols.cross)} Metaproject is not initialized.`);
+      console.log(`  ${style.cyan(symbols.arrow)} Run ${style.cyan("keryx init")} first.`);
+    }
     process.exitCode = 1;
     return;
   }
@@ -60,9 +72,9 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
   );
 
   // `--json` is a pure projection of the state `printStatus` already renders,
-  // emitted in MODULES order so two runs are byte-identical and diffable —
-  // matching the determinism `keryx commands --json` guarantees.
-  if (args.includes("--json")) {
+  // sorted by module name so two runs are byte-identical and diffable — the
+  // determinism `keryx commands --json` also guarantees.
+  if (wantsJson) {
     console.log(emitModulesJson(enabled));
     return;
   }
@@ -128,9 +140,9 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
 }
 
 /**
- * Deterministic machine-readable module state. Entries are sorted by name so the
- * payload is byte-stable across runs regardless of `MODULES` authoring order,
- * which is what makes it safe to diff and to consume from a harness.
+ * Deterministic machine-readable module state, sorted by module name so the
+ * payload is byte-stable regardless of `MODULES` authoring order — which is
+ * what makes it safe to diff and to consume from a harness.
  */
 export function emitModulesJson(enabled: Set<string>): string {
   const modules = [...MODULES]

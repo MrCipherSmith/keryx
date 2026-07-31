@@ -12,7 +12,11 @@ describe("command-registry", () => {
   test("every descriptor is well-formed", () => {
     for (const descriptor of COMMAND_DESCRIPTORS) {
       expect(descriptor.module.length).toBeGreaterThan(0);
-      expect(descriptor.command.startsWith(moduleStem(descriptor.module))).toBe(true);
+      if (descriptor.module === "core") {
+        expect(CORE_COMMANDS).toContain(descriptor.command);
+      } else {
+        expect(descriptor.command.startsWith(moduleStem(descriptor.module))).toBe(true);
+      }
       expect(descriptor.summary.length).toBeGreaterThan(0);
       expect(descriptor.intent.length).toBeGreaterThan(0);
       for (const arg of descriptor.args) {
@@ -62,6 +66,26 @@ describe("command-registry", () => {
     expect(matches[0]?.command).toBe("wiki enrich");
   });
 
+  test("matchIntent resolves the maintenance phrases to their commands", () => {
+    // The maintenance descriptors added ~40 intent phrases. The intent index is
+    // the agent-facing contract, so a collision or a ranking regression between
+    // the three "статус …" phrases would be silent without this.
+    const cases: ReadonlyArray<[string, string]> = [
+      ["построй граф", "gdgraph build"],
+      ["собери вики", "wiki collect"],
+      ["проверь ссылки вики", "wiki check-links"],
+      ["проанализируй тесты", "test analyze"],
+      ["статус тестов", "test status"],
+      ["переиндексируй память", "memory index"],
+      ["статус ctx", "ctx status"],
+      ["статус проекта", "status"],
+      ["статус модулей", "modules status"],
+    ];
+    for (const [phrase, command] of cases) {
+      expect(matchIntent(phrase)[0]?.command).toBe(command);
+    }
+  });
+
   test("markdown rendering includes model + json badges", () => {
     const markdown = renderCommandsMarkdown("gdwiki");
     expect(markdown).toContain("keryx wiki enrich");
@@ -79,10 +103,6 @@ describe("command-registry", () => {
 function moduleStem(module: string): string {
   // Command stems use the CLI verb, which differs from the module key for a few
   // modules (gdwiki -> wiki, gdctx -> ctx, tasks -> flow, memory -> memory).
-  //
-  // `core` is the toolkit itself (`keryx status`, `keryx modules status`), and
-  // those commands carry no module prefix by design — the empty stem opts them
-  // out of the prefix rule rather than pretending they satisfy it.
   const map: Record<string, string> = {
     gdwiki: "wiki",
     gdctx: "ctx",
@@ -92,7 +112,14 @@ function moduleStem(module: string): string {
     health: "health",
     testing: "test",
     security: "security",
-    core: "",
   };
   return map[module] ?? module;
 }
+
+/**
+ * `core` is the toolkit itself, and its commands carry no module prefix. An
+ * empty stem would satisfy `startsWith` for literally anything, disabling the
+ * invariant for a whole module — so the members are enumerated instead. Adding
+ * a core command means adding it here, which is the point.
+ */
+const CORE_COMMANDS: readonly string[] = ["status", "modules status"];
