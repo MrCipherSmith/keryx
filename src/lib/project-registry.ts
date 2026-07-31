@@ -76,10 +76,28 @@ const EMPTY: ProjectRegistry = { schemaVersion: 1, projects: [] };
  * The registry sits next to `auth.json`. "It holds no secrets" has to be
  * enforced on write, not asserted in a comment.
  */
-const SECRET_FIELD_MARKERS = ["token", "key", "secret", "cred", "passw", "cookie", "bearer", "auth"];
+const SECRET_WORDS = new Set([
+  "token",
+  "secret",
+  "password",
+  "passwd",
+  "passphrase",
+  "credential",
+  "credentials",
+  "cookie",
+  "bearer",
+  "auth",
+  "apikey",
+  "jwt",
+  "signature",
+]);
 
-/** Fields that legitimately contain one of the markers and must not be stripped. */
-const SECRET_MARKER_EXCEPTIONS = new Set(["displayName", "projectId", "path", "state"]);
+/**
+ * `key` on its own is not a marker: `sortKey` and `apiKey` are indistinguishable
+ * by that word alone, and treating it as a secret deletes the first while
+ * catching the second. So `key` counts only when qualified by one of these.
+ */
+const KEY_QUALIFIERS = new Set(["api", "private", "secret", "access", "signing", "encryption", "session"]);
 
 /** Same resolution as the rest of the user-global config (auth.json, sandbox.json). */
 function configDir(dir?: string): string {
@@ -104,8 +122,14 @@ export function projectRegistryPath(dir?: string): string {
 
 /** How long a lock may be held before it is treated as abandoned. */
 const LOCK_STALE_MS = 10_000;
-/** Total time to wait for a contended lock before giving up. */
-const LOCK_TIMEOUT_MS = 5_000;
+/**
+ * Total time to wait for a contended lock before giving up.
+ *
+ * Deliberately LONGER than {@link LOCK_STALE_MS}: with the shorter value a
+ * caller gave up before a genuinely crashed holder's lock became breakable, so
+ * every registration failed for a window instead of waiting it out.
+ */
+const LOCK_TIMEOUT_MS = 15_000;
 
 function sleepSync(ms: number): void {
   const bunSleep = (globalThis as { Bun?: { sleepSync?: (ms: number) => void } }).Bun?.sleepSync;
@@ -141,23 +165,35 @@ function withRegistryLock<T>(dir: string | undefined, fn: () => T): T | null {
     return null;
   }
 
+  // A nonce identifies THIS holder. Without it, a holder whose critical section
+  // ran past the stale threshold has its lock broken by someone else and then
+  // deletes the new holder's lock in its own `finally` — letting a third caller
+  // in while the second is still inside, which is the lost update the lock
+  // exists to prevent.
+  const nonce = randomUUID();
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   let handle: number | null = null;
+
   while (handle === null) {
+    // The deadline is checked FIRST, before the stale branch. Checking it only
+    // in the contended branch meant an unremovable stale lock (read-only or
+    // root-owned config dir) spun forever at full CPU instead of degrading to a
+    // reported write failure.
+    if (Date.now() > deadline) {
+      return null;
+    }
     try {
       handle = openSync(lockPath, "wx", 0o600);
+      writeFileSync(handle, nonce, { encoding: "utf8" });
     } catch {
       const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;
       if (age !== undefined && Date.now() - age > LOCK_STALE_MS) {
         try {
           rmSync(lockPath, { force: true });
         } catch {
-          // Someone else broke it first; loop and retry.
+          // Someone else broke it first, or we cannot remove it at all; either
+          // way sleep and retry until the deadline rather than spinning.
         }
-        continue;
-      }
-      if (Date.now() > deadline) {
-        return null;
       }
       sleepSync(15);
     }
@@ -171,10 +207,14 @@ function withRegistryLock<T>(dir: string | undefined, fn: () => T): T | null {
     } catch {
       // already closed
     }
+    // Only remove the lock if it is still OURS. If it was broken as stale and
+    // retaken, the file now holds someone else's nonce and must be left alone.
     try {
-      rmSync(lockPath, { force: true });
+      if (readFileSync(lockPath, "utf8") === nonce) {
+        rmSync(lockPath, { force: true });
+      }
     } catch {
-      // best effort; a leftover lock goes stale and is broken above
+      // Gone already, or unreadable; a leftover goes stale and is broken above.
     }
   }
 }
@@ -220,13 +260,34 @@ function projectIdentity(projectPath: string): string {
   }
 }
 
-/** True when `field` looks like a credential name. Case-insensitive, substring. */
+/**
+ * Split a field name into lowercase words across camelCase, snake_case,
+ * kebab-case and SCREAMING_CASE.
+ */
+function fieldWords(field: string): string[] {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+|\s+/)
+    .filter((word) => word.length > 0)
+    .map((word) => word.toLowerCase());
+}
+
+/**
+ * True when `field` looks like a credential name.
+ *
+ * Matched on whole WORDS, not raw substrings. A bare `includes` meant `key`
+ * matched `monkeyPatch` and `sortKey`, `auth` matched `authoredAt`, and `cred`
+ * matched `credibility` — each of which would then be deleted on the next
+ * write, permanently and invisibly.
+ */
 function isSecretShapedName(field: string): boolean {
-  if (SECRET_MARKER_EXCEPTIONS.has(field)) {
-    return false;
+  const words = fieldWords(field);
+  if (words.some((word) => SECRET_WORDS.has(word))) {
+    return true;
   }
-  const lower = field.toLowerCase();
-  return SECRET_FIELD_MARKERS.some((marker) => lower.includes(marker));
+  // `key` only in company: apiKey and privateKey are credentials, sortKey and
+  // keyboardLayout are not, and nothing in the word alone separates them.
+  return words.includes("key") && words.some((word) => KEY_QUALIFIERS.has(word));
 }
 
 /** True when `value` carries a credential-shaped field at any depth. */
@@ -249,9 +310,9 @@ export function hasSecretShapedField(value: unknown): boolean {
  * careless future field, a hand-edit, another tool — is dropped rather than
  * faithfully re-serialized next to `auth.json`.
  */
-export function stripSecretShapedFields<T>(value: T): T {
+export function stripSecretShapedFields<T>(value: T, onStrip?: (field: string) => void): T {
   if (Array.isArray(value)) {
-    return value.map((item) => stripSecretShapedFields(item)) as unknown as T;
+    return value.map((item) => stripSecretShapedFields(item, onStrip)) as unknown as T;
   }
   if (typeof value !== "object" || value === null) {
     return value;
@@ -259,9 +320,12 @@ export function stripSecretShapedFields<T>(value: T): T {
   const cleaned: Record<string, unknown> = {};
   for (const [field, nested] of Object.entries(value as Record<string, unknown>)) {
     if (isSecretShapedName(field)) {
+      // Named, not silent. Dropping data invisibly is how a future field gets
+      // destroyed with nobody able to explain where it went.
+      onStrip?.(field);
       continue;
     }
-    cleaned[field] = stripSecretShapedFields(nested);
+    cleaned[field] = stripSecretShapedFields(nested, onStrip);
   }
   return cleaned as unknown as T;
 }
@@ -330,7 +394,11 @@ function quarantineDamagedRegistry(dir: string | undefined, onWarn?: (message: s
  * Returns false rather than throwing — a registry that cannot be written must
  * not fail the init it was recording.
  */
-export function saveProjectRegistry(registry: ProjectRegistry, dir?: string): boolean {
+export function saveProjectRegistry(
+  registry: ProjectRegistry,
+  dir?: string,
+  onWarn?: (message: string) => void,
+): boolean {
   const file = projectRegistryPath(dir);
   // A pid is not unique: two processes sharing this directory across PID
   // namespaces (containers with a bind-mounted home) collide, and each can
@@ -344,6 +412,7 @@ export function saveProjectRegistry(registry: ProjectRegistry, dir?: string): bo
       // registration order.
       projects: stripSecretShapedFields(
         [...registry.projects].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+        (field) => onWarn?.(`project registry: dropped credential-shaped field "${field}"`),
       ),
     };
     const handle = openSync(temp, "wx", 0o600);
@@ -419,7 +488,7 @@ export function registerProject(
       if (options.displayName !== undefined) {
         existing.displayName = options.displayName;
       }
-      if (!saveProjectRegistry(registry, options.dir)) {
+      if (!saveProjectRegistry(registry, options.dir, options.onWarn)) {
         return { ok: false, reason: "write-failed", message: "could not write the project registry" };
       }
       return { ok: true, entry: existing, created: false };
@@ -434,7 +503,7 @@ export function registerProject(
       lastSeenAt: now,
     };
     registry.projects.push(entry);
-    if (!saveProjectRegistry(registry, options.dir)) {
+    if (!saveProjectRegistry(registry, options.dir, options.onWarn)) {
       return { ok: false, reason: "write-failed", message: "could not write the project registry" };
     }
     return { ok: true, entry, created: true };
@@ -457,15 +526,29 @@ export type ForgetOutcome = "removed" | "not-found" | "write-failed";
  * The outcome is typed rather than a boolean: reporting a failed write as "no
  * such id" tells the operator the project is gone when it is still registered.
  */
-export function forgetProject(projectId: string, dir?: string): ForgetOutcome {
+export function forgetProject(
+  projectId: string,
+  dir?: string,
+  onWarn?: (message: string) => void,
+): ForgetOutcome {
   const outcome = withRegistryLock(dir, (): ForgetOutcome => {
-    const registry = loadProjectRegistry(dir);
+    // Same treatment as registerProject: a writer that loads silently and then
+    // rewrites destroys every entry the loader dropped. Fixing that in one
+    // writer and not the other just moved the defect.
+    let damaged = false;
+    const registry = loadProjectRegistry(dir, (message) => {
+      damaged = true;
+      onWarn?.(message);
+    });
+    if (damaged) {
+      quarantineDamagedRegistry(dir, onWarn);
+    }
     const before = registry.projects.length;
     registry.projects = registry.projects.filter((entry) => entry.projectId !== projectId);
     if (registry.projects.length === before) {
       return "not-found";
     }
-    return saveProjectRegistry(registry, dir) ? "removed" : "write-failed";
+    return saveProjectRegistry(registry, dir, onWarn) ? "removed" : "write-failed";
   });
   return outcome ?? "write-failed";
 }
@@ -532,5 +615,18 @@ export function emitProjectsJson(entries: ProjectEntry[], warnings: string[] = [
  * rewrite the operator's terminal.
  */
 export function sanitizeForDisplay(value: string): string {
-  return value.replace(/[\\u0000-\\u001F\\u007F-\\u009F]/g, "");
+  // Written with String.fromCharCode ranges rather than an escape literal: the
+  // escaped form was introduced by a patch script that doubled the backslashes,
+  // producing a literal-character class that stripped digits and capitals and no
+  // control character at all. A range built from code points cannot be wrong in
+  // that way, and the tests below pin both halves of the behaviour.
+  let out = "";
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    const isControl = code <= 0x1f || (code >= 0x7f && code <= 0x9f);
+    if (!isControl) {
+      out += char;
+    }
+  }
+  return out;
 }

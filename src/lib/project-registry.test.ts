@@ -12,7 +12,9 @@ import {
   loadProjectRegistry,
   projectRegistryPath,
   registerProject,
+  sanitizeForDisplay,
   saveProjectRegistry,
+  stripSecretShapedFields,
 } from "./project-registry";
 
 let configDir = "";
@@ -151,6 +153,8 @@ describe("the registry holds addressing only", () => {
       "cookie",
       "bearer",
       "password",
+      "sessionKey",
+      "jwt",
     ]) {
       expect(hasSecretShapedField({ path: "/x", [field]: "v" })).toBe(true);
     }
@@ -335,6 +339,52 @@ describe("output is deterministic", () => {
     };
     expect(payload.schemaVersion).toBe(1);
     expect(payload.projects).toHaveLength(1);
+  });
+});
+
+describe("sanitizeForDisplay", () => {
+  // This function had NO tests, which is exactly why a patch script that doubled
+  // the backslashes shipped a regex stripping digits and capitals while letting
+  // every control character through.
+  test("strips control characters", () => {
+    expect(sanitizeForDisplay("my[31mproject")).toBe("my[31mproject");
+    expect(sanitizeForDisplay("bellhere")).toBe("bellhere");
+    expect(sanitizeForDisplay("line\nbreak")).toBe("linebreak");
+    expect(sanitizeForDisplay("delchar")).toBe("delchar");
+    expect(sanitizeForDisplay("c1char")).toBe("c1char");
+  });
+
+  test("leaves ordinary text completely untouched", () => {
+    // The broken version turned this into "roject-_".
+    expect(sanitizeForDisplay("Project-42_ABC")).toBe("Project-42_ABC");
+    expect(sanitizeForDisplay("/home/altsay/keryx-9")).toBe("/home/altsay/keryx-9");
+    expect(sanitizeForDisplay("проект-Ω")).toBe("проект-Ω");
+    expect(sanitizeForDisplay("")).toBe("");
+  });
+
+  test("a terminal-resetting sequence cannot survive", () => {
+    expect(sanitizeForDisplay("c")).toBe("c");
+  });
+});
+
+describe("credential-shaped field matching", () => {
+  test("matches whole words, not substrings", () => {
+    // A bare `includes` deleted authoredAt, sortKey, monkeyPatch and
+    // credibility — permanently and invisibly, on the next write.
+    // sortKey is the case that forced `key` to require a qualifier: it is
+    // indistinguishable from apiKey by the word alone.
+    for (const safe of ["authoredAt", "sortKey", "monkeyPatch", "credibility", "keyboardLayout", "keyword"]) {
+      expect(hasSecretShapedField({ [safe]: "v" })).toBe(false);
+    }
+    for (const unsafe of ["token", "apiKey", "api_key", "ACCESS_TOKEN", "refreshToken", "cookie"]) {
+      expect(hasSecretShapedField({ [unsafe]: "v" })).toBe(true);
+    }
+  });
+
+  test("a stripped field is named, not dropped in silence", () => {
+    const stripped: string[] = [];
+    stripSecretShapedFields({ path: "/x", token: "v" }, (field) => stripped.push(field));
+    expect(stripped).toEqual(["token"]);
   });
 });
 

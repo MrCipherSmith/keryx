@@ -23,7 +23,10 @@ export async function projectsCommand(args: string[] = []): Promise<void> {
     return;
   }
 
-  if (sub === undefined || sub === "list") {
+  // A leading flag means the default subcommand: `keryx projects --json`
+  // previously fell through to the unknown-subcommand branch and printed help
+  // with exit 1, which is not what a machine consumer that omits `list` expects.
+  if (sub === undefined || sub === "list" || sub.startsWith("-")) {
     runList(args.includes("--json"));
     return;
   }
@@ -108,7 +111,9 @@ function runForget(projectId: string | undefined): void {
   // The two failures are reported distinctly. Telling the operator "no such id"
   // when the removal merely failed to persist leaves them believing the project
   // is gone while it is still registered.
-  const outcome = forgetProject(projectId);
+  const outcome = forgetProject(projectId, undefined, (message) =>
+    console.log(`  ${style.yellow(symbols.bullet)} ${message}`),
+  );
   if (outcome === "not-found") {
     console.error(`  ${style.red(symbols.cross)} No registered project with id ${projectId}.`);
     process.exitCode = 1;
