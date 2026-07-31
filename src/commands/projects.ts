@@ -36,7 +36,9 @@ export async function projectsCommand(args: string[] = []): Promise<void> {
     // shortcut left the DOCUMENTED form open: `projects list --jsonn` still
     // printed human output with exit 0, which is the defect this check exists
     // for, on the form the help text tells people to use.
-    const unknown = args.filter((arg) => arg.startsWith("-") && arg !== "list" && !LIST_FLAGS.has(arg));
+    const unknown = args.filter(
+      (arg) => arg.startsWith("-") && !LIST_FLAGS.has(arg) && arg !== "--help" && arg !== "-h",
+    );
     if (unknown.length > 0) {
       console.error(`Unknown option: ${sanitizeForDisplay(unknown[0]!)}`);
       printHelp();
@@ -142,7 +144,7 @@ function runForget(projectId: string | undefined): void {
     process.exitCode = 1;
     return;
   }
-  console.log(`  ${style.green(symbols.ok)} Forgotten: ${projectId}`);
+  console.log(`  ${style.green(symbols.ok)} Forgotten: ${sanitizeForDisplay(projectId)}`);
 }
 
 function printHelp(): void {

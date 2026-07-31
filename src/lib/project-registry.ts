@@ -108,7 +108,7 @@ const UNAMBIGUOUS_SECRET_WORDS = ["token", "secret", "password", "passwd", "pass
  * by that word alone, and treating it as a secret deletes the first while
  * catching the second. So `key` counts only when qualified by one of these.
  */
-const KEY_QUALIFIERS = new Set(["api", "private", "secret", "access", "signing", "encryption", "session", "ssh", "gpg", "pgp"]);
+const KEY_QUALIFIERS = new Set(["api", "private", "secret", "access", "signing", "encryption", "session", "ssh", "gpg", "pgp", "account", "sa"]);
 
 /** Same resolution as the rest of the user-global config (auth.json, sandbox.json). */
 function configDir(dir?: string): string {
@@ -384,7 +384,10 @@ export function stripSecretShapedFields<T>(value: T, onStrip?: (field: string) =
   }
   const cleaned: Record<string, unknown> = {};
   for (const [field, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (isSecretShapedName(field)) {
+    // __proto__ is a real own property after JSON.parse, but assigning it
+    // invokes the prototype setter instead of creating an own key, so the value
+    // would vanish with no notice. Report it like any other dropped field.
+    if (field === "__proto__" || isSecretShapedName(field)) {
       // Named, not silent. Dropping data invisibly is how a future field gets
       // destroyed with nobody able to explain where it went.
       onStrip?.(field);
