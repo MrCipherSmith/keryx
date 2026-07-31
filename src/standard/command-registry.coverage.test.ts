@@ -128,6 +128,12 @@ describe("command registry coverage", () => {
 
   test("listDescriptors filters to a module without losing entries", () => {
     const core = listDescriptors("core").map((descriptor) => descriptor.command);
-    expect(core).toEqual(["modules status", "status"]);
+    expect(core).toEqual([
+      "modules status",
+      "projects forget",
+      "projects list",
+      "projects register",
+      "status",
+    ]);
   });
 });
