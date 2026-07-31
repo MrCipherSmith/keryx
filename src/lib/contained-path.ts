@@ -16,12 +16,39 @@
 //     `/home/u/proj`, even though its path string starts with it.
 
 import { realpath } from "node:fs/promises";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 export type ContainedPathResult =
   | { ok: true; path: string }
   | { ok: false; reason: "outside-project" | "not-found"; message: string };
+
+/**
+ * Walk up from `startDir` to the project root — the nearest ancestor holding a
+ * `.metaproject/` or a `.git/`.
+ *
+ * The boundary has to be the project, not the working directory. Rooted at
+ * `cwd`, `keryx security scan ../lib/x.ts` run from a subdirectory refuses a
+ * path that is plainly inside the project, and the boundary would shift with
+ * wherever the shell happens to be. That over-restriction is the same failure
+ * that forced containment off `agents monitor`.
+ *
+ * Falls back to `startDir` when neither marker is found, which keeps a bare
+ * directory contained to itself rather than silently widening.
+ */
+export function resolveProjectRoot(startDir: string): string {
+  let current = path.resolve(startDir);
+  for (;;) {
+    if (existsSync(path.join(current, ".metaproject")) || existsSync(path.join(current, ".git"))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return path.resolve(startDir);
+    }
+    current = parent;
+  }
+}
 
 /** True when `candidate` is `root` itself or sits beneath it. */
 function isInside(root: string, candidate: string): boolean {
@@ -29,9 +56,15 @@ function isInside(root: string, candidate: string): boolean {
     return true;
   }
   const relative = path.relative(root, candidate);
-  // `path.relative` gives a leading `..` for anything above the root, and an
-  // absolute result when the two are on different roots (Windows drives).
-  return relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative);
+  // `path.relative` gives a leading `..` SEGMENT for anything above the root,
+  // and an absolute result when the two are on different roots (Windows
+  // drives). The comparison is segment-wise on purpose: a plain
+  // `startsWith("..")` also matches an in-project file literally named
+  // `..hidden.ts`, refusing something that is inside the root.
+  if (relative.length === 0 || path.isAbsolute(relative)) {
+    return false;
+  }
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`);
 }
 
 /**

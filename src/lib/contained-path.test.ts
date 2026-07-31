@@ -9,7 +9,7 @@ import { mkdtemp, mkdir, writeFile, symlink, rm } from "node:fs/promises";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { resolveContainedPath, resolveContainedPathSync } from "./contained-path";
+import { resolveContainedPath, resolveContainedPathSync, resolveProjectRoot } from "./contained-path";
 
 let root = "";
 let outsideDir = "";
@@ -112,6 +112,32 @@ describe("resolveContainedPath", () => {
   test("accepts the project root itself", async () => {
     const result = await resolveContainedPath(root, ".");
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("names that merely look like traversals", () => {
+  test("accepts an in-project file whose name starts with two dots", async () => {
+    // A plain startsWith("..") check refuses this, and it is plainly inside the
+    // root. Over-restriction is a real cost: a caller who hits a false refusal
+    // works around containment instead of trusting it.
+    await writeFile(path.join(root, "..hidden.ts"), "export const x = 1;\n", "utf8");
+    const result = await resolveContainedPath(root, "..hidden.ts");
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("resolveProjectRoot", () => {
+  test("finds the root from a nested subdirectory", async () => {
+    // Rooted at cwd instead, `keryx security scan ../lib/x.ts` from a
+    // subdirectory refuses a path that is inside the project.
+    await mkdir(path.join(root, ".git"), { recursive: true });
+    expect(resolveProjectRoot(path.join(root, "src"))).toBe(root);
+  });
+
+  test("returns the start directory when no project marker exists", () => {
+    // Falls back to containing the directory to itself rather than widening
+    // silently to the filesystem root.
+    expect(resolveProjectRoot(outsideDir)).toBe(outsideDir);
   });
 });
 

@@ -638,16 +638,33 @@ export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | n
       const inlineValue = arg.includes("=");
 
       if (RG_SAFE_VALUE_FLAGS.has(name)) {
-        flags.push(arg);
-        if (!inlineValue) {
-          const value = rgArgs[index + 1];
-          if (value === undefined) {
-            return { ok: false, reason: `keryx ctx rg: ${name} needs a value.` };
-          }
-          flags.push(value);
+        if (inlineValue) {
+          flags.push(arg);
           index += 1;
+          continue;
         }
-        index += 1;
+        const value = rgArgs[index + 1];
+        if (value === undefined) {
+          return { ok: false, reason: `keryx ctx rg: ${name} needs a value.` };
+        }
+        // A dash-leading VALUE is refused, not forwarded. As a separate token it
+        // is left to ripgrep's parser to classify, and older clap-based builds
+        // treat a `--…` token following a pending option as a new option — which
+        // re-opens the execution vector the separator closes. Folding into
+        // `--flag=value` is not a general fix either, because short flags do not
+        // accept the `=` form. Refusing is parser-independent, and the inline
+        // form remains available for a genuine dash-leading value.
+        if (value.startsWith("-") && value !== "-") {
+          return {
+            ok: false,
+            reason:
+              `keryx ctx rg: the value for ${name} may not start with a dash (${value}). ` +
+              `Use the inline form instead, which cannot be re-parsed as an option: ${name}=${value}.`,
+          };
+        }
+        flags.push(arg);
+        flags.push(value);
+        index += 2;
         continue;
       }
 

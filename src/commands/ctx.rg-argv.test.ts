@@ -137,3 +137,42 @@ describe("buildRgCommand — existing behaviour is preserved", () => {
     expect(command[command.indexOf("--") + 1]).toBe("-");
   });
 });
+
+describe("buildRgCommand — a flag VALUE cannot become an option", () => {
+  test("refuses a dash-leading value for a value-taking flag", () => {
+    // As a separate token the value is left to ripgrep's parser, and older
+    // clap-based builds treat a `--…` token after a pending option as a NEW
+    // option — re-opening the execution vector the separator closes.
+    const result = buildRgCommand(["-g", "--pre=/tmp/pwn.sh", "needle"], null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("may not start with a dash");
+    }
+  });
+
+  test("refuses it for the long form too", () => {
+    const result = buildRgCommand(["--glob", "--pre=/tmp/pwn.sh", "needle"], null);
+    expect(result.ok).toBe(false);
+  });
+
+  test("points at the inline form, which is a single token and cannot be re-parsed", () => {
+    const result = buildRgCommand(["--glob", "-weird", "needle"], null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("--glob=-weird");
+    }
+  });
+
+  test("a lone dash is still an acceptable value (stdin convention)", () => {
+    const result = buildRgCommand(["--glob", "-", "needle"], null);
+    expect(result.ok).toBe(true);
+  });
+
+  test("an ordinary value is unaffected", () => {
+    const result = buildRgCommand(["--glob", "*.ts", "needle"], null);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.command).toContain("*.ts");
+    }
+  });
+});

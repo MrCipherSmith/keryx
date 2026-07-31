@@ -74,11 +74,11 @@ async function runSuggest(args: string[]): Promise<void> {
     findRelatedTests(cwd, target),
   ]);
   const { readFile } = await import("node:fs/promises");
-  const { resolveContainedPath } = await import("../lib/contained-path");
+  const { resolveContainedPath, resolveProjectRoot } = await import("../lib/contained-path");
   // Contain before opening. This file's contents are sent to a model provider,
   // so an uncontained path does not just read something local — it ships it off
   // the machine.
-  const contained = await resolveContainedPath(cwd, target);
+  const contained = await resolveContainedPath(resolveProjectRoot(cwd), target);
   if (!contained.ok) {
     console.error(contained.message);
     process.exitCode = 1;
