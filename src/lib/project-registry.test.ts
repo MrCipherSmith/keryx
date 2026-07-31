@@ -1,7 +1,7 @@
 // User-global project registry (flow 127 / roadmap R4a).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -229,6 +229,26 @@ describe("a vanished project is reported, not deleted", () => {
     registerProject(makeProject("alpha"), { dir: configDir });
     expect(forgetProject("00000000-0000-0000-0000-000000000000", configDir)).toBe("not-found");
     expect(loadProjectRegistry(configDir).projects).toHaveLength(1);
+  });
+
+  test("an unknown id against a DAMAGED registry destroys nothing", () => {
+    // This is the case the test above was named for and never reached. The
+    // quarantine added for a different finding renamed the live registry aside
+    // and then returned not-found without writing, so one mistyped id wiped
+    // every valid registration.
+    registerProject(makeProject("alpha"), { dir: configDir });
+    registerProject(makeProject("beta"), { dir: configDir });
+    const raw = JSON.parse(readFileSync(projectRegistryPath(configDir), "utf8")) as {
+      projects: unknown[];
+    };
+    raw.projects.push({ projectId: "malformed-no-other-fields" });
+    writeFileSync(projectRegistryPath(configDir), JSON.stringify(raw), "utf8");
+
+    expect(forgetProject("definitely-not-an-id", configDir)).toBe("not-found");
+
+    // The file is still there, and both real projects with it.
+    expect(existsSync(projectRegistryPath(configDir))).toBe(true);
+    expect(loadProjectRegistry(configDir).projects).toHaveLength(2);
   });
 });
 

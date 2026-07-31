@@ -90,14 +90,24 @@ const SECRET_WORDS = new Set([
   "apikey",
   "jwt",
   "signature",
+  "authorization",
+  "pat",
 ]);
+
+/**
+ * The subset safe to match INSIDE a single word, for concatenated acronyms like
+ * `APIToken` that never split. `auth` and `pat` are excluded: as substrings they
+ * would hit `authoredAt` and `path`, and `path` is a field this registry
+ * legitimately uses.
+ */
+const UNAMBIGUOUS_SECRET_WORDS = ["token", "secret", "password", "passwd", "passphrase", "credential", "cookie", "bearer", "apikey"];
 
 /**
  * `key` on its own is not a marker: `sortKey` and `apiKey` are indistinguishable
  * by that word alone, and treating it as a secret deletes the first while
  * catching the second. So `key` counts only when qualified by one of these.
  */
-const KEY_QUALIFIERS = new Set(["api", "private", "secret", "access", "signing", "encryption", "session"]);
+const KEY_QUALIFIERS = new Set(["api", "private", "secret", "access", "signing", "encryption", "session", "ssh", "gpg", "pgp"]);
 
 /** Same resolution as the rest of the user-global config (auth.json, sandbox.json). */
 function configDir(dir?: string): string {
@@ -157,7 +167,11 @@ function sleepSync(ms: number): void {
  * Returns `null` when the lock could not be taken, which callers surface as a
  * write failure rather than a throw.
  */
-function withRegistryLock<T>(dir: string | undefined, fn: () => T): T | null {
+function withRegistryLock<T>(
+  dir: string | undefined,
+  fn: () => T,
+  onWaiting?: (message: string) => void,
+): T | null {
   const lockPath = `${projectRegistryPath(dir)}.lock`;
   try {
     mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
@@ -171,8 +185,10 @@ function withRegistryLock<T>(dir: string | undefined, fn: () => T): T | null {
   // in while the second is still inside, which is the lost update the lock
   // exists to prevent.
   const nonce = randomUUID();
-  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  const started = Date.now();
+  const deadline = started + LOCK_TIMEOUT_MS;
   let handle: number | null = null;
+  let announced = false;
 
   while (handle === null) {
     // The deadline is checked FIRST, before the stale branch. Checking it only
@@ -184,7 +200,18 @@ function withRegistryLock<T>(dir: string | undefined, fn: () => T): T | null {
     }
     try {
       handle = openSync(lockPath, "wx", 0o600);
-      writeFileSync(handle, nonce, { encoding: "utf8" });
+      try {
+        writeFileSync(handle, nonce, { encoding: "utf8" });
+      } catch (cause) {
+        // The open succeeded but the nonce did not land. Leaving `handle` set
+        // would run the critical section holding a lock whose contents can never
+        // match, so the finally would decline to remove it and every other
+        // caller would wait out the stale window. Drop it and retry cleanly.
+        closeSync(handle);
+        handle = null;
+        rmSync(lockPath, { force: true });
+        throw cause;
+      }
     } catch {
       const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;
       if (age !== undefined && Date.now() - age > LOCK_STALE_MS) {
@@ -194,6 +221,13 @@ function withRegistryLock<T>(dir: string | undefined, fn: () => T): T | null {
           // Someone else broke it first, or we cannot remove it at all; either
           // way sleep and retry until the deadline rather than spinning.
         }
+      }
+      // A crashed holder costs the next caller the full stale window, and an
+      // unwritable config dir costs the whole timeout. Silence for that long
+      // reads as a hang, so say what is happening once.
+      if (!announced && Date.now() - started > 1_000) {
+        announced = true;
+        onWaiting?.("waiting for the project registry lock…");
       }
       sleepSync(15);
     }
@@ -281,13 +315,35 @@ function fieldWords(field: string): string[] {
  * write, permanently and invisibly.
  */
 function isSecretShapedName(field: string): boolean {
-  const words = fieldWords(field);
+  // Plurals count: `tokens` and `keys` are exactly as sensitive as the singular,
+  // and word-equality alone let them straight through.
+  const words = fieldWords(field).map((word) => (word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word));
+
   if (words.some((word) => SECRET_WORDS.has(word))) {
     return true;
   }
-  // `key` only in company: apiKey and privateKey are credentials, sortKey and
-  // keyboardLayout are not, and nothing in the word alone separates them.
-  return words.includes("key") && words.some((word) => KEY_QUALIFIERS.has(word));
+
+  // Concatenated acronyms never split into words: `APIToken`, `apitoken` and
+  // `sshKey` arrive as one token, so a secret word appearing INSIDE a single
+  // word still counts. This is only applied to the unambiguous words — `key` is
+  // handled separately below precisely because it is ambiguous.
+  if (words.some((word) => UNAMBIGUOUS_SECRET_WORDS.some((marker) => word.includes(marker)))) {
+    return true;
+  }
+
+  // A field named exactly `key` or `keys` announces nothing but itself, and this
+  // schema has no legitimate field by that name — treat it as a credential.
+  if (words.length === 1 && words[0] === "key") {
+    return true;
+  }
+
+  // In a compound, `key` only counts in company: apiKey and privateKey are
+  // credentials, sortKey and keyBindings are not, and the word alone does not
+  // separate them — the qualifier does.
+  return (
+    words.includes("key") &&
+    words.some((word) => KEY_QUALIFIERS.has(word) || [...KEY_QUALIFIERS].some((q) => word.includes(q)))
+  );
 }
 
 /** True when `value` carries a credential-shaped field at any depth. */
@@ -463,7 +519,11 @@ export function registerProject(
     return {
       ok: false,
       reason: "not-a-project",
-      message: `${absolute} is not an initialized keryx project (no .metaproject/ directory). Run keryx init there first.`,
+      // Sanitized HERE, in the message itself, rather than at each call site:
+      // the error path printed the caller-supplied path raw, so the terminal
+      // escape injection the display sanitizer exists to stop simply arrived by
+      // a different route. Fixing it per-caller would leave the next one open.
+      message: `${sanitizeForDisplay(absolute)} is not an initialized keryx project (no .metaproject/ directory). Run keryx init there first.`,
     };
   }
 
@@ -477,6 +537,9 @@ export function registerProject(
       damaged = true;
       options.onWarn?.(message);
     });
+    // Safe here because EVERY path below writes. If a future edit adds an early
+    // return, move this next to the save — a quarantine without a following
+    // write moves the live registry to a backup and leaves nothing in its place.
     if (damaged) {
       quarantineDamagedRegistry(options.dir, options.onWarn);
     }
@@ -507,7 +570,7 @@ export function registerProject(
       return { ok: false, reason: "write-failed", message: "could not write the project registry" };
     }
     return { ok: true, entry, created: true };
-  });
+  }, options.onWarn);
 
   return (
     outcome ?? {
@@ -533,23 +596,30 @@ export function forgetProject(
 ): ForgetOutcome {
   const outcome = withRegistryLock(dir, (): ForgetOutcome => {
     // Same treatment as registerProject: a writer that loads silently and then
-    // rewrites destroys every entry the loader dropped. Fixing that in one
-    // writer and not the other just moved the defect.
+    // rewrites destroys every entry the loader dropped.
+    //
+    // Quarantine happens on the WRITE path only. Renaming the file aside and
+    // then returning without writing — which is what an unknown id does — moved
+    // the live registry to a backup and left nothing in its place, so one
+    // mistyped id destroyed every valid registration.
     let damaged = false;
     const registry = loadProjectRegistry(dir, (message) => {
       damaged = true;
       onWarn?.(message);
     });
-    if (damaged) {
-      quarantineDamagedRegistry(dir, onWarn);
-    }
     const before = registry.projects.length;
     registry.projects = registry.projects.filter((entry) => entry.projectId !== projectId);
     if (registry.projects.length === before) {
+      // Nothing changed, so nothing is written and the file is left exactly as
+      // it was — damaged or not. An unknown id must not be able to alter the
+      // registry at all.
       return "not-found";
     }
+    if (damaged) {
+      quarantineDamagedRegistry(dir, onWarn);
+    }
     return saveProjectRegistry(registry, dir, onWarn) ? "removed" : "write-failed";
-  });
+  }, onWarn);
   return outcome ?? "write-failed";
 }
 

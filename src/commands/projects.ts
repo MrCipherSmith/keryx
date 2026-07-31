@@ -23,10 +23,15 @@ export async function projectsCommand(args: string[] = []): Promise<void> {
     return;
   }
 
-  // A leading flag means the default subcommand: `keryx projects --json`
-  // previously fell through to the unknown-subcommand branch and printed help
+  // A KNOWN leading flag means the default subcommand: `keryx projects --json`
+  // otherwise fell through to the unknown-subcommand branch and printed help
   // with exit 1, which is not what a machine consumer that omits `list` expects.
-  if (sub === undefined || sub === "list" || sub.startsWith("-")) {
+  //
+  // Only known flags, deliberately: accepting anything dash-leading made
+  // `projects --jsonn` print human output with exit 0, so a typo looked like
+  // success and produced unparseable stdout.
+  const LIST_FLAGS = new Set(["--json"]);
+  if (sub === undefined || sub === "list" || LIST_FLAGS.has(sub)) {
     runList(args.includes("--json"));
     return;
   }
