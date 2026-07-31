@@ -12,6 +12,7 @@ import {
   listProjects,
   projectRegistryPath,
   registerProject,
+  sanitizeForDisplay,
 } from "../lib/project-registry";
 import { helpOptions, helpTitle, helpUsage, note, statusLine, style, symbols } from "../lib/ui";
 
@@ -47,7 +48,10 @@ function runList(asJson: boolean): void {
   const entries = listProjects(undefined, (message) => warnings.push(message));
 
   if (asJson) {
-    console.log(emitProjectsJson(entries));
+    // Warnings travel in the payload: without them a machine consumer cannot
+    // tell a corrupt registry from an empty one — both would be an empty list
+    // with a success exit code.
+    console.log(emitProjectsJson(entries, warnings));
     return;
   }
 
@@ -66,7 +70,11 @@ function runList(asJson: boolean): void {
   for (const entry of entries) {
     // A missing project is shown, not hidden: the operator decides whether the
     // path is gone for good or merely not mounted right now.
-    statusLine(entry.displayName, entry.state === "active", entry.path);
+    //
+    // Both fields come from directory names, so they are stripped of control
+    // characters before printing — otherwise a directory name containing ANSI
+    // escapes rewrites the operator's terminal.
+    statusLine(sanitizeForDisplay(entry.displayName), entry.state === "active", sanitizeForDisplay(entry.path));
   }
   console.log("");
   console.log(`  registry: ${projectRegistryPath()}`);
@@ -78,15 +86,17 @@ function runRegister(target: string | undefined): void {
     process.exitCode = 1;
     return;
   }
-  const result = registerProject(target);
+  const result = registerProject(target, {
+    onWarn: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${message}`),
+  });
   if (!result.ok) {
     console.error(`  ${style.red(symbols.cross)} ${result.message}`);
     process.exitCode = 1;
     return;
   }
   const verb = result.created ? "registered" : "already registered (refreshed)";
-  console.log(`  ${style.green(symbols.ok)} ${result.entry.displayName} ${verb}`);
-  console.log(`    ${style.dim(result.entry.path)}`);
+  console.log(`  ${style.green(symbols.ok)} ${sanitizeForDisplay(result.entry.displayName)} ${verb}`);
+  console.log(`    ${style.dim(sanitizeForDisplay(result.entry.path))}`);
 }
 
 function runForget(projectId: string | undefined): void {
@@ -95,8 +105,19 @@ function runForget(projectId: string | undefined): void {
     process.exitCode = 1;
     return;
   }
-  if (!forgetProject(projectId)) {
+  // The two failures are reported distinctly. Telling the operator "no such id"
+  // when the removal merely failed to persist leaves them believing the project
+  // is gone while it is still registered.
+  const outcome = forgetProject(projectId);
+  if (outcome === "not-found") {
     console.error(`  ${style.red(symbols.cross)} No registered project with id ${projectId}.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (outcome === "write-failed") {
+    console.error(
+      `  ${style.red(symbols.cross)} ${projectId} is still registered: the registry could not be written.`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -125,7 +146,10 @@ function printHelp(): void {
  * failure is reported and init continues.
  */
 export function registerInitializedProject(projectRoot: string, log: (message: string) => void): void {
-  const result = registerProject(projectRoot, { displayName: path.basename(path.resolve(projectRoot)) });
+  const result = registerProject(projectRoot, {
+    displayName: path.basename(path.resolve(projectRoot)),
+    onWarn: (message) => log(`  ${style.yellow(symbols.bullet)} ${message}`),
+  });
   if (!result.ok) {
     log(`  ${style.yellow(symbols.bullet)} project registry: ${result.message}`);
     return;

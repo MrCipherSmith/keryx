@@ -76,6 +76,38 @@ describe("registration", () => {
     }
   });
 
+  test("the same project reached through a symlink is one entry, not two", () => {
+    // Lexical resolution is not identity: a symlinked path produced a second
+    // entry with a second projectId, which is what idempotency was meant to stop.
+    const root = makeProject("alpha");
+    const link = path.join(workspace, "alpha-link");
+    require("node:fs").symlinkSync(root, link);
+
+    const first = registerProject(root, { dir: configDir });
+    const second = registerProject(link, { dir: configDir });
+
+    expect(first.ok && second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.created).toBe(false);
+      expect(second.entry.projectId).toBe(first.entry.projectId);
+    }
+    expect(loadProjectRegistry(configDir).projects).toHaveLength(1);
+  });
+
+  test("refuses a .metaproject that is a file rather than a directory", () => {
+    // existsSync accepts a plain file, so a directory with a stray file named
+    // .metaproject registered and then reported active forever.
+    const fake = path.join(workspace, "fake");
+    mkdirSync(fake, { recursive: true });
+    writeFileSync(path.join(fake, ".metaproject"), "not a directory", "utf8");
+
+    const result = registerProject(fake, { dir: configDir });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("not-a-project");
+    }
+  });
+
   test("stores an absolute path even when given a relative one", () => {
     const root = makeProject("alpha");
     const previous = process.cwd();
@@ -106,10 +138,46 @@ describe("the registry holds addressing only", () => {
 
   test("the forbidden-field check actually detects one", () => {
     // Otherwise the assertion above passes because the check is broken, not
-    // because the data is clean.
-    expect(hasSecretShapedField({ path: "/x", token: "abc" })).toBe(true);
-    expect(hasSecretShapedField({ path: "/x", apiKey: "abc" })).toBe(true);
-    expect(hasSecretShapedField({ path: "/x" })).toBe(false);
+    // because the data is clean. The first version matched exact names,
+    // case-sensitively, at the top level only — so it missed every one of these.
+    for (const field of [
+      "token",
+      "apiKey",
+      "accessToken",
+      "refreshToken",
+      "API_KEY",
+      "apikey",
+      "privateKey",
+      "cookie",
+      "bearer",
+      "password",
+    ]) {
+      expect(hasSecretShapedField({ path: "/x", [field]: "v" })).toBe(true);
+    }
+    expect(hasSecretShapedField({ path: "/x", nested: { apiKey: "v" } })).toBe(true);
+    expect(hasSecretShapedField({ path: "/x", list: [{ token: "v" }] })).toBe(true);
+    expect(hasSecretShapedField({ path: "/x", displayName: "monkey" })).toBe(false);
+  });
+
+  test("a secret that reached the file by any route is stripped on the next write", () => {
+    // Enforcement, not documentation: hand-edited or injected credential-shaped
+    // data must not be faithfully re-serialized next to auth.json.
+    const root = makeProject("alpha");
+    registerProject(root, { dir: configDir });
+    const onDisk = JSON.parse(readFileSync(projectRegistryPath(configDir), "utf8")) as {
+      projects: Array<Record<string, unknown>>;
+    };
+    onDisk.projects[0]!.token = "ghp_NOT_A_REAL_VALUE";
+    onDisk.projects[0]!.nested = { apiKey: "also-not-real" };
+    writeFileSync(projectRegistryPath(configDir), JSON.stringify(onDisk), "utf8");
+
+    // Any write rewrites the whole file, so re-registering is enough.
+    registerProject(root, { dir: configDir });
+
+    const after = readFileSync(projectRegistryPath(configDir), "utf8");
+    expect(after).not.toContain("ghp_NOT_A_REAL_VALUE");
+    expect(after).not.toContain("also-not-real");
+    expect(hasSecretShapedField(JSON.parse(after))).toBe(false);
   });
 });
 
@@ -145,15 +213,17 @@ describe("a vanished project is reported, not deleted", () => {
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
-    expect(forgetProject(first.entry.projectId, configDir)).toBe(true);
+    expect(forgetProject(first.entry.projectId, configDir)).toBe("removed");
     const remaining = loadProjectRegistry(configDir).projects;
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.path).toBe(b);
   });
 
-  test("forgetting an unknown id changes nothing", () => {
+  test("forgetting an unknown id changes nothing and says so distinctly", () => {
+    // A boolean conflated this with a failed write, so the operator was told the
+    // project was gone while it was still registered.
     registerProject(makeProject("alpha"), { dir: configDir });
-    expect(forgetProject("00000000-0000-0000-0000-000000000000", configDir)).toBe(false);
+    expect(forgetProject("00000000-0000-0000-0000-000000000000", configDir)).toBe("not-found");
     expect(loadProjectRegistry(configDir).projects).toHaveLength(1);
   });
 });
@@ -181,13 +251,47 @@ describe("damage never breaks the caller", () => {
     expect(loadProjectRegistry(configDir).projects).toHaveLength(1);
   });
 
-  test("entries missing a path are dropped rather than poisoning the list", () => {
+  test("structurally invalid entries are dropped, with a warning naming the count", () => {
+    // A half-valid entry is worse than a missing one: without a projectId it can
+    // never be removed by `forget`, so it would be permanent.
+    const sound = {
+      projectId: "11111111-1111-1111-1111-111111111111",
+      path: "/tmp/ok",
+      displayName: "ok",
+      state: "active",
+      registeredAt: "2026-01-01T00:00:00.000Z",
+    };
     writeFileSync(
       projectRegistryPath(configDir),
-      JSON.stringify({ schemaVersion: 1, projects: [{ projectId: "x" }, { path: "/tmp/ok" }] }),
+      JSON.stringify({
+        schemaVersion: 1,
+        projects: [{ projectId: "no-path" }, { path: "/x", displayName: { evil: 1 } }, sound],
+      }),
       "utf8",
     );
-    expect(loadProjectRegistry(configDir).projects).toHaveLength(1);
+    const warnings: string[] = [];
+    const registry = loadProjectRegistry(configDir, (message) => warnings.push(message));
+    expect(registry.projects).toHaveLength(1);
+    expect(registry.projects[0]?.path).toBe("/tmp/ok");
+    expect(warnings.join(" ")).toContain("2 malformed");
+  });
+
+  test("a damaged registry is preserved, not silently overwritten", () => {
+    // Rewriting over corruption destroys whatever registrations were there. The
+    // operator gets a file to inspect instead of a registry that lost everything.
+    writeFileSync(projectRegistryPath(configDir), "{not json", "utf8");
+    const warnings: string[] = [];
+    const result = registerProject(makeProject("alpha"), {
+      dir: configDir,
+      onWarn: (message) => warnings.push(message),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(warnings.join(" ")).toContain("corrupt-");
+    const leftovers = require("node:fs")
+      .readdirSync(configDir)
+      .filter((name: string) => name.includes("corrupt-"));
+    expect(leftovers).toHaveLength(1);
   });
 
   test("an unwritable registry directory reports failure instead of throwing", () => {
@@ -235,18 +339,48 @@ describe("output is deterministic", () => {
 });
 
 describe("concurrent writes", () => {
-  test("parallel registrations lose no entry and leave no partial file", async () => {
-    // Two `keryx init` runs at once is ordinary. The write is atomic (temp file
-    // + rename), so a reader sees either the old file or the new one.
-    const roots = ["a", "b", "c", "d", "e"].map((name) => makeProject(name));
-    await Promise.all(roots.map((root) => Promise.resolve(registerProject(root, { dir: configDir }))));
+  test("genuinely parallel registrations lose no entry", () => {
+    // The first version of this test wrapped a SYNCHRONOUS call in
+    // Promise.resolve, so nothing ran concurrently, and asserted
+    // `length > 0` — a tautology that passed while the implementation
+    // reproducibly lost entries. Real subprocesses, exact count.
+    const roots = ["a", "b", "c", "d", "e", "f", "g", "h"].map((name) => makeProject(name));
+    const script = path.join(__dirname, "project-registry.ts");
 
-    const registry = loadProjectRegistry(configDir);
-    // Every write is a full rewrite, so a lost update is possible under true
-    // concurrency; what must never happen is a corrupt or partial file.
-    expect(registry.projects.length).toBeGreaterThan(0);
-    expect(() => JSON.parse(readFileSync(projectRegistryPath(configDir), "utf8"))).not.toThrow();
-  });
+    const children = roots.map((root) =>
+      Bun.spawn(
+        [
+          "bun",
+          "-e",
+          `const { registerProject } = await import(${JSON.stringify(script)});
+           const r = registerProject(${JSON.stringify(root)}, { dir: ${JSON.stringify(configDir)} });
+           if (!r.ok) { console.error(r.message); process.exit(1); }`,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      ),
+    );
+
+    return Promise.all(children.map((child) => child.exited)).then(() => {
+      const registry = loadProjectRegistry(configDir);
+      const registered = new Set(registry.projects.map((entry) => entry.path));
+      for (const root of roots) {
+        expect(registered.has(root)).toBe(true);
+      }
+      expect(registry.projects).toHaveLength(roots.length);
+      expect(() => JSON.parse(readFileSync(projectRegistryPath(configDir), "utf8"))).not.toThrow();
+    });
+  }, 60_000);
+
+  test("a stale lock does not wedge registration forever", () => {
+    // A process killed mid-write leaves the lock behind. Every later
+    // registration must not fail because of it.
+    writeFileSync(`${projectRegistryPath(configDir)}.lock`, "", "utf8");
+    const stale = new Date(Date.now() - 60_000);
+    require("node:fs").utimesSync(`${projectRegistryPath(configDir)}.lock`, stale, stale);
+
+    const result = registerProject(makeProject("alpha"), { dir: configDir });
+    expect(result.ok).toBe(true);
+  }, 30_000);
 
   test("saveProjectRegistry writes atomically, leaving no temp file behind", () => {
     const root = makeProject("alpha");
