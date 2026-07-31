@@ -462,3 +462,36 @@ describe("concurrent writes", () => {
     expect(leftovers).toEqual([]);
   });
 });
+
+describe("fixes that shipped without a guard", () => {
+  // Every one of these was mutation-checked against the FULL suite and reverted
+  // green — the escape guard is load-bearing but only for its own class, so
+  // three behavioural fixes rode along with no regression protection at all.
+
+  test("cloud service-account key names are credentials", () => {
+    for (const field of ["storageAccountKey", "serviceAccountKey", "GCP_SA_KEY", "sa_key"]) {
+      expect(hasSecretShapedField({ [field]: "v" })).toBe(true);
+    }
+    // The qualifiers must not swallow ordinary words containing them.
+    for (const field of ["accountName", "saved", "accountId"]) {
+      expect(hasSecretShapedField({ [field]: "v" })).toBe(false);
+    }
+  });
+
+  test("__proto__ is reported and does not replace the prototype", () => {
+    // Assigning `__proto__` invokes the prototype setter rather than creating an
+    // own key, so the value vanished with no notice and the cleaned object came
+    // back with a replaced prototype.
+    const parsed = JSON.parse('{"__proto__":{"polluted":1},"path":"/p","displayName":"d"}') as Record<
+      string,
+      unknown
+    >;
+    const stripped: string[] = [];
+    const cleaned = stripSecretShapedFields(parsed, (field) => stripped.push(field));
+
+    expect(stripped).toContain("__proto__");
+    expect(Object.getPrototypeOf(cleaned)).toBe(Object.prototype);
+    expect((cleaned as Record<string, unknown>).path).toBe("/p");
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});

@@ -13,7 +13,7 @@
 // that fails when a sanitizer is removed from a command-layer call site.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { projectsCommand } from "./projects";
@@ -227,4 +227,48 @@ describe("the guard itself can fail", () => {
     console.log(`x${ESC}y`);
     expect(offendingCharacters()).toEqual([ESC]);
   });
+});
+
+describe("help is reachable on every documented form", () => {
+  // Written BEFORE the fix, and confirmed failing: the round-6 `--help`
+  // exemption stopped the flag being REJECTED but routed it nowhere, so
+  // `projects list --help` printed the project list at exit 0 — a wrong exit
+  // code traded for wrong output.
+  const forms = [["--help"], ["-h"], ["help"], ["list", "--help"], ["list", "-h"]];
+
+  for (const form of forms) {
+    test(`projects ${form.join(" ")} prints usage`, async () => {
+      await projectsCommand(form);
+      expect(captured.join("\n")).toContain("Usage");
+      expect(process.exitCode ?? 0).toBe(0);
+    });
+  }
+});
+
+describe("the write-failed branch", () => {
+  test("forget reports a failed write distinctly, and sanitized", async () => {
+    // The last unguarded sanitizer site. It needs a registry that loads but
+    // cannot be rewritten, which an unwritable config directory produces.
+    const project = makeProject("delta");
+    await projectsCommand(["register", project]);
+
+    const onDisk = JSON.parse(readFileSync(fixtureRegistryPath(), "utf8")) as {
+      projects: Array<Record<string, unknown>>;
+    };
+    const hostileId = `wf${HOSTILE}id`;
+    onDisk.projects[0]!.projectId = hostileId;
+    writeFileSync(fixtureRegistryPath(), JSON.stringify(onDisk), "utf8");
+
+    const registryDir = path.dirname(fixtureRegistryPath());
+    chmodSync(registryDir, 0o500);
+    captured = [];
+    try {
+      await projectsCommand(["forget", hostileId]);
+    } finally {
+      chmodSync(registryDir, 0o700);
+    }
+
+    expect(captured.join("")).toContain("still registered");
+    expect(offendingCharacters()).toEqual([]);
+  }, 60_000);
 });

@@ -18,7 +18,12 @@ import { helpOptions, helpTitle, helpUsage, note, statusLine, style, symbols } f
 
 export async function projectsCommand(args: string[] = []): Promise<void> {
   const sub = args[0];
-  if (sub === "--help" || sub === "-h" || sub === "help") {
+  // Help is resolved against the WHOLE argv, before any branch. Exempting
+  // `--help` from the unknown-flag filter only stopped it being rejected and
+  // routed it nowhere, so `projects list --help` printed the project list at
+  // exit 0 — a wrong exit code traded for wrong output, on the form the help
+  // text itself recommends.
+  if (args.includes("--help") || args.includes("-h") || sub === "help") {
     printHelp();
     return;
   }
@@ -36,9 +41,8 @@ export async function projectsCommand(args: string[] = []): Promise<void> {
     // shortcut left the DOCUMENTED form open: `projects list --jsonn` still
     // printed human output with exit 0, which is the defect this check exists
     // for, on the form the help text tells people to use.
-    const unknown = args.filter(
-      (arg) => arg.startsWith("-") && !LIST_FLAGS.has(arg) && arg !== "--help" && arg !== "-h",
-    );
+    // No --help exemption needed: help is resolved above, on the whole argv.
+    const unknown = args.filter((arg) => arg.startsWith("-") && !LIST_FLAGS.has(arg));
     if (unknown.length > 0) {
       console.error(`Unknown option: ${sanitizeForDisplay(unknown[0]!)}`);
       printHelp();
