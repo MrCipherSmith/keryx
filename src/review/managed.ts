@@ -288,7 +288,7 @@ function normalizeFindings(
   const findings: NormalizedReviewFinding[] = [];
   const lines = report.split("\n");
   for (const [index, line] of lines.entries()) {
-    const match = line.match(/\b(F-\d{3,})\b[:\]\s-]*(.*)/i);
+    const match = line.match(FINDING_HEADING);
     if (!match?.[1]) {
       continue;
     }
@@ -312,11 +312,23 @@ function normalizeFindings(
   return findings;
 }
 
+/**
+ * A line that OPENS a finding, as opposed to one that mentions an id in prose.
+ *
+ * The id must lead the line, after optional markdown heading or list markers and
+ * an optional bracket. Matching a bare `F-\d{3,}` anywhere counted every
+ * cross-reference as a new finding AND truncated the referring finding's body at
+ * that line — so a finding that said "this is the root cause of F-001" lost
+ * everything below, including its own `class_scope`, and was then refused for
+ * not having one. Found by ingesting a real report, not by reading this.
+ */
+const FINDING_HEADING = /^\s*(?:#{1,6}\s*)?(?:[-*+]\s*)?\[?\s*(F-\d{3,})\b\]?[:\s-]*(.*)$/i;
+
 /** The lines of one finding: from its heading to the next finding or the end. */
 function findingBlock(lines: string[], headingIndex: number): string {
   const out: string[] = [];
   for (let i = headingIndex + 1; i < lines.length; i += 1) {
-    if (/\bF-\d{3,}\b/i.test(lines[i] ?? "")) {
+    if (FINDING_HEADING.test(lines[i] ?? "")) {
       break;
     }
     out.push(lines[i] ?? "");

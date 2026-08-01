@@ -279,6 +279,44 @@ test("ingest accepts a minor or info without class_scope — enumerating every l
   }
 });
 
+test("a finding that cross-references another id keeps its own body", async () => {
+  // Found by ingesting a real round-4 report: F-010's text said "this is the
+  // root cause of F-001", which was counted as a new finding AND truncated
+  // F-010's block at that line — so its class_scope, written below, was invisible
+  // and the guard refused a finding that did have one.
+  await fresh();
+  const reportPath = path.join(ROOT, "review.md");
+  await writeFile(
+    reportPath,
+    [
+      "### [F-010] Nothing structurally guards readers",
+      "- **Severity**: major",
+      "- **Problem**: this is the root cause of F-001, not a separate issue.",
+      "- **class_scope**:",
+      "  - sites: [\"config-dir.readers.test.ts\", \"config-dir.writers.test.ts\"]",
+      "  - enumeration_method: \"added a probe reader and ran both guards; neither fired\"",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId: "2026-07-09-cross-reference",
+    target: { kind: "report", ref: "review.md" },
+    reportPath: "review.md",
+    now: new Date("2026-07-09T11:00:00Z"),
+  });
+
+  const findings = JSON.parse(
+    await readFile(path.join(ROOT, result.path, "findings.json"), "utf8"),
+  ) as Array<{ id: string; class_scope_present?: boolean }>;
+  // One finding, not two: the prose mention of F-001 is not a heading.
+  expect(findings.map((f) => f.id)).toEqual(["F-010"]);
+  expect(findings[0]?.class_scope_present).toBe(true);
+});
+
 test("a declared severity beats a severity word appearing in the prose", async () => {
   // Found by running this on a real review report: a `minor` finding whose text
   // discussed blockers was recorded as a blocker and tripped the class-scope
