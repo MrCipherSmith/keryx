@@ -58,3 +58,4 @@ probe asserts the typed refusal, not merely that the process survived.
 - 2026-08-01T19:37:37.011Z - task-done: T2: Implement per plan
 - 2026-08-01T19:37:37.092Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-01T19:37:37.176Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-01T19:38:36.157Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/219

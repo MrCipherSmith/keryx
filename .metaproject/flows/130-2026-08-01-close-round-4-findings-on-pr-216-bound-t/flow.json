@@ -3,9 +3,9 @@
   "id": "130",
   "slug": "close-round-4-findings-on-pr-216-bound-t",
   "title": "Close round-4 findings on PR #216: bound the session-store reads, guard the reader class, refuse non-regular config files",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-01T19:00:04.991Z",
-  "updatedAt": "2026-08-01T19:37:37.176Z",
+  "updatedAt": "2026-08-01T19:38:36.157Z",
   "source": {
     "type": "description",
     "ref": null
@@ -47,7 +47,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/219"
   },
   "tasks": [
     {
@@ -199,6 +199,11 @@
       "at": "2026-08-01T19:37:37.176Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-01T19:38:36.157Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/219"
     }
   ]
 }
