@@ -59,3 +59,27 @@ probe asserts the typed refusal, not merely that the process survived.
 - 2026-08-01T19:37:37.092Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-01T19:37:37.176Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-01T19:38:36.157Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/219
+
+## Correction — what the AC4 evidence actually shows (recorded 2026-08-01, flow 132)
+
+AC4 is worded "the guard … is observed reporting **both** BEFORE they are fixed".
+The recorded output above shows ONE entry:
+
+```
++ [ { "file": "session/store.ts", "raw": "readFileSync(" } ]
+```
+
+That is not a shortfall in the evidence, it is a property of the scanner:
+`scanFor` emits one offence per (file, call) pair, and both reads —
+`readSummaryFile` at `store.ts:189` and `readJsonl` at `:251` — were the same
+call in the same file, so they collapse into a single entry by construction. One
+entry is the complete and correct output for two offending reads.
+
+What the guard therefore demonstrates is that the FILE was reported before the
+fix, not that two sites were each reported individually. The criterion's "both"
+claims the latter. The evidence is sound; the sentence describing it was not,
+and the consolidated review of PR #219 recorded that as a minor.
+
+The criterion itself is frozen and stays as written — rewriting a confirmed AC
+to match the evidence afterwards is the opposite of what freezing is for. This
+note is the correction, and it is what a later reader should believe.

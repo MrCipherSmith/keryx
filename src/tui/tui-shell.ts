@@ -1459,6 +1459,15 @@ export async function launchTuiAgentShell(opts: {
           model: currentSel.model,
         });
         applyOpened(opened);
+        if (opened.archiveDegraded !== undefined) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `sessdeg${uid++}`,
+              content: otui.t`${otui.yellow(`archive unavailable — resumed from the active context (${opened.archiveDegraded})`)}`,
+              marginTop: 1,
+            }),
+          );
+        }
         if (opened.resumed) {
           transcript.add(
             new otui.TextRenderable(r, {
@@ -1559,15 +1568,31 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.("Session not found in this project.\n");
         return;
       }
-      applyOpened(
-        openSession({
+      // Guarded, and deliberately NOT by falling back to a new session the way
+      // the startup path does. The operator asked to resume a specific session;
+      // losing the live one as a side effect of that request would be a second
+      // failure on top of the first. Unguarded, the throw escaped an async
+      // handler with no rejection boundary.
+      let opened: ReturnType<typeof openSession>;
+      try {
+        opened = openSession({
           cwd: sessionCwd,
           resumeId: found.id,
           provider: currentSel.provider,
           model: currentSel.model,
-        }),
-      );
+        });
+      } catch (cause) {
+        io.onSystem?.(
+          `Could not resume ${shortSessionId(found.id)}: ${cause instanceof Error ? cause.message : String(cause)}\n` +
+            `Staying in the current session.\n`,
+        );
+        return;
+      }
+      applyOpened(opened);
       paintSessionHeader();
+      if (opened.archiveDegraded !== undefined) {
+        io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
+      }
       io.onSystem?.(
         `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
       );

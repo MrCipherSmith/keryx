@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 2,
+  "id": "132",
+  "slug": "fix-round-pr219",
+  "title": "Fix round PR #219 (flow 130): AC8 subset extractor, session-resume regression, ingest parser phantom headings",
+  "status": "in-progress",
+  "createdAt": "2026-08-01T22:38:26.504Z",
+  "updatedAt": "2026-08-01T23:03:02.303Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:77835692eb47ef9156a718d586e8bd66e738557d12e664822bf890085ba010d6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "F-014c: source-level guard over the caller class",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "F-013a: widen the AC8 extractor to the whole instruction class",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "F-013b: cover the refusal-by-design instruction with its own test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Correct flow 130 journal claim about the readers guard evidence",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify: focused tests, full suite, typecheck, lint, health",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Self-review the diff against the three findings; draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T22:38:26.504Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T22:43:59.195Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T22:43:59.405Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T22:44:03.754Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T22:48:46.819Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T23:00:14.702Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T23:00:14.794Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-01T23:00:21.999Z",
+      "event": "task-added",
+      "detail": "T5: F-014c: source-level guard over the caller class"
+    },
+    {
+      "at": "2026-08-01T23:00:22.085Z",
+      "event": "task-added",
+      "detail": "T6: F-013a: widen the AC8 extractor to the whole instruction class"
+    },
+    {
+      "at": "2026-08-01T23:00:22.170Z",
+      "event": "task-added",
+      "detail": "T7: F-013b: cover the refusal-by-design instruction with its own test"
+    },
+    {
+      "at": "2026-08-01T23:00:22.258Z",
+      "event": "task-added",
+      "detail": "T8: Correct flow 130 journal claim about the readers guard evidence"
+    },
+    {
+      "at": "2026-08-01T23:00:22.347Z",
+      "event": "task-added",
+      "detail": "T9: Verify: focused tests, full suite, typecheck, lint, health"
+    },
+    {
+      "at": "2026-08-01T23:00:22.432Z",
+      "event": "task-added",
+      "detail": "T10: Self-review the diff against the three findings; draft PR"
+    },
+    {
+      "at": "2026-08-01T23:00:27.049Z",
+      "event": "task-done",
+      "detail": "T5: F-014c: source-level guard over the caller class"
+    },
+    {
+      "at": "2026-08-01T23:00:27.135Z",
+      "event": "task-done",
+      "detail": "T6: F-013a: widen the AC8 extractor to the whole instruction class"
+    },
+    {
+      "at": "2026-08-01T23:00:27.220Z",
+      "event": "task-done",
+      "detail": "T7: F-013b: cover the refusal-by-design instruction with its own test"
+    },
+    {
+      "at": "2026-08-01T23:01:56.825Z",
+      "event": "task-done",
+      "detail": "T8: Correct flow 130 journal claim about the readers guard evidence"
+    },
+    {
+      "at": "2026-08-01T23:03:02.303Z",
+      "event": "task-done",
+      "detail": "T9: Verify: focused tests, full suite, typecheck, lint, health"
+    }
+  ]
+}

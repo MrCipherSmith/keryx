@@ -154,14 +154,25 @@ function plantFifo(file: string): boolean {
   return Bun.spawnSync(["mkfifo", file]).exitCode === 0;
 }
 
-/** Run one reader in its own process. Returns the exit code and its output. */
-async function runReader(call: string): Promise<{ exit: number; out: string }> {
+/**
+ * Run one reader in its own process. Returns the exit code and its output.
+ *
+ * `SRC` and `DIR` are substituted as plain substrings, so a probe must not
+ * contain either token inside a longer identifier — `KERYX_DATA_DIR` written
+ * literally becomes `KERYX_DATA_"/tmp/…"` and the probe fails to parse. Pass
+ * environment through `env` instead of writing it into the source.
+ */
+async function runReader(call: string, env?: Record<string, string>): Promise<{ exit: number; out: string }> {
   const source = call
     .replaceAll("SRC", path.join(import.meta.dir, ".."))
     .replaceAll("DIR", JSON.stringify(configDir));
   const script = path.join(base, "probe.ts");
   await Bun.write(script, `${source}\nconsole.log("survived");\n`);
-  const proc = Bun.spawn(["bun", script], { stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["bun", script], {
+    stdout: "pipe",
+    stderr: "pipe",
+    ...(env !== undefined ? { env: { ...process.env, ...env } } : {}),
+  });
   const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   // Read from the process, never through a pipe: `process.exitCode = undefined`
   // does not reset in Bun and a piped read has produced a false green here.
@@ -288,6 +299,119 @@ describe("the session store, which was outside the list above until flow 130", (
 
     expect({ what: "loadContext", exit }).toEqual({ what: "loadContext", exit: 0 });
     expect(out).toContain(`MESSAGES:${rows}`);
+  }, 60_000);
+
+  test("an unreadable ARCHIVE does not abort a resume whose context is readable", async () => {
+    // F-014 of the consolidated review. `loadArchive` read `archive.jsonl`
+    // before its fallback, so the typed throw added for the silent-empty
+    // problem turned into a different silent loss: every caller answers that
+    // throw by starting a brand new session, and `archive.jsonl` is the file
+    // most likely to reach the bound because it is the one compaction never
+    // shortens. The longest conversations became the unresumable ones.
+    const { project, dir } = sessionFiles();
+    mkdirSync(dir, { recursive: true });
+    const line = JSON.stringify({ role: "user", content: "still here", ts: "t", kind: "message" });
+    writeFileSync(path.join(dir, "context.jsonl"), `${line}\n${line}\n`, "utf8");
+    plantSparse(path.join(dir, "archive.jsonl"), 3 * 1024 * 1024 * 1024);
+
+    const { exit, out } = await runReader(
+      `const { loadArchive } = await import("SRC/session/store.ts");
+       const reasons = [];
+       const messages = loadArchive(${JSON.stringify(project)}, ${JSON.stringify(SESSION_ID)}, DIR, (e) => reasons.push(e.reason));
+       console.log("MESSAGES:" + messages.length);
+       console.log("DEGRADED:" + reasons.join(","));`,
+    );
+
+    expect({ what: "loadArchive", exit }).toEqual({ what: "loadArchive", exit: 0 });
+    // The context, not a throw and not an empty list.
+    expect(out).toContain("MESSAGES:2");
+    // And the caller was TOLD. Falling back silently would make a degraded
+    // resume indistinguishable from a session that never had an archive, which
+    // is the same lie the typed throw was added to stop.
+    expect(out).toContain("DEGRADED:too-large");
+  }, 60_000);
+
+  test("openSession resumes such a session and reports the degradation", async () => {
+    // The behavioural half at the level a caller actually uses. `loadArchive`
+    // returning the context is worth nothing if `openSession` still throws.
+    const { project, dir } = sessionFiles();
+    mkdirSync(dir, { recursive: true });
+    const line = JSON.stringify({ role: "user", content: "still here", ts: "t", kind: "message" });
+    writeFileSync(path.join(dir, "context.jsonl"), `${line}\n`, "utf8");
+    writeFileSync(
+      path.join(dir, "summary.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: SESSION_ID,
+        projectKey: "k",
+        projectPath: project,
+        title: "resumable",
+        createdAt: "t",
+        updatedAt: "t",
+        messageCount: 1,
+        archiveMessageCount: 1,
+        compactCount: 0,
+      }),
+      "utf8",
+    );
+    plantSparse(path.join(dir, "archive.jsonl"), 3 * 1024 * 1024 * 1024);
+
+    const { exit, out } = await runReader(
+      `const { openSession } = await import("SRC/session/store.ts");
+       const opened = openSession({ cwd: ${JSON.stringify(project)}, resumeId: ${JSON.stringify(SESSION_ID)}, dataDir: DIR });
+       console.log("RESUMED:" + opened.resumed + ":" + opened.history.length);
+       console.log("REPORTED:" + (opened.archiveDegraded ?? "nothing"));`,
+    );
+
+    expect({ what: "openSession", exit }).toEqual({ what: "openSession", exit: 0 });
+    expect(out).toContain("RESUMED:true:1");
+    expect(out).toContain("REPORTED:session transcript");
+    expect(out).toContain("too-large");
+  }, 60_000);
+
+  test("`keryx sessions export` states the file and the reason instead of a stack trace", async () => {
+    // The second of the two unguarded callers. Unguarded, the typed throw
+    // reached `main().catch` and printed a stack carrying an absolute
+    // home-directory path — for a condition the operator can act on if simply
+    // told which file and why.
+    const { project, dir } = sessionFiles();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      path.join(dir, "summary.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: SESSION_ID,
+        projectKey: "k",
+        projectPath: project,
+        title: "unreadable",
+        createdAt: "t",
+        updatedAt: "t",
+        messageCount: 1,
+        archiveMessageCount: 1,
+        compactCount: 0,
+      }),
+      "utf8",
+    );
+    plantSparse(path.join(dir, "context.jsonl"), 3 * 1024 * 1024 * 1024);
+
+    const { exit, out } = await runReader(
+      `process.chdir(${JSON.stringify(project)});
+       const { sessionsCommand } = await import("SRC/commands/sessions.ts");
+       await sessionsCommand(["export", ${JSON.stringify(SESSION_ID)}]);
+       console.log("EXITCODE:" + (process.exitCode ?? 0));`,
+      { KERYX_DATA_DIR: configDir },
+    );
+
+    // Exit 1 through the real process, not merely `process.exitCode` read back
+    // in-process — Bun does not reset that between runs and a piped read has
+    // produced a false green in this file before.
+    expect({ what: "sessions export", exit }).toEqual({ what: "sessions export", exit: 1 });
+    expect(out).toContain("EXITCODE:1");
+    expect(out).toContain("could not be read (too-large)");
+    // A refusal, not a crash: no stack frame, and nothing about this file's
+    // real location on the machine that ran it.
+    expect(out).not.toContain("at loadContext");
+    expect(out).not.toContain("Bun v");
   }, 60_000);
 
   test("a FIFO in place of a transcript is refused, not blocked on", async () => {
