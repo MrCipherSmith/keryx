@@ -1,6 +1,6 @@
 # A fix round needs its own review: three consecutive rounds each introduced a blocker
 
-Version: 0.1.0
+Version: 0.2.0
 Type: lesson
 Status: draft
 Confidence: high
@@ -44,6 +44,40 @@ Three failure modes, one root cause each time:
   an `assertNoSecrets` that was never written, and the real check was
   exact-name, case-sensitive, top-level and called nowhere outside tests.
 
+## It recurred on the next flow, and one remedy did work
+
+Flow 128 (PR #216, `keryx serve`) ran three review rounds after the same lesson
+had been written and read. Rounds 1 and 2 each shipped a defect inside the fix
+they were named for, and both were the *same* failure mode as above — the fix
+applied where the finding pointed rather than everywhere the class lived:
+
+- Round 1 was told the shared config directory was left group-writable. It
+  tightened **one writer of five**, so on any install that never ran
+  `keryx serve token issue` the directory stayed 0775 and `auth.json` — plaintext
+  provider API keys — stayed replaceable by any member of the operator's group.
+- Round 2 was told an error message instructed the operator to run a command
+  that would destroy their configuration. It corrected **one message of four**
+  — and the correction (making `config init` refuse to clobber) silently broke
+  the other three, none of which anyone looked for. Its second attempt then
+  added `--force` to make an instruction work again, which made it succeed *by*
+  resetting bind, port and profile: the exact damage the round was raised over.
+- Round 3 also found a comment claiming enforcement no code performs, in code
+  written one round after this file named that failure.
+
+What broke the pattern was not more care. It was changing the SHAPE of the
+guard, from per-site to per-class:
+
+- `config-dir.permissions.test.ts` drives **every** writer of the shared
+  directory under `umask 002` against an already-widened directory. Tightening
+  four writers of five leaves it red.
+- `serve.recovery.test.ts` enumerates **every** refusal state the CLI can reach
+  with a configuration on disk, and executes the instruction each one prints.
+  Fixing three messages of four leaves it red.
+
+Neither could pass while a sibling was broken, which is the property a
+per-site test does not have. Round 3's fixes were mutation-checked before being
+claimed and introduced no new defect.
+
 ## How to apply
 
 - Write the failing test **before** the fix, and confirm it fails for the stated
@@ -52,7 +86,17 @@ Three failure modes, one root cause each time:
   This caught the decorative coverage guard in flow 087 and would have caught
   all three rounds here.
 - When a finding names one call site, grep the class. Ask "where else does this
-  shape occur" before declaring the fix complete.
+  shape occur" before declaring the fix complete. Then go further and make the
+  TEST the class: one guard that enumerates every member and fails while any one
+  of them is wrong. "I checked the others" is a claim; a guard over the whole set
+  is a measurement, and it is the only thing that stopped this recurring.
+- Ask what the fix itself breaks. A guard that refuses an operation makes every
+  instruction that recommends that operation wrong, and those instructions live
+  somewhere else. Grep for what NAMES the thing you just changed, not only for
+  what resembles it.
+- Never make a broken instruction work by adding a destructive flag to it. If
+  following the instruction now costs the operator their configuration, the
+  instruction is still wrong.
 - Fix at the source, not the call site, when the value is untrusted — sanitizing
   per-caller leaves the next caller open.
 - Never let a comment describe enforcement that no code performs. If the
@@ -65,16 +109,18 @@ Three failure modes, one root cause each time:
 
 ## Provenance
 
-- Source: review rounds on PR #215 (flow 127)
+- Source: review rounds on PR #215 (flow 127) and PR #216 (flow 128)
 - Link: https://github.com/MrCipherSmith/keryx/pull/215
+- Link: https://github.com/MrCipherSmith/keryx/pull/216
 - Created: 2026-07-31
-- Updated: 2026-07-31
+- Updated: 2026-08-01
 
 ## Related Scopes
 
 - Module: core
 - Entity: project-registry
-- Files: src/lib/project-registry.ts, src/commands/projects.ts
+- Files: src/lib/project-registry.ts, src/commands/projects.ts, src/lib/config-dir.ts, src/commands/serve.ts
+- Guards: src/lib/config-dir.permissions.test.ts, src/commands/serve.recovery.test.ts
 - Skills: review-logic, review-security-code, flow-orchestrator
 
 ## Tags
@@ -84,3 +130,6 @@ review, testing, mutation-testing, data-loss, process
 ## Changelog
 
 - 0.1.0 - Initial version.
+- 0.2.0 - Recurred on flow 128 (PR #216) with the same root cause. Records what
+  actually broke the pattern: a guard shaped per-class rather than per-site, so
+  fixing four members of five leaves it red.
