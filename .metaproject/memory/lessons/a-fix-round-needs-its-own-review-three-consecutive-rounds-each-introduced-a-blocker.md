@@ -1,8 +1,8 @@
 # A fix round needs its own review: three consecutive rounds each introduced a blocker
 
-Version: 0.2.0
+Version: 0.3.0
 Type: lesson
-Status: draft
+Status: accepted
 Confidence: high
 
 ## Summary
@@ -133,3 +133,14 @@ review, testing, mutation-testing, data-loss, process
 - 0.2.0 - Recurred on flow 128 (PR #216) with the same root cause. Records what
   actually broke the pattern: a guard shaped per-class rather than per-site, so
   fixing four members of five leaves it red.
+- 0.3.0 - Promoted `draft` -> `accepted` (flow 129). Two flows, eleven rounds and
+  two independent recurrences are enough evidence; and the status now has a
+  mechanical consequence, because the review pipeline inlines memory filtered to
+  `--status accepted`. Left as a draft, the one lesson naming this exact failure
+  would have been excluded by the very mechanism built to surface it.
+  Round 4 on PR #216 confirmed the pattern a fourth time and located why it kept
+  recurring: nothing in the review pipeline read this file. Reviewer input
+  carried no prior findings, no memory search ran, and eleven rounds produced no
+  managed-review package to diff against. Flow 129 makes `class_scope` a schema
+  requirement for blocker and major findings, makes `prior_findings` and
+  `metaproject` required on a fix round, and makes a fix round record itself.
