@@ -72,6 +72,62 @@ function deployment(): { address: string; port: number; ack: boolean | undefined
 const CUSTOM = ["--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened", "--acknowledge-non-loopback"];
 const CUSTOM_DEPLOYMENT = { address: "10.0.0.5", port: 8443, ack: true, profile: "hardened" };
 
+/**
+ * Every `keryx serve …` span in the transcript, in the order printed.
+ *
+ * Backticks are NOT required. An earlier version required them, and a
+ * mutation drifted the one unbackticked instruction — the non-loopback note
+ * in `runServe` — to a command that exits 1 with nothing going red. Every
+ * site is backticked now, and the extractor no longer depends on that.
+ *
+ * NOTHING is substituted. An earlier version rewrote `<addr>` into a real
+ * address before executing, so for the one instruction that carried a
+ * placeholder this suite proved a command it had written itself rather than
+ * the one the operator is handed. Both sites now print the configured
+ * address, and `no executed instruction still carries a placeholder` below
+ * fails if a placeholder ever comes back into an executable instruction.
+ *
+ * The disposition is derived from the SPAN, not from a list of commands
+ * this file happens to know about — a list is how the `token` forms stayed
+ * outside the class for a whole round:
+ *
+ *   `usageForm`        carries `<`, `[` or `|`; documentation, not a command
+ *   `startsAListener`  no subcommand, only flags; covered by its own test
+ *   `runnable`         everything else; executed verbatim
+ */
+type Disposition = "runnable" | "usageForm" | "startsAListener";
+interface Instruction {
+  command: string;
+  argv: string[];
+  disposition: Disposition;
+}
+
+function instructions(transcript: string): Instruction[] {
+  const out: Instruction[] = [];
+  // Two alternatives, and the order matters. A BACKTICKED span runs to its
+  // closing backtick and may contain anything, including the dots of an
+  // IPv4 address; an UNBACKTICKED one has to stop at sentence punctuation,
+  // because nothing else marks where it ends.
+  //
+  // One terminator set for both truncated `--bind 10.0.0.5` to `--bind 10`
+  // and executed that instead — silently, because "10" is an address the
+  // setter accepts. The guard whose whole purpose is verbatim execution was
+  // rewriting the one instruction that carries an address.
+  const pattern = /`(keryx serve[^`\n]*)`|(keryx serve(?:\s+[^`\n.;]*)?)/g;
+  for (const match of transcript.matchAll(pattern)) {
+    const command = (match[1] ?? match[2]!).trim();
+    // Drop the leading `keryx serve` — `run()` supplies both.
+    const argv = command.split(/\s+/).slice(2);
+    const disposition: Disposition = /[<[|]/.test(command)
+      ? "usageForm"
+      : argv.length === 0 || argv[0]!.startsWith("-")
+        ? "startsAListener"
+        : "runnable";
+    out.push({ command, argv, disposition });
+  }
+  return out;
+}
+
 beforeEach(() => {
   xdgRoot = mkdtempSync(path.join(tmpdir(), "keryx-serve-recovery-"));
   configDir = path.join(xdgRoot, "keryx");
@@ -405,15 +461,23 @@ describe("the rotate-failure recovery instruction", () => {
     // never enumerated.
     //
     // So: enumerate every state the configuration can be in, run both `keryx
-    // serve` and `keryx serve status`, extract every backticked `keryx serve
-    // config …` command from the output, and RUN IT. Exit 0 or the guard fails.
+    // serve` and `keryx serve status`, extract every `keryx serve …` command
+    // from the output, and RUN IT. Exit 0 or the guard fails.
     //
-    // Scope, stated rather than implied: only `config` instructions are
-    // executed. `keryx serve --acknowledge-non-loopback` is a "try again after
-    // fixing the other half" instruction and legitimately still refuses, and
-    // `keryx serve token …` is covered by its own tests. A usage form carrying
-    // a `<placeholder>` other than `<addr>` is skipped — it is documentation,
-    // not a command.
+    // The scope was narrower than the criterion for one round. AC8 claims every
+    // operator instruction printed by `keryx serve` is executed verbatim, and
+    // the extractor matched `keryx serve config …` alone — so of the fifteen
+    // printed instructions, the `token issue` / `token rotate` and bare
+    // `keryx serve --acknowledge-non-loopback` forms were asserted by substring
+    // and never run. A criterion covering a subset of its own class is the
+    // site-not-class pattern this flow was opened to close, reproduced inside
+    // the flow's own evidence.
+    //
+    // Now every printed span is extracted and carries a DISPOSITION, and the
+    // dispositions are asserted by value. Nothing is silently outside the
+    // class: an instruction is executed, or it is documentation, or it starts a
+    // listener and is covered by the refusal test below — and which one it is
+    // is a fact this file asserts rather than a scope note in a comment.
     const states: Array<{ label: string; setup: () => Promise<void> }> = [
       {
         label: "absent",
@@ -462,36 +526,11 @@ describe("the rotate-failure recovery instruction", () => {
       },
     ];
 
-    /**
-     * `keryx serve config …` commands in the transcript, as argv arrays.
-     *
-     * Backticks are NOT required. An earlier version required them, and a
-     * mutation drifted the one unbackticked instruction — the non-loopback note
-     * in `runServe` — to a command that exits 1 with nothing going red. Every
-     * site is backticked now, and the extractor no longer depends on that.
-     *
-     * A span still carrying a `<placeholder>` after `<addr>` substitution is a
-     * usage form (`config set <setting>`), not a command. Those are counted, and
-     * the count is asserted, so a real instruction cannot be dropped silently.
-     */
-    function instructions(transcript: string): { runnable: string[][]; skipped: string[] } {
-      const runnable: string[][] = [];
-      const skipped: string[] = [];
-      for (const match of transcript.matchAll(/`?(keryx serve config [a-z][^`\n.;]*)`?/g)) {
-        const command = match[1]!.trim().replace(/<addr>/g, "10.0.0.5");
-        if (command.includes("<")) {
-          skipped.push(command);
-          continue;
-        }
-        // Drop the leading `keryx serve` — `run()` supplies both.
-        runnable.push(command.split(/\s+/).slice(2));
-      }
-      return { runnable, skipped };
-    }
-
     const failures: string[] = [];
     const statesThatPrintedAnInstruction = new Set<string>();
     const skippedUsageForms: string[] = [];
+    const listenerStarts: string[] = [];
+    const executed: string[] = [];
     for (const state of states) {
       // `config show` is here because a mutation proved it unguarded: reverting
       // its instruction to a bare `config init` — which refuses on an
@@ -504,8 +543,9 @@ describe("the rotate-failure recovery instruction", () => {
         await state.setup();
 
         const shown = await run(invoke);
-        const { runnable, skipped } = instructions(shown.out);
-        skippedUsageForms.push(...skipped);
+        const printed = instructions(shown.out);
+        skippedUsageForms.push(...printed.filter((i) => i.disposition === "usageForm").map((i) => i.command));
+        listenerStarts.push(...printed.filter((i) => i.disposition === "startsAListener").map((i) => i.command));
 
         // G1: a command that SHOULD advise must advise. Without this, `config
         // show` could go mute in three of the six states and the per-state set
@@ -517,31 +557,51 @@ describe("the rotate-failure recovery instruction", () => {
         // and demanding an instruction from them would be demanding a failure.
         const reports = invoke.length === 0 || invoke[0] === "status" || invoke[1] === "show";
         if (reports && state.label !== "valid but disabled" && state.label !== "valid, non-loopback, unacknowledged") {
-          const advises = runnable.length + skipped.length > 0;
-          if (!advises) {
+          if (printed.length === 0) {
             failures.push(`[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed no instruction at all`);
           }
         }
 
-        for (const instruction of runnable) {
-          statesThatPrintedAnInstruction.add(state.label);
-          const followed = await run(instruction);
-          if (followed.exit !== 0) {
-            failures.push(
-              `[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed \`keryx serve ${instruction.join(" ")}\`, which exited ${followed.exit}: ${followed.out.trim()}`,
-            );
+        // Instructions printed TOGETHER are one recovery path, not a menu. The
+        // `absent` state prints "`keryx serve config init` then `keryx serve
+        // token issue`", and `token issue` alone leaves a server with no
+        // configuration stopped — which is correct, and which is why executing
+        // each instruction independently could not include the `token` forms at
+        // all. Followed in order, the same pair is exactly the repair the
+        // operator is being handed.
+        //
+        // Identical spans collapse: a transcript that names one step twice is
+        // still one step, and `config init` run twice refuses the second time
+        // by design.
+        const sequence = printed.filter((i) => i.disposition === "runnable");
+        const seen = new Set<string>();
+        let followedAny = false;
+        for (const instruction of sequence) {
+          if (seen.has(instruction.command)) {
             continue;
           }
+          seen.add(instruction.command);
+          statesThatPrintedAnInstruction.add(state.label);
+          executed.push(instruction.command);
+          const followed = await run(instruction.argv);
+          followedAny = true;
+          if (followed.exit !== 0) {
+            failures.push(
+              `[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed \`${instruction.command}\`, which exited ${followed.exit}: ${followed.out.trim()}`,
+            );
+          }
+        }
+        if (followedAny) {
           // G2: exit 0 is not enough. An instruction that succeeds and repairs
           // nothing is precisely the "wrong instruction" this guard exists for,
           // and the exit-code-only version passed when the malformed advice was
-          // drifted to `config show`. After following it, the configuration must
-          // be usable — which for every state here means `serve status` no
-          // longer reports `stopped`.
+          // drifted to `config show`. After following the whole printed path,
+          // the configuration must be usable — which for every state here means
+          // `serve status` no longer reports `stopped`.
           const after = await run(["status"]);
           if (after.out.includes("state:      stopped")) {
             failures.push(
-              `[${state.label}] \`keryx serve ${instruction.join(" ")}\` exited 0 but left the server stopped: ${after.out.trim()}`,
+              `[${state.label}] following \`${[...seen].join("` then `")}\` left the server stopped: ${after.out.trim()}`,
             );
           }
         }
@@ -563,10 +623,181 @@ describe("the rotate-failure recovery instruction", () => {
     expect([...new Set(skippedUsageForms)].sort()).toEqual([
       "keryx serve config set <setting>",
     ]);
+    // And exactly which were treated as listener starts. This is the set the
+    // criterion used to cover by substring; it is asserted by value here and
+    // executed for real by `the listener-start instruction refuses …` below, so
+    // "not executed in this loop" no longer means "not covered".
+    expect([...new Set(listenerStarts)].sort()).toEqual([
+      "keryx serve --acknowledge-non-loopback",
+    ]);
+    // What was actually RUN, by value. The count assertion below cannot tell a
+    // widened extractor from the `config`-only one it replaced; this can, and
+    // it fails the moment a subcommand family drops back out of the class.
+    expect([...new Set(executed)].sort()).toEqual([
+      "keryx serve config init",
+      "keryx serve config init --force",
+      "keryx serve config set --bind 10.0.0.5 --acknowledge-non-loopback",
+      "keryx serve config set --enable",
+      // Not reachable before this round: the extractor matched `config` only,
+      // and executing instructions independently left `token issue` failing G2
+      // in the one state that prints it.
+      "keryx serve token issue",
+    ]);
     // The count first: a multi-line failure message makes the array diff hard
     // to read, and an undercount is exactly how three of these were missed.
     expect({ count: failures.length, failures }).toEqual({ count: 0, failures: [] });
   }, 60_000);
+
+  test("every CREDENTIAL instruction the CLI prints is executed verbatim too", async () => {
+    // The other half of the class. The guard above enumerates configuration
+    // states, so the `token rotate` family — printed by the credential checks
+    // in `serve-server.ts`, by `token issue`'s refusal, and by the rotate
+    // window in `serve.ts` — was never reachable from it and was asserted by
+    // `toContain` alone.
+    //
+    // Same extractor, same sequence execution, different states: an instruction
+    // is covered because it was RUN, not because a substring matched.
+    if (process.getuid?.() === 0) {
+      // The rotate window needs the mode bits to hold; root ignores them.
+      return;
+    }
+    const states: Array<{ label: string; setup: () => Promise<void>; invoke: string[] }> = [
+      {
+        label: "configured, no credential yet",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+        },
+        invoke: ["status"],
+      },
+      {
+        // `config init` itself advises here; `config show` deliberately does
+        // not, because it reports the configuration and the credential is not
+        // part of it. Enumerating the command that DOES advise, rather than
+        // demanding advice from one that should not, is the same distinction
+        // the `reports` scope makes in the guard above.
+        label: "first-run config init with no credential",
+        setup: async () => {},
+        invoke: ["config", "init", ...CUSTOM],
+      },
+      {
+        label: "a credential exists and token issue refuses",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+        },
+        invoke: ["token", "issue"],
+      },
+      {
+        label: "the two-write rotate window",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          chmodSync(serveConfigPath(configDir), 0o400);
+          await run(["token", "rotate"]);
+          chmodSync(serveConfigPath(configDir), 0o600);
+        },
+        invoke: [],
+      },
+    ];
+
+    const failures: string[] = [];
+    const executed: string[] = [];
+    for (const state of states) {
+      rmSync(serveConfigPath(configDir), { force: true });
+      rmSync(serveCredentialPath(configDir), { force: true });
+      await state.setup();
+
+      const shown = await run(state.invoke);
+      const sequence = instructions(shown.out).filter((i) => i.disposition === "runnable");
+      if (sequence.length === 0) {
+        failures.push(`[${state.label}] \`keryx serve ${state.invoke.join(" ")}\` printed no instruction at all`);
+        continue;
+      }
+      const seen = new Set<string>();
+      for (const instruction of sequence) {
+        if (seen.has(instruction.command)) {
+          continue;
+        }
+        seen.add(instruction.command);
+        executed.push(instruction.command);
+        const followed = await run(instruction.argv);
+        if (followed.exit !== 0) {
+          failures.push(
+            `[${state.label}] \`keryx serve ${state.invoke.join(" ")}\` printed \`${instruction.command}\`, which exited ${followed.exit}: ${followed.out.trim()}`,
+          );
+        }
+      }
+      // The credential equivalent of G2: following the path must leave a
+      // credential the configuration actually points at. Exit 0 from a rotate
+      // that re-minted and failed to re-point is the exact defect this whole
+      // file was opened for.
+      const record = loadServeCredential(configDir);
+      const stored = loadServeConfig(configDir);
+      if (record === null || stored === null || stored.credentialRef.id !== record.id) {
+        failures.push(
+          `[${state.label}] following \`${[...seen].join("` then `")}\` left the configuration pointing at ${stored?.credentialRef.id ?? "nothing"} while the store holds ${record?.id ?? "nothing"}`,
+        );
+      }
+    }
+
+    // The `token` family, executed. Asserted by value so this cannot quietly
+    // narrow back to whatever happens to be printed.
+    expect([...new Set(executed)].sort()).toEqual([
+      "keryx serve token issue",
+      "keryx serve token rotate",
+    ]);
+    expect({ count: failures.length, failures }).toEqual({ count: 0, failures: [] });
+  }, 60_000);
+
+  test("the listener-start instruction refuses for the reason it prints, rather than being skipped", async () => {
+    // The one disposition that is not executed by the loops above, covered here
+    // instead of excused in a comment. `keryx serve --acknowledge-non-loopback`
+    // is printed only on the refusal path, and it legitimately still refuses
+    // when the STORED acknowledgement is the missing half — the flag alone is
+    // not enough, by security policy. That refusal is the behaviour, so it is
+    // what gets asserted.
+    //
+    // It cannot start a listener from here even if the check were removed: the
+    // bind address is 10.0.0.5, which does not resolve to an interface on the
+    // machine running this.
+    rmSync(serveConfigPath(configDir), { force: true });
+    rmSync(serveCredentialPath(configDir), { force: true });
+    await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+    await run(["token", "issue"]);
+
+    const advised = await run([]);
+    const printed = instructions(advised.out).filter((i) => i.disposition === "startsAListener");
+    expect(printed.map((i) => i.command)).toEqual(["keryx serve --acknowledge-non-loopback"]);
+
+    // Followed verbatim, exactly as extracted.
+    const followed = await run(printed[0]!.argv);
+
+    expect(followed.exit).toBe(1);
+    expect(followed.out).toContain("reachable beyond loopback");
+    // And it says which half is still missing, rather than repeating itself.
+    expect(followed.out).toContain("The configuration does not acknowledge a non-loopback bind");
+    expect(followed.out).not.toContain("This invocation did not acknowledge a non-loopback bind");
+  }, 30_000);
+
+  test("the non-loopback instruction names the CONFIGURED address, not a `<addr>` placeholder", async () => {
+    // F-005 of round 4. Both sites printed `--bind <addr>`, and the guard above
+    // substituted a real address before executing — so the one instruction in
+    // the whole surface that was not copy-pasteable was also the one the guard
+    // could not actually prove. Pinned directly here as well as through the
+    // `skippedUsageForms` assertion, because that one fails with a diff about
+    // an array and this one fails saying what is wrong.
+    rmSync(serveConfigPath(configDir), { force: true });
+    rmSync(serveCredentialPath(configDir), { force: true });
+    await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+    await run(["token", "issue"]);
+
+    // Both sites: `runServe`'s refusal and `serve status`'s note.
+    for (const invoke of [[], ["status"]]) {
+      const shown = await run(invoke);
+      expect({ invoke, out: shown.out.includes("<addr>") }).toEqual({ invoke, out: false });
+      expect(shown.out).toContain("--bind 10.0.0.5");
+    }
+  }, 30_000);
 
   test("no instruction printed while a configuration EXISTS names `config init`", async () => {
     // The class, not the call site. The first fix corrected the one message the
@@ -662,9 +893,15 @@ describe("the rotate-failure recovery instruction", () => {
       .split("\n")
       .find((line) => line.includes("reachable beyond loopback") && line.includes("Run "));
     expect(refusalLine).toBeDefined();
-    expect(refusalLine!).toContain("keryx serve config set --bind <addr> --acknowledge-non-loopback");
+    expect(refusalLine!).toContain("keryx serve config set --bind 10.0.0.5 --acknowledge-non-loopback");
 
-    const followed = await run(["config", "set", "--bind", "10.0.0.5", "--acknowledge-non-loopback"]);
+    // Followed VERBATIM, extracted from the line rather than retyped. The
+    // retyped version could not tell the difference between an instruction that
+    // works and one the test happened to write correctly — which is exactly
+    // what the `<addr>` placeholder was hiding.
+    const printed = /`keryx serve ([^`]+)`/.exec(refusalLine!);
+    expect(printed).not.toBeNull();
+    const followed = await run(printed![1]!.trim().split(/\s+/));
     expect(followed.exit).toBe(0);
     expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
   });

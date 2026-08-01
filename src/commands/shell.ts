@@ -220,6 +220,12 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       live = opened.handle;
       history = opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
+      if (opened.archiveDegraded !== undefined) {
+        // Said out loud. A resume that quietly drops the archive reports a
+        // shorter conversation than the session has, and the operator has no
+        // way to tell that from a session that was genuinely that short.
+        system(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
+      }
       if (opened.resumed) {
         system(
           `Resumed session ${shortSessionId(live.summary.id)} · ${live.summary.title} (${history.length} context msgs)\n`,

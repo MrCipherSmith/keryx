@@ -1,6 +1,7 @@
 // `keryx sessions` — list / export per-project interactive shell sessions.
 
 import {
+  TranscriptUnreadableError,
   exportSessionMarkdown,
   findSession,
   listSessions,
@@ -67,7 +68,20 @@ export async function sessionsCommand(args: string[]): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    console.log(exportSessionMarkdown(cwd, found.id));
+    // Guarded, because `loadContext` throws on a transcript it cannot read
+    // rather than returning an empty one. Unguarded, that throw left `main()`
+    // to print a stack trace carrying an absolute home-directory path, for a
+    // condition — an oversized or non-regular transcript — the operator can act
+    // on if simply told which file and why.
+    try {
+      console.log(exportSessionMarkdown(cwd, found.id));
+    } catch (cause) {
+      if (!(cause instanceof TranscriptUnreadableError)) {
+        throw cause;
+      }
+      console.error(`Cannot export session "${found.id}": ${cause.message}`);
+      process.exitCode = 1;
+    }
     return;
   }
 

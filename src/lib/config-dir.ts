@@ -17,7 +17,11 @@
 //   sessions/               per-project interactive session store — created by
 //                           `src/session/store.ts`, which calls this helper
 //                           because with KERYX_DATA_DIR unset its root IS this
-//                           directory
+//                           directory. Its summaries read through
+//                           `readConfigFile` and its transcripts through
+//                           `readTranscriptFile`; until flow 130 both were raw
+//                           `readFileSync` calls, so this entry named the path
+//                           while the read had no bound at all.
 //
 // NOT resolved through this function, stated rather than glossed over:
 // `src/session/paths.ts` has its own `keryxDataDir()`, which applies the same
@@ -28,7 +32,7 @@
 // of any existing install that sets it, which is a migration, not a cleanup.
 // It is recorded here so the next person finds it rather than discovering it.
 
-import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, type Stats, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -69,37 +73,71 @@ export function keryxConfigDir(dir?: string): string {
  * The first fix bounded `serve.json` alone. The other five readers of this
  * directory — `auth.json`, `projects.json`, `permissions.json`, `sandbox.json`
  * and the credential store — still aborted, on the same two commands. That is
- * the third time on this branch that a fix covered the site a finding named
- * rather than the class, so the bound lives here and every reader uses it.
+ * the third time on that branch that a fix covered the site a finding named
+ * rather than the class, so the bound lives here.
+ *
+ * A fourth round then found that "every reader uses it", as this comment used
+ * to end, was false: `session/store.ts` read two files under this directory
+ * with a raw `readFileSync` and appeared in no list. It is true now, and it is
+ * held true by the source-level guard in `config-dir.readers.test.ts` rather
+ * than by this sentence.
  */
 export const MAX_CONFIG_FILE_BYTES = 1_000_000;
 
-/** Why a config file could not be read. `null` means it was read fine. */
-export type ConfigReadFailure = "absent" | "too-large" | "unreadable";
+/**
+ * The largest a session transcript may be before it is refused unread.
+ *
+ * Separate from `MAX_CONFIG_FILE_BYTES`, and not simply a larger value for it.
+ * The config bound is 1 MB because every file it governs is a few hundred bytes
+ * of JSON; raising that number to fit a transcript would loosen the bound on
+ * `auth.json` and the credential store for no reason. `context.jsonl` and
+ * `archive.jsonl` are append-only logs of a real conversation and legitimately
+ * run to megabytes, so routing them through the config bound would have turned
+ * "an oversized file aborts the process" into "a long session cannot be
+ * resumed" — a regression dressed as a fix.
+ *
+ * 64 MiB is far above any observed transcript and far below the size at which
+ * the read aborts, which is the whole job of this number.
+ */
+export const MAX_TRANSCRIPT_FILE_BYTES = 64 * 1024 * 1024;
+
+/** Why a file could not be read. */
+export type ConfigReadFailure = "absent" | "not-regular" | "too-large" | "unreadable";
 
 export type ConfigReadResult =
   | { ok: true; text: string }
   | { ok: false; reason: ConfigReadFailure };
 
 /**
- * Read a user-global config file, refusing one too large to be a config.
+ * Read a file under the shared directory, refusing one that is not a regular
+ * file or is larger than `maxBytes`.
  *
- * The size is checked with `statSync` BEFORE the read, because the abort
- * happens inside `readFileSync` and cannot be caught after the fact. Every
- * reader of this directory must go through here;
- * `config-dir.readers.test.ts` runs each one against an oversized file in a
- * real subprocess and fails on a non-zero exit.
+ * Both checks run on the `statSync` BEFORE the read, because neither failure
+ * can be caught afterwards:
+ *
+ *   too large    the abort happens inside `readFileSync`; Bun aborts rather
+ *                than throwing, so `try/catch` never runs.
+ *   not regular  a FIFO stats as size 0, passes any size bound, and then
+ *                `readFileSync` BLOCKS FOREVER waiting for a writer. A review
+ *                replaced `serve.json` with a FIFO and `keryx serve status`
+ *                produced no output, no refusal and no timeout. A hang is not
+ *                a safer failure than an abort, only a less legible one — so
+ *                the requirement is `isFile()`, stated as the class rather
+ *                than as a list of the device types known to hang.
  */
-export function readConfigFile(file: string): ConfigReadResult {
-  let size: number;
+function readBoundedFile(file: string, maxBytes: number): ConfigReadResult {
+  let stats: Stats;
   try {
-    size = statSync(file).size;
+    stats = statSync(file);
   } catch {
     // Absent, a dangling symlink, or a path we cannot stat. The caller's
     // existing "nothing configured" branch is the right answer for all three.
     return { ok: false, reason: "absent" };
   }
-  if (size > MAX_CONFIG_FILE_BYTES) {
+  if (!stats.isFile()) {
+    return { ok: false, reason: "not-regular" };
+  }
+  if (stats.size > maxBytes) {
     return { ok: false, reason: "too-large" };
   }
   try {
@@ -107,6 +145,29 @@ export function readConfigFile(file: string): ConfigReadResult {
   } catch {
     return { ok: false, reason: "unreadable" };
   }
+}
+
+/**
+ * Read a user-global config file, refusing one too large to be a config.
+ *
+ * Every reader of this directory must go through here or through
+ * `readTranscriptFile`. Two guards hold that: `config-dir.readers.test.ts`
+ * scans the source for a raw read beside a config-path resolver, and the same
+ * file drives every reader against an oversized file in a real subprocess and
+ * fails on a non-zero exit.
+ */
+export function readConfigFile(file: string): ConfigReadResult {
+  return readBoundedFile(file, MAX_CONFIG_FILE_BYTES);
+}
+
+/**
+ * Read a session transcript, refusing one beyond `MAX_TRANSCRIPT_FILE_BYTES`.
+ *
+ * Same stat-before-read path as `readConfigFile`, different bound and a
+ * different reason for it — see `MAX_TRANSCRIPT_FILE_BYTES`.
+ */
+export function readTranscriptFile(file: string): ConfigReadResult {
+  return readBoundedFile(file, MAX_TRANSCRIPT_FILE_BYTES);
 }
 
 /**

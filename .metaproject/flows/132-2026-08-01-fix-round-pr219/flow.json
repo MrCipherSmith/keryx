@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 2,
+  "id": "132",
+  "slug": "fix-round-pr219",
+  "title": "Fix round PR #219 (flow 130): AC8 subset extractor, session-resume regression, ingest parser phantom headings",
+  "status": "implemented",
+  "createdAt": "2026-08-01T22:38:26.504Z",
+  "updatedAt": "2026-08-01T23:05:53.512Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9f68a1e0ca74570eea93fe7af869a506b58435b37a8fd01f7dda7169fc97c69a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-01T23:05:37.265Z",
+      "note": "config-dir.readers.test.ts 'an unreadable ARCHIVE does not abort a resume whose context is readable': 3 GiB sparse archive.jsonl next to a readable context.jsonl; MESSAGES:2, no throw."
+    },
+    "AC2": {
+      "at": "2026-08-01T23:05:37.353Z",
+      "note": "Same suite: DEGRADED:too-large from loadArchive's onDegraded, and 'openSession resumes such a session and reports the degradation' asserts REPORTED:session transcript … too-large. exportSessionMarkdown writes an '- **incomplete**' header line."
+    },
+    "AC3": {
+      "at": "2026-08-01T23:05:37.441Z",
+      "note": "'keryx sessions export states the file and the reason instead of a stack trace': real subprocess exits 1, prints 'could not be read (too-large)', no stack frame and no 'Bun v'. TUI /resume wrapped: reports and keeps the current session."
+    },
+    "AC4": {
+      "at": "2026-08-01T23:05:37.526Z",
+      "note": "src/session/store.callers.test.ts, built from the config-dir.readers template: unguardedCalls() is pure over a {path->source} map, the self-check drives that seam with 6 shapes including the two real pre-fix call sites, plus a scan-reach test (>200 files) and a numerator control (>=3 real callers)."
+    },
+    "AC5": {
+      "at": "2026-08-01T23:05:37.609Z",
+      "note": "serve.recovery.test.ts: extractor widened to /keryx serve …/ with dispositions runnable|usageForm|startsAListener. usageForm and startsAListener sets asserted by value; executed set asserted by value and now includes 'keryx serve token issue'."
+    },
+    "AC6": {
+      "at": "2026-08-01T23:05:37.694Z",
+      "note": "Same test: printed instructions are executed in order as one sequence with identical spans collapsed, and G2 (serve status not 'stopped') is asserted once after the whole sequence."
+    },
+    "AC7": {
+      "at": "2026-08-01T23:05:37.779Z",
+      "note": "'the listener-start instruction refuses for the reason it prints': extracts the startsAListener span, runs it verbatim, asserts exit 1, 'reachable beyond loopback' and that only the missing half is named. Plus a credential state matrix that executes token issue and token rotate verbatim."
+    },
+    "AC8": {
+      "at": "2026-08-01T23:05:47.185Z",
+      "note": "findingHeading() identifies a heading positively: bracketed id, or id followed by a title separator; ',' '.' ';' ')' after the id is a reference. findingBlock uses the same predicate. Pinned both ways: 'a wrapped reference at line start is not a heading' (five real reference shapes -> zero findings) and 'every heading shape the reviewer skills emit is still a heading' (six shapes -> six findings)."
+    },
+    "AC9": {
+      "at": "2026-08-01T23:05:47.276Z",
+      "note": "'the consolidated review ingests as its fifteen findings and nothing else': the 549-line report at src/review/fixtures/consolidated-review-2026-08-01.md yields exactly F-001..F-015, with a >20 000-byte non-vacuity control on the fixture itself."
+    },
+    "AC10": {
+      "at": "2026-08-01T23:05:47.363Z",
+      "note": "Correction section appended to flow 130's journal: scanFor emits one offence per (file, call) pair and both reads were the same call in the same file, so one entry is the complete output. The frozen criterion is left as written and the journal carries the correction."
+    },
+    "AC11": {
+      "at": "2026-08-01T23:05:47.449Z",
+      "note": "bun run check: 2703 pass, 14 skip, 0 fail across 279 files. tsc --noEmit clean. keryx health run: PASS, project score 93, no gate conditions. No lint script exists in package.json."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/219"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "F-014c: source-level guard over the caller class",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "F-013a: widen the AC8 extractor to the whole instruction class",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "F-013b: cover the refusal-by-design instruction with its own test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Correct flow 130 journal claim about the readers guard evidence",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify: focused tests, full suite, typecheck, lint, health",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Self-review the diff against the three findings; draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T22:38:26.504Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T22:43:59.195Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T22:43:59.405Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T22:44:03.754Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T22:48:46.819Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T23:00:14.702Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T23:00:14.794Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-01T23:00:21.999Z",
+      "event": "task-added",
+      "detail": "T5: F-014c: source-level guard over the caller class"
+    },
+    {
+      "at": "2026-08-01T23:00:22.085Z",
+      "event": "task-added",
+      "detail": "T6: F-013a: widen the AC8 extractor to the whole instruction class"
+    },
+    {
+      "at": "2026-08-01T23:00:22.170Z",
+      "event": "task-added",
+      "detail": "T7: F-013b: cover the refusal-by-design instruction with its own test"
+    },
+    {
+      "at": "2026-08-01T23:00:22.258Z",
+      "event": "task-added",
+      "detail": "T8: Correct flow 130 journal claim about the readers guard evidence"
+    },
+    {
+      "at": "2026-08-01T23:00:22.347Z",
+      "event": "task-added",
+      "detail": "T9: Verify: focused tests, full suite, typecheck, lint, health"
+    },
+    {
+      "at": "2026-08-01T23:00:22.432Z",
+      "event": "task-added",
+      "detail": "T10: Self-review the diff against the three findings; draft PR"
+    },
+    {
+      "at": "2026-08-01T23:00:27.049Z",
+      "event": "task-done",
+      "detail": "T5: F-014c: source-level guard over the caller class"
+    },
+    {
+      "at": "2026-08-01T23:00:27.135Z",
+      "event": "task-done",
+      "detail": "T6: F-013a: widen the AC8 extractor to the whole instruction class"
+    },
+    {
+      "at": "2026-08-01T23:00:27.220Z",
+      "event": "task-done",
+      "detail": "T7: F-013b: cover the refusal-by-design instruction with its own test"
+    },
+    {
+      "at": "2026-08-01T23:01:56.825Z",
+      "event": "task-done",
+      "detail": "T8: Correct flow 130 journal claim about the readers guard evidence"
+    },
+    {
+      "at": "2026-08-01T23:03:02.303Z",
+      "event": "task-done",
+      "detail": "T9: Verify: focused tests, full suite, typecheck, lint, health"
+    },
+    {
+      "at": "2026-08-01T23:05:11.125Z",
+      "event": "task-done",
+      "detail": "T10: Self-review the diff against the three findings; draft PR"
+    },
+    {
+      "at": "2026-08-01T23:05:11.210Z",
+      "event": "ac-updated",
+      "detail": "AC9 named the review package path .metaproject/reviews/2026-08-01-ingest-feat-r4c-turn-submission/report.md, which is committed on feat/r4c-turn-submission and does not exist on this branch. A guard that reads a file only present on another branch does not run. The report is checked in byte-identical at src/review/fixtures/consolidated-review-2026-08-01.md and the criterion now names that copy; the substance — exactly fifteen findings, zero phantoms, asserted by id — is unchanged."
+    },
+    {
+      "at": "2026-08-01T23:05:24.235Z",
+      "event": "ac-updated",
+      "detail": "AC9 named a review-package path committed on feat/r4c-turn-submission that does not exist on this branch; restated against the byte-identical fixture at src/review/fixtures/consolidated-review-2026-08-01.md. Substance unchanged: exactly fifteen findings, zero phantoms, asserted by id."
+    },
+    {
+      "at": "2026-08-01T23:05:37.265Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: config-dir.readers.test.ts 'an unreadable ARCHIVE does not abort a resume whose context is readable': 3 GiB sparse archive.jsonl next to a readable context.jsonl; MESSAGES:2, no throw."
+    },
+    {
+      "at": "2026-08-01T23:05:37.353Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Same suite: DEGRADED:too-large from loadArchive's onDegraded, and 'openSession resumes such a session and reports the degradation' asserts REPORTED:session transcript … too-large. exportSessionMarkdown writes an '- **incomplete**' header line."
+    },
+    {
+      "at": "2026-08-01T23:05:37.441Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: 'keryx sessions export states the file and the reason instead of a stack trace': real subprocess exits 1, prints 'could not be read (too-large)', no stack frame and no 'Bun v'. TUI /resume wrapped: reports and keeps the current session."
+    },
+    {
+      "at": "2026-08-01T23:05:37.526Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/session/store.callers.test.ts, built from the config-dir.readers template: unguardedCalls() is pure over a {path->source} map, the self-check drives that seam with 6 shapes including the two real pre-fix call sites, plus a scan-reach test (>200 files) and a numerator control (>=3 real callers)."
+    },
+    {
+      "at": "2026-08-01T23:05:37.610Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: serve.recovery.test.ts: extractor widened to /keryx serve …/ with dispositions runnable|usageForm|startsAListener. usageForm and startsAListener sets asserted by value; executed set asserted by value and now includes 'keryx serve token issue'."
+    },
+    {
+      "at": "2026-08-01T23:05:37.694Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Same test: printed instructions are executed in order as one sequence with identical spans collapsed, and G2 (serve status not 'stopped') is asserted once after the whole sequence."
+    },
+    {
+      "at": "2026-08-01T23:05:37.779Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 'the listener-start instruction refuses for the reason it prints': extracts the startsAListener span, runs it verbatim, asserts exit 1, 'reachable beyond loopback' and that only the missing half is named. Plus a credential state matrix that executes token issue and token rotate verbatim."
+    },
+    {
+      "at": "2026-08-01T23:05:47.185Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: findingHeading() identifies a heading positively: bracketed id, or id followed by a title separator; ',' '.' ';' ')' after the id is a reference. findingBlock uses the same predicate. Pinned both ways: 'a wrapped reference at line start is not a heading' (five real reference shapes -> zero findings) and 'every heading shape the reviewer skills emit is still a heading' (six shapes -> six findings)."
+    },
+    {
+      "at": "2026-08-01T23:05:47.276Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: 'the consolidated review ingests as its fifteen findings and nothing else': the 549-line report at src/review/fixtures/consolidated-review-2026-08-01.md yields exactly F-001..F-015, with a >20 000-byte non-vacuity control on the fixture itself."
+    },
+    {
+      "at": "2026-08-01T23:05:47.363Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Correction section appended to flow 130's journal: scanFor emits one offence per (file, call) pair and both reads were the same call in the same file, so one entry is the complete output. The frozen criterion is left as written and the journal carries the correction."
+    },
+    {
+      "at": "2026-08-01T23:05:47.449Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: bun run check: 2703 pass, 14 skip, 0 fail across 279 files. tsc --noEmit clean. keryx health run: PASS, project score 93, no gate conditions. No lint script exists in package.json."
+    },
+    {
+      "at": "2026-08-01T23:05:53.512Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/219"
+    }
+  ]
+}

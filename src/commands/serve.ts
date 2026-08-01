@@ -226,7 +226,12 @@ async function runServe(args: string[]): Promise<void> {
         // guard extracts backticked commands and executes them, so an
         // unbackticked one is invisible to it — a mutation drifted this line to
         // a command that exits 1 and nothing went red.
-        note(`The configuration does not acknowledge a non-loopback bind. Re-run: \`keryx serve config set --bind <addr> ${ACK_FLAG}\``);
+        // The CONFIGURED address, not `<addr>`: the placeholder was the one
+        // thing the class guard could not execute verbatim, so it substituted an
+        // address first and proved a command of its own making.
+        note(
+          `The configuration does not acknowledge a non-loopback bind. Re-run: \`keryx serve config set --bind ${stored.bind.address} ${ACK_FLAG}\``,
+        );
       }
       if (!runtimeAck) {
         note(`This invocation did not acknowledge a non-loopback bind. Re-run: \`keryx serve ${ACK_FLAG}\``);

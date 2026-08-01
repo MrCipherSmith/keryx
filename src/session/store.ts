@@ -19,7 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir } from "../lib/config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, readTranscriptFile } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
@@ -185,9 +185,16 @@ function atomicWriteJson(file: string, value: unknown): void {
 }
 
 function readSummaryFile(file: string): SessionSummary | undefined {
+  // `readConfigFile`, not `readFileSync`: a summary is config-sized, and an
+  // oversized one aborts the process outright (SIGABRT, no output, uncatchable
+  // — the `try/catch` below does not run). A non-regular file in its place
+  // hangs the read forever. See MAX_CONFIG_FILE_BYTES.
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    return undefined;
+  }
   try {
-    const raw = readFileSync(file, "utf8");
-    const o = JSON.parse(raw) as Partial<SessionSummary> & { messageCount?: number };
+    const o = JSON.parse(read.text) as Partial<SessionSummary> & { messageCount?: number };
     if (typeof o.id !== "string" || typeof o.projectPath !== "string") {
       return undefined;
     }
@@ -243,12 +250,41 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
   atomicWriteText(file, lines.length > 0 ? `${lines.join("\n")}\n` : "");
 }
 
+/**
+ * A transcript that exists but could not be read, so history is UNKNOWN rather
+ * than empty.
+ *
+ * `readJsonl` returns `[]` for a session that has no transcript yet, which is a
+ * true statement about a new session. Returning the same `[]` for a transcript
+ * that is too large, or is a FIFO, or cannot be read, would say "this
+ * conversation had no messages" about an audit log the process could not open —
+ * and the caller would resume a session that silently appears to have no
+ * history. So it throws instead, and the operator is told which file and why.
+ */
+export class TranscriptUnreadableError extends Error {
+  constructor(
+    readonly file: string,
+    readonly reason: string,
+  ) {
+    super(`session transcript ${file} could not be read (${reason})`);
+    this.name = "TranscriptUnreadableError";
+  }
+}
+
 function readJsonl(file: string): NormalizedMessage[] {
   if (!existsSync(file)) {
     return [];
   }
+  // `readTranscriptFile`, not `readFileSync`: an oversized file aborts the
+  // process (SIGABRT, uncatchable) and a non-regular one blocks forever. The
+  // bound is the transcript bound, not the config bound — a real conversation
+  // legitimately exceeds the latter.
+  const read = readTranscriptFile(file);
+  if (!read.ok) {
+    throw new TranscriptUnreadableError(file, read.reason);
+  }
   const out: NormalizedMessage[] = [];
-  for (const line of readFileSync(file, "utf8").split("\n")) {
+  for (const line of read.text.split("\n")) {
     if (line.trim().length === 0) {
       continue;
     }
@@ -387,14 +423,44 @@ export function loadContext(cwd: string, sessionId: string, dataDir?: string): N
   return readJsonl(path.join(dir, "transcript.jsonl"));
 }
 
-/** Full archive for export (falls back to context/transcript). */
-export function loadArchive(cwd: string, sessionId: string, dataDir?: string): NormalizedMessage[] {
+/**
+ * Full archive for export (falls back to context/transcript).
+ *
+ * The fallback covers an UNREADABLE archive, not only an absent one. Before it
+ * did, a `TranscriptUnreadableError` on `archive.jsonl` aborted the resume of a
+ * session whose `context.jsonl` was perfectly readable — and `archive.jsonl` is
+ * the file most likely to reach the 64 MiB bound, because it is the one that
+ * keeps everything compaction removed. Every caller answers that throw by
+ * starting a brand new session, so the effect was that the longest
+ * conversations became the ones that could not be resumed.
+ *
+ * The degradation is REPORTED, never swallowed. `onDegraded` is how a caller
+ * tells "this session has no archive" from "this session's archive could not be
+ * read", and the module's rule — an unreadable file must not read back as an
+ * empty one — survives one level up instead of being traded away here.
+ *
+ * A failure of the CONTEXT still throws. Falling back from a fallback would be
+ * the silent-empty this whole area exists to prevent.
+ */
+export function loadArchive(
+  cwd: string,
+  sessionId: string,
+  dataDir?: string,
+  onDegraded?: (error: TranscriptUnreadableError) => void,
+): NormalizedMessage[] {
   const dir = sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir);
   const archivePath = path.join(dir, "archive.jsonl");
   if (existsSync(archivePath)) {
-    const archive = readJsonl(archivePath);
-    if (archive.length > 0) {
-      return archive;
+    try {
+      const archive = readJsonl(archivePath);
+      if (archive.length > 0) {
+        return archive;
+      }
+    } catch (cause) {
+      if (!(cause instanceof TranscriptUnreadableError)) {
+        throw cause;
+      }
+      onDegraded?.(cause);
     }
   }
   return loadContext(cwd, sessionId, dataDir);
@@ -508,6 +574,13 @@ export function openSession(opts: OpenSessionOptions): {
   history: NormalizedMessage[];
   archive: NormalizedMessage[];
   resumed: boolean;
+  /**
+   * Set when the session resumed WITHOUT its archive because the archive could
+   * not be read. The resume succeeded and is not a lie about what it loaded:
+   * a caller that ignores this reports a shorter history than the session has,
+   * which is the one thing the transcript readers throw to prevent.
+   */
+  archiveDegraded?: string;
 } {
   const cwd = opts.cwd;
   const dataDir = opts.dataDir;
@@ -517,12 +590,22 @@ export function openSession(opts: OpenSessionOptions): {
     history: NormalizedMessage[];
     archive: NormalizedMessage[];
     resumed: true;
+    archiveDegraded?: string;
   } => {
     const dir = sessionDirPath(resolveProjectRoot(cwd), found.id, dataDir);
     const handle: SessionHandle = { summary: found, dir };
     const history = loadContext(cwd, found.id, dataDir);
-    const archive = loadArchive(cwd, found.id, dataDir);
-    return { handle, history, archive, resumed: true };
+    let degraded: string | undefined;
+    const archive = loadArchive(cwd, found.id, dataDir, (error) => {
+      degraded = error.message;
+    });
+    return {
+      handle,
+      history,
+      archive,
+      resumed: true,
+      ...(degraded !== undefined ? { archiveDegraded: degraded } : {}),
+    };
   };
 
   if (opts.resumeId !== undefined && opts.resumeId.length > 0) {
@@ -557,7 +640,10 @@ export function openSession(opts: OpenSessionOptions): {
 export function exportSessionMarkdown(cwd: string, sessionId: string, dataDir?: string): string {
   const summary = findSession(cwd, sessionId, dataDir);
   const id = summary?.id ?? sessionId;
-  const history = loadArchive(cwd, id, dataDir);
+  let degraded: string | undefined;
+  const history = loadArchive(cwd, id, dataDir, (error) => {
+    degraded = error.message;
+  });
   const lines: string[] = [
     `# ${summary?.title ?? sessionId}`,
     "",
@@ -567,6 +653,12 @@ export function exportSessionMarkdown(cwd: string, sessionId: string, dataDir?: 
     summary?.model !== undefined ? `- model: ${summary.provider ?? ""}/${summary.model}` : "",
     summary !== undefined
       ? `- context: ${summary.messageCount} · archive: ${summary.archiveMessageCount} · compact×${summary.compactCount}`
+      : "",
+    // In the document, not on stderr: an export is read later, by someone who
+    // was not at the terminal, and "this is the whole conversation" is exactly
+    // what they will assume of a file that does not say otherwise.
+    degraded !== undefined
+      ? `- **incomplete**: exported from the active context because the archive could not be read (${degraded})`
       : "",
     "",
     "---",
