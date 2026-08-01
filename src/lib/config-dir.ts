@@ -12,6 +12,10 @@
 //   projects.json           the user-global project registry (flow 127)
 //   serve.json              the `keryx serve` configuration (flow 128)
 //   serve-credentials.json  salted bearer-token hash (0600, flow 128)
+//   sessions/               per-project interactive session store — created by
+//                           `src/session/store.ts`, which calls this helper
+//                           because with KERYX_DATA_DIR unset its root IS this
+//                           directory
 //
 // NOT resolved through this function, stated rather than glossed over:
 // `src/session/paths.ts` has its own `keryxDataDir()`, which applies the same
@@ -69,26 +73,42 @@ export function keryxConfigDir(dir?: string): string {
  * instead by `config-dir.permissions.test.ts`, which drives all five writers
  * under `umask 002` against an already-widened directory.
  *
- * Best-effort by contract, matching every caller: a directory that cannot be
- * created or chmodded (a read-only mount, a network filesystem that refuses
- * chmod, a directory owned by someone else) returns normally and the caller's
- * own write fails and is reported there. `chmod` is skipped on Windows, where
- * POSIX modes carry no meaning.
+ * Best-effort: a directory that cannot be created or chmodded (a read-only
+ * mount, a network filesystem that refuses chmod, a directory owned by someone
+ * else) returns normally rather than throwing, because this helper sits under
+ * five writers with different error contracts. What the operator sees then is
+ * the caller's business and is not uniform — see the catch blocks below.
+ * `chmod` is skipped on Windows, where POSIX modes carry no meaning.
  */
 export function ensureKeryxConfigDir(dir?: string): string {
   const base = keryxConfigDir(dir);
   try {
     mkdirSync(base, { recursive: true, mode: 0o700 });
   } catch {
-    // Reported by the caller's write, which is the operation the operator asked
-    // for; failing here would turn a persistence problem into a crash.
+    // Deliberately swallowed: failing here would turn a persistence problem
+    // into a crash in a helper every writer calls. What happens next differs by
+    // caller and is NOT uniform — `saveServeConfig`, `saveProjectRegistry` and
+    // `writeStore` return false and their callers report it, while
+    // `saveShellConfig` (and `saveApiKey` through it) is best-effort by
+    // contract and reports nothing at all. An earlier comment here claimed the
+    // caller always reports; a review checked and two of the five do not.
   }
   if (process.platform !== "win32") {
     try {
       chmodSync(base, 0o700);
     } catch {
-      // A filesystem that refuses chmod is surfaced by the fail-closed
-      // permission check in `readServeCredential`, not silently accepted.
+      // Unreported, and said plainly rather than papered over. An earlier
+      // version of this comment claimed the failure was "surfaced by the
+      // fail-closed permission check in readServeCredential" — a review checked
+      // and it is not: that check reads the MODE OF THE FILE
+      // (`serve-credential.ts`, `isGroupOrOtherAccessible`), never the
+      // directory, and a wide directory produces no warning anywhere. It is
+      // also precisely the check this whole fix exists because of, since an
+      // attacker who replaces the file sets 0600 on it themselves.
+      //
+      // A directory-mode check is worth having and is not in this slice. Until
+      // it is, a chmod that cannot be applied is silent, and that is the
+      // honest description.
     }
   }
   return base;

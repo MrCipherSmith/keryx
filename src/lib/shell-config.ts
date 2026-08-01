@@ -51,7 +51,7 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
     // 002` left it 0775 — group-writable, so `auth.json` and the serve
     // credential store beside it were unlinkable and replaceable by any member
     // of the operator's primary group. See `config-dir.permissions.test.ts`.
-    const base = ensureKeryxConfigDir(dir);
+    ensureKeryxConfigDir(dir);
     const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
     writeFileSync(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   } catch {

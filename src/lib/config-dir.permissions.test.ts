@@ -27,6 +27,7 @@ import { saveApiKey, saveShellConfig } from "./shell-config";
 import { defaultServeConfig, saveServeConfig } from "./serve-config";
 import { issueServeToken } from "./serve-credential";
 import { registerProject } from "./project-registry";
+import { createSession } from "../session/store";
 
 let base = "";
 let configDir = "";
@@ -164,6 +165,73 @@ describe("every writer of the shared config directory tightens it", () => {
 
     expect(mode(configDir)).toBe("700");
     expect(mode(path.join(configDir, "serve-credentials.json"))).toBe("600");
+  });
+
+  test("the session store, which creates the shared directory on `keryx shell`", () => {
+    // The writer the first sweep missed. `createSession` used a mode-less
+    // recursive `mkdirSync`, and with `KERYX_DATA_DIR` unset its top level IS
+    // this directory — so on a fresh install under `umask 002` the first
+    // `keryx shell` created `~/.local/share/keryx` at 0775 before any config
+    // writer existed to tighten it, and every level of `sessions/` with it.
+    if (process.platform === "win32") {
+      return;
+    }
+    const previousXdg = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = base;
+    try {
+      const project = path.join(base, "project");
+      mkdirSync(project, { recursive: true });
+
+      const handle = createSession({ cwd: project });
+
+      expect(mode(configDir)).toBe("700");
+      // Every level between the shared root and the session, not just the leaf:
+      // a 0775 `sessions/` lets a group member unlink a whole project's
+      // transcripts whatever mode the leaf carries.
+      let current = configDir;
+      for (const segment of handle.dir.slice(configDir.length + 1).split(path.sep)) {
+        current = path.join(current, segment);
+        expect({ level: current.slice(base.length), mode: mode(current) }).toEqual({
+          level: current.slice(base.length),
+          mode: "700",
+        });
+      }
+    } finally {
+      if (previousXdg === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdg;
+      }
+    }
+  });
+
+  test("the session store tightens levels that ALREADY exist wide", () => {
+    // `mode` on `mkdirSync` is a no-op on an existing directory, so an install
+    // upgraded from a release without this fix keeps its 0775 `sessions/`
+    // forever unless something walks down and forces each level.
+    if (process.platform === "win32") {
+      return;
+    }
+    const previousXdg = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = base;
+    try {
+      const project = path.join(base, "project");
+      mkdirSync(project, { recursive: true });
+      mkdirSync(path.join(configDir, "sessions"), { recursive: true });
+      chmodSync(configDir, 0o775);
+      chmodSync(path.join(configDir, "sessions"), 0o775);
+
+      createSession({ cwd: project });
+
+      expect(mode(configDir)).toBe("700");
+      expect(mode(path.join(configDir, "sessions"))).toBe("700");
+    } finally {
+      if (previousXdg === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdg;
+      }
+    }
   });
 
   test("a later writer does not re-loosen what an earlier one tightened", () => {

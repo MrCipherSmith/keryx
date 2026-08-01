@@ -142,7 +142,11 @@ describe("AC4 — refusal is terminal", () => {
     // message and not just the exit code. Two of them used to assert only the
     // code, which would have passed a silent exit(1).
     expect(out).toContain("disabled");
-    expect(out).toContain("keryx serve config init");
+    // `config set --enable`, NOT `config init`. This state is reachable only
+    // when a configuration exists, and `config init` now refuses to replace one
+    // — so the instruction this line originally pinned failed when followed.
+    // `serve.recovery.test.ts` holds the class guard.
+    expect(out).toContain("keryx serve config set --enable");
     expect(await isListening(port)).toBe(false);
   }, 30_000);
 

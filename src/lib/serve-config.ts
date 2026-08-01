@@ -441,11 +441,18 @@ export function loadServeConfig(dir?: string, onWarn?: (message: string) => void
   if (!existsSync(file)) {
     return null;
   }
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    onWarn?.("serve.json exists but could not be read; treating the server as not configured");
+    return null;
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    parsed = JSON.parse(text) as unknown;
   } catch {
-    onWarn?.("serve.json is unreadable or malformed; treating the server as not configured");
+    onWarn?.("serve.json is malformed; treating the server as not configured");
     return null;
   }
   const config = projectServeConfig(parsed, (key) =>
@@ -455,6 +462,44 @@ export function loadServeConfig(dir?: string, onWarn?: (message: string) => void
     onWarn?.("serve.json does not match the remote-entry configuration schema; treating the server as not configured");
   }
   return config;
+}
+
+/**
+ * What is on disk, distinguishing the three cases a caller must treat apart.
+ *
+ * `loadServeConfig` collapses all of them to `null`, which is right for "should
+ * the server start" and wrong for "may I overwrite this". A review chmodded a
+ * valid configuration to 0200 and watched `config init` replace it at exit 0:
+ * the overwrite guard read `null` as "there is nothing worth protecting" when
+ * it actually meant "I cannot see what I am about to destroy".
+ *
+ * - `absent`     — no file. Anything may create one.
+ * - `valid`      — parses and matches the schema. Replacing it needs `--force`.
+ * - `malformed`  — exists and does not parse, or fails the schema. It protects
+ *                  nothing, so it is repairable without `--force`; refusing
+ *                  would leave a broken file the CLI cannot fix.
+ * - `unreadable` — exists and cannot be read. Treated like `valid`, because the
+ *                  safe assumption about a file you cannot see is that it
+ *                  matters.
+ */
+export type ServeConfigState = "absent" | "valid" | "malformed" | "unreadable";
+
+export function serveConfigState(dir?: string): ServeConfigState {
+  const file = serveConfigPath(dir);
+  if (!existsSync(file)) {
+    return "absent";
+  }
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return "unreadable";
+  }
+  try {
+    return projectServeConfig(JSON.parse(text) as unknown) === null ? "malformed" : "valid";
+  } catch {
+    return "malformed";
+  }
 }
 
 /**

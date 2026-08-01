@@ -6,6 +6,7 @@
 //   keryx serve status [--json]
 //   keryx serve token issue | rotate | revoke
 //   keryx serve config init [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback] [--force]
+//   keryx serve config set [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback|--no-acknowledge-non-loopback] [--enable|--disable]
 //   keryx serve config show [--json]
 //
 // `config init` / `config show` are not in specification.md's CLI list, which
@@ -33,6 +34,7 @@ import {
   defaultServeConfig,
   isLoopbackAddress,
   loadServeConfig,
+  serveConfigState,
   saveServeConfig,
   serveConfigPath,
   type ServeConfig,
@@ -127,6 +129,10 @@ const BIND_FLAGS = ["--bind", "--port", "--profile"] as const;
 const ACK_FLAG = "--acknowledge-non-loopback";
 /** Replace an existing `serve.json`. Required, because `config init` is destructive. */
 const FORCE_FLAG = "--force";
+/** `config set` only: withdraw a non-loopback acknowledgement without a full rewrite. */
+const NO_ACK_FLAG = "--no-acknowledge-non-loopback";
+const ENABLE_FLAG = "--enable";
+const DISABLE_FLAG = "--disable";
 
 // ---------------------------------------------------------------------------
 
@@ -196,12 +202,13 @@ async function runServe(args: string[]): Promise<void> {
       // Security policy requires BOTH halves; say which one is missing rather
       // than leaving the operator to guess.
       if (stored.bind.acknowledgeNonLoopback !== true) {
-        // `--force` is part of the instruction because a configuration
-        // demonstrably exists on this branch (`stored !== null`), and
-        // `config init` refuses to replace one without it. An instruction
-        // that fails when followed is the defect this branch already had
-        // once, in the rotate-failure message.
-        note(`The configuration does not acknowledge a non-loopback bind. Re-run: keryx serve config init --bind <addr> ${ACK_FLAG} ${FORCE_FLAG}`);
+        // `config set`, not `config init`. A configuration demonstrably
+        // exists on this branch (`stored !== null`), so `config init` refuses
+        // — and adding `--force` would make the instruction succeed by
+        // resetting bind, port and profile to defaults, which is the damage
+        // this whole area was fixed for. `config set` changes the named field
+        // and preserves the rest.
+        note(`The configuration does not acknowledge a non-loopback bind. Re-run: keryx serve config set --bind <addr> ${ACK_FLAG}`);
       }
       if (!runtimeAck) {
         note(`This invocation did not acknowledge a non-loopback bind. Re-run: keryx serve ${ACK_FLAG}`);
@@ -369,7 +376,15 @@ function runStatus(args: string[]): void {
     console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(report.message)}`);
   }
   if (report.state === "stopped") {
-    note("Nothing is listening. `keryx serve config init` then `keryx serve token issue` to set one up.");
+    // `stopped` covers two different situations and they need different
+    // instructions. A review reached this note with a configuration on disk —
+    // `describeServeStatus` reports a disabled configuration as `stopped` too —
+    // and was told to run `config init`, which refuses when one exists.
+    note(
+      serveConfigState() === "absent"
+        ? "Nothing is listening. `keryx serve config init` then `keryx serve token issue` to set one up."
+        : "Nothing is listening: the configuration is present but disabled. Run `keryx serve config set --enable`.",
+    );
   }
 }
 
@@ -495,15 +510,21 @@ function runConfig(args: string[]): void {
     // `init` names a first-run operation and behaved like an unconditional
     // overwrite. A security review ran it on a customised deployment and
     // recorded bind, port, profile and the acknowledgement resetting to
-    // defaults at exit 0, with nothing saying a configuration had been
-    // replaced. A DAMAGED configuration is deliberately not protected here:
-    // `loadServeConfig` returns null for one, and refusing would leave the
-    // operator with a broken file they cannot repair through the CLI.
-    const existing = loadServeConfig(undefined, warn);
-    if (existing !== null && !parsed.parsed.flags.has(FORCE_FLAG)) {
+    // defaults at exit 0, with nothing saying a configuration had been replaced.
+    //
+    // The state is read through `serveConfigState`, not through
+    // `loadServeConfig(...) !== null`. That first version conflated "malformed"
+    // with "unreadable", so a valid configuration the process could not read was
+    // replaced without `--force` — destroyed by the guard meant to protect it.
+    // `malformed` is the only existing state that may be overwritten freely,
+    // because refusing there leaves the operator with a broken file the CLI
+    // cannot repair.
+    const state = serveConfigState();
+    if (state !== "absent" && state !== "malformed" && !parsed.parsed.flags.has(FORCE_FLAG)) {
       fail(
-        `${sanitizeForDisplay(serveConfigPath())} already exists. ` +
-          `Re-run with ${FORCE_FLAG} to replace it, or \`keryx serve config show\` to see it.`,
+        `${sanitizeForDisplay(serveConfigPath())} already exists${state === "unreadable" ? " and could not be read" : ""}. ` +
+          `\`keryx serve config set\` changes one setting without touching the rest; ` +
+          `${FORCE_FLAG} replaces the whole file with defaults.`,
       );
       return;
     }
@@ -549,6 +570,11 @@ function runConfig(args: string[]): void {
     return;
   }
 
+  if (sub === "set") {
+    runConfigSet(args.slice(1));
+    return;
+  }
+
   if (sub === "show") {
     const parsed = parseArgs(args.slice(1), [], ["--json"]);
     if (!parsed.ok) {
@@ -577,6 +603,95 @@ function runConfig(args: string[]): void {
   process.exitCode = 1;
 }
 
+/**
+ * `keryx serve config set` — change named settings and preserve the rest.
+ *
+ * This exists because every refusal `keryx serve` can print is reachable ONLY
+ * when a configuration already exists, and the instructions all pointed at
+ * `config init`. Once `init` refused to clobber, those instructions failed when
+ * followed; adding `--force` to them made them succeed by destroying the
+ * deployment they were meant to repair. A review reproduced both. An operator
+ * needs a way to change one setting, so here it is, and every instruction now
+ * names it.
+ */
+function runConfigSet(args: string[]): void {
+  const parsed = parseArgs(args, BIND_FLAGS, [ACK_FLAG, NO_ACK_FLAG, ENABLE_FLAG, DISABLE_FLAG]);
+  if (!parsed.ok) {
+    console.error(parsed.message);
+    printHelp();
+    process.exitCode = 1;
+    return;
+  }
+  const { values, flags } = parsed.parsed;
+
+  // Contradictory flags are refused rather than resolved by order — the same
+  // rule the argv parser applies to a repeated flag, and for the same reason.
+  if (flags.has(ACK_FLAG) && flags.has(NO_ACK_FLAG)) {
+    fail(`${ACK_FLAG} and ${NO_ACK_FLAG} cannot both be given`);
+    return;
+  }
+  if (flags.has(ENABLE_FLAG) && flags.has(DISABLE_FLAG)) {
+    fail(`${ENABLE_FLAG} and ${DISABLE_FLAG} cannot both be given`);
+    return;
+  }
+  if (values.size === 0 && flags.size === 0) {
+    fail("nothing to set. Name at least one of --bind, --port, --profile, --acknowledge-non-loopback, --enable, --disable");
+    return;
+  }
+
+  const state = serveConfigState();
+  if (state === "absent") {
+    fail("there is no serve configuration to change. Run `keryx serve config init` to create one.");
+    return;
+  }
+  const existing = loadServeConfig(undefined, warn);
+  if (existing === null) {
+    // `malformed` or `unreadable`: patching what cannot be read would silently
+    // invent the fields it could not see.
+    fail(
+      `${sanitizeForDisplay(serveConfigPath())} could not be read as a configuration. ` +
+        "Inspect it, or run `keryx serve config init --force` to replace it with defaults.",
+    );
+    return;
+  }
+
+  const port = readPort(values.get("--port"), { allowEphemeral: false });
+  if (port === "invalid") {
+    fail("--port must be an integer between 1 and 65535");
+    return;
+  }
+  if (!requireNonBlank("--bind", values.get("--bind"))) {
+    return;
+  }
+  if (!requireNonBlank("--profile", values.get("--profile"))) {
+    return;
+  }
+
+  const acknowledge = flags.has(ACK_FLAG) ? true : flags.has(NO_ACK_FLAG) ? false : existing.bind.acknowledgeNonLoopback;
+  const updated: ServeConfig = {
+    ...existing,
+    enabled: flags.has(ENABLE_FLAG) ? true : flags.has(DISABLE_FLAG) ? false : existing.enabled,
+    bind: {
+      address: values.get("--bind") ?? existing.bind.address,
+      port: port ?? existing.bind.port,
+      ...(acknowledge === undefined ? {} : { acknowledgeNonLoopback: acknowledge }),
+    },
+    profile: values.get("--profile") ?? existing.profile,
+  };
+
+  if (!saveServeConfig(updated, undefined, warn)) {
+    fail(`could not write ${sanitizeForDisplay(serveConfigPath())}; nothing was changed`);
+    return;
+  }
+  console.log(`  ${style.green(symbols.ok)} updated ${sanitizeForDisplay(serveConfigPath())}`);
+  printConfig(updated);
+  if (!isLoopbackAddress(updated.bind.address) && updated.bind.acknowledgeNonLoopback !== true) {
+    console.log(
+      `  ${style.yellow(symbols.bullet)} this bind is reachable beyond loopback and is not acknowledged; it will refuse to start`,
+    );
+  }
+}
+
 function printConfig(config: ServeConfig): void {
   console.log(`  enabled:    ${config.enabled}`);
   console.log(`  bind:       ${sanitizeForDisplay(config.bind.address)}:${config.bind.port}`);
@@ -595,6 +710,7 @@ function printHelp(): void {
     "keryx serve status [--json]",
     "keryx serve token issue | rotate | revoke",
     `keryx serve config init [--bind <addr>] [--port <n>] [--profile <name>] [${ACK_FLAG}] [${FORCE_FLAG}]`,
+    `keryx serve config set [--bind <addr>] [--port <n>] [--profile <name>] [${ACK_FLAG}|${NO_ACK_FLAG}] [${ENABLE_FLAG}|${DISABLE_FLAG}]`,
     "keryx serve config show [--json]",
   ]);
   helpOptions([
@@ -607,6 +723,7 @@ function printHelp(): void {
     { flag: "token rotate", desc: "Mint a new credential and invalidate the previous one." },
     { flag: "token revoke", desc: "Invalidate the credential." },
     { flag: "config init", desc: "Write the user-global serve configuration. Refuses to replace one without --force." },
+    { flag: "config set", desc: "Change named settings and preserve the rest. The non-destructive way to fix a configuration." },
     { flag: FORCE_FLAG, desc: "Replace an existing configuration on `config init`. It is not merged." },
     { flag: "config show", desc: "Print the configuration. It holds a credential reference, never a token." },
   ]);

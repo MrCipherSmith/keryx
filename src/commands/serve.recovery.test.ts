@@ -19,7 +19,7 @@
 //      is a destructive operation wearing the name of a first-run command.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { serveCommand } from "./serve";
@@ -151,18 +151,96 @@ describe("config init refuses to replace an existing configuration", () => {
   });
 
   test("a DAMAGED configuration is replaceable without --force", async () => {
-    // `loadServeConfig` returns null for a file that does not parse or does not
-    // match the schema. Refusing there would leave the operator with a broken
-    // file they cannot fix through the CLI — the guard exists to protect a
-    // configuration, and there is none to protect.
+    // A file that does not parse, or parses and fails the schema, protects
+    // nothing. Refusing there would leave the operator with a broken file they
+    // cannot fix through the CLI.
     await run(["config", "init", ...CUSTOM]);
-    Bun.write(serveConfigPath(configDir), "{not json");
-    await Bun.sleep(0);
+    writeFileSync(serveConfigPath(configDir), "{not json", "utf8");
 
     const repaired = await run(["config", "init"]);
 
     expect(repaired.exit).toBe(0);
     expect(deployment().address).toBe("127.0.0.1");
+  });
+
+  test("an UNREADABLE configuration is NOT replaceable without --force", async () => {
+    // The first version of the guard was `loadServeConfig(...) !== null`, which
+    // conflates "malformed" with "I could not read it". A review chmodded a
+    // perfectly valid configuration to 0200 and watched `config init` replace
+    // it at exit 0 — the deployment destroyed by the very guard meant to
+    // protect it, because the process could not see what it was overwriting.
+    if (process.getuid?.() === 0) {
+      return;
+    }
+    await run(["config", "init", ...CUSTOM]);
+    const before = readFileSync(serveConfigPath(configDir), "utf8");
+    chmodSync(serveConfigPath(configDir), 0o200);
+
+    const attempted = await run(["config", "init"]);
+    chmodSync(serveConfigPath(configDir), 0o600);
+
+    expect(attempted.exit).toBe(1);
+    expect(readFileSync(serveConfigPath(configDir), "utf8")).toBe(before);
+  });
+});
+
+describe("config set patches without replacing", () => {
+  test("it changes only what was named", async () => {
+    await run(["config", "init", ...CUSTOM]);
+
+    const patched = await run(["config", "set", "--port", "9001"]);
+
+    expect(patched.exit).toBe(0);
+    expect(deployment()).toEqual({ ...CUSTOM_DEPLOYMENT, port: 9001 });
+  });
+
+  test("it can acknowledge a non-loopback bind without resetting the deployment", async () => {
+    // The exact recovery the non-loopback refusal now prints.
+    await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+    expect(deployment().ack).toBe(false);
+
+    const acknowledged = await run(["config", "set", "--bind", "10.0.0.5", "--acknowledge-non-loopback"]);
+
+    expect(acknowledged.exit).toBe(0);
+    expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
+  });
+
+  test("--enable and --disable flip only `enabled`", async () => {
+    await run(["config", "init", ...CUSTOM]);
+
+    expect((await run(["config", "set", "--disable"])).exit).toBe(0);
+    expect(loadServeConfig(configDir)!.enabled).toBe(false);
+    expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
+
+    expect((await run(["config", "set", "--enable"])).exit).toBe(0);
+    expect(loadServeConfig(configDir)!.enabled).toBe(true);
+    expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
+  });
+
+  test("--enable and --disable together are refused rather than resolved by order", async () => {
+    await run(["config", "init", ...CUSTOM]);
+
+    const both = await run(["config", "set", "--enable", "--disable"]);
+
+    expect(both.exit).toBe(1);
+    expect(loadServeConfig(configDir)!.enabled).toBe(true);
+  });
+
+  test("with no flags it refuses rather than rewriting the file for nothing", async () => {
+    await run(["config", "init", ...CUSTOM]);
+
+    const empty = await run(["config", "set"]);
+
+    expect(empty.exit).toBe(1);
+    expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
+  });
+
+  test("with nothing configured it points at config init instead of inventing a config", async () => {
+    const orphan = await run(["config", "set", "--port", "9001"]);
+
+    expect(orphan.exit).toBe(1);
+    expect(orphan.out).toContain("keryx serve config init");
+    expect(existsSync(serveConfigPath(configDir))).toBe(false);
   });
 });
 
@@ -222,6 +300,99 @@ describe("the rotate-failure recovery instruction", () => {
     expect(record).not.toBeNull();
     expect(verifyServeToken(token, record!)).toBe(true);
     expect(loadServeConfig(configDir)!.credentialRef.id).toBe(record!.id);
+  });
+
+  test("no instruction printed while a configuration EXISTS names `config init`", async () => {
+    // The class, not the call site. The first fix corrected the one message the
+    // finding named, and a review then found three more — the `disabled`
+    // refusal, the non-loopback refusal, and the `serve status` note — each of
+    // which is reachable ONLY when a configuration exists, and each of which
+    // told the operator to run a command that now refuses.
+    //
+    // `--force` does not make them acceptable: it is a full replace built from
+    // the defaults, so following such an instruction resets bind, port and
+    // profile. The rule is therefore absolute for these states.
+    const states: Array<{ label: string; setup: () => Promise<void>; invoke: string[] }> = [
+      {
+        label: "disabled configuration, keryx serve",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          await run(["config", "set", "--disable"]);
+        },
+        invoke: [],
+      },
+      {
+        label: "disabled configuration, keryx serve status",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          await run(["config", "set", "--disable"]);
+        },
+        invoke: ["status"],
+      },
+      {
+        label: "unacknowledged non-loopback bind, keryx serve",
+        setup: async () => {
+          await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+          await run(["token", "issue"]);
+        },
+        invoke: [],
+      },
+      {
+        label: "unacknowledged non-loopback bind, keryx serve status",
+        setup: async () => {
+          await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+          await run(["token", "issue"]);
+        },
+        invoke: ["status"],
+      },
+    ];
+
+    const offenders: string[] = [];
+    for (const state of states) {
+      rmSync(serveConfigPath(configDir), { force: true });
+      await state.setup();
+      const result = await run(state.invoke);
+      // Not vacuous: each state must actually produce a message to inspect.
+      expect({ label: state.label, empty: result.out.trim().length === 0 }).toEqual({
+        label: state.label,
+        empty: false,
+      });
+      if (result.out.includes("config init")) {
+        offenders.push(state.label);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  }, 30_000);
+
+  test("the disabled refusal prints an instruction that works and preserves the deployment", async () => {
+    await run(["config", "init", ...CUSTOM]);
+    await run(["token", "issue"]);
+    await run(["config", "set", "--disable"]);
+
+    const refused = await run([]);
+    expect(refused.exit).toBe(1);
+    expect(refused.out).toContain("keryx serve config set --enable");
+
+    const followed = await run(["config", "set", "--enable"]);
+    expect(followed.exit).toBe(0);
+    expect(loadServeConfig(configDir)!.enabled).toBe(true);
+    expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
+  });
+
+  test("the non-loopback refusal prints an instruction that works and preserves the deployment", async () => {
+    await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+    await run(["token", "issue"]);
+
+    const refused = await run([]);
+    expect(refused.exit).toBe(1);
+    expect(refused.out).toContain("keryx serve config set --bind");
+
+    const followed = await run(["config", "set", "--bind", "10.0.0.5", "--acknowledge-non-loopback"]);
+    expect(followed.exit).toBe(0);
+    expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
   });
 
   test("status prints the same recovery instruction the failure does", async () => {

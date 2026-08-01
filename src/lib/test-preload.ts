@@ -23,7 +23,7 @@
 //
 // Wired through `bunfig.toml` `[test].preload`.
 
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -37,3 +37,34 @@ process.env.APPDATA = root;
 // mutation-checked and produced no failure at all: a guard that could not fail.
 // An env var is only present if something actually ran this file first.
 process.env.KERYX_TEST_CONFIG_ROOT = root;
+
+// Sweep the roots left by earlier runs.
+//
+// Without this every `bun test` left a directory behind — 23 had accumulated on
+// the machine a review measured. The obvious fix, an `exit` handler, does not
+// work: `bun test` fires neither `exit` nor `beforeExit`, verified directly
+// before writing this. So the cleanup runs at START and removes roots older
+// than an hour, which is far longer than any suite and therefore cannot touch a
+// concurrent run's directory. The steady state is one leftover, not N.
+const STALE_MS = 60 * 60 * 1_000;
+try {
+  const now = Date.now();
+  for (const entry of readdirSync(tmpdir(), { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("keryx-test-config-")) {
+      continue;
+    }
+    const candidate = path.join(tmpdir(), entry.name);
+    if (candidate === root) {
+      continue;
+    }
+    try {
+      if (now - statSync(candidate).mtimeMs > STALE_MS) {
+        rmSync(candidate, { recursive: true, force: true });
+      }
+    } catch {
+      // Someone else's, already gone, or not ours to remove.
+    }
+  }
+} catch {
+  // An unreadable tmpdir is not worth failing a test run over.
+}

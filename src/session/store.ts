@@ -10,6 +10,7 @@
 // current project.
 
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -18,6 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { ensureKeryxConfigDir, keryxConfigDir } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
@@ -75,8 +77,48 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Create a session directory owner-only, without widening what is above it.
+ *
+ * A recursive `mkdirSync` with no mode created every level under the current
+ * umask, and with `KERYX_DATA_DIR` unset the top level IS the shared
+ * user-global config directory — the one that holds `auth.json`. A review ran
+ * `keryx shell` on a fresh install under `umask 002` and measured the result:
+ * `~/.local/share/keryx` and the whole `sessions/` subtree at 0775, so any
+ * member of the operator's primary group could pre-create or replace
+ * `auth.json` before the first `/connect`, and unlink transcripts indefinitely.
+ *
+ * So the shared root goes through `ensureKeryxConfigDir`, which owns its mode,
+ * and every level this function creates below it is forced to 0700. `chmod` is
+ * best-effort and skipped on Windows, matching `ensureKeryxConfigDir`.
+ */
 function ensureDir(dir: string): void {
-  mkdirSync(dir, { recursive: true });
+  const root = keryxConfigDir();
+  const shared = dir === root || dir.startsWith(root + path.sep);
+  if (shared) {
+    // Only when the session tree really is inside the shared directory. With
+    // `KERYX_DATA_DIR` or an explicit `dataDir` it is not, and creating the
+    // shared directory as a side effect of writing somewhere else would be a
+    // surprise.
+    ensureKeryxConfigDir();
+  }
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (process.platform === "win32" || !shared) {
+    return;
+  }
+  // `mode` applies at CREATION only, so a level that already exists — from a
+  // release before this one, or created under a umask that stripped the bits —
+  // keeps whatever it had. Walk down from the shared root and force each level.
+  let current = root;
+  for (const segment of dir.slice(root.length + 1).split(path.sep)) {
+    current = path.join(current, segment);
+    try {
+      chmodSync(current, 0o700);
+    } catch {
+      // Not ours to chmod, or a filesystem that refuses it. The directory is
+      // still created; the mode is best-effort, exactly as it is one level up.
+    }
+  }
 }
 
 function atomicWriteText(file: string, body: string): void {

@@ -95,7 +95,10 @@ export function resolveServeStartup(input: ServeStartupInput): ServeStartup {
   if (!config.enabled) {
     return refuse(
       "disabled",
-      "the serve configuration is present but disabled. Re-run `keryx serve config init` to enable it.",
+      // `config set`, not `config init`. This state is reachable ONLY when a
+      // configuration exists, so `config init` refuses — and `--force` would
+      // make the instruction succeed by resetting bind, port and profile.
+      "the serve configuration is present but disabled. Run `keryx serve config set --enable` to enable it.",
     );
   }
   if (config.credentialRef.store !== "auth-json") {
@@ -133,7 +136,9 @@ export function resolveServeStartup(input: ServeStartupInput): ServeStartup {
   if (nonLoopback && config.bind.acknowledgeNonLoopback !== true) {
     return refuse(
       "non-loopback-not-acknowledged",
-      "the configured bind address is reachable beyond loopback. Re-run `keryx serve config init --bind <addr> --acknowledge-non-loopback` to acknowledge it explicitly; there is no TLS in this release.",
+      // Same reason as `disabled` above: a configuration exists on this branch
+      // by construction, so the instruction has to be the non-destructive one.
+      "the configured bind address is reachable beyond loopback. Run `keryx serve config set --bind <addr> --acknowledge-non-loopback` to acknowledge it explicitly; there is no TLS in this release.",
     );
   }
 
