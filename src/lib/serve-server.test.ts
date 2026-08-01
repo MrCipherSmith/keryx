@@ -132,8 +132,24 @@ afterEach(async () => {
   rmSync(path.dirname(configDir), { recursive: true, force: true });
 });
 
+/**
+ * A runner that refuses everything, for the tests that are not about turns.
+ *
+ * `makeSubmitTurn` is required rather than optional, which is the fix for the
+ * blocker where production simply never set it. These suites are about startup
+ * and the read routes, so they supply a runner that starts nothing — an honest
+ * stand-in, and one that would fail loudly if a test here ever began depending
+ * on a turn actually running.
+ */
+const REFUSES_EVERY_TURN = () => async () => ({ kind: "rejected" }) as const;
+
 async function start(config: ServeConfig | null, cred: ServeCredentialResult = credentialResult()) {
-  const outcome = await startServeListener({ config, credential: cred, dir: configDir });
+  const outcome = await startServeListener({
+    config,
+    credential: cred,
+    dir: configDir,
+    makeSubmitTurn: REFUSES_EVERY_TURN,
+  });
   if (outcome.ok) {
     listeners.push(outcome.listener);
   }
@@ -317,6 +333,7 @@ describe("startup preconditions", () => {
       credential: credentialResult(),
       localBaseline: () => resolveLocalProfile("read-only-review"),
       dir: configDir,
+      makeSubmitTurn: REFUSES_EVERY_TURN,
     });
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
@@ -332,6 +349,7 @@ describe("startup preconditions", () => {
       config: ephemeralConfig({ profile: "hardened" }),
       credential: credentialResult(),
       dir: configDir,
+      makeSubmitTurn: REFUSES_EVERY_TURN,
     });
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {

@@ -36,8 +36,38 @@ import { runOffline, type RunDeps } from "../harness/run/run";
 import { ToolRegistry } from "../harness/tool/registry";
 import type { ToolDefinition, ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/tool/types";
 import type { HarnessRunInput } from "../harness/types";
-import { readTurnEvents, readTurnRecord } from "./serve-turn-store";
+import {
+  readTurnEvents,
+  readTurnRecord,
+  type StreamEvent,
+  type TurnRecord,
+} from "./serve-turn-store";
 import { REMOTE_ORIGIN, runRemoteTurn, type TurnRequest } from "./serve-turn";
+
+/**
+ * The events of a turn, failing loudly when the store could not read them.
+ *
+ * `readTurnEvents` returns a typed result now: collapsing `too-large` into an
+ * empty list was the blocker this flow fixed, and the unwrapping here must not
+ * put it back. An unreadable read is a red test naming the reason, never an
+ * assertion about zero events.
+ */
+function eventsOf(turnId: string, after = -1, dir?: string): StreamEvent[] {
+  const read = readTurnEvents(turnId, after, dir);
+  if (!read.ok) {
+    throw new Error(`events for ${turnId} could not be read: ${read.reason}`);
+  }
+  return read.value;
+}
+
+/** The record of a turn, failing loudly for the same reason. */
+function recordOf(turnId: string, dir?: string): TurnRecord {
+  const read = readTurnRecord(turnId, dir);
+  if (!read.ok) {
+    throw new Error(`record for ${turnId} could not be read: ${read.reason}`);
+  }
+  return read.value;
+}
 
 let configDir = "";
 let project = "";
@@ -164,7 +194,7 @@ describe("an `ask` terminates in a recorded denial (AC5)", () => {
     // two accounts of itself disagree — a client watching live and a client
     // polling would learn different things about the same turn.
     const run = await runAsking();
-    const events = readTurnEvents(run.turnId, -1, configDir);
+    const events = eventsOf(run.turnId, -1, configDir);
     const pending = events.find((event) => event.kind === "approval.pending");
     const resolved = events.find((event) => event.kind === "approval.resolved");
 
@@ -187,8 +217,8 @@ describe("an `ask` terminates in a recorded denial (AC5)", () => {
 
     // And on the remote side: no turn is left without a terminal result.
     const run = await runAsking();
-    expect(readTurnRecord(run.turnId, configDir)?.result).toBeDefined();
-    expect(readTurnEvents(run.turnId, -1, configDir).some((e) => e.terminal === true)).toBe(true);
+    expect(recordOf(run.turnId, configDir).result).toBeDefined();
+    expect(eventsOf(run.turnId, -1, configDir).some((e) => e.terminal === true)).toBe(true);
   });
 
   test("the denial is not produced by the absence of an approval store", async () => {
@@ -271,7 +301,7 @@ describe("parity between the HTTP path and the local harness path (AC2)", () => 
       newId: () => `00000000-0000-4000-8000-00000000000${counter++}`,
     });
 
-    const remoteRecord = readTurnRecord(remote.turnId, configDir);
+    const remoteRecord = recordOf(remote.turnId, configDir);
     expect(remoteRecord).not.toBeNull();
 
     // The remote run's decisions are not returned to the caller by design — a
@@ -349,6 +379,6 @@ describe("parity between the HTTP path and the local harness path (AC2)", () => 
     // A `deny` is not an `ask`: the turn completes rather than being denied for
     // want of an approval, and no approval record is invented for it.
     expect(remote.result.approvals).toBeUndefined();
-    expect(readTurnEvents(remote.turnId, -1, configDir).some((e) => e.kind === "approval.pending")).toBe(false);
+    expect(eventsOf(remote.turnId, -1, configDir).some((e) => e.kind === "approval.pending")).toBe(false);
   });
 });

@@ -218,6 +218,17 @@ export interface RunTurnInput {
   /** Overrides the user-global config directory. */
   dir?: string | undefined;
   clock?: () => string;
+  /**
+   * The turn's own id, when the caller already minted one.
+   *
+   * Separate from `newId` deliberately. `createSubmitTurn` mints the turn id
+   * before the run so it can claim the idempotency key against it, and it used
+   * to hand that id back as `newId: () => turnId` — a CONSTANT seam. Every id
+   * minted through the seam then collided: the session id and the approval id
+   * were the turn id, and the 202 reported a `sessionId` that was really the
+   * turnId. The test asserted both were uuid-shaped and never that they differ.
+   */
+  turnId?: string;
   /** Injected so a test can pin ids; production mints uuids. */
   newId?: () => string;
   /**
@@ -286,7 +297,34 @@ export async function scanPrompt(scanRoot: string, prompt: string): Promise<{ re
     // conversion into a turn." `redact` and `warn` do not stop it — the first
     // is handled by the redaction itself and the second is advisory by
     // definition.
-    const blocking = findings.some((finding) => finding.action === "block" || finding.action === "require-approval");
+    //
+    // AND a prompt-injection finding stops it whatever action the gate assigned,
+    // which is not the same rule and has to be stated separately. Every
+    // injection detector scores 0.35 to 0.45; the default `gate.minConfidence`
+    // is 0.5; so `buildFinding` downgraded every injection finding to `warn` and
+    // this line let all four canonical injection prompts through with
+    // `rejected: false` while an AWS key was correctly rejected. Step 5 of the
+    // required decision path worked for the secret class and was inert for the
+    // injection class — on the one surface that can cause agent execution from
+    // outside the operator's terminal.
+    //
+    // Not fixed by lowering the threshold. The threshold is right for what it
+    // governs: `resolve.ts` §7a deliberately keeps a LONE injection signal at
+    // `warn` for content scanning, and escalates only when an egress signal
+    // co-occurs. That is a reasonable policy for a project file. It is not a
+    // reasonable policy for a prompt a stranger just posted to a listener, and
+    // the boundary is where that difference belongs — not in the shared
+    // resolver, whose other callers were not reviewed here.
+    //
+    // Nor is it reconfigurable away: the scan root is the install directory,
+    // which never receives a `security.config.json`, so an operator could not
+    // have tightened this even knowing about it.
+    const blocking = findings.some(
+      (finding) =>
+        finding.action === "block" ||
+        finding.action === "require-approval" ||
+        finding.category === "prompt-injection",
+    );
     return { rejected: blocking };
   } catch {
     // Fail closed. A scanner that errored has not cleared this prompt, and the
@@ -323,7 +361,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   const scanRoot = input.scanRoot;
   const newId = input.newId ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
-  const turnId = newId();
+  const turnId = input.turnId ?? newId();
   const sessionId = input.request.sessionId ?? newId();
   const startedAt = clock();
   let seq = 0;
@@ -333,15 +371,47 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     input.dir,
   );
 
+  // True once the backlog bound has refused an append. The record has stopped
+  // growing, which is a different thing from the turn ending, and the terminal
+  // event says which of the two happened.
+  let bounded = false;
+
   const emit = (kind: StreamEventKind, extra: Partial<StreamEvent> = {}): void => {
     const event: StreamEvent = { schemaVersion: "1.0.0", turnId, seq, kind, at: clock(), ...extra };
     if (appendTurnEvent(event, input.dir)) {
       seq += 1;
       return;
     }
-    // The backlog bound. api-protocol.md §Bounds: the stream is closed with a
-    // terminal event rather than truncated silently — so the caller is told the
-    // record stopped growing, which is a different thing from the turn ending.
+    // The backlog bound. api-protocol.md §Bounds: the stream is CLOSED with a
+    // terminal event rather than truncated silently. This return used to be the
+    // whole handling — the `false` was discarded, so past the bound every later
+    // event was dropped INCLUDING `terminate()`'s `turn.finished`, and the
+    // stream just stopped. A client waiting for a terminal event waited forever.
+    bounded = true;
+  };
+
+  /**
+   * The closing event, which the bound may not refuse.
+   *
+   * Forced past the window on purpose, and marked so a reader can tell a stream
+   * that ended from one that was cut short: `terminal` says the stream is over,
+   * `text` says why there is less of it than the turn produced.
+   */
+  const emitTerminal = (): void => {
+    appendTurnEvent(
+      {
+        schemaVersion: "1.0.0",
+        turnId,
+        seq,
+        kind: "turn.finished",
+        at: clock(),
+        terminal: true,
+        ...(bounded ? { text: "the event backlog bound was reached; earlier events are complete, later ones were not recorded" } : {}),
+      },
+      input.dir,
+      { force: true },
+    );
+    seq += 1;
   };
 
   const terminate = (
@@ -362,7 +432,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
       ...(text !== undefined ? { text } : {}),
       ...(approvals !== undefined ? { approvals } : {}),
     };
-    emit("turn.finished", { terminal: true });
+    emitTerminal();
     finishTurn(turnId, result, input.dir);
     return { turnId, sessionId, result };
   };
@@ -531,26 +601,36 @@ export interface SubmitDeps {
  *
  * Order, and why each step is where it is:
  *
- *   1. claim the idempotency key — before anything else, because "returns the
- *      original turnId and starts nothing" has to mean NOTHING, including the
- *      scan and the record that would otherwise already exist.
- *   2. scan the prompt — before a record is created, because a rejected prompt
- *      must leave no turn behind. security-policy.md: "No turn is created."
+ *   1. scan the prompt — first, and before anything durable exists. A rejected
+ *      prompt must leave no turn behind AND no claim behind.
+ *   2. claim the idempotency key — after the scan, immediately before the
+ *      record. Claiming first is what the first version did, and it made a
+ *      422-rejected prompt POISON its key permanently: every later submission
+ *      of the corrected prompt returned `200 {duplicate: true, sessionId: ""}`
+ *      pointing at a turnId whose record 404s forever, and the legitimate
+ *      prompt never ran. There is no release path for a claim, so a claim taken
+ *      before a step that can fail is a key burned for good.
  *   3. run.
+ *
+ * The window this leaves is stated rather than hidden: two concurrent
+ * submissions of the same key can both pass the scan and both reach the claim,
+ * and one of them loses and is answered as a duplicate. That is a duplicate
+ * turn under contention, which is the direction to fail in — the alternative
+ * fails by permanently burning a key on a prompt the caller can fix and resend.
  */
 export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, project: string) => Promise<SubmitOutcome> {
   return async (request: TurnRequest, project: string): Promise<SubmitOutcome> => {
     const turnId = (deps.newId ?? (() => randomUUID()))();
 
-    const claimed = claimTurnKey(request, turnId, deps.dir);
-    if (claimed.existing !== null) {
-      const held = readTurnRecord(claimed.existing, deps.dir);
-      return { kind: "duplicate", turnId: claimed.existing, sessionId: held?.sessionId ?? "" };
-    }
-
     const scanned = await scanPrompt(deps.dir, request.prompt);
     if (scanned.rejected) {
       return { kind: "rejected" };
+    }
+
+    const claimed = claimTurnKey(request, turnId, deps.dir);
+    if (claimed.existing !== null) {
+      const held = readTurnRecord(claimed.existing, deps.dir);
+      return { kind: "duplicate", turnId: claimed.existing, sessionId: held.ok ? held.value.sessionId : "" };
     }
 
     const run = await runRemoteTurn({
@@ -562,7 +642,10 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
       model: deps.model,
       dir: deps.dir,
       scanRoot: deps.dir,
-      newId: () => turnId,
+      // The id as a VALUE, not as a constant `newId` seam. Passing the seam made
+      // the session id and the approval id collide with the turn id.
+      turnId,
+      ...(deps.newId !== undefined ? { newId: deps.newId } : {}),
       ...(deps.toolRegistry !== undefined ? { toolRegistry: deps.toolRegistry } : {}),
       ...(deps.clock !== undefined ? { clock: deps.clock } : {}),
       ...(deps.containmentAvailable !== undefined ? { containmentAvailable: deps.containmentAvailable } : {}),

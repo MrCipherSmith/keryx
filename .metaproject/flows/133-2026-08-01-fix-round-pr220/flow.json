@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 2,
+  "id": "133",
+  "slug": "fix-round-pr220",
+  "title": "Fix round PR #220 (flow 131 / R4c): two blockers and the eleven remaining majors",
+  "status": "in-progress",
+  "createdAt": "2026-08-01T23:22:55.451Z",
+  "updatedAt": "2026-08-01T23:45:06.642Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:37f04759f13a5e342a940f3f88d4073f1f962199cc815ba6ee7009f04871eeff",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "AC1/AC2: the real-socket route test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "F-005/F-006/F-007: claim order, distinct ids, terminal event",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "F-003: an injection finding blocks, at both sites of the class",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "F-004: one profile ranking, trustMode included, guarded",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "F-008: the error boundary on the listener",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "F-009/F-010/F-011: the three test defects",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verify: full suite, typecheck, health",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Fix-round review, recorded as a managed package",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Update PR #220 and ready it",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T23:22:55.451Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T23:27:24.752Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T23:27:24.841Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T23:27:24.926Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T23:27:25.009Z",
+      "event": "task-added",
+      "detail": "T5: AC1/AC2: the real-socket route test"
+    },
+    {
+      "at": "2026-08-01T23:27:25.095Z",
+      "event": "task-added",
+      "detail": "T6: F-005/F-006/F-007: claim order, distinct ids, terminal event"
+    },
+    {
+      "at": "2026-08-01T23:27:25.179Z",
+      "event": "task-added",
+      "detail": "T7: F-003: an injection finding blocks, at both sites of the class"
+    },
+    {
+      "at": "2026-08-01T23:27:25.264Z",
+      "event": "task-added",
+      "detail": "T8: F-004: one profile ranking, trustMode included, guarded"
+    },
+    {
+      "at": "2026-08-01T23:27:25.346Z",
+      "event": "task-added",
+      "detail": "T9: F-008: the error boundary on the listener"
+    },
+    {
+      "at": "2026-08-01T23:27:25.429Z",
+      "event": "task-added",
+      "detail": "T10: F-009/F-010/F-011: the three test defects"
+    },
+    {
+      "at": "2026-08-01T23:27:25.514Z",
+      "event": "task-added",
+      "detail": "T11: Verify: full suite, typecheck, health"
+    },
+    {
+      "at": "2026-08-01T23:27:25.599Z",
+      "event": "task-added",
+      "detail": "T12: Fix-round review, recorded as a managed package"
+    },
+    {
+      "at": "2026-08-01T23:27:25.682Z",
+      "event": "task-added",
+      "detail": "T13: Update PR #220 and ready it"
+    },
+    {
+      "at": "2026-08-01T23:33:35.476Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T23:37:21.500Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T23:45:06.474Z",
+      "event": "task-done",
+      "detail": "T5: AC1/AC2: the real-socket route test"
+    },
+    {
+      "at": "2026-08-01T23:45:06.558Z",
+      "event": "task-done",
+      "detail": "T6: F-005/F-006/F-007: claim order, distinct ids, terminal event"
+    },
+    {
+      "at": "2026-08-01T23:45:06.642Z",
+      "event": "task-done",
+      "detail": "T7: F-003: an injection finding blocks, at both sites of the class"
+    }
+  ]
+}

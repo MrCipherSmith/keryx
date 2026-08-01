@@ -1,0 +1,20 @@
+# Flow Journal
+
+- 2026-08-01T23:22:55.451Z - flow created
+- 2026-08-01T23:27:24.752Z - frozen: 15 criteria; checksum recorded
+- 2026-08-01T23:27:24.841Z - started
+- 2026-08-01T23:27:24.926Z - task-done: T1: Collect remaining context
+- 2026-08-01T23:27:25.009Z - task-added: T5: AC1/AC2: the real-socket route test
+- 2026-08-01T23:27:25.095Z - task-added: T6: F-005/F-006/F-007: claim order, distinct ids, terminal event
+- 2026-08-01T23:27:25.179Z - task-added: T7: F-003: an injection finding blocks, at both sites of the class
+- 2026-08-01T23:27:25.264Z - task-added: T8: F-004: one profile ranking, trustMode included, guarded
+- 2026-08-01T23:27:25.346Z - task-added: T9: F-008: the error boundary on the listener
+- 2026-08-01T23:27:25.429Z - task-added: T10: F-009/F-010/F-011: the three test defects
+- 2026-08-01T23:27:25.514Z - task-added: T11: Verify: full suite, typecheck, health
+- 2026-08-01T23:27:25.599Z - task-added: T12: Fix-round review, recorded as a managed package
+- 2026-08-01T23:27:25.682Z - task-added: T13: Update PR #220 and ready it
+- 2026-08-01T23:33:35.476Z - task-done: T2: Implement per plan
+- 2026-08-01T23:37:21.500Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-01T23:45:06.474Z - task-done: T5: AC1/AC2: the real-socket route test
+- 2026-08-01T23:45:06.558Z - task-done: T6: F-005/F-006/F-007: claim order, distinct ids, terminal event
+- 2026-08-01T23:45:06.642Z - task-done: T7: F-003: an injection finding blocks, at both sites of the class

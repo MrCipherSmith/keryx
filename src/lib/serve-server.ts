@@ -553,7 +553,14 @@ function streamTurnEvents(request: Request, turnId: string, ctx: ServeContext): 
   const after = Number.isInteger(parsed) && parsed >= 0 ? parsed : -1;
 
   const events = readTurnEvents(turnId, after, ctx.dir);
-  const body = events.map((event) => `id: ${event.seq}\ndata: ${JSON.stringify(event)}\n\n`).join("");
+  if (!events.ok) {
+    // 200 with an empty body is the answer this route used to give for a record
+    // it could not read — the silent truncation §Bounds forbids, and the reason
+    // the bound the store reads at is now its own. A caller is told the stream
+    // is unavailable instead of being told the turn produced nothing.
+    return errorResponse(500, "record-unreadable", "The durable record for this turn could not be read.");
+  }
+  const body = events.value.map((event) => `id: ${event.seq}\ndata: ${JSON.stringify(event)}\n\n`).join("");
 
   return new Response(body, {
     headers: {
@@ -637,19 +644,28 @@ export async function handleServeRequest(request: Request, ctx: ServeContext): P
     // malformed one answer identically: api-protocol.md requires a 404 for an
     // unknown id and a 403 for one the token may not reach to be
     // indistinguishable, and the same reasoning covers "not an id at all".
-    const record = isTurnId(matched.turnId) ? readTurnRecord(matched.turnId, ctx.dir) : null;
-    if (record === null) {
+    const record = readTurnRecord(matched.turnId, ctx.dir);
+    if (!record.ok) {
+      // "There is no such turn" and "I could not read the turn there is" are
+      // different answers and used to be the same one: an oversized `turn.json`
+      // 404'd for a turn that existed. `absent`, `malformed` and `not-a-turn-id`
+      // stay 404 — an unknown id and a malformed one answer identically by
+      // design, so a caller cannot probe for which ids exist. The two that mean
+      // "this process failed" are reported as this process failing.
+      if (record.reason === "too-large" || record.reason === "unreadable") {
+        return errorResponse(500, "record-unreadable", "The durable record for this turn could not be read.");
+      }
       return errorResponse(404, "not-found", "Not found.");
     }
     if (matched.route === "turn-events") {
       return streamTurnEvents(request, matched.turnId, ctx);
     }
-    if (record.result === undefined) {
+    if (record.value.result === undefined) {
       // Accepted and running. api-protocol.md: the terminal result is
       // "available after the turn reaches a terminal state".
       return errorResponse(409, "turn-in-progress", "The turn has not reached a terminal state.");
     }
-    return new Response(`${JSON.stringify(record.result, null, 2)}\n`, { headers: JSON_HEADERS });
+    return new Response(`${JSON.stringify(record.value.result, null, 2)}\n`, { headers: JSON_HEADERS });
   }
 
   if (pathname === "/v1/status") {
@@ -709,6 +725,27 @@ export type StartServeOutcome = { ok: true; listener: ServeListener } | ServeSta
 export interface StartServeInput extends ServeStartupInput {
   /** Overrides the user-global config directory (registry + credential store). */
   dir?: string | undefined;
+  /**
+   * How the turn runner is assembled for this listener.
+   *
+   * REQUIRED, and that is the fix rather than an inconvenience. `submitTurn` was
+   * an optional field on `ServeContext` that production simply never set:
+   * `createSubmitTurn` had zero production callers, so a `keryx serve` the CLI
+   * could start answered every submission with 503 — while nine of the twelve
+   * criteria that were supposed to prove otherwise had been verified through
+   * `handleServeRequest` with a runner the test fixture injected. Optional plus
+   * a caller who forgets is indistinguishable from absent.
+   *
+   * It stays a parameter rather than becoming an import because of the
+   * dependency direction this module holds: no provider, model or run-assembly
+   * concept appears here, and none may. `serve-runner.ts` owns the assembly and
+   * `commands/serve.ts` is the composition root that passes it. What changed is
+   * that omitting it no longer typechecks.
+   */
+  makeSubmitTurn: (
+    profile: PolicyProfile,
+    dir: string | undefined,
+  ) => (request: TurnRequest, project: string) => Promise<SubmitTurnOutcome>;
 }
 
 /**
@@ -737,6 +774,12 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
   // out of a server they control by fixing it and turning it back on.
   const throttle = new AuthFailureThrottle();
 
+  // The runner, assembled here rather than left to the caller. `startup.profile`
+  // is the profile the startup path already resolved and compared against the
+  // local baseline, so the listener cannot run turns under a profile that was
+  // never checked.
+  const submitTurn = input.makeSubmitTurn(startup.profile, input.dir);
+
   let server: Server<undefined>;
   try {
     server = Bun.serve({
@@ -757,6 +800,7 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
           // mistake as reading an origin out of a request body.
           peer: self.requestIP(request)?.address ?? "unknown",
           throttle,
+          submitTurn,
         }),
     });
   } catch (error) {

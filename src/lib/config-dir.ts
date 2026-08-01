@@ -114,6 +114,28 @@ export const MAX_CONFIG_FILE_BYTES = 1_000_000;
  */
 export const MAX_TRANSCRIPT_FILE_BYTES = 64 * 1024 * 1024;
 
+/**
+ * The largest a durable turn file may be before it is refused unread.
+ *
+ * A third bound, for the third reason. `turns/<id>/events.jsonl` is append-only
+ * and grows with the turn, and `turns/<id>/turn.json` carries the assistant's
+ * text in `result.text`, so neither is a config document and neither may be read
+ * at the config bound.
+ *
+ * That is not hypothetical. Both were read through `readConfigFile`, whose bound
+ * is 1 MB, while this module's own `MAX_TURN_EVENTS` is 10 000 — and 10 000
+ * events serialise to at least 1 518 890 bytes carrying no assistant text at
+ * all. Measured: 8 000 events give 1 302 890 bytes and the read then returned
+ * ZERO events, so past roughly 6 500 events the event route answered 200 with an
+ * empty body. `api-protocol.md` §Bounds forbids exactly that, and the store's
+ * own header said it could not happen.
+ *
+ * 64 MiB, the same number as a transcript and for the same reason: far above any
+ * event log 10 000 bounded events can produce, far below the size at which the
+ * read aborts.
+ */
+export const MAX_TURN_FILE_BYTES = 64 * 1024 * 1024;
+
 /** Why a file could not be read. */
 export type ConfigReadFailure = "absent" | "not-regular" | "too-large" | "unreadable";
 
@@ -181,6 +203,19 @@ export function readConfigFile(file: string): ConfigReadResult {
  */
 export function readTranscriptFile(file: string): ConfigReadResult {
   return readBoundedFile(file, MAX_TRANSCRIPT_FILE_BYTES);
+}
+
+/**
+ * Read a durable turn file, refusing one beyond `MAX_TURN_FILE_BYTES`.
+ *
+ * Same stat-before-read path as the other two, a third bound and a third reason
+ * for it — see `MAX_TURN_FILE_BYTES`. A caller of this one must surface the
+ * failure rather than collapsing it into an empty result: that collapse is the
+ * defect the bound was added for, and a correct bound with a lying caller in
+ * front of it is the same silence.
+ */
+export function readTurnFile(file: string): ConfigReadResult {
+  return readBoundedFile(file, MAX_TURN_FILE_BYTES);
 }
 
 /**

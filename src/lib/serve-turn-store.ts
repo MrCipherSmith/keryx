@@ -33,7 +33,15 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { appendOwnerOnlyLine, ensureKeryxSubdir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
+import {
+  appendOwnerOnlyLine,
+  type ConfigReadFailure,
+  ensureKeryxSubdir,
+  keryxConfigDir,
+  readConfigFile,
+  readTurnFile,
+  writeOwnerOnlyFile,
+} from "./config-dir";
 
 /** `stream-event.schema.json`, as this release emits it. */
 export type StreamEventKind =
@@ -137,6 +145,11 @@ function keyPath(idempotencyKey: string, dir?: string): string {
  * onto a path, so this is the containment boundary for all of them — one check,
  * at the one place the id becomes a path, rather than one per route.
  */
+/** Why a turn file could not be read, or the value if it could. */
+export type TurnReadFailure = ConfigReadFailure | "not-a-turn-id" | "malformed";
+
+export type TurnReadResult<T> = { ok: true; value: T } | { ok: false; reason: TurnReadFailure };
+
 export function isTurnId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 }
@@ -162,9 +175,15 @@ export function createTurnRecord(record: TurnRecord, dir?: string): void {
  * doing it, because "the stream is closed with a terminal event" is a statement
  * about the stream and the stream is the caller's.
  */
-export function appendTurnEvent(event: StreamEvent, dir?: string): boolean {
+export function appendTurnEvent(event: StreamEvent, dir?: string, opts?: { force?: boolean }): boolean {
   const target = ensureTurnDir(event.turnId, dir);
-  if (event.seq >= MAX_TURN_EVENTS) {
+  // `force` exists for exactly one event: the terminal one. §Bounds requires the
+  // stream to be CLOSED with a terminal event rather than truncated, and the
+  // caller could not honour that while the bound refused the closing event
+  // too — past the bound `turn.finished` was dropped like everything else, so
+  // the stream simply stopped, which is the silent truncation the bound was
+  // supposed to prevent. One event past the window is the cost of saying so.
+  if (event.seq >= MAX_TURN_EVENTS && opts?.force !== true) {
     return false;
   }
   appendOwnerOnlyLine(path.join(target, "events.jsonl"), JSON.stringify(event));
@@ -183,13 +202,20 @@ export function appendTurnEvent(event: StreamEvent, dir?: string): boolean {
  * unreadable, and every line before it is intact by construction because each
  * append is one document.
  */
-export function readTurnEvents(turnId: string, after = -1, dir?: string): StreamEvent[] {
+export function readTurnEvents(turnId: string, after = -1, dir?: string): TurnReadResult<StreamEvent[]> {
   if (!isTurnId(turnId)) {
-    return [];
+    return { ok: false, reason: "not-a-turn-id" };
   }
-  const read = readConfigFile(path.join(turnDir(turnId, dir), "events.jsonl"));
+  const read = readTurnFile(path.join(turnDir(turnId, dir), "events.jsonl"));
   if (!read.ok) {
-    return [];
+    // `absent` is a real answer: a turn whose first event has not been appended
+    // yet has no log, and that is zero events rather than a failure. Every other
+    // reason is a file this process could not read, and saying "no events" about
+    // one of those is the silent truncation §Bounds forbids.
+    if (read.reason === "absent") {
+      return { ok: true, value: [] };
+    }
+    return { ok: false, reason: read.reason };
   }
   const events: StreamEvent[] = [];
   for (const line of read.text.split("\n")) {
@@ -205,36 +231,55 @@ export function readTurnEvents(turnId: string, after = -1, dir?: string): Stream
       continue;
     }
   }
-  return events;
+  return { ok: true, value: events };
 }
 
-/** The record for a turn, or null when there is none this process may read. */
-export function readTurnRecord(turnId: string, dir?: string): TurnRecord | null {
+/**
+ * The record for a turn.
+ *
+ * `absent` and `malformed` are distinct from `too-large` and `unreadable` for
+ * the same reason the event log's are: a route that answers 404 for all four
+ * tells the caller a turn does not exist when the truth is that this process
+ * could not read one that does — and `finishTurn` built on that answer no-opped
+ * silently, stranding the turn at 409 forever.
+ */
+export function readTurnRecord(turnId: string, dir?: string): TurnReadResult<TurnRecord> {
   if (!isTurnId(turnId)) {
-    return null;
+    return { ok: false, reason: "not-a-turn-id" };
   }
-  const read = readConfigFile(path.join(turnDir(turnId, dir), "turn.json"));
+  const read = readTurnFile(path.join(turnDir(turnId, dir), "turn.json"));
   if (!read.ok) {
-    return null;
+    return { ok: false, reason: read.reason };
   }
   try {
     const record = JSON.parse(read.text) as TurnRecord;
-    return typeof record.turnId === "string" && record.turnId === turnId ? record : null;
+    if (typeof record.turnId !== "string" || record.turnId !== turnId) {
+      return { ok: false, reason: "malformed" };
+    }
+    return { ok: true, value: record };
   } catch {
-    return null;
+    return { ok: false, reason: "malformed" };
   }
 }
 
-/** Write the terminal result onto an existing record. */
-export function finishTurn(turnId: string, result: TurnResult, dir?: string): void {
+/**
+ * Write the terminal result onto an existing record. Returns what it did.
+ *
+ * The boolean is the point. This used to return void and no-op when the record
+ * could not be read, so an unreadable `turn.json` left a turn that had finished
+ * reporting `running` — 409 to every later submission, with nothing anywhere
+ * saying why.
+ */
+export function finishTurn(turnId: string, result: TurnResult, dir?: string): boolean {
   const record = readTurnRecord(turnId, dir);
-  if (record === null) {
-    return;
+  if (!record.ok) {
+    return false;
   }
   writeOwnerOnlyFile(
     path.join(turnDir(turnId, dir), "turn.json"),
-    `${JSON.stringify({ ...record, result }, null, 2)}\n`,
+    `${JSON.stringify({ ...record.value, result }, null, 2)}\n`,
   );
+  return true;
 }
 
 // ---------------------------------------------------------------------------

@@ -55,6 +55,7 @@ import {
   serveCredentialPath,
 } from "../lib/serve-credential";
 import { describeServeStatus, startServeListener } from "../lib/serve-server";
+import { assembleSubmitTurn } from "../lib/serve-runner";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 // ---------------------------------------------------------------------------
@@ -209,6 +210,11 @@ async function runServe(args: string[]): Promise<void> {
     // configured" from "the file is there and I could not read it", and the
     // instruction it prints is wrong for two of the three.
     configState: serveConfigState(),
+    // The composition root supplies the runner. This is the line whose absence
+    // made every `POST /v1/turns` answer 503 on a real listener while the route
+    // tests were green — the field is required now, so it cannot go missing
+    // again without the build saying so.
+    makeSubmitTurn: assembleSubmitTurn,
   });
   if (!outcome.ok) {
     fail(sanitizeForDisplay(outcome.message));
