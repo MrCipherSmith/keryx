@@ -78,6 +78,20 @@ function nowIso(): string {
 }
 
 /**
+ * The `sessions/` directory a session path sits under, or null.
+ *
+ * Used only to bound the mode walk when the data root is NOT the shared config
+ * directory: everything from `sessions/` down is created by keryx and is forced
+ * to 0700; the operator's own `KERYX_DATA_DIR` above it is not keryx's to
+ * re-permission.
+ */
+function sessionsRootFor(dir: string): string | null {
+  const marker = `${path.sep}sessions${path.sep}`;
+  const at = dir.indexOf(marker);
+  return at < 0 ? null : dir.slice(0, at + marker.length - 1);
+}
+
+/**
  * Create a session directory owner-only, without widening what is above it.
  *
  * A recursive `mkdirSync` with no mode created every level under the current
@@ -89,12 +103,21 @@ function nowIso(): string {
  * `auth.json` before the first `/connect`, and unlink transcripts indefinitely.
  *
  * So the shared root goes through `ensureKeryxConfigDir`, which owns its mode,
- * and every level this function creates below it is forced to 0700. `chmod` is
- * best-effort and skipped on Windows, matching `ensureKeryxConfigDir`.
+ * and every level below it is forced to 0700.
+ *
+ * The walk runs under `KERYX_DATA_DIR` too. A first version skipped it there —
+ * scoped, again, to the call site the finding named — which left every install
+ * that sets that variable with a permanently group-writable `sessions/`, and
+ * transcripts anyone in the group could read or unlink. The data root itself is
+ * not touched in that case: it is the operator's chosen directory and may
+ * legitimately hold other things, so the tighten starts one level in, at
+ * `sessions/`.
+ *
+ * `chmod` is best-effort and skipped on Windows, matching `ensureKeryxConfigDir`.
  */
 function ensureDir(dir: string): void {
-  const root = keryxConfigDir();
-  const shared = dir === root || dir.startsWith(root + path.sep);
+  const configRoot = keryxConfigDir();
+  const shared = dir === configRoot || dir.startsWith(configRoot + path.sep);
   if (shared) {
     // Only when the session tree really is inside the shared directory. With
     // `KERYX_DATA_DIR` or an explicit `dataDir` it is not, and creating the
@@ -103,21 +126,43 @@ function ensureDir(dir: string): void {
     ensureKeryxConfigDir();
   }
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  if (process.platform === "win32" || !shared) {
+  if (process.platform === "win32") {
     return;
   }
   // `mode` applies at CREATION only, so a level that already exists — from a
   // release before this one, or created under a umask that stripped the bits —
-  // keeps whatever it had. Walk down from the shared root and force each level.
+  // keeps whatever it had. Walk down and force each level.
+  //
+  // Where the walk STARTS is the whole question. Inside the shared config
+  // directory it starts at the root, which `ensureKeryxConfigDir` has already
+  // tightened. Outside it, the root is the operator's own directory and is left
+  // alone; the walk begins at the first level keryx itself creates.
+  const root = shared ? configRoot : sessionsRootFor(dir);
+  if (root === null || !dir.startsWith(root + path.sep)) {
+    return;
+  }
+  if (!shared) {
+    // `sessions/` itself is the first level keryx creates outside the shared
+    // directory, so it is part of the walk rather than its already-tightened
+    // starting point. Omitting it left it at 0775 while every level below it
+    // was 0700 — which is the level that matters, since group write there is
+    // enough to unlink a whole project's transcripts.
+    tighten(root);
+  }
   let current = root;
   for (const segment of dir.slice(root.length + 1).split(path.sep)) {
     current = path.join(current, segment);
-    try {
-      chmodSync(current, 0o700);
-    } catch {
-      // Not ours to chmod, or a filesystem that refuses it. The directory is
-      // still created; the mode is best-effort, exactly as it is one level up.
-    }
+    tighten(current);
+  }
+}
+
+/** Force one directory owner-only. Best-effort, like every other mode here. */
+function tighten(target: string): void {
+  try {
+    chmodSync(target, 0o700);
+  } catch {
+    // Not ours to chmod, or a filesystem that refuses it. The directory is
+    // still created; the mode is best-effort, exactly as it is one level up.
   }
 }
 

@@ -7,9 +7,9 @@
 // owner-only, never logged, and only read to populate the process env at startup.
 // All functions are best-effort and never throw; the `dir` override keeps them
 // unit-testable against a temp directory.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
 
 export interface ShellConfig {
   provider?: string;
@@ -53,7 +53,10 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
     // of the operator's primary group. See `config-dir.permissions.test.ts`.
     ensureKeryxConfigDir(dir);
     const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
-    writeFileSync(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+    // Same creation-only trap as the directory mode: an `auth.json` that already
+    // exists 0664 keeps that mode through every write, and this file holds
+    // plaintext provider API keys.
+    writeOwnerOnlyFile(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
   } catch {
     // best-effort persistence — a failure just means the user re-enters next time
   }

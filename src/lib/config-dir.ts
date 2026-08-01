@@ -26,7 +26,7 @@
 // of any existing install that sets it, which is a migration, not a cleanup.
 // It is recorded here so the next person finds it rather than discovering it.
 
-import { chmodSync, mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -56,6 +56,36 @@ export function keryxConfigDir(dir?: string): string {
 }
 
 /**
+ * Write a user-global config file and force it owner-only.
+ *
+ * The same defect as the directory one, on the file path, and it survived the
+ * first two fix rounds: `writeFileSync`'s `mode` applies at CREATION only, so a
+ * `serve.json` or `auth.json` that already exists at 0664 — from a release
+ * before the mode was passed, or from a restore, or from an editor — stays 0664
+ * through every subsequent write. `keryx serve config set` made it reachable on
+ * every single invocation, since a patch is by construction a rewrite.
+ *
+ * The credential store does not use this: it needs temp+fsync+rename, and rename
+ * carries the temp file's mode, so it is already correct.
+ *
+ * Throws what the write throws — callers here decide what a failure means.
+ */
+export function writeOwnerOnlyFile(file: string, body: string): void {
+  writeFileSync(file, body, { mode: 0o600 });
+  if (process.platform === "win32") {
+    return;
+  }
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    // Unreported, like the directory chmod above and for the same reason: this
+    // helper has callers with different error contracts. Nothing in keryx reads
+    // the mode of these two files back, so there is no fail-closed check to
+    // route it through — said plainly rather than implied.
+  }
+}
+
+/**
  * Resolve the config directory, create it if absent, and force it owner-only.
  *
  * Every writer of a file in this directory must call this instead of
@@ -69,15 +99,16 @@ export function keryxConfigDir(dir?: string): string {
  * inspects only the file mode never fires — and authenticates as the operator.
  * The same handle replaces `auth.json` and its plaintext provider API keys.
  *
- * A first fix tightened only the writer the finding named. The class is pinned
- * instead by `config-dir.permissions.test.ts`, which drives all five writers
- * under `umask 002` against an already-widened directory.
+ * A first fix tightened only the writer the finding named, and a second missed
+ * `createSession`. The class is pinned instead by
+ * `config-dir.permissions.test.ts`, which drives every writer under `umask 002`
+ * against a directory that already exists group-writable.
  *
  * Best-effort: a directory that cannot be created or chmodded (a read-only
  * mount, a network filesystem that refuses chmod, a directory owned by someone
  * else) returns normally rather than throwing, because this helper sits under
- * five writers with different error contracts. What the operator sees then is
- * the caller's business and is not uniform — see the catch blocks below.
+ * six callers with three different error contracts. What the operator sees then
+ * is the caller's business and is not uniform — see the catch block below.
  * `chmod` is skipped on Windows, where POSIX modes carry no meaning.
  */
 export function ensureKeryxConfigDir(dir?: string): string {
@@ -87,11 +118,20 @@ export function ensureKeryxConfigDir(dir?: string): string {
   } catch {
     // Deliberately swallowed: failing here would turn a persistence problem
     // into a crash in a helper every writer calls. What happens next differs by
-    // caller and is NOT uniform — `saveServeConfig`, `saveProjectRegistry` and
-    // `writeStore` return false and their callers report it, while
-    // `saveShellConfig` (and `saveApiKey` through it) is best-effort by
-    // contract and reports nothing at all. An earlier comment here claimed the
-    // caller always reports; a review checked and two of the five do not.
+    // caller and is NOT uniform. There are SIX direct callers and three
+    // behaviours between them — an earlier version of this comment claimed one
+    // behaviour, a second claimed two and listed five callers (counting
+    // `saveApiKey`, which reaches this only through `saveShellConfig`, and
+    // omitting the newest):
+    //
+    //   report it     `saveServeConfig`, `saveProjectRegistry`, `writeStore`
+    //                 return false; their callers print the failure.
+    //   swallow it    `saveShellConfig` is best-effort by contract and says
+    //                 nothing; `saveApiKey` inherits that.
+    //   throw         `ensureDir` in `src/session/store.ts` lets the following
+    //                 `mkdirSync` throw EACCES up through `createSession`. That
+    //                 predates this helper — a shell that cannot write its
+    //                 session store has nothing useful to continue with.
   }
   if (process.platform !== "win32") {
     try {

@@ -9,11 +9,17 @@
 //   keryx serve config set [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback|--no-acknowledge-non-loopback] [--enable|--disable]
 //   keryx serve config show [--json]
 //
-// `config init` / `config show` are not in specification.md's CLI list, which
-// names no command that CREATES the configuration. Something has to, and
-// inferring a persisted config from a bare `keryx serve` invocation would make
-// "off by default" depend on argument order. Flags on `keryx serve` itself are
-// a per-run overlay and are never persisted.
+// `config init` / `config set` / `config show` are not in specification.md's CLI
+// list, which names no command that CREATES or CHANGES the configuration.
+// Something has to, and inferring a persisted config from a bare `keryx serve`
+// invocation would make "off by default" depend on argument order. Flags on
+// `keryx serve` itself are a per-run overlay and are never persisted.
+//
+// `config set` in particular is not decoration: once `config init` refuses to
+// replace an existing configuration, every instruction that says "fix your
+// configuration" needs a non-destructive command to name, and `--force` is not
+// one — it rebuilds from defaults and drops the operator's bind, port and
+// profile.
 //
 // Argv discipline is the one from src/commands/projects.ts, and for the reason
 // recorded there: `--help` is resolved against the WHOLE argv before any
@@ -34,6 +40,7 @@ import {
   defaultServeConfig,
   isLoopbackAddress,
   loadServeConfig,
+  serveConfigAdvice,
   serveConfigState,
   saveServeConfig,
   serveConfigPath,
@@ -195,7 +202,14 @@ async function runServe(args: string[]): Promise<void> {
   const runtimeAck = parsed.parsed.flags.has(ACK_FLAG);
   const config = stored === null ? null : overlay(stored, parsed.parsed, port, runtimeAck);
 
-  const outcome = await startServeListener({ config, credential: readServeCredential() });
+  const outcome = await startServeListener({
+    config,
+    credential: readServeCredential(),
+    // Without this the `no-configuration` refusal cannot tell "nothing is
+    // configured" from "the file is there and I could not read it", and the
+    // instruction it prints is wrong for two of the three.
+    configState: serveConfigState(),
+  });
   if (!outcome.ok) {
     fail(sanitizeForDisplay(outcome.message));
     if (outcome.reason === "non-loopback-not-acknowledged" && stored !== null) {
@@ -329,7 +343,7 @@ function runStatus(args: string[]): void {
   const warnings: string[] = [];
   const config = loadServeConfig(undefined, (message) => warnings.push(message));
   const credential = readServeCredential();
-  const report = describeServeStatus({ config, credential });
+  const report = describeServeStatus({ config, credential, configState: serveConfigState() });
 
   const credentialState = credential.status === "ok" ? "present" : credential.status;
   const fingerprint = credential.status === "ok" ? credentialFingerprint(credential.record) : undefined;
@@ -376,14 +390,17 @@ function runStatus(args: string[]): void {
     console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(report.message)}`);
   }
   if (report.state === "stopped") {
-    // `stopped` covers two different situations and they need different
-    // instructions. A review reached this note with a configuration on disk —
-    // `describeServeStatus` reports a disabled configuration as `stopped` too —
-    // and was told to run `config init`, which refuses when one exists.
+    // `stopped` covers FOUR different situations, not two. `describeServeStatus`
+    // reports `stopped` when the config is null (absent, malformed, or
+    // unreadable) AND when it is valid-but-disabled. An earlier version
+    // special-cased `absent` and told the other three "present but disabled" —
+    // a false diagnosis for two of them, with an instruction that exited 1 when
+    // followed. `serveConfigAdvice` is the one place that decides.
+    const state = serveConfigState();
     note(
-      serveConfigState() === "absent"
+      state === "absent"
         ? "Nothing is listening. `keryx serve config init` then `keryx serve token issue` to set one up."
-        : "Nothing is listening: the configuration is present but disabled. Run `keryx serve config set --enable`.",
+        : `Nothing is listening: ${serveConfigAdvice(state)}`,
     );
   }
 }
@@ -585,7 +602,10 @@ function runConfig(args: string[]): void {
     }
     const config = loadServeConfig(undefined, warn);
     if (config === null) {
-      note("Not configured. Run `keryx serve config init`.");
+      // Not a bare `config init`: on an unreadable file that command refuses,
+      // so the instruction has to come from the state. Same source as every
+      // other site.
+      note(serveConfigAdvice(serveConfigState()));
       return;
     }
     if (parsed.parsed.flags.has("--json")) {
@@ -648,10 +668,7 @@ function runConfigSet(args: string[]): void {
   if (existing === null) {
     // `malformed` or `unreadable`: patching what cannot be read would silently
     // invent the fields it could not see.
-    fail(
-      `${sanitizeForDisplay(serveConfigPath())} could not be read as a configuration. ` +
-        "Inspect it, or run `keryx serve config init --force` to replace it with defaults.",
-    );
+    fail(serveConfigAdvice(state));
     return;
   }
 
@@ -667,7 +684,21 @@ function runConfigSet(args: string[]): void {
     return;
   }
 
-  const acknowledge = flags.has(ACK_FLAG) ? true : flags.has(NO_ACK_FLAG) ? false : existing.bind.acknowledgeNonLoopback;
+  // An acknowledgement is about ONE address. Carrying it across a `--bind` that
+  // names a different one silently authorises a bind the operator never
+  // acknowledged: a review moved a configuration from an acknowledged
+  // 10.0.0.5 to 203.0.113.9 and watched `acknowledgeNonLoopback: true` follow it
+  // with no warning, while `config init --bind 203.0.113.9` correctly wrote
+  // false. security-policy.md requires the acknowledgement to be explicit, and
+  // an inherited one is not.
+  const rebinding = values.has("--bind") && values.get("--bind") !== existing.bind.address;
+  const acknowledge = flags.has(ACK_FLAG)
+    ? true
+    : flags.has(NO_ACK_FLAG)
+      ? false
+      : rebinding
+        ? false
+        : existing.bind.acknowledgeNonLoopback;
   const updated: ServeConfig = {
     ...existing,
     enabled: flags.has(ENABLE_FLAG) ? true : flags.has(DISABLE_FLAG) ? false : existing.enabled,
@@ -685,6 +716,13 @@ function runConfigSet(args: string[]): void {
   }
   console.log(`  ${style.green(symbols.ok)} updated ${sanitizeForDisplay(serveConfigPath())}`);
   printConfig(updated);
+  if (rebinding && existing.bind.acknowledgeNonLoopback === true && !flags.has(ACK_FLAG)) {
+    // Dropping it silently would be the same failure in the other direction:
+    // the operator's next `keryx serve` would refuse and they would not know why.
+    console.log(
+      `  ${style.yellow(symbols.bullet)} the non-loopback acknowledgement did not carry over to a new address; re-run with ${ACK_FLAG} if this one is intended`,
+    );
+  }
   if (!isLoopbackAddress(updated.bind.address) && updated.bind.acknowledgeNonLoopback !== true) {
     console.log(
       `  ${style.yellow(symbols.bullet)} this bind is reachable beyond loopback and is not acknowledged; it will refuse to start`,
@@ -718,6 +756,9 @@ function printHelp(): void {
     { flag: "--port <n>", desc: "Port. 0 selects an ephemeral port when starting the server." },
     { flag: "--profile <name>", desc: "Name of the remote policy profile to report." },
     { flag: ACK_FLAG, desc: "Acknowledge a bind reachable beyond loopback. Needed on BOTH config and run." },
+    { flag: NO_ACK_FLAG, desc: "Withdraw the acknowledgement (`config set` only). Changing --bind withdraws it too." },
+    { flag: ENABLE_FLAG, desc: "Enable the configuration (`config set` only)." },
+    { flag: DISABLE_FLAG, desc: "Disable it without deleting it (`config set` only)." },
     { flag: "status", desc: "State, bind, profile, non-loopback flag and pending-approval count." },
     { flag: "token issue", desc: "Mint a credential. The token is printed once and never again." },
     { flag: "token rotate", desc: "Mint a new credential and invalidate the previous one." },

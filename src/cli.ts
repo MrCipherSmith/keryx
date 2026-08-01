@@ -130,7 +130,7 @@ Usage:
   keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
   keryx serve status [--json]
   keryx serve token issue | rotate | revoke
-  keryx serve config init|show
+  keryx serve config init|set|show
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open

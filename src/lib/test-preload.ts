@@ -45,7 +45,12 @@ process.env.KERYX_TEST_CONFIG_ROOT = root;
 // work: `bun test` fires neither `exit` nor `beforeExit`, verified directly
 // before writing this. So the cleanup runs at START and removes roots older
 // than an hour, which is far longer than any suite and therefore cannot touch a
-// concurrent run's directory. The steady state is one leftover, not N.
+// concurrent run's directory.
+//
+// What that bounds, stated accurately: accumulation per HOUR, not to a single
+// leftover. A comment here claimed the latter and a review counted 16 live
+// roots to disprove it. Ten runs in ten minutes still leave ten directories
+// until the next run an hour later sweeps them.
 const STALE_MS = 60 * 60 * 1_000;
 try {
   const now = Date.now();

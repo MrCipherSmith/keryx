@@ -20,9 +20,9 @@
 // Every function is best-effort and never throws: a damaged serve.json must
 // leave the operator with "nothing is configured", not a stack trace.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
 
 export const SERVE_CONFIG_SCHEMA_VERSION = "1.0.0";
 
@@ -465,7 +465,7 @@ export function loadServeConfig(dir?: string, onWarn?: (message: string) => void
 }
 
 /**
- * What is on disk, distinguishing the three cases a caller must treat apart.
+ * What is on disk, distinguishing the four cases a caller must treat apart.
  *
  * `loadServeConfig` collapses all of them to `null`, which is right for "should
  * the server start" and wrong for "may I overwrite this". A review chmodded a
@@ -483,6 +483,36 @@ export function loadServeConfig(dir?: string, onWarn?: (message: string) => void
  *                  matters.
  */
 export type ServeConfigState = "absent" | "valid" | "malformed" | "unreadable";
+
+/**
+ * What to tell an operator whose configuration is not usable, given what is
+ * actually on disk.
+ *
+ * One function because there are four sites that need it — the `no-configuration`
+ * startup refusal, the `serve status` note, `config show`, and `config set` —
+ * and the previous round proved they drift. Two of them were left naming a bare
+ * `keryx serve config init` after `config init` had been taught to refuse in the
+ * `unreadable` state, so the instruction failed when followed; a third told an
+ * operator with a MALFORMED file that their configuration was "present but
+ * disabled", which was both a false diagnosis and a non-working instruction.
+ *
+ * Every string returned here names a command that exits 0 in the state it is
+ * returned for. `serve.recovery.test.ts` executes them.
+ */
+export function serveConfigAdvice(state: ServeConfigState): string {
+  switch (state) {
+    case "absent":
+      return "no serve configuration was found. Run `keryx serve config init` to create one.";
+    case "malformed":
+      return "the serve configuration does not match the schema. Run `keryx serve config init` to replace it with defaults.";
+    case "unreadable":
+      return "the serve configuration exists but could not be read. Fix its permissions, or run `keryx serve config init --force` to replace it with defaults.";
+    case "valid":
+      // Reached only when the configuration parses and is disabled — every
+      // other `valid` path has a real configuration to act on.
+      return "the serve configuration is present but disabled. Run `keryx serve config set --enable` to enable it.";
+  }
+}
 
 export function serveConfigState(dir?: string): ServeConfigState {
   const file = serveConfigPath(dir);
@@ -525,7 +555,10 @@ export function saveServeConfig(
     // `mode` on `mkdirSync` applies at creation only, and this is rarely the
     // first writer of the shared directory. See `ensureKeryxConfigDir`.
     ensureKeryxConfigDir(dir);
-    writeFileSync(serveConfigPath(dir), `${JSON.stringify(projected, null, 2)}\n`, { mode: 0o600 });
+    // `writeOwnerOnlyFile`, not `writeFileSync(..., { mode })`: the mode applies
+    // at creation only, so a `serve.json` that already exists group-readable
+    // stays that way through every write. `config set` is always a rewrite.
+    writeOwnerOnlyFile(serveConfigPath(dir), `${JSON.stringify(projected, null, 2)}\n`);
     return true;
   } catch {
     return false;

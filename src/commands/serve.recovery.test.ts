@@ -23,8 +23,8 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { serveCommand } from "./serve";
-import { loadServeConfig, serveConfigPath } from "../lib/serve-config";
-import { loadServeCredential, verifyServeToken } from "../lib/serve-credential";
+import { loadServeConfig, saveServeConfig, serveConfigPath } from "../lib/serve-config";
+import { loadServeCredential, serveCredentialPath, verifyServeToken } from "../lib/serve-credential";
 
 let xdgRoot = "";
 let configDir = "";
@@ -235,6 +235,73 @@ describe("config set patches without replacing", () => {
     expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
   });
 
+  test("a non-loopback acknowledgement does not carry over to a DIFFERENT address", async () => {
+    // A review moved an acknowledged 10.0.0.5 to 203.0.113.9 and watched
+    // `acknowledgeNonLoopback: true` follow it with no warning — silently
+    // authorising a bind the operator never acknowledged. `config init --bind
+    // 203.0.113.9` correctly wrote false, so `config set` was strictly weaker
+    // than the command it exists to replace.
+    await run(["config", "init", ...CUSTOM]);
+    expect(deployment().ack).toBe(true);
+
+    const moved = await run(["config", "set", "--bind", "203.0.113.9"]);
+
+    expect(moved.exit).toBe(0);
+    expect(deployment()).toEqual({ address: "203.0.113.9", port: 8443, ack: false, profile: "hardened" });
+    // And it says so, because dropping it silently is the same failure in the
+    // other direction: the next `keryx serve` refuses and the operator does not
+    // know why.
+    expect(moved.out).toContain("did not carry over");
+  });
+
+  test("re-stating the SAME address keeps the acknowledgement", async () => {
+    // Otherwise the fix above would make `config set --bind <same> --port N`
+    // silently withdraw an acknowledgement the operator never touched.
+    await run(["config", "init", ...CUSTOM]);
+
+    const same = await run(["config", "set", "--bind", "10.0.0.5", "--port", "9443"]);
+
+    expect(same.exit).toBe(0);
+    expect(deployment()).toEqual({ ...CUSTOM_DEPLOYMENT, port: 9443 });
+  });
+
+  test("an explicit acknowledgement moves with the address", async () => {
+    await run(["config", "init", ...CUSTOM]);
+
+    const moved = await run(["config", "set", "--bind", "203.0.113.9", "--acknowledge-non-loopback"]);
+
+    expect(moved.exit).toBe(0);
+    expect(deployment()).toEqual({ address: "203.0.113.9", port: 8443, ack: true, profile: "hardened" });
+  });
+
+  test("it preserves every field it does not name, not only the four we render", async () => {
+    // `deployment()` reads four fields. `credentialRef`, `approval`, `bounds`,
+    // `retentionDays` and `schemaVersion` are preserved too, and nothing pinned
+    // it — a reviewer had to verify that by hand.
+    await run(["config", "init", ...CUSTOM]);
+    await run(["token", "issue"]);
+    const enriched = {
+      ...loadServeConfig(configDir)!,
+      bounds: { maxBodyBytes: 4096, maxPromptChars: 99, maxConcurrentTurnsPerSession: 2, eventBacklogSeconds: 7 },
+      retentionDays: 11,
+    };
+    expect(saveServeConfig(enriched, configDir)).toBe(true);
+
+    const patched = await run(["config", "set", "--port", "9001"]);
+    expect(patched.exit).toBe(0);
+
+    const after = loadServeConfig(configDir)!;
+    expect(after.bind.port).toBe(9001);
+    // Everything else, compared as whole objects so a dropped key fails.
+    expect(after.schemaVersion).toBe(enriched.schemaVersion);
+    expect(after.credentialRef).toEqual(enriched.credentialRef);
+    expect(after.approval).toEqual(enriched.approval);
+    expect(after.bounds).toEqual(enriched.bounds);
+    expect(after.retentionDays).toBe(11);
+    expect(after.profile).toBe("hardened");
+    expect(after.enabled).toBe(true);
+  });
+
   test("with nothing configured it points at config init instead of inventing a config", async () => {
     const orphan = await run(["config", "set", "--port", "9001"]);
 
@@ -301,6 +368,134 @@ describe("the rotate-failure recovery instruction", () => {
     expect(verifyServeToken(token, record!)).toBe(true);
     expect(loadServeConfig(configDir)!.credentialRef.id).toBe(record!.id);
   });
+
+  test("every configuration instruction the CLI prints EXITS 0 when executed", async () => {
+    // The guard that replaces a substring check.
+    //
+    // Its first version asserted only that the printed text did not contain
+    // "config init", and enumerated four states that all had a VALID
+    // configuration on disk. A review then found three instructions it could
+    // not see: two more states (`malformed`, `unreadable`) that the same commit
+    // had newly made distinguishable, and two messages that named `config init`
+    // in a state where `config init` now refuses. All three passed the old
+    // guard — one because it printed `config set`, two because their state was
+    // never enumerated.
+    //
+    // So: enumerate every state the configuration can be in, run both `keryx
+    // serve` and `keryx serve status`, extract every backticked `keryx serve
+    // config …` command from the output, and RUN IT. Exit 0 or the guard fails.
+    //
+    // Scope, stated rather than implied: only `config` instructions are
+    // executed. `keryx serve --acknowledge-non-loopback` is a "try again after
+    // fixing the other half" instruction and legitimately still refuses, and
+    // `keryx serve token …` is covered by its own tests. A usage form carrying
+    // a `<placeholder>` other than `<addr>` is skipped — it is documentation,
+    // not a command.
+    const states: Array<{ label: string; setup: () => Promise<void> }> = [
+      {
+        label: "absent",
+        setup: async () => {
+          rmSync(serveConfigPath(configDir), { force: true });
+        },
+      },
+      {
+        label: "valid but disabled",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          await run(["config", "set", "--disable"]);
+        },
+      },
+      {
+        label: "valid, non-loopback, unacknowledged",
+        setup: async () => {
+          await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+          await run(["token", "issue"]);
+        },
+      },
+      {
+        label: "malformed",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          writeFileSync(serveConfigPath(configDir), "{not json", "utf8");
+        },
+      },
+      {
+        label: "parses but fails the schema",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          writeFileSync(serveConfigPath(configDir), JSON.stringify({ nonsense: true }), "utf8");
+        },
+      },
+      {
+        label: "unreadable",
+        setup: async () => {
+          await run(["config", "init", ...CUSTOM]);
+          await run(["token", "issue"]);
+          chmodSync(serveConfigPath(configDir), 0o200);
+        },
+      },
+    ];
+
+    /** Backticked `keryx serve config …` commands, as argv arrays. */
+    function instructions(transcript: string): string[][] {
+      const found: string[][] = [];
+      for (const match of transcript.matchAll(/`(keryx serve config [^`]+)`/g)) {
+        const command = match[1]!.replace(/<addr>/g, "10.0.0.5");
+        if (command.includes("<")) {
+          continue;
+        }
+        // Drop the leading `keryx serve` — `run()` supplies both.
+        found.push(command.split(/\s+/).slice(2));
+      }
+      return found;
+    }
+
+    const failures: string[] = [];
+    const statesThatPrintedAnInstruction = new Set<string>();
+    let executed = 0;
+    for (const state of states) {
+      // `config show` is here because a mutation proved it unguarded: reverting
+      // its instruction to a bare `config init` — which refuses on an
+      // unreadable file — left every test in this file green. A guard that
+      // enumerates states but not the commands that print to them is only half
+      // a guard.
+      for (const invoke of [[], ["status"], ["config", "show"]]) {
+        rmSync(serveConfigPath(configDir), { force: true });
+        rmSync(serveCredentialPath(configDir), { force: true });
+        await state.setup();
+
+        const shown = await run(invoke);
+        for (const instruction of instructions(shown.out)) {
+          statesThatPrintedAnInstruction.add(state.label);
+          const followed = await run(instruction);
+          executed += 1;
+          if (followed.exit !== 0) {
+            failures.push(
+              `[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed \`keryx ${instruction.join(" ")}\`, which exited ${followed.exit}: ${followed.out.trim()}`,
+            );
+          }
+        }
+        // Restore the mode so the fixture can be torn down and reused.
+        if (existsSync(serveConfigPath(configDir))) {
+          chmodSync(serveConfigPath(configDir), 0o600);
+        }
+      }
+    }
+
+    // Not vacuous: if the extraction ever stopped matching, `failures` would be
+    // empty for the wrong reason. Every state must produce at least one
+    // actionable instruction from at least one of the three commands. (`config
+    // show` on a healthy configuration prints the configuration and no
+    // instruction, which is correct, so this counts states rather than rows.)
+    expect(statesThatPrintedAnInstruction.size).toBe(states.length);
+    expect(executed).toBeGreaterThanOrEqual(states.length);
+    // The count first: a multi-line failure message makes the array diff hard
+    // to read, and an undercount is exactly how three of these were missed.
+    expect({ count: failures.length, failures }).toEqual({ count: 0, failures: [] });
+  }, 60_000);
 
   test("no instruction printed while a configuration EXISTS names `config init`", async () => {
     // The class, not the call site. The first fix corrected the one message the
@@ -388,7 +583,15 @@ describe("the rotate-failure recovery instruction", () => {
 
     const refused = await run([]);
     expect(refused.exit).toBe(1);
-    expect(refused.out).toContain("keryx serve config set --bind");
+    // Anchored to the REFUSAL line, not merely to the transcript. A review
+    // reverted `serve-server.ts`'s message to the old `config init` form and
+    // this test stayed green, because a separate `note()` further down happened
+    // to contain the same substring — so it was pinning the wrong line.
+    const refusalLine = refused.out
+      .split("\n")
+      .find((line) => line.includes("reachable beyond loopback") && line.includes("Run "));
+    expect(refusalLine).toBeDefined();
+    expect(refusalLine!).toContain("keryx serve config set --bind <addr> --acknowledge-non-loopback");
 
     const followed = await run(["config", "set", "--bind", "10.0.0.5", "--acknowledge-non-loopback"]);
     expect(followed.exit).toBe(0);

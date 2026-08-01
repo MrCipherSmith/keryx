@@ -185,7 +185,12 @@ describe("configuration", () => {
 
   test("config show with nothing configured says so and does not invent one", async () => {
     await serveCommand(["config", "show"]);
-    expect(output().toLowerCase()).toContain("not configured");
+    // The wording moved to `serveConfigAdvice`, which is the one place that
+    // decides what to say about an unusable configuration — this line used to
+    // pin a literal that could not be right for all four states. What matters
+    // here is that it reports the absence and names the command that fixes it.
+    expect(output()).toContain("no serve configuration was found");
+    expect(output()).toContain("keryx serve config init");
     expect(existsSync(serveConfigPath(configDir))).toBe(false);
   });
 });

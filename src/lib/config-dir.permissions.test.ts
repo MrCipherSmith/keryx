@@ -19,7 +19,7 @@
 // against a directory that already exists group-writable.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
@@ -101,6 +101,89 @@ describe("ensureKeryxConfigDir", () => {
     } finally {
       chmodSync(locked, 0o700);
     }
+  });
+});
+
+describe("every writer tightens a FILE that already exists too wide", () => {
+  // The same creation-only trap as the directory mode, on the file path, and it
+  // survived two fix rounds. `writeFileSync`'s `mode` does nothing to a file
+  // that already exists, so a `serve.json` or `auth.json` left at 0664 by an
+  // earlier release, a restore or an editor keeps that mode through every
+  // subsequent write — and `keryx serve config set` rewrites on every call.
+  //
+  // Each case widens the file FIRST, then writes, then asserts 0600. Widening a
+  // file the writer is about to create would prove nothing.
+  function widenFile(name: string): string {
+    const file = path.join(configDir, name);
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(file, "{}\n", { mode: 0o664 });
+    chmodSync(file, 0o664);
+    expect(mode(file)).toBe("664");
+    return file;
+  }
+
+  test("saveShellConfig, over an auth.json that already exists 0664", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("auth.json");
+
+    saveShellConfig({ provider: "openrouter" }, configDir);
+
+    expect(mode(file)).toBe("600");
+  });
+
+  test("saveServeConfig, over a serve.json that already exists 0664", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("serve.json");
+
+    expect(saveServeConfig(defaultServeConfig("cred-id"), configDir)).toBe(true);
+
+    expect(mode(file)).toBe("600");
+  });
+
+  test("the credential store REFUSES a widened file rather than tightening it", () => {
+    // Deliberately different from the other three, and stronger. A widened
+    // credential store means something outside keryx touched the file that
+    // decides who may authenticate, so `readServeCredential` fails closed and
+    // `issue` refuses rather than quietly writing a fresh credential over it.
+    // Silently re-tightening would erase the only evidence the operator has.
+    if (process.getuid?.() === 0 || process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("serve-credentials.json");
+
+    const outcome = issueServeToken(configDir);
+
+    expect(outcome.ok).toBe(false);
+    // Untouched: a refusal must not be a write.
+    expect(mode(file)).toBe("664");
+    expect(readFileSync(file, "utf8")).toBe("{}\n");
+  });
+
+  test("a NEW credential store is created owner-only", () => {
+    // The positive half, so the refusal above is not the only thing measured.
+    if (process.platform === "win32") {
+      return;
+    }
+    expect(issueServeToken(configDir).ok).toBe(true);
+
+    expect(mode(path.join(configDir, "serve-credentials.json"))).toBe("600");
+  });
+
+  test("the project registry, over a projects.json that already exists 0664", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("projects.json");
+    const project = path.join(base, "registry-project");
+    mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+
+    expect(registerProject(project, { dir: configDir }).ok).toBe(true);
+
+    expect(mode(file)).toBe("600");
   });
 });
 
@@ -232,6 +315,49 @@ describe("every writer of the shared config directory tightens it", () => {
         process.env.XDG_DATA_HOME = previousXdg;
       }
     }
+  });
+
+  test("the session store tightens sessions/ under KERYX_DATA_DIR too", () => {
+    // The first version of this fix skipped the walk entirely when the data
+    // root was not the shared config directory — scoped to the call site the
+    // finding named, again — so every install that sets `KERYX_DATA_DIR` kept a
+    // permanently group-writable `sessions/`, and transcripts anyone in the
+    // group could read or unlink.
+    if (process.platform === "win32") {
+      return;
+    }
+    const dataDir = path.join(base, "data");
+    mkdirSync(path.join(dataDir, "sessions"), { recursive: true });
+    chmodSync(dataDir, 0o775);
+    chmodSync(path.join(dataDir, "sessions"), 0o775);
+    const project = path.join(base, "kdd-project");
+    mkdirSync(project, { recursive: true });
+
+    const previous = process.env.KERYX_DATA_DIR;
+    process.env.KERYX_DATA_DIR = dataDir;
+    let handle;
+    try {
+      handle = createSession({ cwd: project });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.KERYX_DATA_DIR;
+      } else {
+        process.env.KERYX_DATA_DIR = previous;
+      }
+    }
+
+    expect(mode(path.join(dataDir, "sessions"))).toBe("700");
+    let current = path.join(dataDir, "sessions");
+    for (const segment of handle.dir.slice(current.length + 1).split(path.sep)) {
+      current = path.join(current, segment);
+      expect({ level: current.slice(base.length), mode: mode(current) }).toEqual({
+        level: current.slice(base.length),
+        mode: "700",
+      });
+    }
+    // The operator's OWN directory is left alone: it is not keryx's to
+    // re-permission, and it may hold other things.
+    expect(mode(dataDir)).toBe("775");
   });
 
   test("a later writer does not re-loosen what an earlier one tightened", () => {

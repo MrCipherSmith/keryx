@@ -28,7 +28,12 @@
 
 import type { Server } from "bun";
 import { emitProjectsJson, listProjects } from "./project-registry";
-import { isLoopbackAddress, type ServeConfig } from "./serve-config";
+import {
+  isLoopbackAddress,
+  serveConfigAdvice,
+  type ServeConfig,
+  type ServeConfigState,
+} from "./serve-config";
 import {
   readServeCredential,
   verifyServeToken,
@@ -70,6 +75,18 @@ export type ServeStartup = ServeStartupOk | ServeStartupRefused;
 export interface ServeStartupInput {
   config: ServeConfig | null;
   credential: ServeCredentialResult;
+  /**
+   * What is actually on disk, when the caller knows.
+   *
+   * `config === null` covers three different situations — nothing configured, a
+   * file that does not match the schema, and a file that could not be read —
+   * and they need three different instructions. Without this the refusal said
+   * "no serve configuration was found. Run `keryx serve config init`" for all
+   * three, and after `config init` learned to refuse over an unreadable file
+   * that instruction failed when followed. Defaults to `absent`, which is what
+   * a caller that genuinely has no file passes.
+   */
+  configState?: ServeConfigState;
 }
 
 function refuse(reason: ServeRefusalReason, message: string): ServeStartupRefused {
@@ -87,19 +104,16 @@ export function resolveServeStartup(input: ServeStartupInput): ServeStartup {
   const { config, credential } = input;
 
   if (config === null) {
-    return refuse(
-      "no-configuration",
-      "no serve configuration was found. Run `keryx serve config init` to create one.",
-    );
+    // The message comes from `serveConfigAdvice`, which is the one place that
+    // decides what to tell an operator about an unusable configuration. A
+    // literal here is how two sites drifted into naming a command that refuses.
+    return refuse("no-configuration", serveConfigAdvice(input.configState ?? "absent"));
   }
   if (!config.enabled) {
-    return refuse(
-      "disabled",
-      // `config set`, not `config init`. This state is reachable ONLY when a
-      // configuration exists, so `config init` refuses — and `--force` would
-      // make the instruction succeed by resetting bind, port and profile.
-      "the serve configuration is present but disabled. Run `keryx serve config set --enable` to enable it.",
-    );
+    // `config set`, not `config init`. This state is reachable ONLY when a
+    // configuration exists, so `config init` refuses — and `--force` would make
+    // the instruction succeed by resetting bind, port and profile.
+    return refuse("disabled", serveConfigAdvice("valid"));
   }
   if (config.credentialRef.store !== "auth-json") {
     // The schema allows `os-credential-store`; nothing in this release reads

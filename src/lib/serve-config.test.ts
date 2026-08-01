@@ -13,7 +13,7 @@
 // since "credential" is in its SECRET_WORDS list.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { shellConfigPath } from "./shell-config";
@@ -26,8 +26,11 @@ import {
   loadServeConfig,
   projectServeConfig,
   saveServeConfig,
+  serveConfigAdvice,
   serveConfigPath,
+  serveConfigState,
   type ServeConfig,
+  type ServeConfigState,
 } from "./serve-config";
 
 let configDir = "";
@@ -257,5 +260,91 @@ describe("persistence", () => {
     const loaded = loadServeConfig(configDir);
     expect(loaded).not.toBeNull();
     expect(JSON.stringify(loaded)).not.toContain(secret);
+  });
+});
+
+describe("serveConfigState, which decides whether a file may be overwritten", () => {
+  // It had no direct test: every state was reached only through `config init`.
+  // The distinction it draws is load-bearing — `malformed` is freely
+  // replaceable and `unreadable` is not — and one of those two branches was
+  // wrong when it was written.
+  function plant(body: string): void {
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(serveConfigPath(configDir), body, "utf8");
+  }
+
+  test("no file at all is absent", () => {
+    expect(serveConfigState(configDir)).toBe("absent");
+  });
+
+  test("a schema-conforming file is valid", () => {
+    expect(saveServeConfig(defaultServeConfig("cred-1"), configDir)).toBe(true);
+    expect(serveConfigState(configDir)).toBe("valid");
+  });
+
+  test.each([
+    ["empty", ""],
+    ["truncated json", "{not json"],
+    ["a bare string", '"just a string"'],
+    ["an array", "[1,2,3]"],
+    ["null", "null"],
+    ["an object that is not a configuration", '{"nonsense":true}'],
+    ["a configuration missing a required field", '{"schemaVersion":"1.0.0","enabled":true}'],
+  ])("%s is malformed, so it may be replaced without --force", (_label, body) => {
+    plant(body);
+    expect(serveConfigState(configDir)).toBe("malformed");
+  });
+
+  test("a file that cannot be read is unreadable, NOT malformed", () => {
+    // The distinction the first version collapsed: it treated "I could not read
+    // it" as "there is nothing worth protecting" and replaced a valid
+    // configuration the process simply could not see.
+    if (process.getuid?.() === 0) {
+      return;
+    }
+    expect(saveServeConfig(defaultServeConfig("cred-1"), configDir)).toBe(true);
+    chmodSync(serveConfigPath(configDir), 0o200);
+    try {
+      expect(serveConfigState(configDir)).toBe("unreadable");
+    } finally {
+      chmodSync(serveConfigPath(configDir), 0o600);
+    }
+  });
+
+  test("a directory where serve.json should be is unreadable, not a crash", () => {
+    mkdirSync(serveConfigPath(configDir), { recursive: true });
+    expect(serveConfigState(configDir)).toBe("unreadable");
+  });
+});
+
+describe("serveConfigAdvice, the one source of what to tell the operator", () => {
+  const states: ServeConfigState[] = ["absent", "valid", "malformed", "unreadable"];
+
+  test("every state has advice, and it names a command", () => {
+    for (const state of states) {
+      const advice = serveConfigAdvice(state);
+      expect({ state, namesACommand: advice.includes("`keryx serve ") }).toEqual({
+        state,
+        namesACommand: true,
+      });
+    }
+  });
+
+  test("only `unreadable` requires --force, because only there is the file worth protecting AND unseen", () => {
+    expect(serveConfigAdvice("unreadable")).toContain("--force");
+    expect(serveConfigAdvice("malformed")).not.toContain("--force");
+    expect(serveConfigAdvice("absent")).not.toContain("--force");
+  });
+
+  test("a VALID configuration is never told to run `config init`, which refuses", () => {
+    // The whole reason this function exists. Executing every one of these is
+    // `serve.recovery.test.ts`'s job; this pins the property at the source.
+    expect(serveConfigAdvice("valid")).not.toContain("config init");
+    expect(serveConfigAdvice("valid")).toContain("config set");
+  });
+
+  test("the four messages are distinct — a shared string would hide a wrong branch", () => {
+    const messages = states.map(serveConfigAdvice);
+    expect(new Set(messages).size).toBe(states.length);
   });
 });
