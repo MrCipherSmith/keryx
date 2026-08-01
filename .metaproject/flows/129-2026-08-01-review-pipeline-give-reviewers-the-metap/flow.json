@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 2,
+  "id": "129",
+  "slug": "review-pipeline-give-reviewers-the-metap",
+  "title": "Review pipeline: give reviewers the metaproject context and a memory of prior rounds",
+  "status": "in-progress",
+  "createdAt": "2026-08-01T15:27:59.707Z",
+  "updatedAt": "2026-08-01T16:23:51.051Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:52f3adae3bac06b7917b1728a510df18cbd518c62647e399e6ea21602838c116",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Schemas: prior_findings + metaproject on reviewer-input, memory on review-context, class_scope on reviewer-finding",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Schema guards written FIRST and confirmed failing: blocker without class_scope rejected, minor without it accepted, fix-round input without prior_findings rejected",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Orchestrator SKILL.md: memory sub-step in the Context Pack, fix-round scope rule, mandatory keryx review start/ingest around dispatch",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Source-level guard over every reviewer skill, written before the sweep and red until all 15 carry the class_scope contract",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Sweep the 15 reviewer skills to the new finding format - no checklist item added, removed or reworded",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Promote the flow-128 lesson draft -> accepted, reindex memory, confirm a scoped search returns it",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Prove the managed-review loop on this branch: review start -> report -> ingest -> status reads it back",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Mutation-check every guard this flow adds and record what went red in journal.md",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Verification gates: tsc --noEmit, full bun test, keryx health run, schema validation",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T15:27:59.707Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T15:30:48.480Z",
+      "event": "task-added",
+      "detail": "T5: Schemas: prior_findings + metaproject on reviewer-input, memory on review-context, class_scope on reviewer-finding"
+    },
+    {
+      "at": "2026-08-01T15:30:48.560Z",
+      "event": "task-added",
+      "detail": "T6: Schema guards written FIRST and confirmed failing: blocker without class_scope rejected, minor without it accepted, fix-round input without prior_findings rejected"
+    },
+    {
+      "at": "2026-08-01T15:30:48.643Z",
+      "event": "task-added",
+      "detail": "T7: Orchestrator SKILL.md: memory sub-step in the Context Pack, fix-round scope rule, mandatory keryx review start/ingest around dispatch"
+    },
+    {
+      "at": "2026-08-01T15:30:48.722Z",
+      "event": "task-added",
+      "detail": "T8: Source-level guard over every reviewer skill, written before the sweep and red until all 15 carry the class_scope contract"
+    },
+    {
+      "at": "2026-08-01T15:30:48.805Z",
+      "event": "task-added",
+      "detail": "T9: Sweep the 15 reviewer skills to the new finding format - no checklist item added, removed or reworded"
+    },
+    {
+      "at": "2026-08-01T15:30:48.890Z",
+      "event": "task-added",
+      "detail": "T10: Promote the flow-128 lesson draft -> accepted, reindex memory, confirm a scoped search returns it"
+    },
+    {
+      "at": "2026-08-01T15:30:48.970Z",
+      "event": "task-added",
+      "detail": "T11: Prove the managed-review loop on this branch: review start -> report -> ingest -> status reads it back"
+    },
+    {
+      "at": "2026-08-01T15:30:49.053Z",
+      "event": "task-added",
+      "detail": "T12: Mutation-check every guard this flow adds and record what went red in journal.md"
+    },
+    {
+      "at": "2026-08-01T15:30:49.140Z",
+      "event": "task-added",
+      "detail": "T13: Verification gates: tsc --noEmit, full bun test, keryx health run, schema validation"
+    },
+    {
+      "at": "2026-08-01T15:31:24.703Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T15:31:24.865Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T16:18:22.731Z",
+      "event": "ac-updated",
+      "detail": "Formalization pointed at .metaproject/, which is an installed copy: the source of truth is src/gdskills/bundled/ and src/gdskills/contracts/, so the original AC1-AC4 would have been satisfiable by an edit the next keryx update reverts. Two finding schemas exist, and the strict one (additionalProperties:false) would reject the field the loose one gains. The bundle carries 20 reviewer skills, not the 15 the recommended profile installs. AC12 added to pin the installed copies against the sources."
+    },
+    {
+      "at": "2026-08-01T16:23:50.885Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T16:23:50.967Z",
+      "event": "task-done",
+      "detail": "T6: Schema guards written FIRST and confirmed failing: blocker without class_scope rejected, minor without it accepted, fix-round input without prior_findings rejected"
+    },
+    {
+      "at": "2026-08-01T16:23:51.051Z",
+      "event": "task-done",
+      "detail": "T5: Schemas: prior_findings + metaproject on reviewer-input, memory on review-context, class_scope on reviewer-finding"
+    }
+  ]
+}

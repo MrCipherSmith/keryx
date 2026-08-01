@@ -25,9 +25,23 @@ type JsonSchema = {
   additionalProperties?: boolean | JsonSchema;
   items?: JsonSchema;
   enum?: unknown[];
+  const?: unknown;
   minimum?: number;
   minLength?: number;
   pattern?: string;
+  // Conditional application. Added for the `class_scope` rule on
+  // `review-finding`, where a requirement depends on `severity`.
+  //
+  // This validator is hand-rolled because keryx carries zero runtime
+  // dependencies, and it silently IGNORES any keyword it does not implement. A
+  // schema written with `if`/`then` before this existed would have looked
+  // enforced and enforced nothing — see `review-finding-class-scope.test.ts`,
+  // which pins the keyword itself so the finding rule cannot pass for the wrong
+  // reason.
+  if?: JsonSchema;
+  then?: JsonSchema;
+  else?: JsonSchema;
+  allOf?: JsonSchema[];
 };
 
 export type ValidationError = {
@@ -94,6 +108,20 @@ export async function validateContractFile(
   };
 }
 
+/**
+ * Validate an in-memory value against an in-memory schema.
+ *
+ * `validateContractFile` reads both from disk, which makes the conditional
+ * keywords above untestable in isolation: a test could only observe them
+ * through a real contract, and would then pass or fail for two reasons at once.
+ * This is the seam that lets the keyword be pinned on its own.
+ */
+export async function validateJson(value: unknown, schema: JsonSchema): Promise<ValidationError[]> {
+  const errors: ValidationError[] = [];
+  await validateValue(value, schema, "$", errors, schema, new Map());
+  return errors;
+}
+
 export async function loadSchema(name: ContractName): Promise<JsonSchema> {
   const contract = CONTRACTS.find((entry) => entry.name === name);
   if (!contract) {
@@ -152,6 +180,29 @@ async function validateValue(
       path: valuePath,
       message: `Expected one of ${schema.enum.map(String).join(", ")}`,
     });
+  }
+
+  if ("const" in schema && schema.const !== value) {
+    errors.push({
+      path: valuePath,
+      message: `Expected ${describeValue(schema.const)}`,
+    });
+  }
+
+  for (const branch of schema.allOf ?? []) {
+    await validateValue(value, branch, valuePath, errors, rootSchema, schemaCache);
+  }
+
+  if (schema.if) {
+    // The `if` subschema is a TEST, not an assertion: its errors decide which
+    // branch applies and are then discarded. Collecting them into `errors`
+    // would report every non-matching branch as a violation.
+    const probe: ValidationError[] = [];
+    await validateValue(value, schema.if, valuePath, probe, rootSchema, schemaCache);
+    const branch = probe.length === 0 ? schema.then : schema.else;
+    if (branch) {
+      await validateValue(value, branch, valuePath, errors, rootSchema, schemaCache);
+    }
   }
 
   if (typeof value === "number" && schema.minimum !== undefined && value < schema.minimum) {
@@ -258,8 +309,41 @@ async function resolveRef(
     return schema;
   }
 
+  // Any other sibling schema, resolved by filename from the directories that
+  // hold one. `reviewer-input.schema.json` has always carried
+  // `$ref: review-context.schema.json`, and before this the validator threw on
+  // it — so that contract could not be validated at all, and the `$ref` read as
+  // enforcement while enforcing nothing.
+  //
+  // Filename lookup rather than a relative path because a schema is validated
+  // from memory as often as from disk (`validateJson`), so there is not always a
+  // containing directory to be relative to. The names are unique across these
+  // roots; `resolves every sibling ref` in `review-input-fix-round.test.ts`
+  // fails if that stops being true.
+  if (ref.endsWith(".schema.json") && !ref.includes("..") && !ref.includes("/")) {
+    const cached = schemaCache.get(ref);
+    if (cached) {
+      return cached;
+    }
+
+    for (const dir of SCHEMA_ROOTS) {
+      const candidate = path.join(dir, ref);
+      if (existsSync(candidate)) {
+        const schema = JSON.parse(await readFile(candidate, "utf8")) as JsonSchema;
+        schemaCache.set(ref, schema);
+        return schema;
+      }
+    }
+  }
+
   throw new Error(`Unsupported schema ref: ${ref}`);
 }
+
+/** Directories that hold a resolvable `$ref` target, in precedence order. */
+const SCHEMA_ROOTS: string[] = [
+  fileURLToPath(new URL("./contracts/", import.meta.url)),
+  fileURLToPath(new URL("./bundled/skills/review/review-orchestrator/", import.meta.url)),
+];
 
 function matchesType(value: unknown, type: string | string[]): boolean {
   const types = Array.isArray(type) ? type : [type];
