@@ -5,7 +5,7 @@
   "title": "R4c: remote turn submission, streaming, and the non-weakening remote policy profile",
   "status": "implemented",
   "createdAt": "2026-08-01T20:05:04.222Z",
-  "updatedAt": "2026-08-01T20:40:06.222Z",
+  "updatedAt": "2026-08-01T20:58:25.965Z",
   "source": {
     "type": "description",
     "ref": null
@@ -41,6 +41,12 @@
     },
     "AC12": {
       "at": "2026-08-01T20:39:32.140Z"
+    },
+    "AC2": {
+      "at": "2026-08-01T20:58:25.790Z"
+    },
+    "AC5": {
+      "at": "2026-08-01T20:58:25.880Z"
     }
   },
   "pr": {
@@ -96,7 +102,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -104,7 +110,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -190,6 +197,21 @@
       "at": "2026-08-01T20:40:06.222Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/220"
+    },
+    {
+      "at": "2026-08-01T20:58:25.790Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-08-01T20:58:25.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-08-01T20:58:25.965Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

@@ -117,3 +117,6 @@ change this slice needs. Moved to last, with the reason in the source.
 - 2026-08-01T20:39:32.054Z - ac-confirmed: AC11
 - 2026-08-01T20:39:32.140Z - ac-confirmed: AC12
 - 2026-08-01T20:40:06.222Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/220
+- 2026-08-01T20:58:25.790Z - ac-confirmed: AC2
+- 2026-08-01T20:58:25.880Z - ac-confirmed: AC5
+- 2026-08-01T20:58:25.965Z - task-done: T4: Self-review and prepare draft PR
