@@ -367,7 +367,12 @@ describe("the configuration and the credential cannot silently disagree", () => 
     }
 
     expect(process.exitCode).toBe(1);
-    expect(output()).toContain("keryx serve config init");
+    // `token rotate`, NOT `config init`. This assertion originally pinned the
+    // opposite, and a review followed that instruction on a customised
+    // deployment and watched bind, port, profile and the acknowledgement reset
+    // to defaults. `serve.recovery.test.ts` holds the full story.
+    expect(output()).toContain("keryx serve token rotate");
+    expect(output()).not.toContain("config init");
     // And the operator was still shown the token, because it cannot be recovered.
     expect(() => extractToken(output())).not.toThrow();
   });

@@ -38,7 +38,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
 import { withFileLock } from "./file-lock";
 
 /** One registered project. Addressing only — see the module comment. */
@@ -370,7 +370,9 @@ export function saveProjectRegistry(
   // rename the other's half-written temp into place.
   const temp = `${file}.${randomUUID()}.tmp`;
   try {
-    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    // `mode` on `mkdirSync` applies at creation only, and `saveShellConfig`
+    // usually got here first. See `ensureKeryxConfigDir`.
+    ensureKeryxConfigDir(dir);
     const sorted: ProjectRegistry = {
       schemaVersion: 1,
       // Sorted by path so the file is byte-stable and diffable regardless of

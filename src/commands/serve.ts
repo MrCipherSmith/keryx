@@ -5,7 +5,7 @@
 //   keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
 //   keryx serve status [--json]
 //   keryx serve token issue | rotate | revoke
-//   keryx serve config init [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
+//   keryx serve config init [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback] [--force]
 //   keryx serve config show [--json]
 //
 // `config init` / `config show` are not in specification.md's CLI list, which
@@ -125,6 +125,8 @@ function warn(message: string): void {
 
 const BIND_FLAGS = ["--bind", "--port", "--profile"] as const;
 const ACK_FLAG = "--acknowledge-non-loopback";
+/** Replace an existing `serve.json`. Required, because `config init` is destructive. */
+const FORCE_FLAG = "--force";
 
 // ---------------------------------------------------------------------------
 
@@ -194,7 +196,12 @@ async function runServe(args: string[]): Promise<void> {
       // Security policy requires BOTH halves; say which one is missing rather
       // than leaving the operator to guess.
       if (stored.bind.acknowledgeNonLoopback !== true) {
-        note(`The configuration does not acknowledge a non-loopback bind. Re-run: keryx serve config init --bind <addr> ${ACK_FLAG}`);
+        // `--force` is part of the instruction because a configuration
+        // demonstrably exists on this branch (`stored !== null`), and
+        // `config init` refuses to replace one without it. An instruction
+        // that fails when followed is the defect this branch already had
+        // once, in the rotate-failure message.
+        note(`The configuration does not acknowledge a non-loopback bind. Re-run: keryx serve config init --bind <addr> ${ACK_FLAG} ${FORCE_FLAG}`);
       }
       if (!runtimeAck) {
         note(`This invocation did not acknowledge a non-loopback bind. Re-run: keryx serve ${ACK_FLAG}`);
@@ -381,7 +388,7 @@ function runToken(args: string[]): void {
   }
 
   if (sub === "issue") {
-    const result = issueServeToken();
+    const result = issueServeToken(undefined, undefined, warn);
     if (!result.ok) {
       fail(sanitizeForDisplay(result.message));
       return;
@@ -392,7 +399,7 @@ function runToken(args: string[]): void {
   }
 
   if (sub === "rotate") {
-    const result = rotateServeToken();
+    const result = rotateServeToken(undefined, undefined, warn);
     if (!result.ok) {
       fail(sanitizeForDisplay(result.message));
       return;
@@ -406,7 +413,7 @@ function runToken(args: string[]): void {
   }
 
   if (sub === "revoke") {
-    const outcome = revokeServeToken();
+    const outcome = revokeServeToken(undefined, warn);
     if (outcome === "not-found") {
       fail("no serve credential exists to revoke");
       return;
@@ -453,9 +460,16 @@ function pointConfigurationAt(credentialId: string): void {
     // so the install is now in a state where no token works and the server will
     // refuse to start. A success exit code here sent the operator away believing
     // a routine rotation had succeeded.
+    //
+    // The recovery is `token rotate` ALONE. An earlier version of this message
+    // told the operator to run `keryx serve config init` first; a security
+    // review followed that instruction on a customised deployment and recorded
+    // bind, port, profile and the non-loopback acknowledgement all resetting to
+    // defaults. `rotate` re-mints and re-points in one operation and preserves
+    // every one of them — pinned by `serve.recovery.test.ts`.
     fail(
       `the credential was replaced but ${sanitizeForDisplay(serveConfigPath())} could not be updated, so the server will refuse to start. ` +
-        `Fix the file's permissions and re-run \`keryx serve config init\`, then \`keryx serve token rotate\` again.`,
+        `Fix the file's permissions and re-run \`keryx serve token rotate\`.`,
     );
     return;
   }
@@ -470,11 +484,27 @@ function runConfig(args: string[]): void {
   const sub = args[0];
 
   if (sub === "init") {
-    const parsed = parseArgs(args.slice(1), BIND_FLAGS, [ACK_FLAG]);
+    const parsed = parseArgs(args.slice(1), BIND_FLAGS, [ACK_FLAG, FORCE_FLAG]);
     if (!parsed.ok) {
       console.error(parsed.message);
       printHelp();
       process.exitCode = 1;
+      return;
+    }
+
+    // `init` names a first-run operation and behaved like an unconditional
+    // overwrite. A security review ran it on a customised deployment and
+    // recorded bind, port, profile and the acknowledgement resetting to
+    // defaults at exit 0, with nothing saying a configuration had been
+    // replaced. A DAMAGED configuration is deliberately not protected here:
+    // `loadServeConfig` returns null for one, and refusing would leave the
+    // operator with a broken file they cannot repair through the CLI.
+    const existing = loadServeConfig(undefined, warn);
+    if (existing !== null && !parsed.parsed.flags.has(FORCE_FLAG)) {
+      fail(
+        `${sanitizeForDisplay(serveConfigPath())} already exists. ` +
+          `Re-run with ${FORCE_FLAG} to replace it, or \`keryx serve config show\` to see it.`,
+      );
       return;
     }
     const port = readPort(parsed.parsed.values.get("--port"), { allowEphemeral: false });
@@ -564,7 +594,7 @@ function printHelp(): void {
     `keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [${ACK_FLAG}]`,
     "keryx serve status [--json]",
     "keryx serve token issue | rotate | revoke",
-    `keryx serve config init [--bind <addr>] [--port <n>] [--profile <name>] [${ACK_FLAG}]`,
+    `keryx serve config init [--bind <addr>] [--port <n>] [--profile <name>] [${ACK_FLAG}] [${FORCE_FLAG}]`,
     "keryx serve config show [--json]",
   ]);
   helpOptions([
@@ -576,7 +606,8 @@ function printHelp(): void {
     { flag: "token issue", desc: "Mint a credential. The token is printed once and never again." },
     { flag: "token rotate", desc: "Mint a new credential and invalidate the previous one." },
     { flag: "token revoke", desc: "Invalidate the credential." },
-    { flag: "config init", desc: "Write the user-global serve configuration." },
+    { flag: "config init", desc: "Write the user-global serve configuration. Refuses to replace one without --force." },
+    { flag: FORCE_FLAG, desc: "Replace an existing configuration on `config init`. It is not merged." },
     { flag: "config show", desc: "Print the configuration. It holds a credential reference, never a token." },
   ]);
   note("Routes in this release: GET /v1/status and GET /v1/projects, both authenticated. Nothing else is reachable, and no turn can be submitted.");

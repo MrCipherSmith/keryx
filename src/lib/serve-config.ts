@@ -20,9 +20,9 @@
 // Every function is best-effort and never throws: a damaged serve.json must
 // leave the operator with "nothing is configured", not a stack trace.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
 
 export const SERVE_CONFIG_SCHEMA_VERSION = "1.0.0";
 
@@ -477,7 +477,9 @@ export function saveServeConfig(
     return false;
   }
   try {
-    mkdirSync(keryxConfigDir(dir), { recursive: true, mode: 0o700 });
+    // `mode` on `mkdirSync` applies at creation only, and this is rarely the
+    // first writer of the shared directory. See `ensureKeryxConfigDir`.
+    ensureKeryxConfigDir(dir);
     writeFileSync(serveConfigPath(dir), `${JSON.stringify(projected, null, 2)}\n`, { mode: 0o600 });
     return true;
   } catch {

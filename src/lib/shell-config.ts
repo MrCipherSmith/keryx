@@ -7,9 +7,9 @@
 // owner-only, never logged, and only read to populate the process env at startup.
 // All functions are best-effort and never throw; the `dir` override keeps them
 // unit-testable against a temp directory.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
 
 export interface ShellConfig {
   provider?: string;
@@ -46,8 +46,12 @@ export function loadShellConfig(dir?: string): ShellConfig {
 /** Merge `patch` into the persisted config (0600). Best-effort; never throws. */
 export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
   try {
-    const base = keryxConfigDir(dir);
-    mkdirSync(base, { recursive: true });
+    // `ensureKeryxConfigDir`, not `mkdirSync`: this is usually the first writer
+    // to create the shared directory, and creating it mode-less under `umask
+    // 002` left it 0775 — group-writable, so `auth.json` and the serve
+    // credential store beside it were unlinkable and replaceable by any member
+    // of the operator's primary group. See `config-dir.permissions.test.ts`.
+    const base = ensureKeryxConfigDir(dir);
     const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
     writeFileSync(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   } catch {

@@ -35,7 +35,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
 import { withFileLock } from "./file-lock";
 
 /** What is persisted. Note the absence of anything usable as a token. */
@@ -206,14 +206,12 @@ export function loadServeCredential(dir?: string, onWarn?: (message: string) => 
 /**
  * Write the store atomically at 0600, inside a directory forced to 0700.
  *
- * Both `chmod` calls are deliberate and neither is redundant: `mkdirSync`'s
- * `mode` and `writeFileSync`'s `mode` apply at CREATION only. The shared
- * user-global directory is usually created first by `saveShellConfig`, with no
- * mode at all, so under the common `umask 002` it already exists as 0775 by the
- * time this runs and the mode argument is a no-op. A security review
- * demonstrated the consequence end to end: on a group-writable directory an
- * attacker replaces this file with a salt and hash of a token they chose and
- * authenticates as the operator.
+ * The directory mode is NOT this function's business any more, and that is the
+ * point: an earlier version tightened the directory here and only here, which
+ * left `auth.json` and `projects.json` sitting in a 0775 directory on any
+ * install that never ran `keryx serve token issue`. The tighten now lives in
+ * `ensureKeryxConfigDir`, which every writer of this directory calls; see
+ * `config-dir.permissions.test.ts` for the class it pins.
  *
  * Temp-file + fsync + rename rather than a truncating write, matching
  * `saveProjectRegistry`: a process killed mid-write would otherwise leave a
@@ -221,13 +219,11 @@ export function loadServeCredential(dir?: string, onWarn?: (message: string) => 
  * operator out of their own listener.
  */
 function writeStore(store: ServeCredentialStore, dir?: string): boolean {
-  const base = keryxConfigDir(dir);
   const file = serveCredentialPath(dir);
   // A pid is not unique across PID namespaces sharing a bind-mounted home.
   const temp = `${file}.${randomUUID()}.tmp`;
   try {
-    mkdirSync(base, { recursive: true, mode: 0o700 });
-    tighten(base, 0o700);
+    ensureKeryxConfigDir(dir);
     const handle = openSync(temp, "wx", 0o600);
     try {
       writeFileSync(handle, `${JSON.stringify(store, null, 2)}\n`, { encoding: "utf8" });
@@ -274,8 +270,18 @@ function tighten(target: string, mode: number): void {
  * stops a TORN file and does nothing about a LOST update, and every operation
  * below decides what to write based on what it just read.
  */
-function withServeCredentialLock<T>(dir: string | undefined, fn: () => T): T | null {
+function withServeCredentialLock<T>(
+  dir: string | undefined,
+  fn: () => T,
+  onWaiting?: (message: string) => void,
+): T | null {
+  // `onWaiting` is not optional decoration: `withFileLock` emits `waitingMessage`
+  // ONLY through this callback, and an earlier version passed the message
+  // without one. A review executed the contended path and recorded ten seconds
+  // of silence — a named control that no code performed. Pinned by
+  // `serve-credential.waiting.test.ts`.
   return withFileLock(`${serveCredentialPath(dir)}.lock`, fn, {
+    onWaiting,
     waitingMessage: "waiting for the serve credential lock…",
   });
 }
@@ -299,7 +305,11 @@ function mintRecord(now: string): { token: string; record: ServeCredentialRecord
  * operator would learn about it from a 401 rather than from this command.
  * `rotate` is the operation that deliberately replaces.
  */
-export function issueServeToken(dir?: string, now: () => string = () => new Date().toISOString()): IssueOutcome {
+export function issueServeToken(
+  dir?: string,
+  now: () => string = () => new Date().toISOString(),
+  onWaiting?: (message: string) => void,
+): IssueOutcome {
   // The check and the write are ONE critical section. Without the lock this is
   // a check-then-write, and a security review ran eight concurrent `issue`
   // processes: six printed a token to their operator and only one of those
@@ -318,7 +328,7 @@ export function issueServeToken(dir?: string, now: () => string = () => new Date
       return { ok: false, reason: "write-failed", message: "could not write the serve credential store" };
     }
     return { ok: true, token, record };
-  });
+  }, onWaiting);
   return outcome ?? { ok: false, reason: "write-failed", message: "could not acquire the serve credential lock" };
 }
 
@@ -330,7 +340,11 @@ export function issueServeToken(dir?: string, now: () => string = () => new Date
  * credential, and a failure between the two steps leaves the operator locked
  * out with no token to show for it.
  */
-export function rotateServeToken(dir?: string, now: () => string = () => new Date().toISOString()): RotateOutcome {
+export function rotateServeToken(
+  dir?: string,
+  now: () => string = () => new Date().toISOString(),
+  onWaiting?: (message: string) => void,
+): RotateOutcome {
   const outcome = withServeCredentialLock(dir, (): RotateOutcome => {
     // `readServeCredential`, not `loadServeCredential`: a store this call is
     // about to replace may legitimately be damaged, and reporting the id it
@@ -341,12 +355,12 @@ export function rotateServeToken(dir?: string, now: () => string = () => new Dat
       return { ok: false, reason: "write-failed", message: "could not write the serve credential store" };
     }
     return { ok: true, token, record, replacedId: previous.status === "ok" ? previous.record.id : null };
-  });
+  }, onWaiting);
   return outcome ?? { ok: false, reason: "write-failed", message: "could not acquire the serve credential lock" };
 }
 
 /** Invalidate the credential. Reported distinctly from "there was none". */
-export function revokeServeToken(dir?: string): RevokeOutcome {
+export function revokeServeToken(dir?: string, onWaiting?: (message: string) => void): RevokeOutcome {
   const outcome = withServeCredentialLock(dir, (): RevokeOutcome => {
     // A damaged store still has something to revoke: writing `active: null` is
     // how the operator recovers from one, and reporting "not-found" would leave
@@ -355,7 +369,7 @@ export function revokeServeToken(dir?: string): RevokeOutcome {
       return "not-found";
     }
     return writeStore({ schemaVersion: 1, active: null }, dir) ? "revoked" : "write-failed";
-  });
+  }, onWaiting);
   return outcome ?? "write-failed";
 }
 
