@@ -142,8 +142,9 @@ describe("every caller of a throwing transcript reader guards the throw", () => 
 
   test("the scan finds files that genuinely call a throwing reader", () => {
     // The complement being empty means nothing if the numerator is empty too.
-    const callers = sourceFiles(SRC).filter((relative) => {
-      const source = code(treeSources(SRC).get(relative) ?? "");
+    const tree = treeSources(SRC);
+    const callers = [...tree.keys()].filter((relative) => {
+      const source = code(tree.get(relative) ?? "");
       return THROWING_READERS.some((call) => source.includes(call));
     });
     expect(callers.length).toBeGreaterThanOrEqual(3);
