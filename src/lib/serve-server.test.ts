@@ -143,7 +143,7 @@ async function start(config: ServeConfig | null, cred: ServeCredentialResult = c
 // ---------------------------------------------------------------------------
 
 describe("startup preconditions", () => {
-  test("a loopback configuration with a credential resolves", () => {
+  test("a loopback configuration with a credential resolves", async () => {
     const startup = resolveServeStartup({ config: ephemeralConfig(), credential: credentialResult() });
     expect(startup.ok).toBe(true);
     if (startup.ok) {
@@ -151,7 +151,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("no configuration refuses", () => {
+  test("no configuration refuses", async () => {
     const startup = resolveServeStartup({ config: null, credential: credentialResult() });
     expect(startup.ok).toBe(false);
     if (!startup.ok) {
@@ -160,7 +160,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a disabled configuration refuses", () => {
+  test("a disabled configuration refuses", async () => {
     const startup = resolveServeStartup({
       config: { ...ephemeralConfig(), enabled: false },
       credential: credentialResult(),
@@ -171,7 +171,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("an absent credential refuses", () => {
+  test("an absent credential refuses", async () => {
     const startup = resolveServeStartup({ config: ephemeralConfig(), credential: { status: "absent" } });
     expect(startup.ok).toBe(false);
     if (!startup.ok) {
@@ -180,7 +180,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("an unreadable credential refuses, and is reported distinctly from an absent one", () => {
+  test("an unreadable credential refuses, and is reported distinctly from an absent one", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig(),
       credential: { status: "unreadable", message: "the serve credential store is unreadable" },
@@ -191,7 +191,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a credential the configuration does not reference refuses", () => {
+  test("a credential the configuration does not reference refuses", async () => {
     // Otherwise a rotate that changed the id would leave the config pointing at
     // a credential that no longer exists while the server happily authenticated
     // with a different one.
@@ -205,7 +205,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a configuration naming the OS credential store refuses instead of silently using the file store", () => {
+  test("a configuration naming the OS credential store refuses instead of silently using the file store", async () => {
     // The schema allows the value; nothing in this release implements it. An
     // accepted-and-ignored field is the same shape as a comment describing
     // enforcement no code performs — the operator believes their token is in
@@ -222,7 +222,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a non-loopback bind without acknowledgement refuses", () => {
+  test("a non-loopback bind without acknowledgement refuses", async () => {
     for (const address of ["0.0.0.0", "::", "192.168.1.10", "example.com"]) {
       const startup = resolveServeStartup({
         config: ephemeralConfig({ address }),
@@ -236,7 +236,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a non-loopback bind WITH acknowledgement resolves and is reported as non-loopback", () => {
+  test("a non-loopback bind WITH acknowledgement resolves and is reported as non-loopback", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig({ address: "0.0.0.0", acknowledgeNonLoopback: true }),
       credential: credentialResult(),
@@ -247,7 +247,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("acknowledgement on a loopback bind does not make it non-loopback", () => {
+  test("acknowledgement on a loopback bind does not make it non-loopback", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig({ address: "127.0.0.1", acknowledgeNonLoopback: true }),
       credential: credentialResult(),
@@ -263,7 +263,7 @@ describe("startup preconditions", () => {
 
   // ── the non-weakening remote profile (spec AC-04) ────────────────────────
 
-  test("the default configuration resolves a profile, and the resolved posture is returned rather than the name", () => {
+  test("the default configuration resolves a profile, and the resolved posture is returned rather than the name", async () => {
     // Not vacuous: every refusal test below means nothing if the happy path
     // never resolves a profile at all.
     const startup = resolveServeStartup({ config: ephemeralConfig(), credential: credentialResult() });
@@ -278,7 +278,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a profile name this release does not implement is a refusal, not a fallback", () => {
+  test("a profile name this release does not implement is a refusal, not a fallback", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig({ profile: "hardened" }),
       credential: credentialResult(),
@@ -291,7 +291,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a widening remote profile refuses at startup and names the fields that widen", () => {
+  test("a widening remote profile refuses at startup and names the fields that widen", async () => {
     // Every profile this release ships resolves at or below the baseline, so
     // the widening input is produced by TIGHTENING the baseline rather than by
     // inventing a wider remote profile. Same branch, reachable premise.
@@ -340,7 +340,7 @@ describe("startup preconditions", () => {
     expect(Object.hasOwn(outcome, "listener")).toBe(false);
   });
 
-  test("the shell-allow posture is wider than the baseline — the premise, asserted", () => {
+  test("the shell-allow posture is wider than the baseline — the premise, asserted", async () => {
     // If this ever stops being true the widening tests above are still green
     // while proving nothing, because their input would no longer widen.
     expect(compareProfiles(localBaselineProfile(), resolveLocalProfile("monitored-trusted-local"))).toEqual({
@@ -349,7 +349,7 @@ describe("startup preconditions", () => {
     });
   });
 
-  test("no non-test file supplies the localBaseline seam", () => {
+  test("no non-test file supplies the localBaseline seam", async () => {
     // `localBaseline` exists so the widening branch has a reachable input under
     // test. It can also LOWER the ceiling a remote profile is held to, which is
     // the one thing this whole check exists to prevent — so production code may
@@ -378,7 +378,7 @@ describe("startup preconditions", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("the seam detector fires on a planted caller", () => {
+  test("the seam detector fires on a planted caller", async () => {
     // Otherwise the assertion above passes because the predicate matches nothing.
     const planted = "resolveServeStartup({ config, credential, localBaseline: () => wideOpen() });";
     expect(/localBaseline\s*:/.test(planted) && !/localBaseline\?\s*:/.test(planted)).toBe(true);
@@ -386,7 +386,7 @@ describe("startup preconditions", () => {
     expect(/localBaseline\s*:/.test(declaration) && !/localBaseline\?\s*:/.test(declaration)).toBe(false);
   });
 
-  test("the profile is checked AFTER the refusals that already existed", () => {
+  test("the profile is checked AFTER the refusals that already existed", async () => {
     // A configuration with two faults refuses on the one that was already
     // proven, not on the new one. Both are terminal and neither is unsafe, so
     // this is about not silently changing which instruction an operator is
@@ -403,13 +403,13 @@ describe("startup preconditions", () => {
 });
 
 describe("CLI status projection", () => {
-  test("nothing configured is stopped", () => {
+  test("nothing configured is stopped", async () => {
     const report = describeServeStatus({ config: null, credential: { status: "absent" } });
     expect(report.state).toBe("stopped");
     expect(report.pendingApprovals).toBe(0);
   });
 
-  test("a configuration with enabled:false is stopped, not refused", () => {
+  test("a configuration with enabled:false is stopped, not refused", async () => {
     const report = describeServeStatus({
       config: { ...ephemeralConfig(), enabled: false },
       credential: credentialResult(),
@@ -417,7 +417,7 @@ describe("CLI status projection", () => {
     expect(report.state).toBe("stopped");
   });
 
-  test("a complete configuration is configured and reports the same fields as the route", () => {
+  test("a complete configuration is configured and reports the same fields as the route", async () => {
     const report = describeServeStatus({
       config: ephemeralConfig({ profile: "remote-restricted" }),
       credential: credentialResult(),
@@ -429,7 +429,7 @@ describe("CLI status projection", () => {
     expect(report.pendingApprovals).toBe(0);
   });
 
-  test("a non-loopback acknowledged bind is reported as non-loopback", () => {
+  test("a non-loopback acknowledged bind is reported as non-loopback", async () => {
     const report = describeServeStatus({
       config: ephemeralConfig({ address: "0.0.0.0", acknowledgeNonLoopback: true }),
       credential: credentialResult(),
@@ -438,13 +438,13 @@ describe("CLI status projection", () => {
     expect(report.nonLoopback).toBe(true);
   });
 
-  test("a failed precondition is refused, with the reason", () => {
+  test("a failed precondition is refused, with the reason", async () => {
     const report = describeServeStatus({ config: ephemeralConfig(), credential: { status: "absent" } });
     expect(report.state).toBe("refused");
     expect(report.reason).toBe("no-credential");
   });
 
-  test("no status projection contains the token", () => {
+  test("no status projection contains the token", async () => {
     const report = describeServeStatus({ config: ephemeralConfig(), credential: credentialResult() });
     expect(JSON.stringify(report)).not.toContain(token);
   });
@@ -467,7 +467,7 @@ describe("authentication", () => {
     ];
     const seen = new Set<string>();
     for (const request of variants) {
-      const response = handleServeRequest(request, context(config));
+      const response = await handleServeRequest(request, context(config));
       expect(response.status).toBe(401);
       const body = await response.text();
       seen.add(
@@ -486,7 +486,7 @@ describe("authentication", () => {
     const shapes = new Set<string>();
     for (const route of paths) {
       for (const method of ["GET", "POST", "DELETE"]) {
-        const response = handleServeRequest(new Request(`http://127.0.0.1${route}`, { method }), context(config));
+        const response = await handleServeRequest(new Request(`http://127.0.0.1${route}`, { method }), context(config));
         // Pinned explicitly. Without it "they all match each other" is also
         // satisfied by them all being 200.
         expect(response.status).toBe(401);
@@ -510,12 +510,12 @@ describe("authentication", () => {
     // fixture had registered nothing and the profile name had not taken. This
     // proves those values really are reachable through this surface when the
     // caller IS authenticated, which is what makes their absence meaningful.
-    const authorized = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(config)).text();
+    const authorized = await (await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(config))).text();
     expect(authorized).toContain("alpha");
-    const authorizedStatus = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config)).text();
+    const authorizedStatus = await (await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config))).text();
     expect(authorizedStatus).toContain("a-very-distinctive-profile-name");
 
-    const response = handleServeRequest(new Request("http://127.0.0.1/v1/projects"), context(config));
+    const response = await handleServeRequest(new Request("http://127.0.0.1/v1/projects"), context(config));
     const body = await response.text();
     for (const leak of [token, credential.id, credential.hash, credential.salt, "a-very-distinctive-profile-name", "alpha", workspace, configDir]) {
       expect(body).not.toContain(leak);
@@ -523,17 +523,17 @@ describe("authentication", () => {
     expect(JSON.parse(body)).toEqual({ error: { code: "unauthorized", message: "Unauthorized." } });
   });
 
-  test("a correct token is accepted", () => {
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
+  test("a correct token is accepted", async () => {
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
     expect(response.status).toBe(200);
   });
 
-  test("the scheme is matched case-insensitively, as RFC 7235 requires", () => {
+  test("the scheme is matched case-insensitively, as RFC 7235 requires", async () => {
     // `bearerToken` lowercases the scheme. That was asserted only in the
     // negative direction (a `Basic` header is refused); a lowercase `bearer`
     // must still be ACCEPTED or the leniency is one-way and useless.
     for (const scheme of ["bearer", "Bearer", "BEARER", "BeArEr"]) {
-      const response = handleServeRequest(
+      const response = await handleServeRequest(
         new Request("http://127.0.0.1/v1/status", { headers: { authorization: `${scheme} ${token}` } }),
         context(ephemeralConfig()),
       );
@@ -543,10 +543,26 @@ describe("authentication", () => {
 });
 
 describe("the route surface", () => {
-  test("only two paths exist; everything else is 404 for an authenticated caller", async () => {
+  test("the route table is closed; everything outside it is 404 for an authenticated caller", async () => {
+    // `/v1/turns` left this list when R4c added it — it is now a real route and
+    // answers 405 to a GET, which the method test below pins. Everything here
+    // is a path that does NOT exist, including the near-misses that a prefix
+    // match would have accepted.
     const config = ephemeralConfig();
-    for (const route of ["/", "/health", "/v1", "/v1/", "/v1/status/", "/v1/statusx", "/v1/turns", "/v1/projects/1", "/V1/STATUS"]) {
-      const response = handleServeRequest(authed(`http://127.0.0.1${route}`), context(config));
+    for (const route of [
+      "/",
+      "/health",
+      "/v1",
+      "/v1/",
+      "/v1/status/",
+      "/v1/statusx",
+      "/v1/turnsx",
+      "/v1/turns/",
+      "/v1/turns/not-an-id/events/more",
+      "/v1/projects/1",
+      "/V1/STATUS",
+    ]) {
+      const response = await handleServeRequest(authed(`http://127.0.0.1${route}`), context(config));
       expect({ route, status: response.status }).toEqual({ route, status: 404 });
       expect(JSON.parse(await response.text())).toEqual({ error: { code: "not-found", message: "Not found." } });
     }
@@ -556,7 +572,7 @@ describe("the route surface", () => {
     const config = ephemeralConfig();
     for (const route of ["/v1/status", "/v1/projects"]) {
       for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]) {
-        const response = handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
+        const response = await handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
         expect({ route, method, status: response.status }).toEqual({ route, method, status: 405 });
         expect(JSON.parse(await response.text())).toEqual({
           error: { code: "method-not-allowed", message: "Method not allowed." },
@@ -567,7 +583,7 @@ describe("the route surface", () => {
 
   test("a draining server accepts no new request", async () => {
     const config = ephemeralConfig();
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config, () => "draining"));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config, () => "draining"));
     expect(response.status).toBe(503);
     expect(JSON.parse(await response.text())).toEqual({
       error: { code: "draining", message: "The server is draining." },
@@ -578,7 +594,7 @@ describe("the route surface", () => {
 describe("GET /v1/status", () => {
   test("reports state, bind, profile, the non-loopback flag and a pending-approval count of 0", async () => {
     const config = ephemeralConfig({ profile: "remote-restricted" });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), {
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), {
       ...context(config),
       nonLoopback: false,
       boundPort: 54321,
@@ -594,7 +610,7 @@ describe("GET /v1/status", () => {
 
   test("reports the bind as non-loopback when it is one", async () => {
     const config = ephemeralConfig({ address: "0.0.0.0", acknowledgeNonLoopback: true });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), {
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), {
       ...context(config),
       nonLoopback: true,
     });
@@ -604,7 +620,7 @@ describe("GET /v1/status", () => {
   });
 
   test("never carries the token, the stored hash, the salt or the credential id", async () => {
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
     const raw = await response.text();
     for (const leak of [token, credential.hash, credential.salt, credential.id]) {
       expect(raw).not.toContain(leak);
@@ -619,7 +635,7 @@ describe("GET /v1/projects", () => {
     registerProject(alpha, { dir: configDir });
     registerProject(beta, { dir: configDir });
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     expect(response.status).toBe(200);
     const body = (await response.json()) as { schemaVersion: number; projects: Array<Record<string, unknown>> };
     expect(body.schemaVersion).toBe(1);
@@ -633,7 +649,7 @@ describe("GET /v1/projects", () => {
     registerProject(gone, { dir: configDir });
     rmSync(gone, { recursive: true, force: true });
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const body = (await response.json()) as { projects: Array<Record<string, unknown>> };
     expect(body.projects).toHaveLength(1);
     expect(body.projects[0]!.state).toBe("missing");
@@ -641,7 +657,7 @@ describe("GET /v1/projects", () => {
 
   test("carries addressing only — no credential-shaped field anywhere", async () => {
     registerProject(makeProject("alpha"), { dir: configDir });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const body = (await response.json()) as { projects: unknown[] };
     // Pinned first: `hasSecretShapedField` returns false for an empty list, so
     // without this the assertion below would pass having inspected nothing.
@@ -696,7 +712,7 @@ describe("the listener", () => {
     const base = `http://127.0.0.1:${outcome.listener.port}`;
     const auth = { authorization: `Bearer ${token}` };
 
-    for (const route of ["/", "/health", "/v1/status/", "/v1/turns"]) {
+    for (const route of ["/", "/health", "/v1/status/", "/v1/turnsx"]) {
       const response = await fetch(`${base}${route}`, { headers: auth });
       expect({ route, status: response.status }).toEqual({ route, status: 404 });
     }
@@ -913,7 +929,7 @@ describe("the projects route discloses no filesystem path of its own", () => {
       "utf8",
     );
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const raw = await response.text();
     expect(raw).not.toContain(configDir);
     expect(raw).not.toContain("projects.json");
@@ -926,7 +942,7 @@ describe("the projects route discloses no filesystem path of its own", () => {
     mkdirSync(configDir, { recursive: true });
     writeFileSync(path.join(configDir, "projects.json"), "{not json", "utf8");
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const raw = await response.text();
     expect(raw).not.toContain(configDir);
     const body = JSON.parse(raw) as { warnings: unknown[]; projects: unknown[] };
@@ -936,7 +952,7 @@ describe("the projects route discloses no filesystem path of its own", () => {
 
   test("a healthy registry reports no warnings at all", async () => {
     registerProject(makeProject("alpha"), { dir: configDir });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const body = (await response.json()) as { warnings: unknown[]; projects: unknown[] };
     expect(body.warnings).toEqual([]);
     expect(body.projects).toHaveLength(1);
@@ -956,10 +972,10 @@ describe("read-only on disk", () => {
     const config = ephemeralConfig();
     for (const route of ["/v1/status", "/v1/projects", "/v1/unknown"]) {
       for (const method of ["GET", "POST"]) {
-        const response = handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
+        const response = await handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
         await response.text();
       }
-      await handleServeRequest(new Request(`http://127.0.0.1${route}`), context(config)).text();
+      (await handleServeRequest(new Request(`http://127.0.0.1${route}`), context(config))).text();
     }
 
     expect(inventory(project)).toEqual(before);
@@ -974,7 +990,7 @@ function makeProject(name: string): string {
 }
 
 describe("the credential reader reports absence and damage distinctly", () => {
-  test("absent, ok and unreadable are three different answers", () => {
+  test("absent, ok and unreadable are three different answers", async () => {
     const empty = mkdtempSync(path.join(tmpdir(), "keryx-serve-cred-read-"));
     try {
       expect(readServeCredential(empty).status).toBe("absent");

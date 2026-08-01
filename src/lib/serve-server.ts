@@ -36,6 +36,8 @@ import {
 import type { PolicyProfile } from "../harness/policy/types";
 import { emitProjectsJson, listProjects } from "./project-registry";
 import { AuthFailureThrottle } from "./serve-throttle";
+import { isTurnId, readTurnEvents, readTurnRecord } from "./serve-turn-store";
+import { MAX_TURN_BODY_BYTES, resolveProject, type TurnRequest, validateTurnRequest } from "./serve-turn";
 import {
   isLoopbackAddress,
   serveConfigAdvice,
@@ -331,10 +333,59 @@ export interface ServeContext {
    * with a control they are not testing.
    */
   throttle?: AuthFailureThrottle;
+  /**
+   * Submit a validated turn. Absent means this listener cannot execute one.
+   *
+   * Injected rather than assembled here, and for two reasons. The adapter
+   * "depends inward" — no HTTP type may appear in a harness contract, and the
+   * cleanest way to hold that is for this module to know nothing about
+   * providers, models or run assembly. And the offline fake transport
+   * specification.md §Testability requires is then a function rather than a
+   * network fixture.
+   */
+  submitTurn?: (request: TurnRequest, project: string) => Promise<SubmitTurnOutcome>;
 }
 
-/** The complete route surface of this slice. Exact match, closed set. */
-const ROUTES = new Set(["/v1/status", "/v1/projects"]);
+/** What a submission did. `duplicate` started nothing; `rejected` ran nothing. */
+export type SubmitTurnOutcome =
+  | { kind: "accepted"; turnId: string; sessionId: string }
+  | { kind: "duplicate"; turnId: string; sessionId: string }
+  | { kind: "rejected" };
+
+/**
+ * The complete route surface, as a closed enumeration.
+ *
+ * Two shapes now: fixed paths, and the three turn routes that carry an id. The
+ * id-bearing ones are matched by SEGMENT COUNT AND POSITION, never by prefix —
+ * `.metaproject/memory/lessons/allowlist-not-a-boundary.md` is exactly a check
+ * against a raw string standing in for a check against structure, and a
+ * `startsWith("/v1/turns/")` here would match `/v1/turns/../../anything`.
+ *
+ * The id itself is validated by `isTurnId` before it can become a path; matching
+ * only decides WHICH route, never whether the id is acceptable.
+ */
+const FIXED_ROUTES = new Set(["/v1/status", "/v1/projects", "/v1/turns"]);
+
+type RouteMatch =
+  | { route: "fixed"; pathname: string }
+  | { route: "turn"; turnId: string }
+  | { route: "turn-events"; turnId: string }
+  | { route: "none" };
+
+function matchRoute(pathname: string): RouteMatch {
+  if (FIXED_ROUTES.has(pathname)) {
+    return { route: "fixed", pathname };
+  }
+  const segments = pathname.split("/");
+  // ["", "v1", "turns", "<id>"] and ["", "v1", "turns", "<id>", "events"].
+  if (segments.length === 4 && segments[1] === "v1" && segments[2] === "turns") {
+    return { route: "turn", turnId: segments[3] ?? "" };
+  }
+  if (segments.length === 5 && segments[1] === "v1" && segments[2] === "turns" && segments[4] === "events") {
+    return { route: "turn-events", turnId: segments[3] ?? "" };
+  }
+  return { route: "none" };
+}
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
 
@@ -400,13 +451,129 @@ export function summarizeRegistryWarnings(messages: readonly string[]): Array<{ 
 }
 
 /**
+ * `POST /v1/turns` — the only route that can cause agent execution.
+ *
+ * The order below is `security-policy.md` §"Required decision path", steps 1
+ * and 3 through 6. Step 2 (authentication) already ran in the caller, before
+ * the URL was parsed. The order is the control: the same checks in a different
+ * sequence is a finding, which is why each one says what it is.
+ */
+async function submitTurn(request: Request, ctx: ServeContext): Promise<Response> {
+  // (1) Bound the body and the content type BEFORE parsing semantics. A
+  // declared length beyond the bound is refused without reading the body at
+  // all, so an oversized request costs nothing to refuse.
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_TURN_BODY_BYTES) {
+    return errorResponse(413, "too-large", "The request body exceeds the configured bound.");
+  }
+  const contentType = (request.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    return errorResponse(400, "invalid-request", "Content-Type must be application/json.");
+  }
+
+  const raw = await request.text();
+  // Checked again against the ACTUAL bytes: a chunked request declares no
+  // length, so the header check above is an optimisation and this is the bound.
+  if (Buffer.byteLength(raw, "utf8") > MAX_TURN_BODY_BYTES) {
+    return errorResponse(413, "too-large", "The request body exceeds the configured bound.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return errorResponse(400, "invalid-request", "The request body is not valid JSON.");
+  }
+
+  const validated = validateTurnRequest(parsed);
+  if (!validated.ok) {
+    return errorResponse(validated.problem.status, validated.problem.code, validated.problem.message);
+  }
+
+  // (4) Resolve the session identity-first from the declared project. Never
+  // infer. An unknown project fails rather than falling back to "the obvious
+  // one" — the failure mode that made helyx cross-link transports between
+  // projects.
+  const project = resolveProject(validated.request.project, ctx.dir);
+  if (!project.ok) {
+    return errorResponse(404, project.code, project.message);
+  }
+
+  const submit = ctx.submitTurn;
+  if (submit === undefined) {
+    // No runner wired. A 503 rather than a 500: the surface is up and the
+    // request was well-formed; this install simply cannot execute a turn.
+    return errorResponse(503, "unavailable", "Turn execution is not available on this listener.");
+  }
+
+  const outcome = await submit(validated.request, project.project);
+  if (outcome.kind === "duplicate") {
+    // (AC7) A repeated idempotency key returns the ORIGINAL turnId and starts
+    // nothing. 200 rather than 202: nothing was accepted, because nothing new
+    // happened.
+    return new Response(
+      `${JSON.stringify({ schemaVersion: "1.0.0", turnId: outcome.turnId, sessionId: outcome.sessionId, duplicate: true }, null, 2)}\n`,
+      { status: 200, headers: JSON_HEADERS },
+    );
+  }
+  if (outcome.kind === "rejected") {
+    // (5) The prompt was rejected by the security scan. The body states that it
+    // was rejected and NOTHING about what matched — naming the detector or the
+    // matched span would turn this route into an oracle for the scanner.
+    return errorResponse(422, "prompt-rejected", "The prompt was rejected.");
+  }
+
+  // 202: accepted. api-protocol.md is explicit that "an accepted turn is not a
+  // permitted turn" — classification happens inside the run loop and the turn
+  // may still terminate in a denial, which the result will say.
+  return new Response(
+    `${JSON.stringify({ schemaVersion: "1.0.0", turnId: outcome.turnId, sessionId: outcome.sessionId }, null, 2)}\n`,
+    { status: 202, headers: JSON_HEADERS },
+  );
+}
+
+/**
+ * `GET /v1/turns/{turnId}/events` — server-sent events, replayed from the record.
+ *
+ * There is no live-pipe path and no separate replay path. Every caller reads the
+ * durable record from a cursor, which is what makes "re-attachment never
+ * re-executes anything" true by construction rather than by discipline: this
+ * function cannot run a turn, because reading a file is all it does.
+ *
+ * `Last-Event-ID` is the standard SSE resume header and carries the `seq` of the
+ * last event the client saw. Absent, the stream starts from the beginning.
+ */
+function streamTurnEvents(request: Request, turnId: string, ctx: ServeContext): Response {
+  const header = request.headers.get("last-event-id");
+  const parsed = header === null ? Number.NaN : Number(header);
+  // A malformed cursor replays from the beginning rather than being refused.
+  // The client asking for a resume it cannot express correctly is better served
+  // by too much history than by an error it cannot act on — and a duplicate
+  // event is harmless here, because events carry no side effect.
+  const after = Number.isInteger(parsed) && parsed >= 0 ? parsed : -1;
+
+  const events = readTurnEvents(turnId, after, ctx.dir);
+  const body = events.map((event) => `id: ${event.seq}\ndata: ${JSON.stringify(event)}\n\n`).join("");
+
+  return new Response(body, {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      // A replayed stream must not be cached by anything between here and the
+      // client: a cached event stream is a client stuck at a cursor forever.
+      "cache-control": "no-store",
+      connection: "keep-alive",
+    },
+  });
+}
+
+/**
  * The whole request surface.
  *
  * Exported separately from the listener so every response can be asserted
  * without binding a socket, and so the listener and the tests exercise the same
  * function rather than two implementations of the same rules.
  */
-export function handleServeRequest(request: Request, ctx: ServeContext): Response {
+export async function handleServeRequest(request: Request, ctx: ServeContext): Promise<Response> {
   // (1) Authenticate FIRST. The URL is not even parsed until this passes, so
   // there is no branch on it that could differ for an unauthenticated caller.
   //
@@ -437,21 +604,52 @@ export function handleServeRequest(request: Request, ctx: ServeContext): Respons
   // (2) A draining server accepts no new request. After authentication, so the
   // 503 is not an oracle for a stranger.
   //
-  // Unreachable through the real listener today — see drain(); the window
-  // between the state flip and the close is empty while every route is
-  // synchronous. Kept because it is the correct answer once one is not, and
-  // because the alternative is a server that serves a request it has already
-  // decided to stop serving.
+  // Reachable now: `POST /v1/turns` does asynchronous work, so the window
+  // between the state flip in `drain()` and the close is no longer empty. R4b's
+  // comment here recorded it as unreachable-but-correct; this slice is the one
+  // that made it reachable.
   if (ctx.state() === "draining") {
     return errorResponse(503, "draining", "The server is draining.");
   }
 
   const pathname = new URL(request.url).pathname;
-  if (!ROUTES.has(pathname)) {
+  const matched = matchRoute(pathname);
+  if (matched.route === "none") {
     return errorResponse(404, "not-found", "Not found.");
+  }
+
+  // `POST /v1/turns` is the one route that is not a GET. Method checking stays
+  // per-route rather than a single "GET or 405", because a surface with one
+  // mutating route and five read routes must not answer 405 for the mutating one
+  // and must not accept POST on the reads.
+  if (matched.route === "fixed" && pathname === "/v1/turns") {
+    if (request.method !== "POST") {
+      return errorResponse(405, "method-not-allowed", "Method not allowed.", { allow: "POST" });
+    }
+    return submitTurn(request, ctx);
   }
   if (request.method !== "GET") {
     return errorResponse(405, "method-not-allowed", "Method not allowed.", { allow: "GET" });
+  }
+
+  if (matched.route === "turn" || matched.route === "turn-events") {
+    // The id is constrained BEFORE it becomes a path, and an unknown turn and a
+    // malformed one answer identically: api-protocol.md requires a 404 for an
+    // unknown id and a 403 for one the token may not reach to be
+    // indistinguishable, and the same reasoning covers "not an id at all".
+    const record = isTurnId(matched.turnId) ? readTurnRecord(matched.turnId, ctx.dir) : null;
+    if (record === null) {
+      return errorResponse(404, "not-found", "Not found.");
+    }
+    if (matched.route === "turn-events") {
+      return streamTurnEvents(request, matched.turnId, ctx);
+    }
+    if (record.result === undefined) {
+      // Accepted and running. api-protocol.md: the terminal result is
+      // "available after the turn reaches a terminal state".
+      return errorResponse(409, "turn-in-progress", "The turn has not reached a terminal state.");
+    }
+    return new Response(`${JSON.stringify(record.result, null, 2)}\n`, { headers: JSON_HEADERS });
   }
 
   if (pathname === "/v1/status") {

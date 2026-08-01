@@ -27,6 +27,39 @@ implement the feature.
    statement of why `compareProfiles` may never compare names: `remote-restricted`
    and `unattended-untrusted` are one posture under two spellings.
 
+## D6 — the security scan is rooted at the INSTALL, not the declared project
+
+AC10's inventory assertion found it: `redact()` still needs an HMAC key to hash
+finding values, and creates one under `<root>/.metaproject/data/security/` on
+first use. Scanning against the declared project therefore WROTE INTO THE
+PROJECT, which spec AC-14/15 forbid of every route on this surface.
+
+Scoping to the install is the better answer on its own terms, not merely the one
+that makes the test pass. The prompt is untrusted content arriving at the
+INSTALL boundary. Project-scoped, a remote caller would choose which security
+configuration governs the scan of their own prompt by naming that project — so
+the laxest `.metaproject` on the machine would decide. One install, one scanning
+policy, chosen by the operator rather than by the caller.
+
+## Three defects the tests found in my own work
+
+1. **The security scan was implemented and unreachable.** It was an exported
+   function the route was expected to call, and the route did not. Step 5 of the
+   required decision path was therefore indistinguishable from absent while
+   every test passed. Fixed by making the pipeline a factory — a caller that
+   gets a turn runner gets the scan with it — and by having the route suite use
+   the production factory instead of re-composing its steps.
+2. **The terminal result carried no assistant text.** The completion gate writes
+   no `summary` when no tools are registered, so `text` was `""` while the event
+   stream carried the whole answer — a result contradicting its own stream.
+   Found by the AC9 positive control, which exists precisely so the absence
+   assertions cannot pass against a surface that emits nothing.
+3. **My redaction test claimed more than the code does.** It planted a generic
+   40-character string and asserted its absence; no detector matches that shape.
+   The claim is now scoped to what `src/security`'s detectors recognise, because
+   redaction here is exactly as good as those detectors and a wider claim would
+   be a claim about a different module.
+
 ## An ordering mistake I made and reverted
 
 The profile checks first went in BEFORE the non-loopback check, and the recovery
@@ -40,3 +73,6 @@ change this slice needs. Moved to last, with the reason in the source.
 - 2026-08-01T20:05:04.222Z - flow created
 - 2026-08-01T20:12:53.915Z - frozen: 12 criteria; checksum recorded
 - 2026-08-01T20:12:54.001Z - started
+- 2026-08-01T20:38:43.999Z - task-done: T1: Collect remaining context
+- 2026-08-01T20:38:44.083Z - task-done: T2: Implement per plan
+- 2026-08-01T20:38:44.170Z - task-done: T3: Add/adjust tests and make them pass

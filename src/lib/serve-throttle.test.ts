@@ -46,7 +46,7 @@ function fakeClock(start = 1_000_000): { now: () => number; advance: (ms: number
 }
 
 describe("AuthFailureThrottle", () => {
-  test("a peer is not throttled until it reaches the limit, and is at it", () => {
+  test("a peer is not throttled until it reaches the limit, and is at it", async () => {
     const clock = fakeClock();
     const throttle = new AuthFailureThrottle(clock.now);
     // One short of the limit: still allowed to try.
@@ -56,7 +56,7 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.recordFailure("peer").throttled).toBe(true);
   });
 
-  test("the window slides: failures that age out do not count", () => {
+  test("the window slides: failures that age out do not count", async () => {
     // A fixed bucket would let a peer spend the whole allowance at the end of
     // one window and the whole allowance again at the start of the next.
     const clock = fakeClock();
@@ -69,7 +69,7 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.recordFailure("peer").throttled).toBe(false);
   });
 
-  test("a throttled peer is released after the cooldown", () => {
+  test("a throttled peer is released after the cooldown", async () => {
     const clock = fakeClock();
     const throttle = new AuthFailureThrottle(clock.now);
     for (let i = 0; i < AUTH_FAILURE_LIMIT; i += 1) {
@@ -80,7 +80,7 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.check("peer").throttled).toBe(false);
   });
 
-  test("checking does not extend the cooldown", () => {
+  test("checking does not extend the cooldown", async () => {
     // Otherwise a client retrying in a loop can never get back in, and the
     // cooldown stops being a cooldown. `check` is what the request path calls
     // for a peer already serving one.
@@ -100,7 +100,7 @@ describe("AuthFailureThrottle", () => {
     expect(verdict.retryAfterSeconds).toBeLessThanOrEqual(10);
   });
 
-  test("peers are independent", () => {
+  test("peers are independent", async () => {
     const throttle = new AuthFailureThrottle(fakeClock().now);
     for (let i = 0; i < AUTH_FAILURE_LIMIT; i += 1) {
       throttle.recordFailure("noisy");
@@ -109,7 +109,7 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.check("quiet").throttled).toBe(false);
   });
 
-  test("the peer table is bounded, so an unauthenticated caller cannot grow it without limit", () => {
+  test("the peer table is bounded, so an unauthenticated caller cannot grow it without limit", async () => {
     // A map an unauthenticated caller can grow is a memory-exhaustion primitive
     // wearing the costume of a security control.
     const throttle = new AuthFailureThrottle(fakeClock().now);
@@ -119,7 +119,7 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
   });
 
-  test("flooding the table does not clear an existing cooldown", () => {
+  test("flooding the table does not clear an existing cooldown", async () => {
     // Eviction is oldest-seen-first and does NOT prefer throttled records —
     // otherwise an attacker clears their own ban by spoofing a thousand peers.
     const clock = fakeClock();
@@ -163,12 +163,12 @@ describe("the request path consults the throttle in the right order (AC11)", () 
 
     const codes: number[] = [];
     for (let i = 0; i < AUTH_FAILURE_LIMIT + 1; i += 1) {
-      codes.push(handleServeRequest(wrong.clone(), ctx(throttle)).status);
+      codes.push((await handleServeRequest(wrong.clone(), ctx(throttle))).status);
     }
     expect(codes.slice(0, AUTH_FAILURE_LIMIT - 1)).toEqual(Array(AUTH_FAILURE_LIMIT - 1).fill(401));
     expect(codes.at(-1)).toBe(429);
 
-    const throttled = handleServeRequest(wrong.clone(), ctx(throttle));
+    const throttled = await handleServeRequest(wrong.clone(), ctx(throttle));
     expect(throttled.status).toBe(429);
     expect(Number(throttled.headers.get("retry-after"))).toBeGreaterThan(0);
   });
@@ -186,7 +186,7 @@ describe("the request path consults the throttle in the right order (AC11)", () 
     const good = new Request("http://127.0.0.1/v1/status", {
       headers: { authorization: `Bearer ${token}` },
     });
-    const response = handleServeRequest(good, ctx(throttle));
+    const response = await handleServeRequest(good, ctx(throttle));
     expect(response.status).toBe(200);
   });
 
@@ -197,12 +197,12 @@ describe("the request path consults the throttle in the right order (AC11)", () 
       const good = new Request("http://127.0.0.1/v1/status", {
         headers: { authorization: `Bearer ${token}` },
       });
-      expect(handleServeRequest(good, ctx(throttle)).status).toBe(200);
+      expect((await handleServeRequest(good, ctx(throttle))).status).toBe(200);
     }
     expect(throttle.size()).toBe(0);
   });
 
-  test("a context without a throttle is unthrottled, not crashed", () => {
+  test("a context without a throttle is unthrottled, not crashed", async () => {
     // Every pre-existing synthetic context in the suite omits both fields.
     const wrong = new Request("http://127.0.0.1/v1/status", {
       headers: { authorization: "Bearer nope" },
@@ -216,11 +216,11 @@ describe("the request path consults the throttle in the right order (AC11)", () 
       state: () => "listening" as const,
     };
     for (let i = 0; i < AUTH_FAILURE_LIMIT + 5; i += 1) {
-      expect(handleServeRequest(wrong.clone(), bare).status).toBe(401);
+      expect((await handleServeRequest(wrong.clone(), bare)).status).toBe(401);
     }
   });
 
-  test("the 429 body reveals nothing a 401 does not", () => {
+  test("the 429 body reveals nothing a 401 does not", async () => {
     // A throttle is a rate signal, not an oracle. It must not become the one
     // response that distinguishes a known path from an unknown one, or a
     // malformed token from a wrong one.
@@ -229,11 +229,14 @@ describe("the request path consults the throttle in the right order (AC11)", () 
       throttle.recordFailure("10.0.0.9");
     }
     const paths = ["/v1/status", "/v1/nothing-here", "/"];
-    const bodies = paths.map(
-      (p) =>
-        handleServeRequest(new Request(`http://127.0.0.1${p}`, { headers: { authorization: "Bearer x" } }), ctx(throttle))
-          .status,
-    );
+    const bodies: number[] = [];
+    for (const p of paths) {
+      const response = await handleServeRequest(
+        new Request(`http://127.0.0.1${p}`, { headers: { authorization: "Bearer x" } }),
+        ctx(throttle),
+      );
+      bodies.push(response.status);
+    }
     // Identical on every path, exactly as the fixed 401 is.
     expect(bodies).toEqual([429, 429, 429]);
   });
