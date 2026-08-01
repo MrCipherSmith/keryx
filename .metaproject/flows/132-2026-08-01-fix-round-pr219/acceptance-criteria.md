@@ -18,7 +18,7 @@ Rules:
 - AC6: Instructions printed together are executed in the order printed, as one recovery sequence, and the end state is asserted after the whole sequence rather than after each instruction independently.
 - AC7: The instructions that are not executed are covered rather than skipped — the bare `keryx serve --acknowledge-non-loopback` form has its own test asserting the refusal it is designed to produce and the reason given for it.
 - AC8: `FINDING_HEADING` identifies a heading positively rather than by position alone: an identifier that opens a line and is followed by `,`, `)` or `.` is a reference; a heading carries a title separator or a markdown heading/list marker. Both directions are pinned by tests.
-- AC9: Ingesting `.metaproject/reviews/2026-08-01-ingest-feat-r4c-turn-submission/report.md` through the parser yields exactly the fifteen real findings and zero phantoms, asserted by id.
+- AC9: Ingesting the consolidated review report through the parser yields exactly the fifteen real findings and zero phantoms, asserted by id. The report is checked in byte-identical at `src/review/fixtures/consolidated-review-2026-08-01.md`, because the recorded package it was copied from lives on `feat/r4c-turn-submission` and a guard that reads a file only present on another branch does not run.
 - AC10: Flow 130's journal claim about what the readers guard reported is corrected to match the recorded scanner output (one offence per (file, call) pair, one entry recorded).
 - AC11: `bun test` is green on the whole suite, and typecheck and lint are clean.
 </content>
