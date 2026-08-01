@@ -8,8 +8,8 @@
 // All functions are best-effort and never throw; the `dir` override keeps them
 // unit-testable against a temp directory.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
+import { keryxConfigDir } from "./config-dir";
 
 export interface ShellConfig {
   provider?: string;
@@ -24,31 +24,9 @@ export interface ShellConfig {
   apiKeys?: Record<string, string>;
 }
 
-/**
- * The per-user config directory for keryx, cross-platform:
- *   - Windows: `%APPDATA%\keryx` (or `~/AppData/Roaming/keryx`).
- *   - Linux/BSD: `$XDG_DATA_HOME/keryx` (or `~/.local/share/keryx`).
- *   - macOS: `~/.local/share/keryx` (as opencode/most CLIs use on Unix).
- * Overridable via `dir` for tests.
- */
-function configDir(dir?: string): string {
-  if (dir !== undefined) {
-    return dir;
-  }
-  const home = homedir();
-  if (process.platform === "win32") {
-    const appData = process.env.APPDATA;
-    const base = appData !== undefined && appData.length > 0 ? appData : path.join(home, "AppData", "Roaming");
-    return path.join(base, "keryx");
-  }
-  const xdg = process.env.XDG_DATA_HOME;
-  const base = xdg !== undefined && xdg.length > 0 ? xdg : path.join(home, ".local", "share");
-  return path.join(base, "keryx");
-}
-
 /** Absolute path to the `auth.json` config file. */
 export function shellConfigPath(dir?: string): string {
-  return path.join(configDir(dir), "auth.json");
+  return path.join(keryxConfigDir(dir), "auth.json");
 }
 
 /** Read the persisted config; `{}` when absent/unreadable/malformed. Never throws. */
@@ -68,7 +46,7 @@ export function loadShellConfig(dir?: string): ShellConfig {
 /** Merge `patch` into the persisted config (0600). Best-effort; never throws. */
 export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
   try {
-    const base = configDir(dir);
+    const base = keryxConfigDir(dir);
     mkdirSync(base, { recursive: true });
     const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
     writeFileSync(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });

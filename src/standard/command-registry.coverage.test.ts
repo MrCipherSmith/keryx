@@ -35,6 +35,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   { verb: "init", reason: "project lifecycle; scaffolds and rewrites the workspace" },
   { verb: "update", reason: "toolkit lifecycle; replaces the installed runtime" },
   { verb: "harness", reason: "executes arbitrary subprocesses and spends provider tokens; gated by policy, never by a descriptor" },
+  {
+    verb: "serve",
+    reason:
+      "binds a network socket and runs until signalled, like shell and harness; its token subcommands mint and invalidate a credential. Neither shape is a single callable operation with a machine-consumable result, and a descriptor would advertise the credential surface to exactly the agents that must not reach it",
+  },
   { verb: "dash", reason: "alias of dashboard open; opens a browser, no machine-consumable result" },
   { verb: "dashboard", reason: "build writes a human artifact and open launches a browser; neither is an agent operation" },
   { verb: "mcp", reason: "installs and serves an MCP endpoint; changes client configuration outside this project" },

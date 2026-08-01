@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "id": "128",
+  "slug": "r4b-keryx-serve-skeleton-loopback-listen",
+  "title": "R4b: keryx serve skeleton (loopback listener, bearer auth, token lifecycle, status/projects routes)",
+  "status": "in-progress",
+  "createdAt": "2026-08-01T09:32:04.039Z",
+  "updatedAt": "2026-08-01T10:51:28.605Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2d97cafd67d1db4a5c88bc5765df78b08b1c7f2eb0e483a1470c808a57f38bc6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Extract configDir into src/lib/config-dir.ts and repoint both existing copies",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "CLI wiring (src/commands/serve.ts + cli.ts) and command-registry verb classification",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Mutation-check every guard and record what went red",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Verification gates: tsc --noEmit, full bun test, keryx health run",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T09:32:04.039Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T09:34:57.016Z",
+      "event": "task-added",
+      "detail": "T5: Extract configDir into src/lib/config-dir.ts and repoint both existing copies"
+    },
+    {
+      "at": "2026-08-01T09:34:57.165Z",
+      "event": "task-added",
+      "detail": "T6: CLI wiring (src/commands/serve.ts + cli.ts) and command-registry verb classification"
+    },
+    {
+      "at": "2026-08-01T09:34:57.320Z",
+      "event": "task-added",
+      "detail": "T7: Mutation-check every guard and record what went red"
+    },
+    {
+      "at": "2026-08-01T09:34:57.469Z",
+      "event": "task-added",
+      "detail": "T8: Verification gates: tsc --noEmit, full bun test, keryx health run"
+    },
+    {
+      "at": "2026-08-01T09:35:33.031Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T09:35:33.213Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T09:35:35.853Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T09:47:12.176Z",
+      "event": "task-done",
+      "detail": "T5: Extract configDir into src/lib/config-dir.ts and repoint both existing copies"
+    },
+    {
+      "at": "2026-08-01T09:47:12.342Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T09:56:12.945Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T09:56:13.126Z",
+      "event": "task-done",
+      "detail": "T6: CLI wiring (src/commands/serve.ts + cli.ts) and command-registry verb classification"
+    },
+    {
+      "at": "2026-08-01T10:08:22.002Z",
+      "event": "task-done",
+      "detail": "T7: Mutation-check every guard and record what went red"
+    },
+    {
+      "at": "2026-08-01T10:51:28.522Z",
+      "event": "task-done",
+      "detail": "T8: Verification gates: tsc --noEmit, full bun test, keryx health run"
+    },
+    {
+      "at": "2026-08-01T10:51:28.605Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

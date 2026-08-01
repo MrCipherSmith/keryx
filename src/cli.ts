@@ -23,6 +23,7 @@ import { shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
+import { serveCommand } from "./commands/serve";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
@@ -52,6 +53,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   status: () => statusCommand(),
   modules: modulesCommand,
   projects: projectsCommand,
+  serve: serveCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
@@ -125,6 +127,10 @@ Usage:
   keryx status
   keryx modules [status | enable <name> | disable <name>]
   keryx projects [list [--json] | register <path> | forget <id>]
+  keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
+  keryx serve status [--json]
+  keryx serve token issue | rotate | revoke
+  keryx serve config init|show
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open
@@ -198,6 +204,7 @@ Commands:
   status    Show local Metaproject status
   modules   View and toggle Metaproject modules (interactive)
   projects  Inspect the user-global registry of initialized projects
+  serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html

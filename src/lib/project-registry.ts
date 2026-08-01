@@ -32,14 +32,14 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
-  rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { keryxConfigDir } from "./config-dir";
+import { withFileLock } from "./file-lock";
 
 /** One registered project. Addressing only — see the module comment. */
 export interface ProjectEntry {
@@ -110,60 +110,18 @@ const UNAMBIGUOUS_SECRET_WORDS = ["token", "secret", "password", "passwd", "pass
  */
 const KEY_QUALIFIERS = new Set(["api", "private", "secret", "access", "signing", "encryption", "session", "ssh", "gpg", "pgp", "account", "sa"]);
 
-/** Same resolution as the rest of the user-global config (auth.json, sandbox.json). */
-function configDir(dir?: string): string {
-  if (dir !== undefined) {
-    return dir;
-  }
-  const home = homedir();
-  if (process.platform === "win32") {
-    const appData = process.env.APPDATA;
-    const base = appData !== undefined && appData.length > 0 ? appData : path.join(home, "AppData", "Roaming");
-    return path.join(base, "keryx");
-  }
-  const xdg = process.env.XDG_DATA_HOME;
-  const base = xdg !== undefined && xdg.length > 0 ? xdg : path.join(home, ".local", "share");
-  return path.join(base, "keryx");
-}
-
-/** Absolute path to `projects.json`. */
+/** Absolute path to `projects.json`, in the shared user-global config directory. */
 export function projectRegistryPath(dir?: string): string {
-  return path.join(configDir(dir), "projects.json");
-}
-
-/** How long a lock may be held before it is treated as abandoned. */
-const LOCK_STALE_MS = 10_000;
-/**
- * Total time to wait for a contended lock before giving up.
- *
- * Deliberately LONGER than {@link LOCK_STALE_MS}: with the shorter value a
- * caller gave up before a genuinely crashed holder's lock became breakable, so
- * every registration failed for a window instead of waiting it out.
- */
-const LOCK_TIMEOUT_MS = 15_000;
-
-function sleepSync(ms: number): void {
-  const bunSleep = (globalThis as { Bun?: { sleepSync?: (ms: number) => void } }).Bun?.sleepSync;
-  if (typeof bunSleep === "function") {
-    bunSleep(ms);
-    return;
-  }
-  const until = Date.now() + ms;
-  while (Date.now() < until) {
-    // Busy-wait fallback; the critical section is a few file operations long.
-  }
+  return path.join(keryxConfigDir(dir), "projects.json");
 }
 
 /**
  * Run `fn` while holding an exclusive lock on the registry.
  *
- * Atomic writes prevent a TORN file; they do nothing about a LOST update, and
- * the read-modify-write here is exactly the shape that loses one. Two `keryx
- * init` runs at once is an ordinary thing to do, so the whole load-modify-save
- * is serialized instead.
- *
- * A lock older than {@link LOCK_STALE_MS} is treated as abandoned — a process
- * killed mid-write must not wedge every future registration.
+ * The lock primitive itself lives in `./file-lock` — `keryx serve` needs the
+ * same serialization for its credential store, and a second copy of a helper
+ * this subtle would be a second place to get it wrong. The behaviour is
+ * unchanged; only the location is.
  *
  * Returns `null` when the lock could not be taken, which callers surface as a
  * write failure rather than a throw.
@@ -173,85 +131,10 @@ function withRegistryLock<T>(
   fn: () => T,
   onWaiting?: (message: string) => void,
 ): T | null {
-  const lockPath = `${projectRegistryPath(dir)}.lock`;
-  try {
-    mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-  } catch {
-    return null;
-  }
-
-  // A nonce identifies THIS holder. Without it, a holder whose critical section
-  // ran past the stale threshold has its lock broken by someone else and then
-  // deletes the new holder's lock in its own `finally` — letting a third caller
-  // in while the second is still inside, which is the lost update the lock
-  // exists to prevent.
-  const nonce = randomUUID();
-  const started = Date.now();
-  const deadline = started + LOCK_TIMEOUT_MS;
-  let handle: number | null = null;
-  let announced = false;
-
-  while (handle === null) {
-    // The deadline is checked FIRST, before the stale branch. Checking it only
-    // in the contended branch meant an unremovable stale lock (read-only or
-    // root-owned config dir) spun forever at full CPU instead of degrading to a
-    // reported write failure.
-    if (Date.now() > deadline) {
-      return null;
-    }
-    try {
-      handle = openSync(lockPath, "wx", 0o600);
-      try {
-        writeFileSync(handle, nonce, { encoding: "utf8" });
-      } catch (cause) {
-        // The open succeeded but the nonce did not land. Leaving `handle` set
-        // would run the critical section holding a lock whose contents can never
-        // match, so the finally would decline to remove it and every other
-        // caller would wait out the stale window. Drop it and retry cleanly.
-        closeSync(handle);
-        handle = null;
-        rmSync(lockPath, { force: true });
-        throw cause;
-      }
-    } catch {
-      const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;
-      if (age !== undefined && Date.now() - age > LOCK_STALE_MS) {
-        try {
-          rmSync(lockPath, { force: true });
-        } catch {
-          // Someone else broke it first, or we cannot remove it at all; either
-          // way sleep and retry until the deadline rather than spinning.
-        }
-      }
-      // A crashed holder costs the next caller the full stale window, and an
-      // unwritable config dir costs the whole timeout. Silence for that long
-      // reads as a hang, so say what is happening once.
-      if (!announced && Date.now() - started > 1_000) {
-        announced = true;
-        onWaiting?.("waiting for the project registry lock…");
-      }
-      sleepSync(15);
-    }
-  }
-
-  try {
-    return fn();
-  } finally {
-    try {
-      closeSync(handle);
-    } catch {
-      // already closed
-    }
-    // Only remove the lock if it is still OURS. If it was broken as stale and
-    // retaken, the file now holds someone else's nonce and must be left alone.
-    try {
-      if (readFileSync(lockPath, "utf8") === nonce) {
-        rmSync(lockPath, { force: true });
-      }
-    } catch {
-      // Gone already, or unreadable; a leftover goes stale and is broken above.
-    }
-  }
+  return withFileLock(`${projectRegistryPath(dir)}.lock`, fn, {
+    onWaiting,
+    waitingMessage: "waiting for the project registry lock…",
+  });
 }
 
 /**
