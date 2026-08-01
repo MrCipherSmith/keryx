@@ -3,9 +3,9 @@
   "id": "131",
   "slug": "r4c-remote-turn-submission-streaming-and",
   "title": "R4c: remote turn submission, streaming, and the non-weakening remote policy profile",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-01T20:05:04.222Z",
-  "updatedAt": "2026-08-01T20:39:32.140Z",
+  "updatedAt": "2026-08-01T20:40:06.222Z",
   "source": {
     "type": "description",
     "ref": null
@@ -44,7 +44,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/220"
   },
   "tasks": [
     {
@@ -185,6 +185,11 @@
       "at": "2026-08-01T20:39:32.140Z",
       "event": "ac-confirmed",
       "detail": "AC12"
+    },
+    {
+      "at": "2026-08-01T20:40:06.222Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/220"
     }
   ]
 }
