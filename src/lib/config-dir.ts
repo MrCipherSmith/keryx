@@ -14,6 +14,11 @@
 //   serve-credentials.json  salted bearer-token hash (0600, flow 128)
 //   permissions.json        shell-command auto-approval allowlist
 //   sandbox.json            global sandbox defaults
+//   turns/                  durable remote-turn records (flow 131 / R4c) — the
+//                           event log and terminal result each remote turn is
+//                           streamed and replayed from, plus the idempotency
+//                           index. Written through `writeOwnerOnlyFile` and
+//                           `appendOwnerOnlyLine`, read through `readConfigFile`
 //   sessions/               per-project interactive session store — created by
 //                           `src/session/store.ts`, which calls this helper
 //                           because with KERYX_DATA_DIR unset its root IS this
@@ -32,7 +37,15 @@
 // of any existing install that sets it, which is a migration, not a cleanup.
 // It is recorded here so the next person finds it rather than discovering it.
 
-import { chmodSync, mkdirSync, readFileSync, type Stats, statSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  type Stats,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -168,6 +181,69 @@ export function readConfigFile(file: string): ConfigReadResult {
  */
 export function readTranscriptFile(file: string): ConfigReadResult {
   return readBoundedFile(file, MAX_TRANSCRIPT_FILE_BYTES);
+}
+
+/**
+ * Create a directory below the shared root, owner-only at every level.
+ *
+ * `mkdirSync`'s `mode` applies at CREATION only, so a level that already exists
+ * — from a release before this one, or created under a umask that stripped the
+ * bits — keeps whatever it had. That is the exact `sessions/` defect
+ * `ensureKeryxConfigDir`'s comment describes one screen down, and the writers
+ * guard reported the first attempt at the turn store making it again. So the
+ * walk is here, once, rather than in each module that needs a subdirectory.
+ *
+ * `segments` are joined under the resolved root. Callers pass literals; nothing
+ * caller-supplied reaches this without being constrained first (see
+ * `isTurnId` in `serve-turn-store.ts`).
+ */
+export function ensureKeryxSubdir(segments: readonly string[], dir?: string): string {
+  const root = ensureKeryxConfigDir(dir);
+  let current = root;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    mkdirSync(current, { recursive: true, mode: 0o700 });
+    if (process.platform === "win32") {
+      continue;
+    }
+    try {
+      chmodSync(current, 0o700);
+    } catch {
+      // Best-effort, like every other mode in this module. A level that cannot
+      // be chmodded is still created; the caller's error contract decides what
+      // that means, and they differ.
+    }
+  }
+  return current;
+}
+
+/**
+ * Append one line to an owner-only file under the shared directory.
+ *
+ * Exists so the durable turn record (flow 131 / R4c) can be append-only without
+ * calling `appendFileSync` itself. `config-dir.writers.test.ts` reports every
+ * raw write beside a config-path resolver, and the honest way past that guard is
+ * a sanctioned helper here — not an exemption on the new module, which would
+ * excuse every future write in it as well.
+ *
+ * Same mode trap as `writeOwnerOnlyFile`: `appendFileSync`'s `mode` applies at
+ * CREATION only, so a file that already exists at 0664 stays 0664 through every
+ * later append. The chmod is unconditional for that reason.
+ *
+ * `line` is written verbatim with a trailing newline; callers pass one JSON
+ * document per call, so a torn append damages one record rather than the file.
+ */
+export function appendOwnerOnlyLine(file: string, line: string): void {
+  appendFileSync(file, `${line}\n`, { mode: 0o600 });
+  if (process.platform === "win32") {
+    return;
+  }
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    // Unreported, exactly as in `writeOwnerOnlyFile` and for the same reason:
+    // this helper sits under callers with different error contracts.
+  }
 }
 
 /**
