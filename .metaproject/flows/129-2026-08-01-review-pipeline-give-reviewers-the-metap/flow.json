@@ -5,7 +5,7 @@
   "title": "Review pipeline: give reviewers the metaproject context and a memory of prior rounds",
   "status": "in-progress",
   "createdAt": "2026-08-01T15:27:59.707Z",
-  "updatedAt": "2026-08-01T16:23:51.051Z",
+  "updatedAt": "2026-08-01T16:34:01.920Z",
   "source": {
     "type": "description",
     "ref": null
@@ -107,7 +107,7 @@
       "id": "T7",
       "title": "Orchestrator SKILL.md: memory sub-step in the Context Pack, fix-round scope rule, mandatory keryx review start/ingest around dispatch",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -115,13 +115,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Source-level guard over every reviewer skill, written before the sweep and red until all 15 carry the class_scope contract",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -129,13 +130,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Sweep the 15 reviewer skills to the new finding format - no checklist item added, removed or reworded",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -143,13 +145,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Promote the flow-128 lesson draft -> accepted, reindex memory, confirm a scoped search returns it",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -157,7 +160,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -280,6 +284,26 @@
       "at": "2026-08-01T16:23:51.051Z",
       "event": "task-done",
       "detail": "T5: Schemas: prior_findings + metaproject on reviewer-input, memory on review-context, class_scope on reviewer-finding"
+    },
+    {
+      "at": "2026-08-01T16:34:01.676Z",
+      "event": "task-done",
+      "detail": "T7: Orchestrator SKILL.md: memory sub-step in the Context Pack, fix-round scope rule, mandatory keryx review start/ingest around dispatch"
+    },
+    {
+      "at": "2026-08-01T16:34:01.758Z",
+      "event": "task-done",
+      "detail": "T8: Source-level guard over every reviewer skill, written before the sweep and red until all 15 carry the class_scope contract"
+    },
+    {
+      "at": "2026-08-01T16:34:01.838Z",
+      "event": "task-done",
+      "detail": "T9: Sweep the 15 reviewer skills to the new finding format - no checklist item added, removed or reworded"
+    },
+    {
+      "at": "2026-08-01T16:34:01.920Z",
+      "event": "task-done",
+      "detail": "T10: Promote the flow-128 lesson draft -> accepted, reindex memory, confirm a scoped search returns it"
     }
   ]
 }

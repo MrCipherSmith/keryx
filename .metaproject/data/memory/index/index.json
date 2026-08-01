@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-23T19:03:52.348Z",
-  "entryCount": 3,
+  "generatedAt": "2026-08-01T16:33:25.700Z",
+  "entryCount": 4,
   "entries": [
     {
       "path": "constraints/flow-ids-allocated-per-clone.md",
@@ -13,6 +13,21 @@
       "scopes": {
         "module": "tasks",
         "entity": "flow",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+      "type": "lesson",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+      "updated": "2026-08-01",
+      "tags": [],
+      "scopes": {
+        "module": "core",
+        "entity": "project-registry",
         "files": [],
         "skills": []
       }

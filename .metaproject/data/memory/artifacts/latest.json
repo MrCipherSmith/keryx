@@ -1,8 +1,49 @@
 {
   "schemaVersion": 1,
-  "query": "config directory",
-  "generatedAt": "2026-08-01T15:29:20.106Z",
+  "query": "fix round review config-dir",
+  "generatedAt": "2026-08-01T16:33:25.819Z",
   "results": [
+    {
+      "entry": {
+        "absolutePath": "/home/altsay/keryx/.metaproject/memory/lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "relativePath": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "type": "lesson",
+        "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+        "version": "0.3.0",
+        "status": "accepted",
+        "confidence": "high",
+        "summary": "On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.",
+        "details": "What happened, in order:\n\n1. **Round 1** shipped a concurrency test that wrapped a *synchronous* call in\n   `Promise.resolve` and asserted `length > 0`. Nothing ran concurrently and the\n   assertion was a tautology, so it passed while the implementation\n   reproducibly lost registrations (8 subprocesses → 4, 3, 2 entries).\n2. **Round 2**, fixing that, patched a control-character regex with a script\n   that doubled the backslashes. The class became literal characters: it\n   stripped digits and capitals (`Project-42_ABC` → `roject-_`) and stripped no\n   control character at all — so the finding it existed for stayed open and a\n   new corruption shipped beside it. The same round left the stale-lock branch\n   without a deadline check, hanging `keryx init` forever at full CPU.\n3. **Round 3**, fixing *that*, added a quarantine to `forgetProject` that\n   renamed the live registry aside and then returned `not-found` without\n   writing. One mistyped id destroyed every valid registration. A data-loss fix\n   that caused data loss.\n\nThree failure modes, one root cause each time:\n\n- **The fix was not tested, only written.** The regex had zero tests; the\n  quarantine's supposed test never reached its branch; the concurrency test\n  could not fail.\n- **The fix was applied where the finding pointed, not everywhere the class\n  lived.** `registerProject` got the warn-and-quarantine treatment and\n  `forgetProject` did not. The display sanitizer was applied at one call site\n  while the error path printed the same untrusted value raw.\n- **A comment asserted a control that did not exist.** The module header named\n  an `assertNoSecrets` that was never written, and the real check was\n  exact-name, case-sensitive, top-level and called nowhere outside tests.",
+        "tags": [],
+        "scopes": {
+          "module": "core",
+          "entity": "project-registry",
+          "files": [],
+          "skills": []
+        },
+        "created": "2026-07-31",
+        "updated": "2026-08-01",
+        "provenance": {
+          "source": "review rounds on PR #215 (flow 127) and PR #216 (flow 128)",
+          "link": "https://github.com/MrCipherSmith/keryx/pull/215"
+        },
+        "class": "episodic",
+        "validFrom": null,
+        "validTo": null,
+        "recordedAt": "2026-07-31",
+        "supersedes": null,
+        "supersededBy": null
+      },
+      "score": 2.398,
+      "components": {
+        "relevance": 0.9,
+        "recency": 0.997,
+        "confidence": 1,
+        "status": 1,
+        "scope": 0
+      },
+      "reason": "matched 3/5 terms; status accepted; confidence high"
+    },
     {
       "entry": {
         "absolutePath": "/home/altsay/keryx/.metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
@@ -34,15 +75,15 @@
         "supersedes": null,
         "supersededBy": null
       },
-      "score": 1.974,
+      "score": 1.674,
       "components": {
-        "relevance": 0.5,
+        "relevance": 0.2,
         "recency": 0.948,
         "confidence": 1,
         "status": 1,
         "scope": 0
       },
-      "reason": "matched 1/2 terms; status accepted; confidence high"
+      "reason": "matched 1/5 terms; status accepted; confidence high"
     },
     {
       "entry": {
@@ -75,15 +116,15 @@
         "supersedes": null,
         "supersededBy": null
       },
-      "score": 1.974,
+      "score": 1.674,
       "components": {
-        "relevance": 0.5,
+        "relevance": 0.2,
         "recency": 0.948,
         "confidence": 1,
         "status": 1,
         "scope": 0
       },
-      "reason": "matched 1/2 terms; status accepted; confidence high"
+      "reason": "matched 1/5 terms; status accepted; confidence high"
     }
   ]
 }

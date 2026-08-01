@@ -16,3 +16,7 @@
 - 2026-08-01T16:23:50.885Z - task-done: T1: Collect remaining context
 - 2026-08-01T16:23:50.967Z - task-done: T6: Schema guards written FIRST and confirmed failing: blocker without class_scope rejected, minor without it accepted, fix-round input without prior_findings rejected
 - 2026-08-01T16:23:51.051Z - task-done: T5: Schemas: prior_findings + metaproject on reviewer-input, memory on review-context, class_scope on reviewer-finding
+- 2026-08-01T16:34:01.676Z - task-done: T7: Orchestrator SKILL.md: memory sub-step in the Context Pack, fix-round scope rule, mandatory keryx review start/ingest around dispatch
+- 2026-08-01T16:34:01.758Z - task-done: T8: Source-level guard over every reviewer skill, written before the sweep and red until all 15 carry the class_scope contract
+- 2026-08-01T16:34:01.838Z - task-done: T9: Sweep the 15 reviewer skills to the new finding format - no checklist item added, removed or reworded
+- 2026-08-01T16:34:01.920Z - task-done: T10: Promote the flow-128 lesson draft -> accepted, reindex memory, confirm a scoped search returns it
