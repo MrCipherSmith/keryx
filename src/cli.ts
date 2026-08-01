@@ -22,6 +22,7 @@ import { harnessCommand } from "./commands/harness";
 import { shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { modulesCommand } from "./commands/modules";
+import { projectsCommand } from "./commands/projects";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
@@ -50,6 +51,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   init: initCommand,
   status: () => statusCommand(),
   modules: modulesCommand,
+  projects: projectsCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
@@ -122,6 +124,7 @@ Usage:
   keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   keryx status
   keryx modules [status | enable <name> | disable <name>]
+  keryx projects [list [--json] | register <path> | forget <id>]
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open
@@ -194,6 +197,7 @@ Commands:
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status
   modules   View and toggle Metaproject modules (interactive)
+  projects  Inspect the user-global registry of initialized projects
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html

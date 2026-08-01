@@ -122,4 +122,10 @@ function moduleStem(module: string): string {
  * invariant for a whole module — so the members are enumerated instead. Adding
  * a core command means adding it here, which is the point.
  */
-const CORE_COMMANDS: readonly string[] = ["status", "modules status"];
+const CORE_COMMANDS: readonly string[] = [
+  "status",
+  "modules status",
+  "projects list",
+  "projects register",
+  "projects forget",
+];

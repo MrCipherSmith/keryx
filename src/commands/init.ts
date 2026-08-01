@@ -10,6 +10,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { moduleCommands } from "./module-commands";
+import { registerInitializedProject } from "./projects";
+import { sanitizeForDisplay } from "../lib/project-registry";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import { seedAssetsLock } from "../assets/seed";
@@ -228,8 +230,8 @@ export async function initCommand(args: string[]): Promise<void> {
   banner(
     "keryx init",
     alreadyExists
-      ? `Updating the .metaproject workspace in ${path.basename(projectRoot)}/`
-      : `Setting up a .metaproject workspace in ${path.basename(projectRoot)}/`,
+      ? `Updating the .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`
+      : `Setting up a .metaproject workspace in ${sanitizeForDisplay(path.basename(projectRoot))}/`,
   );
   if (!options.yes) {
     note("Press Enter to accept the Recommended default for each question.");
@@ -960,6 +962,12 @@ export async function initCommand(args: string[]): Promise<void> {
   if (wroteSandboxPolicy) {
     statusLine(".keryx/sandbox-policy.json", true, "sandbox policy skeleton (no secrets)");
   }
+
+  // Record the project in the user-global registry. Deliberately AFTER the
+  // workspace is written and deliberately best-effort: the registry is an index,
+  // and failing to index a project that was successfully initialized would be
+  // the wrong failure to surface.
+  registerInitializedProject(projectRoot, (message) => console.log(message));
 
   const steps = [
     `Read ${style.cyan(".metaproject/index.md")} - the agent entrypoint and module map.`,
