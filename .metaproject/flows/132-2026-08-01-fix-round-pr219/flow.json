@@ -3,9 +3,9 @@
   "id": "132",
   "slug": "fix-round-pr219",
   "title": "Fix round PR #219 (flow 130): AC8 subset extractor, session-resume regression, ingest parser phantom headings",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-01T22:38:26.504Z",
-  "updatedAt": "2026-08-01T23:05:53.512Z",
+  "updatedAt": "2026-08-01T23:18:50.306Z",
   "source": {
     "type": "description",
     "ref": null
@@ -375,6 +375,20 @@
       "at": "2026-08-01T23:05:53.512Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/219"
+    },
+    {
+      "at": "2026-08-01T23:18:50.299Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-01T23:18:50.306Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "7b04b122",
+    "ref": "origin/main",
+    "at": "2026-08-01T23:18:50.306Z"
+  }
 }
