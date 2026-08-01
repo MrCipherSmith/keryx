@@ -259,13 +259,19 @@ describe("the write-failed branch", () => {
     onDisk.projects[0]!.projectId = hostileId;
     writeFileSync(fixtureRegistryPath(), JSON.stringify(onDisk), "utf8");
 
+    // Make the registry directory's PARENT unwritable rather than the directory
+    // itself. Locking the directory makes the lock file uncreatable, so the
+    // helper spins the full 15s timeout — 45% of the whole suite's wall time —
+    // and never loads the registry at all, so the comment above would have been
+    // describing a path the test does not reach.
     const registryDir = path.dirname(fixtureRegistryPath());
-    chmodSync(registryDir, 0o500);
+    rmSync(registryDir, { recursive: true, force: true });
+    chmodSync(configDir, 0o500);
     captured = [];
     try {
       await projectsCommand(["forget", hostileId]);
     } finally {
-      chmodSync(registryDir, 0o700);
+      chmodSync(configDir, 0o700);
     }
 
     expect(captured.join("")).toContain("still registered");

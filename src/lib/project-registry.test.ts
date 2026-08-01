@@ -472,8 +472,11 @@ describe("fixes that shipped without a guard", () => {
     for (const field of ["storageAccountKey", "serviceAccountKey", "GCP_SA_KEY", "sa_key"]) {
       expect(hasSecretShapedField({ [field]: "v" })).toBe(true);
     }
-    // The qualifiers must not swallow ordinary words containing them.
-    for (const field of ["accountName", "saved", "accountId"]) {
+    // The qualifiers must not swallow ordinary words containing them. The
+    // negative half deliberately includes *Key compounds: probing only non-Key
+    // names is why the two-letter "sa" qualifier matching as a SUBSTRING went
+    // unnoticed, destroying messageKey and usageKey on every write.
+    for (const field of ["accountName", "saved", "accountId", "messageKey", "usageKey", "salesKey", "sampleKey", "databaseKey"]) {
       expect(hasSecretShapedField({ [field]: "v" })).toBe(false);
     }
   });

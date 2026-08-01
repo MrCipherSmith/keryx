@@ -351,7 +351,16 @@ function isSecretShapedName(field: string): boolean {
   // separate them — the qualifier does.
   return (
     words.includes("key") &&
-    words.some((word) => KEY_QUALIFIERS.has(word) || [...KEY_QUALIFIERS].some((q) => word.includes(q)))
+    words.some(
+      (word) =>
+        KEY_QUALIFIERS.has(word) ||
+        // Substring matching is for concatenated forms like `awsAccessKey`, but
+        // only for qualifiers long enough to be distinctive. The two-letter
+        // `sa` occurs inside ordinary words, so as a substring it deleted
+        // messageKey, usageKey and salesKey from `transportBindings` — this
+        // module's own documented extension point — on every write.
+        [...KEY_QUALIFIERS].some((qualifier) => qualifier.length >= 3 && word.includes(qualifier)),
+    )
   );
 }
 
