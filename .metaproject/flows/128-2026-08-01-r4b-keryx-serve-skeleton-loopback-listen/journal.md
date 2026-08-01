@@ -211,3 +211,57 @@ group access to new files whatever mode the caller asked for.
 - 2026-08-01T10:53:38.269Z - ac-confirmed: AC12: Run after the fix round, on the committed tree: 'bunx tsc --noEmit' exited 0 with no output; 'bun test' reported 2540 pass / 14 skip / 0 fail across 269 files; 'keryx health run' printed '# Code Health: PASS', score 93, trend stable, 'PASS: no gate conditions triggered'. The command-registry coverage guard is green with 'serve' classified in EXCLUSIONS with a stated reason; it is not decorative — adding 'serve' to CLI_ROUTES turned it red unprompted with unclassified: ['serve'] before the exclusion was written, and renaming the exclusion verb turns two of its tests red.
 - 2026-08-01T10:53:43.233Z - completing
 - 2026-08-01T10:53:44.826Z - done: all gates passed
+
+## Post-completion review rounds on PR #216
+
+The flow reached `done` with the draft PR recorded. Two further adversarial
+review rounds ran against the PR itself, each instructed to assume the fixes
+were wrong until executed. Both found real defects, so the record continues
+here rather than ending at `done`.
+
+### Round 2 — 2 blockers, 2 highs, in the round-1 fixes
+
+| Finding | What was wrong | Fix |
+|---|---|---|
+| F-001 (blocker) | The rotate-failure message told the operator to run `keryx serve config init`. The reviewer followed it verbatim on a customised deployment and recorded bind, port, profile and the acknowledgement all resetting to defaults. `token rotate` alone recovers and preserves all four — and `keryx serve status` was already printing that, so the two disagreed and the wrong one was the one read at the moment of failure. | Message corrected; `serve.cli.test.ts` had pinned the wrong instruction and was corrected with it. |
+| F-004 (blocker) | `config init` replaced an existing configuration unconditionally — a destructive operation wearing the name of a first-run command. | Refuses without `--force`. |
+| F-002 (high) | The 0700 directory tighten was applied to the one writer the finding named (`writeStore`) and not to `saveShellConfig`, `saveApiKey`, `saveServeConfig` or `saveProjectRegistry`. On any install that never ran `serve token issue` the shared directory stayed 0775 under `umask 002`, leaving `auth.json` and its plaintext provider keys unlinkable and replaceable by any member of the operator's group. | `ensureKeryxConfigDir` in `config-dir.ts`; every writer calls it. `config-dir.permissions.test.ts` drives all of them under `umask 002` against an already-widened directory. |
+| F-003 (minor) | `withServeCredentialLock` passed `waitingMessage` and no `onWaiting`, so nothing was ever printed. The reviewer executed the contended path: 10 s of silence. A named control that no code performed. | `onWaiting` threaded through issue/rotate/revoke; `warn` passed from the CLI. |
+| F-006 (info) | `keryxDataDir`'s docstring claimed it resolved `auth.json`. It does not. | Corrected; the `KERYX_DATA_DIR` divergence is described rather than contradicted. |
+
+Found in the same round, not in the findings: a full `bun test` wrote into the
+developer's real `~/.local/share/keryx`. `projects.json` had accumulated 1006
+`/tmp/…` fixture entries, one per run. Fixed with a `bunfig.toml`
+`[test].preload` rather than per test file — the polluting path was
+`keryx modules enable` → `initCommand` → registry write, which no scan of that
+test's own source would have found.
+
+### Round 3 — 2 blockers, 2 highs, in the round-2 fixes
+
+| Finding | What was wrong | Fix |
+|---|---|---|
+| Blocker | Making `config init` refuse silently broke three OTHER instructions that tell the operator to run it — the `disabled` refusal, the non-loopback refusal, and the `serve status` note (reached with a config on disk, because `describeServeStatus` reports disabled as `stopped`). Each is reachable only when a configuration exists, so each now failed when followed. | New `keryx serve config set`: changes named settings, preserves the rest. All four instructions name it. The status note distinguishes absent from disabled. |
+| Blocker | The round-2 fix to the non-loopback advice added `--force` to make the instruction work — which made it succeed by resetting bind, port and profile, reproducing the exact damage F-001 was raised over. `serve.recovery.test.ts` had pinned that reset as correct. | `config set` again; the test now asserts preservation. |
+| High | `createSession` was a missed writer of the shared directory. With `KERYX_DATA_DIR` unset its root IS that directory, so the first `keryx shell` on a fresh install under `umask 002` created `~/.local/share/keryx` and every level of `sessions/` at 0775 — before any config writer existed to tighten it. | Routed through `ensureKeryxConfigDir`, forcing 0700 down each level, including levels that already existed wide. |
+| High | `ensureKeryxConfigDir` claimed a failed chmod was "surfaced by the fail-closed permission check in `readServeCredential`". That check reads the mode of the FILE, never the directory — and it is the check this whole fix exists because of, since an attacker who replaces the file sets 0600 on it themselves. A comment asserting enforcement no code performs, one round after the lesson naming that failure. | Both comments corrected to describe what actually happens. A directory-mode check is stated as wanted and out of this slice. |
+| Medium | The `config init` overwrite guard was `loadServeConfig(...) !== null`, which conflates malformed with unreadable: a valid configuration the process could not read was replaced without `--force` — destroyed by the guard meant to protect it. | `serveConfigState`: `absent` / `valid` / `malformed` / `unreadable`. Only `malformed` is freely replaceable. |
+| Low | The previous commit message overclaimed two mutation counts (7 vs 8, 1 vs 2). | Corrected in the following commit message. |
+| Low | The preload leaked one temp root per run; 23 had accumulated. An `exit` handler does not work — `bun test` fires neither `exit` nor `beforeExit`, verified directly. | Stale roots older than an hour are swept at preload start. |
+
+### The pattern, stated plainly
+
+Three rounds, and rounds 1 and 2 each shipped a defect inside the fix they were
+named for. The failure was the same both times and is the one the flow-127
+lesson names: **the fix was applied where the finding pointed, not everywhere
+the class lived.** Round 1 tightened one writer of five. Round 2 corrected one
+instruction of four — and the correction itself broke the other three, which
+nothing looked for.
+
+What worked, and should be the default next time: making the guard the CLASS
+rather than the site. `config-dir.permissions.test.ts` drives every writer;
+`serve.recovery.test.ts` enumerates every refusal state and executes the
+instruction it prints. Neither could have passed while a sibling was broken.
+
+Round 3's fixes were mutation-checked before being claimed: 6 mutations,
+6 red, each reddening exactly the tests it should. Gates after: `tsc` clean,
+2580 pass / 14 skip / 0 fail, health PASS 93, build ok, real-registry delta 0.
