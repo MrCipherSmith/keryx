@@ -23,6 +23,7 @@ import { ensureKeryxConfigDir, keryxConfigDir } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
+  keryxDataDir,
   projectKeyFromPath,
   projectSessionsDir,
   resolveProjectRoot,
@@ -78,17 +79,21 @@ function nowIso(): string {
 }
 
 /**
- * The `sessions/` directory a session path sits under, or null.
+ * The `sessions/` directory keryx creates under a given data root.
  *
- * Used only to bound the mode walk when the data root is NOT the shared config
- * directory: everything from `sessions/` down is created by keryx and is forced
- * to 0700; the operator's own `KERYX_DATA_DIR` above it is not keryx's to
- * re-permission.
+ * Derived from the data root, NOT searched for in the path. The first version
+ * did `dir.indexOf("/sessions/")`, which finds whichever `sessions` segment
+ * comes first — so with `KERYX_DATA_DIR=/srv/sessions/keryx` the walk started
+ * at `/srv/sessions`, a directory shared with other services, and chmodded it
+ * and the data root itself to 0700. The comment below it claimed the data root
+ * was left alone; a review measured 0775 → 0700 on both.
+ *
+ * The guard that was supposed to cover this asserted `mode(dataDir) === "775"`
+ * and passed, because its fixture path happened to contain no `sessions`
+ * segment. Deriving the answer removes the question.
  */
-function sessionsRootFor(dir: string): string | null {
-  const marker = `${path.sep}sessions${path.sep}`;
-  const at = dir.indexOf(marker);
-  return at < 0 ? null : dir.slice(0, at + marker.length - 1);
+function sessionsRootFor(dataDir: string | undefined): string {
+  return path.join(keryxDataDir(dataDir), "sessions");
 }
 
 /**
@@ -115,7 +120,7 @@ function sessionsRootFor(dir: string): string | null {
  *
  * `chmod` is best-effort and skipped on Windows, matching `ensureKeryxConfigDir`.
  */
-function ensureDir(dir: string): void {
+function ensureDir(dir: string, dataDir?: string): void {
   const configRoot = keryxConfigDir();
   const shared = dir === configRoot || dir.startsWith(configRoot + path.sep);
   if (shared) {
@@ -137,8 +142,11 @@ function ensureDir(dir: string): void {
   // directory it starts at the root, which `ensureKeryxConfigDir` has already
   // tightened. Outside it, the root is the operator's own directory and is left
   // alone; the walk begins at the first level keryx itself creates.
-  const root = shared ? configRoot : sessionsRootFor(dir);
-  if (root === null || !dir.startsWith(root + path.sep)) {
+  const root = shared ? configRoot : sessionsRootFor(dataDir);
+  if (!dir.startsWith(root + path.sep)) {
+    // Not under the tree this function is responsible for. Nothing outside it
+    // is keryx's to re-permission, and a walk that starts somewhere else is
+    // exactly the defect this guard replaced.
     return;
   }
   if (!shared) {
@@ -287,7 +295,7 @@ export function createSession(opts: {
   const projectKey = projectKeyFromPath(projectPath);
   const id = opts.id ?? randomUUID();
   const dir = sessionDirPath(projectPath, id, opts.dataDir);
-  ensureDir(dir);
+  ensureDir(dir, opts.dataDir);
   const ts = nowIso();
   const summary: SessionSummary = {
     schemaVersion: SESSION_SCHEMA_VERSION,

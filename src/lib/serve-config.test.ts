@@ -13,7 +13,18 @@
 // since "credential" is in its SECRET_WORDS list.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  ftruncateSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { shellConfigPath } from "./shell-config";
@@ -309,6 +320,26 @@ describe("serveConfigState, which decides whether a file may be overwritten", ()
     } finally {
       chmodSync(serveConfigPath(configDir), 0o600);
     }
+  });
+
+  test("a file too large to be a configuration is unreadable, not a process abort", () => {
+    // Measured, not imagined: a review pointed serve.json at a 2 GiB sparse
+    // file and every `keryx serve …` path died with SIGABRT and no output at
+    // all, against a module header promising that nothing here throws.
+    mkdirSync(configDir, { recursive: true });
+    const file = serveConfigPath(configDir);
+    const handle = openSync(file, "w");
+    try {
+      // Sparse: no real disk is consumed, and the size is what is being tested.
+      ftruncateSync(handle, 3 * 1024 * 1024 * 1024);
+    } finally {
+      closeSync(handle);
+    }
+
+    expect(serveConfigState(configDir)).toBe("unreadable");
+    const warnings: string[] = [];
+    expect(loadServeConfig(configDir, (m) => warnings.push(m))).toBeNull();
+    expect(warnings.join(" ")).toContain("too large");
   });
 
   test("a directory where serve.json should be is unreadable, not a crash", () => {

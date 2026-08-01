@@ -439,22 +439,36 @@ describe("the rotate-failure recovery instruction", () => {
       },
     ];
 
-    /** Backticked `keryx serve config …` commands, as argv arrays. */
-    function instructions(transcript: string): string[][] {
-      const found: string[][] = [];
-      for (const match of transcript.matchAll(/`(keryx serve config [^`]+)`/g)) {
-        const command = match[1]!.replace(/<addr>/g, "10.0.0.5");
+    /**
+     * `keryx serve config …` commands in the transcript, as argv arrays.
+     *
+     * Backticks are NOT required. An earlier version required them, and a
+     * mutation drifted the one unbackticked instruction — the non-loopback note
+     * in `runServe` — to a command that exits 1 with nothing going red. Every
+     * site is backticked now, and the extractor no longer depends on that.
+     *
+     * A span still carrying a `<placeholder>` after `<addr>` substitution is a
+     * usage form (`config set <setting>`), not a command. Those are counted, and
+     * the count is asserted, so a real instruction cannot be dropped silently.
+     */
+    function instructions(transcript: string): { runnable: string[][]; skipped: string[] } {
+      const runnable: string[][] = [];
+      const skipped: string[] = [];
+      for (const match of transcript.matchAll(/`?(keryx serve config [a-z][^`\n.;]*)`?/g)) {
+        const command = match[1]!.trim().replace(/<addr>/g, "10.0.0.5");
         if (command.includes("<")) {
+          skipped.push(command);
           continue;
         }
         // Drop the leading `keryx serve` — `run()` supplies both.
-        found.push(command.split(/\s+/).slice(2));
+        runnable.push(command.split(/\s+/).slice(2));
       }
-      return found;
+      return { runnable, skipped };
     }
 
     const failures: string[] = [];
     const statesThatPrintedAnInstruction = new Set<string>();
+    const skippedUsageForms: string[] = [];
     let executed = 0;
     for (const state of states) {
       // `config show` is here because a mutation proved it unguarded: reverting
@@ -462,19 +476,51 @@ describe("the rotate-failure recovery instruction", () => {
       // unreadable file — left every test in this file green. A guard that
       // enumerates states but not the commands that print to them is only half
       // a guard.
-      for (const invoke of [[], ["status"], ["config", "show"]]) {
+      for (const invoke of [[], ["status"], ["config", "show"], ["config", "init"], ["config", "set", "--enable"]]) {
         rmSync(serveConfigPath(configDir), { force: true });
         rmSync(serveCredentialPath(configDir), { force: true });
         await state.setup();
 
         const shown = await run(invoke);
-        for (const instruction of instructions(shown.out)) {
+        const { runnable, skipped } = instructions(shown.out);
+        skippedUsageForms.push(...skipped);
+
+        // G1: a command that SHOULD advise must advise. Without this, `config
+        // show` could go mute in three of the six states and the per-state set
+        // below would still be satisfied by `serve` and `serve status`.
+        //
+        // Scoped to the commands that REPORT on the configuration. `config init`
+        // and `config set` are here to have their own instructions executed;
+        // when they succeed they repair the configuration instead of advising,
+        // and demanding an instruction from them would be demanding a failure.
+        const reports = invoke.length === 0 || invoke[0] === "status" || invoke[1] === "show";
+        if (reports && state.label !== "valid but disabled" && state.label !== "valid, non-loopback, unacknowledged") {
+          const advises = runnable.length + skipped.length > 0;
+          if (!advises) {
+            failures.push(`[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed no instruction at all`);
+          }
+        }
+
+        for (const instruction of runnable) {
           statesThatPrintedAnInstruction.add(state.label);
           const followed = await run(instruction);
           executed += 1;
           if (followed.exit !== 0) {
             failures.push(
-              `[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed \`keryx ${instruction.join(" ")}\`, which exited ${followed.exit}: ${followed.out.trim()}`,
+              `[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed \`keryx serve ${instruction.join(" ")}\`, which exited ${followed.exit}: ${followed.out.trim()}`,
+            );
+            continue;
+          }
+          // G2: exit 0 is not enough. An instruction that succeeds and repairs
+          // nothing is precisely the "wrong instruction" this guard exists for,
+          // and the exit-code-only version passed when the malformed advice was
+          // drifted to `config show`. After following it, the configuration must
+          // be usable — which for every state here means `serve status` no
+          // longer reports `stopped`.
+          const after = await run(["status"]);
+          if (after.out.includes("state:      stopped")) {
+            failures.push(
+              `[${state.label}] \`keryx serve ${instruction.join(" ")}\` exited 0 but left the server stopped: ${after.out.trim()}`,
             );
           }
         }
@@ -491,7 +537,11 @@ describe("the rotate-failure recovery instruction", () => {
     // show` on a healthy configuration prints the configuration and no
     // instruction, which is correct, so this counts states rather than rows.)
     expect(statesThatPrintedAnInstruction.size).toBe(states.length);
-    expect(executed).toBeGreaterThanOrEqual(states.length);
+    // Exactly which spans were treated as documentation rather than commands.
+    // Asserted by value: a silent `continue` is how an instruction disappears.
+    expect([...new Set(skippedUsageForms)].sort()).toEqual([
+      "keryx serve config set <setting>",
+    ]);
     // The count first: a multi-line failure message makes the array diff hard
     // to read, and an undercount is exactly how three of these were missed.
     expect({ count: failures.length, failures }).toEqual({ count: 0, failures: [] });

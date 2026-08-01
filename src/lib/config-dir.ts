@@ -12,6 +12,8 @@
 //   projects.json           the user-global project registry (flow 127)
 //   serve.json              the `keryx serve` configuration (flow 128)
 //   serve-credentials.json  salted bearer-token hash (0600, flow 128)
+//   permissions.json        shell-command auto-approval allowlist
+//   sandbox.json            global sandbox defaults
 //   sessions/               per-project interactive session store — created by
 //                           `src/session/store.ts`, which calls this helper
 //                           because with KERYX_DATA_DIR unset its root IS this
@@ -107,7 +109,7 @@ export function writeOwnerOnlyFile(file: string, body: string): void {
  * Best-effort: a directory that cannot be created or chmodded (a read-only
  * mount, a network filesystem that refuses chmod, a directory owned by someone
  * else) returns normally rather than throwing, because this helper sits under
- * six callers with three different error contracts. What the operator sees then
+ * seven callers with three different error contracts. What the operator sees then
  * is the caller's business and is not uniform — see the catch block below.
  * `chmod` is skipped on Windows, where POSIX modes carry no meaning.
  */
@@ -118,16 +120,18 @@ export function ensureKeryxConfigDir(dir?: string): string {
   } catch {
     // Deliberately swallowed: failing here would turn a persistence problem
     // into a crash in a helper every writer calls. What happens next differs by
-    // caller and is NOT uniform. There are SIX direct callers and three
-    // behaviours between them — an earlier version of this comment claimed one
-    // behaviour, a second claimed two and listed five callers (counting
-    // `saveApiKey`, which reaches this only through `saveShellConfig`, and
-    // omitting the newest):
+    // caller and is NOT uniform. There are SEVEN direct callers and three
+    // behaviours between them. Counting them has itself gone wrong twice — one
+    // version claimed a single uniform behaviour, the next claimed two and said
+    // "five callers" while counting `saveApiKey` (which reaches this only
+    // through `saveShellConfig`) and omitting `createSession`. Grep for
+    // `ensureKeryxConfigDir(` outside tests before editing this:
     //
     //   report it     `saveServeConfig`, `saveProjectRegistry`, `writeStore`
     //                 return false; their callers print the failure.
-    //   swallow it    `saveShellConfig` is best-effort by contract and says
-    //                 nothing; `saveApiKey` inherits that.
+    //   swallow it    `saveShellConfig`, `saveShellPermissions` and
+    //                 `saveSandboxDefaults` are best-effort by contract and say
+    //                 nothing; `saveApiKey` inherits that from `saveShellConfig`.
     //   throw         `ensureDir` in `src/session/store.ts` lets the following
     //                 `mkdirSync` throw EACCES up through `createSession`. That
     //                 predates this helper — a shell that cannot write its

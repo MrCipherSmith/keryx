@@ -20,7 +20,7 @@
 // Every function is best-effort and never throws: a damaged serve.json must
 // leave the operator with "nothing is configured", not a stack trace.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
 
@@ -430,6 +430,27 @@ export function defaultServeConfig(
 // ---------------------------------------------------------------------------
 
 /**
+ * The largest `serve.json` this module will read.
+ *
+ * A review pointed `serve.json` at a 2 GiB sparse file and every `keryx serve …`
+ * path died with SIGABRT and NOTHING on stdout or stderr — no message, no
+ * diagnosis, against a module header that says every function "never throws".
+ * A configuration is a few hundred bytes; anything past this is not one, and
+ * refusing to read it is both faster and honest.
+ */
+const MAX_SERVE_CONFIG_BYTES = 1_000_000;
+
+/** True when the file is too large to be a configuration. */
+function tooLargeToRead(file: string): boolean {
+  try {
+    return statSync(file).size > MAX_SERVE_CONFIG_BYTES;
+  } catch {
+    // Unstatable is handled by the read that follows.
+    return false;
+  }
+}
+
+/**
  * Read the configuration, or null when nothing valid is configured.
  *
  * The projection runs on READ as well as on write. The writer cannot create an
@@ -439,6 +460,10 @@ export function defaultServeConfig(
 export function loadServeConfig(dir?: string, onWarn?: (message: string) => void): ServeConfig | null {
   const file = serveConfigPath(dir);
   if (!existsSync(file)) {
+    return null;
+  }
+  if (tooLargeToRead(file)) {
+    onWarn?.("serve.json is far too large to be a configuration; treating the server as not configured");
     return null;
   }
   let text: string;
@@ -518,6 +543,13 @@ export function serveConfigState(dir?: string): ServeConfigState {
   const file = serveConfigPath(dir);
   if (!existsSync(file)) {
     return "absent";
+  }
+  if (tooLargeToRead(file)) {
+    // `unreadable`, not `malformed`: it may well be a valid configuration with
+    // something appended, and the safe assumption about a file this module
+    // declines to open is that it matters. `config init --force` still replaces
+    // it, which is the documented way out.
+    return "unreadable";
   }
   let text: string;
   try {

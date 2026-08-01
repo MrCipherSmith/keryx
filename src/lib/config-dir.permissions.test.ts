@@ -15,8 +15,15 @@
 // `serve-credential.ts`) and left `saveShellConfig`, `saveServeConfig` and
 // `saveProjectRegistry` alone — the failure the flow-127 lesson file calls "the
 // fix was applied where the finding pointed, not everywhere the class lived".
-// This file IS the class: it drives all five writers, under a permissive umask,
-// against a directory that already exists group-writable.
+// This file drives every writer under a permissive umask, against a directory
+// that already exists group-writable — and against a FILE that already exists
+// group-readable, which is the same creation-only trap one level down.
+//
+// It is not the only guard, and deliberately so. Three successive rounds of
+// "every writer" turned out to mean "every writer I thought of": the sweep
+// missed `createSession`, then `saveShellPermissions` and `saveSandboxDefaults`.
+// `config-dir.writers.test.ts` reads the source and fails when a NEW writer
+// appears, which is the part a behavioural test cannot do.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -28,6 +35,8 @@ import { defaultServeConfig, saveServeConfig } from "./serve-config";
 import { issueServeToken } from "./serve-credential";
 import { registerProject } from "./project-registry";
 import { createSession } from "../session/store";
+import { saveShellPermissions } from "./shell-permissions";
+import { saveSandboxDefaults } from "./sandbox-config";
 
 let base = "";
 let configDir = "";
@@ -171,6 +180,28 @@ describe("every writer tightens a FILE that already exists too wide", () => {
     expect(issueServeToken(configDir).ok).toBe(true);
 
     expect(mode(path.join(configDir, "serve-credentials.json"))).toBe("600");
+  });
+
+  test("saveShellPermissions, over a permissions.json that already exists 0664", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("permissions.json");
+
+    saveShellPermissions({ allow: ["git status"] }, configDir);
+
+    expect(mode(file)).toBe("600");
+  });
+
+  test("saveSandboxDefaults, over a sandbox.json that already exists 0664", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("sandbox.json");
+
+    saveSandboxDefaults({ maskMode: "auto" }, configDir);
+
+    expect(mode(file)).toBe("600");
   });
 
   test("the project registry, over a projects.json that already exists 0664", () => {
@@ -358,6 +389,87 @@ describe("every writer of the shared config directory tightens it", () => {
     // The operator's OWN directory is left alone: it is not keryx's to
     // re-permission, and it may hold other things.
     expect(mode(dataDir)).toBe("775");
+  });
+
+  test("a KERYX_DATA_DIR whose OWN path contains `sessions` is not walked from the wrong root", () => {
+    // The fixture the previous version of this guard used could not fail:
+    // `<tmp>/keryx-configdir-mode-XXXX/data` contains no `sessions` segment, so
+    // an implementation that searched the path for the FIRST `/sessions/` gave
+    // the right answer by accident. A review used `<base>/sessions/keryx` and
+    // watched the walk chmod both `<base>/sessions` — a directory shared with
+    // whatever else lives there — and the data root itself, while the comment
+    // beside it claimed the data root was left alone.
+    if (process.platform === "win32") {
+      return;
+    }
+    const outer = path.join(base, "sessions");
+    const dataDir = path.join(outer, "keryx");
+    mkdirSync(path.join(dataDir, "sessions"), { recursive: true });
+    chmodSync(outer, 0o775);
+    chmodSync(dataDir, 0o775);
+    chmodSync(path.join(dataDir, "sessions"), 0o775);
+    const project = path.join(base, "nested-project");
+    mkdirSync(project, { recursive: true });
+
+    const previous = process.env.KERYX_DATA_DIR;
+    process.env.KERYX_DATA_DIR = dataDir;
+    try {
+      createSession({ cwd: project });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.KERYX_DATA_DIR;
+      } else {
+        process.env.KERYX_DATA_DIR = previous;
+      }
+    }
+
+    // The tree keryx creates: tightened.
+    expect(mode(path.join(dataDir, "sessions"))).toBe("700");
+    // Everything above it: untouched. Both of these were 0700 before the fix.
+    expect({ level: "data root", mode: mode(dataDir) }).toEqual({ level: "data root", mode: "775" });
+    expect({ level: "above it", mode: mode(outer) }).toEqual({ level: "above it", mode: "775" });
+  });
+
+  test("saveShellPermissions", () => {
+    // Missed by the round-3 sweep. It shares a directory with `auth.json` and,
+    // on a host where `KERYX_DATA_DIR` is set so `createSession` never touches
+    // the config dir, it is the writer that CREATES it — at 0775. It is also
+    // the file that decides which shell commands run without asking.
+    if (process.platform === "win32") {
+      return;
+    }
+    widenConfigDir();
+
+    saveShellPermissions({ allow: ["git status"] }, configDir);
+
+    expect(mode(configDir)).toBe("700");
+    expect(mode(path.join(configDir, "permissions.json"))).toBe("600");
+  });
+
+  test("saveSandboxDefaults", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    widenConfigDir();
+
+    saveSandboxDefaults({ maskMode: "auto" }, configDir);
+
+    expect(mode(configDir)).toBe("700");
+    expect(mode(path.join(configDir, "sandbox.json"))).toBe("600");
+  });
+
+  test("saveShellPermissions and saveSandboxDefaults CREATE the directory owner-only", () => {
+    // The sharper case: no other writer has run, so whatever mode these two
+    // leave is the mode `auth.json` is later created into.
+    if (process.platform === "win32") {
+      return;
+    }
+    saveShellPermissions({ allow: ["git status"] }, configDir);
+    expect(mode(configDir)).toBe("700");
+
+    rmSync(configDir, { recursive: true, force: true });
+    saveSandboxDefaults({ maskMode: "auto" }, configDir);
+    expect(mode(configDir)).toBe("700");
   });
 
   test("a later writer does not re-loosen what an earlier one tightened", () => {

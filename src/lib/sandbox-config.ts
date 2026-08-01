@@ -5,8 +5,9 @@
 // Resolution order for consumers: process env > this file > built-in defaults.
 // All functions are best-effort and never throw; `dir` override is for tests.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { ensureKeryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
 
 /** Allowed values for the `shell` field (mirrors KERYX_SANDBOX_SHELL surface). */
@@ -88,12 +89,14 @@ export function loadSandboxDefaults(dir?: string): SandboxDefaults {
 export function saveSandboxDefaults(patch: Partial<SandboxDefaults>, dir?: string): void {
   try {
     const sanitizedPatch = sanitizeSandboxDefaults(patch);
-    const baseDir = path.dirname(sandboxConfigPath(dir));
-    mkdirSync(baseDir, { recursive: true });
+    // Through the shared helpers: a mode passed to `mkdirSync`/`writeFileSync`
+    // applies at creation only, and this writer shares a directory with
+    // `auth.json`. See `ensureKeryxConfigDir`.
+    ensureKeryxConfigDir(path.dirname(sandboxConfigPath(dir)));
     const next: SandboxDefaults = { ...loadSandboxDefaults(dir), ...sanitizedPatch };
     // Re-sanitize the merge so we never persist junk.
     const clean = sanitizeSandboxDefaults(next);
-    writeFileSync(sandboxConfigPath(dir), `${JSON.stringify(clean, null, 2)}\n`, { mode: 0o600 });
+    writeOwnerOnlyFile(sandboxConfigPath(dir), `${JSON.stringify(clean, null, 2)}\n`);
   } catch {
     // best-effort
   }

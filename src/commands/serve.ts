@@ -222,10 +222,14 @@ async function runServe(args: string[]): Promise<void> {
         // resetting bind, port and profile to defaults, which is the damage
         // this whole area was fixed for. `config set` changes the named field
         // and preserves the rest.
-        note(`The configuration does not acknowledge a non-loopback bind. Re-run: keryx serve config set --bind <addr> ${ACK_FLAG}`);
+        // Backticked, like every other instruction. Not cosmetic: the class
+        // guard extracts backticked commands and executes them, so an
+        // unbackticked one is invisible to it — a mutation drifted this line to
+        // a command that exits 1 and nothing went red.
+        note(`The configuration does not acknowledge a non-loopback bind. Re-run: \`keryx serve config set --bind <addr> ${ACK_FLAG}\``);
       }
       if (!runtimeAck) {
-        note(`This invocation did not acknowledge a non-loopback bind. Re-run: keryx serve ${ACK_FLAG}`);
+        note(`This invocation did not acknowledge a non-loopback bind. Re-run: \`keryx serve ${ACK_FLAG}\``);
       }
     }
     return;
@@ -540,7 +544,11 @@ function runConfig(args: string[]): void {
     if (state !== "absent" && state !== "malformed" && !parsed.parsed.flags.has(FORCE_FLAG)) {
       fail(
         `${sanitizeForDisplay(serveConfigPath())} already exists${state === "unreadable" ? " and could not be read" : ""}. ` +
-          `\`keryx serve config set\` changes one setting without touching the rest; ` +
+          // `<setting>` deliberately: a bare `keryx serve config set` exits 1
+          // with "nothing to set", so this is a usage form and must read as one.
+          // The class guard skips spans carrying a placeholder for exactly that
+          // reason, and counts what it skipped rather than dropping it silently.
+          `\`keryx serve config set <setting>\` changes one setting without touching the rest; ` +
           `${FORCE_FLAG} replaces the whole file with defaults.`,
       );
       return;
@@ -716,7 +724,7 @@ function runConfigSet(args: string[]): void {
   }
   console.log(`  ${style.green(symbols.ok)} updated ${sanitizeForDisplay(serveConfigPath())}`);
   printConfig(updated);
-  if (rebinding && existing.bind.acknowledgeNonLoopback === true && !flags.has(ACK_FLAG)) {
+  if (rebinding && existing.bind.acknowledgeNonLoopback === true && !flags.has(ACK_FLAG) && !flags.has(NO_ACK_FLAG)) {
     // Dropping it silently would be the same failure in the other direction:
     // the operator's next `keryx serve` would refuse and they would not know why.
     console.log(
