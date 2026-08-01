@@ -5,7 +5,7 @@
   "title": "Review pipeline: give reviewers the metaproject context and a memory of prior rounds",
   "status": "in-progress",
   "createdAt": "2026-08-01T15:27:59.707Z",
-  "updatedAt": "2026-08-01T16:34:01.920Z",
+  "updatedAt": "2026-08-01T16:42:46.822Z",
   "source": {
     "type": "description",
     "ref": null
@@ -35,7 +35,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -43,13 +43,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,7 +58,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -167,7 +169,7 @@
       "id": "T11",
       "title": "Prove the managed-review loop on this branch: review start -> report -> ingest -> status reads it back",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -175,13 +177,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Mutation-check every guard this flow adds and record what went red in journal.md",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -189,13 +192,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Verification gates: tsc --noEmit, full bun test, keryx health run, schema validation",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -203,7 +207,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -304,6 +309,31 @@
       "at": "2026-08-01T16:34:01.920Z",
       "event": "task-done",
       "detail": "T10: Promote the flow-128 lesson draft -> accepted, reindex memory, confirm a scoped search returns it"
+    },
+    {
+      "at": "2026-08-01T16:42:46.489Z",
+      "event": "task-done",
+      "detail": "T11: Prove the managed-review loop on this branch: review start -> report -> ingest -> status reads it back"
+    },
+    {
+      "at": "2026-08-01T16:42:46.575Z",
+      "event": "task-done",
+      "detail": "T12: Mutation-check every guard this flow adds and record what went red in journal.md"
+    },
+    {
+      "at": "2026-08-01T16:42:46.660Z",
+      "event": "task-done",
+      "detail": "T13: Verification gates: tsc --noEmit, full bun test, keryx health run, schema validation"
+    },
+    {
+      "at": "2026-08-01T16:42:46.738Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T16:42:46.822Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }

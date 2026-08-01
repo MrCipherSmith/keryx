@@ -1,5 +1,6 @@
 import { afterEach, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
@@ -198,7 +199,19 @@ test("review-flow creates standalone package under .metaproject/reviews", async 
 test("ingest writes classified findings and skill learning decision", async () => {
   await fresh();
   const reportPath = path.join(ROOT, "review.md");
-  await writeFile(reportPath, "## Major Issues\n\n- [F-001] major: Missing managed review coverage.\n", "utf8");
+  await writeFile(
+    reportPath,
+    [
+      "## Major Issues",
+      "",
+      "- [F-001] major: Missing managed review coverage.",
+      "  - class_scope:",
+      "    sites: [\"src/review/managed.ts\", \"src/commands/review.ts\"]",
+      "    enumeration_method: \"grep for createManagedReviewPackage; 2 call sites\"",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
 
   const result = await createManagedReviewPackage({
     cwd: ROOT,
@@ -212,8 +225,119 @@ test("ingest writes classified findings and skill learning decision", async () =
   const findings = await readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
   expect(findings).toContain('"id": "F-001"');
   expect(findings).toContain('"classification": "valid_followup"');
+  expect(findings).toContain('"class_scope_present": true');
   const learning = await readFile(path.join(ROOT, result.path, "learning.md"), "utf8");
   expect(learning).toContain("## Skill Learning");
+});
+
+test("ingest refuses a blocker or major that does not enumerate its class", async () => {
+  // The rule exists because eleven rounds across flows 127 and 128 produced
+  // fixes that repaired the one site a finding named. Enforced HERE, not only in
+  // review-finding.schema.json, because until this the schema was the only place
+  // it lived and no real path validated against it — a rule matched against
+  // nothing, which is the `allowlist-not-a-boundary` lesson.
+  for (const severity of ["blocker", "major"]) {
+    await fresh();
+    const reportPath = path.join(ROOT, "review.md");
+    await writeFile(reportPath, `- [F-001] ${severity}: one site, no class.\n`, "utf8");
+
+    await expect(
+      createManagedReviewPackage({
+        cwd: ROOT,
+        mode: "ingest",
+        reviewId: `2026-07-09-${severity}-review`,
+        target: { kind: "report", ref: "review.md" },
+        reportPath: "review.md",
+        now: new Date("2026-07-09T11:00:00Z"),
+      }),
+    ).rejects.toThrow(/does not enumerate|do not enumerate/);
+
+    // Nothing is left behind: a refused ingest must not leave a package a later
+    // round could mistake for a recorded review.
+    expect(existsSync(path.join(ROOT, ".metaproject", "reviews", `2026-07-09-${severity}-review`))).toBe(
+      false,
+    );
+  }
+});
+
+test("ingest accepts a minor or info without class_scope — enumerating every low-severity note is theatre", async () => {
+  for (const severity of ["minor", "info"]) {
+    await fresh();
+    const reportPath = path.join(ROOT, "review.md");
+    await writeFile(reportPath, `- [F-002] ${severity}: a small observation.\n`, "utf8");
+
+    const result = await createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: `2026-07-09-${severity}-review`,
+      target: { kind: "report", ref: "review.md" },
+      reportPath: "review.md",
+      now: new Date("2026-07-09T11:00:00Z"),
+    });
+    const findings = await readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
+    expect(findings).toContain(`"severity": "${severity}"`);
+  }
+});
+
+test("a declared severity beats a severity word appearing in the prose", async () => {
+  // Found by running this on a real review report: a `minor` finding whose text
+  // discussed blockers was recorded as a blocker and tripped the class-scope
+  // guard. Keyword scanning the body is a fallback, never an override.
+  await fresh();
+  const reportPath = path.join(ROOT, "review.md");
+  await writeFile(
+    reportPath,
+    [
+      "### [F-004] The detector is a substring match",
+      "- **Severity**: minor",
+      "- **Problem**: any SKILL.md containing \"blocker\" is treated as a reviewer.",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId: "2026-07-09-declared-severity",
+    target: { kind: "report", ref: "review.md" },
+    reportPath: "review.md",
+    now: new Date("2026-07-09T11:00:00Z"),
+  });
+  const findings = await readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
+  expect(findings).toContain('"severity": "minor"');
+  // And therefore it is NOT refused for missing class_scope.
+  expect(findings).not.toContain('"severity": "blocker"');
+});
+
+test("severity is read from the whole finding block, not only its heading line", async () => {
+  // The parser read the heading line alone, so a report that puts severity on
+  // the line below — which every reviewer skill's format does — was recorded as
+  // `minor` whatever it said. That also made the class-scope rule unreachable
+  // for exactly the findings it governs.
+  await fresh();
+  const reportPath = path.join(ROOT, "review.md");
+  await writeFile(
+    reportPath,
+    [
+      "### [F-003] Title carrying no severity word",
+      "- **Severity**: blocker",
+      "- class_scope: sites: [\"a.ts\"] enumeration_method: \"grep\"",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId: "2026-07-09-block-severity",
+    target: { kind: "report", ref: "review.md" },
+    reportPath: "review.md",
+    now: new Date("2026-07-09T11:00:00Z"),
+  });
+  const findings = await readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
+  expect(findings).toContain('"severity": "blocker"');
 });
 
 test("manifest validation rejects invalid modes and missing artifact paths", async () => {

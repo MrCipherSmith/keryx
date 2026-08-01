@@ -10,7 +10,7 @@
 // must not be forced to invent an empty array's worth of ceremony.
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { validateJson } from "./contracts";
 
@@ -116,6 +116,39 @@ describe("reviewer-input requires prior findings on a fix round", () => {
     // A `major` without class_scope is invalid under the finding contract, so
     // the ref resolved and the conditional inside it fired.
     expect(errors.some((e) => e.path.includes("class_scope"))).toBe(true);
+  });
+
+  test("resolves every sibling ref — no two roots hold the same basename", () => {
+    // `resolveRef` resolves a bare `<name>.schema.json` by searching SCHEMA_ROOTS
+    // in order and taking the first hit. If two roots ever hold the same
+    // filename, one silently shadows the other and a `$ref` starts meaning
+    // something else with no error anywhere.
+    //
+    // This test exists because the comment in contracts.ts claimed it existed
+    // before it did — which is precisely the failure the lesson behind this flow
+    // names: a comment describing enforcement no code performs.
+    const roots = [
+      path.join(import.meta.dir, "contracts"),
+      path.join(import.meta.dir, "bundled", "skills", "review", "review-orchestrator"),
+    ];
+    const seen = new Map<string, string>();
+    const collisions: string[] = [];
+    for (const root of roots) {
+      for (const entry of readdirSync(root)) {
+        if (!entry.endsWith(".schema.json")) {
+          continue;
+        }
+        const prior = seen.get(entry);
+        if (prior !== undefined) {
+          collisions.push(`${entry}: ${prior} and ${root}`);
+        } else {
+          seen.set(entry, root);
+        }
+      }
+    }
+    expect(collisions).toEqual([]);
+    // Not vacuous: both roots must actually contain schemas.
+    expect(seen.size).toBeGreaterThan(4);
   });
 
   test("memory entries that are not accepted are rejected", async () => {

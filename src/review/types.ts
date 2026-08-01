@@ -69,6 +69,16 @@ export type NormalizedReviewFinding = {
   flow_relevance: "active_flow_feedback" | "post_flow_feedback" | "standalone_review";
   file?: string | undefined;
   line?: number | undefined;
+  /**
+   * Whether the finding's block carried a `class_scope` — every site of the
+   * shape, and how the set was enumerated.
+   *
+   * A shape check, not schema validation, and said plainly: the report is
+   * markdown, so what is observable here is that the block names `class_scope`
+   * and supplies both `sites` and `enumeration_method`. Required for `blocker`
+   * and `major`; see `review-finding.schema.json`, which is the strict form.
+   */
+  class_scope_present?: boolean | undefined;
 };
 
 export type ManagedReviewInput = {

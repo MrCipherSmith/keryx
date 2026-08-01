@@ -1,0 +1,47 @@
+[
+  {
+    "id": "F-001",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "The class_scope rule was enforced in a schema no real path validated against",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-002",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "normalizeFindings read severity from the heading line only",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-003",
+    "severity": "minor",
+    "reviewer": "review-orchestrator",
+    "summary": "A comment claimed a uniqueness test that did not exist",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": false
+  },
+  {
+    "id": "F-004",
+    "severity": "minor",
+    "reviewer": "review-orchestrator",
+    "summary": "The reviewer detector is a substring match",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": false
+  },
+  {
+    "id": "F-005",
+    "severity": "info",
+    "reviewer": "review-orchestrator",
+    "summary": "Procedure guards over SKILL.md match on prose",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": false
+  }
+]

@@ -72,6 +72,17 @@ export async function createManagedReviewPackage(
     throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
   }
 
+  const violations = classScopeViolations(findings);
+  if (violations.length > 0) {
+    // Before the package is written, so a refused ingest leaves nothing behind
+    // that a later round could mistake for a recorded review.
+    throw new Error(
+      `Refusing to record findings that do not enumerate their class: ${violations
+        .map((finding) => `${finding.id} (${finding.severity})`)
+        .join(", ")}. A blocker or major must carry class_scope with sites and enumeration_method — every site holding the shape, and how the set was derived.`,
+    );
+  }
+
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "scope.md"), renderScope(input, flowMatch, at));
@@ -276,23 +287,109 @@ function normalizeFindings(
 ): NormalizedReviewFinding[] {
   const findings: NormalizedReviewFinding[] = [];
   const lines = report.split("\n");
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     const match = line.match(/\b(F-\d{3,})\b[:\]\s-]*(.*)/i);
     if (!match?.[1]) {
       continue;
     }
     const id = match[1].toUpperCase();
     const summary = match[2]?.trim() || "Review finding";
+    // The block is everything up to the next finding, because severity and
+    // class_scope live on lines BELOW the heading in every report format the
+    // reviewer skills emit. Reading only the heading line, as this did, made
+    // severity depend on whether the word happened to appear in the title.
+    const block = findingBlock(lines, index);
     findings.push({
       id,
-      severity: severityFromLine(line),
+      severity: severityFor(line, block),
       reviewer: "review-orchestrator",
       summary,
       classification: mode === "ingest" ? "valid_followup" : "skill_learning_candidate",
       flow_relevance: attachedToFlow ? "post_flow_feedback" : "standalone_review",
+      class_scope_present: hasClassScope(block),
     });
   }
   return findings;
+}
+
+/** The lines of one finding: from its heading to the next finding or the end. */
+function findingBlock(lines: string[], headingIndex: number): string {
+  const out: string[] = [];
+  for (let i = headingIndex + 1; i < lines.length; i += 1) {
+    if (/\bF-\d{3,}\b/i.test(lines[i] ?? "")) {
+      break;
+    }
+    out.push(lines[i] ?? "");
+  }
+  return out.join("\n");
+}
+
+/**
+ * Does this finding enumerate its class?
+ *
+ * A SHAPE check over markdown, not schema validation — stated rather than
+ * implied. It requires the block to name `class_scope` and to supply both
+ * halves, because either alone is the thing it was added to prevent: a list of
+ * sites with no method is unverifiable, and a method with no sites enumerates
+ * nothing. `review-finding.schema.json` is the strict form and is what
+ * `keryx skills contracts validate` applies to a JSON finding.
+ */
+function hasClassScope(block: string): boolean {
+  const lower = block.toLowerCase();
+  return (
+    (lower.includes("class_scope") || lower.includes("class scope")) &&
+    lower.includes("sites") &&
+    lower.includes("enumeration_method")
+  );
+}
+
+/**
+ * Findings that must enumerate their class and do not.
+ *
+ * Fail-closed at ingest rather than a warning, because the rule this enforces
+ * was added after eleven review rounds in which a fix repaired the one site a
+ * finding named and left its siblings for the next round to find. A rule that
+ * only lives in a schema no path validates against is matched against nothing —
+ * which is the `allowlist-not-a-boundary` lesson, applied to this flow's own
+ * work.
+ */
+export function classScopeViolations(
+  findings: readonly NormalizedReviewFinding[],
+): NormalizedReviewFinding[] {
+  return findings.filter(
+    (finding) =>
+      (finding.severity === "blocker" || finding.severity === "major") &&
+      finding.class_scope_present !== true,
+  );
+}
+
+/**
+ * The severity of one finding, from its heading and body.
+ *
+ * Precedence matters and was learned by executing this on a real report. Reading
+ * the heading alone recorded every finding as `minor`, because every reviewer
+ * format puts severity on the line below. Then reading heading-plus-body
+ * keyword-scanned the prose, and a `minor` finding whose text merely DISCUSSED
+ * blockers was recorded as a blocker — which tripped the class-scope guard on a
+ * finding that did not need one.
+ *
+ * So: an explicit declaration wins wherever it appears; only in its absence does
+ * a keyword count, and then the heading outranks the body.
+ */
+function severityFor(heading: string, block: string): NormalizedReviewFinding["severity"] {
+  const declared = `${heading}\n${block}`.match(
+    /^[\s>*_-]*(?:\*\*|__)?severity(?:\*\*|__)?\s*[:=]\s*(?:\*\*|__|`)?\s*(blocker|major|minor|info)\b/im,
+  );
+  if (declared?.[1]) {
+    return declared[1].toLowerCase() as NormalizedReviewFinding["severity"];
+  }
+  const fromHeading = severityFromLine(heading);
+  // `severityFromLine` cannot say "nothing here", so ask whether the heading
+  // actually named one rather than trusting its `minor` default.
+  if (/\b(blocker|major|info)\b/i.test(heading)) {
+    return fromHeading;
+  }
+  return severityFromLine(block);
 }
 
 function severityFromLine(line: string): NormalizedReviewFinding["severity"] {
