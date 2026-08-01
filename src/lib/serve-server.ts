@@ -27,7 +27,15 @@
 // constant 0 because nothing in this slice can create one.
 
 import type { Server } from "bun";
+import {
+  compareProfiles,
+  localBaselineProfile,
+  REMOTE_PROFILE_NAMES,
+  resolveRemoteProfile,
+} from "../harness/policy/profiles";
+import type { PolicyProfile } from "../harness/policy/types";
 import { emitProjectsJson, listProjects } from "./project-registry";
+import { AuthFailureThrottle } from "./serve-throttle";
 import {
   isLoopbackAddress,
   serveConfigAdvice,
@@ -52,6 +60,16 @@ export type ServeRefusalReason =
   | "non-loopback-not-acknowledged"
   /** The configuration names a credential store this release does not implement. */
   | "unsupported-credential-store"
+  /** The configuration names a policy profile this release does not implement. */
+  | "unknown-profile"
+  /**
+   * The remote profile would grant something the local profile withholds.
+   *
+   * specification.md AC-04 and security-policy.md §"Remote policy profile":
+   * "a resolution that would widen is a startup `refused`, not a warning and not
+   * a downgrade". Terminal like every other refusal here — no socket is bound.
+   */
+  | "widening-profile"
   /** The address was acceptable but the kernel would not give us the socket. */
   | "bind-failed";
 
@@ -61,6 +79,14 @@ export interface ServeStartupOk {
   credential: ServeCredentialRecord;
   /** True when the bind address is reachable beyond loopback. */
   nonLoopback: boolean;
+  /**
+   * The RESOLVED remote profile, not the name.
+   *
+   * Returned rather than re-resolved by the caller, so there is exactly one
+   * resolution per startup and no way for the profile a turn runs under to
+   * differ from the one that was checked for widening.
+   */
+  profile: PolicyProfile;
 }
 
 export interface ServeStartupRefused {
@@ -87,6 +113,21 @@ export interface ServeStartupInput {
    * a caller that genuinely has no file passes.
    */
   configState?: ServeConfigState;
+  /**
+   * Overrides the local profile the remote one is compared against. Tests only.
+   *
+   * Every profile this release ships resolves at or below the local baseline, so
+   * without this seam the widening branch has no reachable input and AC-04 would
+   * be asserted against `compareProfiles` alone — a unit test standing in for
+   * the startup refusal it is supposed to prove. The branch becomes reachable in
+   * production the moment the baseline is tightened or a wider remote profile is
+   * added, which is exactly when it must already have been proven.
+   *
+   * The production call sites pass nothing, and `serve-server.test.ts` holds a
+   * source-level guard asserting that no non-test file supplies it — because a
+   * seam that can lower the ceiling is a seam worth watching.
+   */
+  localBaseline?: () => PolicyProfile;
 }
 
 function refuse(reason: ServeRefusalReason, message: string): ServeStartupRefused {
@@ -163,7 +204,39 @@ export function resolveServeStartup(input: ServeStartupInput): ServeStartup {
     );
   }
 
-  return { ok: true, config, credential: credential.record, nonLoopback };
+  // The profile resolves LAST, and deliberately so. R4b carried the name and
+  // resolved nothing, because nothing in that slice ran a turn; this slice runs
+  // turns, so the name has to become a posture at startup — where a widening
+  // resolution can still be refused, rather than being discovered by the first
+  // request that gets more than it should.
+  //
+  // Placed after the checks that already existed rather than ahead of them. In a
+  // configuration with two faults both refusals are terminal and neither is
+  // unsafe, so the order decides only which one the operator is told about — and
+  // quietly moving the non-loopback refusal, which has its own proven
+  // instruction and its own test, is not a change this slice needs to make.
+  const remoteProfile = resolveRemoteProfile(config.profile);
+  if (remoteProfile === null) {
+    return refuse(
+      "unknown-profile",
+      // Names the valid set: the operator has to type one of them, and an error
+      // that says only "invalid" leaves them guessing. The set is schema
+      // vocabulary, not operator data, so printing it discloses nothing.
+      `profile "${config.profile}" is not implemented in this release; valid profiles are ${REMOTE_PROFILE_NAMES.join(", ")}. Run \`keryx serve config set --profile remote-restricted\``,
+    );
+  }
+  const comparison = compareProfiles((input.localBaseline ?? localBaselineProfile)(), remoteProfile);
+  if (!comparison.ok) {
+    return refuse(
+      "widening-profile",
+      // The FIELDS that widen, not merely the fact. An operator told only "too
+      // permissive" has to guess which of eight; the field names are schema
+      // vocabulary and disclose nothing about the host.
+      `profile "${config.profile}" would grant more than the local profile allows (${comparison.widened.join(", ")}). Run \`keryx serve config set --profile remote-restricted\``,
+    );
+  }
+
+  return { ok: true, config, credential: credential.record, nonLoopback, profile: remoteProfile };
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +314,23 @@ export interface ServeContext {
   /** Overrides the user-global config directory. Tests only. */
   dir?: string | undefined;
   state: () => ServeState;
+  /**
+   * Who is calling, for the failed-authentication throttle only.
+   *
+   * Resolved by the listener from the connection, never from a header. An
+   * `X-Forwarded-For` would let a caller pick its own throttle bucket, which is
+   * the same class of mistake as reading an origin out of a request body.
+   */
+  peer?: string;
+  /**
+   * The failed-authentication throttle (D4).
+   *
+   * Optional so every existing synthetic context keeps working unthrottled —
+   * `handleServeRequest` is called directly by a large suite, and a required
+   * field would have meant editing every one of those call sites into agreeing
+   * with a control they are not testing.
+   */
+  throttle?: AuthFailureThrottle;
 }
 
 /** The complete route surface of this slice. Exact match, closed set. */
@@ -319,8 +409,28 @@ export function summarizeRegistryWarnings(messages: readonly string[]): Array<{ 
 export function handleServeRequest(request: Request, ctx: ServeContext): Response {
   // (1) Authenticate FIRST. The URL is not even parsed until this passes, so
   // there is no branch on it that could differ for an unauthenticated caller.
+  //
+  // The throttle is consulted only on the FAILURE path, and that order is the
+  // control rather than an implementation detail: security-policy.md requires
+  // that an authenticated caller is never throttled, and a throttle checked
+  // before authentication would refuse the operator's own valid token because
+  // someone else had been guessing from the same address. There is no code path
+  // from a successful verification into the throttle at all.
   const credential = ctx.resolveCredential();
   if (credential.status !== "ok" || !verifyServeToken(bearerToken(request), credential.record)) {
+    const peer = ctx.peer;
+    if (ctx.throttle !== undefined && peer !== undefined) {
+      // Already serving a cooldown: refuse WITHOUT recording, so a client
+      // retrying in a loop cannot extend its own ban indefinitely and the
+      // cooldown stays a cooldown.
+      const standing = ctx.throttle.check(peer);
+      const verdict = standing.throttled ? standing : ctx.throttle.recordFailure(peer);
+      if (verdict.throttled) {
+        return errorResponse(429, "too-many-requests", "Too many requests.", {
+          "retry-after": String(verdict.retryAfterSeconds ?? 60),
+        });
+      }
+    }
     return unauthorized();
   }
 
@@ -423,12 +533,18 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
   // chooses" and the caller needs to be told which one it chose.
   let boundPort = 0;
 
+  // One throttle per listener. Its lifetime is the process's, so a restart
+  // clears every cooldown — which is correct: a restart is an operator action,
+  // and persisting a ban across one would mean an operator could lock themselves
+  // out of a server they control by fixing it and turning it back on.
+  const throttle = new AuthFailureThrottle();
+
   let server: Server<undefined>;
   try {
     server = Bun.serve({
       hostname,
       port: startup.config.bind.port,
-      fetch: (request) =>
+      fetch: (request, self) =>
         handleServeRequest(request, {
           config: startup.config,
           // Re-read on every request so `token revoke` and `token rotate` reach
@@ -438,6 +554,11 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
           boundPort,
           dir: input.dir,
           state: () => state,
+          // From the CONNECTION, never from a header. `X-Forwarded-For` would
+          // let a caller choose its own throttle bucket, which is the same
+          // mistake as reading an origin out of a request body.
+          peer: self.requestIP(request)?.address ?? "unknown",
+          throttle,
         }),
     });
   } catch (error) {

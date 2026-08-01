@@ -17,9 +17,11 @@
 // address the configuration named.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Glob } from "bun";
+import { compareProfiles, localBaselineProfile, resolveLocalProfile } from "../harness/policy/profiles";
 import { hasSecretShapedField, registerProject } from "./project-registry";
 import { defaultServeConfig, type ServeConfig } from "./serve-config";
 import {
@@ -256,6 +258,146 @@ describe("startup preconditions", () => {
     expect(startup.ok).toBe(true);
     if (startup.ok) {
       expect(startup.nonLoopback).toBe(false);
+    }
+  });
+
+  // ── the non-weakening remote profile (spec AC-04) ────────────────────────
+
+  test("the default configuration resolves a profile, and the resolved posture is returned rather than the name", () => {
+    // Not vacuous: every refusal test below means nothing if the happy path
+    // never resolves a profile at all.
+    const startup = resolveServeStartup({ config: ephemeralConfig(), credential: credentialResult() });
+    expect(startup.ok).toBe(true);
+    if (startup.ok) {
+      expect(startup.profile.profileId).toBe("unattended-untrusted");
+      // The stricter-by-default posture, asserted through the startup result —
+      // so a configuration that resolved to something laxer fails HERE and not
+      // only in the profile module's own suite.
+      expect(startup.profile.requiredControls.isolation).toBe("required-fail-closed");
+      expect(startup.profile.defaults.network).toBe("deny");
+    }
+  });
+
+  test("a profile name this release does not implement is a refusal, not a fallback", () => {
+    const startup = resolveServeStartup({
+      config: ephemeralConfig({ profile: "hardened" }),
+      credential: credentialResult(),
+    });
+    expect(startup.ok).toBe(false);
+    if (!startup.ok) {
+      expect(startup.reason).toBe("unknown-profile");
+      // The message names the valid set, so the operator is not left guessing.
+      expect(startup.message).toContain("remote-restricted");
+    }
+  });
+
+  test("a widening remote profile refuses at startup and names the fields that widen", () => {
+    // Every profile this release ships resolves at or below the baseline, so
+    // the widening input is produced by TIGHTENING the baseline rather than by
+    // inventing a wider remote profile. Same branch, reachable premise.
+    const startup = resolveServeStartup({
+      config: ephemeralConfig({ profile: "remote-restricted" }),
+      credential: credentialResult(),
+      localBaseline: () => resolveLocalProfile("read-only-review"),
+    });
+    expect(startup.ok).toBe(false);
+    if (!startup.ok) {
+      expect(startup.reason).toBe("widening-profile");
+      // The FIELDS, by value. `remote-restricted` asks where read-only-review
+      // denies, on exactly these three.
+      expect(startup.message).toContain("defaults.delegate, defaults.shell, defaults.write");
+    }
+  });
+
+  test("a widening profile binds NO socket", async () => {
+    // The point of AC-04. `refused` is "a terminal startup outcome, never a
+    // degraded listen", so the assertion is about the socket, not the message.
+    const outcome = await startServeListener({
+      config: ephemeralConfig({ profile: "remote-restricted" }),
+      credential: credentialResult(),
+      localBaseline: () => resolveLocalProfile("read-only-review"),
+      dir: configDir,
+    });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.reason).toBe("widening-profile");
+      expect(outcome.state).toBe("refused");
+    }
+    // No listener object exists to drain, because nothing was opened.
+    expect(Object.hasOwn(outcome, "listener")).toBe(false);
+  });
+
+  test("an unknown profile name also binds no socket", async () => {
+    const outcome = await startServeListener({
+      config: ephemeralConfig({ profile: "hardened" }),
+      credential: credentialResult(),
+      dir: configDir,
+    });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.reason).toBe("unknown-profile");
+    }
+    expect(Object.hasOwn(outcome, "listener")).toBe(false);
+  });
+
+  test("the shell-allow posture is wider than the baseline — the premise, asserted", () => {
+    // If this ever stops being true the widening tests above are still green
+    // while proving nothing, because their input would no longer widen.
+    expect(compareProfiles(localBaselineProfile(), resolveLocalProfile("monitored-trusted-local"))).toEqual({
+      ok: false,
+      widened: ["defaults.shell"],
+    });
+  });
+
+  test("no non-test file supplies the localBaseline seam", () => {
+    // `localBaseline` exists so the widening branch has a reachable input under
+    // test. It can also LOWER the ceiling a remote profile is held to, which is
+    // the one thing this whole check exists to prevent — so production code may
+    // not pass it, and that is held by reading the source rather than by the
+    // comment on the field.
+    //
+    // Source-level, same construction as the config-dir guards: derive the
+    // denominator from the tree, assert the complement is empty.
+    const src = path.join(import.meta.dir, "..");
+    const offenders: string[] = [];
+    for (const relative of new Glob("**/*.ts").scanSync(src)) {
+      const file = relative.split(path.sep).join("/");
+      if (file.includes(".test.")) {
+        continue;
+      }
+      const source = readFileSync(path.join(src, relative), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/[^\n]*/g, "");
+      // The DECLARATION in serve-server.ts is `localBaseline?:`; a caller
+      // supplying it writes `localBaseline:`. The optional marker is what
+      // separates them.
+      if (/localBaseline\s*:/.test(source) && !/localBaseline\?\s*:/.test(source)) {
+        offenders.push(file);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test("the seam detector fires on a planted caller", () => {
+    // Otherwise the assertion above passes because the predicate matches nothing.
+    const planted = "resolveServeStartup({ config, credential, localBaseline: () => wideOpen() });";
+    expect(/localBaseline\s*:/.test(planted) && !/localBaseline\?\s*:/.test(planted)).toBe(true);
+    const declaration = "  localBaseline?: () => PolicyProfile;";
+    expect(/localBaseline\s*:/.test(declaration) && !/localBaseline\?\s*:/.test(declaration)).toBe(false);
+  });
+
+  test("the profile is checked AFTER the refusals that already existed", () => {
+    // A configuration with two faults refuses on the one that was already
+    // proven, not on the new one. Both are terminal and neither is unsafe, so
+    // this is about not silently changing which instruction an operator is
+    // handed — the non-loopback refusal has its own executed instruction.
+    const startup = resolveServeStartup({
+      config: ephemeralConfig({ address: "10.0.0.5", profile: "hardened" }),
+      credential: credentialResult(),
+    });
+    expect(startup.ok).toBe(false);
+    if (!startup.ok) {
+      expect(startup.reason).toBe("non-loopback-not-acknowledged");
     }
   });
 });

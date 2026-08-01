@@ -274,4 +274,67 @@ export function compareProfiles(local: PolicyProfile, remote: PolicyProfile): Pr
  */
 export const REMOTE_DEFAULT_PROFILE: LocalProfileName = "unattended-untrusted";
 
+// ---------------------------------------------------------------------------
+// Operator-facing profile names
+// ---------------------------------------------------------------------------
+
+/**
+ * The names `serve.json`'s `profile` field may carry.
+ *
+ * Deliberately NOT the same vocabulary as `PolicyProfileId`. Those three ids are
+ * frozen by `policy-profile.schema.json` and appear in evidence; these are what
+ * an operator types. R4b shipped `remote-restricted` as the default before any
+ * of them resolved to anything, and it is kept — renaming it would refuse every
+ * configuration already on disk, which is a migration wearing the costume of a
+ * validation fix.
+ *
+ * That the operator-facing name and the frozen id differ is also the clearest
+ * possible statement of why `compareProfiles` may never compare names:
+ * `remote-restricted` and `unattended-untrusted` are the same posture under two
+ * spellings, and a name comparison would call them different.
+ */
+export type RemoteProfileName = "remote-restricted" | "remote-read-only";
+
+export const REMOTE_PROFILE_NAMES: readonly RemoteProfileName[] = ["remote-restricted", "remote-read-only"];
+
+/**
+ * Resolve the profile a remote turn runs under, or `null` for a name that is not
+ * in the closed set.
+ *
+ * `null` rather than a fallback. A configuration naming a profile this release
+ * does not implement is a configuration whose author believed something about
+ * their security posture that is not true, and running them under "the closest
+ * one" is how that belief survives. The caller turns it into a startup refusal.
+ */
+export function resolveRemoteProfile(name: string): PolicyProfile | null {
+  switch (name) {
+    case "remote-restricted":
+      // The stricter-by-default posture specification.md requires: containment
+      // required, network off, every mutation `ask`.
+      return resolveLocalProfile("unattended-untrusted");
+    case "remote-read-only":
+      return resolveLocalProfile("read-only-review");
+    default:
+      return null;
+  }
+}
+
+/**
+ * The posture the OPERATOR's own agent surface runs under, and therefore the
+ * ceiling a remote profile may not exceed.
+ *
+ * Choosing this is a decision rather than a lookup, and it is recorded as D5 in
+ * flow 131. keryx has several local postures: `harness run` is read-only-review,
+ * `harness exec` is shell-allow, and the interactive shell — the one an operator
+ * actually sits in front of — is `shellParentProfile`. The ceiling has to be the
+ * most permissive thing the operator's own surface grants, because
+ * "remote may never grant what local denies" is a statement about what local
+ * grants, not about the strictest corner of it. Picking `read-only-review` would
+ * make the check pass only for a remote profile that can do nothing, which is
+ * not a security property but a refusal to implement the feature.
+ */
+export function localBaselineProfile(): PolicyProfile {
+  return shellParentProfile();
+}
+
 export type { PolicyOutcome, PolicyProfileDefaults };
