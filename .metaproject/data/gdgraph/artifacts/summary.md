@@ -2,40 +2,40 @@
 
 ## Stats
 
-- Source files indexed: 555
+- Source files indexed: 633
 - Imported asset files indexed: 4
-- Total nodes: 559
-- Edges: 1167
-- Import edges: 1162
+- Total nodes: 637
+- Edges: 1359
+- Import edges: 1354
 - Asset edges: 5
 - Unresolved imports: 0
 - Import resolution: 100%
-- Skipped generated/static directories: 5
+- Skipped generated/static directories: 6
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 163 |
-| commands | 54 |
+| harness | 171 |
+| commands | 69 |
+| lib | 61 |
 | health | 39 |
-| security | 36 |
+| security | 37 |
 | gdgraph | 32 |
-| lib | 29 |
 | memory | 28 |
+| flow | 19 |
+| tui | 18 |
+| gdskills | 17 |
 | mcp | 17 |
-| flow | 16 |
-| gdskills | 14 |
-| standard | 13 |
+| standard | 14 |
 | metrics | 12 |
 | fixtures | 11 |
+| capability | 11 |
 | ctx | 11 |
 | testing | 11 |
-| tui | 11 |
 | wiki | 11 |
-| capability | 10 |
 | assets | 8 |
-| session | 6 |
+| scripts | 7 |
 
 ## Unresolved By Type
 
@@ -45,6 +45,7 @@
 
 ## Skipped Directories
 
+- `.git`
 - `.metaproject`
 - `dist`
 - `fixtures/paraphrase/.metaproject`

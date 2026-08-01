@@ -1,0 +1,137 @@
+[
+  {
+    "id": "F-001",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "— `POST /v1/turns` is not wired in production",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-002",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "— the durable event log silently reads back as empty",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-003",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— prompt-injection detection never blocks",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-004",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— `compareProfiles` duplicates an existing comparator and drops `trustMode`",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-005",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— the idempotency key is claimed before anything that can fail",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-006",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— `sessionId`, `approvalId` and `turnId` are the same value in production",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-007",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— the backlog bound drops the terminal event too",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-008",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— no error boundary on the listener",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-009",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— two source-level guards are decorative",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-010",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— AC10's inventory test compares two empty inventories",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-011",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— a throttle test asserts a property that is false",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-012",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— merging the two branches turns the readers guard red",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-013",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— flow 130's AC8 covers a subset of its own class",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-014",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— a behavioural regression in session resume",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-015",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "— the ingest parser still creates phantom findings from prose",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]
