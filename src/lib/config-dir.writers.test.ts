@@ -40,22 +40,25 @@
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { Glob } from "bun";
 import path from "node:path";
+import {
+  CONFIG_PATH_RESOLVERS,
+  code,
+  type Exemption,
+  type Offence,
+  scanFor,
+  sourceFiles as scanSourceFiles,
+  treeSources as scanTreeSources,
+} from "./config-dir.scan";
 
 const SRC = path.join(import.meta.dir, "..");
 
-/** Functions that resolve a path inside the shared user-global directory. */
-const CONFIG_PATH_RESOLVERS = [
-  "keryxConfigDir(",
-  "keryxDataDir(",
-  "shellConfigPath(",
-  "shellPermissionsPath(",
-  "sandboxConfigPath(",
-  "serveConfigPath(",
-  "serveCredentialPath(",
-  "projectRegistryPath(",
-];
+// `code`, the tree walk and `CONFIG_PATH_RESOLVERS` moved to
+// `config-dir.scan.ts` when the reader-side guard was built, so the two guards
+// cannot drift about what the source says or about which files count as
+// touching the shared directory. What stays here is what is specific to writes:
+// the call list, the exemptions, and the `offenders` seam the mutation test
+// below drives.
 
 /**
  * Raw filesystem calls that create or write, and therefore decide a mode.
@@ -98,7 +101,7 @@ const RAW_WRITE_CALLS = [
  * without a reason is indistinguishable from an oversight, which is the failure
  * this guard exists to prevent.
  */
-const EXEMPTIONS: ReadonlyArray<{ file: string; reason: string }> = [
+const EXEMPTIONS: ReadonlyArray<Exemption> = [
   {
     file: "lib/config-dir.ts",
     reason: "defines the sanctioned helpers; it is the one place allowed to call mkdirSync and writeFileSync directly",
@@ -124,74 +127,29 @@ const EXEMPTIONS: ReadonlyArray<{ file: string; reason: string }> = [
   },
 ];
 
-interface Offence {
-  file: string;
-  raw: string;
-}
-
-/**
- * The source with comments removed — and with string literals blanked first.
- *
- * Both halves are necessary and the second was missing. Comments must go
- * because the very comment explaining why a writer stopped calling
- * `writeFileSync` mentions `writeFileSync`, and a guard whose first finding is
- * spurious teaches everyone to ignore it. String literals must go FIRST because
- * a `/*` inside one — a glob such as `"**` + `/*.json"`, which this codebase
- * already contains — opened a block comment that swallowed everything up to the
- * next `*` + `/`, taking any real write call with it. A review measured a file
- * reduced to seven characters.
- *
- * Literals are replaced by an empty string of the same kind rather than
- * deleted, so nothing downstream sees an unterminated quote.
- */
-function code(source: string): string {
-  const withoutStrings = source
-    .replace(/`(?:\\.|[^`\\])*`/gs, "``")
-    .replace(/"(?:\\.|[^"\\\n])*"/g, '""')
-    .replace(/'(?:\\.|[^'\\\n])*'/g, "''");
-  return withoutStrings.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-}
-
 function sourceFiles(): string[] {
-  return [...new Glob("**/*.ts").scanSync(SRC)]
-    .map((relative) => relative.split(path.sep).join("/"))
-    .filter((relative) => !relative.includes(".test."))
-    .sort();
+  return scanSourceFiles(SRC);
 }
 
 /**
  * Files that both resolve a config path and write with a raw call.
  *
- * PURE over a `{ path -> source }` map, deliberately. The first version read
+ * PURE over a `{ path -> source }` map, deliberately, and it stays a named
+ * function here rather than an inlined `scanFor` call. The first version read
  * the tree itself, and its "the detector can fail" test then re-implemented the
  * predicate inline rather than calling this — so replacing the whole body with
  * `return []` left the file green with a real offender planted in the tree. A
  * guard whose self-check does not exercise the guard is the decorative shape
- * this file's own header warns about, reproduced inside it.
+ * this file's own header warns about, reproduced inside it. This is the seam
+ * that mutation targets; keep it.
  */
 function offenders(sources: ReadonlyMap<string, string>): Offence[] {
-  const exempt = new Set(EXEMPTIONS.map((exemption) => exemption.file));
-  const found: Offence[] = [];
-  for (const [relative, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (exempt.has(relative)) {
-      continue;
-    }
-    const source = code(raw);
-    if (!CONFIG_PATH_RESOLVERS.some((resolver) => source.includes(resolver))) {
-      continue;
-    }
-    for (const call of RAW_WRITE_CALLS) {
-      if (source.includes(call)) {
-        found.push({ file: relative, raw: call });
-      }
-    }
-  }
-  return found;
+  return scanFor(sources, { calls: RAW_WRITE_CALLS, exemptions: EXEMPTIONS });
 }
 
 /** The real source tree, as the map `offenders` consumes. */
 function treeSources(): Map<string, string> {
-  return new Map(sourceFiles().map((relative) => [relative, readFileSync(path.join(SRC, relative), "utf8")]));
+  return scanTreeSources(SRC);
 }
 
 describe("every writer of the shared config directory goes through the helpers", () => {

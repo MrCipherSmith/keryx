@@ -152,7 +152,14 @@ export function resolveServeStartup(input: ServeStartupInput): ServeStartup {
       "non-loopback-not-acknowledged",
       // Same reason as `disabled` above: a configuration exists on this branch
       // by construction, so the instruction has to be the non-destructive one.
-      "the configured bind address is reachable beyond loopback. Run `keryx serve config set --bind <addr> --acknowledge-non-loopback` to acknowledge it explicitly; there is no TLS in this release.",
+      //
+      // The CONFIGURED address, not a `<addr>` placeholder. The placeholder made
+      // this the one instruction the class guard could not execute verbatim —
+      // `serve.recovery.test.ts` had to substitute an address before running it,
+      // so the suite proved a command it wrote itself rather than the one the
+      // operator is handed. The address is in hand here; printing it costs
+      // nothing and makes the instruction copy-pasteable.
+      `the configured bind address is reachable beyond loopback. Run \`keryx serve config set --bind ${config.bind.address} --acknowledge-non-loopback\` to acknowledge it explicitly; there is no TLS in this release.`,
     );
   }
 

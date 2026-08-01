@@ -19,7 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir } from "../lib/config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, readTranscriptFile } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
@@ -185,9 +185,16 @@ function atomicWriteJson(file: string, value: unknown): void {
 }
 
 function readSummaryFile(file: string): SessionSummary | undefined {
+  // `readConfigFile`, not `readFileSync`: a summary is config-sized, and an
+  // oversized one aborts the process outright (SIGABRT, no output, uncatchable
+  // — the `try/catch` below does not run). A non-regular file in its place
+  // hangs the read forever. See MAX_CONFIG_FILE_BYTES.
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    return undefined;
+  }
   try {
-    const raw = readFileSync(file, "utf8");
-    const o = JSON.parse(raw) as Partial<SessionSummary> & { messageCount?: number };
+    const o = JSON.parse(read.text) as Partial<SessionSummary> & { messageCount?: number };
     if (typeof o.id !== "string" || typeof o.projectPath !== "string") {
       return undefined;
     }
@@ -243,12 +250,41 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
   atomicWriteText(file, lines.length > 0 ? `${lines.join("\n")}\n` : "");
 }
 
+/**
+ * A transcript that exists but could not be read, so history is UNKNOWN rather
+ * than empty.
+ *
+ * `readJsonl` returns `[]` for a session that has no transcript yet, which is a
+ * true statement about a new session. Returning the same `[]` for a transcript
+ * that is too large, or is a FIFO, or cannot be read, would say "this
+ * conversation had no messages" about an audit log the process could not open —
+ * and the caller would resume a session that silently appears to have no
+ * history. So it throws instead, and the operator is told which file and why.
+ */
+export class TranscriptUnreadableError extends Error {
+  constructor(
+    readonly file: string,
+    readonly reason: string,
+  ) {
+    super(`session transcript ${file} could not be read (${reason})`);
+    this.name = "TranscriptUnreadableError";
+  }
+}
+
 function readJsonl(file: string): NormalizedMessage[] {
   if (!existsSync(file)) {
     return [];
   }
+  // `readTranscriptFile`, not `readFileSync`: an oversized file aborts the
+  // process (SIGABRT, uncatchable) and a non-regular one blocks forever. The
+  // bound is the transcript bound, not the config bound — a real conversation
+  // legitimately exceeds the latter.
+  const read = readTranscriptFile(file);
+  if (!read.ok) {
+    throw new TranscriptUnreadableError(file, read.reason);
+  }
   const out: NormalizedMessage[] = [];
-  for (const line of readFileSync(file, "utf8").split("\n")) {
+  for (const line of read.text.split("\n")) {
     if (line.trim().length === 0) {
       continue;
     }

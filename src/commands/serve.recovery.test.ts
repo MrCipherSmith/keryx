@@ -470,15 +470,22 @@ describe("the rotate-failure recovery instruction", () => {
      * in `runServe` — to a command that exits 1 with nothing going red. Every
      * site is backticked now, and the extractor no longer depends on that.
      *
-     * A span still carrying a `<placeholder>` after `<addr>` substitution is a
-     * usage form (`config set <setting>`), not a command. Those are counted, and
-     * the count is asserted, so a real instruction cannot be dropped silently.
+     * NOTHING is substituted. An earlier version rewrote `<addr>` into a real
+     * address before executing, so for the one instruction that carried a
+     * placeholder this suite proved a command it had written itself rather than
+     * the one the operator is handed. Both sites now print the configured
+     * address, and `no executed instruction still carries a placeholder` below
+     * fails if a placeholder ever comes back into an executable instruction.
+     *
+     * A span still carrying a `<placeholder>` is a usage form
+     * (`config set <setting>`), not a command. Those are counted, and the count
+     * is asserted, so a real instruction cannot be dropped silently.
      */
     function instructions(transcript: string): { runnable: string[][]; skipped: string[] } {
       const runnable: string[][] = [];
       const skipped: string[] = [];
       for (const match of transcript.matchAll(/`?(keryx serve config [a-z][^`\n.;]*)`?/g)) {
-        const command = match[1]!.trim().replace(/<addr>/g, "10.0.0.5");
+        const command = match[1]!.trim();
         if (command.includes("<")) {
           skipped.push(command);
           continue;
@@ -567,6 +574,26 @@ describe("the rotate-failure recovery instruction", () => {
     // to read, and an undercount is exactly how three of these were missed.
     expect({ count: failures.length, failures }).toEqual({ count: 0, failures: [] });
   }, 60_000);
+
+  test("the non-loopback instruction names the CONFIGURED address, not a `<addr>` placeholder", async () => {
+    // F-005 of round 4. Both sites printed `--bind <addr>`, and the guard above
+    // substituted a real address before executing — so the one instruction in
+    // the whole surface that was not copy-pasteable was also the one the guard
+    // could not actually prove. Pinned directly here as well as through the
+    // `skippedUsageForms` assertion, because that one fails with a diff about
+    // an array and this one fails saying what is wrong.
+    rmSync(serveConfigPath(configDir), { force: true });
+    rmSync(serveCredentialPath(configDir), { force: true });
+    await run(["config", "init", "--bind", "10.0.0.5", "--port", "8443", "--profile", "hardened"]);
+    await run(["token", "issue"]);
+
+    // Both sites: `runServe`'s refusal and `serve status`'s note.
+    for (const invoke of [[], ["status"]]) {
+      const shown = await run(invoke);
+      expect({ invoke, out: shown.out.includes("<addr>") }).toEqual({ invoke, out: false });
+      expect(shown.out).toContain("--bind 10.0.0.5");
+    }
+  }, 30_000);
 
   test("no instruction printed while a configuration EXISTS names `config init`", async () => {
     // The class, not the call site. The first fix corrected the one message the
@@ -662,9 +689,15 @@ describe("the rotate-failure recovery instruction", () => {
       .split("\n")
       .find((line) => line.includes("reachable beyond loopback") && line.includes("Run "));
     expect(refusalLine).toBeDefined();
-    expect(refusalLine!).toContain("keryx serve config set --bind <addr> --acknowledge-non-loopback");
+    expect(refusalLine!).toContain("keryx serve config set --bind 10.0.0.5 --acknowledge-non-loopback");
 
-    const followed = await run(["config", "set", "--bind", "10.0.0.5", "--acknowledge-non-loopback"]);
+    // Followed VERBATIM, extracted from the line rather than retyped. The
+    // retyped version could not tell the difference between an instruction that
+    // works and one the test happened to write correctly — which is exactly
+    // what the `<addr>` placeholder was hiding.
+    const printed = /`keryx serve ([^`]+)`/.exec(refusalLine!);
+    expect(printed).not.toBeNull();
+    const followed = await run(printed![1]!.trim().split(/\s+/));
     expect(followed.exit).toBe(0);
     expect(deployment()).toEqual(CUSTOM_DEPLOYMENT);
   });
