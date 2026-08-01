@@ -35,7 +35,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile } from "./config-dir";
 import { withFileLock } from "./file-lock";
 
 /** What is persisted. Note the absence of anything usable as a token. */
@@ -174,7 +174,17 @@ export function readServeCredential(dir?: string): ServeCredentialResult {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return {
+        status: "unreadable",
+        message:
+          read.reason === "too-large"
+            ? "the serve credential store is far too large to be a credential store"
+            : "the serve credential store could not be read",
+      };
+    }
+    parsed = JSON.parse(read.text) as unknown;
   } catch {
     return { status: "unreadable", message: "the serve credential store is unreadable or malformed" };
   }

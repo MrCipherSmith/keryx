@@ -5,9 +5,9 @@
 // Resolution order for consumers: process env > this file > built-in defaults.
 // All functions are best-effort and never throw; `dir` override is for tests.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
 
 /** Allowed values for the `shell` field (mirrors KERYX_SANDBOX_SHELL surface). */
@@ -75,7 +75,11 @@ export function loadSandboxDefaults(dir?: string): SandboxDefaults {
     if (!existsSync(file)) {
       return {};
     }
-    const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return sanitizeSandboxDefaults({});
+    }
+    const raw: unknown = JSON.parse(read.text);
     return sanitizeSandboxDefaults(raw);
   } catch {
     return {};

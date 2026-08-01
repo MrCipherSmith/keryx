@@ -11,9 +11,9 @@
 // keryx stores shell allow patterns in `~/.local/share/keryx/permissions.json`
 // (same XDG base as auth.json). Default is ask (prompt). Never throws.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
 import { isDestructiveCommand, touchesAgentCredentials } from "./command-risk";
 import { createHash } from "node:crypto";
@@ -209,7 +209,15 @@ export function loadShellPermissionsWithAudit(dir?: string): ShellPermissionsAud
     if (!existsSync(file)) {
       return { permissions: emptyShellPermissions(), rejected: [] };
     }
-    const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+    // `readConfigFile`, not `readFileSync`: an oversized file aborts the process
+    // with SIGABRT, which the `catch` below cannot see, and this module's header
+    // promises it never throws. A file that cannot be read grants nothing, which
+    // is the fail-closed answer for an allowlist.
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return { permissions: emptyShellPermissions(), rejected: [] };
+    }
+    const raw: unknown = JSON.parse(read.text);
     if (raw === null || typeof raw !== "object") {
       return { permissions: emptyShellPermissions(), rejected: [] };
     }
@@ -377,7 +385,11 @@ export function shellPermissionsFingerprint(dir?: string): string {
     if (!existsSync(file)) {
       return "";
     }
-    return createHash("sha256").update(readFileSync(file)).digest("hex");
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return "";
+    }
+    return createHash("sha256").update(read.text, "utf8").digest("hex");
   } catch {
     return "";
   }

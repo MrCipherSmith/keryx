@@ -20,9 +20,9 @@
 // Every function is best-effort and never throws: a damaged serve.json must
 // leave the operator with "nothing is configured", not a stack trace.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 
 export const SERVE_CONFIG_SCHEMA_VERSION = "1.0.0";
 
@@ -430,27 +430,6 @@ export function defaultServeConfig(
 // ---------------------------------------------------------------------------
 
 /**
- * The largest `serve.json` this module will read.
- *
- * A review pointed `serve.json` at a 2 GiB sparse file and every `keryx serve …`
- * path died with SIGABRT and NOTHING on stdout or stderr — no message, no
- * diagnosis, against a module header that says every function "never throws".
- * A configuration is a few hundred bytes; anything past this is not one, and
- * refusing to read it is both faster and honest.
- */
-const MAX_SERVE_CONFIG_BYTES = 1_000_000;
-
-/** True when the file is too large to be a configuration. */
-function tooLargeToRead(file: string): boolean {
-  try {
-    return statSync(file).size > MAX_SERVE_CONFIG_BYTES;
-  } catch {
-    // Unstatable is handled by the read that follows.
-    return false;
-  }
-}
-
-/**
  * Read the configuration, or null when nothing valid is configured.
  *
  * The projection runs on READ as well as on write. The writer cannot create an
@@ -462,17 +441,16 @@ export function loadServeConfig(dir?: string, onWarn?: (message: string) => void
   if (!existsSync(file)) {
     return null;
   }
-  if (tooLargeToRead(file)) {
-    onWarn?.("serve.json is far too large to be a configuration; treating the server as not configured");
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    onWarn?.(
+      read.reason === "too-large"
+        ? "serve.json is far too large to be a configuration; treating the server as not configured"
+        : "serve.json exists but could not be read; treating the server as not configured",
+    );
     return null;
   }
-  let text: string;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    onWarn?.("serve.json exists but could not be read; treating the server as not configured");
-    return null;
-  }
+  const text = read.text;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
@@ -531,7 +509,11 @@ export function serveConfigAdvice(state: ServeConfigState): string {
     case "malformed":
       return "the serve configuration does not match the schema. Run `keryx serve config init` to replace it with defaults.";
     case "unreadable":
-      return "the serve configuration exists but could not be read. Fix its permissions, or run `keryx serve config init --force` to replace it with defaults.";
+      // "Fix its permissions" leads, because that is the usual cause — but not
+      // the only one: an oversized file routes here too, and the warning
+      // printed immediately above says which it was. Naming both keeps the
+      // instruction correct for either.
+      return "the serve configuration exists but could not be read — check its permissions and size, or run `keryx serve config init --force` to replace it with defaults.";
     case "valid":
       // Reached only when the configuration parses and is disabled — every
       // other `valid` path has a real configuration to act on.
@@ -544,19 +526,15 @@ export function serveConfigState(dir?: string): ServeConfigState {
   if (!existsSync(file)) {
     return "absent";
   }
-  if (tooLargeToRead(file)) {
-    // `unreadable`, not `malformed`: it may well be a valid configuration with
-    // something appended, and the safe assumption about a file this module
-    // declines to open is that it matters. `config init --force` still replaces
-    // it, which is the documented way out.
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    // `too-large` maps to `unreadable`, not `malformed`: it may well be a valid
+    // configuration with something appended, and the safe assumption about a
+    // file this module declines to open is that it matters. `config init
+    // --force` still replaces it, which is the documented way out.
     return "unreadable";
   }
-  let text: string;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    return "unreadable";
-  }
+  const text = read.text;
   try {
     return projectServeConfig(JSON.parse(text) as unknown) === null ? "malformed" : "valid";
   } catch {

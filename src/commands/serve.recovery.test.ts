@@ -265,6 +265,29 @@ describe("config set patches without replacing", () => {
     expect(deployment()).toEqual({ ...CUSTOM_DEPLOYMENT, port: 9443 });
   });
 
+  test("--no-acknowledge-non-loopback withdraws it, and is not reported as an accident", async () => {
+    // The flag appeared in exactly one file and in no test. An explicit
+    // withdrawal being reported as "did not carry over … re-run with
+    // --acknowledge-non-loopback" tells the operator to undo what they just
+    // asked for.
+    await run(["config", "init", ...CUSTOM]);
+
+    const withdrawn = await run(["config", "set", "--bind", "203.0.113.9", "--no-acknowledge-non-loopback"]);
+
+    expect(withdrawn.exit).toBe(0);
+    expect(deployment()).toEqual({ address: "203.0.113.9", port: 8443, ack: false, profile: "hardened" });
+    expect(withdrawn.out).not.toContain("did not carry over");
+  });
+
+  test("--no-acknowledge-non-loopback withdraws it without a rebind too", async () => {
+    await run(["config", "init", ...CUSTOM]);
+
+    const withdrawn = await run(["config", "set", "--no-acknowledge-non-loopback"]);
+
+    expect(withdrawn.exit).toBe(0);
+    expect(deployment()).toEqual({ ...CUSTOM_DEPLOYMENT, ack: false });
+  });
+
   test("an explicit acknowledgement moves with the address", async () => {
     await run(["config", "init", ...CUSTOM]);
 
@@ -469,7 +492,6 @@ describe("the rotate-failure recovery instruction", () => {
     const failures: string[] = [];
     const statesThatPrintedAnInstruction = new Set<string>();
     const skippedUsageForms: string[] = [];
-    let executed = 0;
     for (const state of states) {
       // `config show` is here because a mutation proved it unguarded: reverting
       // its instruction to a bare `config init` — which refuses on an
@@ -504,7 +526,6 @@ describe("the rotate-failure recovery instruction", () => {
         for (const instruction of runnable) {
           statesThatPrintedAnInstruction.add(state.label);
           const followed = await run(instruction);
-          executed += 1;
           if (followed.exit !== 0) {
             failures.push(
               `[${state.label}] \`keryx serve ${invoke.join(" ")}\` printed \`keryx serve ${instruction.join(" ")}\`, which exited ${followed.exit}: ${followed.out.trim()}`,

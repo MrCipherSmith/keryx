@@ -7,9 +7,9 @@
 // owner-only, never logged, and only read to populate the process env at startup.
 // All functions are best-effort and never throw; the `dir` override keeps them
 // unit-testable against a temp directory.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 
 export interface ShellConfig {
   provider?: string;
@@ -36,7 +36,13 @@ export function loadShellConfig(dir?: string): ShellConfig {
     if (!existsSync(file)) {
       return {};
     }
-    const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+    // `readConfigFile`, not `readFileSync`: an oversized file aborts the
+    // process outright (SIGABRT, no output, uncatchable). See MAX_CONFIG_FILE_BYTES.
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return {};
+    }
+    const raw: unknown = JSON.parse(read.text);
     return raw !== null && typeof raw === "object" ? (raw as ShellConfig) : {};
   } catch {
     return {};

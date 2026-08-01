@@ -26,7 +26,7 @@
 // appears, which is the part a behavioural test cannot do.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
@@ -201,6 +201,30 @@ describe("every writer tightens a FILE that already exists too wide", () => {
 
     saveSandboxDefaults({ maskMode: "auto" }, configDir);
 
+    expect(mode(file)).toBe("600");
+  });
+
+  test("the quarantine copy of a damaged registry is owner-only", () => {
+    // `copyFileSync` carries the SOURCE file's mode, so repairing a registry
+    // that was group-readable left a group-readable copy sitting beside the
+    // freshly-tightened original — measured by a review as 0664 next to 0600.
+    // Unreachable today because the directory is 0700, which is exactly the
+    // reasoning that justified leaving the directory hole open for two rounds.
+    if (process.platform === "win32") {
+      return;
+    }
+    const file = widenFile("projects.json");
+    writeFileSync(file, "{not json", "utf8");
+    chmodSync(file, 0o664);
+    const project = path.join(base, "quarantine-project");
+    mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+
+    expect(registerProject(project, { dir: configDir }).ok).toBe(true);
+
+    const copies = readdirSync(configDir).filter((name) => name.startsWith("projects.json.corrupt-"));
+    // Not vacuous: the quarantine must actually have happened.
+    expect(copies.length).toBe(1);
+    expect(mode(path.join(configDir, copies[0]!))).toBe("600");
     expect(mode(file)).toBe("600");
   });
 

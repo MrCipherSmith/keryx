@@ -23,6 +23,7 @@
 // two.
 
 import {
+  chmodSync,
   closeSync,
   copyFileSync,
   existsSync,
@@ -38,7 +39,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { ensureKeryxConfigDir, keryxConfigDir } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile } from "./config-dir";
 import { withFileLock } from "./file-lock";
 
 /** One registered project. Addressing only — see the module comment. */
@@ -302,7 +303,22 @@ export function loadProjectRegistry(dir?: string, onWarn?: (message: string) => 
     return { ...EMPTY, projects: [] };
   }
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    // `readConfigFile`, not `readFileSync`: an oversized file aborts the process
+    // with SIGABRT and no output, which no `catch` below can see. The module
+    // header promises this function never throws; that was only true of the
+    // failures Bun raises as exceptions.
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      if (read.reason !== "absent") {
+        onWarn?.(
+          read.reason === "too-large"
+            ? "project registry: the file is far too large to be a registry; treating it as empty"
+            : "project registry: the file could not be read; treating it as empty",
+        );
+      }
+      return { ...EMPTY, projects: [] };
+    }
+    const parsed = JSON.parse(read.text) as unknown;
     if (
       typeof parsed !== "object" ||
       parsed === null ||
@@ -322,6 +338,19 @@ export function loadProjectRegistry(dir?: string, onWarn?: (message: string) => 
   } catch {
     onWarn?.(`project registry at ${file} is unreadable; continuing with an empty registry`);
     return { ...EMPTY, projects: [] };
+  }
+}
+
+/** Force a quarantined copy owner-only. Best-effort: it is already written. */
+function tightenBackup(file: string): void {
+  if (process.platform === "win32") {
+    return;
+  }
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    // The copy exists either way; the warning above already tells the operator
+    // where it is.
   }
 }
 
@@ -345,6 +374,13 @@ function quarantineDamagedRegistry(dir: string | undefined, onWarn?: (message: s
     // A copy is safe in both directions: the write either replaces the original
     // or leaves it exactly as it was.
     copyFileSync(file, backup);
+    // `copyFileSync` carries the SOURCE file's mode. A registry that was
+    // group-readable before the repair leaves a group-readable copy behind, and
+    // nothing else ever touches it — a review measured 0664 sitting beside a
+    // freshly-tightened 0600 registry. The directory is 0700 so it is not
+    // reachable today; it is tightened anyway, because "unreachable because of
+    // a control one level up" is how the directory hole was justified too.
+    tightenBackup(backup);
     onWarn?.(`project registry was damaged; a copy of the previous file was kept at ${backup}`);
   } catch {
     onWarn?.("project registry was damaged and could not be preserved before rewriting");

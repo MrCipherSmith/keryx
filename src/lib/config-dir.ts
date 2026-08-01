@@ -28,7 +28,7 @@
 // of any existing install that sets it, which is a migration, not a cleanup.
 // It is recorded here so the next person finds it rather than discovering it.
 
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -55,6 +55,58 @@ export function keryxConfigDir(dir?: string): string {
   const xdg = process.env.XDG_DATA_HOME;
   const base = xdg !== undefined && xdg.length > 0 ? xdg : path.join(home, ".local", "share");
   return path.join(base, "keryx");
+}
+
+/**
+ * The largest a user-global config file may be before it is refused unread.
+ *
+ * Every file in this directory is a few hundred bytes of JSON. A review pointed
+ * one of them at a 3 GiB sparse file and `keryx serve status` died with SIGABRT
+ * and NOTHING on stdout or stderr — Bun aborts rather than throwing, so a
+ * `try/catch` around `readFileSync` does not help and four module headers
+ * promising "never throws" were wrong.
+ *
+ * The first fix bounded `serve.json` alone. The other five readers of this
+ * directory — `auth.json`, `projects.json`, `permissions.json`, `sandbox.json`
+ * and the credential store — still aborted, on the same two commands. That is
+ * the third time on this branch that a fix covered the site a finding named
+ * rather than the class, so the bound lives here and every reader uses it.
+ */
+export const MAX_CONFIG_FILE_BYTES = 1_000_000;
+
+/** Why a config file could not be read. `null` means it was read fine. */
+export type ConfigReadFailure = "absent" | "too-large" | "unreadable";
+
+export type ConfigReadResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: ConfigReadFailure };
+
+/**
+ * Read a user-global config file, refusing one too large to be a config.
+ *
+ * The size is checked with `statSync` BEFORE the read, because the abort
+ * happens inside `readFileSync` and cannot be caught after the fact. Every
+ * reader of this directory must go through here;
+ * `config-dir.readers.test.ts` runs each one against an oversized file in a
+ * real subprocess and fails on a non-zero exit.
+ */
+export function readConfigFile(file: string): ConfigReadResult {
+  let size: number;
+  try {
+    size = statSync(file).size;
+  } catch {
+    // Absent, a dangling symlink, or a path we cannot stat. The caller's
+    // existing "nothing configured" branch is the right answer for all three.
+    return { ok: false, reason: "absent" };
+  }
+  if (size > MAX_CONFIG_FILE_BYTES) {
+    return { ok: false, reason: "too-large" };
+  }
+  try {
+    return { ok: true, text: readFileSync(file, "utf8") };
+  } catch {
+    return { ok: false, reason: "unreadable" };
+  }
 }
 
 /**
