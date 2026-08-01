@@ -228,6 +228,16 @@ export interface RunTurnInput {
    * containment is detected — that belongs with the sandbox.
    */
   containmentAvailable?: () => boolean;
+  /**
+   * The tools a remote turn may call. EMPTY by default, and that is the whole
+   * posture of this slice: a remote turn that registers no tools cannot execute
+   * one, so the `denyingExecutor` below is a floor rather than a control.
+   *
+   * Injected so the `ask` path has a reachable input under test — without a
+   * registered tool the run produces no policy decision at all, and AC5 would
+   * be a claim about a branch nothing can enter.
+   */
+  toolRegistry?: ToolRegistry;
 }
 
 export interface RunTurnOutput {
@@ -334,7 +344,12 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     // record stopped growing, which is a different thing from the turn ending.
   };
 
-  const terminate = (outcome: TurnResult["outcome"], reasonCode: string, text?: string): RunTurnOutput => {
+  const terminate = (
+    outcome: TurnResult["outcome"],
+    reasonCode: string,
+    text?: string,
+    approvals?: TurnResult["approvals"],
+  ): RunTurnOutput => {
     const result: TurnResult = {
       schemaVersion: "1.0.0",
       turnId,
@@ -345,6 +360,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
       startedAt,
       finishedAt: clock(),
       ...(text !== undefined ? { text } : {}),
+      ...(approvals !== undefined ? { approvals } : {}),
     };
     emit("turn.finished", { terminal: true });
     finishTurn(turnId, result, input.dir);
@@ -392,7 +408,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   let idCounter = 0;
   const deps: RunDeps = {
     provider: input.provider,
-    toolRegistry: new ToolRegistry(),
+    toolRegistry: input.toolRegistry ?? new ToolRegistry(),
     toolExecutor: denyingExecutor,
     // The profile resolved and CHECKED at startup, passed through unchanged.
     // Re-resolving here would allow the profile a turn runs under to differ
@@ -425,13 +441,32 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     return terminate("failed", "run-failed");
   }
 
-  // Any `ask` reaching here terminates in a recorded denial (D3). Approvals are
-  // R4d; this is the stated boundary, not the absence of one.
+  // An action that needed approval terminates in a recorded denial (D3).
   //
-  // Read from the run's POLICY DECISIONS, not from its provider events: the
-  // decision trail is where classification is recorded, and a provider event
-  // stream has no opinion about policy at all.
-  const asked = decisions.some((decision) => decision.decision === "ask");
+  // Detected through `headless-fail-closed`, and the reason is a finding rather
+  // than a preference. The FIRST version of this checked `decision === "ask"`
+  // and could never fire: `src/harness/policy/engine.ts` step 6 already turns an
+  // `ask` into a `deny` whenever the context is non-interactive, and a remote
+  // turn is non-interactive by construction (nobody is present to answer). So
+  // the transport never sees an `ask` at all.
+  //
+  // That makes the D3 boundary REAL but enforced one layer deeper than this
+  // module: the policy engine fails it closed, and the transport's job is to
+  // REPORT that rather than to create it. Reporting matters — without it the
+  // turn ends `completed` with nothing having happened, and the operator is
+  // never told that their request needed an approval this release cannot ask
+  // for.
+  //
+  // Both conditions are kept. `headless-fail-closed` is the reachable one
+  // today; `decision === "ask"` becomes reachable the moment an interactive
+  // remote context exists, which is exactly when it must already be handled.
+  //
+  // Read from the run's POLICY DECISIONS, not its provider events: the decision
+  // trail is where classification is recorded, and a provider event stream has
+  // no opinion about policy at all.
+  const asked = decisions.some(
+    (decision) => decision.decision === "ask" || decision.matchedRules.includes("headless-fail-closed"),
+  );
 
   // Accumulated while streaming, and used for the terminal result when the run
   // produced no `summary`. The completion gate does not always write one — with
@@ -448,8 +483,17 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   }
 
   if (asked) {
-    emit("approval.resolved", { resolution: "denied" });
-    return terminate("denied", "approval-required-but-approvals-are-not-implemented-in-this-release");
+    // Visible in BOTH surfaces, which is what AC5 asks: the stream carries the
+    // pending-then-denied pair so a client watching live sees why the turn
+    // ended, and the result carries the same resolution so a client that only
+    // polls sees it too. A denial visible in one and not the other is a turn
+    // whose two accounts of itself disagree.
+    const approvalId = newId();
+    emit("approval.pending", { approvalId });
+    emit("approval.resolved", { approvalId, resolution: "denied" });
+    return terminate("denied", "approvals-not-implemented-in-this-release", undefined, [
+      { approvalId, resolution: "denied" },
+    ]);
   }
 
   // `summary` is redacted here; `assistantText` already is, delta by delta.
@@ -472,6 +516,7 @@ export interface SubmitDeps {
   containmentAvailable?: () => boolean;
   clock?: () => string;
   newId?: () => string;
+  toolRegistry?: ToolRegistry;
 }
 
 /**
@@ -518,6 +563,7 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
       dir: deps.dir,
       scanRoot: deps.dir,
       newId: () => turnId,
+      ...(deps.toolRegistry !== undefined ? { toolRegistry: deps.toolRegistry } : {}),
       ...(deps.clock !== undefined ? { clock: deps.clock } : {}),
       ...(deps.containmentAvailable !== undefined ? { containmentAvailable: deps.containmentAvailable } : {}),
     });

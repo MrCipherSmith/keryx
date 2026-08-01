@@ -60,6 +60,36 @@ policy, chosen by the operator rather than by the caller.
    redaction here is exactly as good as those detectors and a wider claim would
    be a claim about a different module.
 
+## D7 — the `ask` boundary is enforced by the policy engine, not by the transport
+
+Closing AC5 turned up the reason it could not have been confirmed by inspection.
+`src/harness/policy/engine.ts` step 6 fails an `ask` closed whenever the context
+is non-interactive, and a remote turn is non-interactive by construction —
+nobody is present to answer. So the transport **never sees an `ask` at all**. It
+sees a `deny` carrying `matchedRules: ["headless-fail-closed",
+"profile:<id>:<risk>=ask"]`.
+
+My first implementation checked `decision.decision === "ask"` and could never
+fire. D3 is still right that the boundary must be stated rather than emergent —
+but the statement belongs on the REPORTING, not on the denial. The engine denies;
+the transport's job is to say so. Without that, the turn ends `completed` having
+done nothing, and the operator is never told their request needed an approval
+this release cannot ask for.
+
+Both conditions are kept in the source. `headless-fail-closed` is the reachable
+one today; `decision === "ask"` becomes reachable the moment an interactive
+remote context exists, which is exactly when it must already be handled.
+
+Two further things the fixture found:
+
+- `unattended-untrusted` classifies `write` as `deny`, not `ask`, once the
+  headless rule applies. The suite's premise test asserts the classification
+  directly for that reason: every assertion under it is meaningless if the call
+  is classified some other way.
+- `newId: () => "fixed-id-N"` made `readTurnRecord` return null — `isTurnId`
+  refused it. The turn-id containment check catching a test fixture is the
+  check working.
+
 ## An ordering mistake I made and reverted
 
 The profile checks first went in BEFORE the non-loopback check, and the recovery
