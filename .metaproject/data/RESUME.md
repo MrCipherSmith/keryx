@@ -42,12 +42,21 @@ not discharge that; it moved it onto `main`.
    `.metaproject/skills/gdskills/review/`, instructed to assume the fixes are
    wrong until executed, and to reproduce the mutation counts claimed in the
    commit messages. Anything found lands as a follow-up PR, not a revert.
-2. Start R4c. Note that `docs/requirements/keryx-remote-entry/` has **no**
-   `launch-prompts/` directory — R4a and R4b were launched from prompts that
-   were never written to the repo, unlike `keryx-sandbox-credential-auto-mask`
-   and `keryx-sandbox-harness-hardening`, which both keep one file per slice.
-   Write `launch-prompts/R4c-flow-orchestrator.md` before launching, so the
-   next slice is reproducible from the repo alone.
+2. Start R4c from
+   `docs/requirements/keryx-remote-entry/launch-prompts/R4c-flow-orchestrator.md`.
+   That directory was created on 2026-08-01: R4a and R4b were launched from
+   prompts that were never written to the repo, unlike
+   `keryx-sandbox-credential-auto-mask` and `keryx-sandbox-harness-hardening`,
+   which both keep one file per slice. R4d–R4f still have no prompt; write each
+   before launching it.
+
+   The R4c prompt takes four decisions worth knowing before reading it: the
+   inline profiles in `src/commands/harness.ts` become one resolver (there is
+   nothing for AC-04 to compare against today); the non-weakening comparison is
+   structural with unknown fields failing closed, never a profile-name match;
+   `ask` terminates in a recorded denial because approvals are R4d; and
+   auth-failure throttling lands there, because `POST /v1/turns` is the first
+   route that changes state and R4b deferred throttling on exactly that ground.
 
 ## Standing constraints that are easy to lose
 

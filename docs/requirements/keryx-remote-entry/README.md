@@ -97,6 +97,7 @@ treatment of every remote prompt, and no self-granting of approvals. See
 | [Security policy](security-policy.md) | Trust model, authentication, remote policy profile, approvals, redaction. |
 | [Brainstorm](brainstorm.md) | Alternatives considered, the helyx and Eggent evidence, why this shape. |
 | [Metrics and validation](metrics-and-validation.md) | Success metrics, offline fake-transport tests, release evidence. |
+| [Launch prompts](launch-prompts/README.md) | One flow-orchestrator prompt per slice. R4a and R4b predate the directory and have none. |
 | [Remote entry configuration schema](schemas/remote-entry-config.schema.json) | Safe configuration without a raw token. |
 | [Turn request schema](schemas/turn-request.schema.json) | Inbound turn submission contract. |
 | [Turn result schema](schemas/turn-result.schema.json) | Redacted terminal turn outcome. |
