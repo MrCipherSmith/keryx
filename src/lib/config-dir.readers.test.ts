@@ -541,6 +541,12 @@ const READ_EXEMPTIONS: ReadonlyArray<Exemption> = [
       "readdirSync enumerates session directories and reads no file contents, so no bound applies to it; the file reads in this module are NOT excused and go through the bounded helpers",
     calls: ["readdirSync("],
   },
+  {
+    file: "lib/serve-turn-store.ts",
+    reason:
+      "listTurnIds' readdirSync enumerates turn directories and reads no file contents, so no bound applies to it; every file read in this module is NOT excused and goes through the bounded helpers",
+    calls: ["readdirSync("],
+  },
 ];
 
 /** The seam the mutation test drives. Kept named for the reason in the writers guard. */
