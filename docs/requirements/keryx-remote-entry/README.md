@@ -1,5 +1,5 @@
 # Keryx Remote Entry
-Version: 1.1.0
+Version: 1.2.0
 
 ## Purpose
 
@@ -15,10 +15,34 @@ Remote Entry is transport-neutral. Telegram is its first client, specified in
 
 ## Status
 
-**Specification ready (future).** No runtime, CLI command, HTTP server, or
-network listener is introduced by this package. The Project Agent Harness it
+**Partially implemented — being built in slices.** The Project Agent Harness it
 builds on *is* implemented (`src/harness/`, ~175 files); Remote Entry is a new
 adapter beside the existing TUI adapter, not a rewrite of either.
+
+| Slice | What it is | State |
+|---|---|---|
+| R4a | user-global project registry (`keryx projects`; `keryx init` registers) | **merged** — flow 127, PR #215 |
+| R4b | `keryx serve` skeleton: loopback listener, bearer auth, token lifecycle, `GET /v1/status` + `GET /v1/projects` | **merged** — flow 128, PR #216 |
+| R4c | turn submission (`task.submit`) + streaming, and with it the non-weakening remote-profile check (AC-04) | not started |
+| R4d | asynchronous fail-closed approvals | not started |
+| R4e | maintenance operations projected from `src/standard/command-registry.ts` | not started |
+| R4f | one-time expiring loopback credential handoff | not started |
+
+R4b ships a listener and **nothing behind it**: it cannot run a turn, evaluate a
+policy decision, create an approval or accept a secret. That is what made
+opening a socket acceptable as the first executable slice — the refusal paths
+landed proven before anything could execute. `refused` is terminal and binds no
+socket; it is never a degraded listen.
+
+Three items named elsewhere in this package are deliberately deferred out of
+R4b and are owed by a later slice: the non-weakening remote policy profile
+check (AC-04, deferred because there is no single `resolveLocalProfile` to
+compare against — profiles are built inline per command), the unauthenticated
+`GET /health` liveness route together with cross-process liveness (no PID file
+exists, so `keryx serve status` reports configuration state only and
+`listening` / `draining` are knowable only over `GET /v1/status`), and
+throttling of repeated authentication failures, which is owed from the first
+route that mutates state.
 
 ## Scope
 
