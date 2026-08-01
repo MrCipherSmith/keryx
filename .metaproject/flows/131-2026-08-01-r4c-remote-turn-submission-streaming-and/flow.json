@@ -5,13 +5,44 @@
   "title": "R4c: remote turn submission, streaming, and the non-weakening remote policy profile",
   "status": "in-progress",
   "createdAt": "2026-08-01T20:05:04.222Z",
-  "updatedAt": "2026-08-01T20:38:44.170Z",
+  "updatedAt": "2026-08-01T20:39:32.140Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a84def5c58f652bdf6f4b352307c03e750e52239180fb07297629354d7d1214e",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-01T20:39:31.380Z"
+    },
+    "AC3": {
+      "at": "2026-08-01T20:39:31.465Z"
+    },
+    "AC4": {
+      "at": "2026-08-01T20:39:31.547Z"
+    },
+    "AC6": {
+      "at": "2026-08-01T20:39:31.634Z"
+    },
+    "AC7": {
+      "at": "2026-08-01T20:39:31.720Z"
+    },
+    "AC8": {
+      "at": "2026-08-01T20:39:31.803Z"
+    },
+    "AC9": {
+      "at": "2026-08-01T20:39:31.888Z"
+    },
+    "AC10": {
+      "at": "2026-08-01T20:39:31.969Z"
+    },
+    "AC11": {
+      "at": "2026-08-01T20:39:32.054Z"
+    },
+    "AC12": {
+      "at": "2026-08-01T20:39:32.140Z"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -104,6 +135,56 @@
       "at": "2026-08-01T20:38:44.170Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T20:39:31.380Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-08-01T20:39:31.465Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-01T20:39:31.548Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-08-01T20:39:31.634Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-08-01T20:39:31.720Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-08-01T20:39:31.803Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-08-01T20:39:31.888Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-08-01T20:39:31.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-08-01T20:39:32.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-08-01T20:39:32.140Z",
+      "event": "ac-confirmed",
+      "detail": "AC12"
     }
   ]
 }

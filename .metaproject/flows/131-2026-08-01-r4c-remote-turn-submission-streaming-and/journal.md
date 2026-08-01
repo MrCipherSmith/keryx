@@ -76,3 +76,13 @@ change this slice needs. Moved to last, with the reason in the source.
 - 2026-08-01T20:38:43.999Z - task-done: T1: Collect remaining context
 - 2026-08-01T20:38:44.083Z - task-done: T2: Implement per plan
 - 2026-08-01T20:38:44.170Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-01T20:39:31.380Z - ac-confirmed: AC1
+- 2026-08-01T20:39:31.465Z - ac-confirmed: AC3
+- 2026-08-01T20:39:31.548Z - ac-confirmed: AC4
+- 2026-08-01T20:39:31.634Z - ac-confirmed: AC6
+- 2026-08-01T20:39:31.720Z - ac-confirmed: AC7
+- 2026-08-01T20:39:31.803Z - ac-confirmed: AC8
+- 2026-08-01T20:39:31.888Z - ac-confirmed: AC9
+- 2026-08-01T20:39:31.969Z - ac-confirmed: AC10
+- 2026-08-01T20:39:32.054Z - ac-confirmed: AC11
+- 2026-08-01T20:39:32.140Z - ac-confirmed: AC12
