@@ -1,6 +1,6 @@
 # A fix round needs its own review: three consecutive rounds each introduced a blocker
 
-Version: 0.3.0
+Version: 0.4.0
 Type: lesson
 Status: accepted
 Confidence: high
@@ -78,6 +78,66 @@ Neither could pass while a sibling was broken, which is the property a
 per-site test does not have. Round 3's fixes were mutation-checked before being
 claimed and introduced no new defect.
 
+## Round five (PR #220, flow 133): the remedy worked, and three NEW shapes appeared
+
+The flow-129 machinery did its job. Five reviewers ran with `class_scope`
+required, the fix round recorded itself, and the review found **two blockers and
+eight majors in a tree that was green at 2820 pass / 0 fail**. One finding was
+reported independently by all five reviewers. Without that review both blockers
+would have merged.
+
+So the process fix holds. What recurred is the *authoring* side, in three shapes
+this file had not named before. Each is a way of fixing the example instead of
+the class that LOOKS like fixing the class.
+
+**Shape A — the signature carries a failure the caller still ignores.**
+`finishTurn` was changed from `void` to `boolean` with a docstring reading "The
+boolean is the point", precisely because a silent no-op had stranded turns. Its
+one caller discards the value. Behaviour unchanged; the type now asserts a
+property the code does not have, which is **worse than the `void` it replaced**,
+because the next reader believes it. Found by all five reviewers.
+
+The same shape one layer out: the store gained a typed `TurnReadResult` so
+`too-large` could stop masquerading as "no events". Two of the four callers
+branch on it. One collapses every failure into `sessionId: ""` on an HTTP 200 —
+a null record standing in for a stated failure, on the one path that reaches a
+success status.
+
+**Shape B — the test written to close "verified through a fixture" asserts only
+shape.** The previous blocker was "nine of twelve criteria verified through
+`handleServeRequest` with an injected runner, never against a listener the CLI
+can start". The fix added a real-socket suite: real `startServeListener`, port 0,
+real bearer token, real TCP. It passes — on a turn that never runs. The
+production assembly omits `containmentAvailable`, the default profile requires
+containment, so every submission is `refused`. And a refusal is also 202, also
+emits `turn.started` then `turn.finished`, and also has a defined `outcome`. Not
+one test asserted `outcome === "completed"` or that any assistant text reached
+the caller. **The right layer, the wrong assertion.**
+
+**Shape C — a selection policy changed to protect X, without asking who becomes
+the victim.** The throttle evicted peers in cooldown, so a flood cleared your own
+ban. The fix made eviction skip peers in cooldown. But eviction runs from
+`recordFailure` right after the new peer is inserted, so once every other peer is
+in cooldown the newcomer is the only candidate and evicts itself every time —
+it can never accumulate to the limit. Saturate with 1024 bans and **every fresh
+address guesses the token forever**. Measured: 1000 consecutive failures, never
+throttled; the pre-fix rule throttled the same peer after 10. The fix made the
+hole strictly larger, and the three new tests all probed the one peer that is
+never evicted.
+
+Two smaller ones worth the same shelf:
+
+- **A justification can be false while the code is fine.** Two rank tables were
+  defended in a comment as "inverses on the same field". They are not — reverse
+  one and two of three values do not move. A wrong explanation is worse than
+  none: the next reader re-derives the distinction *and* concludes the code
+  disagrees with its doc. The real content was that the field carried two axes.
+- **A guard can enumerate names where it means shapes.** The guard added for
+  "only one ranking table exists" matched four identifiers. The duplicate it
+  commemorates was two `switch` functions under neither name — pasted back
+  verbatim, the guard stayed green. That is `allowlist-not-a-boundary` applied to
+  a guard built to enforce `allowlist-not-a-boundary`.
+
 ## How to apply
 
 - Write the failing test **before** the fix, and confirm it fails for the stated
@@ -106,14 +166,34 @@ claimed and introduced no new defect.
   exempt from one. The empirical prior on "this fix is correct" was low enough
   that the third review was instructed to assume the fixes were wrong until
   executed — and it was right to.
+- **When you widen a signature to carry a failure, the fix is not the signature.
+  It is the caller.** Grep every call site in the same commit and make one of
+  them observe the new value in a test, or you have shipped a type that lies.
+- **When you write a test to prove a capability WORKS, assert the capability,
+  not the envelope.** Ask: what does this assertion say under the failure I am
+  trying to exclude? If a refusal and a success produce the same status, the
+  same event kinds and the same defined field, the test proves the route is
+  reachable and nothing else. Assert the outcome value and the payload.
+- **When you change who survives an eviction, a cache or a queue, name the new
+  victim out loud.** Every selection policy has one. Then test the victim's
+  side: not "is the protected thing still there" but "can the thing this control
+  exists to catch still be caught".
+- **Do not defend a design with a claim you have not evaluated.** If the comment
+  says two things are inverses, compute the inverse. A false justification
+  survives longer than a false line of code, because nothing executes it.
+- **A guard must match the SHAPE of the offence, not a list of the names it has
+  worn.** Before landing one, reconstruct the actual defect from git history and
+  run the guard against it. If it stays green, the guard commemorates the bug
+  rather than preventing it.
 
 ## Provenance
 
-- Source: review rounds on PR #215 (flow 127) and PR #216 (flow 128)
+- Source: review rounds on PR #215 (flow 127), PR #216 (flow 128), PR #220 (flow 133)
 - Link: https://github.com/MrCipherSmith/keryx/pull/215
 - Link: https://github.com/MrCipherSmith/keryx/pull/216
+- Link: https://github.com/MrCipherSmith/keryx/pull/220
 - Created: 2026-07-31
-- Updated: 2026-08-01
+- Updated: 2026-08-02
 
 ## Related Scopes
 
@@ -144,3 +224,12 @@ review, testing, mutation-testing, data-loss, process
   managed-review package to diff against. Flow 129 makes `class_scope` a schema
   requirement for blocker and major findings, makes `prior_findings` and
   `metaproject` required on a fix round, and makes a fix round record itself.
+- 0.4.0 - Round five (PR #220, flow 133). The flow-129 machinery worked: five
+  reviewers found two blockers and eight majors in a tree green at 2820 pass / 0
+  fail, and one finding was reported independently by all five. What recurred was
+  the authoring side, in three shapes now named here - a widened signature whose
+  caller still ignores it, a test at the right layer asserting only the envelope
+  so a refusal passes as a success, and an eviction policy changed to protect one
+  party without asking who becomes the victim. Plus two smaller: a justification
+  that is false while the code is fine, and a guard that enumerates names where it
+  means shapes.
