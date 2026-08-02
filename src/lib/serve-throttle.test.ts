@@ -18,6 +18,7 @@ import {
   AUTH_FAILURE_WINDOW_MS,
   AUTH_THROTTLE_COOLDOWN_MS,
   AuthFailureThrottle,
+  BAN_VALUE,
   MAX_TRACKED_PEERS,
 } from "./serve-throttle";
 
@@ -239,8 +240,10 @@ describe("AuthFailureThrottle", () => {
     // on a saturated table — so it was always the one evicted, its counter
     // restarted, and it never reached the limit.
     //
-    // Measured on that version: 1800 consecutive guesses from one address,
-    // never refused, at a cost of one throw-away address per nine guesses. The
+    // Measured on that version: 450 consecutive guesses from one address, never
+    // refused, at a cost of one throw-away address per nine guesses — 50 rounds
+    // of 9, which is the loop below. It was written down as 1800 for two rounds
+    // running, because the number was copied forward instead of re-derived. The
     // control this exists for is "a peer that keeps failing is eventually
     // refused", and that was false for the only peer that mattered.
     const clock = fakeClock();
@@ -390,5 +393,110 @@ describe("the request path consults the throttle in the right order (AC11)", () 
     }
     // Identical on every path, exactly as the fixed 401 is.
     expect(bodies).toEqual([429, 429, 429]);
+  });
+});
+
+describe("AuthFailureThrottle — the eviction scale, at the boundary and against stale records", () => {
+  // Round three found three ways through the previous version of this scale, and
+  // the suite that shipped with it caught none of them. Every value of
+  // `BAN_VALUE` in [0.1, 0.9) passed all seventeen tests, because the tests only
+  // ever planted peers at one failure and at nine — the two extremes. These pin
+  // the crossover itself, and the staleness the scale reads through.
+
+  test("a table pinned with STALE decoys does not protect the attacker — the blocker", () => {
+    // The blocker. `valueOf` read `failures.length` raw, and the sliding window
+    // is pruned only inside `recordFailure` for the peer being recorded. A
+    // record parked at six failures an hour ago scored 0.6 forever, outranking
+    // every active cooldown, so an attacker filled the table once and their own
+    // ban became the cheapest record in it.
+    //
+    // Measured on that version: 500 guesses, ZERO refusals. The control below is
+    // the same run without the decoys, and the two must now agree.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+
+    for (let i = 0; i < MAX_TRACKED_PEERS - 1; i += 1) {
+      for (let f = 0; f < 6; f += 1) {
+        throttle.recordFailure(`decoy-${i}`);
+      }
+    }
+    // An hour. Every decoy is now outside the window and worth nothing — but
+    // nothing has touched it, so only a prune at measurement time can see that.
+    clock.advance(3_600_000);
+
+    let guesses = 0;
+    let refusals = 0;
+    for (let round = 0; round < 50; round += 1) {
+      for (let g = 0; g < AUTH_FAILURE_LIMIT; g += 1) {
+        if (throttle.check("attacker").throttled) {
+          refusals += 1;
+          continue;
+        }
+        throttle.recordFailure("attacker");
+        guesses += 1;
+      }
+      throttle.recordFailure(`throwaway-${round}`);
+    }
+
+    expect({ guesses, throttled: throttle.check("attacker").throttled }).toEqual({
+      guesses: AUTH_FAILURE_LIMIT,
+      throttled: true,
+    });
+    expect(refusals).toBeGreaterThan(0);
+  }, 30_000);
+
+  test("half the limit or more outranks a cooldown; one less does not", () => {
+    // The crossover, from both sides. This is the assertion whose absence let
+    // every value in [0.1, 0.9) pass: the suite planted 1 and 9 and never asked
+    // where the line actually is.
+    const half = Math.floor(AUTH_FAILURE_LIMIT / 2);
+
+    for (const [failures, shouldSurvive] of [
+      [half, true],
+      [half - 1, false],
+    ] as const) {
+      const clock = fakeClock();
+      const throttle = new AuthFailureThrottle(clock.now);
+
+      // A table of active cooldowns, one slot short of the bound.
+      for (let i = 0; i < MAX_TRACKED_PEERS - 1; i += 1) {
+        for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+          throttle.recordFailure(`banned-${i}`);
+        }
+        clock.advance(1);
+      }
+      // The peer under test, at exactly the count in question.
+      for (let f = 0; f < failures; f += 1) {
+        throttle.recordFailure("subject");
+      }
+      // One newcomer forces an eviction in which `subject` is a candidate.
+      throttle.recordFailure("newcomer");
+
+      // A surviving record keeps its count: it needs only the remainder to be
+      // refused. An evicted one starts over.
+      let more = 0;
+      while (!throttle.check("subject").throttled && more < AUTH_FAILURE_LIMIT * 2) {
+        throttle.recordFailure("subject");
+        more += 1;
+      }
+      expect({ failures, survived: more === AUTH_FAILURE_LIMIT - failures }).toEqual({
+        failures,
+        survived: shouldSurvive,
+      });
+    }
+  }, 60_000);
+
+  test("no live failure count can tie a cooldown", () => {
+    // Why `BAN_VALUE` carries a `- 0.5`. The tie-break compares a ban's FUTURE
+    // expiry against a peer's PAST `seenAt`, so a tie is always resolved against
+    // the peer — which made the boundary case above fail silently. Placing the
+    // ban strictly between two integer counts means the tie cannot arise.
+    for (let k = 0; k <= AUTH_FAILURE_LIMIT; k += 1) {
+      expect({ k, tied: k / AUTH_FAILURE_LIMIT === BAN_VALUE }).toEqual({ k, tied: false });
+    }
+    // And it sits where the rule says: half the limit is above it, one less below.
+    const half = Math.floor(AUTH_FAILURE_LIMIT / 2);
+    expect(half / AUTH_FAILURE_LIMIT > BAN_VALUE).toBe(true);
+    expect((half - 1) / AUTH_FAILURE_LIMIT < BAN_VALUE).toBe(true);
   });
 });

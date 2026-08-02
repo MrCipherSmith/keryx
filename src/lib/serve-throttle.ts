@@ -58,13 +58,25 @@ export const AUTH_THROTTLE_COOLDOWN_MS = 60_000;
 export const MAX_TRACKED_PEERS = 1_024;
 
 /**
- * What a cooldown record is worth, against `failures / AUTH_FAILURE_LIMIT`.
+ * What a cooldown record is worth, against `liveFailures / AUTH_FAILURE_LIMIT`.
  *
- * Halfway. See `evictIfFull` rule 2 for why the two properties this control
- * needs cannot both hold under a strict "bans first" or "peers first" order,
- * and why this is where they meet.
+ * Just under halfway, and DERIVED rather than chosen. See `evictIfFull` rule 2
+ * for why the two properties this control needs cannot both hold under a strict
+ * "bans first" or "peers first" order, and why the crossover is where they meet.
+ *
+ * The `- 0.5` is what makes the crossover exact. A live failure count is an
+ * integer, so the peer scale only ever takes values `k / AUTH_FAILURE_LIMIT`;
+ * placing the ban strictly BETWEEN two of them means no peer can ever tie it.
+ * At a flat `0.5` a peer at exactly 5 of 10 tied, lost the tie-break — which
+ * compares a ban's future expiry against a peer's past `seenAt`, so the peer
+ * always loses it — and was evicted, letting an attacker interleaving five
+ * guesses per throw-away address run 1500 of them unrefused. The docstring said
+ * "a peer more than halfway is not cheaper to lose" and was off by one at
+ * exactly halfway, with nothing testing the boundary.
+ *
+ * Read it as the rule it now is: HALF THE LIMIT OR MORE outranks a cooldown.
  */
-const BAN_VALUE = 0.5;
+export const BAN_VALUE = (Math.floor(AUTH_FAILURE_LIMIT / 2) - 0.5) / AUTH_FAILURE_LIMIT;
 
 interface PeerRecord {
   /** Failure timestamps inside the window, oldest first. */
@@ -156,7 +168,10 @@ export class AuthFailureThrottle {
   /**
    * Drop one peer when the table is over its bound.
    *
-   * Three rules, and each of the first two was learned by getting it wrong.
+   * Two rules, and both were learned by getting them wrong. There were three
+   * until a round folded the old rule 3 into the tie-break and left this line
+   * saying three — which is the same class of stale count this module has now
+   * produced twice.
    *
    * 1. NEVER the peer that just recorded a failure. It is `justInserted`, it is
    *    excluded, and that exclusion is the whole of this round's fix. Without
@@ -198,8 +213,10 @@ export class AuthFailureThrottle {
    *   accumulation near the limit has to outrank a ban.
    *
    * Both were learned by measurement. Preferring unthrottled records outright
-   * left an attacker unthrottled through 1800 consecutive guesses, one
-   * throw-away address per nine. Preferring bans outright let a flood clear the
+   * left an attacker unthrottled through 450 consecutive guesses, one throw-away
+   * address per nine — 50 rounds of 9, which is what the probe in the test file
+   * actually runs. It was reported as 1800 for two rounds because the figure was
+   * restated rather than re-derived. Preferring bans outright let a flood clear the
    * flooder's own ban, which is the escape the rule above it exists for. The
    * scale is where those two meet: halfway to a ban is the point at which an
    * accumulation becomes worth more than an enforced refusal that is already
@@ -212,18 +229,64 @@ export class AuthFailureThrottle {
    * alternatives was describing a distinction that cannot arise here. The
    * newcomer is never a candidate — see rule 1.
    *
-   * The trade `MAX_TRACKED_PEERS` describes is unchanged: an attacker with many
-   * addresses can still push records out. What they cannot do is push out the
-   * record of the address they are currently guessing from.
+   * WHAT THIS DOES NOT PROVIDE, stated because the previous version of this
+   * sentence claimed the opposite and was the round's blocker:
+   *
+   *   > "What they cannot do is push out the record of the address they are
+   *   > currently guessing from."
+   *
+   * They can. Any bounded table can be defeated by an attacker willing to keep
+   * it full of whatever the eviction order protects; that is inherent to
+   * bounding it, and bounding it is not optional because an unbounded map an
+   * unauthenticated caller can grow is a memory-exhaustion primitive. What the
+   * order decides is the PRICE, and the three known routes now cost:
+   *
+   *   pin with decoys at half the limit   ~85 requests/second, sustained,
+   *                                       because every decoy must be refreshed
+   *                                       inside the window to keep counting.
+   *                                       Before the prune this was a one-time
+   *                                       6100 requests and then free.
+   *   saturate with active cooldowns      ~170 requests/second, sustained, and
+   *                                       it buys only the early expiry of a
+   *                                       cooldown that was about to lapse.
+   *   flood with fresh peers              nothing: they are the cheapest records
+   *                                       in the table and evict each other.
+   *
+   * And the honest ceiling on all of it: the bearer token is 32 CSPRNG bytes
+   * (`serve-credential.ts`), so none of these makes guessing it feasible. This
+   * control exists to make repeated failure expensive and visible, not to be the
+   * thing standing between an attacker and the token.
    */
   private evictIfFull(justInserted: string): void {
     if (this.peers.size <= MAX_TRACKED_PEERS) {
       return;
     }
     const now = this.now();
+    const cutoff = now - AUTH_FAILURE_WINDOW_MS;
+    /**
+     * Failures still inside the window, counted NOW.
+     *
+     * THE fix. `recordFailure` prunes only the peer it is recording, so a record
+     * nobody has touched keeps every timestamp it ever had. The previous version
+     * read `failures.length` raw, so a record parked at six failures an hour ago
+     * scored 0.6 forever and outranked every active cooldown in the table. An
+     * attacker filled 1023 slots with such decoys ONCE — about 6100 requests —
+     * and from then on their own ban was the cheapest record in the table and
+     * one throw-away request evicted it. Measured: 500 consecutive guesses, zero
+     * refusals, against a control of 10 guesses and 490 refusals. The control
+     * was not weakened, it was off.
+     *
+     * Pruning here does not make the table attack-proof and the sentence at the
+     * end of this docstring no longer says it does. What it does is take the
+     * cost of pinning the table from a one-time 6100 requests to a sustained
+     * ~85 requests per second, forever, because every decoy must now be
+     * refreshed inside the window to keep counting.
+     */
+    const liveFailures = (record: PeerRecord): number =>
+      record.failures.reduce((n, at) => (at > cutoff ? n + 1 : n), 0);
     /** A record's worth, on the one scale rule 2 describes. */
     const valueOf = (record: PeerRecord): number =>
-      record.throttledUntil > now ? BAN_VALUE : record.failures.length / AUTH_FAILURE_LIMIT;
+      record.throttledUntil > now ? BAN_VALUE : liveFailures(record) / AUTH_FAILURE_LIMIT;
 
     let victim: string | undefined;
     let lowest = Number.POSITIVE_INFINITY;
