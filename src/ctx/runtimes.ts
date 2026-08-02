@@ -98,6 +98,25 @@ function hooksObject(settings: Settings): Settings {
 
 // Merge/strip a managed group into a named array under `settings.hooks[key]`.
 function mergeIntoHookArray(settings: Settings, key: string, group: Settings): Settings {
+  // A legacy ARRAY under `hooks` is not ours and is not discarded.
+  //
+  // `hooksObject` returns `{}` for anything that is not a plain object, so an
+  // array — the shape the security installer used before the two were split —
+  // was replaced wholesale, taking the operator's own entries with it. The
+  // security side grew a careful migration for the same collision and this side
+  // did not, so whichever installer ran first still lost everything when the
+  // other one ran. The coexistence test drove four orderings and never drove
+  // this one.
+  //
+  // Foreign entries are preserved under a key that says what they are, rather
+  // than being merged into an event map they were never keyed by.
+  if (Array.isArray(settings.hooks) && settings.hooks.length > 0) {
+    settings.unmigratedHooks = [
+      ...(Array.isArray(settings.unmigratedHooks) ? settings.unmigratedHooks : []),
+      ...settings.hooks,
+    ];
+    delete settings.hooks;
+  }
   const hooks = hooksObject(settings);
   hooks[key] = [...stripManaged(hooks[key]), group];
   settings.hooks = hooks;

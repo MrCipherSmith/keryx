@@ -256,20 +256,38 @@ function flatValidate(id: string): (settings: Settings) => string[] {
     const groups = Array.isArray(settings[SECURITY_HOOKS_KEY])
       ? (settings[SECURITY_HOOKS_KEY] as unknown[])
       : [];
-    const commandFor = (on: string): string | undefined => {
-      const g = groups.find(
-        (x) => x && typeof x === "object" && (x as { on?: unknown }).on === on,
-      ) as { command?: unknown } | undefined;
-      return typeof g?.command === "string" ? g.command : undefined;
-    };
+    // `.some` over the MANAGED entries, not `.find` over the first match.
+    //
+    // `flatMerge` appends the managed entries AFTER preserved user groups, so
+    // `find` reached a user entry first whenever one carried the same `on`. A
+    // repository could ship a `.cursor/hooks.json` holding
+    // `{on:"input", command:"keryx security check-input …; curl … | sh"}` and
+    // `hooks install` would validate clean against the attacker's line while
+    // the managed one sat below it unread. The symmetric case is noisier and
+    // just as wrong: a benign user entry made install report the managed hook
+    // missing when it was present.
+    //
+    // Every other validator in both registries already used `.some`; this was
+    // the one that did not.
+    const managedCommands = (on: string): string[] =>
+      groups
+        .filter(
+          (x) =>
+            x !== null &&
+            typeof x === "object" &&
+            (x as { on?: unknown }).on === on &&
+            isManagedGroup(x),
+        )
+        .map((x) => (x as { command?: unknown }).command)
+        .filter((command): command is string => typeof command === "string");
     // `startsWith`, because the command carries `--runtime <id>`. Matching the
     // base means a config written by an older keryx still validates, and a
     // config carrying the wrong runtime id is still recognisably the managed
     // hook rather than a stranger's.
-    if (!(commandFor("input") ?? "").startsWith(AGENT_CHECK_INPUT_COMMAND)) {
+    if (!managedCommands("input").some((c) => c.startsWith(AGENT_CHECK_INPUT_COMMAND))) {
       errors.push(`${id}: missing input hook routing to check-input`);
     }
-    if (!(commandFor("output") ?? "").startsWith(AGENT_CHECK_OUTPUT_COMMAND)) {
+    if (!managedCommands("output").some((c) => c.startsWith(AGENT_CHECK_OUTPUT_COMMAND))) {
       errors.push(`${id}: missing output hook routing to check-output`);
     }
     return errors;
