@@ -18,3 +18,7 @@
 - 2026-08-01T23:45:06.474Z - task-done: T5: AC1/AC2: the real-socket route test
 - 2026-08-01T23:45:06.558Z - task-done: T6: F-005/F-006/F-007: claim order, distinct ids, terminal event
 - 2026-08-01T23:45:06.642Z - task-done: T7: F-003: an injection finding blocks, at both sites of the class
+- 2026-08-02T07:39:38.880Z - task-done: T8: F-004: one profile ranking, trustMode included, guarded
+- 2026-08-02T07:41:42.236Z - task-done: T9: F-008: the error boundary on the listener
+- 2026-08-02T07:46:02.910Z - task-done: T10: F-009/F-010/F-011: the three test defects
+- 2026-08-02T07:47:16.715Z - task-done: T11: Verify: full suite, typecheck, health

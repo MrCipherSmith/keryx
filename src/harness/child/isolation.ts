@@ -19,6 +19,7 @@
 // writes flow state — a child NEVER owns completion. Non-determinism is confined
 // to the injected `deps.idSeq`. Optional fields are set via conditional spread to
 // respect `exactOptionalPropertyTypes`.
+import { ISOLATION_RANK, OUTCOME_RANK, rankOf, TRUST_RANK } from "../policy/ranks";
 import type { PolicyProfile, PolicyProfileDefaults, PolicyProfileRequiredControls } from "../policy/types";
 import type { Provenance } from "../session/types";
 
@@ -103,20 +104,6 @@ export type InheritPolicyResult =
   | { ok: true; policy: PolicyProfile }
   | { ok: false; reason: string };
 
-/** Capability ordering of the three trust postures (broader = higher rank). */
-const TRUST_RANK: Record<PolicyProfile["trustMode"], number> = {
-  "read-only": 0,
-  "trusted-local": 1,
-  untrusted: 2,
-};
-
-/** Permissiveness ordering of the three outcomes (`deny < ask < allow`). */
-const OUTCOME_RANK: Record<PolicyProfileDefaults[keyof PolicyProfileDefaults], number> = {
-  deny: 0,
-  ask: 1,
-  allow: 2,
-};
-
 const CAPABILITY_KEYS: readonly (keyof PolicyProfileDefaults)[] = [
   "read",
   "write",
@@ -135,26 +122,6 @@ const CAPABILITY_KEYS: readonly (keyof PolicyProfileDefaults)[] = [
  */
 export function isKnownCapability(value: string): value is keyof PolicyProfileDefaults {
   return (CAPABILITY_KEYS as readonly string[]).includes(value);
-}
-
-/**
- * Strength ordering of the isolation control (`not-required < required-fail-closed`).
- * A child may only KEEP or STRENGTHEN isolation; downgrading
- * `required-fail-closed` -> `not-required` is a fail-open and is DENIED.
- */
-const ISOLATION_RANK: Record<PolicyProfileRequiredControls["isolation"], number> = {
-  "not-required": 0,
-  "required-fail-closed": 1,
-};
-
-/**
- * Resolve a rank, failing CLOSED on an out-of-enum value. The inputs are typed
- * `PolicyProfile`, but a malformed profile that somehow bypassed schema
- * validation must not silently skip a comparison (`undefined > n` is `false`,
- * which would fail OPEN) — `undefined` here forces the caller to DENY.
- */
-function rankOf<K extends string>(map: Record<K, number>, value: string): number | undefined {
-  return Object.prototype.hasOwnProperty.call(map, value) ? (map as Record<string, number>)[value] : undefined;
 }
 
 /**

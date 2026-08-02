@@ -22,6 +22,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Glob } from "bun";
 import { compareProfiles, localBaselineProfile, resolveLocalProfile } from "../harness/policy/profiles";
+// The SHARED stripper and tree walk. The guard below used to carry its own,
+// which stripped comments but not string literals — so a mention of the seam
+// inside a string would have been reported as a caller supplying it.
+import { code, sourceFiles, treeSources } from "./config-dir.scan";
 import { hasSecretShapedField, registerProject } from "./project-registry";
 import { defaultServeConfig, type ServeConfig } from "./serve-config";
 import {
@@ -39,6 +43,9 @@ import {
   startServeListener,
   type ServeListener,
 } from "./serve-server";
+
+/** The source tree both guards in this file scan. */
+const SRC_ROOT = path.join(import.meta.dir, "..");
 
 let configDir = "";
 let workspace = "";
@@ -367,41 +374,85 @@ describe("startup preconditions", () => {
     });
   });
 
-  test("no non-test file supplies the localBaseline seam", async () => {
+  /**
+   * Files that SUPPLY the `localBaseline` seam, as opposed to declaring it.
+   *
+   * PURE over a `{ path -> source }` map, so the self-checks below drive this
+   * function rather than a re-implementation of it. The guard this replaces
+   * inlined the walk and re-evaluated its regex on a string literal, so
+   * replacing the predicate with "match nothing" would have left it green —
+   * and it had no scan-reach assertion and a zero denominator besides.
+   *
+   * The predicate is one clause, not two. It used to read
+   * `/localBaseline\s*:/.test(x) && !/localBaseline\?\s*:/.test(x)`, and the
+   * second half was dead: `localBaseline?:` does not match the first pattern in
+   * the first place, because `?` is not whitespace. The declaration was already
+   * excluded, the stated rationale for the second clause was wrong, and the
+   * self-check "proving" it passed for a reason other than the one it named.
+   */
+  function baselineSuppliers(sources: ReadonlyMap<string, string>): string[] {
+    const found: string[] = [];
+    for (const [file, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      // `code()`, so a mention inside a string literal cannot fake a hit. The
+      // previous version stripped comments only.
+      if (/localBaseline\s*:/.test(code(raw))) {
+        found.push(file);
+      }
+    }
+    return found;
+  }
+
+  test("no non-test file supplies the localBaseline seam", () => {
     // `localBaseline` exists so the widening branch has a reachable input under
     // test. It can also LOWER the ceiling a remote profile is held to, which is
     // the one thing this whole check exists to prevent — so production code may
     // not pass it, and that is held by reading the source rather than by the
     // comment on the field.
-    //
-    // Source-level, same construction as the config-dir guards: derive the
-    // denominator from the tree, assert the complement is empty.
-    const src = path.join(import.meta.dir, "..");
-    const offenders: string[] = [];
-    for (const relative of new Glob("**/*.ts").scanSync(src)) {
-      const file = relative.split(path.sep).join("/");
-      if (file.includes(".test.")) {
-        continue;
-      }
-      const source = readFileSync(path.join(src, relative), "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/\/\/[^\n]*/g, "");
-      // The DECLARATION in serve-server.ts is `localBaseline?:`; a caller
-      // supplying it writes `localBaseline:`. The optional marker is what
-      // separates them.
-      if (/localBaseline\s*:/.test(source) && !/localBaseline\?\s*:/.test(source)) {
-        offenders.push(file);
-      }
-    }
-    expect(offenders).toEqual([]);
+    expect(baselineSuppliers(treeSources(SRC_ROOT))).toEqual([]);
   });
 
-  test("the seam detector fires on a planted caller", async () => {
-    // Otherwise the assertion above passes because the predicate matches nothing.
-    const planted = "resolveServeStartup({ config, credential, localBaseline: () => wideOpen() });";
-    expect(/localBaseline\s*:/.test(planted) && !/localBaseline\?\s*:/.test(planted)).toBe(true);
-    const declaration = "  localBaseline?: () => PolicyProfile;";
-    expect(/localBaseline\s*:/.test(declaration) && !/localBaseline\?\s*:/.test(declaration)).toBe(false);
+  test("the scan actually reaches the source tree", () => {
+    // Without this the assertion above passes vacuously if the root moves.
+    const files = sourceFiles(SRC_ROOT);
+    expect(files.length).toBeGreaterThan(200);
+    expect(files).toContain("lib/serve-server.ts");
+    expect(files).toContain("commands/serve.ts");
+  });
+
+  test("the file that DECLARES the seam is in the scan and is not reported", () => {
+    // The numerator control. An empty complement means nothing unless the one
+    // file that mentions `localBaseline` at all was actually read — and it must
+    // be read and NOT reported, because declaring the seam is not supplying it.
+    const tree = treeSources(SRC_ROOT);
+    const mentions = [...tree]
+      .filter(([, raw]) => code(raw).includes("localBaseline"))
+      .map(([file]) => file)
+      .sort();
+    // Two files name it: the one that DECLARES the seam, and the one that
+    // exports `localBaselineProfile` — a different identifier that happens to
+    // share the prefix. Both are read, and neither supplies the seam.
+    expect(mentions).toEqual(["harness/policy/profiles.ts", "lib/serve-server.ts"]);
+    expect(baselineSuppliers(tree)).toEqual([]);
+  });
+
+  test("the detector fires on a planted caller, through baselineSuppliers() itself", () => {
+    // Through the seam. The version this replaces tested the regex against a
+    // string, which is not the same thing as testing the function that walks
+    // the tree with it.
+    const planted = new Map([
+      ["probe/supplies.ts", "resolveServeStartup({ config, credential, localBaseline: () => wideOpen() });"],
+      ["probe/supplies-spaced.ts", "startServeListener({ localBaseline : lower });"],
+    ]);
+    expect(baselineSuppliers(planted).sort()).toEqual(["probe/supplies-spaced.ts", "probe/supplies.ts"]);
+
+    // The other half: the declaration, a type-only mention, and a mention
+    // inside a string are all NOT suppliers.
+    const clean = new Map([
+      ["probe/declares.ts", "  localBaseline?: () => PolicyProfile;"],
+      ["probe/mentions.ts", "// localBaseline: the seam, named in a comment"],
+      ["probe/in-a-string.ts", 'const help = "pass localBaseline: to override";'],
+    ]);
+    expect(baselineSuppliers(clean)).toEqual([]);
   });
 
   test("the profile is checked AFTER the refusals that already existed", async () => {

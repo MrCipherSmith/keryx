@@ -120,8 +120,15 @@ describe("AuthFailureThrottle", () => {
   });
 
   test("flooding the table does not clear an existing cooldown", async () => {
-    // Eviction is oldest-seen-first and does NOT prefer throttled records —
-    // otherwise an attacker clears their own ban by spoofing a thousand peers.
+    // F-011. This test asserted `size() <= MAX_TRACKED_PEERS` — a duplicate of
+    // the test above — while its own comment recorded that the flood DID evict
+    // the target. The title claimed a property the assertions did not cover, and
+    // the property was false: `check` reads `seenAt` and never writes it, so a
+    // peer in cooldown stops being seen the moment it starts being refused, and
+    // oldest-first eviction took it first. Flooding cleared exactly the cooldown
+    // the implementation comment said flooding could not clear.
+    //
+    // Now eviction skips peers serving a cooldown, and this asserts the title.
     const clock = fakeClock();
     const throttle = new AuthFailureThrottle(clock.now);
     for (let i = 0; i < AUTH_FAILURE_LIMIT; i += 1) {
@@ -133,11 +140,54 @@ describe("AuthFailureThrottle", () => {
       clock.advance(1); // each flood peer is seen LATER than `target`
       throttle.recordFailure(`flood-${i}`);
     }
-    // `target` was seen first, so oldest-first eviction is the case that
-    // matters: it is gone, and a peer that is not tracked is not throttled.
-    // Stated rather than asserted the other way, because pretending the
-    // cooldown survives would be a claim this implementation does not support.
+
     expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
+    // The property the title names, asserted: the ban survives the flood.
+    expect(throttle.check("target").throttled).toBe(true);
+  });
+
+  test("the flood itself is still evicted, so the bound is not held by keeping everything", async () => {
+    // The other half. Skipping throttled peers must not turn into skipping
+    // eviction: if nothing were evicted the assertion above would pass because
+    // the table grew without limit, which is the memory-exhaustion primitive the
+    // bound exists to prevent.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+    throttle.recordFailure("target"); // one failure: tracked, NOT throttled
+
+    for (let i = 0; i < MAX_TRACKED_PEERS + 200; i += 1) {
+      clock.advance(1);
+      throttle.recordFailure(`flood-${i}`);
+    }
+
+    expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
+    // An untracked peer is not throttled, and this one was correctly dropped:
+    // it was the oldest and it was not serving a cooldown.
+    expect(throttle.check("target").throttled).toBe(false);
+  });
+
+  test("a table saturated with cooldowns is still bounded", async () => {
+    // The saturation case, asserted for the property that matters rather than
+    // for which record went. Eviction always overflows on a peer that has just
+    // recorded its FIRST failure — a peer cannot reach the limit on the call
+    // that adds it — so there is always an unthrottled victim available, and the
+    // soonest-expiring fallback in `evictIfFull` is defensive rather than
+    // reachable from here. Stated instead of asserted, because a test that
+    // cannot construct the state it names is the vacuous shape this round
+    // removed twice already.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+    for (let i = 0; i < MAX_TRACKED_PEERS + 50; i += 1) {
+      for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+        throttle.recordFailure(`banned-${i}`);
+      }
+      clock.advance(1);
+    }
+
+    expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
+    // And the bans that ARE held are real ones, not an empty table passing the
+    // bound: the first peer banned is still banned.
+    expect(throttle.check("banned-0").throttled).toBe(true);
   });
 });
 

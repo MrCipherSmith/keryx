@@ -581,6 +581,25 @@ function streamTurnEvents(request: Request, turnId: string, ctx: ServeContext): 
  * function rather than two implementations of the same rules.
  */
 export async function handleServeRequest(request: Request, ctx: ServeContext): Promise<Response> {
+  // The error boundary, outermost. Every writer this surface reaches is
+  // documented as propagating what the write throws — EACCES, ENOSPC, EROFS —
+  // and there was nothing between them and Bun's default handler, which renders
+  // the message and the stack into the response body. That body carries the
+  // absolute home-directory path this very surface was hardened to stop
+  // disclosing on the projects route.
+  //
+  // Nothing from the error reaches the caller. Not the message, not the code,
+  // not a correlation id — this release has no log to correlate against, and an
+  // id nobody can look up is a string that only tells an attacker that
+  // something specific went wrong.
+  try {
+    return await routeServeRequest(request, ctx);
+  } catch {
+    return errorResponse(500, "internal-error", "The request could not be completed.");
+  }
+}
+
+async function routeServeRequest(request: Request, ctx: ServeContext): Promise<Response> {
   // (1) Authenticate FIRST. The URL is not even parsed until this passes, so
   // there is no branch on it that could differ for an unauthenticated caller.
   //
@@ -802,6 +821,16 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
           throttle,
           submitTurn,
         }),
+      // The second half of the boundary. `handleServeRequest` catches what the
+      // handler throws; this catches what escapes the handler — a rejection
+      // raised while the response is being produced, or anything Bun itself
+      // raises. Without it, Bun's default error page answers, carrying the
+      // message and the stack.
+      error: () =>
+        new Response(
+          `${JSON.stringify({ schemaVersion: "1.0.0", error: "internal-error", message: "The request could not be completed." }, null, 2)}\n`,
+          { status: 500, headers: JSON_HEADERS },
+        ),
     });
   } catch (error) {
     // A bind failure is still a refusal to start, not a degraded listen: the

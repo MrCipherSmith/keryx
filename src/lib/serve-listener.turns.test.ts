@@ -23,8 +23,8 @@
 // exercising the assembly the operator gets.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { registerProject } from "./project-registry";
 import { defaultServeConfig, type ServeConfig } from "./serve-config";
@@ -159,6 +159,38 @@ describe("a listener the CLI can start executes a turn", () => {
       expect(stored.value.sessionId).toBe(accepted.sessionId);
       expect(stored.value.result?.outcome).toBeDefined();
     }
+  }, 30_000);
+
+  test("a writer that throws produces a bare 500, not a stack and a home path", async () => {
+    // F-008. `Bun.serve` had no `error` handler and `handleServeRequest` no
+    // try/catch, while the submit path calls writers `config-dir.ts` documents
+    // as propagating EACCES/ENOSPC/EROFS. A disk-full or permission failure
+    // escaped as Bun's default 500 page carrying the message and the stack —
+    // including the absolute home-directory path the projects route was
+    // specifically hardened to stop disclosing.
+    //
+    // Reproduced with a real filesystem failure rather than a thrown sentinel.
+    // A regular file where the turn store's root directory belongs makes the
+    // first `ensureKeryxSubdir` raise from inside the handler, exactly as EROFS
+    // or ENOSPC would on a real host.
+    //
+    // Not a mode bit: `ensureKeryxSubdir` chmods every level it walks to 0o700,
+    // so making the directory unwritable is undone by the code under test
+    // before it can fail. Worth recording — the obvious fixture here is a
+    // fixture that proves nothing.
+    origin = await listen();
+    writeFileSync(path.join(configDir, "turns"), "not a directory", "utf8");
+
+    const response = await submit("say something");
+
+    expect(response.status).toBe(500);
+    const body = await response.text();
+    // Says THAT it failed and nothing else. No errno, no path, no frame.
+    expect(body).toContain("internal-error");
+    expect(body).not.toMatch(/ENOTDIR|EEXIST|EACCES|ENOSPC|EROFS/);
+    expect(body).not.toContain(configDir);
+    expect(body).not.toContain(homedir());
+    expect(body).not.toMatch(/\bat\s+\w+\s*\(/);
   }, 30_000);
 
   test("an unauthenticated submission never reaches the runner", async () => {

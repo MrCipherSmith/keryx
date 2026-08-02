@@ -5,7 +5,7 @@
   "title": "Fix round PR #220 (flow 131 / R4c): two blockers and the eleven remaining majors",
   "status": "in-progress",
   "createdAt": "2026-08-01T23:22:55.451Z",
-  "updatedAt": "2026-08-01T23:45:06.642Z",
+  "updatedAt": "2026-08-02T07:47:16.715Z",
   "source": {
     "type": "description",
     "ref": null
@@ -124,7 +124,7 @@
       "id": "T8",
       "title": "F-004: one profile ranking, trustMode included, guarded",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -132,13 +132,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "F-008: the error boundary on the listener",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -146,13 +147,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "F-009/F-010/F-011: the three test defects",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -160,13 +162,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Verify: full suite, typecheck, health",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -174,7 +177,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -293,6 +297,26 @@
       "at": "2026-08-01T23:45:06.642Z",
       "event": "task-done",
       "detail": "T7: F-003: an injection finding blocks, at both sites of the class"
+    },
+    {
+      "at": "2026-08-02T07:39:38.880Z",
+      "event": "task-done",
+      "detail": "T8: F-004: one profile ranking, trustMode included, guarded"
+    },
+    {
+      "at": "2026-08-02T07:41:42.236Z",
+      "event": "task-done",
+      "detail": "T9: F-008: the error boundary on the listener"
+    },
+    {
+      "at": "2026-08-02T07:46:02.910Z",
+      "event": "task-done",
+      "detail": "T10: F-009/F-010/F-011: the three test defects"
+    },
+    {
+      "at": "2026-08-02T07:47:16.715Z",
+      "event": "task-done",
+      "detail": "T11: Verify: full suite, typecheck, health"
     }
   ]
 }

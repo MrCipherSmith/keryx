@@ -16,6 +16,7 @@
 // profile is data, and resolution is a lookup.
 
 import { createHash } from "node:crypto";
+import { ISOLATION_RANK, OUTCOME_RANK, rankOf, REMOTE_TRUST_RANK } from "./ranks";
 import type { PolicyOutcome, PolicyProfile, PolicyProfileDefaults } from "./types";
 
 /** Small stable fingerprint for a frozen profile — node built-in only. */
@@ -169,39 +170,6 @@ export function resolveLocalProfile(name: LocalProfileName): PolicyProfile {
 // Non-weakening comparison (spec AC-04)
 // ---------------------------------------------------------------------------
 
-/**
- * How permissive an outcome is. Higher grants more.
- *
- * `undefined` for anything else, and every caller below treats `undefined` as a
- * failure rather than as a rank. A profile carrying a value this function does
- * not recognise is a profile this code cannot reason about, and the answer to
- * "may it run remotely" is then no.
- */
-function rank(outcome: string): number | undefined {
-  switch (outcome) {
-    case "deny":
-      return 0;
-    case "ask":
-      return 1;
-    case "allow":
-      return 2;
-    default:
-      return undefined;
-  }
-}
-
-/** How strict an isolation requirement is. Higher is stricter. */
-function isolationRank(value: string): number | undefined {
-  switch (value) {
-    case "not-required":
-      return 0;
-    case "required-fail-closed":
-      return 1;
-    default:
-      return undefined;
-  }
-}
-
 export interface ProfileComparison {
   /** True only when the remote profile grants nothing the local profile withholds. */
   ok: boolean;
@@ -232,7 +200,16 @@ export interface ProfileComparison {
  *     weaker, so it widens;
  *   - a value neither `allow`, `ask` nor `deny` has no rank, so it widens;
  *   - `requiredControls` compares by strictness, and the two `deny`-pinned
- *     controls are checked for being `deny` rather than assumed to be.
+ *     controls are checked for being `deny` rather than assumed to be;
+ *   - `trustMode` is compared. It was not, for a whole release: a probe with
+ *     `trustMode` widened and everything else equal returned
+ *     `{ok: true, widened: []}`, so a remote profile could claim a more trusting
+ *     posture than the operator's own surface extends and start anyway.
+ *
+ * The rank tables are imported rather than declared here. This function used to
+ * carry its own copies of them — a second implementation of profile
+ * permissiveness ranking, in the same commit whose message argued against making
+ * a third copy of anything — and the copy is where `trustMode` went missing.
  */
 export function compareProfiles(local: PolicyProfile, remote: PolicyProfile): ProfileComparison {
   const widened = new Set<string>();
@@ -242,15 +219,25 @@ export function compareProfiles(local: PolicyProfile, remote: PolicyProfile): Pr
   // The UNION of both key sets, not a hardcoded list of five. A profile with an
   // extra key is compared on it; a profile missing one the other has widens.
   for (const key of new Set([...Object.keys(localDefaults), ...Object.keys(remoteDefaults)])) {
-    const localRank = rank(localDefaults[key] ?? "");
-    const remoteRank = rank(remoteDefaults[key] ?? "");
+    const localRank = rankOf(OUTCOME_RANK, localDefaults[key] ?? "");
+    const remoteRank = rankOf(OUTCOME_RANK, remoteDefaults[key] ?? "");
     if (localRank === undefined || remoteRank === undefined || remoteRank > localRank) {
       widened.add(`defaults.${key}`);
     }
   }
 
-  const localIsolation = isolationRank(local.requiredControls?.isolation ?? "");
-  const remoteIsolation = isolationRank(remote.requiredControls?.isolation ?? "");
+  // `REMOTE_TRUST_RANK`, not `TRUST_RANK`. The two orderings are inverses on the
+  // same field and both are correct for their own question — see `ranks.ts`.
+  // Using the child-inheritance ordering here would refuse the shipped default,
+  // whose defaults are strictly tighter than the baseline's on every dimension.
+  const localTrust = rankOf(REMOTE_TRUST_RANK, local.trustMode);
+  const remoteTrust = rankOf(REMOTE_TRUST_RANK, remote.trustMode);
+  if (localTrust === undefined || remoteTrust === undefined || remoteTrust > localTrust) {
+    widened.add("trustMode");
+  }
+
+  const localIsolation = rankOf(ISOLATION_RANK, local.requiredControls?.isolation ?? "");
+  const remoteIsolation = rankOf(ISOLATION_RANK, remote.requiredControls?.isolation ?? "");
   if (localIsolation === undefined || remoteIsolation === undefined || remoteIsolation < localIsolation) {
     widened.add("requiredControls.isolation");
   }

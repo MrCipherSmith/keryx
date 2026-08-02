@@ -9,15 +9,19 @@
 // operator's own.
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
-import { Glob } from "bun";
+// The SHARED stripper and tree walk, not a local copy. A third comment/string
+// stripper is the mistake `config-dir.scan.ts` was extracted to stop, and the
+// guard this file used to hold made it.
+import { code, sourceFiles, treeSources } from "../../lib/config-dir.scan";
 import {
   compareProfiles,
   isLocalProfileName,
   LOCAL_PROFILE_NAMES,
   REMOTE_DEFAULT_PROFILE,
   resolveLocalProfile,
+  resolveRemoteProfile,
+  shellParentProfile,
 } from "./profiles";
 import type { PolicyProfile } from "./types";
 
@@ -184,78 +188,192 @@ describe("compareProfiles — a remote profile may never grant what the local on
     const renamed = { ...strict, profileId: "unattended-untrusted", profileVersion: "9.9.9" } as PolicyProfile;
     expect(compareProfiles(strict, renamed).ok).toBe(true); // different id, identical fields
   });
+
+  test("trustMode is compared, and a remote profile may not extend more trust", () => {
+    // F-004. `trustMode` was not compared at all: a probe with it widened and
+    // everything else equal returned `{ok: true, widened: []}`, so a remote
+    // profile could claim a more trusting posture than the operator's own
+    // surface extends and start anyway.
+    const strict = resolveLocalProfile("read-only-review");
+    const moreTrusting = { ...strict, trustMode: "trusted-local" } as PolicyProfile;
+
+    const comparison = compareProfiles(strict, moreTrusting);
+    expect(comparison.ok).toBe(false);
+    expect(comparison.widened).toEqual(["trustMode"]);
+  });
+
+  test("a LESS trusting remote posture is not a widening", () => {
+    // The other direction, and the reason the remote check does not reuse
+    // `TRUST_RANK`. `untrusted` extends the LEAST trust — it is the posture for
+    // input nobody has vetted — so a remote profile in it is stricter, not
+    // wider, and must pass. Ranking it as "broadest" here, which the
+    // child-inheritance table does for its own different question, would refuse
+    // the shipped default: `remote-restricted` resolves to
+    // `unattended-untrusted`, whose defaults are tighter than the baseline's on
+    // every dimension and whose isolation is stricter.
+    const baseline = shellParentProfile();
+    const remote = resolveRemoteProfile("remote-restricted");
+    expect(remote).not.toBeNull();
+
+    const comparison = compareProfiles(baseline, remote as PolicyProfile);
+    expect({ ok: comparison.ok, widened: comparison.widened }).toEqual({ ok: true, widened: [] });
+  });
+
+  test("an unrecognised trustMode has no rank and therefore widens", () => {
+    // Fail closed, exactly as the defaults do. A profile carrying a posture this
+    // code cannot reason about is one the answer to "may it run remotely" is no
+    // for.
+    const strict = resolveLocalProfile("read-only-review");
+    const nonsense = { ...strict, trustMode: "extremely-trusted" } as unknown as PolicyProfile;
+    expect(compareProfiles(strict, nonsense).widened).toEqual(["trustMode"]);
+  });
 });
 
-describe("no fourth copy of a profile literal", () => {
-  // The reason this module exists. Two byte-identical literals lived in
-  // `commands/harness.ts`, and `serve` was about to write a third — which would
-  // have made the non-weakening comparison a comparison against a literal
-  // nobody else used. Source-level, so a fourth cannot appear quietly.
+describe("no fourth copy of a profile literal, and no second ranking table", () => {
+  // Rebuilt from the `config-dir.writers.test.ts` template, because the version
+  // this replaces was decorative. It copied that guard's COMMENT about
+  // decorative guards and not its construction: the tree walk was inline rather
+  // than a seam, so the self-check re-evaluated the regex on a string literal
+  // instead of driving the loop the tree assertion drives; nothing asserted the
+  // scan had reached the tree; and the denominator was zero, so the assertion
+  // would have passed against a predicate that matched nothing.
   //
-  // Same construction as `config-dir.writers.test.ts`: derive the denominator
-  // from the tree, assert the complement is empty.
+  // It also carried its own copy of the comment/string stripper — a third one —
+  // while `lib/config-dir.scan.ts` exports the shared implementation. Two
+  // strippers that drift produce two guards that disagree about what the source
+  // says, which is the reason that module exists.
   //
-  // Written first and run against an untouched tree, it reported TWO files. One
-  // was `policy/types.ts`, a false positive the detector below no longer makes —
-  // it now requires an object literal (`requiredControls: {`) rather than the
-  // bare member name, which an interface declaration does not have. The other
-  // was `tool/builtin/spawn-subagent-tool.ts`, which held two further profile
-  // literals that the R4c launch prompt recorded as not existing: it named the
-  // two in `commands/harness.ts` "the ONLY local profiles that exist". There
-  // were four. Both moved into the resolver.
-  const EXEMPT = new Set(["harness/policy/profiles.ts"]);
+  // History worth keeping: written first and run against an untouched tree, the
+  // original reported TWO files. One was `policy/types.ts`, a false positive the
+  // detector no longer makes — it requires an object literal
+  // (`requiredControls: {`) rather than the bare member name. The other was
+  // `tool/builtin/spawn-subagent-tool.ts`, which held two further profile
+  // literals the R4c launch prompt recorded as not existing. Both moved into the
+  // resolver.
+  const EXEMPT_LITERAL = new Set(["harness/policy/profiles.ts"]);
+  /** The two tables `ranks.ts` owns are the two that may exist. */
+  const EXEMPT_RANKS = new Set(["harness/policy/ranks.ts"]);
 
   /** A profile being CONSTRUCTED, not a type declaring the member. */
   const PROFILE_LITERAL = /requiredControls\s*:\s*\{/;
+  /** A permissiveness ordering being DECLARED. */
+  const RANK_TABLE = /\b(TRUST_RANK|OUTCOME_RANK|ISOLATION_RANK|REMOTE_TRUST_RANK)\s*(:|=)/;
 
-  /** Source with string literals and comments blanked, so neither can fake a hit. */
-  function code(source: string): string {
-    return source
-      .replace(/`(?:\\.|[^`\\])*`/gs, "``")
-      .replace(/"(?:\\.|[^"\\\n])*"/g, '""')
-      .replace(/'(?:\\.|[^'\\\n])*'/g, "''")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/[^\n]*/g, "");
-  }
-
-  test("only profiles.ts constructs a PolicyProfile literal", () => {
+  /**
+   * Files that construct a `PolicyProfile` literal.
+   *
+   * PURE over a `{ path -> source }` map, so the self-check below can drive THIS
+   * function rather than a re-implementation of it. That is the whole difference
+   * between this guard and the one it replaces.
+   */
+  function literalOffenders(sources: ReadonlyMap<string, string>): string[] {
     const offenders: string[] = [];
-    for (const relative of new Glob("**/*.ts").scanSync(SRC)) {
-      const file = relative.split(path.sep).join("/");
-      if (file.includes(".test.") || EXEMPT.has(file)) {
+    for (const [file, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      if (EXEMPT_LITERAL.has(file)) {
         continue;
       }
-      const source = code(readFileSync(path.join(SRC, relative), "utf8"));
-      // A profile being constructed carries BOTH an object-literal
-      // `requiredControls` and a `trustMode` member. Matching `profileId` alone
-      // would fire on every file that merely reads one, and matching
+      const source = code(raw);
+      // BOTH an object-literal `requiredControls` and a `trustMode` member.
+      // `profileId` alone fires on every file that merely reads one, and
       // `requiredControls:` without the brace fires on the interface itself.
       if (PROFILE_LITERAL.test(source) && source.includes("trustMode:")) {
         offenders.push(file);
       }
     }
-    expect(offenders).toEqual([]);
+    return offenders;
+  }
+
+  /** Files that declare a permissiveness ranking table. Same construction. */
+  function rankOffenders(sources: ReadonlyMap<string, string>): string[] {
+    const offenders: string[] = [];
+    for (const [file, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      if (EXEMPT_RANKS.has(file)) {
+        continue;
+      }
+      if (RANK_TABLE.test(code(raw))) {
+        offenders.push(file);
+      }
+    }
+    return offenders;
+  }
+
+  test("only profiles.ts constructs a PolicyProfile literal", () => {
+    expect(literalOffenders(treeSources(SRC))).toEqual([]);
   });
 
-  test("the detector fires on a planted literal and not on the type that declares it", () => {
-    // Otherwise the assertion above passes because the predicate matches
-    // nothing at all — the decorative shape this codebase has now shipped twice.
-    const planted = code(`const p = {
-      profileId: "read-only-review",
-      trustMode: "read-only",
-      defaults: { read: "allow" },
-      requiredControls: { isolation: "not-required" },
-    };`);
-    expect(PROFILE_LITERAL.test(planted) && planted.includes("trustMode:")).toBe(true);
+  test("only ranks.ts declares a permissiveness ordering", () => {
+    // F-004. `compareProfiles` grew a second implementation of the ranking
+    // `child/isolation.ts` already owned, and the copy dropped `trustMode` — so
+    // a remote profile could claim a more trusting posture than the operator's
+    // own surface extends and start anyway.
+    expect(rankOffenders(treeSources(SRC))).toEqual([]);
+  });
 
-    // The half that was a false positive: a declaration, not a construction.
-    const declaration = code(`interface PolicyProfile {
-      trustMode: PolicyTrustMode;
-      requiredControls: PolicyProfileRequiredControls;
-    }`);
-    expect(PROFILE_LITERAL.test(declaration)).toBe(false);
+  test("the scan actually reaches the source tree", () => {
+    // Without this both assertions above pass vacuously if the root moves.
+    const files = sourceFiles(SRC);
+    expect(files.length).toBeGreaterThan(200);
+    expect(files).toContain("harness/policy/profiles.ts");
+    expect(files).toContain("harness/policy/ranks.ts");
+    expect(files).toContain("harness/child/isolation.ts");
+  });
 
-    // And it is not defeated by whitespace.
+  test("the scan finds the files that genuinely carry each shape", () => {
+    // The complement being empty means nothing if the numerator is empty too.
+    // Driven through the seams with the exemptions removed, so what is measured
+    // is the predicate rather than a re-reading of it.
+    const tree = treeSources(SRC);
+    const profileFiles = [...tree].filter(([, raw]) => {
+      const source = code(raw);
+      return PROFILE_LITERAL.test(source) && source.includes("trustMode:");
+    });
+    expect(profileFiles.map(([file]) => file)).toEqual(["harness/policy/profiles.ts"]);
+
+    const rankFiles = [...tree].filter(([, raw]) => RANK_TABLE.test(code(raw)));
+    expect(rankFiles.map(([file]) => file)).toEqual(["harness/policy/ranks.ts"]);
+  });
+
+  test("both detectors fire through the seam, and neither fires on a declaration", () => {
+    // Through `literalOffenders`/`rankOffenders` themselves. The guard this
+    // replaces re-evaluated its regex on a string inline, so replacing either
+    // function body with `return []` would have left it green.
+    const planted = new Map([
+      [
+        "probe/constructs-a-profile.ts",
+        `const p = {
+          profileId: "read-only-review",
+          trustMode: "read-only",
+          defaults: { read: "allow" },
+          requiredControls: { isolation: "not-required" },
+        };`,
+      ],
+    ]);
+    expect(literalOffenders(planted)).toEqual(["probe/constructs-a-profile.ts"]);
+
+    const plantedRanks = new Map([
+      ["probe/second-ranking.ts", "const TRUST_RANK: Record<string, number> = { untrusted: 2 };"],
+      ["probe/second-outcome.ts", "const OUTCOME_RANK = { deny: 0, ask: 1, allow: 2 };"],
+    ]);
+    expect(rankOffenders(plantedRanks).sort()).toEqual(["probe/second-outcome.ts", "probe/second-ranking.ts"]);
+
+    // The other half: a declaration is not a construction, and a mention is not
+    // a declaration. Without this, a detector that reported everything would
+    // satisfy the assertions above.
+    const clean = new Map([
+      [
+        "probe/declares-the-type.ts",
+        `interface PolicyProfile {
+          trustMode: PolicyTrustMode;
+          requiredControls: PolicyProfileRequiredControls;
+        }`,
+      ],
+      ["probe/imports-the-ranks.ts", "import { TRUST_RANK, rankOf } from '../policy/ranks';\nrankOf(TRUST_RANK, x);"],
+      ["probe/mentions-in-a-comment.ts", "// OUTCOME_RANK = the ordering, named here and not declared"],
+    ]);
+    expect(literalOffenders(clean)).toEqual([]);
+    expect(rankOffenders(clean)).toEqual([]);
+
+    // And the literal detector is not defeated by whitespace.
     expect(PROFILE_LITERAL.test("requiredControls:{isolation:x}")).toBe(true);
   });
 });

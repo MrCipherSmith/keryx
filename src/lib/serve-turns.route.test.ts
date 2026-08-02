@@ -11,7 +11,7 @@
 // store works and say nothing about whether the route consults it.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveLocalProfile } from "../harness/policy/profiles";
@@ -568,15 +568,36 @@ describe("containment (AC6)", () => {
 });
 
 describe("the turn record is the single writer, and the project is untouched (AC10)", () => {
-  test("no route writes into the project", async () => {
+  test("no route writes into the project, and the inventory can see a MODIFIED file", async () => {
+    // F-010. The fixture created only an empty `.metaproject/`, so both sides of
+    // the comparison were `{}` — the assertion could detect a file being
+    // CREATED (it did catch an HMAC key once) and not a file being modified,
+    // which is the failure AC10 actually names. The helper's own docstring
+    // claimed "so an inventory cannot be empty by accident"; it was empty by
+    // construction. The sibling copy in `serve-server.test.ts` plants a file and
+    // asserts the plant; this copy had lost that control.
+    const planted = path.join(project, ".metaproject", "flow.json");
+    writeFileSync(planted, JSON.stringify({ id: "133" }), "utf8");
+    // Deterministic: two writes inside the same millisecond can share an mtime,
+    // so the modification below changes the SIZE as well.
     const before = inventory(project);
+    expect(Object.keys(before)).toContain(planted);
+
     const accepted = await handleServeRequest(post(turnBody()), ctx());
     const { turnId } = (await accepted.json()) as { turnId: string };
     await handleServeRequest(get(`/v1/turns/${turnId}`), ctx());
     await handleServeRequest(get(`/v1/turns/${turnId}/events`), ctx());
     await handleServeRequest(get("/v1/projects"), ctx());
     await handleServeRequest(get("/v1/status"), ctx());
+
     expect(inventory(project)).toEqual(before);
+
+    // The non-vacuity control, and the specific one the finding is about: the
+    // comparison must notice a file whose CONTENT changed, not only one that
+    // appeared. Without this, `toEqual` between two empty objects is a green
+    // test about nothing.
+    writeFileSync(planted, JSON.stringify({ id: "133", touched: true }), "utf8");
+    expect(inventory(project)).not.toEqual(before);
   });
 });
 

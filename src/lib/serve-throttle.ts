@@ -142,18 +142,44 @@ export class AuthFailureThrottle {
     if (this.peers.size <= MAX_TRACKED_PEERS) {
       return;
     }
-    // Oldest-seen first. Throttled peers are NOT preferred for eviction, which
-    // would let an attacker clear their own cooldown by flooding the table.
+    // Oldest-seen first, among peers NOT currently serving a cooldown.
+    //
+    // The exclusion is the control, and it used to be only a comment. This
+    // comment already claimed throttled peers were not preferred for eviction,
+    // and the code did nothing to hold it: `check` reads `seenAt` and never
+    // writes it, so a peer in cooldown stops being seen the moment it starts
+    // being refused, its `seenAt` freezes, and oldest-first then takes it FIRST.
+    // Flooding the table cleared exactly the cooldown the comment said flooding
+    // could not clear — the escape it was written to describe as impossible.
+    const now = this.now();
     let oldestKey: string | undefined;
     let oldestAt = Number.POSITIVE_INFINITY;
+    // Fallback for the case where every tracked peer is in cooldown. DEFENSIVE
+    // rather than reachable today: eviction always runs from `recordFailure`,
+    // and a peer cannot reach the failure limit on the same call that adds it,
+    // so the peer that overflows the table is itself unthrottled and is
+    // available as a victim. Kept because "unbounded growth" is the wrong way to
+    // fail if that ever stops being true, and the peer whose ban ends soonest is
+    // the one that costs the least to lose. Recorded here rather than asserted
+    // by a test that cannot construct the state.
+    let soonestKey: string | undefined;
+    let soonestUntil = Number.POSITIVE_INFINITY;
     for (const [key, record] of this.peers) {
+      if (record.throttledUntil > now) {
+        if (record.throttledUntil < soonestUntil) {
+          soonestUntil = record.throttledUntil;
+          soonestKey = key;
+        }
+        continue;
+      }
       if (record.seenAt < oldestAt) {
         oldestAt = record.seenAt;
         oldestKey = key;
       }
     }
-    if (oldestKey !== undefined) {
-      this.peers.delete(oldestKey);
+    const victim = oldestKey ?? soonestKey;
+    if (victim !== undefined) {
+      this.peers.delete(victim);
     }
   }
 }
