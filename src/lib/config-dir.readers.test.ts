@@ -46,6 +46,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Glob } from "bun";
+import { loadsModule, parse } from "./config-dir.ast";
 import { sessionDir } from "../session/paths";
 import { MAX_CONFIG_FILE_BYTES, MAX_TRANSCRIPT_FILE_BYTES, readConfigFile, readTranscriptFile } from "./config-dir";
 import {
@@ -656,37 +657,55 @@ describe("every reader of the shared config directory goes through the bounded h
    * without the string.
    */
   function scannerImporters(sources: ReadonlyMap<string, string>): string[] {
-    const withoutComments = (raw: string): string =>
-      raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-    // Three loading positions, not one. `from "…"` covers `import`/`export …
-    // from`; `require("…")` and `import("…")` are the two a reviewer pointed out
-    // this guard could not see, and either one would take the scanner into
-    // production while the guard stayed green.
-    const LOADS_SCANNER =
-      /(?:from\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'][^"']*config-dir\.scan["']/;
+    // Through the AST, after three rounds of losing to spellings.
+    //
+    // This predicate was a regex. It knew `from "…"`; a round added
+    // `require("…")` and dynamic `import("…")`; and then a reviewer defeated the
+    // widened version with a FILE EXTENSION — `from "./config-dir.scan.ts"` —
+    // by planting a real production module that imported the scanner and
+    // watching the whole suite stay green. `.ts` is not exotic here: this very
+    // file writes `await import("…/shell-config.ts")` in four places. The guard
+    // could not see its own idiom.
+    //
+    // `loadsModule` asks the parser instead. An import specifier is a specifier
+    // whatever punctuation surrounds it, and the basename comparison ignores the
+    // extension, so the class is closed by construction rather than enumerated.
+    // See `config-dir.ast.ts` for what that does and does not buy — no module
+    // resolution, so an alias through an intermediate re-export is still
+    // invisible, and that limit is stated there rather than left to be found.
     return [...sources]
-      .filter(([, raw]) => LOADS_SCANNER.test(withoutComments(raw)))
+      .filter(([file, raw]) => loadsModule(parse(file, raw), "config-dir.scan"))
       .map(([file]) => file);
   }
 
-  test("the importer predicate sees all three loading positions", () => {
-    // The self-check. The assertions on either side of it are over a tree that
-    // currently has only static `import … from`, so a predicate that knew only
-    // that form would look identical from out here.
+  test("the importer predicate sees every loading position and spelling", () => {
+    // The self-check, planting what the PREVIOUS version could not see rather
+    // than what the current one already matches. That inversion is the recorded
+    // lesson, and all four guards rewritten last round violated it — each
+    // planted only the shapes its new regex had just learned.
     const planted = new Map([
       ["probe/static.ts", 'import { code } from "./config-dir.scan";'],
       ["probe/re-export.ts", 'export { code } from "../lib/config-dir.scan";'],
       ["probe/require.ts", 'const { code } = require("./config-dir.scan");'],
       ["probe/dynamic.ts", 'const m = await import("./config-dir.scan");'],
+      // The four that defeated the regex.
+      ["probe/extension.ts", 'import { code } from "./config-dir.scan.ts";'],
+      ["probe/js-extension.ts", 'const m = require("./config-dir.scan.js");'],
+      ["probe/side-effect.ts", 'import "./config-dir.scan";'],
+      ["probe/template.ts", "const m = await import(`../lib/config-dir.scan`);"],
       // Neither of these loads it.
-      ["probe/comment.ts", '// see ./config-dir.scan for what the scan can do'],
+      ["probe/comment.ts", "// see ./config-dir.scan for what the scan can do"],
       ["probe/unrelated.ts", 'import { readConfigFile } from "./config-dir";'],
     ]);
     expect(scannerImporters(planted).sort()).toEqual([
       "probe/dynamic.ts",
+      "probe/extension.ts",
+      "probe/js-extension.ts",
       "probe/re-export.ts",
       "probe/require.ts",
+      "probe/side-effect.ts",
       "probe/static.ts",
+      "probe/template.ts",
     ]);
   });
 

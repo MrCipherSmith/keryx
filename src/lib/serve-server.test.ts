@@ -26,6 +26,7 @@ import { compareProfiles, localBaselineProfile, resolveLocalProfile } from "../h
 // which stripped comments but not string literals — so a mention of the seam
 // inside a string would have been reported as a caller supplying it.
 import { code, sourceFiles, treeSources } from "./config-dir.scan";
+import { parse, suppliesProperty } from "./config-dir.ast";
 import { hasSecretShapedField, registerProject } from "./project-registry";
 import { defaultServeConfig, type ServeConfig } from "./serve-config";
 import {
@@ -412,22 +413,24 @@ describe("startup preconditions", () => {
   function baselineSuppliers(sources: ReadonlyMap<string, string>): string[] {
     const found: string[] = [];
     for (const [file, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-      // `code()`, so a mention inside a string literal cannot fake a hit. The
-      // previous version stripped comments only.
-      const source = code(raw);
+      const tree = parse(file, raw);
       for (const seam of WEAKENING_SEAMS) {
         if (seam.suppliedBy.includes(file)) {
           continue;
         }
-        // Two spellings of the same supply. `name:` is the explicit form;
-        // `{ name }` is ES6 shorthand, which passes the seam without ever
-        // writing a colon and which the first version of this guard could not
-        // see. The optional marker is what keeps a DECLARATION out of both:
-        // `localBaseline?: () => PolicyProfile` has a `?` where the colon form
-        // wants a colon, and no braces around a bare name.
-        const explicit = new RegExp(`${seam.name}\\s*:`);
-        const shorthand = new RegExp(`[{,]\\s*${seam.name}\\s*[,}]`);
-        if (explicit.test(source) || shorthand.test(source)) {
+        // Through the AST. This was `name\s*:`, which missed ES6 shorthand;
+        // widened to two patterns, it still missed `opts.name = value` — a
+        // two-line assignment being the most natural way to acquire a
+        // production caller quietly, which is the guard's stated job to stop.
+        //
+        // `suppliesProperty` reports every form that PASSES a value and no form
+        // that declares or reads one. The declaration this used to exclude by
+        // spotting a `?` before the colon is excluded because an interface
+        // member is not an object literal, and a destructuring read is an
+        // ObjectBindingPattern rather than an ObjectLiteralExpression — two
+        // things a regex over text cannot tell apart and a parser cannot
+        // confuse.
+        if (suppliesProperty(tree, seam.name).length > 0) {
           found.push(`${file} :: ${seam.name}`);
         }
       }
@@ -497,12 +500,18 @@ describe("startup preconditions", () => {
     // longer table.
     const plantedContainment = new Map([
       ["probe/uncontained.ts", "createSubmitTurn({ profile, containmentAvailable: () => true });"],
-      // ES6 shorthand — the same supply with the colon left out.
       ["probe/shorthand.ts", "createSubmitTurn({ profile, containmentAvailable });"],
-      ["probe/shorthand-only.ts", "assembleSubmitTurn(p, d, { containmentAvailable });"],
+      // The three the regex could not see, planted here because the lesson is
+      // that a self-check must carry what the CURRENT predicate has never been
+      // shown to catch — not a restatement of what it already matched.
+      ["probe/assignment.ts", "const o = base(); o.containmentAvailable = () => true; run(o);"],
+      ["probe/index-assignment.ts", 'o["containmentAvailable"] = () => true;'],
+      ["probe/computed.ts", 'createSubmitTurn({ ["containmentAvailable"]: probe });'],
     ]);
     expect(baselineSuppliers(plantedContainment).sort()).toEqual([
-      "probe/shorthand-only.ts :: containmentAvailable",
+      "probe/assignment.ts :: containmentAvailable",
+      "probe/computed.ts :: containmentAvailable",
+      "probe/index-assignment.ts :: containmentAvailable",
       "probe/shorthand.ts :: containmentAvailable",
       "probe/uncontained.ts :: containmentAvailable",
     ]);
@@ -510,9 +519,14 @@ describe("startup preconditions", () => {
     // The other half: the declaration, a type-only mention, and a mention
     // inside a string are all NOT suppliers.
     const clean = new Map([
-      ["probe/declares.ts", "  localBaseline?: () => PolicyProfile;"],
+      ["probe/declares.ts", "interface D { localBaseline?: () => PolicyProfile }"],
+      ["probe/declares-required.ts", "interface D { localBaseline: () => PolicyProfile }"],
       ["probe/mentions.ts", "// localBaseline: the seam, named in a comment"],
       ["probe/in-a-string.ts", 'const help = "pass localBaseline: to override";'],
+      // A READ, not a supply. Under the regex this was the same text as the
+      // shorthand form and could only be told apart by luck.
+      ["probe/destructures.ts", "const { localBaseline } = seams;"],
+      ["probe/reads.ts", "if (deps.localBaseline !== undefined) use();"],
     ]);
     expect(baselineSuppliers(clean)).toEqual([]);
   });

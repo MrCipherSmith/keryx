@@ -14,6 +14,7 @@ import path from "node:path";
 // stripper is the mistake `config-dir.scan.ts` was extracted to stop, and the
 // guard this file used to hold made it.
 import { code, sourceFiles, treeSources } from "../../lib/config-dir.scan";
+import { constructsWith, declaresRanking, parse } from "../../lib/config-dir.ast";
 import {
   compareProfiles,
   isLocalProfileName,
@@ -291,54 +292,46 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
   const EXEMPT_RANKS = new Set(["harness/policy/ranks.ts", "security/resolve.ts"]);
 
   /** A profile being CONSTRUCTED, not a type declaring the member. */
-  // A profile being CONSTRUCTED. `requiredControls: {` catches the inline form;
-  // `requiredControls: someControls,` catches the one a reviewer defeated it
-  // with, where the controls are built separately and referenced by name.
-  //
-  // The terminator is what separates a construction from a DECLARATION, and
-  // widening without it made this fire on `requiredControls: RequiredControls;`
-  // in `types.ts` — the interface that every profile is typed by, which must
-  // never count as a second copy. A property value ends at `,` or `}`; a type
-  // annotation ends at `;`.
-  const PROFILE_LITERAL = /requiredControls\s*:\s*(?:\{|[A-Za-z_$][\w$.]*\s*[,}])/;
   /** A permissiveness ordering being DECLARED. */
-  // A permissiveness ordering being DECLARED, by SHAPE rather than by name.
+  // A permissiveness ordering being DECLARED, and a profile being CONSTRUCTED —
+  // both by asking the PARSER, after three rounds of losing to spellings.
   //
-  // Three shapes, because the duplicate has taken three forms here and a guard
-  // that knows two of them commemorates the bug rather than preventing it. The
-  // first version listed four IDENTIFIERS and a reviewer defeated it by pasting
-  // the real pre-fix duplicate back verbatim; the second matched two shapes and
-  // a reviewer defeated it three more ways.
+  // The rank detector was three regexes. It could not see quoted keys at all
+  // (the shared `code()` blanks string literals, and four of the five policy
+  // words cannot be bare identifiers); after that was fixed with a local
+  // comment-stripper and two more patterns, a reviewer defeated the result with
+  // computed keys, a `Map`, an if-chain and a ternary chain — planting a real
+  // `ranks-duplicate.ts` in a sandbox and watching sixty tests stay green.
   //
-  //   the literal form   `{ untrusted: 2 }` or `{ "read-only": 0 }` — policy
-  //                      vocabulary mapped to integers
-  //   the switch form    `case …: return 0;` — matched structurally
-  //   the array form     `["read-only", "trusted-local", …]` plus `indexOf` —
-  //                      an ordering with no integers written down at all
+  // The profile detector was widened last round specifically to catch controls
+  // "built separately and referenced by name", and the widened version still
+  // missed `requiredControls: buildControls()` — a CALL, which is the most
+  // natural way to build something separately.
   //
-  // NOT through the shared `code()`, and that is the reason the first two
-  // versions could not see the literal form: `code()` blanks string literals,
-  // and three of the five words in this vocabulary — `read-only`,
-  // `trusted-local`, `not-required`, `required-fail-closed` — cannot be written
-  // as bare identifiers. A verbatim copy of the tables in `ranks.ts` was
-  // invisible by construction. Comments are stripped locally instead, which is
-  // all this needs: the `: <digit>` shape is not something prose produces.
-  const stripComments = (raw: string): string =>
-    raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  // `declaresRanking` and `constructsWith` ask about node kinds instead.
+  // `{ untrusted: 2 }`, `{ "untrusted": 2 }` and `{ ["untrusted"]: 2 }` are
+  // three strings and one PropertyAssignment. An interface member is not an
+  // ObjectLiteralExpression, so the declaration this used to exclude by
+  // inspecting punctuation is excluded by being a different kind of thing.
+  // See `lib/config-dir.ast.ts` for the stated limits — no module resolution,
+  // no type checking.
+  const POLICY_WORDS = [
+    "read-only",
+    "trusted-local",
+    "untrusted",
+    "deny",
+    "ask",
+    "allow",
+    "not-required",
+    "required-fail-closed",
+    "vetted",
+    "unvetted",
+    "acting",
+  ] as const;
 
-  const POLICY_WORDS =
-    "read-only|trusted-local|untrusted|deny|ask|allow|not-required|required-fail-closed|vetted|unvetted|acting";
-  /** `{ untrusted: 2 }` and `{ "read-only": 0 }`, one or more digits. */
-  const RANK_LITERAL = new RegExp(`[{,]\\s*["']?(?:${POLICY_WORDS})["']?\\s*:\\s*[0-9]+\\s*[,}]`);
-  /** `case "untrusted": return 2;` — structural, because the label may be blanked. */
-  const RANK_SWITCH = /case\s+[^\n:]{0,40}:\s*\n?\s*return\s+[0-9]+\s*;/;
-  /** An ordered array of the vocabulary — an ordering with no integers in it. */
-  const RANK_ARRAY = new RegExp(
-    `\\[\\s*["'](?:${POLICY_WORDS})["']\\s*,\\s*["'](?:${POLICY_WORDS})["']`,
-  );
   const RANK_TABLE = {
-    test: (source: string): boolean =>
-      RANK_LITERAL.test(source) || RANK_SWITCH.test(source) || RANK_ARRAY.test(source),
+    test: (file: string, source: string): boolean =>
+      declaresRanking(parse(file, source), POLICY_WORDS),
   };
 
 
@@ -355,11 +348,11 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
       if (EXEMPT_LITERAL.has(file)) {
         continue;
       }
-      const source = code(raw);
-      // BOTH an object-literal `requiredControls` and a `trustMode` member.
-      // `profileId` alone fires on every file that merely reads one, and
-      // `requiredControls:` without the brace fires on the interface itself.
-      if (PROFILE_LITERAL.test(source) && source.includes("trustMode:")) {
+      // BOTH members, because `trustMode` alone fires on every file that
+      // merely reads one and `requiredControls` alone fires on the interface —
+      // except that "fires on the interface" is no longer something that can
+      // happen: an interface member is not an object literal.
+      if (constructsWith(parse(file, raw), ["trustMode", "requiredControls"])) {
         offenders.push(file);
       }
     }
@@ -373,7 +366,7 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
       if (EXEMPT_RANKS.has(file)) {
         continue;
       }
-      if (RANK_TABLE.test(stripComments(raw))) {
+      if (RANK_TABLE.test(file, raw)) {
         offenders.push(file);
       }
     }
@@ -406,16 +399,31 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     // Driven through the seams with the exemptions removed, so what is measured
     // is the predicate rather than a re-reading of it.
     const tree = treeSources(SRC);
-    const profileFiles = [...tree].filter(([, raw]) => {
-      const source = code(raw);
-      return PROFILE_LITERAL.test(source) && source.includes("trustMode:");
+    const profileFiles = [...tree].filter(([file, raw]) => {
+      return constructsWith(parse(file, raw), ["trustMode", "requiredControls"]);
     });
     expect(profileFiles.map(([file]) => file)).toEqual(["harness/policy/profiles.ts"]);
 
-    const rankFiles = [...tree].filter(([, raw]) => RANK_TABLE.test(stripComments(raw)));
-    // Two: the owner, and the one exempt file whose ranking is over a different
-    // vocabulary. A non-empty numerator, and both members named.
-    expect(rankFiles.map(([file]) => file).sort()).toEqual(["harness/policy/ranks.ts", "security/resolve.ts"]);
+    const rankFiles = [...tree].filter(([file, raw]) => RANK_TABLE.test(file, raw));
+    // ONE, and the change from two is a false positive going away rather than
+    // coverage being lost.
+    //
+    // The regex version also reported `security/resolve.ts`, and the exemption
+    // list carried it as "a ranking over a different vocabulary". It is:
+    // `ACTION_PRECEDENCE` orders `SecurityAction` — block, require-approval,
+    // redact, warn, allow — which shares exactly ONE word with the policy
+    // vocabulary. The regex fired on that single word; requiring two or more
+    // does not, because one word is not an ordering over this vocabulary.
+    //
+    // Checked rather than assumed: the file is still read (it is in `tree`), and
+    // the assertion below re-derives the reason instead of trusting this comment.
+    expect(rankFiles.map(([file]) => file)).toEqual(["harness/policy/ranks.ts"]);
+
+    const resolve = tree.get("security/resolve.ts");
+    expect(resolve).toBeDefined();
+    // It does declare an ordering — over a vocabulary that is not this one.
+    expect(declaresRanking(parse("security/resolve.ts", resolve ?? ""), ["block", "warn", "redact"])).toBe(true);
+    expect(RANK_TABLE.test("security/resolve.ts", resolve ?? "")).toBe(false);
   });
 
   test("both detectors fire through the seam, and neither fires on a declaration", () => {
@@ -495,7 +503,37 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     expect(literalOffenders(clean)).toEqual([]);
     expect(rankOffenders(clean)).toEqual([]);
 
-    // And the literal detector is not defeated by whitespace.
-    expect(PROFILE_LITERAL.test("requiredControls:{isolation:x}")).toBe(true);
+    // The spellings that defeated the regex, driven through the guard itself
+    // rather than by re-testing a pattern against an inline string — which is
+    // the construction the comment at the top of this describe condemns, and
+    // which the previous version of this very assertion used.
+    const defeated = new Map([
+      ["probe/call.ts", 'const p = { trustMode: "x", requiredControls: buildControls() };'],
+      ["probe/quoted.ts", 'const p = { "trustMode": "x", "requiredControls": c };'],
+      ["probe/spaced.ts", 'const p = { trustMode : "x", requiredControls : c };'],
+      ["probe/computed.ts", 'const p = { ["trustMode"]: "x", ["requiredControls"]: c };'],
+    ]);
+    expect(literalOffenders(defeated).sort()).toEqual([
+      "probe/call.ts",
+      "probe/computed.ts",
+      "probe/quoted.ts",
+      "probe/spaced.ts",
+    ]);
+
+    const rankDefeated = new Map([
+      ["probe/computed-keys.ts", 'const R = { ["read-only"]: 0, ["untrusted"]: 2 };'],
+      ["probe/map.ts", 'const R = new Map([["deny", 0], ["ask", 1], ["allow", 2]]);'],
+      [
+        "probe/if-chain.ts",
+        'function r(v){ if (v === "read-only") return 0; if (v === "untrusted") return 2; return 1; }',
+      ],
+      ["probe/ternary.ts", 'const r = (v) => (v === "deny" ? 0 : v === "ask" ? 1 : 2);'],
+    ]);
+    expect(rankOffenders(rankDefeated).sort()).toEqual([
+      "probe/computed-keys.ts",
+      "probe/if-chain.ts",
+      "probe/map.ts",
+      "probe/ternary.ts",
+    ]);
   });
 });
