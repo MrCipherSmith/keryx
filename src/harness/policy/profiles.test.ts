@@ -297,11 +297,13 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
   // both by asking the PARSER, after three rounds of losing to spellings.
   //
   // The rank detector was three regexes. It could not see quoted keys at all
-  // (the shared `code()` blanks string literals, and four of the five policy
-  // words cannot be bare identifiers — note FOUR: an earlier version of this
-  // comment said three and then listed four, and also claimed a verbatim copy
-  // of `ranks.ts` was invisible, which was wrong for the two tables whose keys
-  // are all bare identifiers); after that was fixed with a local
+  // (the shared `code()` blanks string literals, and four of the ELEVEN policy
+  // words cannot be bare identifiers. That count has now been wrong twice: first
+  // "three" while listing four, then "four of the five" — the numerator was
+  // corrected and the denominator was not, which is the same operation that
+  // produced an impossible byte figure two files away. The claim that a verbatim
+  // copy of `ranks.ts` was invisible was also wrong, for the two tables whose
+  // keys are all bare identifiers); after that was fixed with a local
   // comment-stripper and two more patterns, a reviewer defeated the result with
   // computed keys, a `Map`, an if-chain and a ternary chain — planting a real
   // `ranks-duplicate.ts` in a sandbox and watching sixty tests stay green.

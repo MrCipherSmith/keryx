@@ -560,6 +560,17 @@ async function handleHooks(cwd: string, args: string[]): Promise<void> {
         console.log(
           `  ${style.green(symbols.ok)} ${runtime.id} → ${path.relative(cwd, runtime.settingsPath(cwd))}`,
         );
+        // The guard is INSTALLED, which is not the same as ARMED. `exitCodeFor`
+        // returns 0 for every gate under the default `advisory` mode, so a hook
+        // that detects a live credential still lets the call proceed. An
+        // operator who reads "✓" and stops reading has a guard that reports and
+        // does not refuse — the defect this whole surface has been fixed for
+        // twice — and nothing on this screen said so.
+        if ((await modeOf(cwd)) === "advisory") {
+          note(
+            `advisory mode: ${runtime.id} will report findings and allow the call. Set \`mode\` to \`enforced\` or \`ci\` in ${path.join(".metaproject", "security.config.json")} to make it refuse.`,
+          );
+        }
       } else {
         for (const e of errors) {
           console.log(`  ${style.red(symbols.cross)} ${e}`);
