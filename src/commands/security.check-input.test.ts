@@ -449,3 +449,75 @@ describe("the ALLOW half of the runtime contract", () => {
     });
   }, 60_000);
 });
+
+describe("a mode that does not refuse is not an approval", () => {
+  // THE blocker of round five, and it was introduced by round four's fix for
+  // the missing allow path. `exitCodeFor` returns 0 for two different reasons —
+  // "the decision was clean" and "this mode does not refuse on that gate" — and
+  // the allow document was emitted for both. On a DEFAULT install:
+  //
+  //   stderr  gate: FAIL   ✗ secret/secrets.aws-access-key → block
+  //   stdout  {"permission":"allow"}                          exit 0
+  //
+  // Strictly worse than the bug it replaced: before, the allow path wrote zero
+  // bytes and the runtime fell back to its own default, which for a permission
+  // gate is to ask the operator. An approval suppresses that prompt for exactly
+  // the inputs keryx flagged as blocking.
+
+  test("advisory + a blocking finding emits NOTHING, not an approval", async () => {
+    // Advisory is the shipped default (`DEFAULT_SECURITY_CONFIG.mode`).
+    writeConfig("advisory");
+    for (const runtime of ["cursor", "antigravity"]) {
+      const { exit, out, err } = await checkInput(AWS_KEY, "untrusted-external", [
+        "--runtime",
+        runtime,
+      ]);
+      expect({ runtime, exit, out }).toEqual({ runtime, exit: 0, out: "" });
+      // The finding is real and is reported — silence here is a decision, not a
+      // failure to detect.
+      expect(err).toContain("gate: FAIL");
+    }
+  }, 60_000);
+
+  test("ci + needs-approval emits NOTHING — `require-approval` means ask a human", async () => {
+    // The sharpest form. Answering "ask a human" with a machine-readable
+    // approval is the same error with the intent inverted.
+    writeConfig("ci", { injectionFloor: 0.3 });
+    const { exit, out, err } = await checkInput(INJECTION, "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect({ exit, out }).toEqual({ exit: 0, out: "" });
+    expect(err).toContain("NEEDS-APPROVAL");
+  }, 30_000);
+
+  test("a genuine PASS still gets its allow document", async () => {
+    // The control. Emitting nothing on every non-refusal would satisfy both
+    // assertions above and would put back the zero-bytes defect the allow path
+    // was added for.
+    writeConfig("advisory");
+    const cursor = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect(JSON.parse(cursor.out)).toEqual({ permission: "allow" });
+  }, 30_000);
+
+  test("enforced still denies, and the three outcomes are distinct", async () => {
+    writeConfig("enforced");
+    const denied = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "cursor"]);
+    const allowed = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    writeConfig("advisory");
+    const silent = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "cursor"]);
+
+    expect(JSON.parse(denied.out)).toMatchObject({ permission: "deny" });
+    expect(JSON.parse(allowed.out)).toEqual({ permission: "allow" });
+    expect(silent.out).toBe("");
+    // Three different answers to three different situations, which is the point:
+    // the previous version had two, and folded the third into the wrong one.
+    expect(new Set([denied.out, allowed.out, silent.out]).size).toBe(3);
+  }, 60_000);
+});

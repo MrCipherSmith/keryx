@@ -437,6 +437,7 @@ async function handleCheck(
     args,
     exitCodeFor(decision, cwd, await modeOf(cwd)),
     `keryx security: this ${kind} was refused by the configured security policy (gate: ${decision.gate}).`,
+    decision.gate,
   );
 }
 
@@ -728,34 +729,66 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
 /**
  * Emit the decision in the shape the invoking runtime reads, and return its code.
  *
- * `--runtime <id>` is written into the command by `security hooks install`, so
- * a hook knows which harness is asking. Without it — a human at a terminal, or
- * a script — the plain CLI convention of a non-zero exit stands.
+ * `--runtime <id>` is written into the command by `security hooks install`, so a
+ * hook knows which harness is asking. Without it — a human at a terminal, or a
+ * script — the plain CLI convention of a non-zero exit stands.
  *
- * BOTH halves, and the second one is here because the first version of this
- * function was only the first half. It returned early on `code === 0` having
- * written nothing, so a passing check handed a stdout-JSON runtime zero bytes
- * and left the outcome to whatever that runtime does with an empty response.
- * `src/ctx/hook.ts` writes `action.stdout` on both branches and always did; this
- * surface copied the refusal DOCUMENT out of the module that owns it and not
- * the CONTRACT — which is word for word the sentence written about the previous
- * round's version of this bug, one branch over.
+ * THREE outcomes, not two, and conflating the middle one with a pass was a
+ * security regression this function shipped and a review caught:
  *
- * The shapes come from `src/ctx/runtimes.ts`, which owns them.
+ *   the mode refuses          -> the refusal document
+ *   the gate PASSED           -> the allow document
+ *   neither                   -> NOTHING, and that is the whole fix
+ *
+ * `exitCodeFor` returns 0 for two different reasons. One is "the decision was
+ * clean". The other is "this mode does not refuse on that gate" — `advisory`
+ * returns 0 for every gate including `fail`, and `ci` returns 0 for
+ * `needs-approval`. The first version of this function read `code === 0` as a
+ * pass and emitted `{"permission":"allow"}` for both, so on a DEFAULT install a
+ * live AWS key produced:
+ *
+ *   stderr  gate: FAIL   ✗ secret/secrets.aws-access-key → block
+ *   stdout  {"permission":"allow"}                          exit 0
+ *
+ * That is strictly worse than the bug it replaced. Before, the allow path wrote
+ * zero bytes and the runtime fell back to its OWN default, which for a
+ * permission gate is to ask the operator. Emitting an approval suppresses that
+ * prompt for exactly the inputs keryx flagged as blocking. And `require-approval`
+ * — the `needs-approval` gate — literally means ask a human; answering it with a
+ * machine-readable approval is the same error in its sharpest form.
+ *
+ * So silence is the correct third answer. It is not an omission: it says keryx
+ * has a finding and the operator's configured mode does not refuse on it, which
+ * leaves the decision where the operator's mode setting left it.
+ *
+ * The document shapes come from `src/ctx/runtimes.ts`, which owns them.
  */
-function applyRuntimeDecision(args: string[], code: number, message: string): number {
+function applyRuntimeDecision(
+  args: string[],
+  code: number,
+  message: string,
+  gate: SecurityDecision["gate"],
+): number {
   const runtime = optionValue(args, "--runtime");
   if (runtime === undefined) {
     return code;
   }
-  const action = code === 0 ? allowAction(runtime) : refusalAction(runtime, message);
-  if (action.stdout !== undefined) {
-    process.stdout.write(action.stdout);
+  const emit = (action: { exitCode: number; stdout?: string; stderr?: string }): number => {
+    if (action.stdout !== undefined) {
+      process.stdout.write(action.stdout);
+    }
+    if (action.stderr !== undefined) {
+      process.stderr.write(action.stderr);
+    }
+    return action.exitCode;
+  };
+  if (code !== 0) {
+    return emit(refusalAction(runtime, message));
   }
-  if (action.stderr !== undefined) {
-    process.stderr.write(action.stderr);
+  if (gate === "pass") {
+    return emit(allowAction(runtime));
   }
-  return action.exitCode;
+  return 0;
 }
 
 export function printSecurityHelp(): void {
