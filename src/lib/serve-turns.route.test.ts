@@ -676,6 +676,41 @@ describe("idempotency (AC7)", () => {
     expect(body).toMatchObject({ turnId: firstBody.turnId, duplicate: true });
   });
 
+  test("a key whose record cannot be read is a 500, not a duplicate with no session", async () => {
+    // F-011. `SubmitOutcome.unavailable` was added, produced, and turned into a
+    // 500 by the route — with nothing exercising any of it. Deleting the branch
+    // left every test green, which is precisely the shape this outcome exists
+    // to prevent: a null record standing in for a stated failure.
+    const first = await handleServeRequest(post(turnBody({ idempotencyKey: "damaged-record" })), ctx());
+    const { turnId } = (await first.json()) as { turnId: string };
+    expect(first.status).toBe(202);
+
+    // The claim survives; the record it names does not. A directory in place of
+    // the file, so the failure is `not-regular` and this covers the reason
+    // F-012 just moved as well.
+    const record = path.join(configDir, "turns", turnId, "turn.json");
+    rmSync(record, { force: true });
+    mkdirSync(record, { recursive: true });
+
+    const second = await handleServeRequest(post(turnBody({ idempotencyKey: "damaged-record" })), ctx());
+    expect(second.status).toBe(500);
+    const body = await second.text();
+    expect(body).toContain("record-unreadable");
+    // The failure reason is not echoed — same rule as every other 500 here.
+    expect(body).not.toContain("not-regular");
+
+    // And the control, or the assertion above is satisfied by a route that
+    // 500s on every repeated key: a claim whose record was REMOVED is still a
+    // duplicate, because the claim is the authority on what the key holds.
+    const other = await handleServeRequest(post(turnBody({ idempotencyKey: "removed-record" })), ctx());
+    const removed = (await other.json()) as { turnId: string };
+    rmSync(path.join(configDir, "turns", removed.turnId, "turn.json"), { force: true });
+
+    const again = await handleServeRequest(post(turnBody({ idempotencyKey: "removed-record" })), ctx());
+    expect(again.status).toBe(200);
+    expect((await again.json()) as { duplicate: boolean }).toMatchObject({ duplicate: true });
+  });
+
   test("different keys start different turns", async () => {
     const a = (await (await handleServeRequest(post(turnBody({ idempotencyKey: "k1" })), ctx())).json()) as {
       turnId: string;
