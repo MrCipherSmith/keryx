@@ -38,7 +38,6 @@ import { emitProjectsJson, listProjects } from "./project-registry";
 import { AuthFailureThrottle } from "./serve-throttle";
 import { isTurnId, readTurnEvents, readTurnRecord } from "./serve-turn-store";
 import {
-  MAX_TURN_BODY_BYTES,
   resolveProject,
   type SubmitOutcome,
   type TurnRequest,
@@ -56,6 +55,20 @@ import {
   type ServeCredentialRecord,
   type ServeCredentialResult,
 } from "./serve-credential";
+
+/**
+ * The largest request body accepted, enforced before parsing semantics.
+ *
+ * Declared HERE, in the transport, because it bounds an HTTP request body — a
+ * framing artefact — and it is enforced twice in this file, against
+ * `content-length` and against the byte length of the raw text. It used to live
+ * in `serve-turn.ts` one line above `MAX_PROMPT_CHARS`, which is a genuine
+ * domain bound on the prompt; the two read as a pair, which is how the framing
+ * one ended up in the run module. The review that found it put it plainly: the
+ * claim "no HTTP concept crosses inward" survived literally, and the direction
+ * of travel was the one the claim exists to prevent.
+ */
+export const MAX_TURN_BODY_BYTES = 128 * 1024;
 
 /** specification.md §"Process and state machine". */
 export type ServeState = "stopped" | "configured" | "listening" | "draining" | "refused";
@@ -616,7 +629,12 @@ export async function handleServeRequest(request: Request, ctx: ServeContext): P
   // something specific went wrong.
   try {
     return await routeServeRequest(request, ctx);
-  } catch {
+  } catch (cause) {
+    // Nothing reaches the CALLER. The operator is a different audience: this is
+    // their own process, on their own terminal, and the fault class here — a
+    // throwing writer — is one that can burn an idempotency key and strand a
+    // durable record with no other signal anywhere.
+    console.error(`keryx serve: request failed: ${cause instanceof Error ? cause.message : String(cause)}`);
     return errorResponse(500, "internal-error", "The request could not be completed.");
   }
 }
@@ -848,11 +866,23 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
       // raised while the response is being produced, or anything Bun itself
       // raises. Without it, Bun's default error page answers, carrying the
       // message and the stack.
-      error: () =>
-        new Response(
-          `${JSON.stringify({ schemaVersion: "1.0.0", error: "internal-error", message: "The request could not be completed." }, null, 2)}\n`,
-          { status: 500, headers: JSON_HEADERS },
-        ),
+      //
+      // Through `errorResponse`, not a hand-rolled body. It used to emit
+      // `{schemaVersion, error, message}` while api-protocol.md defines
+      // `{error: {code, message}}` — so a client reading `error.code` got
+      // `undefined` on the one response class that means the server broke, and
+      // the shape told it WHICH boundary fired. Same document as the other
+      // fourteen now.
+      //
+      // The operator is told, on the process's own stderr. The argument against
+      // putting an id in the RESPONSE is sound — this release has no log to
+      // correlate against — but it is not an argument for the process saying
+      // nothing at all about a fault that can burn an idempotency key and strand
+      // a durable record.
+      error: (cause: unknown) => {
+        console.error(`keryx serve: request failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+        return errorResponse(500, "internal-error", "The request could not be completed.");
+      },
     });
   } catch (error) {
     // A bind failure is still a refusal to start, not a degraded listen: the

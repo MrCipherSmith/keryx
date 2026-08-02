@@ -153,6 +153,26 @@ export async function runGate(input: {
 // in advisory mode; the caller may proceed after logging. In enforced/ci mode a
 // fail/needs-approval decision must stop the controlled write.
 export function createSecurityService(cwd: string = process.cwd()): SecurityService {
+  // Per-INSTANCE, resolved once and reused. `redact` used to reload the config
+  // and the HMAC key on every call, which is invisible while every caller
+  // constructs a service per call — and is not once a caller has a loop.
+  //
+  // `keryx serve` made that loop production: the remote turn runner redacts
+  // every `assistant.delta` before it is appended, so a 10,000-event turn paid
+  // 10,000 config loads and 10,000 key reads. Measured at 80 microseconds per
+  // event, which was two thirds of the 121 microseconds the whole per-event path
+  // cost.
+  //
+  // Instance-scoped rather than module-scoped, deliberately. A module cache
+  // would outlive a config change on disk for the life of the process; an
+  // instance is held for one turn by the one caller that holds one at all, and
+  // every other caller still constructs per call and sees exactly the behaviour
+  // it saw before.
+  let configOnce: ReturnType<typeof loadSecurityConfig> | undefined;
+  let hashFnOnce: ReturnType<typeof hashFnFor> | undefined;
+  const configFor = (): ReturnType<typeof loadSecurityConfig> => (configOnce ??= loadSecurityConfig(cwd));
+  const hashOnce = (): ReturnType<typeof hashFnFor> => (hashFnOnce ??= hashFnFor(cwd));
+
   return {
     async check(input: SecurityCheck): Promise<SecurityDecision> {
       try {
@@ -168,9 +188,9 @@ export function createSecurityService(cwd: string = process.cwd()): SecurityServ
       content: string,
       opts?: { source?: SecuritySource },
     ): Promise<{ redacted: string; findings: SecurityFinding[] }> {
-      const config = await loadSecurityConfig(cwd);
+      const config = await configFor();
       const matches = await runDetectorsAsync(cwd, content, config);
-      const hashFn = await hashFnFor(cwd);
+      const hashFn = await hashOnce();
       const source: SecuritySource = opts?.source ?? "generated";
       const decision = resolveDecision(config, {
         matches,

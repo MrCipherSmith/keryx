@@ -98,6 +98,18 @@ export function keryxConfigDir(dir?: string): string {
 export const MAX_CONFIG_FILE_BYTES = 1_000_000;
 
 /**
+ * The largest an append-only CONTENT file under this directory may be.
+ *
+ * One value, two named readers over it. See `MAX_TURN_FILE_BYTES` for why the
+ * split that carries information is config-versus-content and not one constant
+ * per filename.
+ *
+ * 64 MiB is far above any observed transcript or event log and far below the
+ * size at which the read aborts, which is the whole job of this number.
+ */
+export const MAX_CONTENT_FILE_BYTES = 64 * 1024 * 1024;
+
+/**
  * The largest a session transcript may be before it is refused unread.
  *
  * Separate from `MAX_CONFIG_FILE_BYTES`, and not simply a larger value for it.
@@ -112,29 +124,45 @@ export const MAX_CONFIG_FILE_BYTES = 1_000_000;
  * 64 MiB is far above any observed transcript and far below the size at which
  * the read aborts, which is the whole job of this number.
  */
-export const MAX_TRANSCRIPT_FILE_BYTES = 64 * 1024 * 1024;
+export const MAX_TRANSCRIPT_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
 
 /**
- * The largest a durable turn file may be before it is refused unread.
+ * The largest a durable TURN file may be before it is refused unread.
  *
- * A third bound, for the third reason. `turns/<id>/events.jsonl` is append-only
- * and grows with the turn, and `turns/<id>/turn.json` carries the assistant's
- * text in `result.text`, so neither is a config document and neither may be read
- * at the config bound.
+ * The same number and the same reason as a transcript, and that is the point
+ * rather than a coincidence: there are two CLASSES of file under this
+ * directory, not three. A config document is a few hundred bytes of fixed shape.
+ * Everything else here is an append-only log of content —
+ * `context.jsonl`, `archive.jsonl`, `turns/<id>/events.jsonl` — or a document
+ * carrying such content, like `turn.json` with the assistant's `result.text`.
  *
- * That is not hypothetical. Both were read through `readConfigFile`, whose bound
- * is 1 MB, while this module's own `MAX_TURN_EVENTS` is 10 000 — and 10 000
- * events serialise to at least 1 518 890 bytes carrying no assistant text at
- * all. Measured: 8 000 events give 1 302 890 bytes and the read then returned
- * ZERO events, so past roughly 6 500 events the event route answered 200 with an
- * empty body. `api-protocol.md` §Bounds forbids exactly that, and the store's
- * own header said it could not happen.
+ * So `MAX_CONTENT_FILE_BYTES` is the value and the two names are the call
+ * sites' vocabulary: a reader says which class of file it is reading, which is
+ * what the readers guard's numerator is derived from. Two named readers over
+ * one bound, rather than two constants that must be kept equal by hand — the
+ * previous version was two identical numbers with two identical rationales and
+ * two byte-identical bodies, and a fourth file class would have had a precedent
+ * ("add a constant and a reader per filename") instead of a principle.
  *
- * 64 MiB, the same number as a transcript and for the same reason: far above any
- * event log 10 000 bounded events can produce, far below the size at which the
- * read aborts.
+ * Why the turn store needed it at all: both files were read through
+ * `readConfigFile`, whose bound is 1 MB, while `MAX_TURN_EVENTS` is 10 000 —
+ * and 10 000 events serialise to at least 1 518 890 bytes carrying no assistant
+ * text. Measured: 8 000 events give 1 302 890 bytes and the read then returned
+ * ZERO, so past roughly 6 500 events the event route answered 200 with an empty
+ * body. §Bounds forbids exactly that, and the store's own header said it could
+ * not happen.
+ *
+ * STATED LIMIT: this is a bound on the FILE, enforced on read, and
+ * `MAX_TURN_EVENTS` is a bound on the COUNT, enforced on write. Nothing connects
+ * them. Ten thousand bare events are 1.35 MiB, leaving about 6 569 bytes of text
+ * per event before the reader refuses, and there is no per-event byte bound. In
+ * practice the provider's own output ceiling holds it down — 10 000 real deltas
+ * measured at 1.5 MiB, a 42x margin — but that is a property keryx neither
+ * states nor enforces, and on the OpenAI-compatible path `maxOutputTokens` is
+ * dropped rather than sent. Recorded here because the next person to raise
+ * `MAX_TURN_EVENTS` needs to know the two numbers are in different units.
  */
-export const MAX_TURN_FILE_BYTES = 64 * 1024 * 1024;
+export const MAX_TURN_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
 
 /** Why a file could not be read. */
 export type ConfigReadFailure = "absent" | "not-regular" | "too-large" | "unreadable";

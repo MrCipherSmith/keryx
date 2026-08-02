@@ -176,7 +176,12 @@ export function createTurnRecord(record: TurnRecord, dir?: string): void {
  * about the stream and the stream is the caller's.
  */
 export function appendTurnEvent(event: StreamEvent, dir?: string, opts?: { force?: boolean }): boolean {
-  const target = ensureTurnDir(event.turnId, dir);
+  // The bound BEFORE the directory walk. `ensureTurnDir` is three `mkdirSync`
+  // plus three `chmodSync` on levels that already exist after the first event —
+  // 16.8 of the 26.5 microseconds an append cost, 63% of it redundant — and it
+  // ran even when the very next line was about to refuse the event. Refusing
+  // costs nothing now.
+  //
   // `force` exists for exactly one event: the terminal one. §Bounds requires the
   // stream to be CLOSED with a terminal event rather than truncated, and the
   // caller could not honour that while the bound refused the closing event
@@ -186,6 +191,7 @@ export function appendTurnEvent(event: StreamEvent, dir?: string, opts?: { force
   if (event.seq >= MAX_TURN_EVENTS && opts?.force !== true) {
     return false;
   }
+  const target = ensureTurnDir(event.turnId, dir);
   appendOwnerOnlyLine(path.join(target, "events.jsonl"), JSON.stringify(event));
   return true;
 }

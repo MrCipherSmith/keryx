@@ -11,7 +11,7 @@
 // store works and say nothing about whether the route consults it.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveLocalProfile } from "../harness/policy/profiles";
@@ -27,9 +27,11 @@ import { registerProject } from "./project-registry";
 import { defaultServeConfig, type ServeConfig } from "./serve-config";
 import { issueServeToken, readServeCredential, type ServeCredentialRecord } from "./serve-credential";
 import { handleServeRequest, type SubmitTurnOutcome } from "./serve-server";
+import { MAX_TURN_FILE_BYTES } from "./config-dir";
 import {
   claimIdempotencyKey,
   listTurnIds,
+  MAX_TURN_EVENTS,
   readTurnEvents,
   readTurnRecord,
   releaseIdempotencyKey,
@@ -443,6 +445,104 @@ describe("a claim is released when the turn that took it fails", () => {
     rmSync(path.join(configDir, "turns", PINNED), { recursive: true, force: true });
     const retried = await handleServeRequest(post(turnBody({ idempotencyKey: "unwritable-result" })), ctx());
     expect(retried.status).toBe(202);
+  });
+});
+
+describe("the backlog bound, through the RUNNER rather than the store", () => {
+  test("past the bound the stream still closes, and says the record stopped growing", async () => {
+    // The store proves `appendTurnEvent` honours `force`. Nothing proved the one
+    // caller passes it — which is exactly the shape of the finding being fixed,
+    // whose own class named that caller as "the only caller, discards it".
+    // Removing `{ force: true }` and the `bounded` flag left the whole suite
+    // green, so this drives the real runner past the real bound.
+    //
+    // Affordable because the per-event cost was fixed in the same round: one
+    // security service per turn instead of a config load and an HMAC key read
+    // per delta, and the bound checked before the directory walk. 10,000 deltas
+    // went from 1.06 s to 0.39 s.
+    const chatty = new (class extends StubProvider {
+      override async *stream(_request: NormalizedRequest, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+        let sequence = 0;
+        const next = (body: Omit<NormalizedEvent, "sequence" | "attemptId">): NormalizedEvent => ({
+          ...body,
+          sequence: sequence++,
+          attemptId: opts.attemptId,
+        });
+        yield next({ kind: "model_start" });
+        // One past the bound, counting `turn.started` as seq 0.
+        for (let i = 0; i < MAX_TURN_EVENTS; i += 1) {
+          yield next({ kind: "text_delta", text: `d${i}` });
+        }
+        yield next({ kind: "model_end" });
+      }
+    })("unused");
+
+    const accepted = await handleServeRequest(post(turnBody()), ctx({ provider: chatty }));
+    expect(accepted.status).toBe(202);
+    const { turnId } = (await accepted.json()) as { turnId: string };
+
+    const events = eventsOf(turnId, -1, configDir);
+    // Exactly one event past the window: the closing one, forced.
+    expect(events.length).toBe(MAX_TURN_EVENTS + 1);
+    const last = events.at(-1);
+    expect(last?.kind).toBe("turn.finished");
+    expect(last?.terminal).toBe(true);
+    expect(last?.seq).toBe(MAX_TURN_EVENTS);
+    // ...and it says WHY there is less of the stream than the turn produced,
+    // which is the difference between a closed stream and a truncated one.
+    expect(last?.text).toContain("backlog bound");
+
+    // A client resuming at the last id it received still gets the terminal
+    // event — a cursor past the bound must not strand it.
+    const resumed = eventsOf(turnId, MAX_TURN_EVENTS - 1, configDir);
+    expect(resumed.map((e) => e.kind)).toEqual(["turn.finished"]);
+  }, 120_000);
+});
+
+describe("a record the process cannot read is a 500, not a 404", () => {
+  // F-002's route half. The store returns a typed failure and the store suite
+  // pins that; nothing pinned what the ROUTE does with it. Reverting both
+  // branches — the SSE route to 200-with-empty-body, the record route to 404 —
+  // left 919 tests green.
+  async function unreadableTurn(): Promise<string> {
+    const accepted = await handleServeRequest(post(turnBody()), ctx());
+    const { turnId } = (await accepted.json()) as { turnId: string };
+    return turnId;
+  }
+
+  function oversize(file: string): void {
+    const handle = openSync(file, "w", 0o600);
+    try {
+      ftruncateSync(handle, MAX_TURN_FILE_BYTES + 1);
+    } finally {
+      closeSync(handle);
+    }
+  }
+
+  test("an oversized turn.json is 500, and an unknown turn is still 404", async () => {
+    const turnId = await unreadableTurn();
+    oversize(path.join(configDir, "turns", turnId, "turn.json"));
+
+    const response = await handleServeRequest(get(`/v1/turns/${turnId}`), ctx());
+    expect(response.status).toBe(500);
+    expect(await response.text()).toContain("record-unreadable");
+
+    // The control: "there is no such turn" must stay 404, or the split says
+    // nothing. An unknown id and a malformed one answer identically by design,
+    // so a caller cannot probe for which ids exist.
+    const unknown = await handleServeRequest(get("/v1/turns/00000000-0000-4000-8000-00000000ffff"), ctx());
+    expect(unknown.status).toBe(404);
+  });
+
+  test("an oversized events.jsonl is 500, not 200 with an empty body", async () => {
+    // The exact symptom of the blocker: past roughly 6,500 events the route
+    // answered 200 with nothing in it for a turn that had produced thousands.
+    const turnId = await unreadableTurn();
+    oversize(path.join(configDir, "turns", turnId, "events.jsonl"));
+
+    const response = await handleServeRequest(get(`/v1/turns/${turnId}/events`), ctx());
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toBe("");
   });
 });
 

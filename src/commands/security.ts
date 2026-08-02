@@ -634,9 +634,46 @@ async function modeOf(cwd: string): Promise<string> {
   return (await loadSecurityConfig(cwd)).mode;
 }
 
-// scan honors mode+gate: ci mode exits non-zero on a gate fail; advisory reports
-// and exits 0. enforced also exits non-zero on fail/needs-approval.
+/**
+ * The exit code, which for `check-input` is a PROCEED/REFUSE for a tool call.
+ *
+ * `scan` honours mode+gate: `ci` exits non-zero on a gate fail, `enforced` also
+ * on `needs-approval`, `advisory` reports and exits 0.
+ *
+ * AND a prompt-injection finding over UNTRUSTED-EXTERNAL content refuses on its
+ * own, whatever the gate said. That is a second rule and it needs stating,
+ * because the first one alone made this command inert for the injection class:
+ * every shipped injection detector scores 0.35 to 0.45 against a default
+ * `gate.minConfidence` of 0.5, so a lone injection resolves to `warn`, the gate
+ * to `pass`, and the exit code to 0 in every mode. `keryx security check-input
+ * --source untrusted-external` is installed as the PreToolUse guard in Claude
+ * Code and the other supported runtimes — so it DETECTED the injection, PRINTED
+ * it, and let the tool call proceed. A guard that reports to a log nobody reads
+ * and returns success is not a guard.
+ *
+ * The same asymmetry, on the same class, that the remote entry surface was
+ * fixed for in this round: step 5 of the required decision path worked for the
+ * secret class and was inert for the injection class. Three sites, and this was
+ * the one nobody had looked at — it is a string constant in the hook installer,
+ * not a call to the security service, so the grep that found the other two
+ * could not see it.
+ *
+ * Scoped by SOURCE, not applied everywhere. `generated`, `tool-output` and
+ * `trusted-project` are content keryx itself produced, and §7a's decision to
+ * keep a lone injection at `warn` for those is right — escalating there would
+ * fail the test suite of any repository whose fixtures contain the canonical
+ * strings, including this one.
+ *
+ * Advisory still exits 0. Report-only in advisory is a stated §11 invariant, and
+ * an operator who has not opted into enforcement has not asked to be blocked.
+ */
 function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): number {
+  if (mode === "advisory") {
+    return 0;
+  }
+  if (refusesOnInjection(decision)) {
+    return 1;
+  }
   if (mode === "ci") {
     return decision.gate === "fail" ? 1 : 0;
   }
@@ -644,6 +681,21 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
     return decision.gate === "fail" || decision.gate === "needs-approval" ? 1 : 0;
   }
   return 0;
+}
+
+/**
+ * A prompt-injection finding over content that arrived from outside.
+ *
+ * `source` is read HERE because nothing downstream reads it: `resolveDecision`
+ * receives it and neither `buildFinding` nor `escalateInjection` consults it, so
+ * the one signal distinguishing "a stranger sent this" from "we generated this"
+ * is carried the whole way down and dropped. Every gate that needs the
+ * distinction has to re-derive it at its own call site, and two of three now do.
+ */
+function refusesOnInjection(decision: SecurityDecision): boolean {
+  return decision.findings.some(
+    (finding) => finding.category === "prompt-injection" && finding.source.kind === "untrusted-external",
+  );
 }
 
 export function printSecurityHelp(): void {

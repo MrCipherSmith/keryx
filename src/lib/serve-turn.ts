@@ -27,6 +27,7 @@ import { ToolRegistry } from "../harness/tool/registry";
 import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/tool/types";
 import type { HarnessRunInput } from "../harness/types";
 import { createSecurityService } from "../security/service";
+import type { SecurityService } from "../security/types";
 import { listProjects } from "./project-registry";
 import {
   appendTurnEvent,
@@ -52,9 +53,6 @@ import {
  * parsed and then chose to ignore; refusing means it was never a legal request.
  */
 export const REMOTE_ORIGIN = "remote:http";
-
-/** The largest request body accepted, enforced before parsing semantics. */
-export const MAX_TURN_BODY_BYTES = 128 * 1024;
 
 /** The largest prompt accepted. Separate bound, separate status code (413). */
 export const MAX_PROMPT_CHARS = 32_000;
@@ -101,9 +99,18 @@ export function validateTurnRequest(body: unknown): TurnRequestOutcome {
   for (const key of Object.keys(value)) {
     if (!ALLOWED_FIELDS.has(key)) {
       // Named, because the caller has to fix it and the field NAME is their own
-      // input echoed back — but only the name, and only when it is short enough
-      // to be a field name rather than a payload.
-      return problem(`Unknown field: ${key.length <= 64 ? key : "(oversized)"}.`);
+      // input echoed back — but only the name, only when it is short enough to
+      // be a field name rather than a payload, and only over an ALLOWLISTED
+      // alphabet.
+      //
+      // The length bound alone was not enough. `JSON.stringify` does not escape
+      // `<`, `/` or `>`, so this was the one unbounded-alphabet reflection on
+      // the surface: a key of `</script><b>` came back verbatim in the body.
+      // Not an XSS here — the content type is `application/json` and the value
+      // is the caller's own input — but any transport that renders an error
+      // body into HTML inherits it, and there is no reason a JSON field name
+      // needs a character outside this set.
+      return problem(`Unknown field: ${describeFieldName(key)}.`);
     }
   }
   if (value.schemaVersion !== "1.0.0") {
@@ -151,6 +158,14 @@ export function validateTurnRequest(body: unknown): TurnRequestOutcome {
     request.idempotencyKey = value.idempotencyKey;
   }
   return { ok: true, request };
+}
+
+/** A field name as it may be echoed: allowlisted alphabet, bounded length. */
+function describeFieldName(key: string): string {
+  if (key.length > 64) {
+    return "(oversized)";
+  }
+  return /^[A-Za-z0-9_$-]+$/.test(key) ? key : "(unprintable)";
 }
 
 function isUuid(value: unknown): value is string {
@@ -312,9 +327,21 @@ export async function scanPrompt(scanRoot: string, prompt: string): Promise<{ re
     const { findings } = await createSecurityService(scanRoot).redact(prompt, { source: "untrusted-external" });
     // Any finding that would block or need approval stops conversion into a
     // turn. security-policy.md: "A prompt-injection or secret finding stops
-    // conversion into a turn." `redact` and `warn` do not stop it — the first
-    // is handled by the redaction itself and the second is advisory by
-    // definition.
+    // conversion into a turn." `redact` and `warn` do not stop it, and the
+    // reason differs for each — the previous version of this comment gave one
+    // reason for both and it was false for `redact`.
+    //
+    // `warn` is advisory by definition, so passing it is the whole point.
+    //
+    // `redact` passes UNREDACTED. This function destructures `{ findings }` and
+    // throws the `redacted` string away, and `runRemoteTurn` sends
+    // `input.request.prompt` — the original — to the provider. The default PII
+    // policy action is `redact`, so that is the common case, not a corner. It is
+    // not a policy violation on its face: step 9 and §"Data minimization" govern
+    // what leaves toward the CALLER, and the outbound side does redact. But the
+    // old comment claimed the inbound redaction was applied here, and it was
+    // not — a false claim in a security comment is how the next reader stops
+    // looking. The prompt is not persisted, so nothing survives the turn.
     //
     // AND a prompt-injection finding stops it whatever action the gate assigned,
     // which is not the same rule and has to be stated separately. Every
@@ -352,13 +379,22 @@ export async function scanPrompt(scanRoot: string, prompt: string): Promise<{ re
   }
 }
 
-/** Redact one outbound string. Never throws; a failure redacts everything. */
-async function redactOut(scanRoot: string, text: string): Promise<string> {
+/**
+ * Redact one outbound string. Never throws; a failure redacts everything.
+ *
+ * Takes the turn's ONE service rather than constructing one per call. This is
+ * called for every `assistant.delta`, and a fresh service reloaded the security
+ * config and the HMAC key on each one: 80 microseconds per event, two thirds of
+ * the whole per-event cost, on a path that wiring the runner into production had
+ * just made hot. The service memoises both per instance, so one instance per
+ * turn pays for them once.
+ */
+async function redactOut(security: SecurityService, text: string): Promise<string> {
   if (text.length === 0) {
     return text;
   }
   try {
-    const { redacted } = await createSecurityService(scanRoot).redact(text, { source: "generated" });
+    const { redacted } = await security.redact(text, { source: "generated" });
     return redacted;
   } catch {
     // `requiredControls.redactionFailure` is pinned to `deny` by the frozen
@@ -377,6 +413,8 @@ async function redactOut(scanRoot: string, text: string): Promise<string> {
  */
 export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput> {
   const scanRoot = input.scanRoot;
+  // ONE for the whole turn. See `redactOut`.
+  const security = createSecurityService(scanRoot);
   const newId = input.newId ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
   const turnId = input.turnId ?? newId();
@@ -409,27 +447,40 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   };
 
   /**
-   * The closing event, which the bound may not refuse.
+   * An event the bound may not refuse.
    *
-   * Forced past the window on purpose, and marked so a reader can tell a stream
-   * that ended from one that was cut short: `terminal` says the stream is over,
-   * `text` says why there is less of it than the turn produced.
+   * The backlog bound exists to stop a chatty turn growing the record without
+   * limit, and `assistant.delta` is what it is for. It is not for the events
+   * that carry the turn's ACCOUNT OF ITSELF — the closing event, and the
+   * approval pair whose absence would make the stream and the result disagree.
+   * Those are a fixed, tiny number per turn and dropping them costs the
+   * property the bound was written to protect.
    */
-  const emitTerminal = (): void => {
+  const emitForced = (kind: StreamEventKind, extra: Partial<StreamEvent> = {}): void => {
     appendTurnEvent(
-      {
-        schemaVersion: "1.0.0",
-        turnId,
-        seq,
-        kind: "turn.finished",
-        at: clock(),
-        terminal: true,
-        ...(bounded ? { text: "the event backlog bound was reached; earlier events are complete, later ones were not recorded" } : {}),
-      },
+      { schemaVersion: "1.0.0", turnId, seq, kind, at: clock(), ...extra },
       input.dir,
       { force: true },
     );
     seq += 1;
+  };
+
+  /**
+   * The closing event.
+   *
+   * Marked so a reader can tell a stream that ended from one that was cut
+   * short: `terminal` says the stream is over, `text` says why there is less of
+   * it than the turn produced.
+   */
+  const emitTerminal = (): void => {
+    emitForced("turn.finished", {
+      terminal: true,
+      ...(bounded
+        ? {
+            text: "the event backlog bound was reached; earlier events are complete, later ones were not recorded",
+          }
+        : {}),
+    });
   };
 
   const terminate = (
@@ -577,7 +628,7 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   let assistantText = "";
   for (const event of events) {
     if (event.kind === "text_delta" && typeof event.text === "string") {
-      const redacted = await redactOut(scanRoot, event.text);
+      const redacted = await redactOut(security, event.text);
       assistantText += redacted;
       emit("assistant.delta", { text: redacted });
     }
@@ -590,15 +641,24 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     // polls sees it too. A denial visible in one and not the other is a turn
     // whose two accounts of itself disagree.
     const approvalId = newId();
-    emit("approval.pending", { approvalId });
-    emit("approval.resolved", { approvalId, resolution: "denied" });
+    // FORCED past the bound, like the terminal event and for the same reason.
+    // The comment above states the invariant — the denial must be visible in
+    // BOTH surfaces, because a turn whose two accounts of itself disagree is
+    // the failure this pair exists to prevent — and past the window the bound
+    // refused these two while `terminate`'s `approvals` array still reached
+    // `turn.json`. The stream then said nothing about a denial the result
+    // recorded. Unreachable today, because this slice registers no tools and
+    // `asked` cannot be true in production; reachable the moment R4d lands one,
+    // which is the same slice that makes approvals real.
+    emitForced("approval.pending", { approvalId });
+    emitForced("approval.resolved", { approvalId, resolution: "denied" });
     return terminate("denied", "approvals-not-implemented-in-this-release", undefined, [
       { approvalId, resolution: "denied" },
     ]);
   }
 
   // `summary` is redacted here; `assistantText` already is, delta by delta.
-  return terminate("completed", "ok", summary.length > 0 ? await redactOut(scanRoot, summary) : assistantText);
+  return terminate("completed", "ok", summary.length > 0 ? await redactOut(security, summary) : assistantText);
 }
 
 /** What a submission did. Mirrors `SubmitTurnOutcome` in `serve-server.ts`. */
