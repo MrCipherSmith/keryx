@@ -126,7 +126,9 @@ describe("declaresRanking — an ordering, in any of its shapes", () => {
   test("the forms that write no object at all", () => {
     for (const [form, source] of [
       ["map", 'const R = new Map([["deny", 0], ["ask", 1], ["allow", 2]]);'], // INVISIBLE
-      ["array", 'const ORDER = ["read-only", "trusted-local", "untrusted"];'],
+      // An array is an ordering only when a POSITION is read out of it.
+      ["array-indexOf", 'const ORDER = ["read-only", "trusted-local", "untrusted"];\nORDER.indexOf(v);'],
+      ["array-index", 'const ORDER = ["read-only", "untrusted"];\nconst r = ORDER[i];'],
       ["switch", 'function r(v){ switch(v){ case "deny": return 0; case "allow": return 2; } }'],
       [
         "if-chain",
@@ -162,6 +164,10 @@ describe("declaresRanking — an ordering, in any of its shapes", () => {
       ["non-numeric", 'const R = { deny: "no", allow: "yes" };'],
       ["type-only", "interface R { deny: number; allow: number }"],
       ["array-of-other", 'const X = ["alpha", "beta"];'],
+      // A membership SET, not an ordering. Reporting this was a false positive
+      // on ordinary code, and a guard that fires on a validation list gets
+      // switched off by whoever trips on it first.
+      ["membership-set", 'const OUTCOMES = ["deny", "ask", "allow"] as const;\nOUTCOMES.includes(v);'],
     ] as const) {
       expect({ form, ranks: ranks(source) }).toEqual({ form, ranks: false });
     }
@@ -253,5 +259,44 @@ describe("propertyKey", () => {
     // identifier's own text, which is the guess a careless version would make.
     expect(suppliesProperty(literal, "dynamicName")).toEqual([]);
     expect(propertyKey(undefined)).toBeUndefined();
+  });
+});
+
+describe("what these predicates DO NOT catch", () => {
+  // The inversion the recorded lesson asks for, and the thing three rounds of
+  // self-checks got wrong: these plant shapes the CURRENT implementation is
+  // known not to handle, rather than replaying its own branch list.
+  //
+  // They assert `false`. That is deliberate and it is not a test of nothing —
+  // it is the gap list at the top of `config-dir.ast.ts` made executable. If one
+  // of these starts returning `true`, someone closed a gap and this file should
+  // say so; if one silently stays `false` while the header claims otherwise, the
+  // header is lying again.
+
+  test("a specifier that is not a string literal is invisible", () => {
+    for (const [form, source] of [
+      ["concatenated", 'const M = "./config-dir" + ".scan"; await import(M);'],
+      ["template-with-substitution", "const P='scan'; await import(`./config-dir.${P}`);"],
+      ["createRequire-renamed", 'const load = createRequire(import.meta.url); load("./config-dir.scan");'],
+    ] as const) {
+      expect({ form, seen: loadsModule(parse("p.ts", source), "config-dir.scan") }).toEqual({
+        form,
+        seen: false,
+      });
+    }
+    // The closure for the question that matters — does it SHIP — is
+    // `production-graph.test.ts`, which asks the bundler and does not care how
+    // the specifier was spelled.
+  });
+
+  test("a ranking whose numbers are not literals, or whose schema is arbitrary, is invisible", () => {
+    for (const [form, source] of [
+      ["named-constants", "const LOW=0,HIGH=2; const R = { deny: LOW, allow: HIGH };"],
+      ["row-table", 'const O = [{mode:"read-only",rank:0},{mode:"untrusted",rank:2}]; O.find(r=>r.mode===m)?.rank;'],
+      ["static-class-fields", 'class O { static readonly "not-required" = 0; static readonly "required-fail-closed" = 1; }'],
+      ["chained-map-set", 'const M = new Map<string,number>().set("read-only",0).set("untrusted",2);'],
+    ] as const) {
+      expect({ form, seen: ranks(source) }).toEqual({ form, seen: false });
+    }
   });
 });
