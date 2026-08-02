@@ -39,9 +39,19 @@
 //     · values that are named constants rather than numeric literals; that
 //       needs constant folding, which this file deliberately does not do
 //     · static class fields, and `new Map().set(a, 0).set(b, 1)`
+//     · a ranking SPLIT ACROSS FUNCTIONS — one comparison each in two helpers.
+//       Created by this round's own false-positive fix: scoping the comparison
+//       counter to the enclosing function was right, and this is what it cost.
 //
 //   constructsWith
-//     · a builder function returning the object; a class instance
+//     · a class instance — `class P { trustMode = t; requiredControls = c; }`
+//
+//     NOT a builder function: `function build(){ return {trustMode, requiredControls}; }`
+//     is CAUGHT, because the predicate looks for the literal anywhere in the
+//     file rather than at a particular position. It was listed here as a gap and
+//     a review measured otherwise. A gap list that advertises a caught case is
+//     wrong in the direction that matters — it invites someone to write the
+//     shape it says is safe.
 //
 //   suppliesProperty
 //     · a whole prebuilt options object passed by name, where the seam was set
@@ -84,11 +94,24 @@
 //
 // COST
 //
-// `walk` uses `getChildren()`, which materialises token and `SyntaxList` nodes:
-// measured at 374ms over 351 files against 35ms for `ts.forEachChild`, for
-// identical results, because no predicate here inspects a token. It stays for
-// now because these run in the test suite and not on a hot path, and the
-// difference is stated rather than left to be measured by the next reviewer.
+// `walk` uses `ts.forEachChild`. `getChildren()` additionally materialises token
+// and `SyntaxList` nodes, which no predicate here inspects. Re-measured with ONE
+// harness for both arms — the same recursive generator `walk` actually is — over
+// 626 `.ts` files under `src/`:
+//
+//   forEachChild    653,949 nodes    225ms / 343ms
+//   getChildren   1,278,189 nodes    619ms / 451ms
+//
+// 1.95x the nodes, and roughly 1.3-2.8x the time. This block previously claimed
+// "ten times", and said in the present tense that `walk` USES `getChildren()`
+// and that it "stays for now" — a decision reversed seven hours later in the
+// same round, in a commit that updated the function's docstring and not this
+// header. Both defects are the round's own subject: a correction over an
+// uncorrected body, and a figure one step stronger than the measurement.
+//
+// The 10x came from timing the two arms with DIFFERENT harnesses — an explicit
+// stack for one and the recursive generator for the other. The change is still
+// worth having; the multiplier was an artifact of the instrument.
 
 import ts from "typescript";
 
@@ -101,9 +124,9 @@ export function parse(file: string, source: string): ts.SourceFile {
  * Every node in the tree, depth-first.
  *
  * `forEachChild`, not `getChildren()`. The latter materialises token and
- * `SyntaxList` nodes — measured at 623,841 nodes in 374ms over 351 files
- * against 332,499 in 35ms — and no predicate in this file inspects a token, so
- * the extra nodes were ten times the cost for identical results.
+ * `SyntaxList` nodes that no predicate here inspects — 1.95x the nodes for
+ * identical results. Figures and the measurement caveat are in the COST block
+ * at the top of this file.
  */
 export function* walk(node: ts.Node): Generator<ts.Node> {
   yield node;

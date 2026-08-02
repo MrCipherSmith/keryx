@@ -19,8 +19,12 @@
 // on which a successful authentication reaches this module at all.
 //
 // This is deliberately NOT a general rate limiter. It counts one thing, failed
-// authentications, per peer. api-protocol.md §Bounds leaves request rate to the
-// transports ("Transports are responsible for their own rate limits").
+// authentications, per peer. Request rate is left to the transports
+// ("Transports are responsible for their own rate limits") — that sentence is
+// in specification.md, NOT in api-protocol.md §Bounds, which this comment used
+// to cite. §Bounds is a five-row table about body size, prompt length,
+// concurrent turns, pending approvals and event backlog, and has no row about
+// request rate at all.
 
 /**
  * Failures a peer may accumulate inside the window before it is throttled.

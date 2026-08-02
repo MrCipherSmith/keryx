@@ -257,7 +257,21 @@ reviewer being wrong in a way I had to prove.
 | F-026 | `f5cf65a2` | `allowAction` beside `refusalAction`; `--runtime=<id>` reaches the same contract |
 | F-027, `.find`, 3 untested branches | `7197e0c7` | ctx preserves foreign arrays; validation is about the MANAGED entry |
 | F-029 | `7ee87f05` | the HMAC memo — the caller the file is actually about |
-| minors | `755882af` | dead code, a 10x traversal, the advisory caveat install never printed |
+| F-028 | `6a0cdd19` | `constructsWith` had NARROWED the guard it replaced; spread and `Object.assign` restored it |
+| F-030 | `6a0cdd19` | the three untested branches |
+| F-031 | `6a0cdd19` | self-checks inverted — they now plant what the predicate is known NOT to catch |
+| minors | `755882af` | dead code, the traversal change, the advisory caveat install never printed |
+
+> **Corrected after round five.** This table was published with F-028 and F-031
+> missing and F-030 unlabelled, under a heading that says "closed" — a closure
+> table silently dropping two of its majors is the same operation as correcting
+> a number where the fixer happens to be reading, which is habit 3 below.
+>
+> Two figures in the rows above were also wrong. `755882af`'s "10x traversal" is
+> 1.95x by nodes and roughly 1.3-2.8x by time, re-measured with one harness for
+> both arms; the original compared an explicit stack against a recursive
+> generator. And the suite figure below was correct when written and is now
+> stale: `03a1a7fe` and later commits land inside this same review scope.
 
 Suite: **2937 pass, 14 skip, 0 fail** across 291 files.
 

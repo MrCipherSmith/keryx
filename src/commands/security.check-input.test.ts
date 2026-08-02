@@ -492,6 +492,12 @@ describe("a mode that does not refuse is not an approval", () => {
   }, 30_000);
 
   test("a genuine PASS still gets its allow document", async () => {
+    // THE control, and the commit that added this block named the wrong test as
+    // such. Restoring the exit-code decision fails three tests and the
+    // distinctness test is one of THEM; this is the one that survives that
+    // mutation, and the one that fails the opposite mutation — emitting nothing
+    // on every non-refusal, which would put back the zero-bytes defect the allow
+    // path was added for. Two reviewers found the misattribution independently.
     // The control. Emitting nothing on every non-refusal would satisfy both
     // assertions above and would put back the zero-bytes defect the allow path
     // was added for.

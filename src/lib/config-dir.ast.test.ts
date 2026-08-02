@@ -271,6 +271,12 @@ describe("propertyKey", () => {
 });
 
 describe("what these predicates DO NOT catch", () => {
+  // This set and the KNOWN GAPS list at the top of `config-dir.ast.ts` must be
+  // the SAME set. A review found they were not: the counts coincided at seven
+  // and the memberships did not — the prose named a builder function (which is
+  // caught) and prebuilt options (untested), and omitted `createRequire`
+  // (tested). A gap list whose evidence is a different list is a gap list with
+  // no evidence.
   // The inversion the recorded lesson asks for, and the thing three rounds of
   // self-checks got wrong: these plant shapes the CURRENT implementation is
   // known not to handle, rather than replaying its own branch list.
@@ -295,6 +301,44 @@ describe("what these predicates DO NOT catch", () => {
     // The closure for the question that matters — does it SHIP — is
     // `production-graph.test.ts`, which asks the bundler and does not care how
     // the specifier was spelled.
+  });
+
+  test("import.meta.require is invisible — the header declares it, so it is tested", () => {
+    const source = 'const m = import.meta.require("./config-dir.scan");';
+    expect(loadsModule(parse("p.ts", source), "config-dir.scan")).toBe(false);
+  });
+
+  test("a class instance is not seen as a construction", () => {
+    // The builder function that used to sit beside this entry is CAUGHT; only
+    // the class form is a gap, and this is what makes that distinction hold.
+    const asClass = "class P { trustMode = t; requiredControls = c; }";
+    expect(constructsWith(parse("p.ts", asClass), ["trustMode", "requiredControls"])).toBe(false);
+    // The control, and the correction: a builder IS caught.
+    const builder = "function build(){ return { trustMode: t, requiredControls: c }; }";
+    expect(constructsWith(parse("p.ts", builder), ["trustMode", "requiredControls"])).toBe(true);
+  });
+
+  test("a prebuilt options object passed by name is invisible", () => {
+    const source = "const opts = base(); opts.containmentAvailable = f; createSubmitTurn(opts);";
+    // The assignment IS seen; what is not is the same seam set in another file
+    // and passed here as a whole object.
+    expect(suppliesProperty(parse("p.ts", source), "containmentAvailable")).toEqual(["assignment"]);
+    const opaque = "createSubmitTurn(prebuiltSeams);";
+    expect(suppliesProperty(parse("p.ts", opaque), "containmentAvailable")).toEqual([]);
+  });
+
+  test("a ranking split across functions is invisible — the gap this round created", () => {
+    // Scoping the comparison counter to one function silenced a false positive
+    // on two unrelated helpers. This is what it cost, and it went undeclared
+    // until a review found it.
+    const split =
+      'function a(v: string){ if (v === "read-only") return 0; return 9; }\n' +
+      'function b(v: string){ if (v === "untrusted") return 2; return 9; }';
+    expect(ranks(split)).toBe(false);
+    // The same two comparisons inside ONE function are still caught.
+    const together =
+      'function r(v: string){ if (v === "read-only") return 0; if (v === "untrusted") return 2; return 1; }';
+    expect(ranks(together)).toBe(true);
   });
 
   test("a ranking whose numbers are not literals, or whose schema is arbitrary, is invisible", () => {
