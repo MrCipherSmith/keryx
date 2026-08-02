@@ -28,9 +28,11 @@ import { defaultServeConfig, type ServeConfig } from "./serve-config";
 import { issueServeToken, readServeCredential, type ServeCredentialRecord } from "./serve-credential";
 import { handleServeRequest, type SubmitTurnOutcome } from "./serve-server";
 import {
+  claimIdempotencyKey,
   listTurnIds,
   readTurnEvents,
   readTurnRecord,
+  releaseIdempotencyKey,
   type StreamEvent,
   type TurnRecord,
 } from "./serve-turn-store";
@@ -133,6 +135,8 @@ function ctx(
   overrides: {
     profile?: PolicyProfile;
     text?: string;
+    provider?: ProviderPort;
+    newId?: () => string;
     containmentAvailable?: () => boolean;
     submitTurn?: (request: TurnRequest, resolved: string) => Promise<SubmitTurnOutcome>;
   } = {},
@@ -146,9 +150,10 @@ function ctx(
     overrides.submitTurn ??
     createSubmitTurn({
       profile: overrides.profile ?? resolveLocalProfile("read-only-review"),
-      provider: new StubProvider(overrides.text ?? "hello from the stub"),
+      provider: overrides.provider ?? new StubProvider(overrides.text ?? "hello from the stub"),
       providerName: "stub-provider",
       model: "stub-model",
+      ...(overrides.newId !== undefined ? { newId: overrides.newId } : {}),
       // The INSTALL directory: the config root, the turn store, and the scan
       // root. A remote caller must not choose which security configuration
       // scans their own prompt by naming a project.
@@ -352,6 +357,92 @@ describe("the prompt is scanned as untrusted content", () => {
     expect(body.duplicate).toBeUndefined();
     // And it really ran: a record exists under the id the caller was handed.
     expect(recordOf(body.turnId, configDir).turnId).toBe(body.turnId);
+  });
+});
+
+describe("a claim is released when the turn that took it fails", () => {
+  const PINNED = "abcdabcd-1234-4567-89ab-cdefcdefcdef";
+
+  test("a write failure after the claim does NOT burn the idempotency key", async () => {
+    // The fix round moved the claim behind the security scan and stopped there,
+    // so the 422 example was closed and the CLASS was not: `createTurnRecord`,
+    // both event appends and `finishTurn` all reach writers documented as
+    // propagating what the write throws. Two reviewers reproduced the original
+    // symptom end to end after the fix.
+    //
+    // A regular file where the turn directory belongs is the ENOTDIR/EROFS/
+    // ENOSPC shape this module's own error-boundary rationale names.
+    mkdirSync(path.join(configDir, "turns"), { recursive: true });
+    writeFileSync(path.join(configDir, "turns", PINNED), "not a directory", "utf8");
+
+    const failed = await handleServeRequest(
+      post(turnBody({ idempotencyKey: "released-on-failure" })),
+      ctx({ newId: () => PINNED }),
+    );
+    expect(failed.status).toBe(500);
+
+    // The claim is gone, so the corrected retry RUNS rather than being answered
+    // as a duplicate of a turn that does not exist.
+    rmSync(path.join(configDir, "turns", PINNED), { force: true });
+    const retried = await handleServeRequest(post(turnBody({ idempotencyKey: "released-on-failure" })), ctx());
+
+    expect(retried.status).toBe(202);
+    const body = (await retried.json()) as { turnId: string; duplicate?: boolean };
+    expect(body.duplicate).toBeUndefined();
+    expect(recordOf(body.turnId, configDir).result?.outcome).toBe("completed");
+  });
+
+  test("a release cannot take a claim another turn legitimately re-took", async () => {
+    // The guard on the release. It removes the entry only when the key still
+    // points at the turn releasing it — otherwise a slow failing turn could
+    // strip the claim from the turn that replaced it.
+    claimIdempotencyKey("contested", PINNED, configDir);
+    expect(releaseIdempotencyKey("contested", "99999999-9999-4999-8999-999999999999", configDir)).toBe(false);
+    // Still held by the original.
+    expect(claimIdempotencyKey("contested", "11111111-1111-4111-8111-111111111111", configDir)).toEqual({
+      existing: PINNED,
+    });
+    // And the rightful owner can release it.
+    expect(releaseIdempotencyKey("contested", PINNED, configDir)).toBe(true);
+    expect(claimIdempotencyKey("contested", "11111111-1111-4111-8111-111111111111", configDir)).toEqual({
+      existing: null,
+    });
+  });
+
+  test("a terminal result that cannot be written is a 500, not a 202", async () => {
+    // `finishTurn` was changed from `void` to `boolean` with a docstring reading
+    // "The boolean is the point", and its only caller discarded it — so a turn
+    // whose record could not be written reported `completed`, the caller was
+    // answered 202, and every later read of that turn answered 404, 409 or 500
+    // forever. All five reviewers found it.
+    //
+    // The corruption happens DURING the run, from inside the provider's stream,
+    // which is the only injection point between `createTurnRecord` and
+    // `finishTurn` that does not require patching either.
+    const corrupting = new (class extends StubProvider {
+      override async *stream(request: NormalizedRequest, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+        for await (const event of super.stream(request, opts)) {
+          yield event;
+        }
+        // The record exists by now and the terminal write has not happened.
+        writeFileSync(path.join(configDir, "turns", PINNED, "turn.json"), "{not json", "utf8");
+      }
+    })("hello from the stub");
+
+    const response = await handleServeRequest(
+      post(turnBody({ idempotencyKey: "unwritable-result" })),
+      ctx({ provider: corrupting, newId: () => PINNED }),
+    );
+
+    expect(response.status).toBe(500);
+    // Says nothing about the turn or the filesystem.
+    const body = await response.text();
+    expect(body).not.toContain(PINNED);
+    expect(body).not.toContain(configDir);
+    // And the key was released, so the caller can retry once the fault clears.
+    rmSync(path.join(configDir, "turns", PINNED), { recursive: true, force: true });
+    const retried = await handleServeRequest(post(turnBody({ idempotencyKey: "unwritable-result" })), ctx());
+    expect(retried.status).toBe(202);
   });
 });
 

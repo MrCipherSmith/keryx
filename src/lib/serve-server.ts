@@ -37,7 +37,13 @@ import type { PolicyProfile } from "../harness/policy/types";
 import { emitProjectsJson, listProjects } from "./project-registry";
 import { AuthFailureThrottle } from "./serve-throttle";
 import { isTurnId, readTurnEvents, readTurnRecord } from "./serve-turn-store";
-import { MAX_TURN_BODY_BYTES, resolveProject, type TurnRequest, validateTurnRequest } from "./serve-turn";
+import {
+  MAX_TURN_BODY_BYTES,
+  resolveProject,
+  type SubmitOutcome,
+  type TurnRequest,
+  validateTurnRequest,
+} from "./serve-turn";
 import {
   isLoopbackAddress,
   serveConfigAdvice,
@@ -343,14 +349,21 @@ export interface ServeContext {
    * specification.md §Testability requires is then a function rather than a
    * network fixture.
    */
-  submitTurn?: (request: TurnRequest, project: string) => Promise<SubmitTurnOutcome>;
+  submitTurn?: (request: TurnRequest, project: string) => Promise<SubmitOutcome>;
 }
 
-/** What a submission did. `duplicate` started nothing; `rejected` ran nothing. */
-export type SubmitTurnOutcome =
-  | { kind: "accepted"; turnId: string; sessionId: string }
-  | { kind: "duplicate"; turnId: string; sessionId: string }
-  | { kind: "rejected" };
+/**
+ * What a submission did. Re-exported, NOT re-declared.
+ *
+ * This was a second structural copy of `SubmitOutcome`, and the comment on the
+ * original said so — "Mirrors `SubmitTurnOutcome` in `serve-server.ts`". The
+ * round that removed a second copy of the rank tables and a third copy of the
+ * comment stripper left the submission contract mirrored, and drift was caught
+ * in one direction only: a variant added HERE grew a route branch no runner
+ * could reach, with nothing to say so. `serve-turn.ts` imports nothing from this
+ * module, so there was never a cycle preventing the single declaration.
+ */
+export type { SubmitOutcome as SubmitTurnOutcome } from "./serve-turn";
 
 /**
  * The complete route surface, as a closed enumeration.
@@ -521,6 +534,15 @@ async function submitTurn(request: Request, ctx: ServeContext): Promise<Response
     // was rejected and NOTHING about what matched — naming the detector or the
     // matched span would turn this route into an oracle for the scanner.
     return errorResponse(422, "prompt-rejected", "The prompt was rejected.");
+  }
+  if (outcome.kind === "unavailable") {
+    // The idempotency key names a turn whose record this process cannot read.
+    // Answered as a server failure rather than as a duplicate, because the
+    // duplicate answer would have to carry a session id it does not have — and
+    // `sessionId: ""` on a 200 is a null record standing in for a stated
+    // failure, on the one path that reaches a success status. The reason is not
+    // echoed, for the same reason no other 500 on this surface echoes one.
+    return errorResponse(500, "record-unreadable", "The durable record for this turn could not be read.");
   }
 
   // 202: accepted. api-protocol.md is explicit that "an accepted turn is not a
@@ -764,7 +786,7 @@ export interface StartServeInput extends ServeStartupInput {
   makeSubmitTurn: (
     profile: PolicyProfile,
     dir: string | undefined,
-  ) => (request: TurnRequest, project: string) => Promise<SubmitTurnOutcome>;
+  ) => (request: TurnRequest, project: string) => Promise<SubmitOutcome>;
 }
 
 /**

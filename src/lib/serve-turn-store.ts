@@ -31,7 +31,7 @@
 // no reader here can be made to abort the process on an oversized file.
 
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import {
   appendOwnerOnlyLine,
@@ -138,6 +138,11 @@ function keyPath(idempotencyKey: string, dir?: string): string {
   return path.join(turnsRoot(dir), "keys", `${digest}.json`);
 }
 
+/** Why a turn file could not be read, or the value if it could. */
+export type TurnReadFailure = ConfigReadFailure | "not-a-turn-id" | "malformed";
+
+export type TurnReadResult<T> = { ok: true; value: T } | { ok: false; reason: TurnReadFailure };
+
 /**
  * Reject a turn id that is not the shape this module mints.
  *
@@ -145,11 +150,6 @@ function keyPath(idempotencyKey: string, dir?: string): string {
  * onto a path, so this is the containment boundary for all of them — one check,
  * at the one place the id becomes a path, rather than one per route.
  */
-/** Why a turn file could not be read, or the value if it could. */
-export type TurnReadFailure = ConfigReadFailure | "not-a-turn-id" | "malformed";
-
-export type TurnReadResult<T> = { ok: true; value: T } | { ok: false; reason: TurnReadFailure };
-
 export function isTurnId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 }
@@ -318,6 +318,44 @@ export function claimIdempotencyKey(idempotencyKey: string, turnId: string, dir?
   ensureKeryxSubdir(["turns", "keys"], dir);
   writeOwnerOnlyFile(file, `${JSON.stringify({ turnId }, null, 2)}\n`);
   return { existing: null };
+}
+
+/**
+ * Release a claim this turn took and could not use.
+ *
+ * The release path this module went two rounds without. `claimIdempotencyKey`
+ * writes a durable file and nothing ever removed it, so a claim taken before a
+ * step that then failed burned the key permanently: every later submission of
+ * the corrected prompt answered `200 {duplicate: true, sessionId: ""}` naming a
+ * turnId whose record does not exist, and the legitimate prompt never ran. The
+ * first fix moved the claim behind the security scan, which closed the one
+ * example the finding named and left the four writers after it.
+ *
+ * Guarded by `turnId`. It removes the entry ONLY when the key still points at
+ * the turn releasing it, so a release arriving after another turn legitimately
+ * re-claimed the key cannot take that turn's claim away.
+ *
+ * Returns whether an entry was removed, so a caller can tell "released" from
+ * "someone else holds it now" rather than inferring it.
+ */
+export function releaseIdempotencyKey(idempotencyKey: string, turnId: string, dir?: string): boolean {
+  const file = keyPath(idempotencyKey, dir);
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    return false;
+  }
+  try {
+    const held = JSON.parse(read.text) as { turnId?: unknown };
+    if (held.turnId !== turnId) {
+      return false;
+    }
+  } catch {
+    // A damaged entry is not this turn's to remove. `claimIdempotencyKey`
+    // overwrites it on the next claim, which is the recovery path.
+    return false;
+  }
+  rmSync(file, { force: true });
+  return true;
 }
 
 /** Turn ids with a record on disk. Used by tests and by drain accounting. */

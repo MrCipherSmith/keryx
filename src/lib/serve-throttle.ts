@@ -126,7 +126,7 @@ export class AuthFailureThrottle {
     }
 
     this.peers.set(peer, record);
-    this.evictIfFull();
+    this.evictIfFull(peer);
 
     return record.throttledUntil > now
       ? { throttled: true, retryAfterSeconds: Math.ceil((record.throttledUntil - now) / 1000) }
@@ -138,33 +138,47 @@ export class AuthFailureThrottle {
     return this.peers.size;
   }
 
-  private evictIfFull(): void {
+  /**
+   * Drop one peer when the table is over its bound.
+   *
+   * Three rules, and each of the first two was learned by getting it wrong.
+   *
+   * 1. NEVER the peer that just recorded a failure. It is `justInserted`, it is
+   *    excluded, and that exclusion is the whole of this round's fix. Without
+   *    it: eviction runs from `recordFailure` right after the insert, so once
+   *    every OTHER peer is in cooldown the newcomer is the only unthrottled
+   *    candidate and evicts itself on every single failure. Its record is
+   *    re-created empty next time and it can never reach the limit. Measured on
+   *    the version that did this — 1024 bans in the table, then 1000
+   *    consecutive failed authentications from a fresh address, never throttled
+   *    once. Saturating the table switched the control off for everyone new,
+   *    and 127.0.0.0/8 gives a local attacker 16.7M addresses to saturate it
+   *    with. That is strictly worse than the escape it replaced.
+   *
+   * 2. Prefer a peer NOT serving a cooldown. Otherwise a flood clears the
+   *    flooder's own ban: `check` reads `seenAt` and never writes it, so a peer
+   *    in cooldown stops being seen the moment it starts being refused, its
+   *    `seenAt` freezes, and oldest-first takes it first.
+   *
+   * 3. When every candidate IS in cooldown, take the ban that expires soonest.
+   *    This branch is reachable — it is what runs on a saturated table now that
+   *    rule 1 protects the newcomer — and it is the right trade: the table
+   *    converges on the bans of peers currently attacking rather than on the
+   *    oldest bans, which is the ordering that matters. It is tested.
+   */
+  private evictIfFull(justInserted: string): void {
     if (this.peers.size <= MAX_TRACKED_PEERS) {
       return;
     }
-    // Oldest-seen first, among peers NOT currently serving a cooldown.
-    //
-    // The exclusion is the control, and it used to be only a comment. This
-    // comment already claimed throttled peers were not preferred for eviction,
-    // and the code did nothing to hold it: `check` reads `seenAt` and never
-    // writes it, so a peer in cooldown stops being seen the moment it starts
-    // being refused, its `seenAt` freezes, and oldest-first then takes it FIRST.
-    // Flooding the table cleared exactly the cooldown the comment said flooding
-    // could not clear — the escape it was written to describe as impossible.
     const now = this.now();
     let oldestKey: string | undefined;
     let oldestAt = Number.POSITIVE_INFINITY;
-    // Fallback for the case where every tracked peer is in cooldown. DEFENSIVE
-    // rather than reachable today: eviction always runs from `recordFailure`,
-    // and a peer cannot reach the failure limit on the same call that adds it,
-    // so the peer that overflows the table is itself unthrottled and is
-    // available as a victim. Kept because "unbounded growth" is the wrong way to
-    // fail if that ever stops being true, and the peer whose ban ends soonest is
-    // the one that costs the least to lose. Recorded here rather than asserted
-    // by a test that cannot construct the state.
     let soonestKey: string | undefined;
     let soonestUntil = Number.POSITIVE_INFINITY;
     for (const [key, record] of this.peers) {
+      if (key === justInserted) {
+        continue;
+      }
       if (record.throttledUntil > now) {
         if (record.throttledUntil < soonestUntil) {
           soonestUntil = record.throttledUntil;

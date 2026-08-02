@@ -17,6 +17,7 @@
 // configuration and the credential — passes this function in. Forgetting is now
 // a type error rather than a 503.
 
+import { detectSandboxLauncher } from "../harness/process/sandbox/detect";
 import { makeProvider } from "../harness/provider/make-provider";
 import type { PolicyProfile } from "../harness/policy/types";
 import { keryxConfigDir } from "./config-dir";
@@ -40,6 +41,23 @@ import { createSubmitTurn, type SubmitOutcome, type TurnRequest } from "./serve-
 export function assembleSubmitTurn(
   profile: PolicyProfile,
   dir: string | undefined,
+  seams: {
+    /**
+     * Overrides the sandbox-launcher probe. TESTS ONLY.
+     *
+     * It exists because the property that must be pinned is bidirectional — a
+     * turn under a containment-requiring profile RUNS when a launcher is
+     * present and is REFUSED when it is not — and no single host can exercise
+     * both. Without the seam, the assertion that would have caught this round's
+     * blocker is only possible on a machine with bubblewrap installed, which is
+     * to say on almost no CI runner.
+     *
+     * It can make a turn run uncontained, so it is a weakening seam and is
+     * treated like `localBaseline`: `serve-server.test.ts` holds a source-level
+     * guard asserting that no file outside this one supplies it.
+     */
+    containmentAvailable?: () => boolean;
+  } = {},
 ): (request: TurnRequest, project: string) => Promise<SubmitOutcome> {
   // Saved keys into the environment first, so `makeProvider` can see them — the
   // same order `keryx shell` uses. Without a key every provider falls closed to
@@ -62,5 +80,20 @@ export function assembleSubmitTurn(
     providerName,
     model,
     dir: keryxConfigDir(dir),
+    // The real probe, and its absence was the second blocker of the fix round.
+    //
+    // `runRemoteTurn` defaults this seam to `() => false`, and the shipped
+    // default profile `remote-restricted` resolves to `unattended-untrusted`,
+    // whose `requiredControls.isolation` is `required-fail-closed`. So an
+    // assembly that omitted it refused EVERY turn with
+    // `containment-unavailable` — a 202 whose record says `refused`, on a
+    // listener that had just been wired specifically so turns could run.
+    //
+    // Evaluated per turn rather than captured at startup, deliberately: a
+    // launcher installed while the listener is up should be picked up without a
+    // restart, and the detection is a handful of `existsSync` calls over PATH
+    // with no spawn. It is also the honest direction to fail in — a launcher
+    // REMOVED while the listener is up must start refusing immediately.
+    containmentAvailable: seams.containmentAvailable ?? (() => detectSandboxLauncher().available),
   });
 }

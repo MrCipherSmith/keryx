@@ -390,25 +390,60 @@ describe("startup preconditions", () => {
    * excluded, the stated rationale for the second clause was wrong, and the
    * self-check "proving" it passed for a reason other than the one it named.
    */
+  /**
+   * Seams that can WEAKEN a control, and the one file each is allowed to supply.
+   *
+   * `localBaseline` can lower the ceiling a remote profile is held to.
+   * `containmentAvailable` can make a turn run uncontained. Both exist so a
+   * branch has a reachable input under test, and both are exactly the kind of
+   * thing that must not acquire a production caller quietly.
+   *
+   * `serve-runner.ts` is the sanctioned supplier of `containmentAvailable`
+   * because it is the module that supplies the REAL probe — the same shape as
+   * `config-dir.ts` being exempt from the raw-read guard it implements. Nothing
+   * else may pass either seam.
+   */
+  const WEAKENING_SEAMS: ReadonlyArray<{ name: string; suppliedBy: readonly string[] }> = [
+    { name: "localBaseline", suppliedBy: [] },
+    { name: "containmentAvailable", suppliedBy: ["lib/serve-runner.ts", "lib/serve-turn.ts"] },
+  ];
+
   function baselineSuppliers(sources: ReadonlyMap<string, string>): string[] {
     const found: string[] = [];
     for (const [file, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
       // `code()`, so a mention inside a string literal cannot fake a hit. The
       // previous version stripped comments only.
-      if (/localBaseline\s*:/.test(code(raw))) {
-        found.push(file);
+      const source = code(raw);
+      for (const seam of WEAKENING_SEAMS) {
+        if (seam.suppliedBy.includes(file)) {
+          continue;
+        }
+        if (new RegExp(`${seam.name}\\s*:`).test(source)) {
+          found.push(`${file} :: ${seam.name}`);
+        }
       }
     }
     return found;
   }
 
-  test("no non-test file supplies the localBaseline seam", () => {
-    // `localBaseline` exists so the widening branch has a reachable input under
-    // test. It can also LOWER the ceiling a remote profile is held to, which is
-    // the one thing this whole check exists to prevent — so production code may
-    // not pass it, and that is held by reading the source rather than by the
-    // comment on the field.
+  test("no non-test file supplies a weakening seam", () => {
+    // Held by reading the source rather than by the comment on each field.
     expect(baselineSuppliers(treeSources(SRC_ROOT))).toEqual([]);
+  });
+
+  test("every sanctioned supplier names a file that exists", () => {
+    // An exemption pointing at a moved file is an exemption that excuses
+    // nothing and hides that it excuses nothing.
+    const files = new Set(sourceFiles(SRC_ROOT));
+    for (const seam of WEAKENING_SEAMS) {
+      for (const supplier of seam.suppliedBy) {
+        expect({ seam: seam.name, supplier, present: files.has(supplier) }).toEqual({
+          seam: seam.name,
+          supplier,
+          present: true,
+        });
+      }
+    }
   });
 
   test("the scan actually reaches the source tree", () => {
@@ -443,7 +478,18 @@ describe("startup preconditions", () => {
       ["probe/supplies.ts", "resolveServeStartup({ config, credential, localBaseline: () => wideOpen() });"],
       ["probe/supplies-spaced.ts", "startServeListener({ localBaseline : lower });"],
     ]);
-    expect(baselineSuppliers(planted).sort()).toEqual(["probe/supplies-spaced.ts", "probe/supplies.ts"]);
+    expect(baselineSuppliers(planted).sort()).toEqual([
+      "probe/supplies-spaced.ts :: localBaseline",
+      "probe/supplies.ts :: localBaseline",
+    ]);
+
+    // And the second seam, through the same function. A guard covering two
+    // seams must be shown to cover both, or it is a one-seam guard with a
+    // longer table.
+    const plantedContainment = new Map([
+      ["probe/uncontained.ts", "createSubmitTurn({ profile, containmentAvailable: () => true });"],
+    ]);
+    expect(baselineSuppliers(plantedContainment)).toEqual(["probe/uncontained.ts :: containmentAvailable"]);
 
     // The other half: the declaration, a type-only mention, and a mention
     // inside a string are all NOT suppliers.

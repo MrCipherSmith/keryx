@@ -34,8 +34,10 @@ import {
   createTurnRecord,
   finishTurn,
   readTurnRecord,
+  releaseIdempotencyKey,
   type StreamEvent,
   type StreamEventKind,
+  type TurnReadFailure,
   type TurnResult,
 } from "./serve-turn-store";
 
@@ -251,6 +253,22 @@ export interface RunTurnInput {
   toolRegistry?: ToolRegistry;
 }
 
+/**
+ * The terminal result could not be written to the durable record.
+ *
+ * Typed rather than a bare `Error` so `createSubmitTurn` can tell it from a
+ * filesystem throw and so a future caller can branch on it. Carries the turn id
+ * and nothing else: the message reaches no response body — the route answers a
+ * bare 500 — but a turn id in an exception that might one day be logged is the
+ * operator's own identifier, not caller data.
+ */
+export class TurnRecordUnwritableError extends Error {
+  constructor(readonly turnId: string) {
+    super(`the durable record for turn ${turnId} could not be written`);
+    this.name = "TurnRecordUnwritableError";
+  }
+}
+
 export interface RunTurnOutput {
   turnId: string;
   sessionId: string;
@@ -433,7 +451,20 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
       ...(approvals !== undefined ? { approvals } : {}),
     };
     emitTerminal();
-    finishTurn(turnId, result, input.dir);
+    if (!finishTurn(turnId, result, input.dir)) {
+      // The boolean, acted on. It used to be discarded, so an unreadable or
+      // malformed `turn.json` left this function returning `completed` while
+      // nothing was written — the caller was answered 202 and every later read
+      // of that turn answered 404, 409 or 500 forever. The signature said the
+      // failure was reported and the code threw the report away.
+      //
+      // A throw rather than a degraded return, because there is no honest
+      // success to report: the durable record IS the turn, and a turn whose
+      // record does not carry its result has not finished in any sense a client
+      // can observe. `createSubmitTurn` releases the idempotency claim on the
+      // way out and the route answers 500.
+      throw new TurnRecordUnwritableError(turnId);
+    }
     return { turnId, sessionId, result };
   };
 
@@ -574,7 +605,14 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
 export type SubmitOutcome =
   | { kind: "accepted"; turnId: string; sessionId: string }
   | { kind: "duplicate"; turnId: string; sessionId: string }
-  | { kind: "rejected" };
+  | { kind: "rejected" }
+  /**
+   * The store could not answer. Added because the union had no way to say so:
+   * a key whose record was unreadable was answered as a duplicate carrying
+   * `sessionId: ""` — a null record standing in for a stated failure, on the
+   * one path that reaches a 200. The route turns this into a 500.
+   */
+  | { kind: "unavailable"; reason: TurnReadFailure };
 
 export interface SubmitDeps {
   profile: PolicyProfile;
@@ -612,11 +650,23 @@ export interface SubmitDeps {
  *      before a step that can fail is a key burned for good.
  *   3. run.
  *
- * The window this leaves is stated rather than hidden: two concurrent
- * submissions of the same key can both pass the scan and both reach the claim,
- * and one of them loses and is answered as a duplicate. That is a duplicate
- * turn under contention, which is the direction to fail in — the alternative
- * fails by permanently burning a key on a prompt the caller can fix and resend.
+ * And every step after the claim RELEASES it on failure. Reordering alone was
+ * not enough and the first attempt at this stopped there: `createTurnRecord`,
+ * both event appends and `finishTurn` all reach writers documented as
+ * propagating what the write throws, so an ENOSPC or an EROFS after the claim
+ * burned the key exactly as a 422 used to — a later submission of the same key
+ * answered `200 {duplicate: true, sessionId: ""}` naming a turn that does not
+ * exist, forever, and clearing the fault did not help. The fix moved one member
+ * of that class and left four.
+ *
+ * The window this leaves is stated rather than hidden, and it is smaller than
+ * the first version of this comment claimed. Measured with eight concurrent
+ * same-key submissions through the real runner: one accepted, seven duplicates,
+ * one record on disk, no empty session ids. `claimIdempotencyKey` reads and
+ * writes with no `await` between, and the run is synchronous through
+ * `createTurnRecord`, so the check-then-write is atomic against any in-process
+ * writer. Across two processes it is not, and that is recorded where the claim
+ * is written rather than here.
  */
 export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, project: string) => Promise<SubmitOutcome> {
   return async (request: TurnRequest, project: string): Promise<SubmitOutcome> => {
@@ -630,27 +680,53 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
     const claimed = claimTurnKey(request, turnId, deps.dir);
     if (claimed.existing !== null) {
       const held = readTurnRecord(claimed.existing, deps.dir);
+      if (!held.ok && held.reason !== "absent") {
+        // A key pointing at a record this process cannot READ is not a
+        // duplicate answer to give: `sessionId: ""` on a 200 is a null record
+        // standing in for a stated failure, on the one path that reaches a
+        // success status. `absent` is different and stays a duplicate — the
+        // claim is the authority on what the key holds, and a claim whose
+        // record was removed still means "this key is taken".
+        return { kind: "unavailable", reason: held.reason };
+      }
       return { kind: "duplicate", turnId: claimed.existing, sessionId: held.ok ? held.value.sessionId : "" };
     }
 
-    const run = await runRemoteTurn({
-      request,
-      project,
-      profile: deps.profile,
-      provider: deps.provider,
-      providerName: deps.providerName,
-      model: deps.model,
-      dir: deps.dir,
-      scanRoot: deps.dir,
-      // The id as a VALUE, not as a constant `newId` seam. Passing the seam made
-      // the session id and the approval id collide with the turn id.
-      turnId,
-      ...(deps.newId !== undefined ? { newId: deps.newId } : {}),
-      ...(deps.toolRegistry !== undefined ? { toolRegistry: deps.toolRegistry } : {}),
-      ...(deps.clock !== undefined ? { clock: deps.clock } : {}),
-      ...(deps.containmentAvailable !== undefined ? { containmentAvailable: deps.containmentAvailable } : {}),
-    });
-    return { kind: "accepted", turnId: run.turnId, sessionId: run.sessionId };
+    try {
+      const run = await runRemoteTurn({
+        request,
+        project,
+        profile: deps.profile,
+        provider: deps.provider,
+        providerName: deps.providerName,
+        model: deps.model,
+        dir: deps.dir,
+        scanRoot: deps.dir,
+        // The id as a VALUE, not as a constant `newId` seam. Passing the seam
+        // made the session id and the approval id collide with the turn id.
+        turnId,
+        ...(deps.newId !== undefined ? { newId: deps.newId } : {}),
+        ...(deps.toolRegistry !== undefined ? { toolRegistry: deps.toolRegistry } : {}),
+        ...(deps.clock !== undefined ? { clock: deps.clock } : {}),
+        ...(deps.containmentAvailable !== undefined ? { containmentAvailable: deps.containmentAvailable } : {}),
+      });
+      return { kind: "accepted", turnId: run.turnId, sessionId: run.sessionId };
+    } catch (cause) {
+      // THE release path. Every writer the run reaches propagates what the write
+      // throws, and `terminate` now throws when the terminal result cannot be
+      // recorded, so this is the one place that knows a claim was taken and not
+      // used. Without it the key is burned permanently and the operator has no
+      // way to learn it: the route answers a bare 500 and the next submission of
+      // the corrected prompt is answered as a duplicate of a turn that does not
+      // exist.
+      //
+      // Guarded by turnId inside the store, so a release cannot take a claim
+      // another turn legitimately re-took while this one was failing.
+      if (request.idempotencyKey !== undefined) {
+        releaseIdempotencyKey(request.idempotencyKey, turnId, deps.dir);
+      }
+      throw cause;
+    }
   };
 }
 

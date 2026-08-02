@@ -166,15 +166,73 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.check("target").throttled).toBe(false);
   });
 
-  test("a table saturated with cooldowns is still bounded", async () => {
-    // The saturation case, asserted for the property that matters rather than
-    // for which record went. Eviction always overflows on a peer that has just
-    // recorded its FIRST failure — a peer cannot reach the limit on the call
-    // that adds it — so there is always an unthrottled victim available, and the
-    // soonest-expiring fallback in `evictIfFull` is defensive rather than
-    // reachable from here. Stated instead of asserted, because a test that
-    // cannot construct the state it names is the vacuous shape this round
-    // removed twice already.
+  test("saturating the table with cooldowns does NOT disable the throttle for a new peer", async () => {
+    // The regression this round introduced and a five-reviewer fix round caught.
+    // Eviction preferred an unthrottled victim, and the peer that overflows the
+    // table is always the one that just recorded its FIRST failure — so on a
+    // saturated table the newcomer evicted itself every time, its record was
+    // re-created empty, and it could never reach the limit.
+    //
+    // Measured on that version: 1024 bans in the table, then 1000 consecutive
+    // failed authentications from a fresh address, never throttled once.
+    // 127.0.0.0/8 gives a local attacker 16.7M addresses to saturate with, so
+    // this was the control switched off globally for everyone new — strictly
+    // worse than the escape it replaced.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+    for (let i = 0; i < MAX_TRACKED_PEERS; i += 1) {
+      for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+        throttle.recordFailure(`banned-${i}`);
+      }
+      clock.advance(1);
+    }
+    expect(throttle.size()).toBe(MAX_TRACKED_PEERS);
+
+    // A fresh address, arriving after saturation, driven exactly as the route
+    // drives it: `check` then `recordFailure`.
+    let refused = false;
+    for (let f = 0; f < AUTH_FAILURE_LIMIT * 2; f += 1) {
+      if (throttle.check("newcomer").throttled) {
+        refused = true;
+        break;
+      }
+      throttle.recordFailure("newcomer");
+    }
+
+    expect(refused).toBe(true);
+    expect(throttle.check("newcomer").throttled).toBe(true);
+    expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
+  });
+
+  test("on a saturated table the ban that expires SOONEST is the one that goes", async () => {
+    // The fallback branch, which is reachable now that the newcomer is excluded
+    // from candidacy — the previous version recorded it as unreachable and left
+    // it untested, which is how it stayed wrong. The trade is deliberate: the
+    // table converges on the bans of peers currently attacking rather than on
+    // the oldest bans, and the oldest ban is also the one closest to expiring.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+    for (let i = 0; i < MAX_TRACKED_PEERS; i += 1) {
+      for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+        throttle.recordFailure(`banned-${i}`);
+      }
+      clock.advance(1); // each later peer's cooldown ends later
+    }
+    expect(throttle.check("banned-0").throttled).toBe(true);
+
+    // One more peer overflows the table. Every other record is in cooldown.
+    throttle.recordFailure("newcomer");
+
+    expect(throttle.size()).toBe(MAX_TRACKED_PEERS);
+    // The soonest-expiring ban went...
+    expect(throttle.check("banned-0").throttled).toBe(false);
+    // ...and the newest ban did not.
+    expect(throttle.check(`banned-${MAX_TRACKED_PEERS - 1}`).throttled).toBe(true);
+    // ...and the newcomer survived, which is the point of rule 1.
+    expect(throttle.size()).toBe(MAX_TRACKED_PEERS);
+  });
+
+  test("a table saturated with cooldowns is still bounded, and holds real bans", async () => {
     const clock = fakeClock();
     const throttle = new AuthFailureThrottle(clock.now);
     for (let i = 0; i < MAX_TRACKED_PEERS + 50; i += 1) {
@@ -185,9 +243,8 @@ describe("AuthFailureThrottle", () => {
     }
 
     expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
-    // And the bans that ARE held are real ones, not an empty table passing the
-    // bound: the first peer banned is still banned.
-    expect(throttle.check("banned-0").throttled).toBe(true);
+    // Not an empty table passing the bound: the most recent ban is held.
+    expect(throttle.check(`banned-${MAX_TRACKED_PEERS + 49}`).throttled).toBe(true);
   });
 });
 
