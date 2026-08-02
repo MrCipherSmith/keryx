@@ -375,3 +375,77 @@ describe("under --runtime, stdout belongs to the runtime and to nothing else", (
     expect({ exit: claude.exit, out: claude.out }).toEqual({ exit: 2, out: "" });
   }, 60_000);
 });
+
+describe("the ALLOW half of the runtime contract", () => {
+  // F-026. The refusal path was fixed and the allow path was left behind:
+  // `applyRuntimeRefusal` returned early on `code === 0` having written nothing,
+  // so a passing check handed a stdout-JSON runtime zero bytes and left the
+  // outcome to whatever that runtime does with an empty response.
+  //
+  // `src/ctx/hook.ts` writes `action.stdout` on both branches and always did.
+  // This surface copied the refusal DOCUMENT from the module that owns the
+  // shapes and not the CONTRACT — word for word the sentence written about the
+  // previous round's version of this same bug, one branch over.
+
+  test("a stdout-JSON runtime gets an ALLOW document on a pass", async () => {
+    writeConfig("enforced");
+    const cursor = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect(cursor.exit).toBe(0);
+    expect(JSON.parse(cursor.out)).toEqual({ permission: "allow" });
+
+    const antigravity = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "antigravity",
+    ]);
+    expect(antigravity.exit).toBe(0);
+    expect(JSON.parse(antigravity.out)).toEqual({ allow_tool: true });
+  }, 60_000);
+
+  test("an exit-code runtime still says yes with silence", async () => {
+    // Not an oversight on that side: exit 0 and no output IS how those runtimes
+    // are told to proceed, and inventing a document for them would be the same
+    // mistake in the other direction.
+    writeConfig("enforced");
+    for (const runtime of ["claude", "windsurf", "generic-mcp"]) {
+      const { exit, out } = await checkInput("summarise the readme", "untrusted-external", [
+        "--runtime",
+        runtime,
+      ]);
+      expect({ runtime, exit, out }).toEqual({ runtime, exit: 0, out: "" });
+    }
+  }, 60_000);
+
+  test("both halves, for one runtime, in one test", async () => {
+    // The pair. Each half alone can be satisfied by a command that always emits
+    // the same document.
+    writeConfig("enforced");
+    const denied = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "cursor"]);
+    const allowed = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect(JSON.parse(denied.out)).toMatchObject({ permission: "deny" });
+    expect(JSON.parse(allowed.out)).toEqual({ permission: "allow" });
+  }, 60_000);
+
+  test("--runtime=<id> is the same contract as --runtime <id>", async () => {
+    // The equals form read `undefined`, so the command fell back to the
+    // no-runtime path: the human report went to stdout and no decision document
+    // was emitted at all. A guard that reports and does not refuse, re-entered
+    // through an argument spelling.
+    writeConfig("enforced");
+    const spaced = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "cursor"]);
+    const equals = await checkInput(AWS_KEY, "untrusted-external", ["--runtime=cursor"]);
+    expect({ exit: equals.exit, out: equals.out }).toEqual({ exit: spaced.exit, out: spaced.out });
+
+    const spacedClaude = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "claude"]);
+    const equalsClaude = await checkInput(AWS_KEY, "untrusted-external", ["--runtime=claude"]);
+    expect({ exit: equalsClaude.exit, out: equalsClaude.out }).toEqual({
+      exit: spacedClaude.exit,
+      out: spacedClaude.out,
+    });
+  }, 60_000);
+});

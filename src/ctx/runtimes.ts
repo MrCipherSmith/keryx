@@ -207,6 +207,30 @@ export function refusalAction(runtimeId: string, message: string): HookAction {
   }
 }
 
+/**
+ * How a runtime says YES. The other half of the same fact.
+ *
+ * `refusalAction` was exported for the security hooks and the CLI copied it; the allow side was left behind, so on a passing check a
+ * stdout-JSON runtime received ZERO BYTES and had to fall back on whatever it
+ * does with an empty hook response. That is the same "copied the document and
+ * not the contract" defect as the refusal path, one branch over, and it was
+ * found by a review of the commit that fixed the refusal path.
+ *
+ * The exit-code runtimes genuinely say yes with silence and exit 0, which is
+ * why this returns a bare `{ exitCode: 0 }` for them rather than inventing
+ * something. The two that decide from stdout get a document.
+ */
+export function allowAction(runtimeId: string): HookAction {
+  switch (runtimeId) {
+    case "cursor":
+      return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
+    case "antigravity":
+      return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };
+    default:
+      return { exitCode: 0 };
+  }
+}
+
 // Exit-2 + stderr (Claude, Codex, Windsurf, OpenCode bridge).
 function exitCodeBlock(command: string, c: HookClassification): HookAction {
   return refusalAction("claude", buildBlockMessage(command, c));

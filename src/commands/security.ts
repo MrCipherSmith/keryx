@@ -1,4 +1,4 @@
-import { refusalAction } from "../ctx/runtimes";
+import { allowAction, refusalAction } from "../ctx/runtimes";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -433,7 +433,7 @@ async function handleCheck(
     }
   }
 
-  process.exitCode = applyRuntimeRefusal(
+  process.exitCode = applyRuntimeDecision(
     args,
     exitCodeFor(decision, cwd, await modeOf(cwd)),
     `keryx security: this ${kind} was refused by the configured security policy (gate: ${decision.gate}).`,
@@ -715,25 +715,29 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
 }
 
 /**
- * Emit the refusal in the shape the invoking runtime reads, and return its code.
+ * Emit the decision in the shape the invoking runtime reads, and return its code.
  *
  * `--runtime <id>` is written into the command by `security hooks install`, so
  * a hook knows which harness is asking. Without it — a human at a terminal, or
  * a script — the plain CLI convention of a non-zero exit stands.
  *
- * The shape comes from `src/ctx/runtimes.ts`, which already owned it. That is
- * the point: the two hook surfaces disagreed about the block signal, and one of
- * them had it right.
+ * BOTH halves, and the second one is here because the first version of this
+ * function was only the first half. It returned early on `code === 0` having
+ * written nothing, so a passing check handed a stdout-JSON runtime zero bytes
+ * and left the outcome to whatever that runtime does with an empty response.
+ * `src/ctx/hook.ts` writes `action.stdout` on both branches and always did; this
+ * surface copied the refusal DOCUMENT out of the module that owns it and not
+ * the CONTRACT — which is word for word the sentence written about the previous
+ * round's version of this bug, one branch over.
+ *
+ * The shapes come from `src/ctx/runtimes.ts`, which owns them.
  */
-function applyRuntimeRefusal(args: string[], code: number, message: string): number {
-  if (code === 0) {
-    return 0;
-  }
+function applyRuntimeDecision(args: string[], code: number, message: string): number {
   const runtime = optionValue(args, "--runtime");
   if (runtime === undefined) {
     return code;
   }
-  const action = refusalAction(runtime, message);
+  const action = code === 0 ? allowAction(runtime) : refusalAction(runtime, message);
   if (action.stdout !== undefined) {
     process.stdout.write(action.stdout);
   }
