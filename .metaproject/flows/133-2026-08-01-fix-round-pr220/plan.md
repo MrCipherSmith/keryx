@@ -154,12 +154,25 @@ fallback in `serve-turn.ts`, which is currently mutable to fail-open with the
 whole suite green — and which the new weakening-seam guard cannot see because it
 exempts that file wholesale. Narrow the exemption to the declaration.
 
-### 5. The majors, in one pass each
+### 5. The majors — ALL EIGHT CLOSED (2026-08-02)
 
-F-005 the fourth injection site · F-006 the eviction victim with accumulated
-failures · F-008 three guards matching spellings rather than shapes · F-009 seven
-untested branches · F-010 `ensureTurnDir` on every recorded append · F-011 the
-untested `unavailable` branch · F-012 the fifth failure-mapping policy.
+| id | what it was | how it closed |
+|---|---|---|
+| F-005 | the fourth injection site: `PreToolUse` carries `check-output` and nothing tested it | same `handleCheck`, now pinned on both surfaces incl. §7a non-refusal (`64a949bc`) |
+| F-006 | eviction dropped the peer at 9 of 10 failures; 1800 guesses unthrottled | single value scale, `BAN_VALUE = 0.5`, load-bearing in both directions (`246dfa43`) |
+| F-007 | 3.3% false refusals | fell out of the round-one revert; confirmed on both hook surfaces (`64a949bc`) |
+| F-008 | three guards matching spellings, not shapes | rank table now three shapes; profile literal discriminated by terminator; importer sees `require`/dynamic `import`; seam sees ES6 shorthand (`839aba24`) |
+| F-009 | branches added this round with no test | unreadable trust mode in `mutation/execute.ts`; the `model.ts` behaviour change; `Bun.serve`'s error hook extracted to one `internalErrorResponse` (`8652e4e9`) |
+| F-010 | `ensureTurnDir` on every recorded append | optimistic append, ENOENT retry only: 26.1µs → 9.4µs, −64% (`f608cc19`) |
+| F-011 | `SubmitOutcome.unavailable` produced and consumed, never exercised | 500 on a damaged claimed record, with a removed-record control (`9b76ca1e`) |
+| F-012 | five sites interpreting six reasons, disagreeing about `not-regular` | `isServerFault`, total with no default arm; `not-regular` is a server fault (`6625d534`) |
+
+Every one carries a mutation showing the fix is load-bearing. Full suite after
+the eight: **2874 pass, 14 skip, 0 fail** across 287 files.
+
+New durable note: `.metaproject/memory/constraints/code-blanks-string-literals.md`
+— `code()` blanks string literals, which has now silently disabled four separate
+source guards. It is the single most productive false-green in this tree.
 
 ### 6. The minors, including every false statement in a comment
 
