@@ -166,13 +166,19 @@ export type TurnReadResult<T> = { ok: true; value: T } | { ok: false; reason: Tu
 /**
  * Is this failure THIS PROCESS failing, or an answer about what was asked for?
  *
- * The single owner of a split that five call sites were each making for
- * themselves, with a sixth reason arriving after four of them were written.
- * `serve-server.ts` enumerated `too-large || unreadable` inline and everything
- * else fell through, so a `turn.json` that was a directory or a symlink — the
- * `not-regular` case, which is a deliberately hostile shape — answered "Not
- * found" while `project-registry.ts` and `serve-turn.ts`, both asking the same
- * question as `reason !== "absent"`, called it a failure.
+ * The owner of the ROUTE's question, at the one site that asks it.
+ *
+ * The sentence here used to read "the single owner of a split that five call
+ * sites were each making for themselves", and three reviewers independently
+ * filed it: there is one caller. The count was right and the sentence was
+ * wrong twice over — it claimed a consolidation that had not happened, and it
+ * asserted that all five sites were asking one question when they are asking
+ * two. See the note below `isDefiniteAbsence` for the other one.
+ *
+ * What is true: `serve-server.ts` enumerated `too-large || unreadable` inline
+ * and everything else fell through, so a `turn.json` that was a directory or a
+ * symlink — the `not-regular` case, a deliberately hostile shape — answered
+ * "Not found" for a record that was demonstrably there.
  *
  * The three that are NOT a fault are answers about the request:
  *
@@ -188,6 +194,29 @@ export type TurnReadResult<T> = { ok: true; value: T } | { ok: false; reason: Tu
  *
  * Total over the union, with no default arm: a seventh reason added to
  * `TurnReadFailure` fails to compile here rather than silently picking a side.
+ *
+ * WHAT THIS DOES NOT OWN. The docstring above this one used to open "the single
+ * owner of a split that five call sites were each making for themselves", and
+ * three reviewers independently pointed out that it had one caller. They were
+ * right about the count and the sentence was wrong, but the fix is not to route
+ * the other four through here — it is that they are not all asking this
+ * question. Two questions were being conflated, including by the commit that
+ * introduced this function:
+ *
+ *   isServerFault      how should a ROUTE answer? 404 (about the request) or
+ *                      500 (about this process). `malformed` is a 404, because
+ *                      an unknown id, a malformed one and one the caller may
+ *                      not reach must be indistinguishable.
+ *   isDefiniteAbsence  can a definite answer be given AT ALL? `malformed` is
+ *                      not: the record is there and its contents are unknowable,
+ *                      so "there is no such turn" would be a claim nothing
+ *                      supports.
+ *
+ * They disagree on `malformed` on purpose, and that disagreement is the reason
+ * one predicate cannot serve both. `serve-turn.ts` asks the second, and answering
+ * it with the first would turn an unreadable claimed record back into
+ * `200 {duplicate: true, sessionId: ""}` — the null-record-for-a-stated-failure
+ * this flow removed.
  */
 export function isServerFault(reason: TurnReadFailure): boolean {
   switch (reason) {
@@ -199,6 +228,37 @@ export function isServerFault(reason: TurnReadFailure): boolean {
     case "too-large":
     case "unreadable":
       return true;
+  }
+}
+
+/**
+ * Is this failure a DEFINITE statement that there is nothing there?
+ *
+ * `absent` is the only one. Every other reason means a file exists and this
+ * process could not turn it into a value, or that the question itself was
+ * malformed — and in both cases "there is nothing there" is a claim nothing
+ * supports.
+ *
+ * The distinction has teeth on the idempotency path. A claim whose record was
+ * REMOVED is still a duplicate: the claim is the authority on what the key
+ * holds, and the turn really did happen. A claim whose record is unreadable is
+ * not, because the duplicate answer has to carry a session id it does not have.
+ *
+ * Total over the union, no default arm, for the same reason as `isServerFault` —
+ * and note that the two are NOT complements: they disagree on `malformed`,
+ * which is a 404 to a route and not a definite absence to a caller deciding
+ * whether it may answer at all.
+ */
+export function isDefiniteAbsence(reason: TurnReadFailure): boolean {
+  switch (reason) {
+    case "absent":
+      return true;
+    case "not-a-turn-id":
+    case "malformed":
+    case "not-regular":
+    case "too-large":
+    case "unreadable":
+      return false;
   }
 }
 
@@ -297,11 +357,12 @@ export function readTurnEvents(turnId: string, after = -1, dir?: string): TurnRe
   }
   const read = readTurnFile(path.join(turnDir(turnId, dir), "events.jsonl"));
   if (!read.ok) {
-    // `absent` is a real answer: a turn whose first event has not been appended
-    // yet has no log, and that is zero events rather than a failure. Every other
-    // reason is a file this process could not read, and saying "no events" about
+    // A definite absence is a real answer: a turn whose first event has not been
+    // appended yet has no log, and that is zero events rather than a failure.
+    // Every other reason is a file this process could not read, and saying "no
+    // events" about
     // one of those is the silent truncation §Bounds forbids.
-    if (read.reason === "absent") {
+    if (isDefiniteAbsence(read.reason)) {
       return { ok: true, value: [] };
     }
     return { ok: false, reason: read.reason };

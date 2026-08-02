@@ -39,7 +39,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile } from "./config-dir";
+import { ensureKeryxConfigDir, isDefiniteAbsence, keryxConfigDir, readConfigFile } from "./config-dir";
 import { withFileLock } from "./file-lock";
 
 /** One registered project. Addressing only — see the module comment. */
@@ -309,7 +309,10 @@ export function loadProjectRegistry(dir?: string, onWarn?: (message: string) => 
     // failures Bun raises as exceptions.
     const read = readConfigFile(file);
     if (!read.ok) {
-      if (read.reason !== "absent") {
+      // Through the named predicate rather than `!== "absent"`. Same set today;
+      // the point is that a fifth `ConfigReadFailure` is a compile error in the
+      // owner instead of a silent "warn about it" here.
+      if (!isDefiniteAbsence(read.reason)) {
         onWarn?.(
           read.reason === "too-large"
             ? "project registry: the file is far too large to be a registry; treating it as empty"

@@ -172,6 +172,34 @@ export const MAX_TURN_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
 /** Why a file could not be read. */
 export type ConfigReadFailure = "absent" | "not-regular" | "too-large" | "unreadable";
 
+/**
+ * Is this failure a DEFINITE statement that there is nothing there?
+ *
+ * `absent` is the only one. `not-regular` means something IS there and this
+ * process declined to read it; `too-large` and `unreadable` mean the same with
+ * a different cause. Treating any of them as "no file" is how an oversized
+ * record became a 404 for a turn that existed.
+ *
+ * Total over the union with no default arm, so a fifth reason is a compile
+ * error at every reader rather than a silent choice at each one. Three modules
+ * were making this call with an inline `reason !== "absent"` and a fourth was
+ * enumerating two reasons by hand.
+ *
+ * `serve-turn-store.ts` has the same predicate over the wider `TurnReadFailure`
+ * union, and a second one — `isServerFault` — that answers a DIFFERENT question
+ * and disagrees on `malformed`. The two are documented against each other there.
+ */
+export function isDefiniteAbsence(reason: ConfigReadFailure): boolean {
+  switch (reason) {
+    case "absent":
+      return true;
+    case "not-regular":
+    case "too-large":
+    case "unreadable":
+      return false;
+  }
+}
+
 export type ConfigReadResult =
   | { ok: true; text: string }
   | { ok: false; reason: ConfigReadFailure };

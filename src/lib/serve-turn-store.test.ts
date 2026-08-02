@@ -32,6 +32,7 @@ import {
   listTurnIds,
   MAX_TURN_EVENTS,
   readTurnEvents,
+  isDefiniteAbsence,
   isServerFault,
   readTurnRecord,
   releaseIdempotencyKey,
@@ -518,5 +519,48 @@ describe("the read-failure taxonomy has one owner", () => {
     // non-empty, so a predicate that answered a constant would fail here.
     expect(Object.values(REASONS).filter(Boolean)).toHaveLength(3);
     expect(Object.values(REASONS).filter((v) => !v)).toHaveLength(3);
+  });
+
+  test("isDefiniteAbsence is the OTHER question, and disagrees on malformed", () => {
+    // Two questions, not one predicate with one caller. Round three counted the
+    // callers correctly and concluded the other sites should route through
+    // `isServerFault`; they must not. A route asking "404 or 500" and a caller
+    // asking "may I answer at all" want opposite answers for `malformed`, and
+    // routing the second through the first puts back the
+    // `200 {duplicate:true, sessionId:""}` this flow removed.
+    const ABSENCE: Record<TurnReadFailure, boolean> = {
+      absent: true,
+      "not-a-turn-id": false,
+      malformed: false,
+      "not-regular": false,
+      "too-large": false,
+      unreadable: false,
+    };
+    for (const [reason, definite] of Object.entries(ABSENCE)) {
+      expect({ reason, definite: isDefiniteAbsence(reason as TurnReadFailure) }).toEqual({
+        reason,
+        definite,
+      });
+    }
+
+    // Two independent properties, pinned so that neither predicate can be
+    // quietly rewritten in terms of the other — which is the shape of the
+    // finding that produced them.
+    const reasons = Object.keys(ABSENCE) as TurnReadFailure[];
+
+    // (1) Not the same function: some reason where they differ.
+    expect(reasons.filter((r) => isServerFault(r) !== isDefiniteAbsence(r))).not.toEqual([]);
+
+    // (2) Not complements either: some reason where BOTH are false. This is the
+    // trap. `malformed` is not a server fault (a route answers 404, because an
+    // unknown id and a malformed one must be indistinguishable) and is not a
+    // definite absence (a caller may not say "no such turn" about a record it
+    // simply could not read). Neither predicate can be written as the negation
+    // of the other, and a round that tried to route every site through one of
+    // them would have broken whichever caller needed the other.
+    expect(reasons.filter((r) => !isServerFault(r) && !isDefiniteAbsence(r))).toEqual([
+      "not-a-turn-id",
+      "malformed",
+    ]);
   });
 });

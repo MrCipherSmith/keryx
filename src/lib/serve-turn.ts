@@ -34,6 +34,7 @@ import {
   claimIdempotencyKey,
   createTurnRecord,
   finishTurn,
+  isDefiniteAbsence,
   readTurnRecord,
   releaseIdempotencyKey,
   type StreamEvent,
@@ -858,13 +859,23 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
     const claimed = claimTurnKey(request, turnId, project, deps.dir);
     if (claimed.existing !== null) {
       const held = readTurnRecord(claimed.existing, deps.dir);
-      if (!held.ok && held.reason !== "absent") {
+      if (!held.ok && !isDefiniteAbsence(held.reason)) {
         // A key pointing at a record this process cannot READ is not a
         // duplicate answer to give: `sessionId: ""` on a 200 is a null record
         // standing in for a stated failure, on the one path that reaches a
-        // success status. `absent` is different and stays a duplicate — the
-        // claim is the authority on what the key holds, and a claim whose
+        // success status. A definite absence is different and stays a duplicate
+        // — the claim is the authority on what the key holds, and a claim whose
         // record was removed still means "this key is taken".
+        //
+        // Through the named predicate, not `reason !== "absent"`. Same set
+        // today; the difference is that a seventh member of `TurnReadFailure`
+        // is now a compile error in the owner rather than a silent `true` here.
+        // That silent `true` is exactly what the round-two commit claimed the
+        // no-default switch had prevented, at a site it never converted.
+        //
+        // NOT `isServerFault`: the two disagree on `malformed`, and this is the
+        // side where an unreadable record must not become a duplicate. See both
+        // docstrings in `serve-turn-store.ts`.
         return { kind: "unavailable", reason: held.reason };
       }
       return { kind: "duplicate", turnId: claimed.existing, sessionId: held.ok ? held.value.sessionId : "" };
