@@ -410,6 +410,11 @@ the first.
 2. **Regex source guards are gone.** Four guards, three rounds, one spelling per
    widening. They match the AST now — see
    `.metaproject/memory/lessons/regex-guards-lose-to-spellings.md`.
+
+   > **Round four disproved this.** Two things were wrong: the internal-error
+   > emitter count is still a regex, and the AST rewrite was defeated by twelve
+   > ordinary spellings within one round. Matching the AST is better; it is not
+   > a closure. Corrected in `round4-review.md` and in the lesson.
 3. **Re-derive every number.** Five false claims this round were figures carried
    verbatim out of a previous report. Two of them were in the memory note written
    to stop exactly that.

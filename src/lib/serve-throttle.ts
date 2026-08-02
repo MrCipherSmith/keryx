@@ -70,11 +70,36 @@ export const MAX_TRACKED_PEERS = 1_024;
  * At a flat `0.5` a peer at exactly 5 of 10 tied, lost the tie-break — which
  * compares a ban's future expiry against a peer's past `seenAt`, so the peer
  * always loses it — and was evicted, letting an attacker interleaving five
- * guesses per throw-away address run 1500 of them unrefused. The docstring said
- * "a peer more than halfway is not cheaper to lose" and was off by one at
+ * guesses per throw-away address run UNBOUNDED guesses unrefused. The docstring
+ * said "a peer more than halfway is not cheaper to lose" and was off by one at
  * exactly halfway, with nothing testing the boundary.
  *
+ * Re-measured: the attacker is never refused at all in that configuration, and
+ * the probe stops at whatever bound its loop was given. This comment used to
+ * quote "1500", which was 300 rounds x 5 — the loop cap, reported as a result,
+ * and inherited verbatim from a review report into a commit that opened by
+ * insisting every number had been re-derived. The figure also UNDERSTATED the
+ * defect it described.
+ *
  * Read it as the rule it now is: HALF THE LIMIT OR MORE outranks a cooldown.
+ *
+ * WHAT THE CROSSOVER STILL COSTS, measured while re-deriving the figures above
+ * rather than found by a review, because any threshold has a region below it:
+ *
+ *   per-round guesses 5..9   refused after 10, from one address
+ *   per-round guesses 4      never refused — 4000 and counting from one address
+ *
+ * A peer at 4 live failures is worth 0.4, below the ban, so it is the cheapest
+ * record and is evicted before any cooldown. That band cannot be removed by
+ * moving the constant; it can only be moved, and wherever it sits the same
+ * thing is true below it.
+ *
+ * The reason it is not worth removing: at 4 guesses per throw-away request the
+ * attacker buys 4 guesses per extra address, and the per-peer allowance already
+ * gives them AUTH_FAILURE_LIMIT - 1 = 9 guesses per address for free, with no
+ * decoys and no eviction. 1023 fresh addresses are 9207 guesses per window at
+ * zero cost. The escape is strictly worse than the baseline it competes with,
+ * and the bearer token is 32 CSPRNG bytes either way.
  */
 export const BAN_VALUE = (Math.floor(AUTH_FAILURE_LIMIT / 2) - 0.5) / AUTH_FAILURE_LIMIT;
 
@@ -187,11 +212,17 @@ export class AuthFailureThrottle {
    *
    * 2. Otherwise the record with the least VALUE, on one scale:
    *
-   *      an unthrottled peer   failures / AUTH_FAILURE_LIMIT   (0 .. <1)
-   *      a peer in cooldown    0.5                             (constant)
+   *      an unthrottled peer   liveFailures / AUTH_FAILURE_LIMIT   (0 .. <1)
+   *      a peer in cooldown    BAN_VALUE = 0.45                    (derived)
    *
-   *    So a peer less than halfway to a ban is cheaper to lose than a ban, and
-   *    a peer more than halfway is not.
+   *    So a peer at HALF THE LIMIT OR MORE outranks a cooldown, and one below
+   *    it does not.
+   *
+   *    This table said `0.5` and closed with "a peer more than halfway is not
+   *    cheaper to lose" — which is verbatim the sentence this file quotes 120
+   *    lines above as the defect it fixed. The constant was corrected in its own
+   *    docstring and the rule that explains it was not, so the file shipped the
+   *    fix, documented the fix, and restated the defect as its rule.
    *
    *    There is no separate "prefer a peer not in cooldown" step, and an earlier
    *    version of this comment described one after the code had stopped having
@@ -241,16 +272,34 @@ export class AuthFailureThrottle {
    * unauthenticated caller can grow is a memory-exhaustion primitive. What the
    * order decides is the PRICE, and the three known routes now cost:
    *
-   *   pin with decoys at half the limit   ~85 requests/second, sustained,
-   *                                       because every decoy must be refreshed
-   *                                       inside the window to keep counting.
-   *                                       Before the prune this was a one-time
-   *                                       6100 requests and then free.
-   *   saturate with active cooldowns      ~170 requests/second, sustained, and
-   *                                       it buys only the early expiry of a
-   *                                       cooldown that was about to lapse.
+   *   pin with decoys at half the limit   1023 x 5 / 60s = 85.3 req/s,
+   *                                       sustained, because every decoy must be
+   *                                       refreshed inside the window to keep
+   *                                       counting. Before the prune this was a
+   *                                       one-time 6138 requests and then free.
+   *                                       It clears ANY cooldown in the table,
+   *                                       including one with the full 60s left.
+   *   saturate with active cooldowns      1023 x 10 / 60s = 170.5 req/s,
+   *                                       sustained. Strictly more expensive
+   *                                       than the row above and buys the same
+   *                                       thing.
    *   flood with fresh peers              nothing: they are the cheapest records
    *                                       in the table and evict each other.
+   *   stay below the crossover            unbounded guesses from ONE address at
+   *                                       4 per throw-away request. See the note
+   *                                       on `BAN_VALUE`.
+   *
+   * The second row previously read "buys only the early expiry of a cooldown
+   * that was about to lapse". That is false and was measured false: once every
+   * other record is worth more than `BAN_VALUE`, any cooldown is the unique
+   * minimum, the soonest-expiring tie-break never runs, and remaining time stops
+   * mattering. Verified directly — a victim at `{"throttled":true,
+   * "retryAfterSeconds":60}` before, `{"throttled":false}` after.
+   *
+   * WHAT NONE OF THEM BUY. The throttle is per-peer and the limit is 10, so an
+   * attacker with 1023 source addresses already has 9 guesses from each — 9207
+   * per window, free, no decoys, no eviction. Every route above costs traffic to
+   * obtain a worse rate. What they defeat is the module's claim, not the token.
    *
    * And the honest ceiling on all of it: the bearer token is 32 CSPRNG bytes
    * (`serve-credential.ts`), so none of these makes guessing it feasible. This

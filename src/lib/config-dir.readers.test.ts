@@ -669,10 +669,17 @@ describe("every reader of the shared config directory goes through the bounded h
     //
     // `loadsModule` asks the parser instead. An import specifier is a specifier
     // whatever punctuation surrounds it, and the basename comparison ignores the
-    // extension, so the class is closed by construction rather than enumerated.
-    // See `config-dir.ast.ts` for what that does and does not buy — no module
-    // resolution, so an alias through an intermediate re-export is still
-    // invisible, and that limit is stated there rather than left to be found.
+    // extension — which closes the spellings that beat the regex, and is NOT the
+    // same as closing the class. A specifier that is not a string literal at all
+    // (`"./config-dir" + ".scan"`, a template with a substitution,
+    // `createRequire` bound to another name) is still invisible here, and the
+    // gap list at the top of `config-dir.ast.ts` says so.
+    //
+    // For the question that actually matters — does the scanner SHIP —
+    // `production-graph.test.ts` asks the bundler, which resolves specifiers
+    // rather than matching them. That one is a closure. This one catches the
+    // weaker case it cannot: an import that exists but is currently tree-shaken,
+    // and would ship the moment something calls it.
     return [...sources]
       .filter(([file, raw]) => loadsModule(parse(file, raw), "config-dir.scan"))
       .map(([file]) => file);

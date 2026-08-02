@@ -29,7 +29,7 @@ instead of re-deriving, which is precisely the failure it was written about.
 
 | guard | what it could not see |
 |---|---|
-| rank-table `RANK_LITERAL` (`profiles.test.ts`) | `{ "read-only": 0 }` — four of the five policy words cannot be bare identifiers |
+| rank-table `RANK_LITERAL` (`profiles.test.ts`) | `{ "read-only": 0 }` — four of the ELEVEN policy words cannot be bare identifiers |
 | internal-error emitter count (`serve-server.test.ts`) | `` `keryx serve: request failed: …` `` — the counted thing is the literal |
 
 **Not occurrences, and why:**
@@ -79,12 +79,29 @@ written only inside a string literal?**
 * **No** (an identifier, a call shape, a keyword) → `code()` is right, and it is
   what stops a mention in a docstring from being reported as a violation.
 
-## The self-check that would have caught all four
+## The self-check that would have caught both
 
 A guard's self-check must plant **the real thing, verbatim, in the spelling
 production uses** — not a paraphrase in the spelling the guard already knows.
-Every one of these four passed a self-check that planted a bare identifier where
+Both occurrences above passed a self-check that planted a bare identifier where
 production wrote a quoted string.
 
-See [[a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker]]
-for the wider pattern: a guard that commemorates a bug rather than preventing it.
+The heading here said "all four" after this note had already been corrected down
+to two, so it argued from a count its own headline had retired. Correcting a
+number in one place and reasoning from the old one three sections later is the
+same operation that produced the "8 000 events" figure.
+
+## And the AST rewrite did not close it either
+
+The four regex guards were moved onto the TypeScript AST and the note said "All
+four guards now go through `src/lib/config-dir.ast.ts` and match the PARSE
+TREE". Two things were wrong with that:
+
+- the internal-error emitter count — one of the two genuine occurrences above —
+  is **still a regex**, and is not one of the four;
+- the AST predicates are an enumeration of node shapes, not a closure. Twelve
+  ordinary spellings defeated them. See
+  [[regex-guards-lose-to-spellings]], which now carries the corrected version.
+
+Where a real closure exists it is `src/lib/production-graph.test.ts`, which asks
+the bundler what the release actually ships.

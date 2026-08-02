@@ -167,12 +167,18 @@ exempts that file wholesale. Narrow the exemption to the declaration.
 | F-011 | `SubmitOutcome.unavailable` produced and consumed, never exercised | 500 on a damaged claimed record, with a removed-record control (`9b76ca1e`) |
 | F-012 | five sites interpreting six reasons, disagreeing about `not-regular` | `isServerFault`, total with no default arm; `not-regular` is a server fault (`6625d534`) |
 
-Every one carries a mutation showing the fix is load-bearing. Full suite after
+Six of the eight carry a mutation showing the fix is load-bearing; `64a949bc`
+and `839aba24` offer passing controls and planted probes instead, which is a
+different form of evidence. The blanket "every one" was false and was filed. Full suite after
 the eight: **2874 pass, 14 skip, 0 fail** across 287 files.
 
 New durable note: `.metaproject/memory/constraints/code-blanks-string-literals.md`
-— `code()` blanks string literals, which has now silently disabled four separate
-source guards. It is the single most productive false-green in this tree.
+— `code()` blanks string literals, which silently disabled **two** source guards.
+
+> Corrected twice. This line said "four", which round three showed was double the
+> real count with two guards misattributed; the note itself was fixed and this
+> restatement was not, which round four then filed. Correcting a number where the
+> fixer happens to be reading is not correcting it.
 
 ### 6. The minors — NINE OF ELEVEN CLOSED (2026-08-02), commit `ae1211ea`
 

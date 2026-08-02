@@ -39,7 +39,7 @@ all mine:
 | "One point, not an interval" (the `BAN_VALUE` sweep) | the suite pins `(0.4, 0.5)`; my ten-value grid had one sample inside it |
 | "letting an attacker run 1500 guesses" | the attacker is never refused; 1500 was my probe's loop cap |
 | "saturating with cooldowns buys only the early expiry of a cooldown that was about to lapse" | a pinned table clears a cooldown with the full 60s remaining |
-| "the same key … fails four tests" / stdout table control row `173B` | the control row is 222B, and my own "was 349B" proves it (349 = 222 + 127) |
+| stdout table control row `173B` | 222B — and my own "was 349B" in the same table proves it, since 349 = 222 + 127. The two rows the fix was about were instrumented; the control row was filled in from memory |
 | "memoizeResolved had no pinned caller — now it does" | one of its two callers is pinned; the other is the HMAC load the file is about |
 | "every self-check now plants what defeated the previous version" | all four plant exactly the implementation's own branch list |
 

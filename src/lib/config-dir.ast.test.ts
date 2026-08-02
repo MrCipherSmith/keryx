@@ -2,11 +2,19 @@
 //
 // This is the numerator for four guards at once. Each case below is a real
 // evasion found by review — most of them found AFTER the regex had been widened
-// for the previous one — and the point of the file is that the list is now
-// closed by construction rather than by enumeration: these are all one node
-// kind each, and a spelling nobody has thought of is the same node.
+// for the previous one.
 //
-// Every `INVISIBLE` comment marks a form the regex version could not see.
+// The header here used to say the list was "closed by construction rather than
+// by enumeration". It is not. A node-shape matcher enumerates node shapes, and
+// the round after that sentence shipped, twelve ordinary spellings defeated all
+// four guards. `Object.assign`, a spread, `Object.fromEntries`,
+// `Object.defineProperty`, a static class field and a chained `Map.set()` are
+// six structures for a handful of semantic acts.
+//
+// `INVISIBLE` marks a form the REGEX could not see. The gaps in the current
+// implementation are at the bottom of this file, as tests that assert they are
+// still gaps — which is the only kind of self-check that cannot decay into a
+// restatement of the implementation's own branch list.
 
 import { describe, expect, test } from "bun:test";
 import {

@@ -157,8 +157,8 @@ export const MAX_TRANSCRIPT_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
  * both are over the 1 MB bound, which is the only thing the sentence needed to
  * say. Past roughly 6 500 events the event route answered 200 with an empty
  * body.
- * §Bounds forbids exactly that, and the store's own header said it could not
- * happen.
+ * api-protocol.md §Bounds forbids exactly that, and the store's own header said
+ * it could not happen.
  *
  * STATED LIMIT: this is a bound on the FILE, enforced on read, and
  * `MAX_TURN_EVENTS` is a bound on the COUNT, enforced on write. Nothing connects

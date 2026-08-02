@@ -500,3 +500,71 @@ describe("AuthFailureThrottle — the eviction scale, at the boundary and agains
     expect((half - 1) / AUTH_FAILURE_LIMIT < BAN_VALUE).toBe(true);
   });
 });
+
+describe("what the eviction scale does NOT prevent, pinned so the prose stays true", () => {
+  // Three rounds running, this file's docstring asserted a bound the code did
+  // not hold — and each correction introduced the next false sentence. These
+  // assert the limits themselves, so the prose has something under it rather
+  // than being checked by whoever reads it next.
+
+  test("a pinned table clears a cooldown with its FULL window remaining", () => {
+    // The price table said saturating "buys only the early expiry of a cooldown
+    // that was about to lapse". Once every other record outranks BAN_VALUE, any
+    // cooldown is the unique minimum and remaining time stops mattering.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+    for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+      throttle.recordFailure("victim");
+    }
+    expect(throttle.check("victim")).toEqual({ throttled: true, retryAfterSeconds: 60 });
+
+    // Decoys at exactly half the limit: worth 0.5, above BAN_VALUE.
+    for (let i = 0; i < MAX_TRACKED_PEERS - 1; i += 1) {
+      for (let f = 0; f < AUTH_FAILURE_LIMIT / 2; f += 1) {
+        throttle.recordFailure(`decoy-${i}`);
+      }
+    }
+    throttle.recordFailure("one-more");
+
+    expect(throttle.check("victim").throttled).toBe(false);
+  }, 60_000);
+
+  test("below the crossover, one address is never refused — and gains nothing by it", () => {
+    // Any threshold has a region below it. A peer at 4 live failures is worth
+    // 0.4, under the ban, so it is evicted first and its counter never reaches
+    // the limit. Moving the constant moves the band; it cannot remove it.
+    const attack = (perRound: number): { guesses: number; refused: boolean } => {
+      const clock = fakeClock();
+      const throttle = new AuthFailureThrottle(clock.now);
+      for (let i = 0; i < MAX_TRACKED_PEERS - 1; i += 1) {
+        for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+          throttle.recordFailure(`banned-${i}`);
+        }
+        clock.advance(1);
+      }
+      let guesses = 0;
+      for (let round = 0; round < 200; round += 1) {
+        for (let g = 0; g < perRound; g += 1) {
+          if (throttle.check("attacker").throttled) {
+            return { guesses, refused: true };
+          }
+          throttle.recordFailure("attacker");
+          guesses += 1;
+        }
+        throttle.recordFailure(`throwaway-${round}`);
+      }
+      return { guesses, refused: false };
+    };
+
+    const half = AUTH_FAILURE_LIMIT / 2;
+    // At or above the crossover the attacker is refused after one full run.
+    expect(attack(half)).toEqual({ guesses: AUTH_FAILURE_LIMIT, refused: true });
+    // Below it they are not — and this is the documented limit, not a defect
+    // to be fixed by another constant.
+    expect(attack(half - 1).refused).toBe(false);
+
+    // The bound that makes it not worth closing: the per-peer allowance already
+    // gives 9 guesses per address for free, more than the 4 this buys.
+    expect(half - 1).toBeLessThan(AUTH_FAILURE_LIMIT - 1);
+  }, 120_000);
+});
