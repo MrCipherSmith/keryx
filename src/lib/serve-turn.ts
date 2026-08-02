@@ -855,7 +855,7 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
       return { kind: "rejected" };
     }
 
-    const claimed = claimTurnKey(request, turnId, deps.dir);
+    const claimed = claimTurnKey(request, turnId, project, deps.dir);
     if (claimed.existing !== null) {
       const held = readTurnRecord(claimed.existing, deps.dir);
       if (!held.ok && held.reason !== "absent") {
@@ -920,7 +920,7 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
         // that has no other witness. Not a fault and not an error path: the
         // guard inside the store did its job. The operator is told because a
         // silent no-op is indistinguishable from a release that happened.
-        const released = releaseIdempotencyKey(request.idempotencyKey, turnId, deps.dir);
+        const released = releaseIdempotencyKey(project, request.idempotencyKey, turnId, deps.dir);
         if (!released) {
           console.error(`keryx serve: idempotency claim for turn ${turnId} was already re-taken; not released`);
         }
@@ -938,11 +938,18 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
  * starts nothing" has to mean nothing, including the side effects that would
  * otherwise happen before the check.
  */
-export function claimTurnKey(request: TurnRequest, turnId: string, dir?: string): { existing: string | null } {
+export function claimTurnKey(
+  request: TurnRequest,
+  turnId: string,
+  project: string,
+  dir?: string,
+): { existing: string | null } {
   if (request.idempotencyKey === undefined) {
     return { existing: null };
   }
-  return claimIdempotencyKey(request.idempotencyKey, turnId, dir);
+  // `project` scopes the claim. Without it the index was global and one
+  // project's key answered another project's submission — see `keyPath`.
+  return claimIdempotencyKey(project, request.idempotencyKey, turnId, dir);
 }
 
 /** True when `project` is a directory that exists. Used only for a clearer 400. */

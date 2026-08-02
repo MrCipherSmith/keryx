@@ -34,6 +34,7 @@ import {
   readTurnEvents,
   isServerFault,
   readTurnRecord,
+  releaseIdempotencyKey,
   type StreamEvent,
   type TurnReadFailure,
   type TurnRecord,
@@ -45,6 +46,8 @@ let configDir = "";
 // Hex LETTERS on purpose. The first version of these constants was all digits,
 // so the "uppercase is rejected" assertion below was comparing a string to
 // itself and passing for that reason rather than for the intended one.
+/** The project an idempotency key is scoped to. Keys are per-project now. */
+const PROJECT = "/tmp/project";
 const TURN = "1a1b1c1d-2e2f-4a3b-8c4d-5e5f6a6b7c7d";
 const OTHER = "9f9e9d9c-8b8a-4d7c-8e6f-5a5b4c4d3e3f";
 
@@ -327,8 +330,8 @@ describe("the record and its terminal result", () => {
 
 describe("idempotency", () => {
   test("the first claim is free and the second returns the original turn", () => {
-    expect(claimIdempotencyKey("key-a", TURN, configDir)).toEqual({ existing: null });
-    expect(claimIdempotencyKey("key-a", OTHER, configDir)).toEqual({ existing: TURN });
+    expect(claimIdempotencyKey(PROJECT, "key-a", TURN, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey(PROJECT, "key-a", OTHER, configDir)).toEqual({ existing: TURN });
   });
 
   test("the claim survives a restart", () => {
@@ -336,14 +339,48 @@ describe("idempotency", () => {
     // same directory with no shared in-memory state — which is exactly what a
     // second process sees. An in-memory map passes every other test here and
     // fails this one.
-    claimIdempotencyKey("key-b", TURN, configDir);
-    const afterRestart = claimIdempotencyKey("key-b", OTHER, configDir);
+    claimIdempotencyKey(PROJECT, "key-b", TURN, configDir);
+    const afterRestart = claimIdempotencyKey(PROJECT, "key-b", OTHER, configDir);
     expect(afterRestart).toEqual({ existing: TURN });
   });
 
+  test("the same key in two projects is two claims", () => {
+    // F-017. The index was GLOBAL: `keyPath` hashed the caller's key and
+    // nothing else. One install serves many projects, and two transports
+    // drawing keys from the same counter space — a chat message id, a job
+    // number — collided. The second project's submission was answered
+    // `200 {duplicate: true}` naming the FIRST project's turn, its prompt never
+    // ran, and reading that turn handed the caller the other project's result
+    // text. Every idempotency test used a single project, so nothing looked.
+    expect(claimIdempotencyKey("/projects/a", "daily", TURN, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey("/projects/b", "daily", OTHER, configDir)).toEqual({ existing: null });
+
+    // And each still holds its own.
+    expect(claimIdempotencyKey("/projects/a", "daily", OTHER, configDir)).toEqual({ existing: TURN });
+    expect(claimIdempotencyKey("/projects/b", "daily", TURN, configDir)).toEqual({ existing: OTHER });
+  });
+
+  test("a release in one project cannot free another project's claim", () => {
+    // The same boundary on the way out. A release is guarded by turnId inside
+    // the store; the project scope has to hold independently of that guard.
+    claimIdempotencyKey("/projects/a", "shared", TURN, configDir);
+    expect(releaseIdempotencyKey("/projects/b", "shared", TURN, configDir)).toBe(false);
+    expect(claimIdempotencyKey("/projects/a", "shared", OTHER, configDir)).toEqual({ existing: TURN });
+  });
+
+  test("the project/key encoding is injective — no boundary shift collides", () => {
+    // `sha256(project + key)` maps ("/a/b", "c") and ("/a", "/bc") to one
+    // digest, which would put the collision back somewhere subtler. The digest
+    // is over a length-prefixed composite for that reason, and this is the pair
+    // that would catch a plain concatenation.
+    expect(claimIdempotencyKey("/a/b", "c", TURN, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey("/a", "/bc", OTHER, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey("/a/b", "c", OTHER, configDir)).toEqual({ existing: TURN });
+  });
+
   test("different keys do not collide", () => {
-    claimIdempotencyKey("key-c", TURN, configDir);
-    expect(claimIdempotencyKey("key-d", OTHER, configDir)).toEqual({ existing: null });
+    claimIdempotencyKey(PROJECT, "key-c", TURN, configDir);
+    expect(claimIdempotencyKey(PROJECT, "key-d", OTHER, configDir)).toEqual({ existing: null });
   });
 
   test("a key is hashed, so it cannot traverse or name a device", () => {
@@ -351,7 +388,7 @@ describe("idempotency", () => {
     // path join. The digest is what makes that safe — asserted by using a key
     // that would escape if it were used verbatim.
     const hostile = "../../../../etc/passwd";
-    expect(claimIdempotencyKey(hostile, TURN, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey(PROJECT, hostile, TURN, configDir)).toEqual({ existing: null });
 
     // Exactly one file, inside the keys directory, named by a hex digest. NOT
     // asserted as "/etc/passwd does not exist" — the first version of this test
@@ -363,27 +400,27 @@ describe("idempotency", () => {
     expect(written[0]).toMatch(/^[0-9a-f]{64}\.json$/);
 
     // And it round-trips, so hashing did not break the feature it protects.
-    expect(claimIdempotencyKey(hostile, OTHER, configDir)).toEqual({ existing: TURN });
+    expect(claimIdempotencyKey(PROJECT, hostile, OTHER, configDir)).toEqual({ existing: TURN });
   });
 
   test("a damaged index entry is treated as absent rather than as a permanent refusal", () => {
     // Refusing would make one corrupt file a denial of service for whichever
     // key hashes to it, forever.
-    claimIdempotencyKey("key-e", TURN, configDir);
+    claimIdempotencyKey(PROJECT, "key-e", TURN, configDir);
     const keysDir = path.join(configDir, "turns", "keys");
     const entry = path.join(keysDir, readdirSync(keysDir)[0]!);
     writeFileSync(entry, "{not json", "utf8");
-    expect(claimIdempotencyKey("key-e", OTHER, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey(PROJECT, "key-e", OTHER, configDir)).toEqual({ existing: null });
     // ...and the claim is repaired, not left damaged.
-    expect(claimIdempotencyKey("key-e", TURN, configDir)).toEqual({ existing: OTHER });
+    expect(claimIdempotencyKey(PROJECT, "key-e", TURN, configDir)).toEqual({ existing: OTHER });
   });
 
   test("an index entry naming a non-id is ignored", () => {
-    claimIdempotencyKey("key-f", TURN, configDir);
+    claimIdempotencyKey(PROJECT, "key-f", TURN, configDir);
     const keysDir = path.join(configDir, "turns", "keys");
     const entry = path.join(keysDir, readdirSync(keysDir)[0]!);
     writeFileSync(entry, JSON.stringify({ turnId: "../../etc/passwd" }), "utf8");
-    expect(claimIdempotencyKey("key-f", OTHER, configDir)).toEqual({ existing: null });
+    expect(claimIdempotencyKey(PROJECT, "key-f", OTHER, configDir)).toEqual({ existing: null });
   });
 });
 

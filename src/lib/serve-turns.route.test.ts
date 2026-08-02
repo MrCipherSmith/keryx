@@ -405,15 +405,15 @@ describe("a claim is released when the turn that took it fails", () => {
     // The guard on the release. It removes the entry only when the key still
     // points at the turn releasing it — otherwise a slow failing turn could
     // strip the claim from the turn that replaced it.
-    claimIdempotencyKey("contested", PINNED, configDir);
-    expect(releaseIdempotencyKey("contested", "99999999-9999-4999-8999-999999999999", configDir)).toBe(false);
+    claimIdempotencyKey(project, "contested", PINNED, configDir);
+    expect(releaseIdempotencyKey(project, "contested", "99999999-9999-4999-8999-999999999999", configDir)).toBe(false);
     // Still held by the original.
-    expect(claimIdempotencyKey("contested", "11111111-1111-4111-8111-111111111111", configDir)).toEqual({
+    expect(claimIdempotencyKey(project, "contested", "11111111-1111-4111-8111-111111111111", configDir)).toEqual({
       existing: PINNED,
     });
     // And the rightful owner can release it.
-    expect(releaseIdempotencyKey("contested", PINNED, configDir)).toBe(true);
-    expect(claimIdempotencyKey("contested", "11111111-1111-4111-8111-111111111111", configDir)).toEqual({
+    expect(releaseIdempotencyKey(project, "contested", PINNED, configDir)).toBe(true);
+    expect(claimIdempotencyKey(project, "contested", "11111111-1111-4111-8111-111111111111", configDir)).toEqual({
       existing: null,
     });
   });
@@ -476,9 +476,9 @@ describe("a claim is released when the turn that took it fails", () => {
     //
     // Asserted through the store rather than the route, because the route pair
     // is already covered above and what differs here is one boolean.
-    claimIdempotencyKey("pre-effect", PINNED, configDir);
-    expect(releaseIdempotencyKey("pre-effect", PINNED, configDir)).toBe(true);
-    expect(claimIdempotencyKey("pre-effect", "22222222-2222-4222-8222-222222222222", configDir)).toEqual({
+    claimIdempotencyKey(project, "pre-effect", PINNED, configDir);
+    expect(releaseIdempotencyKey(project, "pre-effect", PINNED, configDir)).toBe(true);
+    expect(claimIdempotencyKey(project, "pre-effect", "22222222-2222-4222-8222-222222222222", configDir)).toEqual({
       existing: null,
     });
   });

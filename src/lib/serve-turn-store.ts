@@ -125,16 +125,36 @@ function turnDir(turnId: string, dir?: string): string {
 }
 
 /**
- * The idempotency index path for a key.
+ * The idempotency index path for a key, WITHIN a project.
  *
  * The key is HASHED rather than used as a filename, and not for tidiness: an
  * idempotency key is caller-supplied untrusted text, and a caller-controlled
  * string reaching a path join is the containment defect flow 126 fixed
  * elsewhere in this codebase. A hex digest cannot traverse, cannot collide with
  * a reserved name, and cannot be a device file.
+ *
+ * `project` is in the digest because without it the index was GLOBAL, and one
+ * install serves many projects. Two transports drawing keys from the same
+ * counter space — a chat message id, a job number — collided: the second
+ * project's submission was answered `200 {duplicate: true}` naming the FIRST
+ * project's turn, its prompt never ran, and `GET /v1/turns/{id}` handed the
+ * caller the other project's result text. That is the failure `resolveProject`
+ * exists to prevent, arriving through the field next to the one it guards.
+ *
+ * The digest is over a LENGTH-PREFIXED composite, not a concatenation.
+ * `sha256(project + key)` maps `("/a/b", "c")` and `("/a", "/bc")` to the same
+ * digest, which would put the collision back in a subtler place. Prefixing the
+ * project's byte length makes the encoding injective.
+ *
+ * `project` is the path the REGISTRY resolved, never the caller's string — see
+ * `resolveProject`. A caller cannot pick which bucket their key lands in beyond
+ * picking a project they are already entitled to submit to.
  */
-function keyPath(idempotencyKey: string, dir?: string): string {
-  const digest = createHash("sha256").update(idempotencyKey, "utf8").digest("hex");
+function keyPath(project: string, idempotencyKey: string, dir?: string): string {
+  const projectBytes = Buffer.byteLength(project, "utf8");
+  const digest = createHash("sha256")
+    .update(`${projectBytes}:${project}\u0000${idempotencyKey}`, "utf8")
+    .digest("hex");
   return path.join(turnsRoot(dir), "keys", `${digest}.json`);
 }
 
@@ -369,8 +389,13 @@ export function finishTurn(turnId: string, result: TurnResult, dir?: string): bo
  * supervisor — and a lock here would be machinery for a scenario that cannot
  * arise yet. Within one process the check-then-write is synchronous.
  */
-export function claimIdempotencyKey(idempotencyKey: string, turnId: string, dir?: string): { existing: string | null } {
-  const file = keyPath(idempotencyKey, dir);
+export function claimIdempotencyKey(
+  project: string,
+  idempotencyKey: string,
+  turnId: string,
+  dir?: string,
+): { existing: string | null } {
+  const file = keyPath(project, idempotencyKey, dir);
   const read = readConfigFile(file);
   if (read.ok) {
     try {
@@ -409,8 +434,13 @@ export function claimIdempotencyKey(idempotencyKey: string, turnId: string, dir?
  * case a silent no-op, and a caller that discards the boolean cannot tell the
  * two apart. `createSubmitTurn` reports the second on the operator's stderr.
  */
-export function releaseIdempotencyKey(idempotencyKey: string, turnId: string, dir?: string): boolean {
-  const file = keyPath(idempotencyKey, dir);
+export function releaseIdempotencyKey(
+  project: string,
+  idempotencyKey: string,
+  turnId: string,
+  dir?: string,
+): boolean {
+  const file = keyPath(project, idempotencyKey, dir);
   const read = readConfigFile(file);
   if (!read.ok) {
     return false;
