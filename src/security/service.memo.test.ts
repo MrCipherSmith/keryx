@@ -11,9 +11,10 @@
 // read the file again. These tests are the difference between those two.
 
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { keyDir } from "./redact";
 import { createSecurityService, memoizeResolved } from "./service";
 
 describe("memoizeResolved", () => {
@@ -159,6 +160,88 @@ describe("the service actually uses it", () => {
       // new file and stops redacting.
       const fresh = await createSecurityService(dir).redact(PII, { source: "generated" });
       expect(fresh.redacted).toContain("nobody@example.com");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+describe("the service uses it for the HMAC key too — the other caller", () => {
+  // `createSecurityService` memoises TWO loads. The test above pins `configFor`;
+  // `hashOnce` was left unpinned, and replacing it with a bare thunk left
+  // `src/security/` green. That is the load this whole file's opening docstring
+  // is about — "one `EINTR` reading the HMAC key used to cost a 10,000-event
+  // turn its entire redaction" — so the half that was covered was the half the
+  // file is not about.
+  //
+  // Observable: a finding carries `hash`, computed with the key. Change the key
+  // file between two calls on ONE service and a memoised load keeps the old
+  // key, an unmemoised one picks up the new one.
+  const PII = "mail me at nobody@example.com";
+
+  function project(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-memo-hmac-"));
+    mkdirSync(path.join(dir, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(dir, ".metaproject", "security.config.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "advisory",
+        rawRetention: "off",
+        gate: { failOn: "critical", minConfidence: 0.5 },
+        policies: {
+          secrets: { action: "block" },
+          pii: { action: "redact", enabled: true },
+          promptInjection: { action: "warn" },
+          egress: { action: "warn" },
+          artifactSafety: { action: "warn" },
+        },
+      }),
+      "utf8",
+    );
+    return dir;
+  }
+
+  /**
+   * Overwrite the HMAC key, at the path its OWNER computes.
+   *
+   * `keyDir` rather than a guessed path: the first version of this helper
+   * guessed two locations, found neither, and the assertion that the key file
+   * had been replaced is what caught it. A test that quietly fails to change
+   * the thing it is measuring proves nothing about the memo.
+   */
+  function replaceKey(dir: string, value: string): boolean {
+    const file = path.join(keyDir(dir), "hmac.key");
+    if (!existsSync(file)) {
+      return false;
+    }
+    writeFileSync(file, `${value}\n`, "utf8");
+    return true;
+  }
+
+  test("one service keeps the key it loaded; a fresh one picks up the change", async () => {
+    const dir = project();
+    try {
+      const service = createSecurityService(dir);
+      const first = await service.redact(PII, { source: "generated" });
+      const firstHash = first.findings[0]?.hash;
+      expect(typeof firstHash).toBe("string");
+
+      // The key file exists now, because `getHmacKey` creates it on first use.
+      const replaced = replaceKey(dir, "f".repeat(64));
+      expect({ keyFileFound: replaced }).toEqual({ keyFileFound: true });
+
+      const second = await service.redact(PII, { source: "generated" });
+      expect({ sameService: second.findings[0]?.hash === firstHash }).toEqual({
+        sameService: true,
+      });
+
+      // The control, and the reason the assertion above is about the memo: a
+      // FRESH service reads the new key and hashes differently.
+      const fresh = await createSecurityService(dir).redact(PII, { source: "generated" });
+      expect({ freshService: fresh.findings[0]?.hash === firstHash }).toEqual({
+        freshService: false,
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
