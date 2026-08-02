@@ -66,6 +66,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Glob } from "bun";
 
 const ROOT = path.join(import.meta.dir, "..", "..");
 
@@ -100,10 +101,28 @@ const TEST_ONLY_MODULES: ReadonlyArray<{ file: string; reason: string }> = [
  *     after, so whichever test ran first threw and the rest passed. A guard
  *     whose result depends on test ordering is not a guard.
  *
+ * ENTRY POINTS ARE PLURAL. The first version took `tokens[2]` as *the* entry
+ * point, and `bun build` accepts any number of positionals. A reviewer added a
+ * second one to the same command, shipped `dist/tools/report.js` with the source
+ * scanner inside it, and the suite stayed green — including the test named
+ * "every entry point in the release script is asked". Every positional ending in
+ * `.ts` is an entry point now, and the count is asserted.
+ *
+ * Steps that are not `bun build` are SKIPPED rather than fatal. The first
+ * version threw on them, so adding a `cp README.md dist/` to the release script
+ * broke the guard rather than the property — and a guard that breaks on ordinary
+ * maintenance is a guard someone deletes.
+ *
  * Only `--outdir` is rewritten, to a temp directory, so running the tests never
  * touches `./dist`.
  */
-function releaseCommands(outDir: string): string[][] {
+interface ReleaseBuild {
+  tokens: string[];
+  entries: string[];
+  outDir: string;
+}
+
+function releaseBuilds(root: string): ReleaseBuild[] {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
     scripts: Record<string, string>;
   };
@@ -111,36 +130,41 @@ function releaseCommands(outDir: string): string[][] {
   if (script === undefined) {
     throw new Error("package.json has no build script; this guard has nothing to ask about");
   }
-  return script.split("&&").map((command) => {
+  const builds: ReleaseBuild[] = [];
+  script.split("&&").forEach((command, index) => {
     const tokens = command.trim().split(/\s+/);
+    if (tokens[0] !== "bun" || tokens[1] !== "build") {
+      return; // not a build step — a copy, a chmod, a sub-script
+    }
     const outIndex = tokens.indexOf("--outdir");
     if (outIndex === -1 || tokens[outIndex + 1] === undefined) {
       throw new Error(`build command has no --outdir to redirect: ${command.trim()}`);
     }
-    const entry = tokens[2];
-    if (entry === undefined || !entry.endsWith(".ts")) {
+    // Every positional that is a `.ts` file and is not the value of a flag.
+    const entries = tokens.filter(
+      (token, i) => i > 1 && token.endsWith(".ts") && !(tokens[i - 1] ?? "").startsWith("--"),
+    );
+    if (entries.length === 0) {
       throw new Error(`could not read an entry point out of: ${command.trim()}`);
     }
+    const outDir = path.join(root, `step-${index}`);
     const rewritten = [...tokens];
-    rewritten[outIndex + 1] = path.join(outDir, path.basename(entry, ".ts"));
+    rewritten[outIndex + 1] = outDir;
     rewritten.push("--sourcemap=external");
-    return rewritten;
+    builds.push({ tokens: rewritten, entries: entries.map((e) => path.join(ROOT, e)), outDir });
   });
-}
-
-/** The entry point a release command builds, absolute. */
-function entryOf(tokens: string[]): string {
-  return path.join(ROOT, tokens[2] as string);
+  return builds;
 }
 
 /**
- * Every project source the release build pulled into one entry point's graph.
+ * Run one release build and return every module graph it emitted.
  *
- * Read out of the emitted sourcemap, which lists exactly the modules the
- * bundler resolved and inlined.
+ * The maps are ENUMERATED from the output directory rather than constructed
+ * from an entry name. Constructing the filename is what let a second entry
+ * point go unread: the file was emitted, and nothing looked at it.
  */
-async function graphOf(tokens: string[]): Promise<string[]> {
-  const proc = Bun.spawn(tokens, { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+async function graphsOf(build: ReleaseBuild): Promise<Map<string, string[]>> {
+  const proc = Bun.spawn(build.tokens, { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
   const [, err] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -149,49 +173,64 @@ async function graphOf(tokens: string[]): Promise<string[]> {
   if (exit !== 0) {
     throw new Error(`release build failed (exit ${exit}): ${err.slice(0, 400)}`);
   }
-  const outDir = tokens[tokens.indexOf("--outdir") + 1] as string;
-  const entry = path.basename(entryOf(tokens), ".ts");
-  const mapFile = path.join(outDir, `${entry}.js.map`);
-  const parsed = JSON.parse(readFileSync(mapFile, "utf8")) as { sources: string[] };
-  // Resolved against the OUTPUT directory, because that is what a sourcemap's
-  // paths are relative to. `path.resolve` normalises the `../..` chain back to
-  // an absolute project path.
-  return parsed.sources.map((source) => path.resolve(outDir, source));
+  const graphs = new Map<string, string[]>();
+  for (const map of new Glob("**/*.js.map").scanSync(build.outDir)) {
+    const file = path.join(build.outDir, map);
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as { sources: string[] };
+    // Relative to the OUTDIR ROOT, not to the map's own directory. A nested
+    // artifact (`tools/report.js.map`) still carries paths written from the
+    // outdir, so resolving from the map's directory silently produced
+    // `<outdir>/tools/../fixbox/...` and every lookup missed. The numerator
+    // assertion below is what caught it.
+    graphs.set(file, parsed.sources.map((source) => path.resolve(build.outDir, source)));
+  }
+  return graphs;
 }
 
 describe("the shipped build contains no test scaffolding", () => {
-  let outDir = "";
-  /** entry -> its module graph, built once for the whole file. */
+  let root = "";
+  /** every emitted map -> its module graph, built once for the whole file. */
   const graphs = new Map<string, string[]>();
+  /** every entry point the release script names. */
+  const entries: string[] = [];
 
   beforeAll(async () => {
-    outDir = mkdtempSync(path.join(tmpdir(), "keryx-graph-"));
-    for (const tokens of releaseCommands(outDir)) {
-      graphs.set(entryOf(tokens), await graphOf(tokens));
+    root = mkdtempSync(path.join(tmpdir(), "keryx-graph-"));
+    for (const build of releaseBuilds(root)) {
+      entries.push(...build.entries);
+      for (const [file, graph] of await graphsOf(build)) {
+        graphs.set(file, graph);
+      }
     }
   }, 300_000);
 
   afterAll(() => {
-    if (outDir !== "") {
-      rmSync(outDir, { recursive: true, force: true });
+    if (root !== "") {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 
   test("every entry point in the release script is asked, and each graph is real", () => {
-    // The numerator. An empty graph, or a build script this cannot parse, makes
-    // every assertion below vacuous — which is exactly how a guard dies quietly.
-    expect(graphs.size).toBeGreaterThan(0);
-    for (const [entry, graph] of graphs) {
-      const relative = path.relative(ROOT, entry);
-      // Non-empty, and it really is THIS entry's graph. Asserted per entry as
-      // "contains its own entry file" rather than "contains `config-dir.ts`":
-      // the sandbox proxy worker is a second, much smaller entry point that does
-      // not import it, so the first version failed for a reason that had nothing
-      // to do with the property.
-      expect({ relative, modules: graph.length > 1 }).toEqual({ relative, modules: true });
-      expect({ relative, containsItself: graph.includes(entry) }).toEqual({
-        relative,
-        containsItself: true,
+    // The numerator, and the assertion the first version got wrong. It checked
+    // that SOME graphs existed; it never compared how many artifacts were read
+    // against how many the build command actually produces. A second entry point
+    // in the same `bun build` was silently dropped, and a reviewer used exactly
+    // that to ship the scanner with this file green.
+    expect(entries.length).toBeGreaterThan(0);
+    expect(graphs.size).toBeGreaterThanOrEqual(entries.length);
+
+    for (const [file, graph] of graphs) {
+      expect({ file: path.basename(file), modules: graph.length > 1 }).toEqual({
+        file: path.basename(file),
+        modules: true,
+      });
+    }
+    // And each named entry really is the root of one of them.
+    for (const entry of entries) {
+      const covered = [...graphs.values()].some((graph) => graph.includes(entry));
+      expect({ entry: path.relative(ROOT, entry), covered }).toEqual({
+        entry: path.relative(ROOT, entry),
+        covered: true,
       });
     }
   });
@@ -209,9 +248,37 @@ describe("the shipped build contains no test scaffolding", () => {
     expect(offenders).toEqual([]);
   });
 
+  test("no devDependency is in any shipped graph — the property, not two filenames", () => {
+    // The header claimed "a devDependency cannot reach an installed user's
+    // machine" while the list below it named two FILES. A production module
+    // importing `typescript` directly bundles the compiler and satisfies the
+    // filename check: measured, the artifact goes from 1.7 MB to 10.5 MB.
+    // This asserts the property the header names.
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      devDependencies?: Record<string, string>;
+    };
+    const devDeps = Object.keys(pkg.devDependencies ?? {});
+    expect(devDeps.length).toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const graph of graphs.values()) {
+      for (const source of graph) {
+        const marker = `${path.sep}node_modules${path.sep}`;
+        const at = source.lastIndexOf(marker);
+        if (at === -1) {
+          continue;
+        }
+        const rest = source.slice(at + marker.length);
+        const name = rest.startsWith("@") ? rest.split(path.sep).slice(0, 2).join("/") : rest.split(path.sep)[0];
+        if (name !== undefined && devDeps.includes(name)) {
+          offenders.push(name);
+        }
+      }
+    }
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
   test("every module named in the list exists, so the guard cannot excuse a moved file", async () => {
-    // An entry pointing at a path that no longer exists forbids nothing, and
-    // reads exactly like one that forbids something.
     for (const { file } of TEST_ONLY_MODULES) {
       expect({ file, exists: await Bun.file(path.join(ROOT, file)).exists() }).toEqual({
         file,
@@ -220,25 +287,44 @@ describe("the shipped build contains no test scaffolding", () => {
     }
   });
 
+  test("the raw-source trees the package also ships carry no scaffolding", async () => {
+    // `package.json` `files` ships `src/gdgraph` and parts of `src/gdskills` as
+    // RAW `.ts`, which the bundler never sees — so they are outside this file's
+    // question entirely unless it asks separately.
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      files?: string[];
+    };
+    const rawTrees = (pkg.files ?? []).filter((f) => f.startsWith("src/"));
+    expect(rawTrees.length).toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const tree of rawTrees) {
+      for (const relative of new Glob("**/*.ts").scanSync(path.join(ROOT, tree))) {
+        const source = readFileSync(path.join(ROOT, tree, relative), "utf8");
+        for (const { file } of TEST_ONLY_MODULES) {
+          const basename = path.basename(file, ".ts");
+          if (source.includes(basename)) {
+            offenders.push(`${tree}/${relative} names ${basename}`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   test("the graph reader SEES real production modules — the numerator", () => {
     // Without this, "no test-only module is in the graph" passes just as well
     // for a reader that returns nothing useful. It already caught one such bug:
-    // resolving sourcemap paths against the wrong base produced `src/src/lib/…`
-    // and a guard that matched nothing at all.
-    //
-    // The numerator is real production modules rather than a planted offender,
-    // and that is forced rather than lazy: a planted import is tree-shaken
-    // unless something the CLI actually calls reaches it, so planting one and
-    // watching this stay green would prove nothing about the guard. What CAN be
-    // asserted is that the reader sees modules that genuinely ship, and does not
-    // see the two under test.
-    const cli = [...graphs.entries()].find(([entry]) => entry.endsWith("src/cli.ts"));
-    expect(cli).toBeDefined();
-    const graph = new Set(cli?.[1] ?? []);
-    expect(graph.has(path.join(ROOT, "src/lib/config-dir.ts"))).toBe(true);
-    expect(graph.has(path.join(ROOT, "src/lib/serve-turn-store.ts"))).toBe(true);
-    // ...and the two under test are absent, which is the whole claim.
-    expect(graph.has(path.join(ROOT, "src/lib/config-dir.scan.ts"))).toBe(false);
-    expect(graph.has(path.join(ROOT, "src/lib/config-dir.ast.ts"))).toBe(false);
+    // resolving sourcemap paths against the wrong base produced `src/src/lib/…`.
+    const shipped = new Set<string>();
+    for (const graph of graphs.values()) {
+      for (const source of graph) {
+        shipped.add(source);
+      }
+    }
+    expect(shipped.has(path.join(ROOT, "src/lib/config-dir.ts"))).toBe(true);
+    expect(shipped.has(path.join(ROOT, "src/lib/serve-turn-store.ts"))).toBe(true);
+    expect(shipped.has(path.join(ROOT, "src/lib/config-dir.scan.ts"))).toBe(false);
+    expect(shipped.has(path.join(ROOT, "src/lib/config-dir.ast.ts"))).toBe(false);
   });
 });

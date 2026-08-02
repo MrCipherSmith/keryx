@@ -308,3 +308,81 @@ describe("what these predicates DO NOT catch", () => {
     }
   });
 });
+
+describe("every predicate change this round made, pinned", () => {
+  // A review found the round's own overstated commit: eight behaviour changes
+  // shipped — three false-positive fixes and five closed gaps — and SEVEN of the
+  // eight could be deleted with all 138 guard tests green. The prose described
+  // each one; nothing exercised them.
+  //
+  // That is the shape this whole exercise is about, applied by the commit whose
+  // subject was "an honest gap list". A fix with no test is a claim, and the
+  // round spent its own argument on claims.
+
+  test("FP: the comparison counter is scoped to one function", () => {
+    // Two unrelated helpers, one comparison each. File-wide counting reported
+    // them as an ordering chain.
+    const split =
+      'export function exitCodeFor(o: string): number { if (o === "deny") { return 1; } return 0; }\n' +
+      'export function columnWidth(k: string): number { if (k === "allow") { return 8; } return 4; }';
+    expect(ranks(split)).toBe(false);
+    // ...and a real chain inside ONE function is still caught, so the scoping
+    // did not simply switch the branch off.
+    const together =
+      'function r(v: string): number { if (v === "deny") { return 0; } if (v === "allow") { return 2; } return 1; }';
+    expect(ranks(together)).toBe(true);
+  });
+
+  test("FP: a projection is not a construction, and a real build still is", () => {
+    const projection =
+      "export function evidence(p: PolicyProfile) { return { trustMode: p.trustMode, requiredControls: p.requiredControls }; }";
+    expect(constructsWith(parse("p.ts", projection), ["trustMode", "requiredControls"])).toBe(false);
+    // The control: same two keys, values NOT all read off one object.
+    const built = 'const p = { trustMode: "untrusted", requiredControls: buildControls() };';
+    expect(constructsWith(parse("p.ts", built), ["trustMode", "requiredControls"])).toBe(true);
+    // And a projection off two different objects is a construction again.
+    const mixed = "const p = { trustMode: a.trustMode, requiredControls: b.requiredControls };";
+    expect(constructsWith(parse("p.ts", mixed), ["trustMode", "requiredControls"])).toBe(true);
+  });
+
+  test("gap: a spread carries keys this file cannot enumerate", () => {
+    // Deliberate over-reach in the reporting direction, and the case where the
+    // AST version was WEAKER than the regex it replaced.
+    expect(constructsWith(parse("p.ts", 'const p = { ...base, trustMode: "untrusted" };'), ["trustMode", "requiredControls"])).toBe(true);
+    expect(constructsWith(parse("p.ts", "const p = { ...base, requiredControls: c };"), ["trustMode", "requiredControls"])).toBe(true);
+    // A spread carrying NEITHER required name is not a profile construction.
+    expect(constructsWith(parse("p.ts", "const p = { ...base, other: 1 };"), ["trustMode", "requiredControls"])).toBe(false);
+  });
+
+  test("gap: Object.assign unions its argument literals", () => {
+    const split = 'const p = Object.assign({ trustMode: "untrusted" }, { requiredControls: c });';
+    expect(constructsWith(parse("p.ts", split), ["trustMode", "requiredControls"])).toBe(true);
+    // Only one half present is not a construction.
+    const half = 'const p = Object.assign({ trustMode: "untrusted" }, { other: 1 });';
+    expect(constructsWith(parse("p.ts", half), ["trustMode", "requiredControls"])).toBe(false);
+  });
+
+  test("gap: Object.defineProperty supplies a seam", () => {
+    const supplied = 'Object.defineProperty(o, "containmentAvailable", { value: () => true });';
+    expect(suppliesProperty(parse("p.ts", supplied), "containmentAvailable")).toEqual(["assignment"]);
+    // A different property name is not this seam.
+    const other = 'Object.defineProperty(o, "somethingElse", { value: 1 });';
+    expect(suppliesProperty(parse("p.ts", other), "containmentAvailable")).toEqual([]);
+  });
+
+  test("gap: Object.fromEntries supplies a seam", () => {
+    const supplied = 'Object.fromEntries([["localBaseline", lower]]);';
+    expect(suppliesProperty(parse("p.ts", supplied), "localBaseline")).toEqual(["property"]);
+    const other = 'Object.fromEntries([["unrelated", x]]);';
+    expect(suppliesProperty(parse("p.ts", other), "localBaseline")).toEqual([]);
+  });
+
+  test("gap: a computed key named by a local const supplies a seam", () => {
+    const viaConst = 'const SEAM = "containmentAvailable";\nconst o = { [SEAM]: () => true };';
+    expect(suppliesProperty(parse("p.ts", viaConst), "containmentAvailable")).toEqual(["property"]);
+    // A const holding a DIFFERENT name is not this seam — the one-hop lookup
+    // must resolve the value, not merely notice that a const exists.
+    const wrongConst = 'const SEAM = "somethingElse";\nconst o = { [SEAM]: () => true };';
+    expect(suppliesProperty(parse("p.ts", wrongConst), "containmentAvailable")).toEqual([]);
+  });
+});
