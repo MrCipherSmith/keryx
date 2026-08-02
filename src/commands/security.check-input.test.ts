@@ -65,13 +65,36 @@ async function checkInput(
   source: string,
   extra: readonly string[] = [],
 ): Promise<{ exit: number; out: string; err: string }> {
+  return runCheck(["check-input", "--source", source], content, extra);
+}
+
+/**
+ * The OTHER hook surface. `security hooks install` writes two entries per
+ * runtime — `UserPromptSubmit` carrying `check-input`, and `PreToolUse`
+ * carrying `check-output` — and everything above exercises only the first.
+ * Both reach the same `handleCheck`, which is the reason the refusal contract
+ * holds for both, and that reason is worth one test rather than an inference.
+ */
+async function checkOutput(
+  content: string,
+  target: string,
+  extra: readonly string[] = [],
+): Promise<{ exit: number; out: string; err: string }> {
+  return runCheck(["check-output", "--target", target], content, extra);
+}
+
+async function runCheck(
+  subcommand: readonly string[],
+  content: string,
+  extra: readonly string[],
+): Promise<{ exit: number; out: string; err: string }> {
   const cli = path.join(import.meta.dir, "..", "cli.ts");
   // A real pipe, written and CLOSED, because that is how the runtimes invoke
   // the hook. An earlier version of this helper passed a byte array and every
   // assertion expecting a refusal failed while every assertion expecting a pass
   // went green: the command was scanning an empty string, so `exit 0` was
   // correct for the wrong reason.
-  const proc = Bun.spawn(["bun", cli, "security", "check-input", "--source", source, ...extra], {
+  const proc = Bun.spawn(["bun", cli, "security", ...subcommand, ...extra], {
     cwd: project,
     stdin: "pipe",
     stdout: "pipe",
@@ -228,5 +251,42 @@ describe("how it refuses is the runtime's own contract", () => {
     expect(exit).toBe(2);
     expect(err).not.toContain("AKIAIOSFODNN7EXAMPLE");
     expect(err).not.toContain(project);
+  }, 30_000);
+
+  test("check-output — the second installed hook — honours the same contract", async () => {
+    // The fourth site. `hooks install` writes `check-output` into `PreToolUse`
+    // for every runtime, and a refusal contract that held on one of the two
+    // surfaces would be exactly the defect this round started from: a guard
+    // that reports and does not refuse.
+    writeConfig("enforced");
+
+    // No runtime: the plain CLI convention.
+    expect((await checkOutput(AWS_KEY, "external")).exit).toBe(1);
+
+    // An exit-code runtime: 2 and a stderr message.
+    const claude = await checkOutput(AWS_KEY, "external", ["--runtime", "claude"]);
+    expect(claude.exit).toBe(2);
+    expect(claude.err).toContain("refused");
+    expect(claude.err).not.toContain("AKIAIOSFODNN7EXAMPLE");
+
+    // A stdout-JSON runtime: its own shape, exit 0.
+    const cursor = await checkOutput(AWS_KEY, "external", ["--runtime", "cursor"]);
+    expect(cursor.exit).toBe(0);
+    expect(JSON.parse(cursor.out.trim().split("\n").at(-1) ?? "{}")).toMatchObject({
+      permission: "deny",
+    });
+
+    // And the control, or all of the above is satisfied by refusing always.
+    const clean = await checkOutput("the readme, summarised", "external", ["--runtime", "claude"]);
+    expect(clean.exit).toBe(0);
+  }, 60_000);
+
+  test("check-output does NOT refuse a lone injection either — §7a on both surfaces", async () => {
+    // The half that matters for false refusals. `PreToolUse` fires on every
+    // Write and Edit an agent makes, so a hardcoded injection refusal here is
+    // the 3.3%-of-ordinary-prose figure applied to the agent's own edits.
+    writeConfig("enforced");
+    const { exit } = await checkOutput(INJECTION, "generated");
+    expect(exit).toBe(0);
   }, 30_000);
 });
