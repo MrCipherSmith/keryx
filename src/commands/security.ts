@@ -161,9 +161,9 @@ async function readContent(file: string | undefined): Promise<string> {
   return readStdin();
 }
 
-function surfaceWarnings(warnings: string[]): void {
+function surfaceWarnings(warnings: string[], emit: (line: string) => void = console.log): void {
   for (const warning of warnings) {
-    console.log(`  ${style.yellow(symbols.bullet)} ${warning}`);
+    emit(`  ${style.yellow(symbols.bullet)} ${warning}`);
   }
 }
 
@@ -398,15 +398,38 @@ async function handleCheck(
   const { decision, warnings } = await analyze(cwd, check);
   const asJson = args.includes("--json");
 
+  // WHERE the report goes is decided by whether a runtime is asking.
+  //
+  // With `--runtime <id>`, stdout belongs to that runtime's contract and to
+  // nothing else. Cursor and Antigravity decide from a stdout JSON document, and
+  // this command printed the human report onto the same stream first — so the
+  // document arrived as the last of nine lines, `JSON.parse` failed on
+  // `keryx securi…`, the exit code was 0, and the input proceeded. That is the
+  // "reported but did not refuse" defect this command was fixed for, surviving
+  // one more round in a different shape.
+  //
+  // `src/ctx/hook.ts` had it right all along: it writes `action.stdout` and
+  // nothing else. The previous fix copied the refusal DOCUMENT from the module
+  // that owns it and not the CONTRACT, and the contract is "stdout is exactly
+  // this one document".
+  //
+  // The report is not dropped — it goes to stderr, where every exit-code runtime
+  // already surfaces it to the operator. That also fixes a second thing on
+  // Claude: `UserPromptSubmit` stdout on exit 0 is appended to the model's
+  // context, so every prompt was injecting the report plus a redacted copy of
+  // itself back into the conversation it was scanning.
+  const forRuntime = optionValue(args, "--runtime") !== undefined;
+  const report = forRuntime ? (line: string) => process.stderr.write(`${line}\n`) : console.log;
+
   if (asJson) {
-    console.log(JSON.stringify(decision, null, 2));
+    report(JSON.stringify(decision, null, 2));
   } else {
-    heading(`keryx security check-${kind}`);
-    surfaceWarnings(warnings);
-    renderDecision(decision);
+    heading(`keryx security check-${kind}`, report);
+    surfaceWarnings(warnings, report);
+    renderDecision(decision, report);
     if (decision.redacted !== undefined) {
-      heading("Redacted");
-      console.log(decision.redacted);
+      heading("Redacted", report);
+      report(decision.redacted);
     }
   }
 
@@ -606,14 +629,14 @@ async function handleEval(cwd: string, args: string[]): Promise<void> {
   process.exitCode = gate.status === "fail" ? 1 : 0;
 }
 
-function renderDecision(decision: SecurityDecision): void {
-  console.log("");
-  console.log(`  gate: ${gateLabel(decision.gate)}`);
-  console.log(`  action: ${decision.action}`);
-  console.log(`  findings: ${decision.findings.length}`);
+function renderDecision(decision: SecurityDecision, emit: (line: string) => void = console.log): void {
+  emit("");
+  emit(`  gate: ${gateLabel(decision.gate)}`);
+  emit(`  action: ${decision.action}`);
+  emit(`  findings: ${decision.findings.length}`);
   for (const finding of decision.findings.slice(0, 20)) {
     const loc = finding.location?.line ? ` (line ${finding.location.line})` : "";
-    console.log(
+    emit(
       `    ${severityMarker(finding.severity)} ${finding.category}/${finding.policyId} → ${finding.action}${loc}`,
     );
   }

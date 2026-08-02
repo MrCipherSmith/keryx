@@ -216,13 +216,19 @@ describe("how it refuses is the runtime's own contract", () => {
     // emitting 2 there would be an error rather than a denial.
     writeConfig("enforced");
 
+    // `JSON.parse(out)` on the WHOLE stream, which is what a hook does. The
+    // previous version of this assertion read `.split("\n").at(-1)` — an
+    // admission that the stream carried other lines, written around the defect
+    // instead of against it. The command printed the human report to stdout
+    // first, so the document arrived as the last of nine lines, the parse
+    // failed, the exit code was 0, and the input proceeded.
     const cursor = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "cursor"]);
     expect(cursor.exit).toBe(0);
-    expect(JSON.parse(cursor.out.trim().split("\n").at(-1) ?? "{}")).toMatchObject({ permission: "deny" });
+    expect(JSON.parse(cursor.out)).toMatchObject({ permission: "deny" });
 
     const antigravity = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "antigravity"]);
     expect(antigravity.exit).toBe(0);
-    expect(JSON.parse(antigravity.out.trim().split("\n").at(-1) ?? "{}")).toMatchObject({ allow_tool: false });
+    expect(JSON.parse(antigravity.out)).toMatchObject({ allow_tool: false });
   }, 60_000);
 
   test("a PASS emits no refusal shape for any runtime", async () => {
@@ -289,4 +295,72 @@ describe("how it refuses is the runtime's own contract", () => {
     const { exit } = await checkOutput(INJECTION, "generated");
     expect(exit).toBe(0);
   }, 30_000);
+});
+
+describe("under --runtime, stdout belongs to the runtime and to nothing else", () => {
+  // F-014. `src/ctx/hook.ts` writes `action.stdout` and nothing else; this
+  // command wrote a human report to the same stream first. Two callers of one
+  // shared helper, one of them on a polluted stream — the asymmetry the previous
+  // round's commit claimed to have removed. It copied the refusal DOCUMENT from
+  // the module that owns it and not the CONTRACT, and the contract is "stdout is
+  // exactly this one document".
+
+  test("a stdout-JSON runtime receives exactly one parseable document", async () => {
+    writeConfig("enforced");
+    for (const runtime of ["cursor", "antigravity"]) {
+      const { exit, out, err } = await checkInput(AWS_KEY, "untrusted-external", [
+        "--runtime",
+        runtime,
+      ]);
+      expect({ runtime, exit }).toEqual({ runtime, exit: 0 });
+      // The whole stream, not its last line.
+      const parsed = JSON.parse(out) as Record<string, unknown>;
+      expect({ runtime, denied: parsed.permission === "deny" || parsed.allow_tool === false }).toEqual({
+        runtime,
+        denied: true,
+      });
+      // The report is not dropped — the operator still gets it, on the other
+      // stream, and it still names no matched span.
+      expect(err).toContain("gate:");
+      expect(err).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    }
+  }, 60_000);
+
+  test("an exit-code runtime gets NOTHING on stdout", async () => {
+    // The second half, and a defect in its own right. Claude appends
+    // `UserPromptSubmit` stdout to the model's context on exit 0, so every
+    // prompt was injecting the report — plus a redacted copy of the prompt —
+    // back into the conversation it was scanning.
+    writeConfig("enforced");
+    for (const runtime of ["claude", "windsurf"]) {
+      const refused = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", runtime]);
+      expect({ runtime, exit: refused.exit, out: refused.out }).toEqual({ runtime, exit: 2, out: "" });
+
+      const clean = await checkInput("summarise the readme", "untrusted-external", [
+        "--runtime",
+        runtime,
+      ]);
+      expect({ runtime, exit: clean.exit, out: clean.out }).toEqual({ runtime, exit: 0, out: "" });
+    }
+  }, 60_000);
+
+  test("without --runtime the human report still goes to stdout", async () => {
+    // The control. A person at a terminal, or a script reading the report, must
+    // not lose it because a hook contract exists.
+    writeConfig("enforced");
+    const { exit, out, err } = await checkInput(AWS_KEY, "untrusted-external");
+    expect(exit).toBe(1);
+    expect(out).toContain("gate:");
+    expect(err).toBe("");
+  }, 30_000);
+
+  test("check-output honours the same contract", async () => {
+    writeConfig("enforced");
+    const cursor = await checkOutput(AWS_KEY, "external", ["--runtime", "cursor"]);
+    expect(cursor.exit).toBe(0);
+    expect(JSON.parse(cursor.out)).toMatchObject({ permission: "deny" });
+
+    const claude = await checkOutput(AWS_KEY, "external", ["--runtime", "claude"]);
+    expect({ exit: claude.exit, out: claude.out }).toEqual({ exit: 2, out: "" });
+  }, 60_000);
 });
