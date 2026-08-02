@@ -359,3 +359,57 @@ what the detector sees rather than deriving the expectation from it. The
    violated four times in the commit that wrote it down.
 4. **The reviewers must not share a mutable tree with the orchestrator.** This
    round worked; keep it.
+
+---
+
+# Disposition — all nine closed (2026-08-02)
+
+| id | closed by | mutation that proves it |
+|---|---|---|
+| F-013 blocker | `5be13fbf` | reverting the prune fails the decoy-pin test; the constant sweep collapses from `[0.1, 0.9)` to the single point `0.45` |
+| F-014 | `75053543` | returning the report to stdout fails four tests |
+| F-015 | `1d5ad83e` | the reviewer's three planted production modules now fail six tests across all three guards; under the regexes they left sixty green |
+| F-016 | `c625be7f` | routing `serve-turn.ts` through `isServerFault` — the reviewers' own proposal — fails a test |
+| F-017 | `e2afde74` | dropping the project from the digest fails two tests; plain concatenation fails the injectivity test alone |
+| F-018 | `14857b5a` | pointing the key back at `hooks` fails five of six; removing the legacy migration fails two |
+| F-019 | `267f1983` | the listener now pins the exact reason code, which `toContain("blocker")` could not |
+| F-020, F-021 | `267f1983` | corrected against the pre-round blob and re-derived measurements |
+| minors | `ff1ffb93`, `267f1983` | five assertions that could not fail, each with its surviving mutation now red |
+
+Suite: **2910 pass, 14 skip, 0 fail** across 290 files.
+
+## Where a reviewer was wrong, and why it mattered
+
+Three reviewers independently said `isServerFault` had one caller while
+claiming five, and recommended routing the other four through it. The count was
+right; the recommendation was not. Two questions were being conflated — how a
+route answers (404/500) and whether a definite answer exists at all — and they
+disagree on `malformed` on purpose. Running their proposal as a mutation failed
+a test, which is how it was settled rather than argued.
+
+Recorded because a review's diagnosis and its prescription are separate claims,
+and this round would have introduced a defect by accepting the second along with
+the first.
+
+## Two things found while fixing, not by the review
+
+- `pii: { action: "allow" }` still redacts. Measured while looking for a config
+  knob that changes `redact()` output: `redact`, `warn` and `allow` all mask the
+  span, and only `enabled: false` does not. A question about the resolver, out of
+  this round's scope, noted in `service.memo.test.ts` rather than chased.
+- Adding a fourth string parameter to `claimIdempotencyKey` left every stale
+  three-argument call site TYPECHECKING while silently shifting each argument one
+  position. `tsc` reported nothing. Every call site was found by grep and
+  re-checked by hand.
+
+## What changed about method
+
+1. **Reviewers must not share a mutable tree with the orchestrator.** Round two
+   was contaminated by exactly that. This round forbade writes, one reviewer
+   sandboxed a copy to run real mutations, and the results were trustworthy.
+2. **Regex source guards are gone.** Four guards, three rounds, one spelling per
+   widening. They match the AST now — see
+   `.metaproject/memory/lessons/regex-guards-lose-to-spellings.md`.
+3. **Re-derive every number.** Five false claims this round were figures carried
+   verbatim out of a previous report. Two of them were in the memory note written
+   to stop exactly that.
