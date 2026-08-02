@@ -244,3 +244,54 @@ reviewer being wrong in a way I had to prove.
    migration, `.find`→`.some`, the equals-form flag, `hashOnce`, the three
    untested hook mutations.
 5. Every number, re-derived — including the ones in this document.
+
+---
+
+# Disposition — closed (2026-08-02)
+
+| id | closed by | how |
+|---|---|---|
+| F-022 blocker | `6a0cdd19` | false positives first; a real closure via the bundler for the one question that has one; five gaps closed, seven written down as executable "still missed" tests |
+| F-023, F-024, F-032 | `d2fb14e4` | price table re-derived; rule 2's stale constant and restated defect; "1500" was a loop cap; every count re-measured |
+| F-025 | `f6413ad3` | legacy claims adopted, but only their owner's — a blind migration would have been F-017 again |
+| F-026 | `f5cf65a2` | `allowAction` beside `refusalAction`; `--runtime=<id>` reaches the same contract |
+| F-027, `.find`, 3 untested branches | `7197e0c7` | ctx preserves foreign arrays; validation is about the MANAGED entry |
+| F-029 | `7ee87f05` | the HMAC memo — the caller the file is actually about |
+| minors | `755882af` | dead code, a 10x traversal, the advisory caveat install never printed |
+
+Suite: **2937 pass, 14 skip, 0 fail** across 291 files.
+
+## What I changed about how I work, not just what I fixed
+
+Every finding this round was a claim stronger than its evidence. Three concrete
+habits came out of it, and they are the durable part:
+
+1. **A grid of ten samples is not a proof of uniqueness.** "One point, not an
+   interval" was true of my sampling and false of the code. When a claim is about
+   a boundary, sweep the boundary.
+2. **A loop cap is not a measurement.** "1500 guesses" was `300 × 5`. If a probe
+   stops because I told it to, the number is my bound, not the system's.
+3. **Correct a claim everywhere it was copied, not where I happen to be
+   reading.** `plan.md` carried a retired count through two rounds because each
+   fix touched the file the fixer had open.
+
+And one about scope: I now go looking for the **oracle** before writing a
+matcher. For "does this module ship" the bundler is one, and it made a guard that
+three rounds of pattern-widening could not. For the other three properties there
+is none, so they say "heuristic" and carry a gap list.
+
+## Found while fixing, not by the review
+
+- Below the eviction crossover an attacker at 4 guesses per address is never
+  refused — 4000 and counting. Inherent to any threshold, worth less than the
+  free per-peer allowance of 9, documented and pinned rather than left.
+- `pii: { action: "allow" }` still redacts (carried from round three, still not
+  chased — a question about the resolver, outside this flow).
+
+## Method note
+
+Three of the five reviewers were killed mid-run by an account rate limit and
+were relaunched on an unchanged tree. One reviewer wrote a probe file into the
+shared tree despite the constraint. Both are recorded because the value of these
+rounds depends on the tree being stable while it is read, and on knowing when it
+was not.
