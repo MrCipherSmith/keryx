@@ -43,13 +43,28 @@ export const AUTH_THROTTLE_COOLDOWN_MS = 60_000;
  *
  * A throttle keyed by peer is a map an unauthenticated caller can grow, and a
  * map an unauthenticated caller can grow without limit is a memory exhaustion
- * primitive dressed as a security control. When the table is full the oldest
- * entry is evicted — which means a determined attacker with many source
- * addresses can push their own record out, and that is the honest trade: the
- * alternative is refusing service to everyone because someone spoofed a
- * thousand peers. On a loopback-bound listener the peer set is tiny.
+ * primitive dressed as a security control. So the table is bounded, and
+ * something has to go when it is full — see `evictIfFull` for WHICH, because it
+ * is no longer "the oldest entry" and this sentence used to say that a round
+ * after it stopped being true.
+ *
+ * The honest trade is unchanged: a determined attacker with many source
+ * addresses can still push records out, and the alternative is refusing service
+ * to everyone because someone spoofed a thousand peers. What the eviction order
+ * decides is WHOSE record that is, and the order exists to make it never the
+ * record of whoever is currently attacking. On a loopback-bound listener the
+ * peer set is tiny.
  */
 export const MAX_TRACKED_PEERS = 1_024;
+
+/**
+ * What a cooldown record is worth, against `failures / AUTH_FAILURE_LIMIT`.
+ *
+ * Halfway. See `evictIfFull` rule 3 for why the two properties this control
+ * needs cannot both hold under a strict "bans first" or "peers first" order,
+ * and why this is where they meet.
+ */
+const BAN_VALUE = 0.5;
 
 interface PeerRecord {
   /** Failure timestamps inside the window, oldest first. */
@@ -160,38 +175,65 @@ export class AuthFailureThrottle {
    *    in cooldown stops being seen the moment it starts being refused, its
    *    `seenAt` freezes, and oldest-first takes it first.
    *
-   * 3. When every candidate IS in cooldown, take the ban that expires soonest.
-   *    This branch is reachable — it is what runs on a saturated table now that
-   *    rule 1 protects the newcomer — and it is the right trade: the table
-   *    converges on the bans of peers currently attacking rather than on the
-   *    oldest bans, which is the ordering that matters. It is tested.
+   * 3. Otherwise the record with the least VALUE, on one scale:
+   *
+   *      an unthrottled peer   failures / AUTH_FAILURE_LIMIT   (0 .. <1)
+   *      a peer in cooldown    0.5                             (constant)
+   *
+   *    So a peer less than halfway to a ban is cheaper to lose than a ban, and
+   *    a peer more than halfway is not.
+   *
+   * One scale rather than a priority order, and that is forced rather than
+   * chosen. The two properties this control needs are in direct conflict on a
+   * full table, and no strict ordering satisfies both:
+   *
+   *   a flood of fresh peers must not clear an existing ban — so a ban has to
+   *   outrank a one-failure record;
+   *
+   *   a saturated table of bans must not evict the peer at 9 of 10 — so an
+   *   accumulation near the limit has to outrank a ban.
+   *
+   * Both were learned by measurement. Preferring unthrottled records outright
+   * left an attacker unthrottled through 1800 consecutive guesses, one
+   * throw-away address per nine. Preferring bans outright let a flood clear the
+   * flooder's own ban, which is the escape the rule above it exists for. The
+   * scale is where those two meet: halfway to a ban is the point at which an
+   * accumulation becomes worth more than an enforced refusal that is already
+   * counting down.
+   *
+   * Ties break toward the soonest-expiring ban and the oldest-seen peer, and the
+   * newcomer is never a candidate — see rule 1.
+   *
+   * The trade `MAX_TRACKED_PEERS` describes is unchanged: an attacker with many
+   * addresses can still push records out. What they cannot do is push out the
+   * record of the address they are currently guessing from.
    */
   private evictIfFull(justInserted: string): void {
     if (this.peers.size <= MAX_TRACKED_PEERS) {
       return;
     }
     const now = this.now();
-    let oldestKey: string | undefined;
-    let oldestAt = Number.POSITIVE_INFINITY;
-    let soonestKey: string | undefined;
-    let soonestUntil = Number.POSITIVE_INFINITY;
+    /** A record's worth, on the one scale rule 3 describes. */
+    const valueOf = (record: PeerRecord): number =>
+      record.throttledUntil > now ? BAN_VALUE : record.failures.length / AUTH_FAILURE_LIMIT;
+
+    let victim: string | undefined;
+    let lowest = Number.POSITIVE_INFINITY;
+    let tieBreak = Number.POSITIVE_INFINITY;
     for (const [key, record] of this.peers) {
       if (key === justInserted) {
         continue;
       }
-      if (record.throttledUntil > now) {
-        if (record.throttledUntil < soonestUntil) {
-          soonestUntil = record.throttledUntil;
-          soonestKey = key;
-        }
-        continue;
-      }
-      if (record.seenAt < oldestAt) {
-        oldestAt = record.seenAt;
-        oldestKey = key;
+      const value = valueOf(record);
+      // Soonest-expiring for a ban, oldest-seen for a peer: the least useful
+      // member of whichever group the tie is in.
+      const within = record.throttledUntil > now ? record.throttledUntil : record.seenAt;
+      if (value < lowest || (value === lowest && within < tieBreak)) {
+        lowest = value;
+        tieBreak = within;
+        victim = key;
       }
     }
-    const victim = oldestKey ?? soonestKey;
     if (victim !== undefined) {
       this.peers.delete(victim);
     }

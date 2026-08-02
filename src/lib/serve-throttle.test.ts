@@ -232,6 +232,50 @@ describe("AuthFailureThrottle", () => {
     expect(throttle.size()).toBe(MAX_TRACKED_PEERS);
   });
 
+  test("interleaving throw-away addresses does NOT keep one address unthrottled", async () => {
+    // The victim's side of the eviction, which the first two rules did not
+    // cover and no test asked about. They protected the newcomer and the
+    // banned, which left the peer at 9 of 10 as the only unthrottled candidate
+    // on a saturated table — so it was always the one evicted, its counter
+    // restarted, and it never reached the limit.
+    //
+    // Measured on that version: 1800 consecutive guesses from one address,
+    // never refused, at a cost of one throw-away address per nine guesses. The
+    // control this exists for is "a peer that keeps failing is eventually
+    // refused", and that was false for the only peer that mattered.
+    const clock = fakeClock();
+    const throttle = new AuthFailureThrottle(clock.now);
+    for (let i = 0; i < MAX_TRACKED_PEERS - 1; i += 1) {
+      for (let f = 0; f < AUTH_FAILURE_LIMIT; f += 1) {
+        throttle.recordFailure(`banned-${i}`);
+      }
+      clock.advance(1);
+    }
+
+    // Nine guesses, one throw-away address, repeat — the shape that defeated it.
+    let refused = false;
+    let guesses = 0;
+    for (let round = 0; round < 50 && !refused; round += 1) {
+      for (let g = 0; g < AUTH_FAILURE_LIMIT - 1; g += 1) {
+        if (throttle.check("attacker").throttled) {
+          refused = true;
+          break;
+        }
+        throttle.recordFailure("attacker");
+        guesses += 1;
+      }
+      if (!refused) {
+        throttle.recordFailure(`throwaway-${round}`);
+      }
+    }
+
+    expect(refused).toBe(true);
+    // And it took the same number of guesses as an unsaturated table would: the
+    // interleaving bought nothing.
+    expect(guesses).toBe(AUTH_FAILURE_LIMIT);
+    expect(throttle.size()).toBeLessThanOrEqual(MAX_TRACKED_PEERS);
+  }, 30_000);
+
   test("a table saturated with cooldowns is still bounded, and holds real bans", async () => {
     const clock = fakeClock();
     const throttle = new AuthFailureThrottle(clock.now);
