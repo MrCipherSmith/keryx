@@ -362,13 +362,24 @@ export async function scanPrompt(scanRoot: string, prompt: string): Promise<{ re
     // injection class — on the one surface that can cause agent execution from
     // outside the operator's terminal.
     //
-    // Not fixed by lowering the threshold. The threshold is right for what it
-    // governs: `resolve.ts` §7a deliberately keeps a LONE injection signal at
-    // `warn` for content scanning, and escalates only when an egress signal
-    // co-occurs. That is a reasonable policy for a project file. It is not a
-    // reasonable policy for a prompt a stranger just posted to a listener, and
-    // the boundary is where that difference belongs — not in the shared
-    // resolver, whose other callers were not reviewed here.
+    // Hardcoded HERE and configurable everywhere else, and the difference is
+    // which document governs.
+    //
+    // `resolve.ts` §7a keeps a lone injection at `warn` and escalates only with
+    // a corroborating egress signal. That is a real decision, tested, and right
+    // for content scanning: the detectors miss 12 of 14 canonical evasions and
+    // fire on 3.3% of ordinary prose, so a hard gate on them alone is wrong in
+    // both directions. On the agent-hook surface an operator who disagrees
+    // lowers `policies.promptInjection.minConfidence` and the declared action
+    // applies — that is the mechanism, and a round of this review was spent
+    // learning not to override it from a CLI.
+    //
+    // This surface is not that surface. `security-policy.md` states, for remote
+    // entry specifically, that "a prompt-injection or secret finding stops
+    // conversion into a turn" — a requirement of the specification rather than
+    // a default an operator tunes. A configurable version of it would be an
+    // operator-defeatable spec requirement, which is not a knob this release
+    // offers on the one surface reachable from outside the machine.
     //
     // Nor is it reconfigurable away: the scan root is the install directory,
     // which never receives a `security.config.json`, so an operator could not

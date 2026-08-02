@@ -1,3 +1,4 @@
+import { refusalAction } from "../ctx/runtimes";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -409,7 +410,11 @@ async function handleCheck(
     }
   }
 
-  process.exitCode = exitCodeFor(decision, cwd, await modeOf(cwd));
+  process.exitCode = applyRuntimeRefusal(
+    args,
+    exitCodeFor(decision, cwd, await modeOf(cwd)),
+    `keryx security: this ${kind} was refused by the configured security policy (gate: ${decision.gate}).`,
+  );
 }
 
 async function handleRedact(cwd: string, args: string[]): Promise<void> {
@@ -635,45 +640,37 @@ async function modeOf(cwd: string): Promise<string> {
 }
 
 /**
- * The exit code, which for `check-input` is a PROCEED/REFUSE for a tool call.
+ * The exit code, and for an agent hook it is a PROCEED/REFUSE.
  *
- * `scan` honours mode+gate: `ci` exits non-zero on a gate fail, `enforced` also
- * on `needs-approval`, `advisory` reports and exits 0.
+ * `scan` and the two `check` commands share this. `ci` refuses on a gate fail,
+ * `enforced` also on `needs-approval`, `advisory` reports and proceeds —
+ * report-only in advisory is a stated §11 invariant.
  *
- * AND a prompt-injection finding over UNTRUSTED-EXTERNAL content refuses on its
- * own, whatever the gate said. That is a second rule and it needs stating,
- * because the first one alone made this command inert for the injection class:
- * every shipped injection detector scores 0.35 to 0.45 against a default
- * `gate.minConfidence` of 0.5, so a lone injection resolves to `warn`, the gate
- * to `pass`, and the exit code to 0 in every mode. `keryx security check-input
- * --source untrusted-external` is installed as the PreToolUse guard in Claude
- * Code and the other supported runtimes — so it DETECTED the injection, PRINTED
- * it, and let the tool call proceed. A guard that reports to a log nobody reads
- * and returns success is not a guard.
+ * What is NOT here any more is a hardcoded rule that refused on any
+ * prompt-injection finding regardless of the gate. It was added to close "the
+ * installed guard detects an injection and returns success", and it was wrong
+ * in three ways that took a second review round to see:
  *
- * The same asymmetry, on the same class, that the remote entry surface was
- * fixed for in this round: step 5 of the required decision path worked for the
- * secret class and was inert for the injection class. Three sites, and this was
- * the one nobody had looked at — it is a string constant in the hook installer,
- * not a call to the security service, so the grep that found the other two
- * could not see it.
+ *   - it overrode a DOCUMENTED policy. `resolve.ts` §7a keeps a lone injection
+ *     at `warn` and escalates only when an egress signal co-occurs, and
+ *     `security.test.ts` pins that for `untrusted-external` specifically. The
+ *     override contradicted a decision this codebase had already made and
+ *     tested, without changing either.
+ *   - it was unappealable. No floor, no override, no way for an operator to
+ *     disagree — measured at a 3.3% refusal rate over this repository's own
+ *     documentation and source, including its operator guide and README.
+ *   - it emitted `exit 1`, which no runtime keryx installs into treats as a
+ *     block. The refusal did not refuse.
  *
- * Scoped by SOURCE, not applied everywhere. `generated`, `tool-output` and
- * `trusted-project` are content keryx itself produced, and §7a's decision to
- * keep a lone injection at `warn` for those is right — escalating there would
- * fail the test suite of any repository whose fixtures contain the canonical
- * strings, including this one.
- *
- * Advisory still exits 0. Report-only in advisory is a stated §11 invariant, and
- * an operator who has not opted into enforcement has not asked to be blocked.
+ * The mechanism an operator actually has is the one that was already there and
+ * unreachable: every injection detector scores 0.35 to 0.45, the default gate
+ * floor is 0.5, so the declared `policies.promptInjection.action` never
+ * applied. Lowering `policies.promptInjection.minConfidence` below the detector
+ * band makes the declared action apply — verified end to end — and raising it
+ * or setting `action: "warn"` turns it back off. That is a policy the operator
+ * writes down, not a rule compiled into a CLI.
  */
 function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): number {
-  if (mode === "advisory") {
-    return 0;
-  }
-  if (refusesOnInjection(decision)) {
-    return 1;
-  }
   if (mode === "ci") {
     return decision.gate === "fail" ? 1 : 0;
   }
@@ -684,18 +681,32 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
 }
 
 /**
- * A prompt-injection finding over content that arrived from outside.
+ * Emit the refusal in the shape the invoking runtime reads, and return its code.
  *
- * `source` is read HERE because nothing downstream reads it: `resolveDecision`
- * receives it and neither `buildFinding` nor `escalateInjection` consults it, so
- * the one signal distinguishing "a stranger sent this" from "we generated this"
- * is carried the whole way down and dropped. Every gate that needs the
- * distinction has to re-derive it at its own call site, and two of three now do.
+ * `--runtime <id>` is written into the command by `security hooks install`, so
+ * a hook knows which harness is asking. Without it — a human at a terminal, or
+ * a script — the plain CLI convention of a non-zero exit stands.
+ *
+ * The shape comes from `src/ctx/runtimes.ts`, which already owned it. That is
+ * the point: the two hook surfaces disagreed about the block signal, and one of
+ * them had it right.
  */
-function refusesOnInjection(decision: SecurityDecision): boolean {
-  return decision.findings.some(
-    (finding) => finding.category === "prompt-injection" && finding.source.kind === "untrusted-external",
-  );
+function applyRuntimeRefusal(args: string[], code: number, message: string): number {
+  if (code === 0) {
+    return 0;
+  }
+  const runtime = optionValue(args, "--runtime");
+  if (runtime === undefined) {
+    return code;
+  }
+  const action = refusalAction(runtime, message);
+  if (action.stdout !== undefined) {
+    process.stdout.write(action.stdout);
+  }
+  if (action.stderr !== undefined) {
+    process.stderr.write(action.stderr);
+  }
+  return action.exitCode;
 }
 
 export function printSecurityHelp(): void {
@@ -707,8 +718,8 @@ export function printSecurityHelp(): void {
     "keryx security status",
     "keryx security scan <path> [--json] [--source <kind>]",
     "keryx security scan-mcp <manifest.json | dir> [--json] [--pin <manifest>] [--strict]",
-    "keryx security check-input [--source <kind>] [--file <path>]",
-    "keryx security check-output [--target <kind>] [--file <path>]",
+    "keryx security check-input [--source <kind>] [--file <path>] [--runtime <id>]",
+    "keryx security check-output [--target <kind>] [--file <path>] [--runtime <id>]",
     "keryx security redact <path> [--out <path>]",
     "keryx security report [--since <ref>] [--json]",
     "keryx security policy validate",
@@ -719,6 +730,10 @@ export function printSecurityHelp(): void {
   ]);
   helpOptions([
     { flag: "--json", desc: "Emit machine-readable JSON." },
+    {
+      flag: "--runtime <id>",
+      desc: "Refuse in the shape this agent runtime reads (claude|codex|windsurf|cursor|antigravity). Written by `hooks install`; a bare exit code otherwise.",
+    },
     { flag: "--source <kind>", desc: "Trust level of the content source." },
     { flag: "--target <kind>", desc: "Write/publish target for check-output." },
     { flag: "--file <path>", desc: "Read content from a file instead of stdin." },

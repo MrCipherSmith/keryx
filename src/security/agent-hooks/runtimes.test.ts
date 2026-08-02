@@ -11,6 +11,8 @@ import {
   getRuntime,
   runtimeIds,
   AGENT_CHECK_INPUT_COMMAND,
+  checkInputCommand,
+  checkOutputCommand,
   AGENT_CHECK_OUTPUT_COMMAND,
 } from "./runtimes";
 
@@ -37,8 +39,8 @@ test("AC5.1: every registered runtime installs a validator-clean input/output co
       const settings = await readJson(runtime.settingsPath(root));
       expect(runtime.validate(settings)).toEqual([]);
       const flat = JSON.stringify(settings);
-      expect(flat).toContain(AGENT_CHECK_INPUT_COMMAND);
-      expect(flat).toContain(AGENT_CHECK_OUTPUT_COMMAND);
+      expect(flat).toContain(checkInputCommand(runtime.id));
+      expect(flat).toContain(checkOutputCommand(runtime.id));
     }
   });
 });

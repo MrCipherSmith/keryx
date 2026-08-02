@@ -184,9 +184,32 @@ function parseAntigravityCommand(payload: string): string | null {
 
 // --- block/allow signalers ---------------------------------------------------
 
+/**
+ * How a runtime says NO, given the message. The one owner of that fact.
+ *
+ * Exported because a second keryx surface needs it and got it wrong: the
+ * security agent hooks refused with `exit 1`, which every runtime here treats
+ * as a non-blocking error — stderr is surfaced and the call proceeds. The
+ * guard reported and did not refuse, and two modules in one repository
+ * disagreed about the block signal while only one of them had looked it up.
+ *
+ * `runtimeId` is the id under `CTX_RUNTIMES`. An unknown id returns the
+ * exit-code form, which is the majority shape and fails toward refusing.
+ */
+export function refusalAction(runtimeId: string, message: string): HookAction {
+  switch (runtimeId) {
+    case "cursor":
+      return { exitCode: 0, stdout: `${JSON.stringify({ permission: "deny", agent_message: message })}\n` };
+    case "antigravity":
+      return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: false, deny_reason: message })}\n` };
+    default:
+      return { exitCode: 2, stderr: `${message}\n` };
+  }
+}
+
 // Exit-2 + stderr (Claude, Codex, Windsurf, OpenCode bridge).
 function exitCodeBlock(command: string, c: HookClassification): HookAction {
-  return { exitCode: 2, stderr: `${buildBlockMessage(command, c)}\n` };
+  return refusalAction("claude", buildBlockMessage(command, c));
 }
 function exitCodeAllow(c: HookClassification): HookAction {
   if (c.escapeReason !== undefined) {
@@ -198,10 +221,7 @@ function exitCodeAllow(c: HookClassification): HookAction {
 
 // Cursor: stdout { permission: "deny", agent_message } / { permission: "allow" }.
 function cursorBlock(command: string, c: HookClassification): HookAction {
-  return {
-    exitCode: 0,
-    stdout: `${JSON.stringify({ permission: "deny", agent_message: buildBlockMessage(command, c) })}\n`,
-  };
+  return refusalAction("cursor", buildBlockMessage(command, c));
 }
 function cursorAllow(_c: HookClassification): HookAction {
   return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
@@ -209,10 +229,7 @@ function cursorAllow(_c: HookClassification): HookAction {
 
 // Antigravity: stdout top-level { allow_tool, deny_reason }; always exit 0.
 function antigravityBlock(command: string, c: HookClassification): HookAction {
-  return {
-    exitCode: 0,
-    stdout: `${JSON.stringify({ allow_tool: false, deny_reason: buildBlockMessage(command, c) })}\n`,
-  };
+  return refusalAction("antigravity", buildBlockMessage(command, c));
 }
 function antigravityAllow(_c: HookClassification): HookAction {
   return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };

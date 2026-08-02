@@ -15,9 +15,32 @@ import path from "node:path";
 export const AGENT_HOOKS_SENTINEL = "security-agent-hooks";
 export const MANAGED_KEY = "_keryxManaged";
 
+/**
+ * The installed hook commands, per runtime.
+ *
+ * `--runtime <id>` is what makes a refusal actually refuse. Without it the
+ * command exits 1 on a blocked decision, and `src/ctx/runtimes.ts` — which owns
+ * this contract — records that exit 1 is a NON-BLOCKING error for Claude, Codex
+ * and Windsurf, while Cursor and Antigravity decide from stdout JSON and ignore
+ * the code entirely. So the guard reported and did not refuse, on every runtime
+ * keryx installs into, and the two hook surfaces in this repository disagreed
+ * about the block signal with only one of them having looked it up.
+ *
+ * The base strings stay exported: they are what the validators match a rendered
+ * config against, and a command carrying a different runtime id is still the
+ * managed one.
+ */
 export const AGENT_CHECK_INPUT_COMMAND =
   "keryx security check-input --source untrusted-external";
 export const AGENT_CHECK_OUTPUT_COMMAND = "keryx security check-output";
+
+export function checkInputCommand(runtimeId: string): string {
+  return `${AGENT_CHECK_INPUT_COMMAND} --runtime ${runtimeId}`;
+}
+
+export function checkOutputCommand(runtimeId: string): string {
+  return `${AGENT_CHECK_OUTPUT_COMMAND} --runtime ${runtimeId}`;
+}
 
 export type Settings = Record<string, unknown>;
 
@@ -80,7 +103,7 @@ function claudeMerge(settings: Settings): Settings {
   hooks.UserPromptSubmit = [
     ...stripManagedFromArray(hooks.UserPromptSubmit),
     {
-      hooks: [{ type: "command", command: AGENT_CHECK_INPUT_COMMAND }],
+      hooks: [{ type: "command", command: checkInputCommand("claude") }],
       [MANAGED_KEY]: AGENT_HOOKS_SENTINEL,
     },
   ];
@@ -88,7 +111,7 @@ function claudeMerge(settings: Settings): Settings {
     ...stripManagedFromArray(hooks.PreToolUse),
     {
       matcher: CLAUDE_PRE_TOOL_MATCHER,
-      hooks: [{ type: "command", command: AGENT_CHECK_OUTPUT_COMMAND }],
+      hooks: [{ type: "command", command: checkOutputCommand("claude") }],
       [MANAGED_KEY]: AGENT_HOOKS_SENTINEL,
     },
   ];
@@ -132,10 +155,12 @@ function claudeValidate(settings: Settings): string[] {
             ))
           : [],
     );
-  if (!cmds("UserPromptSubmit").includes(AGENT_CHECK_INPUT_COMMAND)) {
+  // Prefix, not equality: the command now carries `--runtime claude`, and a
+  // config written by an older keryx must still validate.
+  if (!cmds("UserPromptSubmit").some((c) => c.startsWith(AGENT_CHECK_INPUT_COMMAND))) {
     errors.push("claude: missing UserPromptSubmit check-input hook");
   }
-  if (!cmds("PreToolUse").includes(AGENT_CHECK_OUTPUT_COMMAND)) {
+  if (!cmds("PreToolUse").some((c) => c.startsWith(AGENT_CHECK_OUTPUT_COMMAND))) {
     errors.push("claude: missing PreToolUse check-output hook");
   }
   return errors;
@@ -146,15 +171,17 @@ function claudeValidate(settings: Settings): string[] {
 // group is `{ on, command, _keryxManaged }` in a top-level `hooks` array.
 // ---------------------------------------------------------------------------
 
-function flatMerge(settings: Settings): Settings {
-  const userGroups = stripManagedFromArray(settings.hooks);
-  settings.hooks = [
-    ...userGroups,
-    { on: "input", command: AGENT_CHECK_INPUT_COMMAND, [MANAGED_KEY]: AGENT_HOOKS_SENTINEL },
-    { on: "output", command: AGENT_CHECK_OUTPUT_COMMAND, [MANAGED_KEY]: AGENT_HOOKS_SENTINEL },
-  ];
-  setSentinel(settings);
-  return settings;
+function flatMerge(id: string): (settings: Settings) => Settings {
+  return (settings: Settings): Settings => {
+    const userGroups = stripManagedFromArray(settings.hooks);
+    settings.hooks = [
+      ...userGroups,
+      { on: "input", command: checkInputCommand(id), [MANAGED_KEY]: AGENT_HOOKS_SENTINEL },
+      { on: "output", command: checkOutputCommand(id), [MANAGED_KEY]: AGENT_HOOKS_SENTINEL },
+    ];
+    setSentinel(settings);
+    return settings;
+  };
 }
 
 function flatStrip(settings: Settings): Settings {
@@ -175,10 +202,14 @@ function flatValidate(id: string): (settings: Settings) => string[] {
       ) as { command?: unknown } | undefined;
       return typeof g?.command === "string" ? g.command : undefined;
     };
-    if (commandFor("input") !== AGENT_CHECK_INPUT_COMMAND) {
+    // `startsWith`, because the command now carries `--runtime <id>`. Matching
+    // the base means a config written by an older keryx still validates, and a
+    // config carrying the wrong runtime id is still recognisably the managed
+    // hook rather than a stranger's.
+    if (!(commandFor("input") ?? "").startsWith(AGENT_CHECK_INPUT_COMMAND)) {
       errors.push(`${id}: missing input hook routing to check-input`);
     }
-    if (commandFor("output") !== AGENT_CHECK_OUTPUT_COMMAND) {
+    if (!(commandFor("output") ?? "").startsWith(AGENT_CHECK_OUTPUT_COMMAND)) {
       errors.push(`${id}: missing output hook routing to check-output`);
     }
     return errors;
@@ -189,7 +220,7 @@ function flatRuntime(id: string, relativePath: string): RuntimeHook {
   return {
     id,
     settingsPath: (root) => path.join(root, ...relativePath.split("/")),
-    merge: flatMerge,
+    merge: flatMerge(id),
     strip: flatStrip,
     validate: flatValidate(id),
   };

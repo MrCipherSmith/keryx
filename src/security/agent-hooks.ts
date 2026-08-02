@@ -4,6 +4,8 @@ import { pathExists } from "../lib/fs";
 import {
   AGENT_CHECK_INPUT_COMMAND,
   AGENT_CHECK_OUTPUT_COMMAND,
+  checkInputCommand,
+  checkOutputCommand,
   AGENT_HOOKS_SENTINEL,
   CLAUDE_RUNTIME,
   MANAGED_KEY,
@@ -27,6 +29,8 @@ import {
 export {
   AGENT_CHECK_INPUT_COMMAND,
   AGENT_CHECK_OUTPUT_COMMAND,
+  checkInputCommand,
+  checkOutputCommand,
   AGENT_HOOKS_SENTINEL,
   runtimeIds,
 } from "./agent-hooks/runtimes";
