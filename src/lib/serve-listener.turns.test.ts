@@ -213,7 +213,11 @@ describe("a listener the CLI can start executes a turn", () => {
     if (!stored.ok) {
       return;
     }
-    expect(stored.value.result?.outcome).toBeDefined();
+    // NOT `toBeDefined()`, which is satisfied by "completed" — the value this
+      // assertion was rewritten to stop accepting. There is no offline
+      // configuration in which the production assembly completes a turn, so the
+      // honest statement is which outcomes ARE reachable.
+      expect(["failed", "refused", "cancelled"]).toContain(stored.value.result?.outcome ?? "missing");
     expect(stored.value.result?.reasonCode).not.toBe("containment-unavailable");
     // The stream closed properly rather than stopping.
     const events = readTurnEvents(body.turnId, -1, configDir);
@@ -499,7 +503,11 @@ describe("a listener the CLI can start executes a turn", () => {
     expect(stored.ok).toBe(true);
     if (stored.ok) {
       expect(stored.value.sessionId).toBe(accepted.sessionId);
-      expect(stored.value.result?.outcome).toBeDefined();
+      // NOT `toBeDefined()`, which is satisfied by "completed" — the value this
+      // assertion was rewritten to stop accepting. There is no offline
+      // configuration in which the production assembly completes a turn, so the
+      // honest statement is which outcomes ARE reachable.
+      expect(["failed", "refused", "cancelled"]).toContain(stored.value.result?.outcome ?? "missing");
     }
   }, 30_000);
 

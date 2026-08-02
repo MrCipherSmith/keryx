@@ -1211,10 +1211,33 @@ describe("the internal-error boundary is one function, and both halves use it", 
     // for the same reason. "Three others" was this round's own miscount, and it
     // is corrected in `.metaproject/memory/constraints/code-blanks-string-literals.md`
     // rather than only here.
-    const raw = readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8");
-    const source = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-    const emitters = source.split("keryx serve: request failed").length - 1;
-    expect(emitters).toBe(1);
+    const stripComments = (raw: string): string =>
+      raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    const countEmitters = (raw: string): number =>
+      stripComments(raw).split(/errorResponse\(\s*500,\s*["']internal-error["']/).length - 1;
+
+    const source = stripComments(readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8"));
+    expect(countEmitters(readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8"))).toBe(1);
     expect(source).toContain("error: internalErrorResponse");
+
+    // The numerator, which this guard was the only one in the tree not to have.
+    // A reviewer defeated the previous version by adding a second, DRIFTED
+    // boundary that spelled the log line through a template, so the counted
+    // literal never appeared and 62 tests stayed green. Counting the response
+    // SHAPE instead of the log string is what closes that, and planting a second
+    // emitter here is what proves the counter can reach 2 at all.
+    const planted = `
+      export function a(c: unknown): Response {
+        return errorResponse(500, "internal-error", "x");
+      }
+      export function b(c: unknown): Response {
+        const what = "request failed";
+        console.error(\`keryx serve: \${what}\`);
+        return errorResponse(500, 'internal-error', "y");
+      }
+    `;
+    expect(countEmitters(planted)).toBe(2);
+    // ...and it does not count a mention in prose.
+    expect(countEmitters('// returns errorResponse(500, "internal-error", …)')).toBe(0);
   });
 });

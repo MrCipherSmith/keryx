@@ -489,10 +489,31 @@ describe("an append does not re-walk the directory it already has", () => {
     // A permission fault retried is a second, identical permission fault. The
     // events path is made a DIRECTORY, so the append fails with EISDIR — a real
     // errno from the real filesystem, not a stubbed throw.
+    //
+    // `toThrow()` alone could NOT state this, and that is why the assertion is
+    // shaped the way it is. Deleting the errno guard entirely makes the catch
+    // retry, `ensureTurnDir` succeeds because the directory exists, and the
+    // append raises the identical EISDIR — so a bare `toThrow()` stayed green
+    // with the feature removed. A reviewer ran exactly that and got 30 pass.
+    //
+    // Two things separate the two worlds: the errno itself, and whether the
+    // retry ran. The retry calls `ensureTurnDir`, which re-asserts 0700 on the
+    // parent, so a parent left at another mode is the observable.
     createTurnRecord(record(), configDir);
     mkdirSync(path.join(configDir, "turns", TURN, "events.jsonl"), { recursive: true });
+    const turns = path.join(configDir, "turns");
+    chmodSync(turns, 0o755);
 
-    expect(() => appendTurnEvent(event(0), configDir)).toThrow();
+    let caught: NodeJS.ErrnoException | undefined;
+    try {
+      appendTurnEvent(event(0), configDir);
+    } catch (error) {
+      caught = error as NodeJS.ErrnoException;
+    }
+
+    expect(caught?.code).toBe("EISDIR");
+    // The retry did not run: 0755 survives. Under the mutation it would be 0700.
+    expect(statSync(turns).mode & 0o777).toBe(0o755);
   });
 });
 

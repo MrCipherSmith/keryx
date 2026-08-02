@@ -296,8 +296,15 @@ describe("how it refuses is the runtime's own contract", () => {
     // Write and Edit an agent makes, so a hardcoded injection refusal here is
     // the 3.3%-of-ordinary-prose figure applied to the agent's own edits.
     writeConfig("enforced");
-    const { exit } = await checkOutput(INJECTION, "generated");
+    const { exit, out } = await checkOutput(INJECTION, "generated");
     expect(exit).toBe(0);
+    // Proof the content REACHED the detector. Without it, `exit === 0` is also
+    // what an empty read produces — which is not hypothetical here: an earlier
+    // version of this file's helper passed a byte array instead of writing to a
+    // pipe, so the command scanned an empty string and every "does not refuse"
+    // assertion went green for the wrong reason. Its check-input twin carries
+    // this control and this one did not.
+    expect(out).toContain("prompt-injection");
   }, 30_000);
 });
 

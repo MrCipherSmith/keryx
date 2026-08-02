@@ -11,7 +11,10 @@
 // read the file again. These tests are the difference between those two.
 
 import { describe, expect, test } from "bun:test";
-import { memoizeResolved } from "./service";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createSecurityService, memoizeResolved } from "./service";
 
 describe("memoizeResolved", () => {
   test("a resolved value is loaded once and reused", () => {
@@ -87,4 +90,77 @@ describe("memoizeResolved", () => {
     }
     expect(calls).toBe(3);
   });
+});
+
+describe("the service actually uses it", () => {
+  // The memo is exhaustively tested above and nothing pinned that
+  // `createSecurityService` calls it. Replacing both wrappers with bare thunks
+  // left `src/security/` at 78 pass, and the 80µs-per-event regression the memo
+  // exists to prevent came back silently — a helper with four honest tests and
+  // no caller under assertion.
+  //
+  // Observed through BEHAVIOUR, not through the filesystem. The first version of
+  // this test counted config reads by `atime` and its own control caught that as
+  // unsound: a fresh service re-read the file and the atime did not move, because
+  // this mount does not update it per read. A control that fails is the control
+  // working — the measurement was wrong, not the claim.
+  //
+  // What is observable without ambiguity: the config decides whether PII is
+  // redacted. Change the file between two calls on ONE service and the memo is
+  // the difference between the old answer and the new one.
+  // `enabled` rather than `action`, and that is not arbitrary: measured, the
+  // action makes no difference to what `redact()` returns — `redact`, `warn` and
+  // even `allow` all mask the span — while disabling the policy drops the
+  // finding and leaves the content alone. The first version of this test used
+  // the action and its control failed, which is the control working.
+  //
+  // (That `pii: { action: "allow" }` still redacts is a separate question about
+  // the resolver, not about this memo. Noted rather than chased here.)
+  const PII = "reach me at nobody@example.com";
+
+  function writeConfig(dir: string, piiEnabled: boolean): void {
+    writeFileSync(
+      path.join(dir, ".metaproject", "security.config.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "advisory",
+        rawRetention: "off",
+        gate: { failOn: "critical", minConfidence: 0.5 },
+        policies: {
+          secrets: { action: "block" },
+          pii: { action: "redact", enabled: piiEnabled },
+          promptInjection: { action: "warn" },
+          egress: { action: "warn" },
+          artifactSafety: { action: "warn" },
+        },
+      }),
+      "utf8",
+    );
+  }
+
+  test("one service keeps the config it loaded; a fresh one picks up the change", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-memo-use-"));
+    try {
+      mkdirSync(path.join(dir, ".metaproject"), { recursive: true });
+      writeConfig(dir, true);
+
+      const service = createSecurityService(dir);
+      const first = await service.redact(PII, { source: "generated" });
+      expect(first.redacted).not.toContain("nobody@example.com");
+
+      // The policy is now off. A service that reloads per call would stop
+      // redacting here; a memoised one does not.
+      writeConfig(dir, false);
+      const second = await service.redact(PII, { source: "generated" });
+      expect(second.redacted).not.toContain("nobody@example.com");
+
+      // The control, and the reason the assertion above is about the memo rather
+      // than about the config change being ineffective: a FRESH service reads the
+      // new file and stops redacting.
+      const fresh = await createSecurityService(dir).redact(PII, { source: "generated" });
+      expect(fresh.redacted).toContain("nobody@example.com");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
