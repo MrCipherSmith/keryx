@@ -79,4 +79,101 @@ returns whether it wrote, so a turn cannot be stranded at 409 in silence.
   surface elsewhere in the suite.
 - The real-socket test binds a port. It must use port 0 and read the bound port
   back, or it will be the flake this repository's testing rules forbid.
-</content>
+
+---
+
+# Round two — the plan after the second review
+
+`.metaproject/reviews/2026-08-02-ingest-round2-review-md/` — four reviewers,
+four blockers, eight majors. Round one's ten findings: eight closed, two closed
+at the site and not the class. Five of round one's six green mutations are red.
+
+## What the second round changes about how this work is done
+
+Three process corrections, each earned:
+
+1. **Mutate the production DEFAULT, not the plumbing around it.** The round-one
+   containment check removed the seam along with the default, so a test that
+   supplies the seam failed for an unrelated reason and the check read as a pass.
+   A mutation must change exactly the thing whose absence is the defect.
+2. **Never mutate a shared tree while reviewers are reading it.** Four agents were
+   working on this checkout while mutations were applied to it; one reviewer's
+   full-suite run failed six tests as a result and had to be redone. Mutations go
+   in a worktree or wait.
+3. **Check an inherited claim before repeating it.** Two factual claims were
+   copied verbatim out of the round-one report — the hook event and a byte
+   figure — and both were wrong. A claim in a review is evidence to verify, not
+   a fact to quote.
+
+## Order
+
+The two that are a redesign rather than a patch come first, because the shape of
+the fix decides what the tests around them look like.
+
+### 1. F-001 — the transport must read what the run returned
+
+`runRemoteTurn` reads `run.output.summary` and terminates with a hardcoded
+`("completed", "ok")`. `status`, `gate.status` and `unresolvedBlockerIds` are
+discarded, so a stock install records a blocked startup as a successful turn.
+
+Map the harness terminal state onto `TurnOutcome` explicitly and totally — a
+switch over `run.output.status` with no default that invents success — and carry
+the gate and the blocker ids into `reasonCode`. The test is the one this round
+should already have had: submit through the production assembly on a config
+directory with no provider, and assert the record does NOT say `completed`.
+
+This is missing functionality rather than a regression, and it is why the socket
+suite's capability assertion passed on a failure.
+
+### 2. F-002 — the refusal has to use the signal the runtime reads
+
+`exitCodeFor` returns 1; `src/ctx/runtimes.ts` documents and implements exit 2 as
+the block for Claude/Codex/Windsurf, plus stdout-JSON forms for the others. The
+fix is not a number change: the exit contract belongs with the runtime registry
+that already owns it, so `security` and `ctx` stop disagreeing. Take the contract
+from `ctx/runtimes.ts`, apply it per runtime, and assert the emitted signal
+against that registry rather than against a literal.
+
+With F-007 in the same pass: an unappealable refusal that fires on 3.3% of this
+repository's own prose is not shippable. The refusal needs either a confidence
+floor of its own or an explicit operator override, decided before the exit
+contract is wired.
+
+### 3. F-003 — release only the failures that precede the effect
+
+Split the catch: a throw before the first provider yield releases the claim; a
+throw after it does not, because the turn ran and releasing converts
+at-most-once into at-least-once for a billed operation. Prefer a tombstone the
+second submission can be answered from over a release.
+
+### 4. F-004 — pin the production defaults
+
+A test that reaches the containment gate with the seam ABSENT, under the shipped
+profile, asserting the outcome tracks the real probe. Plus the fail-closed
+fallback in `serve-turn.ts`, which is currently mutable to fail-open with the
+whole suite green — and which the new weakening-seam guard cannot see because it
+exempts that file wholesale. Narrow the exemption to the declaration.
+
+### 5. The majors, in one pass each
+
+F-005 the fourth injection site · F-006 the eviction victim with accumulated
+failures · F-008 three guards matching spellings rather than shapes · F-009 seven
+untested branches · F-010 `ensureTurnDir` on every recorded append · F-011 the
+untested `unavailable` branch · F-012 the fifth failure-mapping policy.
+
+### 6. The minors, including every false statement in a comment
+
+Eleven, and most of them are a sentence. They matter because the round's own
+lesson is that a wrong explanation outlives a wrong line of code.
+
+### 7. Re-review
+
+Sixth round. The trend is the argument for it, not against it: round one found
+two blockers, round two found four, and every one of round two's was in code
+written to close round one's.
+
+## Not to be "fixed"
+
+One reviewer reported the SSE route returning 200 with an empty body. It returns
+`errorResponse(500, "record-unreadable", …)`, verified twice by execution.
+Rewrite the misleading comment above it; change no behaviour.
