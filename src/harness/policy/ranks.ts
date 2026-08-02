@@ -1,63 +1,91 @@
-// The permissiveness orderings the policy layer compares profiles with.
+// What `trustMode` actually says, and the orderings that follow from it.
 //
-// One copy, here, because there were two. `child/isolation.ts` owned
-// `TRUST_RANK`, `OUTCOME_RANK`, `ISOLATION_RANK` and `rankOf` — including the
-// fail-closed-on-unknown rule — and `policy/profiles.ts` grew a second
-// implementation of the same tables for the remote non-weakening check. Two
-// rankings are two chances to disagree about what "more permissive" means, and
-// the second copy also dropped a dimension the first had.
+// One copy, here, because there were two — `child/isolation.ts` owned the rank
+// tables and `policy/profiles.ts` grew a second implementation of the same
+// question, and the copy silently dropped a dimension for a release.
 //
-// The `rankOf` fail-closed rule is the reason these are functions rather than
-// bare lookups: the inputs are typed, but a malformed profile that bypassed
-// schema validation must not silently skip a comparison. `undefined > n` is
-// `false`, which fails OPEN, so an unrecognised value returns `undefined` and
-// every caller is written to treat that as a refusal.
+// Then the consolidation itself was wrong, and a five-reviewer round said so
+// three times independently. It kept TWO tables over `trustMode` and defended
+// them in a comment as "inverses on the same field". They are not inverses:
+//
+//   TRUST_RANK          read-only 0 < trusted-local 1 < untrusted 2
+//   its actual inverse  untrusted 0 < trusted-local 1 < read-only 2
+//   the second table    untrusted 0 < read-only     1 < trusted-local 2
+//
+// Only `untrusted` moves. When you reverse an ordering and two of three values
+// stay put, you are not looking at one axis measured two ways — you are looking
+// at TWO axes compressed into one enum, with one value living on the axis the
+// other two do not.
+//
+// Say what the field carries:
+//
+//   profile                    authority     input provenance
+//   read-only-review           cannot act    vetted
+//   monitored-trusted-local    can act       vetted
+//   unattended-untrusted       can act       UNVETTED
+//
+// `read-only` and `trusted-local` differ in AUTHORITY. `trusted-local` and
+// `untrusted` differ in the PROVENANCE of the input, at equal authority. There
+// is no fourth cell — no `cannot act` over unvetted input — which is why three
+// values fit one enum and the compression looked free.
+//
+// It was not free. Each of the two tables was a projection of the same pair
+// onto a different component, so each was right about its own question and
+// silent about the other; and a third consumer, `mutation/execute.ts`, gave up
+// on ordering entirely and asked two independent yes/no questions — which is
+// the correct decomposition, arrived at by accident because ordering three
+// values would have produced nonsense for what it needed.
+//
+// So the projection is named here, once, and every consumer reads through it.
+// Two fields, one monotone ordering each, both compared in the same direction,
+// and nothing left to explain in a comment. The wire enum does not change and
+// no fingerprint moves — those are computed from `<profileId>:<profileVersion>`
+// string literals, not from the profile body — so nothing on disk or in
+// recorded evidence shifts.
 
 import type { PolicyProfile, PolicyProfileDefaults, PolicyProfileRequiredControls } from "./types";
 
+/** May this posture act at all, or only read? */
+export type PolicyAuthority = "read-only" | "acting";
+
+/** Has the content this posture handles been vetted by the operator? */
+export type PolicyInputTrust = "vetted" | "unvetted";
+
 /**
- * Capability ordering of the three trust postures for CHILD INHERITANCE.
+ * The two axes `trustMode` compresses.
  *
- * Broader = higher. `untrusted` is the broadest because a child in that posture
- * is the one permitted to take in content nobody has vetted; a child may not be
- * broader than its parent.
- *
- * This ordering answers "may this child do what its parent does". It is NOT the
- * ordering for "may this remote profile run against the operator's ceiling" —
- * see `REMOTE_TRUST_RANK`, which answers a different question and is separate
- * for that reason rather than by accident.
+ * Total and exhaustive over the enum. A value outside it yields `undefined` on
+ * both axes and every caller treats that as a refusal — same fail-closed rule
+ * as `rankOf`, applied one level up.
  */
-export const TRUST_RANK: Record<PolicyProfile["trustMode"], number> = {
+export function axesOf(trustMode: string): { authority: PolicyAuthority; inputTrust: PolicyInputTrust } | undefined {
+  switch (trustMode) {
+    case "read-only":
+      return { authority: "read-only", inputTrust: "vetted" };
+    case "trusted-local":
+      return { authority: "acting", inputTrust: "vetted" };
+    case "untrusted":
+      return { authority: "acting", inputTrust: "unvetted" };
+    default:
+      return undefined;
+  }
+}
+
+/** How much a posture may DO. Higher acts more. */
+export const AUTHORITY_RANK: Record<PolicyAuthority, number> = {
   "read-only": 0,
-  "trusted-local": 1,
-  untrusted: 2,
+  acting: 1,
 };
 
 /**
- * How much TRUST a posture extends, for the remote non-weakening check.
+ * How much a posture TRUSTS its input. Higher extends more trust.
  *
- * Higher extends more. `untrusted` extends the least: it is the posture for
- * input nobody has vetted, and everything about it is tighter. `trusted-local`
- * extends the most: it is the posture for content the operator produced.
- *
- * The two orderings are inverses on the same field, and that is the finding
- * rather than a mistake in one of them. `trustMode` carries two meanings in this
- * codebase — "how much exposure does this agent have" (child inheritance) and
- * "how much trust does this posture extend" (non-weakening) — and a single
- * table cannot answer both. Reusing `TRUST_RANK` for the remote check would make
- * the shipped default refuse to start: `remote-restricted` resolves to
- * `unattended-untrusted`, whose defaults are strictly TIGHTER than the local
- * baseline's on every dimension, and whose isolation is stricter. Refusing it
- * would be a wrong answer produced by a right-looking reuse.
- *
- * Named, exported and justified rather than inlined, so the next reader finds
- * the distinction instead of re-deriving it — and so a guard can assert that
- * these two tables are the only two.
+ * `unvetted` is the bottom: it is the posture for content nobody has checked,
+ * and everything about it is tighter.
  */
-export const REMOTE_TRUST_RANK: Record<PolicyProfile["trustMode"], number> = {
-  untrusted: 0,
-  "read-only": 1,
-  "trusted-local": 2,
+export const INPUT_TRUST_RANK: Record<PolicyInputTrust, number> = {
+  unvetted: 0,
+  vetted: 1,
 };
 
 /** Permissiveness ordering of the three outcomes (`deny < ask < allow`). */
@@ -80,10 +108,86 @@ export const ISOLATION_RANK: Record<PolicyProfileRequiredControls["isolation"], 
 /**
  * Resolve a rank, failing CLOSED on an out-of-enum value.
  *
- * `undefined` forces the caller to deny. Returning a number for an unknown value
- * — any number — would let a profile carrying a value this code cannot reason
- * about be compared as though it could.
+ * `undefined` forces the caller to deny. Returning a number for an unknown
+ * value — any number — would let a profile carrying something this code cannot
+ * reason about be compared as though it could.
  */
 export function rankOf<K extends string>(map: Record<K, number>, value: string): number | undefined {
   return Object.prototype.hasOwnProperty.call(map, value) ? (map as Record<string, number>)[value] : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// The two questions
+// ---------------------------------------------------------------------------
+//
+// Both are built on `axesOf`, and they agree exactly on `authority`: neither a
+// child nor a remote profile may ACT more than the thing it is measured against.
+//
+// They read `inputTrust` in OPPOSITE directions, and that is not a residue of
+// the old mistake — it is the two questions being different, now visible as two
+// named predicates instead of hidden inside two rank tables that looked like
+// they disagreed about one thing:
+//
+//   child inheritance   "does this child take on MORE EXPOSURE than its parent?"
+//                       A child handling less-vetted input than its parent is
+//                       reaching further into untrusted territory than the
+//                       parent was granted, so LOWER inputTrust is the escalation.
+//
+//   remote non-weakening
+//                       "does this profile EXTEND MORE TRUST than the ceiling?"
+//                       A remote profile treating its input as vetted when the
+//                       operator's own ceiling treats it as unvetted is claiming
+//                       a trust the operator does not extend, so HIGHER
+//                       inputTrust is the escalation.
+//
+// Exposure taken on and trust extended are inverses of each other on that one
+// axis. Two predicates, each stating its own direction and its own reason, is
+// the honest shape; one table claiming to answer both was not.
+
+/**
+ * Which axes of `candidate` exceed `ceiling`. Empty means it does not.
+ *
+ * The REMOTE non-weakening question. Fails closed on either side being
+ * unreadable — an unknown posture is one this code cannot reason about, and the
+ * answer is then no.
+ */
+export function exceedingAxes(ceiling: PolicyProfile["trustMode"], candidate: PolicyProfile["trustMode"]): string[] {
+  const low = axesOf(ceiling);
+  const high = axesOf(candidate);
+  if (low === undefined || high === undefined) {
+    return ["authority", "inputTrust"];
+  }
+  const exceeded: string[] = [];
+  if (AUTHORITY_RANK[high.authority] > AUTHORITY_RANK[low.authority]) {
+    exceeded.push("authority");
+  }
+  if (INPUT_TRUST_RANK[high.inputTrust] > INPUT_TRUST_RANK[low.inputTrust]) {
+    exceeded.push("inputTrust");
+  }
+  return exceeded;
+}
+
+/**
+ * Which axes of `child` broaden on `parent`. Empty means it does not.
+ *
+ * The CHILD INHERITANCE question. Behaviour-preserving against the single
+ * `read-only < trusted-local < untrusted` ordering it replaces: all nine
+ * ordered pairs of the enum give the same allow/deny answer, which
+ * `isolation.test.ts` asserts exhaustively rather than by sampling.
+ */
+export function broadeningAxes(parent: PolicyProfile["trustMode"], child: PolicyProfile["trustMode"]): string[] {
+  const above = axesOf(parent);
+  const below = axesOf(child);
+  if (above === undefined || below === undefined) {
+    return ["authority", "inputTrust"];
+  }
+  const broadened: string[] = [];
+  if (AUTHORITY_RANK[below.authority] > AUTHORITY_RANK[above.authority]) {
+    broadened.push("authority");
+  }
+  // LOWER is the escalation here — see the note above.
+  if (INPUT_TRUST_RANK[below.inputTrust] < INPUT_TRUST_RANK[above.inputTrust]) {
+    broadened.push("inputTrust");
+  }
+  return broadened;
 }

@@ -189,17 +189,39 @@ describe("compareProfiles — a remote profile may never grant what the local on
     expect(compareProfiles(strict, renamed).ok).toBe(true); // different id, identical fields
   });
 
-  test("trustMode is compared, and a remote profile may not extend more trust", () => {
-    // F-004. `trustMode` was not compared at all: a probe with it widened and
-    // everything else equal returned `{ok: true, widened: []}`, so a remote
-    // profile could claim a more trusting posture than the operator's own
-    // surface extends and start anyway.
-    const strict = resolveLocalProfile("read-only-review");
-    const moreTrusting = { ...strict, trustMode: "trusted-local" } as PolicyProfile;
+  test("both axes of trustMode are compared, and the refusal names which one", () => {
+    // `trustMode` was not compared at all for a release: a probe with it widened
+    // and everything else equal returned `{ok: true, widened: []}`. The first
+    // fix compared it on a single total order, which named only "trustMode" and
+    // got one pair wrong; the field carries two axes and the refusal says which.
+    const strict = resolveLocalProfile("read-only-review"); // read-only + vetted
 
-    const comparison = compareProfiles(strict, moreTrusting);
-    expect(comparison.ok).toBe(false);
-    expect(comparison.widened).toEqual(["trustMode"]);
+    // More AUTHORITY than the ceiling.
+    expect(compareProfiles(strict, { ...strict, trustMode: "trusted-local" } as PolicyProfile)).toEqual({
+      ok: false,
+      widened: ["authority"],
+    });
+
+    // More TRUST EXTENDED to the input than the ceiling, at equal authority.
+    const acting = resolveLocalProfile("unattended-untrusted"); // acting + unvetted
+    expect(compareProfiles(acting, { ...acting, trustMode: "trusted-local" } as PolicyProfile).widened).toEqual([
+      "inputTrust",
+    ]);
+  });
+
+  test("a read-only ceiling refuses an untrusted remote — the pair the single order got wrong", () => {
+    // The fail-open the review found in the first fix. By the code that
+    // ENFORCES `trustMode` — `mutation/execute.ts` blocks every mutation under
+    // `read-only`, and blocks `untrusted` only without isolation — `read-only`
+    // is strictly the tightest posture. The single total order ranked it ABOVE
+    // `untrusted`, so a `read-only` ceiling ACCEPTED an `untrusted` remote: a
+    // profile that may mutate under isolation clearing a ceiling that may never
+    // mutate at all. Splitting the field refuses it on `authority`.
+    const ceiling = resolveLocalProfile("read-only-review");
+    const remote = resolveLocalProfile("unattended-untrusted");
+
+    expect(compareProfiles(ceiling, remote).widened).toContain("authority");
+    expect(compareProfiles(ceiling, remote).ok).toBe(false);
   });
 
   test("a LESS trusting remote posture is not a widening", () => {
@@ -225,7 +247,11 @@ describe("compareProfiles — a remote profile may never grant what the local on
     // for.
     const strict = resolveLocalProfile("read-only-review");
     const nonsense = { ...strict, trustMode: "extremely-trusted" } as unknown as PolicyProfile;
-    expect(compareProfiles(strict, nonsense).widened).toEqual(["trustMode"]);
+    // BOTH axes, because a posture that cannot be projected is one this code
+    // can say nothing about on either.
+    expect(compareProfiles(strict, nonsense).widened).toEqual(["authority", "inputTrust"]);
+    // ...in both positions. An unreadable ceiling is not a licence either.
+    expect(compareProfiles(nonsense, strict).widened).toEqual(["authority", "inputTrust"]);
   });
 });
 
@@ -251,13 +277,47 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
   // literals the R4c launch prompt recorded as not existing. Both moved into the
   // resolver.
   const EXEMPT_LITERAL = new Set(["harness/policy/profiles.ts"]);
-  /** The two tables `ranks.ts` owns are the two that may exist. */
-  const EXEMPT_RANKS = new Set(["harness/policy/ranks.ts"]);
+  /**
+   * Files allowed to declare a ranking of the policy vocabulary.
+   *
+   * `ranks.ts` owns every ordering over a `PolicyProfile`. `security/resolve.ts`
+   * is excused for one word: its `ACTION_PRECEDENCE` ranks `SecurityAction`, a
+   * different closed vocabulary for a different question, and it happens to
+   * share the token `allow`. Excusing the file rather than dropping `allow` from
+   * the detector, because `allow` is a real member of `OUTCOME_RANK` and
+   * removing it would blind the guard to the table it most needs to see.
+   */
+  const EXEMPT_RANKS = new Set(["harness/policy/ranks.ts", "security/resolve.ts"]);
 
   /** A profile being CONSTRUCTED, not a type declaring the member. */
   const PROFILE_LITERAL = /requiredControls\s*:\s*\{/;
   /** A permissiveness ordering being DECLARED. */
-  const RANK_TABLE = /\b(TRUST_RANK|OUTCOME_RANK|ISOLATION_RANK|REMOTE_TRUST_RANK)\s*(:|=)/;
+  // A permissiveness ordering being DECLARED, by SHAPE rather than by name.
+  //
+  // The version this replaces listed four identifiers, and a reviewer pasted
+  // the duplicate it commemorates back in verbatim — two `switch` functions
+  // under neither name — and the guard stayed green. A name allowlist standing
+  // in for a check against the structure the names describe is the recorded
+  // `allowlist-not-a-boundary` lesson, applied to a guard built to enforce it.
+  //
+  // Two shapes, because the duplicate has taken two forms here, and they need
+  // different detectors for a reason worth stating: the shared `code()` blanks
+  // STRING LITERALS before anything is matched, so a `case "untrusted":` label
+  // is `case "":` by the time this sees it. The vocabulary survives only where
+  // it appears as a bare identifier.
+  //
+  //   the literal form   `{ untrusted: 2, deny: 0 }` — bare policy words mapped
+  //                      to small integers. Matched by vocabulary, which is what
+  //                      keeps it from firing on every numeric map in the tree.
+  //   the switch form    `case …: return 0;` — matched STRUCTURALLY, because the
+  //                      words are gone. A switch whose arms return nothing but
+  //                      small integer literals is a rank table under any name,
+  //                      and it is the shape the previous guard could not see.
+  const POLICY_WORDS = "read-only|trusted-local|untrusted|deny|ask|allow|not-required|required-fail-closed|vetted|unvetted";
+  const RANK_LITERAL = new RegExp(`[{,]\\s*(?:${POLICY_WORDS})\\s*:\\s*[0-9]\\s*[,}]`);
+  const RANK_SWITCH = /case\s+[^\n:]{0,40}:\s*\n?\s*return\s+[0-9]+\s*;/;
+  const RANK_TABLE = { test: (source: string): boolean => RANK_LITERAL.test(source) || RANK_SWITCH.test(source) };
+
 
   /**
    * Files that construct a `PolicyProfile` literal.
@@ -330,7 +390,9 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     expect(profileFiles.map(([file]) => file)).toEqual(["harness/policy/profiles.ts"]);
 
     const rankFiles = [...tree].filter(([, raw]) => RANK_TABLE.test(code(raw)));
-    expect(rankFiles.map(([file]) => file)).toEqual(["harness/policy/ranks.ts"]);
+    // Two: the owner, and the one exempt file whose ranking is over a different
+    // vocabulary. A non-empty numerator, and both members named.
+    expect(rankFiles.map(([file]) => file).sort()).toEqual(["harness/policy/ranks.ts", "security/resolve.ts"]);
   });
 
   test("both detectors fire through the seam, and neither fires on a declaration", () => {
@@ -350,11 +412,35 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     ]);
     expect(literalOffenders(planted)).toEqual(["probe/constructs-a-profile.ts"]);
 
+    // Both shapes the duplicate has actually taken in this repository. The
+    // switch form is the one the guard this replaces could not see: a reviewer
+    // pasted the real pre-fix duplicate back in verbatim and the guard stayed
+    // green, because it matched four identifiers and the duplicate used none of
+    // them.
     const plantedRanks = new Map([
-      ["probe/second-ranking.ts", "const TRUST_RANK: Record<string, number> = { untrusted: 2 };"],
-      ["probe/second-outcome.ts", "const OUTCOME_RANK = { deny: 0, ask: 1, allow: 2 };"],
+      ["probe/literal-under-a-new-name.ts", "const POSTURE_ORDER = { untrusted: 2, 'trusted-local': 1 };"],
+      ["probe/second-outcome.ts", "const WHATEVER = { deny: 0, ask: 1, allow: 2 };"],
+      [
+        "probe/the-real-pre-fix-duplicate.ts",
+        `function rank(outcome: string): number | undefined {
+          switch (outcome) {
+            case "deny":
+              return 0;
+            case "ask":
+              return 1;
+            case "allow":
+              return 2;
+            default:
+              return undefined;
+          }
+        }`,
+      ],
     ]);
-    expect(rankOffenders(plantedRanks).sort()).toEqual(["probe/second-outcome.ts", "probe/second-ranking.ts"]);
+    expect(rankOffenders(plantedRanks).sort()).toEqual([
+      "probe/literal-under-a-new-name.ts",
+      "probe/second-outcome.ts",
+      "probe/the-real-pre-fix-duplicate.ts",
+    ]);
 
     // The other half: a declaration is not a construction, and a mention is not
     // a declaration. Without this, a detector that reported everything would

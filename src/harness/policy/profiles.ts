@@ -16,7 +16,7 @@
 // profile is data, and resolution is a lookup.
 
 import { createHash } from "node:crypto";
-import { ISOLATION_RANK, OUTCOME_RANK, rankOf, REMOTE_TRUST_RANK } from "./ranks";
+import { exceedingAxes, ISOLATION_RANK, OUTCOME_RANK, rankOf } from "./ranks";
 import type { PolicyOutcome, PolicyProfile, PolicyProfileDefaults } from "./types";
 
 /** Small stable fingerprint for a frozen profile — node built-in only. */
@@ -201,10 +201,12 @@ export interface ProfileComparison {
  *   - a value neither `allow`, `ask` nor `deny` has no rank, so it widens;
  *   - `requiredControls` compares by strictness, and the two `deny`-pinned
  *     controls are checked for being `deny` rather than assumed to be;
- *   - `trustMode` is compared. It was not, for a whole release: a probe with
- *     `trustMode` widened and everything else equal returned
- *     `{ok: true, widened: []}`, so a remote profile could claim a more trusting
- *     posture than the operator's own surface extends and start anyway.
+ *   - both axes of `trustMode` are compared, and they are named separately in
+ *     the refusal. It was not compared at all for a whole release: a probe with
+ *     it widened and everything else equal returned `{ok: true, widened: []}`.
+ *     The first fix compared it on a single total order, which got the
+ *     `read-only` ceiling versus `untrusted` remote pair wrong in the fail-open
+ *     direction — see `exceedingAxes`.
  *
  * The rank tables are imported rather than declared here. This function used to
  * carry its own copies of them — a second implementation of profile
@@ -226,14 +228,16 @@ export function compareProfiles(local: PolicyProfile, remote: PolicyProfile): Pr
     }
   }
 
-  // `REMOTE_TRUST_RANK`, not `TRUST_RANK`. The two orderings are inverses on the
-  // same field and both are correct for their own question — see `ranks.ts`.
-  // Using the child-inheritance ordering here would refuse the shipped default,
-  // whose defaults are strictly tighter than the baseline's on every dimension.
-  const localTrust = rankOf(REMOTE_TRUST_RANK, local.trustMode);
-  const remoteTrust = rankOf(REMOTE_TRUST_RANK, remote.trustMode);
-  if (localTrust === undefined || remoteTrust === undefined || remoteTrust > localTrust) {
-    widened.add("trustMode");
+  // Both axes of `trustMode`, in the same direction, by the one projection in
+  // `ranks.ts`. This used to be a second rank table over the raw enum, defended
+  // as the inverse of the child-inheritance one — a claim that was false, and a
+  // total order that got one pair WRONG in the fail-open direction: a
+  // `read-only` local baseline accepted an `untrusted` remote, which is a
+  // profile that may mutate under isolation clearing a ceiling that may never
+  // mutate at all. Splitting the field refuses it on `authority`, which is the
+  // axis that actually differs.
+  for (const axis of exceedingAxes(local.trustMode, remote.trustMode)) {
+    widened.add(axis);
   }
 
   const localIsolation = rankOf(ISOLATION_RANK, local.requiredControls?.isolation ?? "");

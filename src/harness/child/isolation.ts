@@ -19,7 +19,7 @@
 // writes flow state — a child NEVER owns completion. Non-determinism is confined
 // to the injected `deps.idSeq`. Optional fields are set via conditional spread to
 // respect `exactOptionalPropertyTypes`.
-import { ISOLATION_RANK, OUTCOME_RANK, rankOf, TRUST_RANK } from "../policy/ranks";
+import { axesOf, broadeningAxes, ISOLATION_RANK, OUTCOME_RANK, rankOf } from "../policy/ranks";
 import type { PolicyProfile, PolicyProfileDefaults, PolicyProfileRequiredControls } from "../policy/types";
 import type { Provenance } from "../session/types";
 
@@ -149,19 +149,26 @@ export function isKnownCapability(value: string): value is keyof PolicyProfileDe
  * never claim broader authority than its profile encodes.
  */
 export function inheritPolicy(parent: PolicyProfile, childRequest: PolicyProfile): InheritPolicyResult {
-  const childTrust = rankOf(TRUST_RANK, childRequest.trustMode);
-  const parentTrust = rankOf(TRUST_RANK, parent.trustMode);
-  if (childTrust === undefined || parentTrust === undefined) {
+  // Through the shared projection rather than a local rank table. The table
+  // this replaces was one of two over `trustMode`, and the pair was defended in
+  // a comment as inverses when they are not — the field carries two axes, and
+  // each table was a projection onto a different one. `broadeningAxes` names
+  // both and states which direction each is read in and why.
+  //
+  // Behaviour-preserving: all nine ordered pairs of the enum give the same
+  // allow/deny answer as the single ordering did, asserted exhaustively in
+  // `isolation.test.ts`.
+  if (axesOf(childRequest.trustMode) === undefined || axesOf(parent.trustMode) === undefined) {
     return {
       ok: false,
       reason: `unrecognized trustMode (child "${childRequest.trustMode}", parent "${parent.trustMode}")`,
     };
   }
-
-  if (childTrust > parentTrust) {
+  const broadened = broadeningAxes(parent.trustMode, childRequest.trustMode);
+  if (broadened.length > 0) {
     return {
       ok: false,
-      reason: `child trustMode "${childRequest.trustMode}" is broader than parent "${parent.trustMode}"`,
+      reason: `child trustMode "${childRequest.trustMode}" is broader than parent "${parent.trustMode}" on ${broadened.join(", ")}`,
     };
   }
 
