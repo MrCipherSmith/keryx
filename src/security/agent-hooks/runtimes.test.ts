@@ -14,6 +14,7 @@ import {
   checkInputCommand,
   checkOutputCommand,
   AGENT_CHECK_OUTPUT_COMMAND,
+  SECURITY_HOOKS_KEY,
 } from "./runtimes";
 
 async function withTempDir(run: (root: string) => Promise<void>): Promise<void> {
@@ -68,8 +69,12 @@ test("AC5.2: second runtime install preserves user keys + first runtime; re-inst
 
     const cursorSettings = await readJson(cursor.settingsPath(root));
     expect(cursorSettings.editor).toBe("vim");
-    const groups = cursorSettings.hooks as Array<{ on?: string; command?: string }>;
-    expect(groups.some((g) => g.command === "user-cursor-hook")).toBe(true);
+    // The user's own array under `hooks` is left exactly where they put it.
+    // This installer no longer writes there — `src/ctx/runtimes.ts` installs a
+    // shell guard into the same file and owns that key, and the two used to
+    // destroy each other. See `agent-hooks.coexistence.test.ts`.
+    const userGroups = cursorSettings.hooks as Array<{ on?: string; command?: string }>;
+    expect(userGroups.some((g) => g.command === "user-cursor-hook")).toBe(true);
     expect(cursor.validate(cursorSettings)).toEqual([]);
 
     // Claude config is untouched by the cursor install.
@@ -79,10 +84,12 @@ test("AC5.2: second runtime install preserves user keys + first runtime; re-inst
     // Idempotent re-install: exactly one managed input group survives.
     await installRuntimeHooks(root, cursor);
     const after = await readJson(cursor.settingsPath(root));
-    const managedInputs = (after.hooks as Array<{ on?: string }>).filter(
+    const managedInputs = (after[SECURITY_HOOKS_KEY] as Array<{ on?: string }>).filter(
       (g) => g.on === "input",
     );
     expect(managedInputs.length).toBe(1);
+    // And the user's array is still untouched after a re-install.
+    expect(after.hooks).toEqual([{ on: "custom", command: "user-cursor-hook" }]);
   });
 });
 

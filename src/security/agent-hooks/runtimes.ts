@@ -167,14 +167,68 @@ function claudeValidate(settings: Settings): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Flat managed-groups runtimes (cursor / windsurf / generic-mcp). Each hook
-// group is `{ on, command, _keryxManaged }` in a top-level `hooks` array.
+// Flat managed-groups runtimes (cursor / windsurf / generic-mcp).
+//
+// These entries live under `securityHooks`, NOT under `hooks`, and that is a
+// correctness fix rather than a style choice.
+//
+// `src/ctx/runtimes.ts` installs a shell guard into the SAME FILES —
+// `.cursor/hooks.json` and `.windsurf/hooks.json` — and writes `hooks` as an
+// OBJECT keyed by the runtime's real event name (`beforeShellExecution`,
+// `pre_run_command`), which it marks `confidence: "verified"`. This installer
+// wrote `hooks` as an ARRAY. Two incompatible types under one key, and each
+// installer's strip helper replaces what it does not recognise wholesale, so
+// whichever ran second destroyed the first:
+//
+//   ctx then security -> ctx.validate: ["cursor: missing beforeShellExecution guard"]
+//   security then ctx -> sec.validate: ["cursor: missing input hook routing …"]
+//   and in both cases  -> _keryxManaged: ["ctx-agent-hooks","security-agent-hooks"]
+//
+// The sentinel kept claiming the destroyed guard was installed, so an audit or
+// an uninstall would report a guard that is not there. An operator who ran both
+// documented install commands ended up with exactly one of them, chosen by
+// ordering.
+//
+// `hooks` now belongs to ctx, which has verified contracts for it. These entries
+// move to their own key, so neither installer can see or damage the other's.
+//
+// STATED, because a round found it and the honest answer is not to hide it:
+// this shape is keryx's own invention and matches no documented contract for
+// cursor or windsurf. `flatValidate` checks that the installer wrote what the
+// installer intended — not that the runtime will honour it. Where ctx has a
+// verified event name for these files, this module does not, and inventing a
+// second one would repeat the mistake rather than fix it. Tracked as OQ-3.
 // ---------------------------------------------------------------------------
+
+/** The key this installer owns. `hooks` belongs to `src/ctx/runtimes.ts`. */
+export const SECURITY_HOOKS_KEY = "securityHooks";
+
+/**
+ * Remove this installer's entries from the LEGACY `hooks` array, if present.
+ *
+ * A config written before the split has managed groups in `hooks`. They must go,
+ * or an uninstall leaves them behind and a re-install duplicates them — but only
+ * OURS, and only when `hooks` is an array. If a user put their own entries in
+ * that array they stay, and if `hooks` is an object it is ctx's and is not
+ * touched at all.
+ */
+function dropLegacyEntries(settings: Settings): void {
+  if (!Array.isArray(settings.hooks)) {
+    return;
+  }
+  const remaining = stripManagedFromArray(settings.hooks);
+  if (remaining.length > 0) {
+    settings.hooks = remaining;
+  } else {
+    delete settings.hooks;
+  }
+}
 
 function flatMerge(id: string): (settings: Settings) => Settings {
   return (settings: Settings): Settings => {
-    const userGroups = stripManagedFromArray(settings.hooks);
-    settings.hooks = [
+    dropLegacyEntries(settings);
+    const userGroups = stripManagedFromArray(settings[SECURITY_HOOKS_KEY]);
+    settings[SECURITY_HOOKS_KEY] = [
       ...userGroups,
       { on: "input", command: checkInputCommand(id), [MANAGED_KEY]: AGENT_HOOKS_SENTINEL },
       { on: "output", command: checkOutputCommand(id), [MANAGED_KEY]: AGENT_HOOKS_SENTINEL },
@@ -185,9 +239,13 @@ function flatMerge(id: string): (settings: Settings) => Settings {
 }
 
 function flatStrip(settings: Settings): Settings {
-  const remaining = stripManagedFromArray(settings.hooks);
-  if (remaining.length > 0) settings.hooks = remaining;
-  else delete settings.hooks;
+  dropLegacyEntries(settings);
+  const remaining = stripManagedFromArray(settings[SECURITY_HOOKS_KEY]);
+  if (remaining.length > 0) {
+    settings[SECURITY_HOOKS_KEY] = remaining;
+  } else {
+    delete settings[SECURITY_HOOKS_KEY];
+  }
   clearSentinel(settings);
   return settings;
 }
@@ -195,15 +253,17 @@ function flatStrip(settings: Settings): Settings {
 function flatValidate(id: string): (settings: Settings) => string[] {
   return (settings: Settings): string[] => {
     const errors: string[] = [];
-    const groups = Array.isArray(settings.hooks) ? (settings.hooks as unknown[]) : [];
+    const groups = Array.isArray(settings[SECURITY_HOOKS_KEY])
+      ? (settings[SECURITY_HOOKS_KEY] as unknown[])
+      : [];
     const commandFor = (on: string): string | undefined => {
       const g = groups.find(
         (x) => x && typeof x === "object" && (x as { on?: unknown }).on === on,
       ) as { command?: unknown } | undefined;
       return typeof g?.command === "string" ? g.command : undefined;
     };
-    // `startsWith`, because the command now carries `--runtime <id>`. Matching
-    // the base means a config written by an older keryx still validates, and a
+    // `startsWith`, because the command carries `--runtime <id>`. Matching the
+    // base means a config written by an older keryx still validates, and a
     // config carrying the wrong runtime id is still recognisably the managed
     // hook rather than a stranger's.
     if (!(commandFor("input") ?? "").startsWith(AGENT_CHECK_INPUT_COMMAND)) {
