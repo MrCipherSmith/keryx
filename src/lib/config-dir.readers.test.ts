@@ -658,10 +658,37 @@ describe("every reader of the shared config directory goes through the bounded h
   function scannerImporters(sources: ReadonlyMap<string, string>): string[] {
     const withoutComments = (raw: string): string =>
       raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    // Three loading positions, not one. `from "…"` covers `import`/`export …
+    // from`; `require("…")` and `import("…")` are the two a reviewer pointed out
+    // this guard could not see, and either one would take the scanner into
+    // production while the guard stayed green.
+    const LOADS_SCANNER =
+      /(?:from\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'][^"']*config-dir\.scan["']/;
     return [...sources]
-      .filter(([, raw]) => /from\s+["'][^"']*config-dir\.scan["']/.test(withoutComments(raw)))
+      .filter(([, raw]) => LOADS_SCANNER.test(withoutComments(raw)))
       .map(([file]) => file);
   }
+
+  test("the importer predicate sees all three loading positions", () => {
+    // The self-check. The assertions on either side of it are over a tree that
+    // currently has only static `import … from`, so a predicate that knew only
+    // that form would look identical from out here.
+    const planted = new Map([
+      ["probe/static.ts", 'import { code } from "./config-dir.scan";'],
+      ["probe/re-export.ts", 'export { code } from "../lib/config-dir.scan";'],
+      ["probe/require.ts", 'const { code } = require("./config-dir.scan");'],
+      ["probe/dynamic.ts", 'const m = await import("./config-dir.scan");'],
+      // Neither of these loads it.
+      ["probe/comment.ts", '// see ./config-dir.scan for what the scan can do'],
+      ["probe/unrelated.ts", 'import { readConfigFile } from "./config-dir";'],
+    ]);
+    expect(scannerImporters(planted).sort()).toEqual([
+      "probe/dynamic.ts",
+      "probe/re-export.ts",
+      "probe/require.ts",
+      "probe/static.ts",
+    ]);
+  });
 
   test("only test files import the scanner this guard is built on", () => {
     // `config-dir.scan.ts` is test-support code in the production source tree.

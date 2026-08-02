@@ -290,33 +290,55 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
   const EXEMPT_RANKS = new Set(["harness/policy/ranks.ts", "security/resolve.ts"]);
 
   /** A profile being CONSTRUCTED, not a type declaring the member. */
-  const PROFILE_LITERAL = /requiredControls\s*:\s*\{/;
+  // A profile being CONSTRUCTED. `requiredControls: {` catches the inline form;
+  // `requiredControls: someControls,` catches the one a reviewer defeated it
+  // with, where the controls are built separately and referenced by name.
+  //
+  // The terminator is what separates a construction from a DECLARATION, and
+  // widening without it made this fire on `requiredControls: RequiredControls;`
+  // in `types.ts` — the interface that every profile is typed by, which must
+  // never count as a second copy. A property value ends at `,` or `}`; a type
+  // annotation ends at `;`.
+  const PROFILE_LITERAL = /requiredControls\s*:\s*(?:\{|[A-Za-z_$][\w$.]*\s*[,}])/;
   /** A permissiveness ordering being DECLARED. */
   // A permissiveness ordering being DECLARED, by SHAPE rather than by name.
   //
-  // The version this replaces listed four identifiers, and a reviewer pasted
-  // the duplicate it commemorates back in verbatim — two `switch` functions
-  // under neither name — and the guard stayed green. A name allowlist standing
-  // in for a check against the structure the names describe is the recorded
-  // `allowlist-not-a-boundary` lesson, applied to a guard built to enforce it.
+  // Three shapes, because the duplicate has taken three forms here and a guard
+  // that knows two of them commemorates the bug rather than preventing it. The
+  // first version listed four IDENTIFIERS and a reviewer defeated it by pasting
+  // the real pre-fix duplicate back verbatim; the second matched two shapes and
+  // a reviewer defeated it three more ways.
   //
-  // Two shapes, because the duplicate has taken two forms here, and they need
-  // different detectors for a reason worth stating: the shared `code()` blanks
-  // STRING LITERALS before anything is matched, so a `case "untrusted":` label
-  // is `case "":` by the time this sees it. The vocabulary survives only where
-  // it appears as a bare identifier.
+  //   the literal form   `{ untrusted: 2 }` or `{ "read-only": 0 }` — policy
+  //                      vocabulary mapped to integers
+  //   the switch form    `case …: return 0;` — matched structurally
+  //   the array form     `["read-only", "trusted-local", …]` plus `indexOf` —
+  //                      an ordering with no integers written down at all
   //
-  //   the literal form   `{ untrusted: 2, deny: 0 }` — bare policy words mapped
-  //                      to small integers. Matched by vocabulary, which is what
-  //                      keeps it from firing on every numeric map in the tree.
-  //   the switch form    `case …: return 0;` — matched STRUCTURALLY, because the
-  //                      words are gone. A switch whose arms return nothing but
-  //                      small integer literals is a rank table under any name,
-  //                      and it is the shape the previous guard could not see.
-  const POLICY_WORDS = "read-only|trusted-local|untrusted|deny|ask|allow|not-required|required-fail-closed|vetted|unvetted";
-  const RANK_LITERAL = new RegExp(`[{,]\\s*(?:${POLICY_WORDS})\\s*:\\s*[0-9]\\s*[,}]`);
+  // NOT through the shared `code()`, and that is the reason the first two
+  // versions could not see the literal form: `code()` blanks string literals,
+  // and three of the five words in this vocabulary — `read-only`,
+  // `trusted-local`, `not-required`, `required-fail-closed` — cannot be written
+  // as bare identifiers. A verbatim copy of the tables in `ranks.ts` was
+  // invisible by construction. Comments are stripped locally instead, which is
+  // all this needs: the `: <digit>` shape is not something prose produces.
+  const stripComments = (raw: string): string =>
+    raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
+  const POLICY_WORDS =
+    "read-only|trusted-local|untrusted|deny|ask|allow|not-required|required-fail-closed|vetted|unvetted|acting";
+  /** `{ untrusted: 2 }` and `{ "read-only": 0 }`, one or more digits. */
+  const RANK_LITERAL = new RegExp(`[{,]\\s*["']?(?:${POLICY_WORDS})["']?\\s*:\\s*[0-9]+\\s*[,}]`);
+  /** `case "untrusted": return 2;` — structural, because the label may be blanked. */
   const RANK_SWITCH = /case\s+[^\n:]{0,40}:\s*\n?\s*return\s+[0-9]+\s*;/;
-  const RANK_TABLE = { test: (source: string): boolean => RANK_LITERAL.test(source) || RANK_SWITCH.test(source) };
+  /** An ordered array of the vocabulary — an ordering with no integers in it. */
+  const RANK_ARRAY = new RegExp(
+    `\\[\\s*["'](?:${POLICY_WORDS})["']\\s*,\\s*["'](?:${POLICY_WORDS})["']`,
+  );
+  const RANK_TABLE = {
+    test: (source: string): boolean =>
+      RANK_LITERAL.test(source) || RANK_SWITCH.test(source) || RANK_ARRAY.test(source),
+  };
 
 
   /**
@@ -350,7 +372,7 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
       if (EXEMPT_RANKS.has(file)) {
         continue;
       }
-      if (RANK_TABLE.test(code(raw))) {
+      if (RANK_TABLE.test(stripComments(raw))) {
         offenders.push(file);
       }
     }
@@ -389,7 +411,7 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     });
     expect(profileFiles.map(([file]) => file)).toEqual(["harness/policy/profiles.ts"]);
 
-    const rankFiles = [...tree].filter(([, raw]) => RANK_TABLE.test(code(raw)));
+    const rankFiles = [...tree].filter(([, raw]) => RANK_TABLE.test(stripComments(raw)));
     // Two: the owner, and the one exempt file whose ranking is over a different
     // vocabulary. A non-empty numerator, and both members named.
     expect(rankFiles.map(([file]) => file).sort()).toEqual(["harness/policy/ranks.ts", "security/resolve.ts"]);
@@ -420,6 +442,16 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     const plantedRanks = new Map([
       ["probe/literal-under-a-new-name.ts", "const POSTURE_ORDER = { untrusted: 2, 'trusted-local': 1 };"],
       ["probe/second-outcome.ts", "const WHATEVER = { deny: 0, ask: 1, allow: 2 };"],
+      // The three that defeated the previous version.
+      [
+        "probe/quoted-keys.ts",
+        'const POSTURE_RANK = { "read-only": 0, "trusted-local": 1, "untrusted": 2 };',
+      ],
+      ["probe/multi-digit.ts", "const R = { untrusted: 10, allow: 20 };"],
+      [
+        "probe/ordered-array.ts",
+        'const TRUST_ORDER = ["read-only", "trusted-local", "untrusted"];\nTRUST_ORDER.indexOf(v);',
+      ],
       [
         "probe/the-real-pre-fix-duplicate.ts",
         `function rank(outcome: string): number | undefined {
@@ -438,6 +470,9 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     ]);
     expect(rankOffenders(plantedRanks).sort()).toEqual([
       "probe/literal-under-a-new-name.ts",
+      "probe/multi-digit.ts",
+      "probe/ordered-array.ts",
+      "probe/quoted-keys.ts",
       "probe/second-outcome.ts",
       "probe/the-real-pre-fix-duplicate.ts",
     ]);

@@ -418,7 +418,15 @@ describe("startup preconditions", () => {
         if (seam.suppliedBy.includes(file)) {
           continue;
         }
-        if (new RegExp(`${seam.name}\\s*:`).test(source)) {
+        // Two spellings of the same supply. `name:` is the explicit form;
+        // `{ name }` is ES6 shorthand, which passes the seam without ever
+        // writing a colon and which the first version of this guard could not
+        // see. The optional marker is what keeps a DECLARATION out of both:
+        // `localBaseline?: () => PolicyProfile` has a `?` where the colon form
+        // wants a colon, and no braces around a bare name.
+        const explicit = new RegExp(`${seam.name}\\s*:`);
+        const shorthand = new RegExp(`[{,]\\s*${seam.name}\\s*[,}]`);
+        if (explicit.test(source) || shorthand.test(source)) {
           found.push(`${file} :: ${seam.name}`);
         }
       }
@@ -488,8 +496,15 @@ describe("startup preconditions", () => {
     // longer table.
     const plantedContainment = new Map([
       ["probe/uncontained.ts", "createSubmitTurn({ profile, containmentAvailable: () => true });"],
+      // ES6 shorthand — the same supply with the colon left out.
+      ["probe/shorthand.ts", "createSubmitTurn({ profile, containmentAvailable });"],
+      ["probe/shorthand-only.ts", "assembleSubmitTurn(p, d, { containmentAvailable });"],
     ]);
-    expect(baselineSuppliers(plantedContainment)).toEqual(["probe/uncontained.ts :: containmentAvailable"]);
+    expect(baselineSuppliers(plantedContainment).sort()).toEqual([
+      "probe/shorthand-only.ts :: containmentAvailable",
+      "probe/shorthand.ts :: containmentAvailable",
+      "probe/uncontained.ts :: containmentAvailable",
+    ]);
 
     // The other half: the declaration, a type-only mention, and a mention
     // inside a string are all NOT suppliers.
