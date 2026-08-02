@@ -27,6 +27,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { detectSandboxLauncher } from "../harness/process/sandbox/detect";
+import { saveShellConfig } from "./shell-config";
 import type {
   NormalizedEvent,
   NormalizedRequest,
@@ -63,6 +64,14 @@ beforeEach(() => {
   token = issued.token;
   credential = issued.record;
   registerProject(project, { dir: configDir });
+  // A saved provider and model, which is what an operator has after
+  // `keryx shell` -> `/connect`. Without them the harness refuses at startup on
+  // a missing provider precondition and every turn is recorded as FAILED — so
+  // an unconfigured fixture cannot demonstrate the capability, and for one
+  // round it silently did not: the record said `completed` because the
+  // transport discarded the run's status, and the assertion below was satisfied
+  // by a failure. `fake` keeps it offline; the model only has to be non-empty.
+  saveShellConfig({ provider: "fake", model: "fake-model" }, configDir);
 });
 
 afterEach(async () => {
@@ -183,13 +192,29 @@ describe("a listener the CLI can start executes a turn", () => {
     // shape of each rather than that they differ.
     expect(body.sessionId).not.toBe(body.turnId);
 
-    // The turn RAN. This is the assertion the previous version lacked.
+    // The turn RAN, and the record says what the RUN said.
+    //
+    // NOT `outcome === "completed"`. There is no offline configuration in which
+    // the production assembly completes a turn: `makeProvider` falls to
+    // `FakeProvider` with no transcripts, which cannot answer, so the run
+    // legitimately fails. An earlier version asserted `completed` here and was
+    // green — on a turn that had failed, because the transport discarded the
+    // run's status and reported success regardless. Asserting the value a
+    // failure cannot produce is the point; asserting a value a failure DOES
+    // produce is how that went unnoticed.
+    //
+    // What is asserted instead is everything the assembly is responsible for:
+    // the record exists, the ids are distinct, the outcome tracks the run rather
+    // than being invented, and the containment gate was not what stopped it.
+    // The capability itself — assistant text reaching both views — is the next
+    // test, through the same real listener with only the model replaced.
     const stored = readTurnRecord(body.turnId, configDir);
     expect(stored.ok).toBe(true);
     if (!stored.ok) {
       return;
     }
-    expect(stored.value.result?.outcome).toBe("completed");
+    expect(stored.value.result?.outcome).toBeDefined();
+    expect(stored.value.result?.reasonCode).not.toBe("containment-unavailable");
     // The stream closed properly rather than stopping.
     const events = readTurnEvents(body.turnId, -1, configDir);
     expect(events.ok).toBe(true);
@@ -243,6 +268,119 @@ describe("a listener the CLI can start executes a turn", () => {
     expect(stream).toContain("assistant.delta");
   }, 30_000);
 
+  test("a run the harness REFUSES is recorded as failed, not as completed", async () => {
+    // The assertion this suite lacked, and the reason its capability test was
+    // green on a turn that never ran. `runRemoteTurn` read only the run's
+    // `summary` and terminated with a hardcoded `("completed", "ok")`, so on a
+    // stock install — no saved provider, which is what `keryx init` leaves — the
+    // harness refused at startup and the record said the turn succeeded:
+    //
+    //   outcome: "completed"  reasonCode: "ok"
+    //   text:    "Startup blocked: missing required provider precondition(s): model."
+    //
+    // A record that contradicts itself in two adjacent fields, on the field a
+    // client branches on.
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-r4c-stock-"));
+    const stockDir = path.join(base, "config");
+    const stockProject = path.join(base, "project");
+    mkdirSync(stockDir, { recursive: true });
+    mkdirSync(path.join(stockProject, ".metaproject"), { recursive: true });
+    const issued = issueServeToken(stockDir);
+    if (!issued.ok) {
+      throw new Error("fixture could not issue a token");
+    }
+    registerProject(stockProject, { dir: stockDir });
+    // Deliberately NO `saveShellConfig`: this is the stock install.
+
+    const outcome = await startServeListener({
+      config: defaultServeConfig(issued.record.id, { port: 0, profile: "remote-read-only" }),
+      credential: { status: "ok", record: issued.record },
+      dir: stockDir,
+      makeSubmitTurn: assembleSubmitTurn,
+    });
+    if (!outcome.ok) {
+      throw new Error(`listener refused to start: ${outcome.message}`);
+    }
+    try {
+      const response = await fetch(`http://127.0.0.1:${outcome.listener.port}/v1/turns`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${issued.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ schemaVersion: "1.0.0", project: stockProject, prompt: "say something" }),
+      });
+      const body = (await response.json()) as { turnId: string };
+      const stored = readTurnRecord(body.turnId, stockDir);
+      expect(stored.ok).toBe(true);
+      if (!stored.ok) {
+        return;
+      }
+      expect(stored.value.result?.outcome).not.toBe("completed");
+      expect(stored.value.result?.outcome).toBe("failed");
+      // The reason names what to satisfy, not merely that something went wrong.
+      expect(stored.value.result?.reasonCode).toContain("blocker");
+      // And the record does not contradict itself: a result whose text says the
+      // startup was blocked must not carry an outcome that says it was not.
+      expect(stored.value.result?.text ?? "").toContain("blocked");
+    } finally {
+      await outcome.listener.drain();
+      rmSync(base, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("with the seam ABSENT, the production default is the REAL probe", async () => {
+    // The assertion the bidirectional test below cannot make, and the one that
+    // needed thinking about.
+    //
+    // That test supplies the seam in both directions, so it proves the parameter
+    // is threaded and nothing about what is behind it: replacing the production
+    // default with the buggy `() => false` — the previous round's blocker,
+    // restored — left 947 tests green.
+    //
+    // Deriving the expectation from `detectSandboxLauncher()` does not fix that.
+    // On a host with no launcher the real probe returns false, and so does the
+    // hardcoded bug; the two are behaviourally identical and no assertion can
+    // separate them. That is the same trap as "never supplied" versus "supplied
+    // and reporting false", one level along.
+    //
+    // So the test moves what the DETECTOR sees. `detectSandboxLauncher` scans
+    // `PATH` for `bwrap`; planting an executable of that name and prepending its
+    // directory makes the real probe report true on a host where it otherwise
+    // reports false. A hardcoded `false` then differs, and the mutation goes red
+    // on any Linux host regardless of what is installed on it.
+    //
+    // Linux only, stated rather than skipped silently: on macOS the probe looks
+    // for `/usr/bin/sandbox-exec`, which a test may not create.
+    if (process.platform !== "linux") {
+      return;
+    }
+    const bin = mkdtempSync(path.join(tmpdir(), "keryx-fake-bwrap-"));
+    writeFileSync(path.join(bin, "bwrap"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const realPath = process.env.PATH;
+    process.env.PATH = `${bin}${path.delimiter}${realPath ?? ""}`;
+    try {
+      // The premise: with the plant on PATH the real detector now says yes.
+      expect(detectSandboxLauncher().available).toBe(true);
+
+      origin = await listen("remote-restricted");
+      const body = (await (await submit("say something")).json()) as { turnId: string };
+      const stored = readTurnRecord(body.turnId, configDir);
+      expect(stored.ok).toBe(true);
+      if (!stored.ok) {
+        return;
+      }
+      // Past the gate, because the production default consulted the detector.
+      // A hardcoded `false` refuses here; so does an omitted field.
+      expect(stored.value.result?.reasonCode).not.toBe("containment-unavailable");
+      expect(stored.value.result?.outcome).not.toBe("refused");
+    } finally {
+      if (realPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = realPath;
+      }
+      rmSync(bin, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test("the production assembly CONSULTS the launcher probe, in both directions", async () => {
     // The guard for the second blocker, and it has to be bidirectional. The
     // defect was that `assembleSubmitTurn` never supplied `containmentAvailable`
@@ -267,6 +405,7 @@ describe("a listener the CLI can start executes a turn", () => {
         throw new Error("fixture could not issue a token");
       }
       registerProject(probeProject, { dir: probeDir });
+      saveShellConfig({ provider: "fake", model: "fake-model" }, probeDir);
 
       const outcome = await startServeListener({
         config: defaultServeConfig(issued.record.id, { port: 0, profile: "remote-restricted" }),
@@ -289,13 +428,17 @@ describe("a listener the CLI can start executes a turn", () => {
         if (!stored.ok) {
           continue;
         }
+        // The property is about the GATE, not about whether the provider can
+        // answer: with the probe reporting available the turn must get PAST
+        // containment (and then fail on the offline provider, which is a
+        // different reason), and with it reporting unavailable it must be
+        // refused for containment specifically.
+        expect({ available, refusedForContainment: stored.value.result?.reasonCode === "containment-unavailable" }).toEqual(
+          { available, refusedForContainment: !available },
+        );
         expect({ available, outcome: stored.value.result?.outcome }).toEqual({
           available,
-          outcome: available ? "completed" : "refused",
-        });
-        expect({ available, reason: stored.value.result?.reasonCode }).toEqual({
-          available,
-          reason: available ? "ok" : "containment-unavailable",
+          outcome: available ? "failed" : "refused",
         });
       } finally {
         await outcome.listener.drain();

@@ -22,7 +22,7 @@ import path from "node:path";
 import type { HarnessConfig } from "../harness/config";
 import type { PolicyDecision, PolicyProfile } from "../harness/policy/types";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
-import { runOffline, type RunDeps } from "../harness/run/run";
+import { type HarnessRunOutput, runOffline, type RunDeps } from "../harness/run/run";
 import { ToolRegistry } from "../harness/tool/registry";
 import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/tool/types";
 import type { HarnessRunInput } from "../harness/types";
@@ -246,6 +246,15 @@ export interface RunTurnInput {
    * turnId. The test asserted both were uuid-shaped and never that they differ.
    */
   turnId?: string;
+  /**
+   * Called once, immediately before the provider can be invoked.
+   *
+   * The boundary between "this turn did nothing" and "this turn had an effect".
+   * `createSubmitTurn` releases the idempotency claim only for failures on the
+   * near side of it — see the catch there for what happened when it released
+   * for all of them.
+   */
+  onEffect?: () => void;
   /** Injected so a test can pin ids; production mints uuids. */
   newId?: () => string;
   /**
@@ -577,7 +586,23 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   let events: NormalizedEvent[] = [];
   let decisions: PolicyDecision[] = [];
   let summary = "";
+  let runStatus: HarnessRunOutput["status"] = "completed";
+  let runGate: string | undefined;
+  let unresolvedBlockerIds: string[] = [];
   try {
+    // The provider is about to be invoked, which is the point after which this
+    // turn has HAD AN EFFECT: it may bill, it may reach the network, and its
+    // output is about to be appended to a durable record. `createSubmitTurn`
+    // reads this to decide whether a later throw may release the idempotency
+    // claim, and everything from here on may not.
+    //
+    // Set BEFORE the call rather than after it, deliberately. `runOffline`
+    // catches its own provider failures and returns a terminal `failed` instead
+    // of throwing, so "after" would look identical for a run that never reached
+    // the provider and one that was billed and then failed to record. The one
+    // function call of window this costs is a claim burned on a turn that did
+    // nothing; the alternative is a billed turn re-run on retry.
+    input.onEffect?.();
     const run = await runOffline(runInput, config, deps);
     events = run.events;
     decisions = run.decisions;
@@ -585,6 +610,23 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     // field on `HarnessRunOutput`; assuming one is how the first version of
     // this line compiled against a shape that does not exist.
     summary = run.output.summary ?? "";
+    // The other three fields the run reports, which this function used to
+    // discard. It read `summary` and then terminated with a hardcoded
+    // `("completed", "ok")`, so a run that FAILED was recorded as a success —
+    // and on a stock install that is the ordinary case, because a config
+    // directory with no saved provider makes the harness refuse at startup:
+    //
+    //   outcome: "completed"  reasonCode: "ok"
+    //   text:    "Startup blocked: missing required provider precondition(s): model."
+    //
+    // The record contradicted itself and `outcome` is the field a client
+    // branches on. Worse, the socket test written to prove the listener runs
+    // turns asserts `outcome === "completed"` — so the capability assertion was
+    // satisfied by a failure, because the failure was recorded as a success one
+    // layer below the assertion.
+    runStatus = run.output.status;
+    runGate = run.output.gate?.status;
+    unresolvedBlockerIds = run.output.unresolvedBlockerIds ?? [];
   } catch (error) {
     // Never let a provider or run failure escape as an exception: it becomes a
     // terminal `failed` result with a stable slug and no provider error body,
@@ -658,7 +700,62 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   }
 
   // `summary` is redacted here; `assistantText` already is, delta by delta.
-  return terminate("completed", "ok", summary.length > 0 ? await redactOut(security, summary) : assistantText);
+  const text = summary.length > 0 ? await redactOut(security, summary) : assistantText;
+
+  // The run's own verdict, mapped rather than assumed. `terminate("completed",
+  // "ok")` used to be unconditional here, so a harness that reported `failed`
+  // with a blocked gate produced a record saying the turn succeeded — the
+  // ordinary case on an install with no provider configured.
+  //
+  // Total over `HarnessRunOutput["status"]` with no default arm: a status this
+  // function does not recognise is a status it cannot map, and inventing
+  // `completed` for it is exactly the defect. TypeScript makes the switch
+  // exhaustive, so a new status is a compile error rather than a silent success.
+  return terminate(...outcomeOf(runStatus, runGate, unresolvedBlockerIds), text);
+}
+
+/**
+ * The turn outcome and reason for a harness run's terminal state.
+ *
+ * `blocked` and `failed` are distinct: the first means the completion gate
+ * refused the run, which an operator fixes by satisfying the blocker, and the
+ * second means the run itself broke. Collapsing them — or collapsing either
+ * into `completed` — is what made a stock install report success.
+ *
+ * The blocker ids travel in the reason code because they are the actionable
+ * part: `startup-blocked` alone tells an operator nothing, and
+ * `startup-blocked:blocker:startup` names what to satisfy. They are harness
+ * vocabulary, not caller data, so they are safe in a result a caller reads.
+ */
+export function outcomeOf(
+  status: HarnessRunOutput["status"],
+  gate: string | undefined,
+  unresolvedBlockerIds: readonly string[],
+): [TurnResult["outcome"], string] {
+  const blockers = unresolvedBlockerIds.length > 0 ? `:${unresolvedBlockerIds.join(",")}` : "";
+  switch (status) {
+    case "completed":
+      // A completed run whose GATE did not pass is not a completed turn. The
+      // gate is the harness's own statement about whether the work is
+      // acceptable, and a transport that reports success over a refused gate is
+      // reporting the absence of an exception.
+      return gate !== undefined && gate !== "pass"
+        ? ["failed", `completion-gate-${gate}${blockers}`]
+        : ["completed", "ok"];
+    case "blocked":
+      return ["failed", `startup-blocked${blockers}`];
+    case "failed":
+      return ["failed", `run-failed${blockers}`];
+    case "cancelled":
+      return ["cancelled", "run-cancelled"];
+    case "paused":
+    case "in-progress":
+      // Neither is terminal, and a turn that returns from `runOffline` in one of
+      // them has not finished. Reported as a failure rather than held open:
+      // this release has no resume path for a remote turn, so "still running"
+      // would be a state nothing can ever leave.
+      return ["failed", `run-not-terminal-${status}`];
+  }
 }
 
 /** What a submission did. Mirrors `SubmitTurnOutcome` in `serve-server.ts`. */
@@ -752,8 +849,14 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
       return { kind: "duplicate", turnId: claimed.existing, sessionId: held.ok ? held.value.sessionId : "" };
     }
 
+    // Flipped by `runRemoteTurn` immediately before the provider can be
+    // invoked. See the catch below.
+    let effected = false;
     try {
       const run = await runRemoteTurn({
+        onEffect: () => {
+          effected = true;
+        },
         request,
         project,
         profile: deps.profile,
@@ -772,17 +875,24 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
       });
       return { kind: "accepted", turnId: run.turnId, sessionId: run.sessionId };
     } catch (cause) {
-      // THE release path. Every writer the run reaches propagates what the write
-      // throws, and `terminate` now throws when the terminal result cannot be
-      // recorded, so this is the one place that knows a claim was taken and not
-      // used. Without it the key is burned permanently and the operator has no
-      // way to learn it: the route answers a bare 500 and the next submission of
-      // the corrected prompt is answered as a duplicate of a turn that does not
-      // exist.
+      // The release path, and `effected` is the whole of its correctness.
+      //
+      // The first version released on EVERY throw, described as "the one place
+      // that knows a claim was taken and not used". For a throw after the
+      // provider has streamed, the claim WAS used: the turn ran, the assistant's
+      // answer is on disk, and `terminate` throws only because the terminal
+      // write failed. Releasing there turns at-most-once into at-least-once —
+      // measured, one idempotency key bought two provider calls — and the route
+      // answers a bare 500, which is exactly what a client retries.
+      //
+      // So: release only on the near side of the effect. A turn that never
+      // reached the provider leaves no trace and its key must not be burned; a
+      // turn that ran keeps its claim, and a retry is correctly answered as a
+      // duplicate of a turn that really happened.
       //
       // Guarded by turnId inside the store, so a release cannot take a claim
       // another turn legitimately re-took while this one was failing.
-      if (request.idempotencyKey !== undefined) {
+      if (!effected && request.idempotencyKey !== undefined) {
         releaseIdempotencyKey(request.idempotencyKey, turnId, deps.dir);
       }
       throw cause;

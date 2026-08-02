@@ -140,6 +140,8 @@ function ctx(
     provider?: ProviderPort;
     newId?: () => string;
     containmentAvailable?: () => boolean;
+    /** Omit the seam entirely, so the production default decides. */
+    omitContainment?: boolean;
     submitTurn?: (request: TurnRequest, resolved: string) => Promise<SubmitTurnOutcome>;
   } = {},
 ) {
@@ -160,7 +162,12 @@ function ctx(
       // root. A remote caller must not choose which security configuration
       // scans their own prompt by naming a project.
       dir: configDir,
-      containmentAvailable: overrides.containmentAvailable ?? (() => true),
+      // `omitContainment` exists so a test can drive the OMITTED case, which is
+      // the production default and the one thing an override-only fixture can
+      // never reach — the reason the fail-closed fallback went a round unpinned.
+      ...(overrides.omitContainment === true
+        ? {}
+        : { containmentAvailable: overrides.containmentAvailable ?? (() => true) }),
     });
 
   return {
@@ -441,10 +448,61 @@ describe("a claim is released when the turn that took it fails", () => {
     const body = await response.text();
     expect(body).not.toContain(PINNED);
     expect(body).not.toContain(configDir);
-    // And the key was released, so the caller can retry once the fault clears.
-    rmSync(path.join(configDir, "turns", PINNED), { recursive: true, force: true });
+
+    // And the key is KEPT, because this turn RAN.
+    //
+    // The first version of this test asserted the opposite — that the key was
+    // released so the caller could retry — and that was the defect, not the
+    // fix. `terminate` throws only after the provider has streamed and the
+    // answer is on disk, so releasing there turns at-most-once into
+    // at-least-once: measured, one idempotency key bought two provider calls,
+    // for a billed operation, on a 500 that a well-behaved client retries.
+    //
+    // The retry is answered from the claim instead. Not 202, and not a
+    // duplicate carrying an empty session id either — the record is corrupt, so
+    // the honest answer is that the store cannot say.
     const retried = await handleServeRequest(post(turnBody({ idempotencyKey: "unwritable-result" })), ctx());
-    expect(retried.status).toBe(202);
+    expect(retried.status).toBe(500);
+    // The turn did not run again. This is the assertion the class is about.
+    expect(listTurnIds(configDir)).toEqual([PINNED]);
+  });
+
+  test("a pre-effect failure DOES release, so the two sides of the boundary differ", () => {
+    // The control. Without it, "keep the claim" is satisfied by never releasing
+    // at all, which is the burned-key defect the release path was added for.
+    // The two tests above and this one are the same class read from both sides:
+    // `createTurnRecord` throwing is before the provider, `finishTurn` throwing
+    // is after it, and only the first may release.
+    //
+    // Asserted through the store rather than the route, because the route pair
+    // is already covered above and what differs here is one boolean.
+    claimIdempotencyKey("pre-effect", PINNED, configDir);
+    expect(releaseIdempotencyKey("pre-effect", PINNED, configDir)).toBe(true);
+    expect(claimIdempotencyKey("pre-effect", "22222222-2222-4222-8222-222222222222", configDir)).toEqual({
+      existing: null,
+    });
+  });
+});
+
+describe("the containment default", () => {
+  test("a runner given NO containment probe fails closed", () => {
+    // `runRemoteTurn`'s `?? (() => false)` is the fallback the whole containment
+    // gate rests on, and flipping that one token to `true` left the entire suite
+    // green — 2858 tests — because every test that reaches the gate supplies the
+    // seam. A control that nothing observes is a control that can be deleted by
+    // accident, and last round it effectively was.
+    //
+    // Driven through `createSubmitTurn` with the field OMITTED, under the
+    // profile whose isolation is `required-fail-closed`.
+    return handleServeRequest(
+      post(turnBody()),
+      ctx({ profile: resolveLocalProfile("unattended-untrusted"), omitContainment: true }),
+    ).then(async (accepted) => {
+      const { turnId } = (await accepted.json()) as { turnId: string };
+      const record = recordOf(turnId, configDir);
+      expect(record.result?.outcome).toBe("refused");
+      expect(record.result?.reasonCode).toBe("containment-unavailable");
+    });
   });
 });
 
