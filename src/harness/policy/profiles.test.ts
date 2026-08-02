@@ -298,7 +298,10 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
   //
   // The rank detector was three regexes. It could not see quoted keys at all
   // (the shared `code()` blanks string literals, and four of the five policy
-  // words cannot be bare identifiers); after that was fixed with a local
+  // words cannot be bare identifiers — note FOUR: an earlier version of this
+  // comment said three and then listed four, and also claimed a verbatim copy
+  // of `ranks.ts` was invisible, which was wrong for the two tables whose keys
+  // are all bare identifiers); after that was fixed with a local
   // comment-stripper and two more patterns, a reviewer defeated the result with
   // computed keys, a `Map`, an if-chain and a ternary chain — planting a real
   // `ranks-duplicate.ts` in a sandbox and watching sixty tests stay green.

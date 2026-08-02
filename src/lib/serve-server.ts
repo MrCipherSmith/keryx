@@ -653,7 +653,8 @@ export async function handleServeRequest(request: Request, ctx: ServeContext): P
  * a correlation id — this release has no log to correlate against, and an id
  * nobody can look up is a string that only tells an attacker that something
  * specific went wrong. Through `errorResponse`, so the body is the same
- * `{error: {code, message}}` document as the other fourteen; a hand-rolled shape
+ * `{error: {code, message}}` document as every other error on this surface; a
+ * hand-rolled shape
  * here meant a client reading `error.code` got `undefined` on the one response
  * class that means the server broke.
  *

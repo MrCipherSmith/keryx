@@ -149,9 +149,14 @@ export const MAX_TRANSCRIPT_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
  * and 10 000 events serialise to 1 418 890 bytes with no `text` field at all,
  * or 1 518 890 with an empty one. Both are over the 1 MB bound, which is the
  * point; an earlier version of this note gave the second figure and labelled it
- * the first, so one quantity had two numbers. Measured on the real failing
- * shape: 8 000 events gave 1 302 890 bytes and the read then returned ZERO, so
- * past roughly 6 500 events the event route answered 200 with an empty body.
+ * the first, so one quantity had two numbers. It was then rewritten to fix that
+ * and introduced a THIRD: "8 000 events gave 1 302 890 bytes", which cannot be
+ * true of any shape yielding 1 418 890 at 10 000 — that is 162.9 bytes per event
+ * against 141.9, and per-event size only grows with `seq`. Re-derived: 8 000 of
+ * these events are 1 134 890 bytes bare and 1 214 890 with an empty `text`, and
+ * both are over the 1 MB bound, which is the only thing the sentence needed to
+ * say. Past roughly 6 500 events the event route answered 200 with an empty
+ * body.
  * §Bounds forbids exactly that, and the store's own header said it could not
  * happen.
  *

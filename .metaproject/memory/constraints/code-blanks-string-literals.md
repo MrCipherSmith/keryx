@@ -18,18 +18,55 @@ string literal matches **zero, always**, and its self-check passes because the
 negative cases also match zero. It is a guard that cannot fail, which reads
 exactly like a guard that has nothing to report.
 
-## Four occurrences, all found by review rather than by the guard
+## Two occurrences — and this note said four
+
+Corrected after round three, verified against the pre-round blob. The headline
+count was twice reality and two of the four rows named the wrong file. That
+matters more than the count: this note is the artifact a future round will trust
+instead of re-deriving, which is precisely the failure it was written about.
+
+**Genuine:**
 
 | guard | what it could not see |
 |---|---|
-| scanner-importer (`config-dir.readers.test.ts`) | `from "./config-dir.scan"` — an import specifier IS a string |
-| rank-table (`profiles.test.ts`) | `{ "read-only": 0 }` — three of five policy words cannot be bare identifiers, so a verbatim copy of `ranks.ts` was invisible |
-| switch-label rank guard | `case "untrusted":` — the label is blanked, so it had to match structurally |
+| rank-table `RANK_LITERAL` (`profiles.test.ts`) | `{ "read-only": 0 }` — four of the five policy words cannot be bare identifiers |
 | internal-error emitter count (`serve-server.test.ts`) | `` `keryx serve: request failed: …` `` — the counted thing is the literal |
 
-## The rule
+**Not occurrences, and why:**
 
-Before writing a source-level guard, ask **can the thing I am matching be
+- *The scanner-importer guard.* It never used `code()`. `git show
+  2b2e7fc2:src/lib/config-dir.readers.test.ts` carries the docstring "NOT
+  through `code()`, and that is the interesting part… Comments are stripped
+  locally instead", with a local `withoutComments`, and its companion test
+  asserted a NON-EMPTY result — so it never matched zero. Its real defect was
+  knowing only `from "…"`, which is a different failure entirely.
+- *The switch-label rank guard.* Not a separate guard and not disabled:
+  `RANK_SWITCH` is one pattern inside the single `RANK_TABLE` predicate, and it
+  was written structurally BECAUSE of the blanking. It is the mitigation, not an
+  instance.
+
+One more claim in the same family, also false and also corrected in the source:
+"a verbatim copy of the tables in `ranks.ts` was invisible by construction". Two
+of the four tables — `OUTCOME_RANK` and `INPUT_TRUST_RANK` — are all bare
+identifiers and the old guard saw them; its own self-check planted
+`{ deny: 0, ask: 1, allow: 2 }` and expected it as an offender. Only
+`ISOLATION_RANK` and `AUTHORITY_RANK` were hidden.
+
+## What actually replaced these guards
+
+Round three proved that widening a regex buys exactly one spelling: after every
+fix above, a reviewer planted real production modules that the widened patterns
+still could not see — an import with a `.ts` extension, a rank table on computed
+keys, a `Map`, an if-chain. All four guards now go through
+`src/lib/config-dir.ast.ts` and match the PARSE TREE. See
+[[regex-guards-lose-to-spellings]].
+
+`code()` is still the right tool for identifiers and call shapes in a
+text-matching guard, and the rule below still holds for anyone writing one.
+
+## The rule, for a text-matching guard
+
+Prefer the AST. If a guard must match text, ask **can the thing I am matching be
 written only inside a string literal?**
 
 * **Yes** → strip comments locally, do not use `code()`:

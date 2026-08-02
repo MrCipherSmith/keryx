@@ -618,12 +618,19 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     // reads this to decide whether a later throw may release the idempotency
     // claim, and everything from here on may not.
     //
-    // Set BEFORE the call rather than after it, deliberately. `runOffline`
-    // catches its own provider failures and returns a terminal `failed` instead
-    // of throwing, so "after" would look identical for a run that never reached
-    // the provider and one that was billed and then failed to record. The one
-    // function call of window this costs is a claim burned on a turn that did
-    // nothing; the alternative is a billed turn re-run on retry.
+    // Set BEFORE the call rather than after it, deliberately. A provider failure
+    // does not arrive here as a throw — it arrives as a terminal `failed` — so
+    // "after" would look identical for a run that never reached the provider and
+    // one that was billed and then failed to record. The one function call of
+    // window this costs is a claim burned on a turn that did nothing; the
+    // alternative is a billed turn re-run on retry.
+    //
+    // WHICH module does that conversion: `runRemoteTurn`'s own catch, below.
+    // This comment used to credit `runOffline`, and a reviewer checked: `run.ts`
+    // has two catch blocks, neither around `deps.provider.stream(...)` nor around
+    // the `for await` over it, so a throwing provider propagates straight out of
+    // it. The conclusion was right and the module named was not — which is the
+    // kind of detail a reader uses to decide where to look next.
     input.onEffect?.();
     const run = await runOffline(runInput, config, deps);
     events = run.events;
@@ -739,15 +746,33 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
 /**
  * The turn outcome and reason for a harness run's terminal state.
  *
- * `blocked` and `failed` are distinct: the first means the completion gate
- * refused the run, which an operator fixes by satisfying the blocker, and the
- * second means the run itself broke. Collapsing them — or collapsing either
- * into `completed` — is what made a stock install report success.
+ * `blocked` and `failed` are distinct: the first means unresolved risks or a
+ * completion gate that refused, which an operator fixes by satisfying the
+ * blocker; the second means the run itself broke. Collapsing them — or
+ * collapsing either into `completed` — is what made a stock install report
+ * success.
+ *
+ * The `blocked` arm was labelled `startup-blocked`, and a startup refusal cannot
+ * reach it. `earlyTermination` in `run.ts` — the function that produces
+ * "Startup blocked: missing required provider precondition(s)", which is exactly
+ * the stock-install case this whole fix was written for — emits `status:
+ * "failed"`, and says so in its own docstring. `status: "blocked"` comes only
+ * from `resolveStatus`: unresolved risks, or a gate that returned `blocked`. So
+ * a stock install lands on `run-failed:blocker:startup` and the arm named after
+ * it fires for something else entirely. The label now describes what reaches it.
  *
  * The blocker ids travel in the reason code because they are the actionable
- * part: `startup-blocked` alone tells an operator nothing, and
- * `startup-blocked:blocker:startup` names what to satisfy. They are harness
- * vocabulary, not caller data, so they are safe in a result a caller reads.
+ * part: `run-blocked` alone tells an operator nothing, and
+ * `run-blocked:blocker:startup` names what to satisfy.
+ *
+ * STATED LIMIT on that, because the previous version of this sentence said the
+ * ids are "harness vocabulary, not caller data, so they are safe in a result a
+ * caller reads". Three of the four blocker-id shapes in `run.ts` are fixed
+ * slugs. The fourth is not: `blocker:tool-rejected:${toolCallId}` and its two
+ * siblings interpolate a MODEL-SUPPLIED id. It is unreachable today — the
+ * production assembly in `serve-runner.ts` registers no tools, so the branch
+ * that mints those ids cannot run — and it becomes reachable in the slice that
+ * registers one. Whoever writes that slice bounds the id here.
  */
 export function outcomeOf(
   status: HarnessRunOutput["status"],
@@ -765,7 +790,7 @@ export function outcomeOf(
         ? ["failed", `completion-gate-${gate}${blockers}`]
         : ["completed", "ok"];
     case "blocked":
-      return ["failed", `startup-blocked${blockers}`];
+      return ["failed", `run-blocked${blockers}`];
     case "failed":
       return ["failed", `run-failed${blockers}`];
     case "cancelled":
@@ -829,14 +854,18 @@ export interface SubmitDeps {
  *      before a step that can fail is a key burned for good.
  *   3. run.
  *
- * And every step after the claim RELEASES it on failure. Reordering alone was
- * not enough and the first attempt at this stopped there: `createTurnRecord`,
- * both event appends and `finishTurn` all reach writers documented as
- * propagating what the write throws, so an ENOSPC or an EROFS after the claim
- * burned the key exactly as a 422 used to — a later submission of the same key
- * answered `200 {duplicate: true, sessionId: ""}` naming a turn that does not
- * exist, forever, and clearing the fault did not help. The fix moved one member
- * of that class and left four.
+ * And a step after the claim releases it on failure ONLY on the near side of
+ * the effect. This paragraph used to say "every step after the claim RELEASES
+ * it on failure" and list four writers, which stopped being true one commit
+ * later and contradicted the catch sixty lines below it in the same file.
+ *
+ * What is true: of the four writers, only `createTurnRecord` runs before the
+ * provider can be reached. `onEffect` fires immediately before `runOffline`, and
+ * both event appends and `finishTurn` are on the far side of it, so they do NOT
+ * release — releasing there turns at-most-once into at-least-once for a turn
+ * that really ran, which was measured at one idempotency key buying two provider
+ * calls. The reasoning is at the catch, and this sentence exists only so a
+ * reader arriving here is not sent the other way.
  *
  * The window this leaves is stated rather than hidden, and it is smaller than
  * the first version of this comment claimed. Measured with eight concurrent

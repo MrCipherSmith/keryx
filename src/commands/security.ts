@@ -680,8 +680,19 @@ async function modeOf(cwd: string): Promise<string> {
  *     override contradicted a decision this codebase had already made and
  *     tested, without changing either.
  *   - it was unappealable. No floor, no override, no way for an operator to
- *     disagree — measured at a 3.3% refusal rate over this repository's own
- *     documentation and source, including its operator guide and README.
+ *     disagree, over a detector that fires on ordinary prose. Re-measured with
+ *     `detectInjection` over the tracked tree, because the figure previously
+ *     quoted here — "3.3%, including its operator guide and README" — was
+ *     carried out of a review report without being re-derived and does not
+ *     reproduce for any population:
+ *
+ *         docs/**.md   7 of 166   4.22%
+ *         src/**.ts   12 of 624   1.92%
+ *         both        19 of 790   2.41%
+ *         everything  23 of 2538  0.91%
+ *
+ *     The operator guide does match. README.md matches ZERO times, so the
+ *     sentence naming it was false as well as imprecise.
  *   - it emitted `exit 1`, which no runtime keryx installs into treats as a
  *     block. The refusal did not refuse.
  *
@@ -755,7 +766,7 @@ export function printSecurityHelp(): void {
     { flag: "--json", desc: "Emit machine-readable JSON." },
     {
       flag: "--runtime <id>",
-      desc: "Refuse in the shape this agent runtime reads (claude|codex|windsurf|cursor|antigravity). Written by `hooks install`; a bare exit code otherwise.",
+      desc: "Refuse in the shape this agent runtime reads. `hooks install` writes claude|cursor|windsurf|generic-mcp; codex and antigravity are also understood here. A bare exit code with no --runtime.",
     },
     { flag: "--source <kind>", desc: "Trust level of the content source." },
     { flag: "--target <kind>", desc: "Write/publish target for check-output." },

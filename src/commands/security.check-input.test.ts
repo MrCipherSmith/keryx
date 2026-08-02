@@ -69,9 +69,12 @@ async function checkInput(
 }
 
 /**
- * The OTHER hook surface. `security hooks install` writes two entries per
- * runtime — `UserPromptSubmit` carrying `check-input`, and `PreToolUse`
- * carrying `check-output` — and everything above exercises only the first.
+ * The OTHER hook surface. `security hooks install` writes an INPUT and an OUTPUT
+ * entry per runtime, and everything above exercises only the input one. The
+ * event NAMES `UserPromptSubmit` and `PreToolUse` are Claude's; the other three
+ * registered runtimes get a flat `{on: "input"|"output"}` array, which an
+ * earlier version of this comment flattened into "PreToolUse for every
+ * runtime".
  * Both reach the same `handleCheck`, which is the reason the refusal contract
  * holds for both, and that reason is worth one test rather than an inference.
  */
@@ -260,10 +263,11 @@ describe("how it refuses is the runtime's own contract", () => {
   }, 30_000);
 
   test("check-output — the second installed hook — honours the same contract", async () => {
-    // The fourth site. `hooks install` writes `check-output` into `PreToolUse`
-    // for every runtime, and a refusal contract that held on one of the two
-    // surfaces would be exactly the defect this round started from: a guard
-    // that reports and does not refuse.
+    // The fourth site. `hooks install` writes an output-side entry for every
+    // runtime — `PreToolUse` on Claude, `{on: "output"}` on the other three —
+    // and a refusal contract that held on one of the two surfaces would be
+    // exactly the defect this round started from: a guard that reports and does
+    // not refuse.
     writeConfig("enforced");
 
     // No runtime: the plain CLI convention.

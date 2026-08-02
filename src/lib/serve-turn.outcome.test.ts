@@ -47,7 +47,16 @@ describe("outcomeOf", () => {
   test("blocked and failed stay distinct, and the blockers travel with them", () => {
     // An operator fixes a blocked run by satisfying the blocker and a failed run
     // by looking at what broke. Collapsing them loses which of the two it is.
-    expect(outcomeOf("blocked", "pass", ["blocker:startup"])).toEqual(["failed", "startup-blocked:blocker:startup"]);
+    // `run-blocked`, not `startup-blocked`. A startup refusal cannot reach this
+    // arm: `earlyTermination` emits `status: "failed"`, so the stock install
+    // this fix was written for lands on `run-failed:blocker:startup`. The arm
+    // fires for unresolved risks or a gate that returned `blocked`, and the
+    // label used to name the one cause that cannot produce it.
+    //
+    // This test passed under the wrong label because it calls `outcomeOf`
+    // directly, and the listener test passed because it only asserts the reason
+    // code CONTAINS "blocker". Neither ever went through the path it described.
+    expect(outcomeOf("blocked", "pass", ["blocker:startup"])).toEqual(["failed", "run-blocked:blocker:startup"]);
     expect(outcomeOf("failed", "pass", [])).toEqual(["failed", "run-failed"]);
     expect(outcomeOf("failed", "pass", ["a", "b"])).toEqual(["failed", "run-failed:a,b"]);
   });

@@ -16,8 +16,11 @@
  *                       work in — source, docs, committed config. Trusted
  *                       because the operator vetted it by committing it, NOT
  *                       because keryx produced it. `keryx security scan`
- *                       defaults to this, and `ctx` uses it for command output
- *                       read back out of the project.
+ *                       defaults to this, and `ctx` uses it for a FILE read off
+ *                       disk. Not for command output — `ctx` tags that
+ *                       `tool-output`, and an earlier version of this line sent
+ *                       a reader to the wrong one of the five in a docstring
+ *                       whose whole job is choosing between them.
  *
  *   trusted-user        typed by the operator at their own terminal, in this
  *                       session. The one source with a human behind it in real

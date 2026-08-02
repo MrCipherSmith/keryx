@@ -1207,8 +1207,10 @@ describe("the internal-error boundary is one function, and both halves use it", 
     // NOT through `code()`: it blanks string literals, and the thing being
     // counted IS a string literal, so the first version of this assertion
     // counted zero and could never have counted anything else. Comments are
-    // stripped instead — the same correction three other guards in this tree
-    // needed for the same reason.
+    // stripped instead — the same correction ONE other guard in this tree needed
+    // for the same reason. "Three others" was this round's own miscount, and it
+    // is corrected in `.metaproject/memory/constraints/code-blanks-string-literals.md`
+    // rather than only here.
     const raw = readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8");
     const source = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
     const emitters = source.split("keryx serve: request failed").length - 1;

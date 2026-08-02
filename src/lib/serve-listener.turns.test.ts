@@ -315,8 +315,16 @@ describe("a listener the CLI can start executes a turn", () => {
       }
       expect(stored.value.result?.outcome).not.toBe("completed");
       expect(stored.value.result?.outcome).toBe("failed");
-      // The reason names what to satisfy, not merely that something went wrong.
-      expect(stored.value.result?.reasonCode).toContain("blocker");
+      // The reason names what to satisfy, not merely that something went wrong —
+      // and it names WHICH ARM answered, which `toContain("blocker")` could not.
+      //
+      // That weakness is why a mislabel survived a round. `outcomeOf`'s
+      // `status: "blocked"` arm was called `startup-blocked`, and a startup
+      // refusal cannot reach it: `earlyTermination` emits `status: "failed"`.
+      // A stock install lands here, on the FAILED arm, and both this assertion
+      // and the unit test passed under a label naming the one cause that could
+      // never produce it.
+      expect(stored.value.result?.reasonCode).toBe("run-failed:blocker:startup");
       // And the record does not contradict itself: a result whose text says the
       // startup was blocked must not carry an outcome that says it was not.
       expect(stored.value.result?.text ?? "").toContain("blocked");
