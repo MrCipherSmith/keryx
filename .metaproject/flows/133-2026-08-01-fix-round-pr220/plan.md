@@ -174,10 +174,40 @@ New durable note: `.metaproject/memory/constraints/code-blanks-string-literals.m
 — `code()` blanks string literals, which has now silently disabled four separate
 source guards. It is the single most productive false-green in this tree.
 
-### 6. The minors, including every false statement in a comment
+### 6. The minors — NINE OF ELEVEN CLOSED (2026-08-02), commit `ae1211ea`
 
-Eleven, and most of them are a sentence. They matter because the round's own
-lesson is that a wrong explanation outlives a wrong line of code.
+One had behaviour behind it: the `createSecurityService` memo was `once ??=
+load()`, caching a rejected promise, so one transient fault cost a whole turn's
+redaction. `memoizeResolved` clears the slot on rejection; restoring `??=` fails
+three of its four tests.
+
+Two were real but silent: `releaseIdempotencyKey`'s boolean is now read (a
+`false` means another submission legitimately re-took the key, which had no
+witness anywhere), and `widened` now emits `trustMode.authority` rather than a
+bare `authority` that named no field in the schema its docstring invoked.
+
+Six were false statements in comments: the unwritable-record class claiming a
+discrimination nothing performs; the throttle's rule 2 describing a step F-006
+removed; the tie-break offering two names for one record; `MAX_TURN_FILE_BYTES`
+giving one quantity two numbers (measured: 1 418 890 bare, 1 518 890 with an
+empty `text` field); the SSE comment whose first clause read as current
+behaviour and produced a false finding that cost a round to disprove; and
+`SecuritySource`, which had no per-member documentation at all — the reason
+prose about it named four of five and called `trusted-project` content keryx
+produced, when that is `generated`.
+
+**Deliberately NOT actioned — carried to the next round, not silently dropped:**
+
+- *`serve-server.ts`'s value-import closure is 42 modules, 33 reached only
+  through `serve-turn.ts`, for two pure validators.* Real, and the fix is to
+  move the validators out of the turn module — a structural change with its own
+  blast radius, not a minor. It belongs in a change that can be reviewed as
+  one.
+- *The composition-root wiring is held by `tsc` alone.* Also real. A wiring test
+  is worth writing and is a new test surface rather than a correction, so it
+  goes in with a scope of its own.
+
+Full suite after the minors: **2878 pass, 14 skip, 0 fail** across 288 files.
 
 ### 7. Re-review
 
