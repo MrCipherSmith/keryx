@@ -592,6 +592,22 @@ describe("a record the process cannot read is a 500, not a 404", () => {
     expect(unknown.status).toBe(404);
   });
 
+  test("a turn.json that is not a regular file is 500 too — the sixth reason", async () => {
+    // F-012. This route enumerated `too-large || unreadable` inline, so
+    // `not-regular` — a `turn.json` replaced by a directory or a symlink, the
+    // deliberately hostile shape — fell through to 404 while every other reader
+    // of the same taxonomy treated it as a failure. The split has one owner now
+    // and this is the reason that used to fall on the wrong side of it.
+    const turnId = await unreadableTurn();
+    const record = path.join(configDir, "turns", turnId, "turn.json");
+    rmSync(record, { force: true });
+    mkdirSync(record, { recursive: true });
+
+    const response = await handleServeRequest(get(`/v1/turns/${turnId}`), ctx());
+    expect(response.status).toBe(500);
+    expect(await response.text()).toContain("record-unreadable");
+  });
+
   test("an oversized events.jsonl is 500, not 200 with an empty body", async () => {
     // The exact symptom of the blocker: past roughly 6,500 events the route
     // answered 200 with nothing in it for a turn that had produced thousands.

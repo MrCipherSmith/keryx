@@ -36,7 +36,7 @@ import {
 import type { PolicyProfile } from "../harness/policy/types";
 import { emitProjectsJson, listProjects } from "./project-registry";
 import { AuthFailureThrottle } from "./serve-throttle";
-import { isTurnId, readTurnEvents, readTurnRecord } from "./serve-turn-store";
+import { isServerFault, isTurnId, readTurnEvents, readTurnRecord } from "./serve-turn-store";
 import {
   resolveProject,
   type SubmitOutcome,
@@ -707,11 +707,13 @@ async function routeServeRequest(request: Request, ctx: ServeContext): Promise<R
     if (!record.ok) {
       // "There is no such turn" and "I could not read the turn there is" are
       // different answers and used to be the same one: an oversized `turn.json`
-      // 404'd for a turn that existed. `absent`, `malformed` and `not-a-turn-id`
-      // stay 404 — an unknown id and a malformed one answer identically by
-      // design, so a caller cannot probe for which ids exist. The two that mean
-      // "this process failed" are reported as this process failing.
-      if (record.reason === "too-large" || record.reason === "unreadable") {
+      // 404'd for a turn that existed.
+      //
+      // Which reason means which is `isServerFault`'s to decide, not this
+      // route's. Enumerating them here is what let `not-regular` — a `turn.json`
+      // that is a directory or a symlink — answer "Not found" while every other
+      // reader of the same taxonomy called it a failure.
+      if (isServerFault(record.reason)) {
         return errorResponse(500, "record-unreadable", "The durable record for this turn could not be read.");
       }
       return errorResponse(404, "not-found", "Not found.");

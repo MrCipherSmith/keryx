@@ -144,6 +144,45 @@ export type TurnReadFailure = ConfigReadFailure | "not-a-turn-id" | "malformed";
 export type TurnReadResult<T> = { ok: true; value: T } | { ok: false; reason: TurnReadFailure };
 
 /**
+ * Is this failure THIS PROCESS failing, or an answer about what was asked for?
+ *
+ * The single owner of a split that five call sites were each making for
+ * themselves, with a sixth reason arriving after four of them were written.
+ * `serve-server.ts` enumerated `too-large || unreadable` inline and everything
+ * else fell through, so a `turn.json` that was a directory or a symlink — the
+ * `not-regular` case, which is a deliberately hostile shape — answered "Not
+ * found" while `project-registry.ts` and `serve-turn.ts`, both asking the same
+ * question as `reason !== "absent"`, called it a failure.
+ *
+ * The three that are NOT a fault are answers about the request:
+ *
+ *   absent          there is no such turn
+ *   not-a-turn-id   that is not an id
+ *   malformed       the record is not a record
+ *
+ * An unknown id, a malformed one, and one the caller may not reach must be
+ * indistinguishable (api-protocol.md §Principles), so all three answer 404 and
+ * that is a decision rather than an omission. The other three mean a file IS
+ * there and this process would not read it, which is worth reporting as this
+ * process failing.
+ *
+ * Total over the union, with no default arm: a seventh reason added to
+ * `TurnReadFailure` fails to compile here rather than silently picking a side.
+ */
+export function isServerFault(reason: TurnReadFailure): boolean {
+  switch (reason) {
+    case "absent":
+    case "not-a-turn-id":
+    case "malformed":
+      return false;
+    case "not-regular":
+    case "too-large":
+    case "unreadable":
+      return true;
+  }
+}
+
+/**
  * Reject a turn id that is not the shape this module mints.
  *
  * `turnId` arrives from the URL on every read route. Everything below joins it

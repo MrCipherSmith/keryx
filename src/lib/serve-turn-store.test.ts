@@ -32,8 +32,10 @@ import {
   listTurnIds,
   MAX_TURN_EVENTS,
   readTurnEvents,
+  isServerFault,
   readTurnRecord,
   type StreamEvent,
+  type TurnReadFailure,
   type TurnRecord,
   type TurnResult,
 } from "./serve-turn-store";
@@ -453,5 +455,31 @@ describe("an append does not re-walk the directory it already has", () => {
     mkdirSync(path.join(configDir, "turns", TURN, "events.jsonl"), { recursive: true });
 
     expect(() => appendTurnEvent(event(0), configDir)).toThrow();
+  });
+});
+
+describe("the read-failure taxonomy has one owner", () => {
+  // F-012. Six reasons, and five call sites each deciding for themselves which
+  // of them meant "this process failed" — with the sixth reason arriving after
+  // four of them were written. `isServerFault` is the decision, in one place.
+  test("every reason is classified, and the classification is the one the routes want", () => {
+    const REASONS: Record<TurnReadFailure, boolean> = {
+      // Answers about the request. All 404, indistinguishably.
+      absent: false,
+      "not-a-turn-id": false,
+      malformed: false,
+      // A file IS there and this process would not read it.
+      "not-regular": true,
+      "too-large": true,
+      unreadable: true,
+    };
+    for (const [reason, fault] of Object.entries(REASONS)) {
+      expect({ reason, fault: isServerFault(reason as TurnReadFailure) }).toEqual({ reason, fault });
+    }
+    // The map is exhaustive by TYPE — `Record<TurnReadFailure, boolean>` will
+    // not compile if a reason is missing — and this pins that both sides are
+    // non-empty, so a predicate that answered a constant would fail here.
+    expect(Object.values(REASONS).filter(Boolean)).toHaveLength(3);
+    expect(Object.values(REASONS).filter((v) => !v)).toHaveLength(3);
   });
 });
