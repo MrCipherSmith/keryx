@@ -589,10 +589,16 @@ function streamTurnEvents(request: Request, turnId: string, ctx: ServeContext): 
 
   const events = readTurnEvents(turnId, after, ctx.dir);
   if (!events.ok) {
-    // 200 with an empty body is the answer this route used to give for a record
-    // it could not read — the silent truncation §Bounds forbids, and the reason
-    // the bound the store reads at is now its own. A caller is told the stream
-    // is unavailable instead of being told the turn produced nothing.
+    // 500, and the line below says so. This comment opened with "200 with an
+    // empty body" and a reviewer read the first clause as a description of the
+    // current behaviour and filed it as a live defect — a false finding that
+    // cost a round to disprove, from prose that was accurate and badly ordered.
+    //
+    // What it means: answering 200 with an empty body would be the silent
+    // truncation §Bounds forbids, telling a caller the turn produced nothing
+    // when the truth is that this process could not read the record. That WAS
+    // the behaviour, past roughly 6 500 events, and it is why the bound the
+    // store reads at is now its own.
     return errorResponse(500, "record-unreadable", "The durable record for this turn could not be read.");
   }
   const body = events.value.map((event) => `id: ${event.seq}\ndata: ${JSON.stringify(event)}\n\n`).join("");

@@ -23,6 +23,7 @@ import {
   resolveRemoteProfile,
   shellParentProfile,
 } from "./profiles";
+import { AUTHORITY_AXIS, INPUT_TRUST_AXIS } from "./ranks";
 import type { PolicyProfile } from "./types";
 
 const SRC = path.join(import.meta.dir, "..", "..");
@@ -199,13 +200,13 @@ describe("compareProfiles — a remote profile may never grant what the local on
     // More AUTHORITY than the ceiling.
     expect(compareProfiles(strict, { ...strict, trustMode: "trusted-local" } as PolicyProfile)).toEqual({
       ok: false,
-      widened: ["authority"],
+      widened: [AUTHORITY_AXIS],
     });
 
     // More TRUST EXTENDED to the input than the ceiling, at equal authority.
     const acting = resolveLocalProfile("unattended-untrusted"); // acting + unvetted
     expect(compareProfiles(acting, { ...acting, trustMode: "trusted-local" } as PolicyProfile).widened).toEqual([
-      "inputTrust",
+      INPUT_TRUST_AXIS,
     ]);
   });
 
@@ -220,7 +221,7 @@ describe("compareProfiles — a remote profile may never grant what the local on
     const ceiling = resolveLocalProfile("read-only-review");
     const remote = resolveLocalProfile("unattended-untrusted");
 
-    expect(compareProfiles(ceiling, remote).widened).toContain("authority");
+    expect(compareProfiles(ceiling, remote).widened).toContain(AUTHORITY_AXIS);
     expect(compareProfiles(ceiling, remote).ok).toBe(false);
   });
 
@@ -249,9 +250,9 @@ describe("compareProfiles — a remote profile may never grant what the local on
     const nonsense = { ...strict, trustMode: "extremely-trusted" } as unknown as PolicyProfile;
     // BOTH axes, because a posture that cannot be projected is one this code
     // can say nothing about on either.
-    expect(compareProfiles(strict, nonsense).widened).toEqual(["authority", "inputTrust"]);
+    expect(compareProfiles(strict, nonsense).widened).toEqual([AUTHORITY_AXIS, INPUT_TRUST_AXIS]);
     // ...in both positions. An unreadable ceiling is not a licence either.
-    expect(compareProfiles(nonsense, strict).widened).toEqual(["authority", "inputTrust"]);
+    expect(compareProfiles(nonsense, strict).widened).toEqual([AUTHORITY_AXIS, INPUT_TRUST_AXIS]);
   });
 });
 

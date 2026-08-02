@@ -60,7 +60,7 @@ export const MAX_TRACKED_PEERS = 1_024;
 /**
  * What a cooldown record is worth, against `failures / AUTH_FAILURE_LIMIT`.
  *
- * Halfway. See `evictIfFull` rule 3 for why the two properties this control
+ * Halfway. See `evictIfFull` rule 2 for why the two properties this control
  * needs cannot both hold under a strict "bans first" or "peers first" order,
  * and why this is where they meet.
  */
@@ -170,18 +170,22 @@ export class AuthFailureThrottle {
    *    and 127.0.0.0/8 gives a local attacker 16.7M addresses to saturate it
    *    with. That is strictly worse than the escape it replaced.
    *
-   * 2. Prefer a peer NOT serving a cooldown. Otherwise a flood clears the
-   *    flooder's own ban: `check` reads `seenAt` and never writes it, so a peer
-   *    in cooldown stops being seen the moment it starts being refused, its
-   *    `seenAt` freezes, and oldest-first takes it first.
-   *
-   * 3. Otherwise the record with the least VALUE, on one scale:
+   * 2. Otherwise the record with the least VALUE, on one scale:
    *
    *      an unthrottled peer   failures / AUTH_FAILURE_LIMIT   (0 .. <1)
    *      a peer in cooldown    0.5                             (constant)
    *
    *    So a peer less than halfway to a ban is cheaper to lose than a ban, and
    *    a peer more than halfway is not.
+   *
+   *    There is no separate "prefer a peer not in cooldown" step, and an earlier
+   *    version of this comment described one after the code had stopped having
+   *    it. The scale subsumes it, and NOT absolutely: a fresh peer at 0 or 1
+   *    failures loses to a ban, which is what stops a flood clearing the
+   *    flooder's own ban — `check` reads `seenAt` and never writes it, so a peer
+   *    in cooldown stops being seen the moment it starts being refused, its
+   *    `seenAt` freezes, and any oldest-first rule takes it first. A peer at 9
+   *    of 10 does not lose to a ban, which is the other half.
    *
    * One scale rather than a priority order, and that is forced rather than
    * chosen. The two properties this control needs are in direct conflict on a
@@ -201,7 +205,11 @@ export class AuthFailureThrottle {
    * accumulation becomes worth more than an enforced refusal that is already
    * counting down.
    *
-   * Ties break toward the soonest-expiring ban and the oldest-seen peer, and the
+   * Ties break on one field read two ways — `throttledUntil` for a ban, `seenAt`
+   * otherwise, lowest first. For two bans that is the soonest to expire, which
+   * under a constant cooldown is the same record as the oldest ban; it is one
+   * criterion, not two, and the version of this sentence that offered both as
+   * alternatives was describing a distinction that cannot arise here. The
    * newcomer is never a candidate — see rule 1.
    *
    * The trade `MAX_TRACKED_PEERS` describes is unchanged: an attacker with many
@@ -213,7 +221,7 @@ export class AuthFailureThrottle {
       return;
     }
     const now = this.now();
-    /** A record's worth, on the one scale rule 3 describes. */
+    /** A record's worth, on the one scale rule 2 describes. */
     const valueOf = (record: PeerRecord): number =>
       record.throttledUntil > now ? BAN_VALUE : record.failures.length / AUTH_FAILURE_LIMIT;
 

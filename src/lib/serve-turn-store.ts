@@ -404,8 +404,10 @@ export function claimIdempotencyKey(idempotencyKey: string, turnId: string, dir?
  * the turn releasing it, so a release arriving after another turn legitimately
  * re-claimed the key cannot take that turn's claim away.
  *
- * Returns whether an entry was removed, so a caller can tell "released" from
- * "someone else holds it now" rather than inferring it.
+ * Returns whether an entry was removed, which is the only signal separating
+ * "released" from "someone else holds it now" — the guard above makes the second
+ * case a silent no-op, and a caller that discards the boolean cannot tell the
+ * two apart. `createSubmitTurn` reports the second on the operator's stderr.
  */
 export function releaseIdempotencyKey(idempotencyKey: string, turnId: string, dir?: string): boolean {
   const file = keyPath(idempotencyKey, dir);

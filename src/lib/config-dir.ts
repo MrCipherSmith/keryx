@@ -146,16 +146,21 @@ export const MAX_TRANSCRIPT_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
  *
  * Why the turn store needed it at all: both files were read through
  * `readConfigFile`, whose bound is 1 MB, while `MAX_TURN_EVENTS` is 10 000 —
- * and 10 000 events serialise to at least 1 518 890 bytes carrying no assistant
- * text. Measured: 8 000 events give 1 302 890 bytes and the read then returned
- * ZERO, so past roughly 6 500 events the event route answered 200 with an empty
- * body. §Bounds forbids exactly that, and the store's own header said it could
- * not happen.
+ * and 10 000 events serialise to 1 418 890 bytes with no `text` field at all,
+ * or 1 518 890 with an empty one. Both are over the 1 MB bound, which is the
+ * point; an earlier version of this note gave the second figure and labelled it
+ * the first, so one quantity had two numbers. Measured on the real failing
+ * shape: 8 000 events gave 1 302 890 bytes and the read then returned ZERO, so
+ * past roughly 6 500 events the event route answered 200 with an empty body.
+ * §Bounds forbids exactly that, and the store's own header said it could not
+ * happen.
  *
  * STATED LIMIT: this is a bound on the FILE, enforced on read, and
  * `MAX_TURN_EVENTS` is a bound on the COUNT, enforced on write. Nothing connects
- * them. Ten thousand bare events are 1.35 MiB, leaving about 6 569 bytes of text
- * per event before the reader refuses, and there is no per-event byte bound. In
+ * them. Ten thousand bare events are 1 418 890 bytes (1.353 MiB), leaving
+ * (64 MiB - 1 418 890) / 10 000 = 6 569 bytes of text per event before the
+ * reader refuses — derived from the bare figure, which is why that is the one
+ * this paragraph uses. There is no per-event byte bound. In
  * practice the provider's own output ceiling holds it down — 10 000 real deltas
  * measured at 1.5 MiB, a 42x margin — but that is a property keryx neither
  * states nor enforces, and on the OpenAI-compatible path `maxOutputTokens` is

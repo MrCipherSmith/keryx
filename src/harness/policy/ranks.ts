@@ -116,6 +116,19 @@ export function rankOf<K extends string>(map: Record<K, number>, value: string):
   return Object.prototype.hasOwnProperty.call(map, value) ? (map as Record<string, number>)[value] : undefined;
 }
 
+/**
+ * How an axis is NAMED when it reaches an operator in a refusal.
+ *
+ * Qualified by the field they project, because they are not schema fields —
+ * `PolicyProfile` has `trustMode` and has neither of these. `compareProfiles`
+ * puts whatever it is handed into `widened`, whose docstring promises the
+ * contents are "schema vocabulary", and bare `authority` sent an operator
+ * looking for a profile key that does not exist. `trustMode.authority` is both
+ * true and more useful: it names the field to change.
+ */
+export const AUTHORITY_AXIS = "trustMode.authority";
+export const INPUT_TRUST_AXIS = "trustMode.inputTrust";
+
 // ---------------------------------------------------------------------------
 // The two questions
 // ---------------------------------------------------------------------------
@@ -155,14 +168,14 @@ export function exceedingAxes(ceiling: PolicyProfile["trustMode"], candidate: Po
   const low = axesOf(ceiling);
   const high = axesOf(candidate);
   if (low === undefined || high === undefined) {
-    return ["authority", "inputTrust"];
+    return [AUTHORITY_AXIS, INPUT_TRUST_AXIS];
   }
   const exceeded: string[] = [];
   if (AUTHORITY_RANK[high.authority] > AUTHORITY_RANK[low.authority]) {
-    exceeded.push("authority");
+    exceeded.push(AUTHORITY_AXIS);
   }
   if (INPUT_TRUST_RANK[high.inputTrust] > INPUT_TRUST_RANK[low.inputTrust]) {
-    exceeded.push("inputTrust");
+    exceeded.push(INPUT_TRUST_AXIS);
   }
   return exceeded;
 }
@@ -179,15 +192,15 @@ export function broadeningAxes(parent: PolicyProfile["trustMode"], child: Policy
   const above = axesOf(parent);
   const below = axesOf(child);
   if (above === undefined || below === undefined) {
-    return ["authority", "inputTrust"];
+    return [AUTHORITY_AXIS, INPUT_TRUST_AXIS];
   }
   const broadened: string[] = [];
   if (AUTHORITY_RANK[below.authority] > AUTHORITY_RANK[above.authority]) {
-    broadened.push("authority");
+    broadened.push(AUTHORITY_AXIS);
   }
   // LOWER is the escalation here — see the note above.
   if (INPUT_TRUST_RANK[below.inputTrust] < INPUT_TRUST_RANK[above.inputTrust]) {
-    broadened.push("inputTrust");
+    broadened.push(INPUT_TRUST_AXIS);
   }
   return broadened;
 }

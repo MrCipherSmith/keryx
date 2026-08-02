@@ -174,9 +174,15 @@ export interface ProfileComparison {
   /** True only when the remote profile grants nothing the local profile withholds. */
   ok: boolean;
   /**
-   * The fields that widen, or that could not be compared. Field NAMES only —
-   * they are schema vocabulary, not operator data, so they are safe to print in
-   * a refusal. Sorted, so the message is stable.
+   * The fields that widen, or that could not be compared. Field PATHS only —
+   * every entry names a place in the profile schema (`defaults.network`,
+   * `requiredControls.isolation`, `trustMode.authority`), never operator data,
+   * so they are safe to print in a refusal. Sorted, so the message is stable.
+   *
+   * The two `trustMode` axes are qualified for that reason: they are projections
+   * rather than schema keys, and the bare `authority` this used to emit sent an
+   * operator looking for a profile field that does not exist while this
+   * docstring promised the opposite.
    */
   widened: string[];
 }

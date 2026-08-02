@@ -280,11 +280,21 @@ export interface RunTurnInput {
 /**
  * The terminal result could not be written to the durable record.
  *
- * Typed rather than a bare `Error` so `createSubmitTurn` can tell it from a
- * filesystem throw and so a future caller can branch on it. Carries the turn id
- * and nothing else: the message reaches no response body — the route answers a
- * bare 500 — but a turn id in an exception that might one day be logged is the
- * operator's own identifier, not caller data.
+ * Typed rather than a bare `Error` so a caller CAN tell it from a filesystem
+ * throw. None does: `createSubmitTurn` catches every throw the same way, and
+ * the round that introduced this class said in this docstring that it already
+ * discriminated. It did not, and writing down a discrimination nobody performs
+ * is how the next reader concludes the 500 path distinguishes two faults that
+ * it answers identically.
+ *
+ * The type earns its place anyway — `terminate` throwing on a failed write is
+ * how the boolean from `finishTurn` stopped being discarded, and a named class
+ * is what makes that legible at the throw site — but the branch is hypothetical
+ * until something branches.
+ *
+ * Carries the turn id and nothing else: the message reaches no response body —
+ * the route answers a bare 500 — but a turn id in an exception that might one
+ * day be logged is the operator's own identifier, not caller data.
  */
 export class TurnRecordUnwritableError extends Error {
   constructor(readonly turnId: string) {
@@ -904,7 +914,16 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
       // Guarded by turnId inside the store, so a release cannot take a claim
       // another turn legitimately re-took while this one was failing.
       if (!effected && request.idempotencyKey !== undefined) {
-        releaseIdempotencyKey(request.idempotencyKey, turnId, deps.dir);
+        // The boolean is read, not discarded. `false` here means the key no
+        // longer pointed at this turn — another submission legitimately re-took
+        // it while this one was failing — and that is a fact about at-most-once
+        // that has no other witness. Not a fault and not an error path: the
+        // guard inside the store did its job. The operator is told because a
+        // silent no-op is indistinguishable from a release that happened.
+        const released = releaseIdempotencyKey(request.idempotencyKey, turnId, deps.dir);
+        if (!released) {
+          console.error(`keryx serve: idempotency claim for turn ${turnId} was already re-taken; not released`);
+        }
       }
       throw cause;
     }
