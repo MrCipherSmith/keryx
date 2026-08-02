@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   closeSync,
   existsSync,
   ftruncateSync,
@@ -395,5 +396,62 @@ describe("listTurnIds", () => {
 
   test("an absent turns directory lists nothing", () => {
     expect(listTurnIds(configDir)).toEqual([]);
+  });
+});
+
+describe("an append does not re-walk the directory it already has", () => {
+  test("the fast path leaves the parent directory untouched", () => {
+    // The observable difference, and the only honest way to see it from out
+    // here: `ensureTurnDir` re-asserts 0700 on every level it walks, so a parent
+    // left at another mode is restored if the walk ran and stays put if it did
+    // not. This asserts it stays put — which IS the tradeoff, stated rather
+    // than hidden: `createTurnRecord` establishes the mode once per turn, and
+    // `appendOwnerOnlyLine` still chmods the events file on every append.
+    createTurnRecord(record(), configDir);
+    const turns = path.join(configDir, "turns");
+    chmodSync(turns, 0o755);
+
+    expect(appendTurnEvent(event(0), configDir)).toBe(true);
+
+    expect(statSync(turns).mode & 0o777).toBe(0o755);
+    // The event landed, and the file it landed in is still owner-only.
+    expect(eventsOf(TURN)).toHaveLength(1);
+    const log = path.join(turns, TURN, "events.jsonl");
+    expect(statSync(log).mode & 0o777).toBe(0o600);
+  });
+
+  test("an append whose directory has vanished recreates it and lands", () => {
+    // The ENOENT retry — the one case where the walk was doing something. A
+    // turn directory removed underneath a live turn, which is what an operator
+    // clearing state during a run produces.
+    createTurnRecord(record(), configDir);
+    appendTurnEvent(event(0), configDir);
+    rmSync(path.join(configDir, "turns", TURN), { recursive: true, force: true });
+
+    expect(appendTurnEvent(event(1), configDir)).toBe(true);
+
+    // The earlier event is gone with the directory — this is recovery, not
+    // resurrection — and the new one is readable.
+    expect(eventsOf(TURN).map((e) => e.seq)).toEqual([1]);
+    // Recreated through the sanctioned helper, so the mode is right again.
+    expect(statSync(path.join(configDir, "turns", TURN)).mode & 0o777).toBe(0o700);
+  });
+
+  test("an append with no record at all still creates its directory", () => {
+    // `createTurnRecord` is the normal creator, but nothing in the type system
+    // requires it to have run. Before the optimistic path this worked because
+    // every append walked; it has to keep working.
+    expect(appendTurnEvent(event(0), configDir)).toBe(true);
+    expect(eventsOf(TURN)).toHaveLength(1);
+  });
+
+  test("an error that is NOT ENOENT propagates rather than being retried", () => {
+    // A permission fault retried is a second, identical permission fault. The
+    // events path is made a DIRECTORY, so the append fails with EISDIR — a real
+    // errno from the real filesystem, not a stubbed throw.
+    createTurnRecord(record(), configDir);
+    mkdirSync(path.join(configDir, "turns", TURN, "events.jsonl"), { recursive: true });
+
+    expect(() => appendTurnEvent(event(0), configDir)).toThrow();
   });
 });

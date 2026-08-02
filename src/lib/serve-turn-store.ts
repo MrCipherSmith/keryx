@@ -191,8 +191,32 @@ export function appendTurnEvent(event: StreamEvent, dir?: string, opts?: { force
   if (event.seq >= MAX_TURN_EVENTS && opts?.force !== true) {
     return false;
   }
-  const target = ensureTurnDir(event.turnId, dir);
-  appendOwnerOnlyLine(path.join(target, "events.jsonl"), JSON.stringify(event));
+  // Optimistic, because after `createTurnRecord` the directory is already there
+  // and the walk is pure overhead on every subsequent append — three `mkdirSync`
+  // plus three `chmodSync`, which measured at 17.6µs against an 8.5µs write.
+  // Moving the bound above it stopped paying that for REFUSED events; this stops
+  // paying it for accepted ones, which are the overwhelming majority.
+  //
+  // ENOENT is the one case where the walk was doing something: the directory
+  // does not exist yet, or has been removed underneath a live turn. Creating it
+  // then and retrying costs the same as before in exactly that case and nothing
+  // in the others. Every other error propagates — a permission fault must not be
+  // retried into a second, identical permission fault.
+  //
+  // The consequence worth naming: the fast path does not re-assert 0700 on the
+  // parent levels. `createTurnRecord` establishes the mode once per turn and
+  // `appendOwnerOnlyLine` still chmods the events file itself on every append,
+  // so what is no longer re-checked is a directory this process created and
+  // nothing else writes to.
+  const line = JSON.stringify(event);
+  try {
+    appendOwnerOnlyLine(path.join(turnDir(event.turnId, dir), "events.jsonl"), line);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+      throw error;
+    }
+    appendOwnerOnlyLine(path.join(ensureTurnDir(event.turnId, dir), "events.jsonl"), line);
+  }
   return true;
 }
 
