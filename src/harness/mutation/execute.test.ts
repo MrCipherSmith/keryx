@@ -398,6 +398,69 @@ describe("executeGuardedMutation — unattended-untrusted blocked without isolat
   });
 });
 
+describe("executeGuardedMutation — a trust mode this code cannot read is blocked", () => {
+  // The branch this round added and did not test. `trustMode` is projected onto
+  // two axes now, and `axesOf` returns `undefined` for anything outside the
+  // enum — a profile carrying a posture written by a newer keryx, or by hand.
+  // Every other consumer of the projection fails closed on it; deleting the
+  // check here left the whole suite green, and the fall-through would have read
+  // `axes.authority` off `undefined` at best and, with optional chaining,
+  // treated an unreadable posture as one that may act.
+  const UNREADABLE = "wide-open" as unknown as PolicyTrustMode;
+
+  test("an out-of-enum trust mode is blocked, and the adapter is never called", () => {
+    const adapter = new FakeMutationAdapter("effect-confirmed");
+    const outcome = withFetchGuard(() =>
+      executeGuardedMutation(baseInput({ trustMode: UNREADABLE, adapter }), makeDeps()),
+    );
+    expect(outcome.kind).toBe("blocked");
+    if (outcome.kind !== "blocked") throw new Error("expected a blocked outcome");
+    expect(outcome.reason).toMatch(/unrecognized trust mode/i);
+    expect(adapter.calls).toHaveLength(0);
+  });
+
+  test("no guard and no approval can talk it round", () => {
+    // The same rule the isolation boundary has: this is not a permission
+    // question, so a clean guard and a valid approval must not reach past it.
+    const adapter = new FakeMutationAdapter("effect-confirmed");
+    const outcome = withFetchGuard(() =>
+      executeGuardedMutation(
+        baseInput({
+          trustMode: UNREADABLE,
+          isolationAvailable: true,
+          guard: { kind: "allow" },
+          approval: { kind: "valid" },
+          adapter,
+        }),
+        makeDeps(),
+      ),
+    );
+    expect(outcome.kind).toBe("blocked");
+    expect(adapter.calls).toHaveLength(0);
+  });
+
+  test("the three real postures are NOT blocked for this reason", () => {
+    // The control. Without it the assertions above are satisfied by a function
+    // that blocks everything, and the enum values must still route to their own
+    // decisions rather than to the fail-closed arm.
+    for (const trustMode of ["read-only", "trusted-local", "untrusted"] as PolicyTrustMode[]) {
+      const adapter = new FakeMutationAdapter("effect-confirmed");
+      const outcome = withFetchGuard(() =>
+        executeGuardedMutation(
+          baseInput({ trustMode, isolationAvailable: true, guard: { kind: "allow" }, approval: { kind: "valid" }, adapter }),
+          makeDeps(),
+        ),
+      );
+      const reason = outcome.kind === "blocked" ? outcome.reason : "";
+      expect({ trustMode, unrecognized: /unrecognized trust mode/i.test(reason) }).toEqual({
+        trustMode,
+        unrecognized: false,
+      });
+    }
+  });
+});
+
+
 // ---------------------------------------------------------------------------
 // 4. Unknown side-effect requires reconciliation (ties to W8 recoverFrom)
 // ---------------------------------------------------------------------------

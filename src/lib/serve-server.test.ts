@@ -39,6 +39,7 @@ import {
 import {
   describeServeStatus,
   handleServeRequest,
+  internalErrorResponse,
   resolveServeStartup,
   startServeListener,
   type ServeListener,
@@ -1130,5 +1131,74 @@ describe("the credential reader reports absence and damage distinctly", () => {
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the internal-error boundary is one function, and both halves use it", () => {
+  // F-009. `Bun.serve`'s `error` hook was a byte-identical copy of the
+  // handler's own catch, and only the catch had a test. Two copies of a
+  // security-relevant response shape, one of them unexercised, is how the
+  // previous drift happened: the hook emitted `{schemaVersion, error, message}`
+  // against api-protocol.md's `{error: {code, message}}`, so a client reading
+  // `error.code` got `undefined` on the one response class that means the
+  // server broke.
+  function captureStderr<T>(run: () => T): { value: T; written: string } {
+    const original = console.error;
+    let written = "";
+    console.error = (...args: unknown[]) => {
+      written += `${args.map(String).join(" ")}\n`;
+    };
+    try {
+      return { value: run(), written };
+    } finally {
+      console.error = original;
+    }
+  }
+
+  test("it answers the api-protocol document, and echoes nothing from the cause", async () => {
+    const secret = "/home/someone/.keryx/turns/abc/turn.json: EACCES";
+    const { value: response, written } = captureStderr(() =>
+      internalErrorResponse(new Error(secret)),
+    );
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error?: { code?: string; message?: string } };
+    // The shape api-protocol.md defines, not a hand-rolled one.
+    expect(body.error?.code).toBe("internal-error");
+    expect(typeof body.error?.message).toBe("string");
+
+    // Nothing from the cause reaches the caller — not the message, not the path.
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("EACCES");
+    expect(text).not.toContain("/home/someone");
+
+    // The operator IS told, on the process's own stderr.
+    expect(written).toContain("keryx serve: request failed");
+    expect(written).toContain(secret);
+  });
+
+  test("a non-Error cause is reported without throwing", () => {
+    // `throw "string"` and `Promise.reject(undefined)` both reach here.
+    for (const cause of ["a bare string", undefined, null, 42, { code: "X" }]) {
+      const { value, written } = captureStderr(() => internalErrorResponse(cause));
+      expect(value.status).toBe(500);
+      expect(written).toContain("keryx serve: request failed");
+    }
+  });
+
+  test("both boundaries route to it — the hook is the function itself", () => {
+    // The wiring, held by reading the source rather than by the comment on it.
+    // A second emitter of this line in this module is the copy re-appearing.
+    //
+    // NOT through `code()`: it blanks string literals, and the thing being
+    // counted IS a string literal, so the first version of this assertion
+    // counted zero and could never have counted anything else. Comments are
+    // stripped instead — the same correction three other guards in this tree
+    // needed for the same reason.
+    const raw = readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8");
+    const source = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    const emitters = source.split("keryx serve: request failed").length - 1;
+    expect(emitters).toBe(1);
+    expect(source).toContain("error: internalErrorResponse");
   });
 });

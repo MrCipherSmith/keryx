@@ -630,13 +630,34 @@ export async function handleServeRequest(request: Request, ctx: ServeContext): P
   try {
     return await routeServeRequest(request, ctx);
   } catch (cause) {
-    // Nothing reaches the CALLER. The operator is a different audience: this is
-    // their own process, on their own terminal, and the fault class here — a
-    // throwing writer — is one that can burn an idempotency key and strand a
-    // durable record with no other signal anywhere.
-    console.error(`keryx serve: request failed: ${cause instanceof Error ? cause.message : String(cause)}`);
-    return errorResponse(500, "internal-error", "The request could not be completed.");
+    return internalErrorResponse(cause);
   }
+}
+
+/**
+ * The one answer to "something in this process broke while handling a request".
+ *
+ * Two boundaries reach it and they must not drift: this function's caller above
+ * catches what the handler throws, and the `error` hook on `Bun.serve` catches
+ * what escapes the handler — a rejection raised while the response is being
+ * produced, or anything Bun itself raises. They were byte-identical copies, and
+ * only one of them had a test.
+ *
+ * Nothing from the error reaches the CALLER. Not the message, not the code, not
+ * a correlation id — this release has no log to correlate against, and an id
+ * nobody can look up is a string that only tells an attacker that something
+ * specific went wrong. Through `errorResponse`, so the body is the same
+ * `{error: {code, message}}` document as the other fourteen; a hand-rolled shape
+ * here meant a client reading `error.code` got `undefined` on the one response
+ * class that means the server broke.
+ *
+ * The operator is a different audience: this is their own process, on their own
+ * terminal, and the fault class — a throwing writer — is one that can burn an
+ * idempotency key and strand a durable record with no other signal anywhere.
+ */
+export function internalErrorResponse(cause: unknown): Response {
+  console.error(`keryx serve: request failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+  return errorResponse(500, "internal-error", "The request could not be completed.");
 }
 
 async function routeServeRequest(request: Request, ctx: ServeContext): Promise<Response> {
@@ -863,28 +884,14 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
           throttle,
           submitTurn,
         }),
-      // The second half of the boundary. `handleServeRequest` catches what the
-      // handler throws; this catches what escapes the handler — a rejection
-      // raised while the response is being produced, or anything Bun itself
-      // raises. Without it, Bun's default error page answers, carrying the
-      // message and the stack.
-      //
-      // Through `errorResponse`, not a hand-rolled body. It used to emit
-      // `{schemaVersion, error, message}` while api-protocol.md defines
-      // `{error: {code, message}}` — so a client reading `error.code` got
-      // `undefined` on the one response class that means the server broke, and
-      // the shape told it WHICH boundary fired. Same document as the other
-      // fourteen now.
-      //
-      // The operator is told, on the process's own stderr. The argument against
-      // putting an id in the RESPONSE is sound — this release has no log to
-      // correlate against — but it is not an argument for the process saying
-      // nothing at all about a fault that can burn an idempotency key and strand
-      // a durable record.
-      error: (cause: unknown) => {
-        console.error(`keryx serve: request failed: ${cause instanceof Error ? cause.message : String(cause)}`);
-        return errorResponse(500, "internal-error", "The request could not be completed.");
-      },
+      // The second half of the boundary, and the SAME function as the first.
+      // Without it, Bun's default error page answers, carrying the message and
+      // the stack. It was a byte-identical copy of the handler's own catch and
+      // nothing tested it, so the two could drift apart with the suite green —
+      // which is how the previous drift happened, one of them emitting
+      // `{schemaVersion, error, message}` against api-protocol.md's
+      // `{error: {code, message}}`.
+      error: internalErrorResponse,
     });
   } catch (error) {
     // A bind failure is still a refusal to start, not a degraded listen: the
