@@ -20,6 +20,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { appendOwnerOnlyLine, MAX_CONFIG_FILE_BYTES, MAX_TURN_FILE_BYTES } from "./config-dir";
@@ -583,5 +584,81 @@ describe("the read-failure taxonomy has one owner", () => {
       "not-a-turn-id",
       "malformed",
     ]);
+  });
+});
+
+describe("an install that predates key scoping keeps the claims it holds", () => {
+  // F-025. Adding `project` to the digest re-addressed the whole index, so every
+  // existing `turns/keys/<hash>.json` became unreachable: a client retry after
+  // the upgrade would run a SECOND billed provider call. That is the
+  // at-most-once → at-least-once conversion this flow spent a round removing,
+  // reintroduced by the fix for a different defect, with no migration and no
+  // note.
+  //
+  // The migration cannot be blind. The legacy index was GLOBAL, so a legacy
+  // entry may hold any project's turn, and honouring it unconditionally would
+  // hand one project another's turnId — the exact defect scoping was introduced
+  // to fix. The turn record knows its own project, so the question is
+  // answerable exactly.
+
+  /** Write a pre-scoping entry: `sha256(key)` and nothing else. */
+  function plantLegacy(key: string, turnId: string): string {
+    const digest = createHash("sha256").update(key, "utf8").digest("hex");
+    const file = path.join(configDir, "turns", "keys", `${digest}.json`);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify({ turnId })}\n`, "utf8");
+    return file;
+  }
+
+  test("a legacy claim for THIS project is adopted, and moved to the scoped path", () => {
+    createTurnRecord({ ...record(), project: "/projects/a" }, configDir);
+    const legacy = plantLegacy("daily", TURN);
+
+    expect(claimIdempotencyKey("/projects/a", "daily", OTHER, configDir)).toEqual({
+      existing: TURN,
+    });
+    // Moved rather than copied: the unscoped entry must not be consulted twice.
+    expect(existsSync(legacy)).toBe(false);
+    // And it answers from the scoped path now, with the legacy file gone.
+    expect(claimIdempotencyKey("/projects/a", "daily", OTHER, configDir)).toEqual({
+      existing: TURN,
+    });
+  });
+
+  test("a legacy claim for ANOTHER project is not adopted, and is left for its owner", () => {
+    // The half that matters. Adopting this would be F-017 all over again, for
+    // the duration of the migration.
+    createTurnRecord({ ...record(), project: "/projects/a" }, configDir);
+    const legacy = plantLegacy("daily", TURN);
+
+    expect(claimIdempotencyKey("/projects/b", "daily", OTHER, configDir)).toEqual({
+      existing: null,
+    });
+    // Still there, so /projects/a still gets its duplicate answer.
+    expect(existsSync(legacy)).toBe(true);
+    expect(claimIdempotencyKey("/projects/a", "daily", TURN, configDir)).toEqual({
+      existing: TURN,
+    });
+  });
+
+  test("a legacy entry naming nothing readable is removed rather than re-examined forever", () => {
+    const damaged = plantLegacy("orphan", "99999999-9999-4999-8999-999999999999");
+    expect(claimIdempotencyKey("/projects/a", "orphan", TURN, configDir)).toEqual({
+      existing: null,
+    });
+    expect(existsSync(damaged)).toBe(false);
+  });
+
+  test("a scoped claim wins without the legacy path being consulted", () => {
+    // The control. If the scoped entry answered and the legacy one were still
+    // read, a stale global entry could override a correct scoped one.
+    createTurnRecord({ ...record(), project: "/projects/a" }, configDir);
+    claimIdempotencyKey("/projects/a", "both", TURN, configDir);
+    const legacy = plantLegacy("both", OTHER);
+
+    expect(claimIdempotencyKey("/projects/a", "both", OTHER, configDir)).toEqual({
+      existing: TURN,
+    });
+    expect(existsSync(legacy)).toBe(true);
   });
 });

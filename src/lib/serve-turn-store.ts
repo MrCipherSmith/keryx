@@ -158,6 +158,72 @@ function keyPath(project: string, idempotencyKey: string, dir?: string): string 
   return path.join(turnsRoot(dir), "keys", `${digest}.json`);
 }
 
+/**
+ * The pre-scoping index path for a key: `sha256(key)` and nothing else.
+ *
+ * Kept so an install that upgrades does not silently lose every claim it holds.
+ * Adding `project` to the digest re-addressed the whole index, so every existing
+ * `turns/keys/<hash>.json` became unreachable — a client retry would run a
+ * SECOND billed provider call, which is the at-most-once → at-least-once
+ * conversion this flow spent a round removing. The review that caught it noted
+ * there was no migration, no note, and no sweep.
+ */
+function legacyKeyPath(idempotencyKey: string, dir?: string): string {
+  const digest = createHash("sha256").update(idempotencyKey, "utf8").digest("hex");
+  return path.join(turnsRoot(dir), "keys", `${digest}.json`);
+}
+
+/**
+ * Adopt a pre-scoping claim, but ONLY if it belongs to the project now asking.
+ *
+ * The legacy index was global, so a legacy entry for `"daily"` may hold any
+ * project's turn. Honouring it blind would hand one project another's turnId —
+ * which is precisely the defect scoping was introduced to fix, reintroduced for
+ * the duration of the migration and therefore worse than the problem.
+ *
+ * The turn RECORD knows which project it belongs to, so the question is
+ * answerable exactly: adopt when it matches, leave it alone when it does not.
+ * An entry naming a turn whose record is gone or damaged is dropped, because it
+ * can never be matched to anyone and would otherwise sit there forever.
+ *
+ * Returns the adopted turnId, or null.
+ */
+function adoptLegacyClaim(project: string, idempotencyKey: string, dir?: string): string | null {
+  const legacy = legacyKeyPath(idempotencyKey, dir);
+  const scoped = keyPath(project, idempotencyKey, dir);
+  if (legacy === scoped) {
+    return null;
+  }
+  const read = readConfigFile(legacy);
+  if (!read.ok) {
+    return null;
+  }
+  let turnId: string | undefined;
+  try {
+    const held = JSON.parse(read.text) as { turnId?: unknown };
+    if (typeof held.turnId === "string" && isTurnId(held.turnId)) {
+      turnId = held.turnId;
+    }
+  } catch {
+    // Damaged: fall through and remove it.
+  }
+  const record = turnId === undefined ? undefined : readTurnRecord(turnId, dir);
+  if (turnId === undefined || record === undefined || !record.ok) {
+    // Names nothing readable. It can never be matched to a project, so it is
+    // removed rather than left to be re-examined on every future claim.
+    rmSync(legacy, { force: true });
+    return null;
+  }
+  if (record.value.project !== project) {
+    // Another project's claim. LEFT IN PLACE, so that project still gets its
+    // duplicate answer when it next submits.
+    return null;
+  }
+  writeOwnerOnlyFile(scoped, `${JSON.stringify({ turnId }, null, 2)}\n`);
+  rmSync(legacy, { force: true });
+  return turnId;
+}
+
 /** Why a turn file could not be read, or the value if it could. */
 export type TurnReadFailure = ConfigReadFailure | "not-a-turn-id" | "malformed";
 
@@ -458,6 +524,15 @@ export function claimIdempotencyKey(
 ): { existing: string | null } {
   const file = keyPath(project, idempotencyKey, dir);
   const read = readConfigFile(file);
+  if (!read.ok) {
+    // Nothing at the scoped path. Before treating the key as free, check whether
+    // this install predates scoping and holds an unscoped claim for it — see
+    // `adoptLegacyClaim`, which adopts only what belongs to this project.
+    const adopted = adoptLegacyClaim(project, idempotencyKey, dir);
+    if (adopted !== null) {
+      return { existing: adopted };
+    }
+  }
   if (read.ok) {
     try {
       const held = JSON.parse(read.text) as { turnId?: unknown };
