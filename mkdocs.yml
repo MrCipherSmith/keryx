@@ -60,8 +60,11 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
+  # `README.md` is deliberately absent. MkDocs maps a directory's `README.md`
+  # onto its `index.md`, so listing both makes them collide and the README is
+  # dropped. `index.md` is the landing page here; the README stays in the
+  # repository for people browsing on GitHub.
   - Start here: index.md
-  - Overview: README.md
   - Onboarding: onboarding.md
   - Architecture: architecture.md
   - Modules: modules.md
