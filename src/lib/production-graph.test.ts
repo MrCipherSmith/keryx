@@ -101,6 +101,14 @@ const TEST_ONLY_MODULES: ReadonlyArray<{ file: string; reason: string }> = [
  *     after, so whichever test ran first threw and the rest passed. A guard
  *     whose result depends on test ordering is not a guard.
  *
+ * A NOTE ON THIS FILE'S OWN HISTORY, because a commit message claimed a fix it
+ * did not make. `e17ecc0a` says "`--outdir=` and non-build steps no longer
+ * throw"; the non-build half was true and the `--outdir=` half was not — the
+ * parser was still `tokens.indexOf("--outdir")` at that commit, and `889558ec`
+ * fixed it three commits later while describing it as "what was left" rather
+ * than as a retraction. Recorded here because a reader of the code will not
+ * read the commit that was wrong.
+ *
  * ENTRY POINTS ARE PLURAL. The first version took `tokens[2]` as *the* entry
  * point, and `bun build` accepts any number of positionals. A reviewer added a
  * second one to the same command, shipped `dist/tools/report.js` with the source
@@ -247,12 +255,22 @@ function releaseBuildsFrom(
       throw new Error(`--outdir has no value: ${command.trim()}`);
     }
     // Every positional that is a `.ts` file and is not the value of a flag.
-    // A `--flag=value` token carries its own value, so the token AFTER it is a
-    // positional — which the space-form-only check would have misread.
-    const isFlagValue = (i: number): boolean => {
-      const previous = tokens[i - 1] ?? "";
-      return previous.startsWith("--") && !previous.includes("=");
-    };
+    //
+    // "Is not the value of a flag" cannot be "the previous token is a flag":
+    // most of `bun build`'s flags are BOOLEAN, so `bun build --minify ./a.ts
+    // ./b.ts` read `a.ts` as `--minify`'s value and silently dropped an entry
+    // point — the same "entry points are plural" class this file was rewritten
+    // to close, one shape over. A `--flag=value` token likewise carries its own
+    // value, so the token after it is a positional.
+    //
+    // So the test is against the flags that actually take a path argument that
+    // could END IN `.ts`. That list is short and is named rather than guessed:
+    // everything else taking a value takes a directory, a pattern, a format
+    // name or a `.json`. If a future flag takes a `.ts` and is not here, the
+    // consequence is one extra entry in `entries` — over-counting, which the
+    // count assertion turns into a loud failure rather than a silent drop.
+    const TS_VALUED_FLAGS = new Set(["--preload", "--tsconfig-override"]);
+    const isFlagValue = (i: number): boolean => TS_VALUED_FLAGS.has(tokens[i - 1] ?? "");
     const entries = tokens.filter(
       (token, i) => i > 1 && token.endsWith(".ts") && !isFlagValue(i),
     );
@@ -279,6 +297,26 @@ function releaseBuildsFrom(
  * from an entry name. Constructing the filename is what let a second entry
  * point go unread: the file was emitted, and nothing looked at it.
  */
+/**
+ * Sourcemap `sources` are relative to the OUTDIR ROOT, not to the map's own
+ * directory.
+ *
+ * A nested artifact (`tools/report.js.map`) still carries paths written from
+ * the outdir, so resolving from the map's directory produced
+ * `<outdir>/tools/../<project>/…` and every lookup missed — silently, because
+ * a graph of paths that match nothing looks exactly like a clean graph.
+ *
+ * Extracted so a test can state that. The comment here used to claim "the
+ * numerator assertion below is what caught it", which was true of the afternoon
+ * I wrote it and false of the committed suite: the real release script emits
+ * every map at the outdir root, so no committed test could tell the two forms
+ * apart. A sentence describing evidence the suite does not hold is the defect
+ * this whole exercise is about, so the evidence is now here.
+ */
+export function resolveSources(outDir: string, sources: readonly string[]): string[] {
+  return sources.map((source) => path.resolve(outDir, source));
+}
+
 async function graphsOf(build: ReleaseBuild): Promise<Map<string, string[]>> {
   const proc = Bun.spawn(build.tokens, { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
   const [, err] = await Promise.all([
@@ -293,12 +331,7 @@ async function graphsOf(build: ReleaseBuild): Promise<Map<string, string[]>> {
   for (const map of new Glob("**/*.js.map").scanSync(build.outDir)) {
     const file = path.join(build.outDir, map);
     const parsed = JSON.parse(readFileSync(file, "utf8")) as { sources: string[] };
-    // Relative to the OUTDIR ROOT, not to the map's own directory. A nested
-    // artifact (`tools/report.js.map`) still carries paths written from the
-    // outdir, so resolving from the map's directory silently produced
-    // `<outdir>/tools/../fixbox/...` and every lookup missed. The numerator
-    // assertion below is what caught it.
-    graphs.set(file, parsed.sources.map((source) => path.resolve(build.outDir, source)));
+    graphs.set(file, resolveSources(build.outDir, parsed.sources));
   }
   return graphs;
 }
@@ -452,6 +485,10 @@ describe("the shipped build contains no test scaffolding", () => {
       ["two entries, space", `bun build ./src/a.ts ./src/b.ts --outdir ./dist ${BASE}`, 2],
       ["two entries, equals", `bun build ./src/a.ts ./src/b.ts --outdir=./dist ${BASE}`, 2],
       ["entry after an equals flag", `bun build --outdir=./dist ./src/a.ts ${BASE}`, 1],
+      // Most of bun's flags are BOOLEAN, so "the previous token is a flag" read
+      // the first entry as `--minify`'s value and dropped it.
+      ["entry after a boolean flag", `bun build --minify ./src/a.ts ./src/b.ts --outdir ./dist ${BASE}`, 2],
+      ["a genuinely .ts-valued flag is not an entry", `bun build --preload ./src/pre.ts ./src/a.ts --outdir ./dist ${BASE}`, 1],
     ];
     for (const [label, script, expected] of shapes) {
       const [build] = parse(script);
@@ -504,6 +541,30 @@ describe("the shipped build contains no test scaffolding", () => {
     // A build step with no --outdir is still loud: it cannot be redirected, so
     // running it would write into the real ./dist.
     expect(() => parse(`bun build ./src/cli.ts ${BASE}`)).toThrow(/--outdir/);
+  });
+
+  test("a NESTED artifact's sources resolve against the outdir, not the map's directory", () => {
+    // The bug this pins was found during development and, until now, by nothing
+    // committed: the real release script emits every map at the outdir root, so
+    // no end-to-end test can tell the two resolution bases apart. A second
+    // entry point emitting `tools/report.js.map` is what exposes it, and that
+    // shape only exists while a plant is in the tree.
+    //
+    // Stated directly instead. These are the exact strings Bun writes into a
+    // nested map, taken from a real run.
+    const outDir = "/tmp/out";
+    const sources = ["../../project/src/lib/config-dir.scan.ts", "../../project/src/tools/report.ts"];
+
+    expect(resolveSources(outDir, sources)).toEqual([
+      "/project/src/lib/config-dir.scan.ts",
+      "/project/src/tools/report.ts",
+    ]);
+
+    // Resolving from the MAP's directory — the bug — puts them somewhere that
+    // matches nothing, which is why it was silent.
+    const wrong = sources.map((source) => path.resolve(path.join(outDir, "tools"), source));
+    expect(wrong).not.toEqual(resolveSources(outDir, sources));
+    expect(wrong[0]).toContain("/tmp/project/src/lib/config-dir.scan.ts");
   });
 
   test("the graph reader SEES real production modules — the numerator", () => {

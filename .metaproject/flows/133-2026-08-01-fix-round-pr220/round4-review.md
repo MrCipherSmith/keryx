@@ -205,8 +205,11 @@ not explicitly written for.
 `.some`, so a user entry with the same `on` shadows the managed one ·
 `--runtime=cursor` (equals form) silently disables the whole contract, because
 `optionValue` knows only the space form · `hooks install` reports success without
-saying the guard is inert in advisory mode · `walk` uses `getChildren()` and
-costs ~10x `forEachChild` for identical behaviour (374ms vs 35ms over 351 files) ·
+saying the guard is inert in advisory mode · `walk` used `getChildren()` and
+cost ~2x `forEachChild` for identical behaviour (653,949 vs 1,278,189 nodes over
+626 files; the "10x" and "351 files" this line carried until round six were an
+artifact of timing the two arms with different harnesses, and a `sourceFiles()`
+count that excludes tests) ·
 `config-dir.ast.ts` sits in `src/lib/` and imports `typescript`, a
 devDependency, with no production-importer guard — unlike `config-dir.scan.ts`,
 which has exactly that guard · dead code: `SupplyForm.spread-unknown`, an
@@ -267,11 +270,17 @@ reviewer being wrong in a way I had to prove.
 > table silently dropping two of its majors is the same operation as correcting
 > a number where the fixer happens to be reading, which is habit 3 below.
 >
-> Two figures in the rows above were also wrong. `755882af`'s "10x traversal" is
-> 1.95x by nodes and roughly 1.3-2.8x by time, re-measured with one harness for
-> both arms; the original compared an explicit stack against a recursive
-> generator. And the suite figure below was correct when written and is now
-> stale: `03a1a7fe` and later commits land inside this same review scope.
+> Two figures were also wrong, and the first version of this banner pointed at
+> the wrong places for both — it said "the rows above" when the same commit had
+> already scrubbed the row, and named a figure that is below it.
+>
+> `755882af`'s "10x traversal" is 1.95x by nodes and roughly 1.3-2.8x by time,
+> re-measured with one harness for both arms; the original compared an explicit
+> stack against a recursive generator. The live copy of that claim was in the
+> **Minors prose**, in the present tense, and is corrected there.
+>
+> The suite figure below was correct when written and is stale: **2962 pass, 14
+> skip, 0 fail** at the time of this correction.
 
 Suite: **2937 pass, 14 skip, 0 fail** across 291 files.
 

@@ -1,7 +1,16 @@
 # Round five — the review of the round that closed round four
 
 Five reviewers. Verdict: **REQUEST_CHANGES**. 2 blockers, ~8 majors, ~10 minors.
-All closed.
+
+> **This said "All closed" and F-034 was not.** The commit immediately after this
+> record opens "Finishing the round-five blocker": the parser still crashed on
+> `--outdir=`, which the record's own F-034 body does not mention. Closed by
+> `889558ec`, and the entry-point half again by `e3bf6478` in round six after a
+> reviewer shipped the scanner through three build-step spellings the parser
+> skipped.
+>
+> Writing the disposition before the work is finished is the same substitution
+> the round is about, applied to the record of the round.
 
 Two reviewers were killed mid-run by an account rate limit and were relaunched
 on an unchanged tree. No reviewer wrote into the shared tree this time.
@@ -58,6 +67,11 @@ some graphs existed.
 Every positional is an entry point now, every emitted `.js.map` is read rather
 than one filename constructed, and the counts are asserted against each other.
 
+That was not the whole of it. `--outdir=./dist` still crashed the parser
+(`889558ec`), and a build step not spelled literally `bun build` — an env-var
+prefix, `bun --bun build`, `bun run <sub-script>` — was still silently skipped
+and shipped the scanner (`e3bf6478`, round six). Three fixes for one finding.
+
 While rewriting it I broke it in a new way and the numerator caught me:
 resolving sourcemap paths from the map's own directory instead of the outdir
 root silently missed every nested artifact. Second time this guard's numerator
@@ -68,12 +82,17 @@ has caught a wrong-base bug, both times a `path.resolve`.
 `6a0cdd19` · closed by `e17ecc0a`
 
 Three false-positive fixes and five closed gaps. **Seven of the eight could be
-deleted with all 138 guard tests green.** A reviewer verified each individually.
+deleted with the guard suite green.** A reviewer verified each individually.
 The commit's subject was "a real closure where one exists, and an honest gap
 list where none does"; it described eight fixes and proved one.
 
-Each now has a test with a control, and each mutation fails exactly one test:
-baseline 145 pass, each mutation 144 pass / 1 fail.
+Each now has a test with a control, and each mutation fails exactly one test.
+
+> **The numbers this section originally quoted — "138 guard tests", "baseline
+> 145 pass" — named no runnable set.** No command in the repository produced
+> either. I ran a specific group of files and never wrote down which, so the one
+> figure offered as EVIDENCE was the one figure a reader could not re-derive.
+> There is now a `test:guards` script; quote its output or quote nothing.
 
 ## F-036 (major) — the "ten times" traversal is 1.95x
 
