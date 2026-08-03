@@ -126,6 +126,29 @@ describe("resolveChildModel — AC3 fail-closed gates", () => {
     expect(r).toEqual({ ok: true, selection: { providerId: "ollama", modelId: "qwen2.5-coder" }, source: "explicit" });
   });
 
+  test("G2 a trust mode this code cannot read is denied — the branch that changed", () => {
+    // This round rewrote the gate from `trustMode === "read-only"` to
+    // `axesOf(trustMode)?.authority !== "acting"`, which is equivalent for all
+    // three enum values and NOT equivalent outside them: the old form let an
+    // unrecognized posture past this clause, the new one refuses it. That is a
+    // behaviour change, it is the right one, and it went in untested — the same
+    // silent widening the projection was extracted to stop.
+    const unreadable = "wide-open" as unknown as PolicyTrustMode;
+    const r = resolveChildModel(PARENT, { kind: "inherit" }, deps({ policy: policy(unreadable, "allow") }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain("forbidden by child policy");
+  });
+
+  test("G2 a local provider is still fine under an unreadable trust mode", () => {
+    // The control, and the limit of the change: this gate is about reaching the
+    // NETWORK. An unreadable posture must not turn into a blanket refusal of
+    // work that never leaves the machine.
+    const req: ChildModelRequest = { kind: "explicit", providerId: "ollama", modelId: "qwen2.5-coder" };
+    const unreadable = "wide-open" as unknown as PolicyTrustMode;
+    const r = resolveChildModel(PARENT, req, deps({ policy: policy(unreadable, "allow") }));
+    expect(r.ok).toBe(true);
+  });
+
   test("G3 unclassifiable provider is denied even if allowlisted", () => {
     const req: ChildModelRequest = { kind: "explicit", providerId: "mystery", modelId: "x" };
     const r = resolveChildModel(PARENT, req, deps({ allowedProviders: new Set(["mystery"]), providerClass }));

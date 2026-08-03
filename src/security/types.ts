@@ -4,6 +4,43 @@
 // security-finding / security-report JSON schemas (§8/§9). These types are the
 // contract other modules program against; keep them in sync with schemas.ts.
 
+/**
+ * WHERE a piece of content came from, which is what decides how far it is
+ * trusted. Five members, and the set is closed — a caller picks the one that
+ * describes the content's real provenance, never the one whose policy it wants.
+ *
+ * Documented here because they were not documented anywhere, and a round of
+ * review found prose that named four of them and described one wrongly.
+ *
+ *   trusted-project     content already in the repository the operator chose to
+ *                       work in — source, docs, committed config. Trusted
+ *                       because the operator vetted it by committing it, NOT
+ *                       because keryx produced it. `keryx security scan`
+ *                       defaults to this, and `ctx` uses it for a FILE read off
+ *                       disk. Not for command output — `ctx` tags that
+ *                       `tool-output`, and an earlier version of this line sent
+ *                       a reader to the wrong one of the five in a docstring
+ *                       whose whole job is choosing between them.
+ *
+ *   trusted-user        typed by the operator at their own terminal, in this
+ *                       session. The one source with a human behind it in real
+ *                       time, which is why it is separate from the one above:
+ *                       nobody committed it and nobody reviewed it, but the
+ *                       person who wrote it is the person being protected.
+ *
+ *   untrusted-external  arrived from outside the operator's machine — a remote
+ *                       turn's prompt, a fetched document, an agent hook's
+ *                       stdin. The strictest posture, and the reason
+ *                       `scanPrompt` names it explicitly.
+ *
+ *   tool-output         produced by a tool keryx invoked. Untrusted for the
+ *                       same reason as the above without being remote: a tool
+ *                       can read attacker-controlled bytes and hand them back.
+ *
+ *   generated           produced by a model in this process, including every
+ *                       `assistant.delta` before it is appended. This is the
+ *                       one that means "keryx produced it".
+ */
 export type SecuritySource =
   | "trusted-project"
   | "trusted-user"

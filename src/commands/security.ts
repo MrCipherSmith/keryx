@@ -1,3 +1,4 @@
+import { allowAction, refusalAction, type HookAction } from "../ctx/runtimes";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -160,9 +161,9 @@ async function readContent(file: string | undefined): Promise<string> {
   return readStdin();
 }
 
-function surfaceWarnings(warnings: string[]): void {
+function surfaceWarnings(warnings: string[], emit: (line: string) => void = console.log): void {
   for (const warning of warnings) {
-    console.log(`  ${style.yellow(symbols.bullet)} ${warning}`);
+    emit(`  ${style.yellow(symbols.bullet)} ${warning}`);
   }
 }
 
@@ -397,19 +398,48 @@ async function handleCheck(
   const { decision, warnings } = await analyze(cwd, check);
   const asJson = args.includes("--json");
 
+  // WHERE the report goes is decided by whether a runtime is asking.
+  //
+  // With `--runtime <id>`, stdout belongs to that runtime's contract and to
+  // nothing else. Cursor and Antigravity decide from a stdout JSON document, and
+  // this command printed the human report onto the same stream first — so the
+  // document arrived as the last of nine lines, `JSON.parse` failed on
+  // `keryx securi…`, the exit code was 0, and the input proceeded. That is the
+  // "reported but did not refuse" defect this command was fixed for, surviving
+  // one more round in a different shape.
+  //
+  // `src/ctx/hook.ts` had it right all along: it writes `action.stdout` and
+  // nothing else. The previous fix copied the refusal DOCUMENT from the module
+  // that owns it and not the CONTRACT, and the contract is "stdout is exactly
+  // this one document".
+  //
+  // The report is not dropped — it goes to stderr, where every exit-code runtime
+  // already surfaces it to the operator. That also fixes a second thing on
+  // Claude: `UserPromptSubmit` stdout on exit 0 is appended to the model's
+  // context, so every prompt was injecting the report plus a redacted copy of
+  // itself back into the conversation it was scanning.
+  const forRuntime = optionValue(args, "--runtime") !== undefined;
+  const report = forRuntime ? (line: string) => process.stderr.write(`${line}\n`) : console.log;
+
   if (asJson) {
-    console.log(JSON.stringify(decision, null, 2));
+    report(JSON.stringify(decision, null, 2));
   } else {
-    heading(`keryx security check-${kind}`);
-    surfaceWarnings(warnings);
-    renderDecision(decision);
+    heading(`keryx security check-${kind}`, report);
+    surfaceWarnings(warnings, report);
+    renderDecision(decision, report);
     if (decision.redacted !== undefined) {
-      heading("Redacted");
-      console.log(decision.redacted);
+      heading("Redacted", report);
+      report(decision.redacted);
     }
   }
 
-  process.exitCode = exitCodeFor(decision, cwd, await modeOf(cwd));
+  process.exitCode = applyRuntimeDecision(
+    args,
+    exitCodeFor(decision, cwd, await modeOf(cwd)),
+    `keryx security: this ${kind} was refused by the configured security policy (gate: ${decision.gate}).`,
+    decision,
+    await policyIsUnderstood(cwd),
+  );
 }
 
 async function handleRedact(cwd: string, args: string[]): Promise<void> {
@@ -532,6 +562,17 @@ async function handleHooks(cwd: string, args: string[]): Promise<void> {
         console.log(
           `  ${style.green(symbols.ok)} ${runtime.id} → ${path.relative(cwd, runtime.settingsPath(cwd))}`,
         );
+        // The guard is INSTALLED, which is not the same as ARMED. `exitCodeFor`
+        // returns 0 for every gate under the default `advisory` mode, so a hook
+        // that detects a live credential still lets the call proceed. An
+        // operator who reads "✓" and stops reading has a guard that reports and
+        // does not refuse — the defect this whole surface has been fixed for
+        // twice — and nothing on this screen said so.
+        if ((await modeOf(cwd)) === "advisory") {
+          note(
+            `advisory mode: ${runtime.id} will report findings and allow the call. Set \`mode\` to \`enforced\` or \`ci\` in ${path.join(".metaproject", "security.config.json")} to make it refuse.`,
+          );
+        }
       } else {
         for (const e of errors) {
           console.log(`  ${style.red(symbols.cross)} ${e}`);
@@ -601,14 +642,14 @@ async function handleEval(cwd: string, args: string[]): Promise<void> {
   process.exitCode = gate.status === "fail" ? 1 : 0;
 }
 
-function renderDecision(decision: SecurityDecision): void {
-  console.log("");
-  console.log(`  gate: ${gateLabel(decision.gate)}`);
-  console.log(`  action: ${decision.action}`);
-  console.log(`  findings: ${decision.findings.length}`);
+function renderDecision(decision: SecurityDecision, emit: (line: string) => void = console.log): void {
+  emit("");
+  emit(`  gate: ${gateLabel(decision.gate)}`);
+  emit(`  action: ${decision.action}`);
+  emit(`  findings: ${decision.findings.length}`);
   for (const finding of decision.findings.slice(0, 20)) {
     const loc = finding.location?.line ? ` (line ${finding.location.line})` : "";
-    console.log(
+    emit(
       `    ${severityMarker(finding.severity)} ${finding.category}/${finding.policyId} → ${finding.action}${loc}`,
     );
   }
@@ -634,8 +675,48 @@ async function modeOf(cwd: string): Promise<string> {
   return (await loadSecurityConfig(cwd)).mode;
 }
 
-// scan honors mode+gate: ci mode exits non-zero on a gate fail; advisory reports
-// and exits 0. enforced also exits non-zero on fail/needs-approval.
+/**
+ * The exit code, and for an agent hook it is a PROCEED/REFUSE.
+ *
+ * `scan` and the two `check` commands share this. `ci` refuses on a gate fail,
+ * `enforced` also on `needs-approval`, `advisory` reports and proceeds —
+ * report-only in advisory is a stated §11 invariant.
+ *
+ * What is NOT here any more is a hardcoded rule that refused on any
+ * prompt-injection finding regardless of the gate. It was added to close "the
+ * installed guard detects an injection and returns success", and it was wrong
+ * in three ways that took a second review round to see:
+ *
+ *   - it overrode a DOCUMENTED policy. `resolve.ts` §7a keeps a lone injection
+ *     at `warn` and escalates only when an egress signal co-occurs, and
+ *     `security.test.ts` pins that for `untrusted-external` specifically. The
+ *     override contradicted a decision this codebase had already made and
+ *     tested, without changing either.
+ *   - it was unappealable. No floor, no override, no way for an operator to
+ *     disagree, over a detector that fires on ordinary prose. Re-measured with
+ *     `detectInjection` over the tracked tree, because the figure previously
+ *     quoted here — "3.3%, including its operator guide and README" — was
+ *     carried out of a review report without being re-derived and does not
+ *     reproduce for any population:
+ *
+ *         docs/**.md   7 of 166   4.22%
+ *         src/**.ts   12 of 624   1.92%
+ *         both        19 of 790   2.41%
+ *         everything  23 of 2538  0.91%
+ *
+ *     The operator guide does match. README.md matches ZERO times, so the
+ *     sentence naming it was false as well as imprecise.
+ *   - it emitted `exit 1`, which no runtime keryx installs into treats as a
+ *     block. The refusal did not refuse.
+ *
+ * The mechanism an operator actually has is the one that was already there and
+ * unreachable: every injection detector scores 0.35 to 0.45, the default gate
+ * floor is 0.5, so the declared `policies.promptInjection.action` never
+ * applied. Lowering `policies.promptInjection.minConfidence` below the detector
+ * band makes the declared action apply — verified end to end — and raising it
+ * or setting `action: "warn"` turns it back off. That is a policy the operator
+ * writes down, not a rule compiled into a CLI.
+ */
 function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): number {
   if (mode === "ci") {
     return decision.gate === "fail" ? 1 : 0;
@@ -644,6 +725,166 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
     return decision.gate === "fail" || decision.gate === "needs-approval" ? 1 : 0;
   }
   return 0;
+}
+
+/**
+ * What a hook should tell its runtime. Three outcomes, named.
+ *
+ * WHY THIS IS A TYPE. Two blockers in two consecutive rounds came from the same
+ * shape: branching on a value without enumerating what that value can mean.
+ *
+ *   round four   `code === 0` read as "the decision was clean". It also means
+ *                "this mode does not refuse on that gate", and `advisory` — the
+ *                default — returns 0 for `fail`. A live AWS key was approved.
+ *   round six    `gate === "pass"` read as "nothing found". It also means "found
+ *                something the policy asked us to REDACT". An SSN was approved.
+ *
+ * Both were one `if` on a value whose domain I never wrote down. The three
+ * places in this codebase where I DID write the domain down — `outcomeOf`,
+ * `isServerFault`, `isDefiniteAbsence`, each a total switch with no default arm
+ * — have produced zero defects across six review rounds.
+ *
+ * So the outcome is a union and `decideHookOutcome` is total over it. A fourth
+ * outcome, or a fourth reason to reach one, is a compile error here rather than
+ * a fall-through into whichever arm happens to be last.
+ */
+type HookOutcome =
+  /** The operator's mode refuses on this gate. Emit the refusal document. */
+  | { kind: "refuse" }
+  /** Nothing was asked of us. Emit the approval document. */
+  | { kind: "approve" }
+  /**
+   * Something was asked of us that this surface cannot do, or the policy is one
+   * this build cannot read — and the mode does not refuse. Emit NOTHING.
+   *
+   * Silence is a real answer on `cursor` and `antigravity`. On `claude`,
+   * `windsurf` and `generic-mcp` it is byte-identical to approval, because
+   * `allowAction` is a bare `{ exitCode: 0 }` there and exit 0 with no output IS
+   * proceed. So on those three the protection is the operator's `mode`, not this
+   * document, and what this function can honestly guarantee is that it never
+   * AFFIRMS a decision the policy was unhappy with. Tracked as OQ-4.
+   */
+  | { kind: "silent"; because: "policy-asked-for-an-action" | "policy-unreadable" };
+
+/**
+ * Decide the outcome. Total over its inputs, and every branch says which
+ * question it is answering.
+ */
+function decideHookOutcome(
+  refusesUnderThisMode: boolean,
+  decision: SecurityDecision,
+  policyIsKnown: boolean,
+): HookOutcome {
+  if (refusesUnderThisMode) {
+    return { kind: "refuse" };
+  }
+  if (!policyIsKnown) {
+    // An unknown policy is not a permissive one. keryx cannot affirm a decision
+    // it derived from rules it does not understand. It does not manufacture a
+    // refusal either: the operator's mode decides that, and a typo in a config
+    // file must not become an outage.
+    return { kind: "silent", because: "policy-unreadable" };
+  }
+  // `gate: pass` is not "nothing found". `computeGate` returns it for anything
+  // not `block`-actioned and not over `failOn` severity, which INCLUDES findings
+  // the policy asked us to redact — and this surface has no channel to redact
+  // anything. `warn` stays approvable: it is what the resolver assigns below the
+  // confidence floor, and §7a already makes a lone injection advisory.
+  const askedForAnAction = decision.findings.some(
+    (finding) => finding.action !== "allow" && finding.action !== "warn",
+  );
+  if (decision.gate !== "pass" || askedForAnAction) {
+    return { kind: "silent", because: "policy-asked-for-an-action" };
+  }
+  return { kind: "approve" };
+}
+
+/**
+ * Emit the decision in the shape the invoking runtime reads, and return its code.
+ *
+ * `--runtime <id>` is written into the command by `security hooks install`, so a
+ * hook knows which harness is asking. Without it — a human at a terminal, or a
+ * script — the plain CLI convention of a non-zero exit stands.
+ *
+ * The document shapes come from `src/ctx/runtimes.ts`, which owns them; the
+ * OUTCOME comes from `decideHookOutcome`, which owns that.
+ */
+function applyRuntimeDecision(
+  args: string[],
+  code: number,
+  message: string,
+  decision: SecurityDecision,
+  policyIsKnown: boolean,
+): number {
+  const runtime = optionValue(args, "--runtime");
+  if (runtime === undefined) {
+    return code;
+  }
+  const emit = (action: HookAction): number => {
+    if (action.stdout !== undefined) {
+      process.stdout.write(action.stdout);
+    }
+    if (action.stderr !== undefined) {
+      process.stderr.write(action.stderr);
+    }
+    return action.exitCode;
+  };
+  const outcome = decideHookOutcome(code !== 0, decision, policyIsKnown);
+  switch (outcome.kind) {
+    case "refuse":
+      return emit(refusalAction(runtime, message));
+    case "approve":
+      return emit(allowAction(runtime));
+    case "silent":
+      return 0;
+  }
+}
+
+/**
+ * Is the operator's policy one this build can actually reason about?
+ *
+ * `loadSecurityConfig` never validates — it merges whatever parses over the
+ * defaults, and `validateSecurityConfig` is called only by `policy validate`.
+ * So a config that the validator rejects is applied verbatim on the enforcement
+ * path, and a single out-of-range value rewrites the outcome:
+ *
+ *   {"gate":{"failOn":"nope","minConfidence":5}}
+ *
+ * `minConfidence: 5` puts every detector below the floor, so a `block` finding
+ * is rewritten to `warn`; `failOn: "nope"` has no rank, so the severity branch
+ * never fires. Gate `pass`, action `warn` — and a live AWS access key was
+ * answered with `{"permission":"allow"}`. That is the round-four blocker
+ * reachable through a config file rather than through a code path.
+ *
+ * An unknown policy is not a permissive one. keryx cannot affirm a decision it
+ * derived from rules it does not understand, so an invalid config suppresses the
+ * approval and says why on stderr. It does not manufacture a refusal: the
+ * operator's `mode` still decides that, and inventing a block here would make a
+ * typo in a config file into an outage.
+ *
+ * Fixing `loadSecurityConfig` to validate at the source is the better shape and
+ * has eight call sites across four modules; this closes the hole at the one
+ * place that turns a decision into a machine-readable approval.
+ */
+async function policyIsUnderstood(cwd: string): Promise<boolean> {
+  // The LOADED config, not the raw file. The schema describes a fully populated
+  // policy, and `loadSecurityConfig` merges a partial one over the defaults — so
+  // validating the file rejected every ordinary config, which omits `enabled`
+  // on each policy. The first version of this function did exactly that and
+  // turned eight passing tests red, which is how it was caught. `policy
+  // validate` validates the merged object for the same reason.
+  //
+  // Merging does not launder an out-of-range value: `minConfidence: 5` and
+  // `failOn: "nope"` survive it, which is the case this exists for.
+  const config = await loadSecurityConfig(cwd);
+  const errors = validateSecurityConfig(config);
+  if (errors.length > 0) {
+    process.stderr.write(
+      `keryx security: ${path.relative(cwd, configPath(cwd))} does not match the policy schema, so no approval is emitted — ${errors[0]}\n`,
+    );
+    return false;
+  }
+  return true;
 }
 
 export function printSecurityHelp(): void {
@@ -655,8 +896,8 @@ export function printSecurityHelp(): void {
     "keryx security status",
     "keryx security scan <path> [--json] [--source <kind>]",
     "keryx security scan-mcp <manifest.json | dir> [--json] [--pin <manifest>] [--strict]",
-    "keryx security check-input [--source <kind>] [--file <path>]",
-    "keryx security check-output [--target <kind>] [--file <path>]",
+    "keryx security check-input [--source <kind>] [--file <path>] [--runtime <id>]",
+    "keryx security check-output [--target <kind>] [--file <path>] [--runtime <id>]",
     "keryx security redact <path> [--out <path>]",
     "keryx security report [--since <ref>] [--json]",
     "keryx security policy validate",
@@ -667,6 +908,10 @@ export function printSecurityHelp(): void {
   ]);
   helpOptions([
     { flag: "--json", desc: "Emit machine-readable JSON." },
+    {
+      flag: "--runtime <id>",
+      desc: "Refuse in the shape this agent runtime reads. `hooks install` writes claude|cursor|windsurf|generic-mcp; codex and antigravity are also understood here. A bare exit code with no --runtime.",
+    },
     { flag: "--source <kind>", desc: "Trust level of the content source." },
     { flag: "--target <kind>", desc: "Write/publish target for check-output." },
     { flag: "--file <path>", desc: "Read content from a file instead of stdin." },

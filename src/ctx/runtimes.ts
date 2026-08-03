@@ -98,6 +98,25 @@ function hooksObject(settings: Settings): Settings {
 
 // Merge/strip a managed group into a named array under `settings.hooks[key]`.
 function mergeIntoHookArray(settings: Settings, key: string, group: Settings): Settings {
+  // A legacy ARRAY under `hooks` is not ours and is not discarded.
+  //
+  // `hooksObject` returns `{}` for anything that is not a plain object, so an
+  // array — the shape the security installer used before the two were split —
+  // was replaced wholesale, taking the operator's own entries with it. The
+  // security side grew a careful migration for the same collision and this side
+  // did not, so whichever installer ran first still lost everything when the
+  // other one ran. The coexistence test drove four orderings and never drove
+  // this one.
+  //
+  // Foreign entries are preserved under a key that says what they are, rather
+  // than being merged into an event map they were never keyed by.
+  if (Array.isArray(settings.hooks) && settings.hooks.length > 0) {
+    settings.unmigratedHooks = [
+      ...(Array.isArray(settings.unmigratedHooks) ? settings.unmigratedHooks : []),
+      ...settings.hooks,
+    ];
+    delete settings.hooks;
+  }
   const hooks = hooksObject(settings);
   hooks[key] = [...stripManaged(hooks[key]), group];
   settings.hooks = hooks;
@@ -184,9 +203,56 @@ function parseAntigravityCommand(payload: string): string | null {
 
 // --- block/allow signalers ---------------------------------------------------
 
+/**
+ * How a runtime says NO, given the message. The one owner of that fact.
+ *
+ * Exported because a second keryx surface needs it and got it wrong: the
+ * security agent hooks refused with `exit 1`, which every runtime here treats
+ * as a non-blocking error — stderr is surfaced and the call proceeds. The
+ * guard reported and did not refuse, and two modules in one repository
+ * disagreed about the block signal while only one of them had looked it up.
+ *
+ * `runtimeId` is the id under `CTX_RUNTIMES`. An unknown id returns the
+ * exit-code form, which is the majority shape and fails toward refusing.
+ */
+export function refusalAction(runtimeId: string, message: string): HookAction {
+  switch (runtimeId) {
+    case "cursor":
+      return { exitCode: 0, stdout: `${JSON.stringify({ permission: "deny", agent_message: message })}\n` };
+    case "antigravity":
+      return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: false, deny_reason: message })}\n` };
+    default:
+      return { exitCode: 2, stderr: `${message}\n` };
+  }
+}
+
+/**
+ * How a runtime says YES. The other half of the same fact.
+ *
+ * `refusalAction` was exported for the security hooks and the CLI copied it; the allow side was left behind, so on a passing check a
+ * stdout-JSON runtime received ZERO BYTES and had to fall back on whatever it
+ * does with an empty hook response. That is the same "copied the document and
+ * not the contract" defect as the refusal path, one branch over, and it was
+ * found by a review of the commit that fixed the refusal path.
+ *
+ * The exit-code runtimes genuinely say yes with silence and exit 0, which is
+ * why this returns a bare `{ exitCode: 0 }` for them rather than inventing
+ * something. The two that decide from stdout get a document.
+ */
+export function allowAction(runtimeId: string): HookAction {
+  switch (runtimeId) {
+    case "cursor":
+      return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
+    case "antigravity":
+      return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };
+    default:
+      return { exitCode: 0 };
+  }
+}
+
 // Exit-2 + stderr (Claude, Codex, Windsurf, OpenCode bridge).
 function exitCodeBlock(command: string, c: HookClassification): HookAction {
-  return { exitCode: 2, stderr: `${buildBlockMessage(command, c)}\n` };
+  return refusalAction("claude", buildBlockMessage(command, c));
 }
 function exitCodeAllow(c: HookClassification): HookAction {
   if (c.escapeReason !== undefined) {
@@ -198,10 +264,7 @@ function exitCodeAllow(c: HookClassification): HookAction {
 
 // Cursor: stdout { permission: "deny", agent_message } / { permission: "allow" }.
 function cursorBlock(command: string, c: HookClassification): HookAction {
-  return {
-    exitCode: 0,
-    stdout: `${JSON.stringify({ permission: "deny", agent_message: buildBlockMessage(command, c) })}\n`,
-  };
+  return refusalAction("cursor", buildBlockMessage(command, c));
 }
 function cursorAllow(_c: HookClassification): HookAction {
   return { exitCode: 0, stdout: `${JSON.stringify({ permission: "allow" })}\n` };
@@ -209,10 +272,7 @@ function cursorAllow(_c: HookClassification): HookAction {
 
 // Antigravity: stdout top-level { allow_tool, deny_reason }; always exit 0.
 function antigravityBlock(command: string, c: HookClassification): HookAction {
-  return {
-    exitCode: 0,
-    stdout: `${JSON.stringify({ allow_tool: false, deny_reason: buildBlockMessage(command, c) })}\n`,
-  };
+  return refusalAction("antigravity", buildBlockMessage(command, c));
 }
 function antigravityAllow(_c: HookClassification): HookAction {
   return { exitCode: 0, stdout: `${JSON.stringify({ allow_tool: true })}\n` };

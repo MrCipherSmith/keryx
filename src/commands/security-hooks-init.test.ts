@@ -106,8 +106,11 @@ test("init installs merge-safe .claude/settings.json security hooks", async () =
     const outputCommands = (settings.hooks?.PreToolUse ?? []).flatMap((group) =>
       (group.hooks ?? []).map((entry) => entry.command),
     );
-    expect(inputCommands).toContain("keryx security check-input --source untrusted-external");
-    expect(outputCommands).toContain("keryx security check-output");
+    // `--runtime claude` is what makes a refusal actually refuse: without it the
+    // command exits 1, which Claude Code treats as a non-blocking error. Asserted
+    // as a whole string rather than a prefix, so dropping the flag is red.
+    expect(inputCommands).toContain("keryx security check-input --source untrusted-external --runtime claude");
+    expect(outputCommands).toContain("keryx security check-output --runtime claude");
 
     const manifest = await readManifest(root);
     expect(manifest.modules.security.hooks?.agent).toBe(".claude/settings.json");
@@ -147,7 +150,10 @@ test("init merges security hooks into a pre-populated .claude/settings.json", as
     );
     expect(settings.model).toBe("sonnet");
     expect(inputCommands).toContain("user-logger");
-    expect(inputCommands).toContain("keryx security check-input --source untrusted-external");
+    // `--runtime claude` is what makes a refusal actually refuse: without it the
+    // command exits 1, which Claude Code treats as a non-blocking error. Asserted
+    // as a whole string rather than a prefix, so dropping the flag is red.
+    expect(inputCommands).toContain("keryx security check-input --source untrusted-external --runtime claude");
   });
 });
 

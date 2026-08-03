@@ -20,6 +20,7 @@
 // inputs yield deep-equal output. All non-determinism (credential detection, env
 // reading, tier config) is injected via `deps`.
 import { OPENAI_COMPAT_PROVIDERS, providerByName } from "../../commands/providers";
+import { axesOf } from "../policy/ranks";
 import type { PolicyProfile } from "../policy/types";
 
 /** A concrete model/provider selection for a child attempt. */
@@ -201,8 +202,11 @@ export function resolveChildModel(
   // network: not a read-only trust posture, and a `defaults.network` of `allow`
   // (an `ask`/`deny` default cannot be satisfied by an unattended child).
   if (cls === "network") {
+    // Through the projection, like the other three consumers of the field: the
+    // question here is about AUTHORITY (a posture that cannot act cannot reach
+    // the network), not about how vetted its input is.
     const networkForbidden =
-      deps.policy.trustMode === "read-only" || deps.policy.defaults.network !== "allow";
+      axesOf(deps.policy.trustMode)?.authority !== "acting" || deps.policy.defaults.network !== "allow";
     if (networkForbidden) {
       return {
         ok: false,

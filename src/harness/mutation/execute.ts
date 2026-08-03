@@ -19,6 +19,7 @@
 //        - "effect-confirmed" -> executed (receipt + evidence)
 //        - otherwise           -> needs-reconciliation (indeterminate/absent
 //                                  receipt; W8 `recoverFrom` blocks unsafe retry)
+import { axesOf } from "../policy/ranks";
 import type { PolicyTrustMode } from "../policy/types";
 import type { ExecutionReceipt } from "../resume/recovery";
 import { actionFingerprint, type ActionSpec } from "./fingerprint";
@@ -104,14 +105,29 @@ export function executeGuardedMutation(
 ): ExecuteOutcome {
   const { spec, trustMode, isolationAvailable, guard, approval, adapter } = input;
 
-  // 1. Read-only trust mode never mutates — regardless of guard/approval.
-  if (trustMode === "read-only") {
+  // These two branches are the reason `trustMode` is now projected onto two
+  // axes rather than ranked. They ask independent yes/no questions about
+  // independent properties, never compare two profiles, and they were outside
+  // BOTH rank tables and outside the guard that claimed to cover every ordering
+  // of the field — a five-reviewer round found them by grepping the enum rather
+  // than the tables. Reading through `axesOf` puts all four consumers of the
+  // field in one vocabulary.
+  //
+  // Fail closed on a posture this code cannot read, matching every other
+  // consumer of the projection.
+  const axes = axesOf(trustMode);
+  if (axes === undefined) {
+    return blocked(`Unrecognized trust mode "${trustMode}"; failing closed.`);
+  }
+
+  // 1. No authority to act means no mutation — regardless of guard/approval.
+  if (axes.authority === "read-only") {
     return blocked("Trust mode is read-only; mutation is never permitted.");
   }
 
-  // 2. Fail-closed isolation boundary: an untrusted action must not run
-  //    unattended without isolation. No permission prompt can bypass this.
-  if (trustMode === "untrusted" && !isolationAvailable) {
+  // 2. Fail-closed isolation boundary: an action over UNVETTED input must not
+  //    run unattended without isolation. No permission prompt can bypass this.
+  if (axes.inputTrust === "unvetted" && !isolationAvailable) {
     return blocked(
       "Untrusted action requires isolation, which is unavailable; failing closed to block unattended mutation.",
     );

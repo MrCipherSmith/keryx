@@ -1,0 +1,92 @@
+[
+  {
+    "id": "F-001",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the throttle can be switched off globally, and this round switched it on",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-002",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the newly-wired production listener refuses every turn",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-003",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the honesty boolean nobody reads",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-004",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the claim still precedes four steps that can fail",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-005",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the trustMode split is justified by a claim that is false, contradicts the only enforcement of the field, and is inert in production",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-006",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "a third gating site for the injection class, on the surface an operator installs",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-007",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the guard against a second ranking cannot detect the duplicate it commemorates",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-008",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the route half of the durable-record fix has no test",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-009",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the forced terminal event has no test at the level that forces it",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-010",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "wiring the runner made an unmeasured path the hot path",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]

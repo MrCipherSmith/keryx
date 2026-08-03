@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 2,
+  "id": "131",
+  "slug": "r4c-remote-turn-submission-streaming-and",
+  "title": "R4c: remote turn submission, streaming, and the non-weakening remote policy profile",
+  "status": "implemented",
+  "createdAt": "2026-08-01T20:05:04.222Z",
+  "updatedAt": "2026-08-01T20:58:25.965Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a84def5c58f652bdf6f4b352307c03e750e52239180fb07297629354d7d1214e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-01T20:39:31.380Z"
+    },
+    "AC3": {
+      "at": "2026-08-01T20:39:31.465Z"
+    },
+    "AC4": {
+      "at": "2026-08-01T20:39:31.547Z"
+    },
+    "AC6": {
+      "at": "2026-08-01T20:39:31.634Z"
+    },
+    "AC7": {
+      "at": "2026-08-01T20:39:31.720Z"
+    },
+    "AC8": {
+      "at": "2026-08-01T20:39:31.803Z"
+    },
+    "AC9": {
+      "at": "2026-08-01T20:39:31.888Z"
+    },
+    "AC10": {
+      "at": "2026-08-01T20:39:31.969Z"
+    },
+    "AC11": {
+      "at": "2026-08-01T20:39:32.054Z"
+    },
+    "AC12": {
+      "at": "2026-08-01T20:39:32.140Z"
+    },
+    "AC2": {
+      "at": "2026-08-01T20:58:25.790Z"
+    },
+    "AC5": {
+      "at": "2026-08-01T20:58:25.880Z"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/220"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T20:05:04.222Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T20:12:53.915Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T20:12:54.001Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T20:38:43.999Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T20:38:44.083Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T20:38:44.170Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T20:39:31.380Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-08-01T20:39:31.465Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-01T20:39:31.548Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-08-01T20:39:31.634Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-08-01T20:39:31.720Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-08-01T20:39:31.803Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-08-01T20:39:31.888Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-08-01T20:39:31.969Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-08-01T20:39:32.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-08-01T20:39:32.140Z",
+      "event": "ac-confirmed",
+      "detail": "AC12"
+    },
+    {
+      "at": "2026-08-01T20:40:06.222Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/220"
+    },
+    {
+      "at": "2026-08-01T20:58:25.790Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-08-01T20:58:25.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-08-01T20:58:25.965Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

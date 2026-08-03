@@ -1,0 +1,101 @@
+[
+  {
+    "id": "F-022",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the AST guards are an enumeration, and I called them a closure",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-023",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the throttle's price table is false, for the third round running",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-024",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "rule 2 of the same docstring still says `0.5`, and still contains the sentence the file condemns",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-025",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "`keyPath` invalidates every on-disk idempotency claim",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-026",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the ALLOW half of the `--runtime` contract is not implemented",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-027",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the legacy hook migration is one-sided",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-028",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "`constructsWith` NARROWED the guard it replaced",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-029",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "`memoizeResolved` is pinned at one of two callers",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-030",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "three mutations to the hook code have no test",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-031",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "self-checks restate the implementation's branch list",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-032",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "inherited numbers, again",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]

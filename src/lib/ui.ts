@@ -49,8 +49,11 @@ export function banner(title: string, subtitle?: string): void {
   console.log(rule);
 }
 
-export function heading(title: string): void {
-  console.log(`\n${style.bold(style.cyan(title))}`);
+export function heading(title: string, emit: (line: string) => void = console.log): void {
+  // `emit` exists so a caller whose stdout belongs to a machine can send the
+  // human report elsewhere. `keryx security check-*` under `--runtime` is that
+  // caller: its stdout carries one JSON document and nothing else.
+  emit(`\n${style.bold(style.cyan(title))}`);
 }
 
 // One "label: state" row with a leading marker. Disabled rows are dimmed so the

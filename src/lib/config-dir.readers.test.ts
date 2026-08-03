@@ -45,6 +45,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Glob } from "bun";
+import { loadsModule, parse } from "./config-dir.ast";
 import { sessionDir } from "../session/paths";
 import { MAX_CONFIG_FILE_BYTES, MAX_TRANSCRIPT_FILE_BYTES, readConfigFile, readTranscriptFile } from "./config-dir";
 import {
@@ -541,6 +543,12 @@ const READ_EXEMPTIONS: ReadonlyArray<Exemption> = [
       "readdirSync enumerates session directories and reads no file contents, so no bound applies to it; the file reads in this module are NOT excused and go through the bounded helpers",
     calls: ["readdirSync("],
   },
+  {
+    file: "lib/serve-turn-store.ts",
+    reason:
+      "listTurnIds' readdirSync enumerates turn directories and reads no file contents, so no bound applies to it; every file read in this module is NOT excused and goes through the bounded helpers",
+    calls: ["readdirSync("],
+  },
 ];
 
 /** The seam the mutation test drives. Kept named for the reason in the writers guard. */
@@ -635,6 +643,123 @@ describe("every reader of the shared config directory goes through the bounded h
       ["probe/unrelated.ts", 'readFileSync("/tmp/somewhere-else.txt", "utf8");'],
     ]);
     expect(readOffenders(clean)).toEqual([]);
+  });
+
+  /**
+   * Files importing `config-dir.scan`.
+   *
+   * NOT through `code()`, and that is the interesting part. The shared stripper
+   * blanks string literals before anything is matched, so `from
+   * "./config-dir.scan"` is `from ""` by the time it sees it — an import
+   * specifier IS a string literal, so the one helper every other guard here uses
+   * is the one thing that cannot see an import. Comments are stripped locally
+   * instead, which is all this predicate needs: a module path cannot be spelled
+   * without the string.
+   */
+  function scannerImporters(sources: ReadonlyMap<string, string>): string[] {
+    // Through the AST, after three rounds of losing to spellings.
+    //
+    // This predicate was a regex. It knew `from "…"`; a round added
+    // `require("…")` and dynamic `import("…")`; and then a reviewer defeated the
+    // widened version with a FILE EXTENSION — `from "./config-dir.scan.ts"` —
+    // by planting a real production module that imported the scanner and
+    // watching the whole suite stay green. `.ts` is not exotic here: this very
+    // file writes `await import("…/shell-config.ts")` in four places. The guard
+    // could not see its own idiom.
+    //
+    // `loadsModule` asks the parser instead. An import specifier is a specifier
+    // whatever punctuation surrounds it, and the basename comparison ignores the
+    // extension — which closes the spellings that beat the regex, and is NOT the
+    // same as closing the class. A specifier that is not a string literal at all
+    // (`"./config-dir" + ".scan"`, a template with a substitution,
+    // `createRequire` bound to another name) is still invisible here, and the
+    // gap list at the top of `config-dir.ast.ts` says so.
+    //
+    // For the question that actually matters — does the scanner SHIP —
+    // `production-graph.test.ts` asks the bundler, which resolves specifiers
+    // rather than matching them. That one is a closure. This one catches the
+    // weaker case it cannot: an import that exists but is currently tree-shaken,
+    // and would ship the moment something calls it.
+    return [...sources]
+      .filter(([file, raw]) => loadsModule(parse(file, raw), "config-dir.scan"))
+      .map(([file]) => file);
+  }
+
+  test("the importer predicate sees every loading position and spelling", () => {
+    // The self-check, planting what the PREVIOUS version could not see rather
+    // than what the current one already matches. That inversion is the recorded
+    // lesson, and all four guards rewritten last round violated it — each
+    // planted only the shapes its new regex had just learned.
+    const planted = new Map([
+      ["probe/static.ts", 'import { code } from "./config-dir.scan";'],
+      ["probe/re-export.ts", 'export { code } from "../lib/config-dir.scan";'],
+      ["probe/require.ts", 'const { code } = require("./config-dir.scan");'],
+      ["probe/dynamic.ts", 'const m = await import("./config-dir.scan");'],
+      // The four that defeated the regex.
+      ["probe/extension.ts", 'import { code } from "./config-dir.scan.ts";'],
+      ["probe/js-extension.ts", 'const m = require("./config-dir.scan.js");'],
+      ["probe/side-effect.ts", 'import "./config-dir.scan";'],
+      ["probe/template.ts", "const m = await import(`../lib/config-dir.scan`);"],
+      // Neither of these loads it.
+      ["probe/comment.ts", "// see ./config-dir.scan for what the scan can do"],
+      ["probe/unrelated.ts", 'import { readConfigFile } from "./config-dir";'],
+    ]);
+    expect(scannerImporters(planted).sort()).toEqual([
+      "probe/dynamic.ts",
+      "probe/extension.ts",
+      "probe/js-extension.ts",
+      "probe/re-export.ts",
+      "probe/require.ts",
+      "probe/side-effect.ts",
+      "probe/static.ts",
+      "probe/template.ts",
+    ]);
+  });
+
+  test("only test files import the scanner this guard is built on", () => {
+    // `config-dir.scan.ts` is test-support code in the production source tree.
+    // Its own header argues, correctly, that it must NOT be a `.test.` file:
+    // `sourceFiles()` filters those out, and a scanner that cannot see itself
+    // has a blind spot by construction. That argument is sound and the file
+    // stays where it is.
+    //
+    // What was missing is the pin. It is an ordinary export from `src/lib/`, so
+    // nothing stopped a production module importing it, and it ships in whatever
+    // the build emits from that directory. This round took it from three
+    // importers to five and across a package boundary for the first time —
+    // `harness/policy/profiles.test.ts` is the first `src/harness` -> `src/lib`
+    // edge that takes test scaffolding rather than a runtime utility, into the
+    // most protected module in the tree.
+    //
+    // Its header says it must not be exempt from the rules it implements. This
+    // is the rule it was one short of.
+    expect(scannerImporters(scanTreeSources(SRC))).toEqual([]);
+  });
+
+  test("the importer scan sees the test files that DO import it", () => {
+    // The numerator. `treeSources` filters `.test.` files out, so the assertion
+    // above is over production files only — and would pass just as well if the
+    // predicate matched nothing at all. This drives the same predicate over the
+    // whole tree including tests, and names what it finds.
+    const everything = new Map(
+      [...new Glob("**/*.ts").scanSync(SRC)]
+        .map((relative) => relative.split(path.sep).join("/"))
+        .map((relative) => [relative, readFileSync(path.join(SRC, relative), "utf8")] as const),
+    );
+    const importers = scannerImporters(everything).sort();
+
+    expect(importers).toEqual([
+      "harness/policy/profiles.test.ts",
+      "lib/config-dir.readers.test.ts",
+      "lib/config-dir.writers.test.ts",
+      "lib/serve-server.test.ts",
+      "session/store.callers.test.ts",
+    ]);
+    // Every one a test file, which is the property the guard above asserts the
+    // complement of.
+    for (const importer of importers) {
+      expect({ importer, isTest: importer.includes(".test.") }).toEqual({ importer, isTest: true });
+    }
   });
 
   test("a per-call exemption excuses only that call, not the file", () => {

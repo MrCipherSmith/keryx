@@ -18,11 +18,12 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { HarnessConfig } from "../harness/config";
 import { makeProvider } from "../harness/provider/make-provider";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import type { PolicyProfile } from "../harness/policy/types";
+import { resolveLocalProfile } from "../harness/policy/profiles";
 import { type RunDeps, type RunResult, runOffline } from "../harness/run/run";
 import { ToolRegistry } from "../harness/tool/registry";
 import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/tool/types";
@@ -198,17 +199,14 @@ function resolveRuntime(deps?: HarnessCommandDeps): {
  * "approved argv and environment allowlist" posture the frozen
  * SC_R04_SHELL_CONTAINMENT scenario describes (mirrors the shell-allow fixture
  * in `executor.test.ts`). Only reached behind the `exec` opt-in gate.
+ *
+ * The literal moved to `src/harness/policy/profiles.ts` when `keryx serve`
+ * became the third consumer and needed a profile it could COMPARE against. This
+ * is now a named alias over the resolver, kept so the call site below still
+ * reads as what it selects rather than as a string.
  */
 function shellAllowProfile(): PolicyProfile {
-  return {
-    schemaVersion: 1,
-    profileId: "monitored-trusted-local",
-    profileVersion: "1.0.0-shell-contained",
-    fingerprint: sha256Hex("monitored-trusted-local:1.0.0-shell-contained"),
-    trustMode: "trusted-local",
-    defaults: { read: "allow", write: "ask", shell: "allow", network: "ask", delegate: "ask" },
-    requiredControls: { isolation: "not-required", redactionFailure: "deny", networkBrokerFailure: "deny" },
-  };
+  return resolveLocalProfile("monitored-trusted-local");
 }
 
 /** The structured result the command prints as its final JSON blob. */
@@ -236,22 +234,9 @@ const USAGE = [
   "       keryx harness wave --spec <path>",
 ].join("\n");
 
-function sha256Hex(input: string): string {
-  // Small stable fingerprint for the read-only profile — node built-in only.
-  return createHash("sha256").update(input, "utf8").digest("hex");
-}
-
 /** A read-only-review profile (defaults.read = "allow"), per policy-profile.schema.json. */
 function readOnlyProfile(): PolicyProfile {
-  return {
-    schemaVersion: 1,
-    profileId: "read-only-review",
-    profileVersion: "1.0.0",
-    fingerprint: sha256Hex("read-only-review:1.0.0"),
-    trustMode: "read-only",
-    defaults: { read: "allow", write: "deny", shell: "deny", network: "deny", delegate: "deny" },
-    requiredControls: { isolation: "not-required", redactionFailure: "deny", networkBrokerFailure: "deny" },
-  };
+  return resolveLocalProfile("read-only-review");
 }
 
 /**

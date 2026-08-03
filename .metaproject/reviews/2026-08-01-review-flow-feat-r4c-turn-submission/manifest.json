@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-01-review-flow-feat-r4c-turn-submission",
+  "mode": "review-flow",
+  "status": "draft",
+  "target": {
+    "kind": "branch",
+    "ref": "feat/r4c-turn-submission"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-08-01-review-flow-feat-r4c-turn-submission/scope.md",
+    "coverage": ".metaproject/reviews/2026-08-01-review-flow-feat-r4c-turn-submission/coverage.md",
+    "report": ".metaproject/reviews/2026-08-01-review-flow-feat-r4c-turn-submission/report.md",
+    "findings": ".metaproject/reviews/2026-08-01-review-flow-feat-r4c-turn-submission/findings.json",
+    "learning": ".metaproject/reviews/2026-08-01-review-flow-feat-r4c-turn-submission/learning.md",
+    "decisions": ".metaproject/reviews/2026-08-01-review-flow-feat-r4c-turn-submission/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-01T21:00:29.278Z",
+  "updatedAt": "2026-08-01T21:00:29.278Z"
+}

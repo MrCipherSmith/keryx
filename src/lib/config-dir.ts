@@ -14,6 +14,11 @@
 //   serve-credentials.json  salted bearer-token hash (0600, flow 128)
 //   permissions.json        shell-command auto-approval allowlist
 //   sandbox.json            global sandbox defaults
+//   turns/                  durable remote-turn records (flow 131 / R4c) — the
+//                           event log and terminal result each remote turn is
+//                           streamed and replayed from, plus the idempotency
+//                           index. Written through `writeOwnerOnlyFile` and
+//                           `appendOwnerOnlyLine`, read through `readConfigFile`
 //   sessions/               per-project interactive session store — created by
 //                           `src/session/store.ts`, which calls this helper
 //                           because with KERYX_DATA_DIR unset its root IS this
@@ -32,7 +37,15 @@
 // of any existing install that sets it, which is a migration, not a cleanup.
 // It is recorded here so the next person finds it rather than discovering it.
 
-import { chmodSync, mkdirSync, readFileSync, type Stats, statSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  type Stats,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -85,6 +98,18 @@ export function keryxConfigDir(dir?: string): string {
 export const MAX_CONFIG_FILE_BYTES = 1_000_000;
 
 /**
+ * The largest an append-only CONTENT file under this directory may be.
+ *
+ * One value, two named readers over it. See `MAX_TURN_FILE_BYTES` for why the
+ * split that carries information is config-versus-content and not one constant
+ * per filename.
+ *
+ * 64 MiB is far above any observed transcript or event log and far below the
+ * size at which the read aborts, which is the whole job of this number.
+ */
+export const MAX_CONTENT_FILE_BYTES = 64 * 1024 * 1024;
+
+/**
  * The largest a session transcript may be before it is refused unread.
  *
  * Separate from `MAX_CONFIG_FILE_BYTES`, and not simply a larger value for it.
@@ -99,10 +124,86 @@ export const MAX_CONFIG_FILE_BYTES = 1_000_000;
  * 64 MiB is far above any observed transcript and far below the size at which
  * the read aborts, which is the whole job of this number.
  */
-export const MAX_TRANSCRIPT_FILE_BYTES = 64 * 1024 * 1024;
+export const MAX_TRANSCRIPT_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
+
+/**
+ * The largest a durable TURN file may be before it is refused unread.
+ *
+ * The same number and the same reason as a transcript, and that is the point
+ * rather than a coincidence: there are two CLASSES of file under this
+ * directory, not three. A config document is a few hundred bytes of fixed shape.
+ * Everything else here is an append-only log of content —
+ * `context.jsonl`, `archive.jsonl`, `turns/<id>/events.jsonl` — or a document
+ * carrying such content, like `turn.json` with the assistant's `result.text`.
+ *
+ * So `MAX_CONTENT_FILE_BYTES` is the value and the two names are the call
+ * sites' vocabulary: a reader says which class of file it is reading, which is
+ * what the readers guard's numerator is derived from. Two named readers over
+ * one bound, rather than two constants that must be kept equal by hand — the
+ * previous version was two identical numbers with two identical rationales and
+ * two byte-identical bodies, and a fourth file class would have had a precedent
+ * ("add a constant and a reader per filename") instead of a principle.
+ *
+ * Why the turn store needed it at all: both files were read through
+ * `readConfigFile`, whose bound is 1 MB, while `MAX_TURN_EVENTS` is 10 000 —
+ * and 10 000 events serialise to 1 418 890 bytes with no `text` field at all,
+ * or 1 518 890 with an empty one. Both are over the 1 MB bound, which is the
+ * point; an earlier version of this note gave the second figure and labelled it
+ * the first, so one quantity had two numbers. It was then rewritten to fix that
+ * and introduced a THIRD: "8 000 events gave 1 302 890 bytes", which cannot be
+ * true of any shape yielding 1 418 890 at 10 000 — that is 162.9 bytes per event
+ * against 141.9, and per-event size only grows with `seq`. Re-derived: 8 000 of
+ * these events are 1 134 890 bytes bare and 1 214 890 with an empty `text`, and
+ * both are over the 1 MB bound, which is the only thing the sentence needed to
+ * say. Past roughly 6 500 events the event route answered 200 with an empty
+ * body.
+ * api-protocol.md §Bounds forbids exactly that, and the store's own header said
+ * it could not happen.
+ *
+ * STATED LIMIT: this is a bound on the FILE, enforced on read, and
+ * `MAX_TURN_EVENTS` is a bound on the COUNT, enforced on write. Nothing connects
+ * them. Ten thousand bare events are 1 418 890 bytes (1.353 MiB), leaving
+ * (64 MiB - 1 418 890) / 10 000 = 6 569 bytes of text per event before the
+ * reader refuses — derived from the bare figure, which is why that is the one
+ * this paragraph uses. There is no per-event byte bound. In
+ * practice the provider's own output ceiling holds it down — 10 000 real deltas
+ * measured at 1.5 MiB, a 42x margin — but that is a property keryx neither
+ * states nor enforces, and on the OpenAI-compatible path `maxOutputTokens` is
+ * dropped rather than sent. Recorded here because the next person to raise
+ * `MAX_TURN_EVENTS` needs to know the two numbers are in different units.
+ */
+export const MAX_TURN_FILE_BYTES = MAX_CONTENT_FILE_BYTES;
 
 /** Why a file could not be read. */
 export type ConfigReadFailure = "absent" | "not-regular" | "too-large" | "unreadable";
+
+/**
+ * Is this failure a DEFINITE statement that there is nothing there?
+ *
+ * `absent` is the only one. `not-regular` means something IS there and this
+ * process declined to read it; `too-large` and `unreadable` mean the same with
+ * a different cause. Treating any of them as "no file" is how an oversized
+ * record became a 404 for a turn that existed.
+ *
+ * Total over the union with no default arm, so a fifth reason is a compile
+ * error at every reader rather than a silent choice at each one. Three modules
+ * were making this call with an inline `reason !== "absent"` and a fourth was
+ * enumerating two reasons by hand.
+ *
+ * `serve-turn-store.ts` has the same predicate over the wider `TurnReadFailure`
+ * union, and a second one — `isServerFault` — that answers a DIFFERENT question
+ * and disagrees on `malformed`. The two are documented against each other there.
+ */
+export function isDefiniteAbsence(reason: ConfigReadFailure): boolean {
+  switch (reason) {
+    case "absent":
+      return true;
+    case "not-regular":
+    case "too-large":
+    case "unreadable":
+      return false;
+  }
+}
 
 export type ConfigReadResult =
   | { ok: true; text: string }
@@ -168,6 +269,82 @@ export function readConfigFile(file: string): ConfigReadResult {
  */
 export function readTranscriptFile(file: string): ConfigReadResult {
   return readBoundedFile(file, MAX_TRANSCRIPT_FILE_BYTES);
+}
+
+/**
+ * Read a durable turn file, refusing one beyond `MAX_TURN_FILE_BYTES`.
+ *
+ * Same stat-before-read path as the other two, a third bound and a third reason
+ * for it — see `MAX_TURN_FILE_BYTES`. A caller of this one must surface the
+ * failure rather than collapsing it into an empty result: that collapse is the
+ * defect the bound was added for, and a correct bound with a lying caller in
+ * front of it is the same silence.
+ */
+export function readTurnFile(file: string): ConfigReadResult {
+  return readBoundedFile(file, MAX_TURN_FILE_BYTES);
+}
+
+/**
+ * Create a directory below the shared root, owner-only at every level.
+ *
+ * `mkdirSync`'s `mode` applies at CREATION only, so a level that already exists
+ * — from a release before this one, or created under a umask that stripped the
+ * bits — keeps whatever it had. That is the exact `sessions/` defect
+ * `ensureKeryxConfigDir`'s comment describes one screen down, and the writers
+ * guard reported the first attempt at the turn store making it again. So the
+ * walk is here, once, rather than in each module that needs a subdirectory.
+ *
+ * `segments` are joined under the resolved root. Callers pass literals; nothing
+ * caller-supplied reaches this without being constrained first (see
+ * `isTurnId` in `serve-turn-store.ts`).
+ */
+export function ensureKeryxSubdir(segments: readonly string[], dir?: string): string {
+  const root = ensureKeryxConfigDir(dir);
+  let current = root;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    mkdirSync(current, { recursive: true, mode: 0o700 });
+    if (process.platform === "win32") {
+      continue;
+    }
+    try {
+      chmodSync(current, 0o700);
+    } catch {
+      // Best-effort, like every other mode in this module. A level that cannot
+      // be chmodded is still created; the caller's error contract decides what
+      // that means, and they differ.
+    }
+  }
+  return current;
+}
+
+/**
+ * Append one line to an owner-only file under the shared directory.
+ *
+ * Exists so the durable turn record (flow 131 / R4c) can be append-only without
+ * calling `appendFileSync` itself. `config-dir.writers.test.ts` reports every
+ * raw write beside a config-path resolver, and the honest way past that guard is
+ * a sanctioned helper here — not an exemption on the new module, which would
+ * excuse every future write in it as well.
+ *
+ * Same mode trap as `writeOwnerOnlyFile`: `appendFileSync`'s `mode` applies at
+ * CREATION only, so a file that already exists at 0664 stays 0664 through every
+ * later append. The chmod is unconditional for that reason.
+ *
+ * `line` is written verbatim with a trailing newline; callers pass one JSON
+ * document per call, so a torn append damages one record rather than the file.
+ */
+export function appendOwnerOnlyLine(file: string, line: string): void {
+  appendFileSync(file, `${line}\n`, { mode: 0o600 });
+  if (process.platform === "win32") {
+    return;
+  }
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    // Unreported, exactly as in `writeOwnerOnlyFile` and for the same reason:
+    // this helper sits under callers with different error contracts.
+  }
 }
 
 /**

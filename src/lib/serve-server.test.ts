@@ -17,9 +17,16 @@
 // address the configuration named.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Glob } from "bun";
+import { compareProfiles, localBaselineProfile, resolveLocalProfile } from "../harness/policy/profiles";
+// The SHARED stripper and tree walk. The guard below used to carry its own,
+// which stripped comments but not string literals — so a mention of the seam
+// inside a string would have been reported as a caller supplying it.
+import { code, sourceFiles, treeSources } from "./config-dir.scan";
+import { parse, suppliesProperty } from "./config-dir.ast";
 import { hasSecretShapedField, registerProject } from "./project-registry";
 import { defaultServeConfig, type ServeConfig } from "./serve-config";
 import {
@@ -33,10 +40,14 @@ import {
 import {
   describeServeStatus,
   handleServeRequest,
+  internalErrorResponse,
   resolveServeStartup,
   startServeListener,
   type ServeListener,
 } from "./serve-server";
+
+/** The source tree both guards in this file scan. */
+const SRC_ROOT = path.join(import.meta.dir, "..");
 
 let configDir = "";
 let workspace = "";
@@ -130,8 +141,24 @@ afterEach(async () => {
   rmSync(path.dirname(configDir), { recursive: true, force: true });
 });
 
+/**
+ * A runner that refuses everything, for the tests that are not about turns.
+ *
+ * `makeSubmitTurn` is required rather than optional, which is the fix for the
+ * blocker where production simply never set it. These suites are about startup
+ * and the read routes, so they supply a runner that starts nothing — an honest
+ * stand-in, and one that would fail loudly if a test here ever began depending
+ * on a turn actually running.
+ */
+const REFUSES_EVERY_TURN = () => async () => ({ kind: "rejected" }) as const;
+
 async function start(config: ServeConfig | null, cred: ServeCredentialResult = credentialResult()) {
-  const outcome = await startServeListener({ config, credential: cred, dir: configDir });
+  const outcome = await startServeListener({
+    config,
+    credential: cred,
+    dir: configDir,
+    makeSubmitTurn: REFUSES_EVERY_TURN,
+  });
   if (outcome.ok) {
     listeners.push(outcome.listener);
   }
@@ -141,7 +168,7 @@ async function start(config: ServeConfig | null, cred: ServeCredentialResult = c
 // ---------------------------------------------------------------------------
 
 describe("startup preconditions", () => {
-  test("a loopback configuration with a credential resolves", () => {
+  test("a loopback configuration with a credential resolves", async () => {
     const startup = resolveServeStartup({ config: ephemeralConfig(), credential: credentialResult() });
     expect(startup.ok).toBe(true);
     if (startup.ok) {
@@ -149,7 +176,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("no configuration refuses", () => {
+  test("no configuration refuses", async () => {
     const startup = resolveServeStartup({ config: null, credential: credentialResult() });
     expect(startup.ok).toBe(false);
     if (!startup.ok) {
@@ -158,7 +185,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a disabled configuration refuses", () => {
+  test("a disabled configuration refuses", async () => {
     const startup = resolveServeStartup({
       config: { ...ephemeralConfig(), enabled: false },
       credential: credentialResult(),
@@ -169,7 +196,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("an absent credential refuses", () => {
+  test("an absent credential refuses", async () => {
     const startup = resolveServeStartup({ config: ephemeralConfig(), credential: { status: "absent" } });
     expect(startup.ok).toBe(false);
     if (!startup.ok) {
@@ -178,7 +205,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("an unreadable credential refuses, and is reported distinctly from an absent one", () => {
+  test("an unreadable credential refuses, and is reported distinctly from an absent one", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig(),
       credential: { status: "unreadable", message: "the serve credential store is unreadable" },
@@ -189,7 +216,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a credential the configuration does not reference refuses", () => {
+  test("a credential the configuration does not reference refuses", async () => {
     // Otherwise a rotate that changed the id would leave the config pointing at
     // a credential that no longer exists while the server happily authenticated
     // with a different one.
@@ -203,7 +230,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a configuration naming the OS credential store refuses instead of silently using the file store", () => {
+  test("a configuration naming the OS credential store refuses instead of silently using the file store", async () => {
     // The schema allows the value; nothing in this release implements it. An
     // accepted-and-ignored field is the same shape as a comment describing
     // enforcement no code performs — the operator believes their token is in
@@ -220,7 +247,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a non-loopback bind without acknowledgement refuses", () => {
+  test("a non-loopback bind without acknowledgement refuses", async () => {
     for (const address of ["0.0.0.0", "::", "192.168.1.10", "example.com"]) {
       const startup = resolveServeStartup({
         config: ephemeralConfig({ address }),
@@ -234,7 +261,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("a non-loopback bind WITH acknowledgement resolves and is reported as non-loopback", () => {
+  test("a non-loopback bind WITH acknowledgement resolves and is reported as non-loopback", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig({ address: "0.0.0.0", acknowledgeNonLoopback: true }),
       credential: credentialResult(),
@@ -245,7 +272,7 @@ describe("startup preconditions", () => {
     }
   });
 
-  test("acknowledgement on a loopback bind does not make it non-loopback", () => {
+  test("acknowledgement on a loopback bind does not make it non-loopback", async () => {
     const startup = resolveServeStartup({
       config: ephemeralConfig({ address: "127.0.0.1", acknowledgeNonLoopback: true }),
       credential: credentialResult(),
@@ -258,16 +285,276 @@ describe("startup preconditions", () => {
       expect(startup.nonLoopback).toBe(false);
     }
   });
+
+  // ── the non-weakening remote profile (spec AC-04) ────────────────────────
+
+  test("the default configuration resolves a profile, and the resolved posture is returned rather than the name", async () => {
+    // Not vacuous: every refusal test below means nothing if the happy path
+    // never resolves a profile at all.
+    const startup = resolveServeStartup({ config: ephemeralConfig(), credential: credentialResult() });
+    expect(startup.ok).toBe(true);
+    if (startup.ok) {
+      expect(startup.profile.profileId).toBe("unattended-untrusted");
+      // The stricter-by-default posture, asserted through the startup result —
+      // so a configuration that resolved to something laxer fails HERE and not
+      // only in the profile module's own suite.
+      expect(startup.profile.requiredControls.isolation).toBe("required-fail-closed");
+      expect(startup.profile.defaults.network).toBe("deny");
+    }
+  });
+
+  test("a profile name this release does not implement is a refusal, not a fallback", async () => {
+    const startup = resolveServeStartup({
+      config: ephemeralConfig({ profile: "hardened" }),
+      credential: credentialResult(),
+    });
+    expect(startup.ok).toBe(false);
+    if (!startup.ok) {
+      expect(startup.reason).toBe("unknown-profile");
+      // The message names the valid set, so the operator is not left guessing.
+      expect(startup.message).toContain("remote-restricted");
+    }
+  });
+
+  test("a widening remote profile refuses at startup and names the fields that widen", async () => {
+    // Every profile this release ships resolves at or below the baseline, so
+    // the widening input is produced by TIGHTENING the baseline rather than by
+    // inventing a wider remote profile. Same branch, reachable premise.
+    const startup = resolveServeStartup({
+      config: ephemeralConfig({ profile: "remote-restricted" }),
+      credential: credentialResult(),
+      localBaseline: () => resolveLocalProfile("read-only-review"),
+    });
+    expect(startup.ok).toBe(false);
+    if (!startup.ok) {
+      expect(startup.reason).toBe("widening-profile");
+      // The FIELDS, by value. `remote-restricted` asks where read-only-review
+      // denies, on exactly these three.
+      expect(startup.message).toContain("defaults.delegate, defaults.shell, defaults.write");
+    }
+  });
+
+  test("a widening profile binds NO socket", async () => {
+    // The point of AC-04. `refused` is "a terminal startup outcome, never a
+    // degraded listen", so the assertion is about the socket, not the message.
+    const outcome = await startServeListener({
+      config: ephemeralConfig({ profile: "remote-restricted" }),
+      credential: credentialResult(),
+      localBaseline: () => resolveLocalProfile("read-only-review"),
+      dir: configDir,
+      makeSubmitTurn: REFUSES_EVERY_TURN,
+    });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.reason).toBe("widening-profile");
+      expect(outcome.state).toBe("refused");
+    }
+    // No listener object exists to drain, because nothing was opened.
+    expect(Object.hasOwn(outcome, "listener")).toBe(false);
+  });
+
+  test("an unknown profile name also binds no socket", async () => {
+    const outcome = await startServeListener({
+      config: ephemeralConfig({ profile: "hardened" }),
+      credential: credentialResult(),
+      dir: configDir,
+      makeSubmitTurn: REFUSES_EVERY_TURN,
+    });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.reason).toBe("unknown-profile");
+    }
+    expect(Object.hasOwn(outcome, "listener")).toBe(false);
+  });
+
+  test("the shell-allow posture is wider than the baseline — the premise, asserted", async () => {
+    // If this ever stops being true the widening tests above are still green
+    // while proving nothing, because their input would no longer widen.
+    expect(compareProfiles(localBaselineProfile(), resolveLocalProfile("monitored-trusted-local"))).toEqual({
+      ok: false,
+      widened: ["defaults.shell"],
+    });
+  });
+
+  /**
+   * Files that SUPPLY the `localBaseline` seam, as opposed to declaring it.
+   *
+   * PURE over a `{ path -> source }` map, so the self-checks below drive this
+   * function rather than a re-implementation of it. The guard this replaces
+   * inlined the walk and re-evaluated its regex on a string literal, so
+   * replacing the predicate with "match nothing" would have left it green —
+   * and it had no scan-reach assertion and a zero denominator besides.
+   *
+   * The predicate is one clause, not two. It used to read
+   * `/localBaseline\s*:/.test(x) && !/localBaseline\?\s*:/.test(x)`, and the
+   * second half was dead: `localBaseline?:` does not match the first pattern in
+   * the first place, because `?` is not whitespace. The declaration was already
+   * excluded, the stated rationale for the second clause was wrong, and the
+   * self-check "proving" it passed for a reason other than the one it named.
+   */
+  /**
+   * Seams that can WEAKEN a control, and the one file each is allowed to supply.
+   *
+   * `localBaseline` can lower the ceiling a remote profile is held to.
+   * `containmentAvailable` can make a turn run uncontained. Both exist so a
+   * branch has a reachable input under test, and both are exactly the kind of
+   * thing that must not acquire a production caller quietly.
+   *
+   * `serve-runner.ts` is the sanctioned supplier of `containmentAvailable`
+   * because it is the module that supplies the REAL probe — the same shape as
+   * `config-dir.ts` being exempt from the raw-read guard it implements. Nothing
+   * else may pass either seam.
+   */
+  const WEAKENING_SEAMS: ReadonlyArray<{ name: string; suppliedBy: readonly string[] }> = [
+    { name: "localBaseline", suppliedBy: [] },
+    { name: "containmentAvailable", suppliedBy: ["lib/serve-runner.ts", "lib/serve-turn.ts"] },
+  ];
+
+  function baselineSuppliers(sources: ReadonlyMap<string, string>): string[] {
+    const found: string[] = [];
+    for (const [file, raw] of [...sources].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      const tree = parse(file, raw);
+      for (const seam of WEAKENING_SEAMS) {
+        if (seam.suppliedBy.includes(file)) {
+          continue;
+        }
+        // Through the AST. This was `name\s*:`, which missed ES6 shorthand;
+        // widened to two patterns, it still missed `opts.name = value` — a
+        // two-line assignment being the most natural way to acquire a
+        // production caller quietly, which is the guard's stated job to stop.
+        //
+        // `suppliesProperty` reports every form that PASSES a value and no form
+        // that declares or reads one. The declaration this used to exclude by
+        // spotting a `?` before the colon is excluded because an interface
+        // member is not an object literal, and a destructuring read is an
+        // ObjectBindingPattern rather than an ObjectLiteralExpression — two
+        // things a regex over text cannot tell apart and a parser cannot
+        // confuse.
+        if (suppliesProperty(tree, seam.name).length > 0) {
+          found.push(`${file} :: ${seam.name}`);
+        }
+      }
+    }
+    return found;
+  }
+
+  test("no non-test file supplies a weakening seam", () => {
+    // Held by reading the source rather than by the comment on each field.
+    expect(baselineSuppliers(treeSources(SRC_ROOT))).toEqual([]);
+  });
+
+  test("every sanctioned supplier names a file that exists", () => {
+    // An exemption pointing at a moved file is an exemption that excuses
+    // nothing and hides that it excuses nothing.
+    const files = new Set(sourceFiles(SRC_ROOT));
+    for (const seam of WEAKENING_SEAMS) {
+      for (const supplier of seam.suppliedBy) {
+        expect({ seam: seam.name, supplier, present: files.has(supplier) }).toEqual({
+          seam: seam.name,
+          supplier,
+          present: true,
+        });
+      }
+    }
+  });
+
+  test("the scan actually reaches the source tree", () => {
+    // Without this the assertion above passes vacuously if the root moves.
+    const files = sourceFiles(SRC_ROOT);
+    expect(files.length).toBeGreaterThan(200);
+    expect(files).toContain("lib/serve-server.ts");
+    expect(files).toContain("commands/serve.ts");
+  });
+
+  test("the file that DECLARES the seam is in the scan and is not reported", () => {
+    // The numerator control. An empty complement means nothing unless the one
+    // file that mentions `localBaseline` at all was actually read — and it must
+    // be read and NOT reported, because declaring the seam is not supplying it.
+    const tree = treeSources(SRC_ROOT);
+    const mentions = [...tree]
+      .filter(([, raw]) => code(raw).includes("localBaseline"))
+      .map(([file]) => file)
+      .sort();
+    // Two files name it: the one that DECLARES the seam, and the one that
+    // exports `localBaselineProfile` — a different identifier that happens to
+    // share the prefix. Both are read, and neither supplies the seam.
+    expect(mentions).toEqual(["harness/policy/profiles.ts", "lib/serve-server.ts"]);
+    expect(baselineSuppliers(tree)).toEqual([]);
+  });
+
+  test("the detector fires on a planted caller, through baselineSuppliers() itself", () => {
+    // Through the seam. The version this replaces tested the regex against a
+    // string, which is not the same thing as testing the function that walks
+    // the tree with it.
+    const planted = new Map([
+      ["probe/supplies.ts", "resolveServeStartup({ config, credential, localBaseline: () => wideOpen() });"],
+      ["probe/supplies-spaced.ts", "startServeListener({ localBaseline : lower });"],
+    ]);
+    expect(baselineSuppliers(planted).sort()).toEqual([
+      "probe/supplies-spaced.ts :: localBaseline",
+      "probe/supplies.ts :: localBaseline",
+    ]);
+
+    // And the second seam, through the same function. A guard covering two
+    // seams must be shown to cover both, or it is a one-seam guard with a
+    // longer table.
+    const plantedContainment = new Map([
+      ["probe/uncontained.ts", "createSubmitTurn({ profile, containmentAvailable: () => true });"],
+      ["probe/shorthand.ts", "createSubmitTurn({ profile, containmentAvailable });"],
+      // The three the regex could not see, planted here because the lesson is
+      // that a self-check must carry what the CURRENT predicate has never been
+      // shown to catch — not a restatement of what it already matched.
+      ["probe/assignment.ts", "const o = base(); o.containmentAvailable = () => true; run(o);"],
+      ["probe/index-assignment.ts", 'o["containmentAvailable"] = () => true;'],
+      ["probe/computed.ts", 'createSubmitTurn({ ["containmentAvailable"]: probe });'],
+    ]);
+    expect(baselineSuppliers(plantedContainment).sort()).toEqual([
+      "probe/assignment.ts :: containmentAvailable",
+      "probe/computed.ts :: containmentAvailable",
+      "probe/index-assignment.ts :: containmentAvailable",
+      "probe/shorthand.ts :: containmentAvailable",
+      "probe/uncontained.ts :: containmentAvailable",
+    ]);
+
+    // The other half: the declaration, a type-only mention, and a mention
+    // inside a string are all NOT suppliers.
+    const clean = new Map([
+      ["probe/declares.ts", "interface D { localBaseline?: () => PolicyProfile }"],
+      ["probe/declares-required.ts", "interface D { localBaseline: () => PolicyProfile }"],
+      ["probe/mentions.ts", "// localBaseline: the seam, named in a comment"],
+      ["probe/in-a-string.ts", 'const help = "pass localBaseline: to override";'],
+      // A READ, not a supply. Under the regex this was the same text as the
+      // shorthand form and could only be told apart by luck.
+      ["probe/destructures.ts", "const { localBaseline } = seams;"],
+      ["probe/reads.ts", "if (deps.localBaseline !== undefined) use();"],
+    ]);
+    expect(baselineSuppliers(clean)).toEqual([]);
+  });
+
+  test("the profile is checked AFTER the refusals that already existed", async () => {
+    // A configuration with two faults refuses on the one that was already
+    // proven, not on the new one. Both are terminal and neither is unsafe, so
+    // this is about not silently changing which instruction an operator is
+    // handed — the non-loopback refusal has its own executed instruction.
+    const startup = resolveServeStartup({
+      config: ephemeralConfig({ address: "10.0.0.5", profile: "hardened" }),
+      credential: credentialResult(),
+    });
+    expect(startup.ok).toBe(false);
+    if (!startup.ok) {
+      expect(startup.reason).toBe("non-loopback-not-acknowledged");
+    }
+  });
 });
 
 describe("CLI status projection", () => {
-  test("nothing configured is stopped", () => {
+  test("nothing configured is stopped", async () => {
     const report = describeServeStatus({ config: null, credential: { status: "absent" } });
     expect(report.state).toBe("stopped");
     expect(report.pendingApprovals).toBe(0);
   });
 
-  test("a configuration with enabled:false is stopped, not refused", () => {
+  test("a configuration with enabled:false is stopped, not refused", async () => {
     const report = describeServeStatus({
       config: { ...ephemeralConfig(), enabled: false },
       credential: credentialResult(),
@@ -275,7 +562,7 @@ describe("CLI status projection", () => {
     expect(report.state).toBe("stopped");
   });
 
-  test("a complete configuration is configured and reports the same fields as the route", () => {
+  test("a complete configuration is configured and reports the same fields as the route", async () => {
     const report = describeServeStatus({
       config: ephemeralConfig({ profile: "remote-restricted" }),
       credential: credentialResult(),
@@ -287,7 +574,7 @@ describe("CLI status projection", () => {
     expect(report.pendingApprovals).toBe(0);
   });
 
-  test("a non-loopback acknowledged bind is reported as non-loopback", () => {
+  test("a non-loopback acknowledged bind is reported as non-loopback", async () => {
     const report = describeServeStatus({
       config: ephemeralConfig({ address: "0.0.0.0", acknowledgeNonLoopback: true }),
       credential: credentialResult(),
@@ -296,13 +583,13 @@ describe("CLI status projection", () => {
     expect(report.nonLoopback).toBe(true);
   });
 
-  test("a failed precondition is refused, with the reason", () => {
+  test("a failed precondition is refused, with the reason", async () => {
     const report = describeServeStatus({ config: ephemeralConfig(), credential: { status: "absent" } });
     expect(report.state).toBe("refused");
     expect(report.reason).toBe("no-credential");
   });
 
-  test("no status projection contains the token", () => {
+  test("no status projection contains the token", async () => {
     const report = describeServeStatus({ config: ephemeralConfig(), credential: credentialResult() });
     expect(JSON.stringify(report)).not.toContain(token);
   });
@@ -325,7 +612,7 @@ describe("authentication", () => {
     ];
     const seen = new Set<string>();
     for (const request of variants) {
-      const response = handleServeRequest(request, context(config));
+      const response = await handleServeRequest(request, context(config));
       expect(response.status).toBe(401);
       const body = await response.text();
       seen.add(
@@ -344,7 +631,7 @@ describe("authentication", () => {
     const shapes = new Set<string>();
     for (const route of paths) {
       for (const method of ["GET", "POST", "DELETE"]) {
-        const response = handleServeRequest(new Request(`http://127.0.0.1${route}`, { method }), context(config));
+        const response = await handleServeRequest(new Request(`http://127.0.0.1${route}`, { method }), context(config));
         // Pinned explicitly. Without it "they all match each other" is also
         // satisfied by them all being 200.
         expect(response.status).toBe(401);
@@ -368,12 +655,12 @@ describe("authentication", () => {
     // fixture had registered nothing and the profile name had not taken. This
     // proves those values really are reachable through this surface when the
     // caller IS authenticated, which is what makes their absence meaningful.
-    const authorized = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(config)).text();
+    const authorized = await (await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(config))).text();
     expect(authorized).toContain("alpha");
-    const authorizedStatus = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config)).text();
+    const authorizedStatus = await (await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config))).text();
     expect(authorizedStatus).toContain("a-very-distinctive-profile-name");
 
-    const response = handleServeRequest(new Request("http://127.0.0.1/v1/projects"), context(config));
+    const response = await handleServeRequest(new Request("http://127.0.0.1/v1/projects"), context(config));
     const body = await response.text();
     for (const leak of [token, credential.id, credential.hash, credential.salt, "a-very-distinctive-profile-name", "alpha", workspace, configDir]) {
       expect(body).not.toContain(leak);
@@ -381,17 +668,17 @@ describe("authentication", () => {
     expect(JSON.parse(body)).toEqual({ error: { code: "unauthorized", message: "Unauthorized." } });
   });
 
-  test("a correct token is accepted", () => {
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
+  test("a correct token is accepted", async () => {
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
     expect(response.status).toBe(200);
   });
 
-  test("the scheme is matched case-insensitively, as RFC 7235 requires", () => {
+  test("the scheme is matched case-insensitively, as RFC 7235 requires", async () => {
     // `bearerToken` lowercases the scheme. That was asserted only in the
     // negative direction (a `Basic` header is refused); a lowercase `bearer`
     // must still be ACCEPTED or the leniency is one-way and useless.
     for (const scheme of ["bearer", "Bearer", "BEARER", "BeArEr"]) {
-      const response = handleServeRequest(
+      const response = await handleServeRequest(
         new Request("http://127.0.0.1/v1/status", { headers: { authorization: `${scheme} ${token}` } }),
         context(ephemeralConfig()),
       );
@@ -401,10 +688,26 @@ describe("authentication", () => {
 });
 
 describe("the route surface", () => {
-  test("only two paths exist; everything else is 404 for an authenticated caller", async () => {
+  test("the route table is closed; everything outside it is 404 for an authenticated caller", async () => {
+    // `/v1/turns` left this list when R4c added it — it is now a real route and
+    // answers 405 to a GET, which the method test below pins. Everything here
+    // is a path that does NOT exist, including the near-misses that a prefix
+    // match would have accepted.
     const config = ephemeralConfig();
-    for (const route of ["/", "/health", "/v1", "/v1/", "/v1/status/", "/v1/statusx", "/v1/turns", "/v1/projects/1", "/V1/STATUS"]) {
-      const response = handleServeRequest(authed(`http://127.0.0.1${route}`), context(config));
+    for (const route of [
+      "/",
+      "/health",
+      "/v1",
+      "/v1/",
+      "/v1/status/",
+      "/v1/statusx",
+      "/v1/turnsx",
+      "/v1/turns/",
+      "/v1/turns/not-an-id/events/more",
+      "/v1/projects/1",
+      "/V1/STATUS",
+    ]) {
+      const response = await handleServeRequest(authed(`http://127.0.0.1${route}`), context(config));
       expect({ route, status: response.status }).toEqual({ route, status: 404 });
       expect(JSON.parse(await response.text())).toEqual({ error: { code: "not-found", message: "Not found." } });
     }
@@ -414,7 +717,7 @@ describe("the route surface", () => {
     const config = ephemeralConfig();
     for (const route of ["/v1/status", "/v1/projects"]) {
       for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]) {
-        const response = handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
+        const response = await handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
         expect({ route, method, status: response.status }).toEqual({ route, method, status: 405 });
         expect(JSON.parse(await response.text())).toEqual({
           error: { code: "method-not-allowed", message: "Method not allowed." },
@@ -425,7 +728,7 @@ describe("the route surface", () => {
 
   test("a draining server accepts no new request", async () => {
     const config = ephemeralConfig();
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config, () => "draining"));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(config, () => "draining"));
     expect(response.status).toBe(503);
     expect(JSON.parse(await response.text())).toEqual({
       error: { code: "draining", message: "The server is draining." },
@@ -436,7 +739,7 @@ describe("the route surface", () => {
 describe("GET /v1/status", () => {
   test("reports state, bind, profile, the non-loopback flag and a pending-approval count of 0", async () => {
     const config = ephemeralConfig({ profile: "remote-restricted" });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), {
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), {
       ...context(config),
       nonLoopback: false,
       boundPort: 54321,
@@ -452,7 +755,7 @@ describe("GET /v1/status", () => {
 
   test("reports the bind as non-loopback when it is one", async () => {
     const config = ephemeralConfig({ address: "0.0.0.0", acknowledgeNonLoopback: true });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), {
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), {
       ...context(config),
       nonLoopback: true,
     });
@@ -462,7 +765,7 @@ describe("GET /v1/status", () => {
   });
 
   test("never carries the token, the stored hash, the salt or the credential id", async () => {
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/status"), context(ephemeralConfig()));
     const raw = await response.text();
     for (const leak of [token, credential.hash, credential.salt, credential.id]) {
       expect(raw).not.toContain(leak);
@@ -477,7 +780,7 @@ describe("GET /v1/projects", () => {
     registerProject(alpha, { dir: configDir });
     registerProject(beta, { dir: configDir });
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     expect(response.status).toBe(200);
     const body = (await response.json()) as { schemaVersion: number; projects: Array<Record<string, unknown>> };
     expect(body.schemaVersion).toBe(1);
@@ -491,7 +794,7 @@ describe("GET /v1/projects", () => {
     registerProject(gone, { dir: configDir });
     rmSync(gone, { recursive: true, force: true });
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const body = (await response.json()) as { projects: Array<Record<string, unknown>> };
     expect(body.projects).toHaveLength(1);
     expect(body.projects[0]!.state).toBe("missing");
@@ -499,7 +802,7 @@ describe("GET /v1/projects", () => {
 
   test("carries addressing only — no credential-shaped field anywhere", async () => {
     registerProject(makeProject("alpha"), { dir: configDir });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const body = (await response.json()) as { projects: unknown[] };
     // Pinned first: `hasSecretShapedField` returns false for an empty list, so
     // without this the assertion below would pass having inspected nothing.
@@ -554,7 +857,7 @@ describe("the listener", () => {
     const base = `http://127.0.0.1:${outcome.listener.port}`;
     const auth = { authorization: `Bearer ${token}` };
 
-    for (const route of ["/", "/health", "/v1/status/", "/v1/turns"]) {
+    for (const route of ["/", "/health", "/v1/status/", "/v1/turnsx"]) {
       const response = await fetch(`${base}${route}`, { headers: auth });
       expect({ route, status: response.status }).toEqual({ route, status: 404 });
     }
@@ -771,7 +1074,7 @@ describe("the projects route discloses no filesystem path of its own", () => {
       "utf8",
     );
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const raw = await response.text();
     expect(raw).not.toContain(configDir);
     expect(raw).not.toContain("projects.json");
@@ -784,7 +1087,7 @@ describe("the projects route discloses no filesystem path of its own", () => {
     mkdirSync(configDir, { recursive: true });
     writeFileSync(path.join(configDir, "projects.json"), "{not json", "utf8");
 
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const raw = await response.text();
     expect(raw).not.toContain(configDir);
     const body = JSON.parse(raw) as { warnings: unknown[]; projects: unknown[] };
@@ -794,7 +1097,7 @@ describe("the projects route discloses no filesystem path of its own", () => {
 
   test("a healthy registry reports no warnings at all", async () => {
     registerProject(makeProject("alpha"), { dir: configDir });
-    const response = handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
+    const response = await handleServeRequest(authed("http://127.0.0.1/v1/projects"), context(ephemeralConfig()));
     const body = (await response.json()) as { warnings: unknown[]; projects: unknown[] };
     expect(body.warnings).toEqual([]);
     expect(body.projects).toHaveLength(1);
@@ -814,10 +1117,10 @@ describe("read-only on disk", () => {
     const config = ephemeralConfig();
     for (const route of ["/v1/status", "/v1/projects", "/v1/unknown"]) {
       for (const method of ["GET", "POST"]) {
-        const response = handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
+        const response = await handleServeRequest(authed(`http://127.0.0.1${route}`, { method }), context(config));
         await response.text();
       }
-      await handleServeRequest(new Request(`http://127.0.0.1${route}`), context(config)).text();
+      (await handleServeRequest(new Request(`http://127.0.0.1${route}`), context(config))).text();
     }
 
     expect(inventory(project)).toEqual(before);
@@ -832,7 +1135,7 @@ function makeProject(name: string): string {
 }
 
 describe("the credential reader reports absence and damage distinctly", () => {
-  test("absent, ok and unreadable are three different answers", () => {
+  test("absent, ok and unreadable are three different answers", async () => {
     const empty = mkdtempSync(path.join(tmpdir(), "keryx-serve-cred-read-"));
     try {
       expect(readServeCredential(empty).status).toBe("absent");
@@ -842,5 +1145,99 @@ describe("the credential reader reports absence and damage distinctly", () => {
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the internal-error boundary is one function, and both halves use it", () => {
+  // F-009. `Bun.serve`'s `error` hook was a byte-identical copy of the
+  // handler's own catch, and only the catch had a test. Two copies of a
+  // security-relevant response shape, one of them unexercised, is how the
+  // previous drift happened: the hook emitted `{schemaVersion, error, message}`
+  // against api-protocol.md's `{error: {code, message}}`, so a client reading
+  // `error.code` got `undefined` on the one response class that means the
+  // server broke.
+  function captureStderr<T>(run: () => T): { value: T; written: string } {
+    const original = console.error;
+    let written = "";
+    console.error = (...args: unknown[]) => {
+      written += `${args.map(String).join(" ")}\n`;
+    };
+    try {
+      return { value: run(), written };
+    } finally {
+      console.error = original;
+    }
+  }
+
+  test("it answers the api-protocol document, and echoes nothing from the cause", async () => {
+    const secret = "/home/someone/.keryx/turns/abc/turn.json: EACCES";
+    const { value: response, written } = captureStderr(() =>
+      internalErrorResponse(new Error(secret)),
+    );
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error?: { code?: string; message?: string } };
+    // The shape api-protocol.md defines, not a hand-rolled one.
+    expect(body.error?.code).toBe("internal-error");
+    expect(typeof body.error?.message).toBe("string");
+
+    // Nothing from the cause reaches the caller — not the message, not the path.
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("EACCES");
+    expect(text).not.toContain("/home/someone");
+
+    // The operator IS told, on the process's own stderr.
+    expect(written).toContain("keryx serve: request failed");
+    expect(written).toContain(secret);
+  });
+
+  test("a non-Error cause is reported without throwing", () => {
+    // `throw "string"` and `Promise.reject(undefined)` both reach here.
+    for (const cause of ["a bare string", undefined, null, 42, { code: "X" }]) {
+      const { value, written } = captureStderr(() => internalErrorResponse(cause));
+      expect(value.status).toBe(500);
+      expect(written).toContain("keryx serve: request failed");
+    }
+  });
+
+  test("both boundaries route to it — the hook is the function itself", () => {
+    // The wiring, held by reading the source rather than by the comment on it.
+    // A second emitter of this line in this module is the copy re-appearing.
+    //
+    // NOT through `code()`: it blanks string literals, and the thing being
+    // counted IS a string literal, so the first version of this assertion
+    // counted zero and could never have counted anything else. Comments are
+    // stripped instead — the same correction ONE other guard in this tree needed
+    // for the same reason. "Three others" was this round's own miscount, and it
+    // is corrected in `.metaproject/memory/constraints/code-blanks-string-literals.md`
+    // rather than only here.
+    const stripComments = (raw: string): string =>
+      raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    const countEmitters = (raw: string): number =>
+      stripComments(raw).split(/errorResponse\(\s*500,\s*["']internal-error["']/).length - 1;
+
+    const source = stripComments(readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8"));
+    expect(countEmitters(readFileSync(path.join(SRC_ROOT, "lib", "serve-server.ts"), "utf8"))).toBe(1);
+    expect(source).toContain("error: internalErrorResponse");
+
+    // The numerator, which this guard was the only one in the tree not to have.
+    // A reviewer defeated the previous version by adding a second, DRIFTED
+    // boundary that spelled the log line through a template, so the counted
+    // literal never appeared and 62 tests stayed green. Counting the response
+    // SHAPE instead of the log string is what closes that, and planting a second
+    // emitter here is what proves the counter can reach 2 at all.
+    const planted = `
+      export function a(c: unknown): Response {
+        return errorResponse(500, "internal-error", "x");
+      }
+      export function b(c: unknown): Response {
+        const what = "request failed";
+        console.error(\`keryx serve: \${what}\`);
+        return errorResponse(500, 'internal-error', "y");
+      }
+    `;
+    expect(countEmitters(planted)).toBe(2);
+    // ...and it does not count a mention in prose.
+    expect(countEmitters('// returns errorResponse(500, "internal-error", …)')).toBe(0);
   });
 });
