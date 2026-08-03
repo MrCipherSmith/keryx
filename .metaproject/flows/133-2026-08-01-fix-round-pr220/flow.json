@@ -3,9 +3,9 @@
   "id": "133",
   "slug": "fix-round-pr220",
   "title": "Fix round PR #220 (flow 131 / R4c): two blockers and the eleven remaining majors",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-01T23:22:55.451Z",
-  "updatedAt": "2026-08-03T10:53:28.986Z",
+  "updatedAt": "2026-08-03T11:07:30.595Z",
   "source": {
     "type": "description",
     "ref": null
@@ -461,6 +461,15 @@
       "at": "2026-08-03T10:53:28.986Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/220 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-03T11:07:28.647Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-03T11:07:30.595Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
