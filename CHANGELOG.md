@@ -70,10 +70,21 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
   Anthropic and Ollama adapters, resume and recovery, branching and compaction,
   guarded mutation with approval, replay, budget and monitoring.
   CLI: `keryx harness run | exec | extension | wave`.
-- **Subagent orchestration:** a fail-closed child-model resolver, a policy-gated
-  provider allowlist with scoped credentials, depth and count caps against one
-  shared budget ledger, child-output injection quarantine, cost-aware model
-  escalation, git-worktree isolation and bounded peer messaging.
+- **Subagent orchestration**, reachable today through the interactive shell's
+  spawn tool: a fail-closed child-model resolver, a policy-gated provider
+  allowlist, depth and count caps against one shared run-scoped budget ledger
+  including the cost dimension, and child-output injection quarantine (which
+  flags, and never rewrites, child text).
+  - Child containment rests on three things together: `shell_exec` is absent
+    from a child's tool list, the child policy denies it, and the approver is
+    hard-false.
+- **Implemented and tested, but not yet wired to any caller:** cost-aware model
+  escalation, git-worktree isolation, bounded peer messaging, and the
+  orchestrator-state fold. Each of these modules is imported by exactly one file
+  — its own test. They are extension points, not behaviour you get today.
+  Scoped per-child credentials are in the same position: the provider option
+  exists and is tested, but no production path passes it, so a live child reads
+  the ambient environment.
 - **A typed `MetaprojectPort`** with published schemas, so the harness, the
   interactive agent and the MCP server reach graph/wiki/memory/context in-process
   from one source instead of through subprocess wrappers.

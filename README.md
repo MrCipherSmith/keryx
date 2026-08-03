@@ -16,7 +16,24 @@
 
 The core is deterministic, local, and offline — with zero runtime dependencies. Every model-backed or precision feature is strictly opt-in, so a fresh install behaves identically whether or not you enable them.
 
-> **Model assets are optional.** Features like semantic memory search, ML-based security detection, and tree-sitter parsing use downloadable models/grammars that are **not bundled and not required**. When an asset is absent, keryx automatically falls back to its deterministic implementation — nothing to configure, nothing breaks.
+> **Model assets are optional.** Tree-sitter parsing uses downloadable grammars
+> that are **not bundled and not required**; when a grammar is absent, the graph
+> falls back to its deterministic resolver.
+>
+> **Two model-backed features are off in a way a download will not fix.**
+> Semantic memory search and the ML security detectors have no runtime shipped —
+> the ONNX stack was removed for weight, so their runtime identifiers are empty
+> strings (`src/security/detect/index.ts`, `src/memory/config.ts`). Re-enabling
+> them means editing those constants and installing a transformers.js-API
+> package, not supplying an asset. Both run on their deterministic floor
+> instead: lexical recall, and regex plus entropy.
+
+Most things degrade rather than break, but not everything. `keryx ctx rg` exits
+non-zero without `ripgrep` on `PATH` rather than falling back, and the
+model-backed commands — `test suggest`, `flow plan`, `memory reflect --narrate`,
+`health explain --narrate` — have no deterministic mode and exit non-zero
+without a credential. `wiki enrich` is the exception that degrades: it exits 0
+and marks pages skipped.
 
 ## Quick Start
 
@@ -136,12 +153,21 @@ ships these modules:
 - **gdskills** — bundled and generated agent skills with routing, verification, learning, and export.
 - **health** — normalized code-health reports from TypeScript, tests, audit, complexity, coverage, and lint (optional SonarQube).
 - **testing** — testing context, related-test selection, changed-scope runs, and an opt-in coverage-map Test Impact Analysis.
-- **memory** — long-term Markdown project memory with indexing, search, dedup, bitemporal validity, and optional local embeddings.
+- **memory** — long-term Markdown project memory with indexing, lexical search, dedup and bitemporal validity. The embedding seam exists but ships with no runtime — see the note above.
 - **tasks** — an agent-first Task Manager driven by `keryx flow` for issue/task lifecycle tracking.
 - **security** — deterministic secrets / PII / prompt-injection / egress scanning, redaction, and a policy gate at agent write seams.
-- **review** — managed review packages that preserve reviewer coverage, findings, decisions, learning candidates, and optional Task Manager links.
-- **mcp** — opt-in [Model Context Protocol](https://modelcontextprotocol.io) server exposing read-only module services to agents.
-- **serve** — opt-in, off-by-default loopback HTTP entry (`keryx serve`) that puts the agent harness behind a token-authenticated local socket, so a bot or a browser workspace becomes a client of one surface instead of a second integration.
+- **mcp** — opt-in [Model Context Protocol](https://modelcontextprotocol.io) server exposing read-only module services to agents. A real module, but **off by default** — the nine above are on after `init`, this one is not.
+
+`keryx modules` toggles modules by manifest key. Two caveats worth knowing:
+`security` is enabled by default but is **not** in that command's module list, so
+it cannot be toggled there; and toggling any module currently drops an enabled
+`mcp` from the manifest.
+
+**`review` and `serve` are commands, not modules.** They have no manifest entry
+and are not toggleable — `keryx review` writes managed review packages under
+`.metaproject/reviews/`, and `keryx serve` is the loopback HTTP entry described
+below. Earlier versions of this README listed them alongside the modules; that
+conflated three different things.
 
 Two cross-cutting commands improve agent startup and routing:
 

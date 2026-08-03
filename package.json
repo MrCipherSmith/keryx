@@ -29,7 +29,7 @@
   },
   "scripts": {
     "keryx": "bun ./src/cli.ts",
-    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers --external @opentui/core",
+    "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
     "prepare": "bun run build",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
