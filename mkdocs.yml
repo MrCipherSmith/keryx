@@ -23,6 +23,14 @@ edit_uri: edit/main/docs/docs/
 docs_dir: docs/docs
 site_dir: .site
 
+# `docs/docs/README.md` is for people browsing the directory on GitHub. MkDocs
+# maps a directory's README onto its index, so leaving it visible collides with
+# `index.md` and warns — which `--strict` turns into a failed build. Excluding
+# it keeps the file where GitHub readers expect it and out of the site, where
+# `index.md` is the landing page.
+exclude_docs: |
+  README.md
+
 theme:
   name: material
   palette:
