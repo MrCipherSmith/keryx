@@ -7,6 +7,35 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.5] — 2026-08-03
+
+### Fixed
+
+- **Toggling any module silently deleted an enabled `mcp` from the manifest.**
+  `keryx modules` knew eight of the ten modules, and a toggle re-invokes `init`
+  with flags derived from that list — so the two it did not know were decided by
+  the *absence* of a flag rather than by the operator.
+
+  The two absences behaved differently, which is why one list could not describe
+  both. `security` is default-**on**: no `--no-security` meant it survived, but
+  it could never be disabled through this command and never appeared in
+  `modules status`. `mcp` is default-**off**: `init` writes its manifest entry
+  only when `--mcp` is passed, so a project with MCP enabled lost it on any
+  unrelated toggle.
+
+  Both are now in the list, and each module declares whether `init` scaffolds it
+  by default. A default-off module re-sends its enable flag to survive.
+
+  Demonstrated rather than asserted — on `0.2.4`, `init --yes --mcp` followed by
+  `modules disable memory` leaves **no `mcp` entry at all**; with the fix the
+  entry survives and `memory` alone changes. `modules status` now lists
+  `security` and `mcp`.
+
+### Added
+
+- `keryx modules enable|disable security` and `… mcp` now work. `security` was
+  reachable only through `init` flags before this.
+
 ## [0.2.4] — 2026-08-03
 
 ### Documentation
@@ -376,4 +405,5 @@ runtime dependencies, no sockets).
 [0.2.2]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...v0.2.2
 [0.2.3]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...v0.2.3
 [0.2.4]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...v0.2.4
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.4...HEAD
+[0.2.5]: https://github.com/MrCipherSmith/keryx/compare/v0.2.4...v0.2.5
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.5...HEAD

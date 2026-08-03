@@ -17,19 +17,72 @@ import {
   symbols,
 } from "../lib/ui";
 
-type ModuleDef = { name: string; flag: string; desc: string };
+/**
+ * A module as this command understands it.
+ *
+ * `defaultEnabled` exists because a toggle re-invokes `init`, and what the
+ * ABSENCE of a flag means depends on it — which is the whole of defect D1. For a
+ * default-ON module, sending no flag keeps it. For a default-OFF module, sending
+ * no flag REMOVES it: `init` writes the `mcp` manifest entry only when `--mcp`
+ * is passed (`init.ts:595`). So a default-off module must re-send `enableFlag`
+ * to survive an unrelated toggle, and before this field existed, enabling MCP
+ * and then switching any other module silently dropped it.
+ */
+type ModuleDef = {
+  name: string;
+  /** The `--no-<name>` flag that disables it. */
+  flag: string;
+  desc: string;
+  /** Does `init` scaffold this module unless told otherwise? */
+  defaultEnabled: boolean;
+  /** Required for a default-OFF module: the flag that keeps it enabled. */
+  enableFlag?: string;
+};
 
 // name === the metaproject.json module key for every module.
 const MODULES: ModuleDef[] = [
-  { name: "gdgraph", flag: "--no-gdgraph", desc: "code graph, symbols, affected context" },
-  { name: "gdctx", flag: "--no-gdctx", desc: "token-aware command/read output" },
-  { name: "gdwiki", flag: "--no-gdwiki", desc: "project knowledge base" },
-  { name: "gdskills", flag: "--no-gdskills", desc: "bundled working skills" },
-  { name: "health", flag: "--no-health", desc: "quality scoring & gate" },
-  { name: "testing", flag: "--no-testing", desc: "test context & intelligence" },
-  { name: "memory", flag: "--no-memory", desc: "lessons, decisions, constraints" },
-  { name: "tasks", flag: "--no-tasks", desc: "agent-first flow lifecycle" },
+  { name: "gdgraph", flag: "--no-gdgraph", desc: "code graph, symbols, affected context", defaultEnabled: true },
+  { name: "gdctx", flag: "--no-gdctx", desc: "token-aware command/read output", defaultEnabled: true },
+  { name: "gdwiki", flag: "--no-gdwiki", desc: "project knowledge base", defaultEnabled: true },
+  { name: "gdskills", flag: "--no-gdskills", desc: "bundled working skills", defaultEnabled: true },
+  { name: "health", flag: "--no-health", desc: "quality scoring & gate", defaultEnabled: true },
+  { name: "testing", flag: "--no-testing", desc: "test context & intelligence", defaultEnabled: true },
+  { name: "memory", flag: "--no-memory", desc: "lessons, decisions, constraints", defaultEnabled: true },
+  { name: "tasks", flag: "--no-tasks", desc: "agent-first flow lifecycle", defaultEnabled: true },
+  { name: "security", flag: "--no-security", desc: "secrets, PII, injection, egress gate", defaultEnabled: true },
+  {
+    name: "mcp",
+    flag: "--no-mcp",
+    desc: "read-only MCP server (opt-in, off by default)",
+    defaultEnabled: false,
+    enableFlag: "--mcp",
+  },
 ];
+
+/** The module table, for tests that assert its coverage. */
+export function modulesForTest(): readonly ModuleDef[] {
+  return MODULES;
+}
+
+/**
+ * Build the `init` argv that reproduces `next` exactly.
+ *
+ * Both directions are stated, because the absence of a flag is not a neutral
+ * value: for a default-off module it is a removal.
+ */
+export function buildInitFlags(next: Set<string>, profile: string): string[] {
+  const flags = ["--yes", "--gdskills-profile", profile];
+  for (const module of MODULES) {
+    if (!next.has(module.name)) {
+      flags.push(module.flag);
+      continue;
+    }
+    if (!module.defaultEnabled && module.enableFlag !== undefined) {
+      flags.push(module.enableFlag);
+    }
+  }
+  return flags;
+}
 
 type Manifest = { modules?: Record<string, { enabled?: boolean; profile?: string }> };
 
@@ -129,12 +182,7 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
   // Apply through init so newly enabled modules are fully scaffolded and the
   // manifest, index, and dashboard are regenerated consistently.
   const profile = manifest.modules?.gdskills?.profile ?? "recommended";
-  const flags = ["--yes", "--gdskills-profile", String(profile)];
-  for (const module of MODULES) {
-    if (!next.has(module.name)) {
-      flags.push(module.flag);
-    }
-  }
+  const flags = buildInitFlags(next, String(profile));
   heading("Applying");
   await initCommand(flags);
 }
