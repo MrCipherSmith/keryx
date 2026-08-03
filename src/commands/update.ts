@@ -54,6 +54,7 @@ import {
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import { seedAssetsLock } from "../assets/seed";
+import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
 import {
   banner,
   heading,
@@ -1272,9 +1273,11 @@ async function createServiceDirs(
 async function installGdgraphCoreScripts(metaprojectRoot: string): Promise<void> {
   const gdgraphCoreRoot = path.join(metaprojectRoot, "core", "gdgraph");
   await mkdir(gdgraphCoreRoot, { recursive: true });
-  await copyFileIfChanged(runtimeSourcePath("../gdgraph/build.ts"), path.join(gdgraphCoreRoot, "build.ts"));
-  await copyFileIfChanged(runtimeSourcePath("../gdgraph/query.ts"), path.join(gdgraphCoreRoot, "query.ts"));
-  await copyFileIfChanged(runtimeSourcePath("../gdgraph/types.ts"), path.join(gdgraphCoreRoot, "types.ts"));
+  // Shared with `init` — see the note there. Two hand-maintained copies of this
+  // list is how the copied core silently stopped being import-closed.
+  for (const file of GDGRAPH_CORE_SOURCES) {
+    await copyFileIfChanged(runtimeSourcePath(`../gdgraph/${file}`), path.join(gdgraphCoreRoot, file));
+  }
   await writeTextIfChanged(path.join(gdgraphCoreRoot, "cli.ts"), renderGdgraphCoreCli());
 }
 
