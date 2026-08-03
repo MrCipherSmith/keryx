@@ -198,15 +198,15 @@ deferred past Release 0; when enabled they inherit `networkBrokerFailure = deny`
 ## Traceability
 
 **Normative sources** (frozen, never modified):
-- [security-protocol.md](../../../requirements/keryx-project-agent-harness/security-protocol.md) — §Security Objective, §Policy Controls, §Security Profiles and Containment, §Approval and Provenance Binding, §Safe Defaults, §Filesystem and Process Safety, §Network Broker, §Security Tests. **Primary source.**
-- [schemas/policy-profile.schema.json](../../../requirements/keryx-project-agent-harness/schemas/policy-profile.schema.json) — `profileId`/`trustMode`/`defaults`/`requiredControls`; `read-only-review` and `unattended-untrusted` conditionals.
-- [schemas/harness-policy-decision.schema.json](../../../requirements/keryx-project-agent-harness/schemas/harness-policy-decision.schema.json) — allow/ask/deny, `hardDeny`, `override=false`, `ask ⇒ approvalId + fingerprints`.
-- [schemas/approval-request.schema.json](../../../requirements/keryx-project-agent-harness/schemas/approval-request.schema.json), [schemas/approval-result.schema.json](../../../requirements/keryx-project-agent-harness/schemas/approval-result.schema.json) — single-use, fingerprint-bound, `expired`/`invalidated` outcomes.
-- [specification.md](../../../requirements/keryx-project-agent-harness/specification.md) — §Security Boundary, §Policy Decision, §Error and Recovery Contracts (`environment_blocked`).
-- [prd.md](../../../requirements/keryx-project-agent-harness/prd.md) — §Decisions and Open Questions (baseline D4), §Success Criteria Release 1 (guarded mutation fails closed without isolation), R5/R15.
-- [brainstorm.md](../../../requirements/keryx-project-agent-harness/brainstorm.md) — §Selected Decisions D5 (Policy Is a First-Class Domain), D4 (Tool Registry Before Prompt Features).
-- [implementation-plan.md](../../../requirements/keryx-project-agent-harness/implementation-plan.md) — §W1 D-03 row (`S-04, R1-01, M-02`), §W10 M-01/M-02, §W15 H-01/H-02.
-- [acceptance.feature](../../../requirements/keryx-project-agent-harness/acceptance.feature) — `@SC_R05_HARD_DENY`, `@SC_R05_HEADLESS_ASK`, `@SC_R05_STALE_APPROVAL`, `@SC_R04_READ_ONLY_TOOL`.
+- [security-protocol.md](../../requirements/keryx-project-agent-harness/security-protocol.md) — §Security Objective, §Policy Controls, §Security Profiles and Containment, §Approval and Provenance Binding, §Safe Defaults, §Filesystem and Process Safety, §Network Broker, §Security Tests. **Primary source.**
+- [schemas/policy-profile.schema.json](../../requirements/keryx-project-agent-harness/schemas/policy-profile.schema.json) — `profileId`/`trustMode`/`defaults`/`requiredControls`; `read-only-review` and `unattended-untrusted` conditionals.
+- [schemas/harness-policy-decision.schema.json](../../requirements/keryx-project-agent-harness/schemas/harness-policy-decision.schema.json) — allow/ask/deny, `hardDeny`, `override=false`, `ask ⇒ approvalId + fingerprints`.
+- [schemas/approval-request.schema.json](../../requirements/keryx-project-agent-harness/schemas/approval-request.schema.json), [schemas/approval-result.schema.json](../../requirements/keryx-project-agent-harness/schemas/approval-result.schema.json) — single-use, fingerprint-bound, `expired`/`invalidated` outcomes.
+- [specification.md](../../requirements/keryx-project-agent-harness/specification.md) — §Security Boundary, §Policy Decision, §Error and Recovery Contracts (`environment_blocked`).
+- [prd.md](../../requirements/keryx-project-agent-harness/prd.md) — §Decisions and Open Questions (baseline D4), §Success Criteria Release 1 (guarded mutation fails closed without isolation), R5/R15.
+- [brainstorm.md](../../requirements/keryx-project-agent-harness/brainstorm.md) — §Selected Decisions D5 (Policy Is a First-Class Domain), D4 (Tool Registry Before Prompt Features).
+- [implementation-plan.md](../../requirements/keryx-project-agent-harness/implementation-plan.md) — §W1 D-03 row (`S-04, R1-01, M-02`), §W10 M-01/M-02, §W15 H-01/H-02.
+- [acceptance.feature](../../requirements/keryx-project-agent-harness/acceptance.feature) — `@SC_R05_HARD_DENY`, `@SC_R05_HEADLESS_ASK`, `@SC_R05_STALE_APPROVAL`, `@SC_R04_READ_ONLY_TOOL`.
 - [ADR-0001](ADR-0001-d01-release0-boundary.md) — D-01 Release 0 read-only boundary that D-03 extends into Release 1+.
 
 **Traceability id mapping** (implementation-plan.md §W1 D-03 lists `S-04, R1-01, M-02`):

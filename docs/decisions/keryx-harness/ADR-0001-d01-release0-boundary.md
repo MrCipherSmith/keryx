@@ -112,13 +112,13 @@ All Release 1+ work depends on Release 0 acceptance of the provider-neutral even
 ## Traceability
 
 **Normative sources** (frozen, never modified during implementation):
-- [README.md](../../../requirements/keryx-project-agent-harness/README.md) — Release 0 definition, startup preconditions, SLOs, and service-level objectives.
-- [prd.md](../../../requirements/keryx-project-agent-harness/prd.md) — problem, product thesis, functional requirements R1–R18, Release 0 success criteria, and deferred open questions.
-- [specification.md](../../../requirements/keryx-project-agent-harness/specification.md) — architecture, runtime lifecycle, storage model, manifest and config schemas, CLI, tool/policy boundary, durable orchestration.
-- [brainstorm.md](../../../requirements/keryx-project-agent-harness/brainstorm.md) — selected decisions D1–D8, critical questions (8 deferred), and research basis.
-- [implementation-plan.md](../../../requirements/keryx-project-agent-harness/implementation-plan.md) — W1 task contract (D-01…D-04), global constraints, verification gates, and wave dependencies.
-- [acceptance.feature](../../../requirements/keryx-project-agent-harness/acceptance.feature) — executable behavioral contract with 80+ scenarios tagged @release-0, mapped to R0-01, R0-02, R0-03 and functional requirements R1–R18.
-- [Schemas](../../../requirements/keryx-project-agent-harness/schemas/) — 35+ JSON schemas (Draft 2020-12) with fixture matrices, version registry, and deprecated-schema migration paths.
+- [README.md](../../requirements/keryx-project-agent-harness/README.md) — Release 0 definition, startup preconditions, SLOs, and service-level objectives.
+- [prd.md](../../requirements/keryx-project-agent-harness/prd.md) — problem, product thesis, functional requirements R1–R18, Release 0 success criteria, and deferred open questions.
+- [specification.md](../../requirements/keryx-project-agent-harness/specification.md) — architecture, runtime lifecycle, storage model, manifest and config schemas, CLI, tool/policy boundary, durable orchestration.
+- [brainstorm.md](../../requirements/keryx-project-agent-harness/brainstorm.md) — selected decisions D1–D8, critical questions (8 deferred), and research basis.
+- [implementation-plan.md](../../requirements/keryx-project-agent-harness/implementation-plan.md) — W1 task contract (D-01…D-04), global constraints, verification gates, and wave dependencies.
+- [acceptance.feature](../../requirements/keryx-project-agent-harness/acceptance.feature) — executable behavioral contract with 80+ scenarios tagged @release-0, mapped to R0-01, R0-02, R0-03 and functional requirements R1–R18.
+- [Schemas](../../requirements/keryx-project-agent-harness/schemas/) — 35+ JSON schemas (Draft 2020-12) with fixture matrices, version registry, and deprecated-schema migration paths.
 
 **Scenario mappings**:
 - R0-01 (task: Implement disabled capability floor and explicit enabled-startup preconditions)

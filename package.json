@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "CLI-first metaproject workspace for AI agents, code graph, project memory, health reports, testing context, wiki, skills, and task flows.",
   "private": false,
   "publishConfig": {
@@ -34,6 +34,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "tsc --noEmit && bun test",
+    "check:doc-links": "bun scripts/check-doc-links.ts",
     "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts"
   },
   "files": [

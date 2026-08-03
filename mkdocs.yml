@@ -1,0 +1,82 @@
+# Documentation site — MkDocs Material.
+#
+# Why Material: the content is already Markdown with relative links, Material
+# renders Mermaid natively (the architecture page is five diagrams), it is a
+# single Python dependency in CI, and it adds nothing to the runtime — the site
+# builds outside the package, so "zero runtime dependencies" stays true.
+#
+# `docs_dir` is `docs/docs` — the developer documentation only. The rest of
+# `docs/` (requirements packages, decisions, plans, reports) is working material
+# that is versioned and readable on GitHub but is not a published site section;
+# publishing it would bury the eight pages a reader actually needs under two
+# hundred they do not.
+#
+# The build runs with `--strict` in CI, so a broken internal link or a page
+# missing from the nav fails the job rather than shipping a site with dead ends.
+site_name: keryx
+site_description: One project-local brain for your AI agents and your team.
+site_url: https://mrciphersmith.github.io/keryx/
+repo_url: https://github.com/MrCipherSmith/keryx
+repo_name: MrCipherSmith/keryx
+edit_uri: edit/main/docs/docs/
+
+docs_dir: docs/docs
+site_dir: .site
+
+# `docs/docs/README.md` is for people browsing the directory on GitHub. MkDocs
+# maps a directory's README onto its index, so leaving it visible collides with
+# `index.md` and warns — which `--strict` turns into a failed build. Excluding
+# it keeps the file where GitHub readers expect it and out of the site, where
+# `index.md` is the landing page.
+exclude_docs: |
+  README.md
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  # `README.md` is deliberately absent. MkDocs maps a directory's `README.md`
+  # onto its `index.md`, so listing both makes them collide and the README is
+  # dropped. `index.md` is the landing page here; the README stays in the
+  # repository for people browsing on GitHub.
+  - Start here: index.md
+  - Onboarding: onboarding.md
+  - Architecture: architecture.md
+  - Modules: modules.md
+  - CLI reference: cli-reference.md
+  - Workspace and lifecycle: workspace-and-lifecycle.md
+  - Complete setup and agent workflows: complete-setup-and-agent-workflows.md
+  - Agent installation playbook: agent-installation-playbook.md

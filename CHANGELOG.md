@@ -7,6 +7,36 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.7] — 2026-08-03
+
+### Added
+
+- **A documentation link gate, in CI.** `bun run check:doc-links` resolves every
+  relative Markdown link in the root documents and all of `docs/`, and checks
+  `#anchor` fragments against the target file's headings — `file.md#missing`
+  is the failure a plain existence check survives. It fails if it checked *zero*
+  links, so a glob that quietly stopped matching cannot look like a clean sweep.
+
+  `keryx wiki check-links` already covered the wiki. Nothing covered `docs/`.
+
+- **`mkdocs.yml` and a Docs workflow.** MkDocs Material, `docs_dir: docs/docs`,
+  explicit nav, Mermaid through `pymdownx.superfences`. The workflow's `build`
+  job runs `mkdocs build --strict` on every pull request; `deploy` publishes to
+  GitHub Pages from `main`. **The site config has not been executed locally** —
+  `python3-venv` is absent on the authoring machine — so CI is its first oracle.
+
+### Fixed
+
+- **39 broken documentation links**, found by the gate on its first run, out of
+  573 checked. Thirty-eight were one `../` too deep from
+  `docs/decisions/keryx-harness/`; one pointed at a handoff document under a
+  `.metaproject/jobs/` directory that does not exist — the real file lives in
+  `docs/decisions/keryx-harness/`.
+
+  A link check had been reported as passing repeatedly during this
+  documentation work. It ran over a hand-picked file list, and the result was
+  generalised to the repository.
+
 ## [0.2.6] — 2026-08-03
 
 ### Fixed
@@ -448,4 +478,5 @@ runtime dependencies, no sockets).
 [0.2.4]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...v0.2.4
 [0.2.5]: https://github.com/MrCipherSmith/keryx/compare/v0.2.4...v0.2.5
 [0.2.6]: https://github.com/MrCipherSmith/keryx/compare/v0.2.5...v0.2.6
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.6...HEAD
+[0.2.7]: https://github.com/MrCipherSmith/keryx/compare/v0.2.6...v0.2.7
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.7...HEAD

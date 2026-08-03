@@ -3,7 +3,7 @@
 > Reviewed against the source on **2026-08-03** for `0.2.3`. Where this document
 > and the code disagree, the code wins and the disagreement is a bug in this
 > file — the
-> [documentation audit](../report/release-readiness-2026-08-03/documentation-audit.md)
+> [documentation audit](https://github.com/MrCipherSmith/keryx/blob/main/docs/report/release-readiness-2026-08-03/documentation-audit.md)
 > lists the ones found so far.
 
 ## System overview
@@ -37,7 +37,7 @@ external tools (git, gh, eslint, tsc) are optional.
 
 Most things degrade rather than break when a dependency is absent — but not
 everything, and the exceptions are named in
-[the README](../../README.md#quick-start) rather than glossed here.
+[the README](https://github.com/MrCipherSmith/keryx/blob/main/README.md#quick-start) rather than glossed here.
 
 ### Where keryx sits
 
