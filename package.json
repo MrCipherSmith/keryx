@@ -1,8 +1,11 @@
 {
-  "name": "keryx",
-  "version": "0.1.0",
+  "name": "@mrciphersmith/keryx",
+  "version": "0.2.0",
   "description": "CLI-first metaproject workspace for AI agents, code graph, project memory, health reports, testing context, wiki, skills, and task flows.",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -27,7 +30,6 @@
   "scripts": {
     "keryx": "bun ./src/cli.ts",
     "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @xenova/transformers --external @opentui/core",
-    "prepack": "bun run build",
     "prepare": "bun run build",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

@@ -25,9 +25,15 @@ code `1`.
 
 | Command | Purpose |
 |---|---|
+| `shell` | Start the interactive TUI agent shell (sessions are per-project). |
+| `sessions` | List, export, or locate agent sessions for the current project. |
+| `harness` | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`). |
 | `init` | Initialize `.metaproject/` in the current project. |
 | `status` | Show local Metaproject status. |
 | `modules` | View, enable, or disable workspace modules. |
+| `projects` | Manage the user-global project registry that remote entry addresses projects by. |
+| `serve` | Loopback-bound HTTP entry over the agent harness (opt-in, off by default). |
+| `metrics` | Collect, validate, and report execution-observability metrics. |
 | `update` | Refresh managed service files without touching data artifacts. |
 | `dashboard` / `dash` | Build or open the project admin dashboard. |
 | `gdgraph` | Build and query the code dependency graph. |
@@ -57,6 +63,84 @@ example `memory index --embeddings` builds the lexical index only, and
 `security eval --with-model` silently uses the pure detector path). The single
 sanctioned exception is **`mcp serve`**, which hard-fails with an actionable
 message when the optional MCP SDK is not installed.
+
+---
+
+## shell
+
+Start the interactive agent shell. This is the TUI agent harness; bare `keryx`
+prints CLI usage and does **not** start it. Sessions are per-project.
+
+```
+keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
+            [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
+```
+
+| Flag | Description |
+|---|---|
+| _(default)_ | Full-screen OpenTUI renderer plus the agent, whenever `stdout` is a TTY. |
+| `-c`, `--continue` | Resume the most recent session for this project. |
+| `-r`, `--resume [id]` | Resume a specific session; without an id, pick one interactively. |
+| `--provider <p>`, `--model <m>` | Skip the provider/model picker. |
+| `--base-url <url>` | Point the provider at a custom endpoint. |
+| `--agent` / `--chat` | Agent mode with tools, or chat without them. |
+| `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
+
+The renderer falls back to readline gracefully when the TUI cannot start, and
+off a TTY the shell is non-interactive by default.
+
+---
+
+## sessions
+
+Inspect the append-only agent sessions recorded for the current project.
+
+```
+keryx sessions list | export <id> | path
+```
+
+| Subcommand | Description |
+|---|---|
+| `list` | Print the sessions recorded for this project, newest first. |
+| `export <id>` | Emit one session in full, for archiving or review. |
+| `path` | Print the directory sessions are stored under. |
+
+---
+
+## harness
+
+Drive the agent execution loop **non-interactively** — the same loop `shell`
+runs, without a terminal attached. This is the scriptable and CI-facing surface.
+
+```
+keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
+keryx harness exec [options] -- <path> [args...]
+keryx harness extension --spec <path>
+keryx harness wave --spec <path>
+```
+
+| Subcommand | Description |
+|---|---|
+| `run` | Execute one prompt through the run loop against the named provider and model. `fake` is a deterministic in-process provider, which is what makes the loop testable without a network. |
+| `exec` | Run a subprocess under the containment options below. |
+| `extension` | Run a declared extension from a spec file. |
+| `wave` | Run a declared multi-agent wave from a spec file. |
+
+### `harness exec` containment options
+
+| Flag | Description |
+|---|---|
+| `--allow-env KEY` (repeatable) | Pass one environment variable through. The default is to pass none. |
+| `--max-runtime-ms N` | Wall-clock bound on the child. |
+| `--allow-real-subprocess` | Permit a real subprocess at all. Without it, execution is refused. |
+| `--allowed-domains a,b` | Restrict network egress to a domain allowlist, served by a loopback proxy that reports each allow/deny ruling. **macOS only** — on Linux this refuses rather than degrading to full host network. |
+| `--mask-env NAME@host` | Mask a credential toward a specific host. |
+| `--tls-terminate` | Terminate TLS so HTTPS traffic can be masked. **macOS only.** |
+| `--mask-mode auto\|manual\|off`, `--auto-mask` | Credential-masking mode. Resolution order is env → project → global → built-in; the built-in default is `auto` when the restricted sandbox is on. |
+
+Masking without TLS termination **fails closed** — it does not proceed with an
+unmasked connection. Spawn failures carry structured diagnostics rather than a
+bare exit code.
 
 ---
 
@@ -161,6 +245,79 @@ keryx modules [status | enable <name> | disable <name>]
 
 Module names are the manifest keys: `gdgraph`, `gdctx`, `gdwiki`, `gdskills`,
 `health`, `testing`, `memory`, `tasks`, `security`.
+
+---
+
+## projects
+
+Manage the **user-global project registry** — the set of projects on this
+machine, and the addressing keys a remote transport routes by. `keryx init`
+registers a project into it automatically; nothing on the machine knew the
+project set before this registry existed.
+
+```
+keryx projects [list [--json] | register <path> | forget <id>]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` (default) | `--json` | Print every registered project with its id and root path. `--json` emits the machine-readable form. |
+| `register <path>` | — | Register a project root explicitly. Idempotent. |
+| `forget <id>` | — | Remove a project from the registry. Removes the registry entry only — it never touches the project's `.metaproject/` workspace or any file under its root. |
+
+The registry is user-global (not per-project) and is what `keryx serve` resolves
+a request's target project against. A request naming an unregistered project is
+refused; there is no fallback to "some other project".
+
+---
+
+## serve
+
+An **opt-in, off-by-default** loopback-bound HTTP entry over the same agent
+harness `keryx shell` drives. It exists so a bot, a browser workspace, or a
+third-party embedding becomes a client of one surface rather than a second
+agent runtime with its own copy of session state.
+
+```
+keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
+keryx serve status [--json]
+keryx serve token issue | rotate | revoke
+keryx serve config init | set | show
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| _(no argument)_ | `--bind <addr>`, `--port <n>`, `--profile <name>`, `--acknowledge-non-loopback` | Bind and listen. Defaults to loopback; a non-loopback bind requires `--acknowledge-non-loopback` and is never the default. `--profile` selects the remote policy profile. |
+| `status` | `--json` | Report state. **Configuration state only** — there is no PID file, so a listener in another process is not visible here; `listening` and `draining` are knowable only over the authenticated `GET /v1/status`. |
+| `token issue \| rotate \| revoke` | — | Bearer-token lifecycle. Only a **salted hash** is persisted; the plaintext token is printed once, at issue, and cannot be recovered afterwards. |
+| `config init \| set \| show` | — | Create, modify, and print the listener configuration. Without a config, `serve` does not listen. |
+
+### Routes
+
+| Route | Description |
+|---|---|
+| `GET /v1/status` | Listener state, authenticated. |
+| `GET /v1/projects` | The projects this listener will accept turns for. |
+| `POST /v1/turns` | Submit a turn. Takes an idempotency key **scoped per project**, so two projects cannot collide on one key. |
+| `GET /v1/turns/<id>` | The durable turn record, and its server-sent-event stream. |
+
+### Boundaries
+
+These are properties of the implementation, not advice:
+
+- **Authentication runs before routing.** An unauthenticated caller cannot
+  distinguish a known path from an unknown one — both answer identically.
+- **Bearer tokens are compared in constant time.**
+- **`refused` binds no socket at all.** It is a terminal state, never a degraded
+  listen: a listener that cannot satisfy its configuration does not open a port.
+- **The remote policy profile may never be weaker than the local one.** It is
+  compared per turn, and a weaker profile is refused rather than accepted.
+- **Approvals are not implemented.** A turn whose policy decision is `ask`
+  terminates in a **recorded denial**. This is written into the turn module as a
+  stated boundary rather than left to follow from the absence of an approval
+  store, because an accident stops holding the moment the store lands.
+- **Repeated authentication failures are throttled**, per peer.
+- **`GET /health` does not exist.** Liveness is authenticated-only today.
 
 ---
 
@@ -443,6 +600,41 @@ When the `security` module is enabled, `run` runs an advisory security check on 
 captured raw log before persisting it. Advisory (the default) reports and still
 writes the log; `enforced`/`ci` mode can suppress raw-log persistence with a masked
 reason (the run itself is never broken).
+
+---
+
+## metrics
+
+Provenance-aware execution observability: per-run evidence, active-time
+accounting, and baseline-aware comparison.
+
+```
+keryx metrics status
+keryx metrics collect --events <events.json> [--run-id <id>] [--skill <name>]
+keryx metrics validate <run.json>
+keryx metrics latest
+keryx metrics show <run-id>
+keryx metrics compare <run-a> <run-b> [--json]
+keryx metrics rebuild --source <events.json>
+keryx metrics plan --profile lightweight [--changed <file,...>]
+keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
+keryx metrics benchmark validate <manifest.json>
+```
+
+| Subcommand | Description |
+|---|---|
+| `status` | Whether metrics collection is configured, and what has been recorded. |
+| `collect` | Fold an events file into a durable run record. |
+| `validate <run.json>` | Check a run record against the schema. |
+| `latest` / `show <run-id>` | Print the most recent run, or a named one. |
+| `compare <run-a> <run-b>` | Diff two runs. `--json` for the machine-readable form. |
+| `rebuild --source` | Regenerate run records from an events file. |
+| `plan --profile lightweight` | Plan a low-overhead collection profile, optionally scoped with `--changed`. |
+| `benchmark init \| validate` | Create and check a paired-comparison manifest. |
+
+> **No performance claim has been made about keryx.** The benchmark harness
+> exists so that a paired Keryx/no-Keryx comparison can be run and reported
+> honestly, not to support a number that has already been published.
 
 ---
 

@@ -17,4 +17,10 @@ under `docs/report/`.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
 
+## Release and planning
+
+- [../../CHANGELOG.md](../../CHANGELOG.md) — what has landed since `v0.1.0`, with a standing known-gaps list.
+- [../report/release-readiness-2026-08-03/release-readiness.md](../report/release-readiness-2026-08-03/release-readiness.md) — the current readiness verdict and verification matrix.
+- [../plans/community-documentation-plan.md](../plans/community-documentation-plan.md) — the plan for publishable documentation, diagrams, and a docs site.
+
 **Start here:** new to the project? Begin with [onboarding.md](./onboarding.md).

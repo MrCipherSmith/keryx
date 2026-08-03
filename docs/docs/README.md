@@ -1,14 +1,19 @@
 # keryx — Developer Documentation
 
-**keryx** is a single-binary Bun/TypeScript CLI whose one job is to scaffold and maintain a per-project `.metaproject/` workspace — a file-based "agent operating system" that materializes a repo's structure, quality, tests, conventions, and history as durable Markdown plus machine-readable JSON. It has **no database and no always-on HTTP server**; everything is local-first and offline by default, and external tools (git, gh, eslint, tsc) are optional and degrade gracefully. The CLI performs deterministic mechanics (scaffold, scan, score, checksum, render); the "thinking" is delegated to the agent skills the workspace ships. Its nine default product modules are loosely coupled through files under `.metaproject/data/` rather than direct calls, while MCP remains opt-in.
+**keryx** is a single-binary Bun/TypeScript CLI whose one job is to scaffold and maintain a per-project `.metaproject/` workspace — a file-based "agent operating system" that materializes a repo's structure, quality, tests, conventions, and history as durable Markdown plus machine-readable JSON. It has **no database and no always-on HTTP server**; everything is local-first and offline by default, and external tools (git, gh, eslint, tsc) are optional and degrade gracefully. Two HTTP surfaces exist and both are **opt-in and off until you start them**: `keryx mcp serve --http` (localhost-only, and additionally gated on `http.enabled` in the module manifest) and `keryx serve`, the loopback-bound remote entry over the agent harness. The CLI performs deterministic mechanics (scaffold, scan, score, checksum, render); the "thinking" is delegated to the agent skills the workspace ships. Its nine default product modules are loosely coupled through files under `.metaproject/data/` rather than direct calls, while MCP remains opt-in.
 
 ## Quick start
 
 Requirements: `git` and `bun` (>= 1.1.0).
 
 ```bash
-# Global install (adds ~/.local/bin/keryx)
+# Global install. The scope matters: the unscoped `keryx` on npm is an
+# unrelated project (github.com/actionhero/keryx). The executable is `keryx`.
+npm install -g @mrciphersmith/keryx
+
+# Or straight from the repository:
 bun install -g github:MrCipherSmith/keryx
+
 keryx init
 ```
 

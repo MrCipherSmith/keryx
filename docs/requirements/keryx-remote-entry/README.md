@@ -1,5 +1,5 @@
 # Keryx Remote Entry
-Version: 1.2.0
+Version: 1.3.0
 
 ## Purpose
 
@@ -23,7 +23,7 @@ adapter beside the existing TUI adapter, not a rewrite of either.
 |---|---|---|
 | R4a | user-global project registry (`keryx projects`; `keryx init` registers) | **merged** — flow 127, PR #215 |
 | R4b | `keryx serve` skeleton: loopback listener, bearer auth, token lifecycle, `GET /v1/status` + `GET /v1/projects` | **merged** — flow 128, PR #216 |
-| R4c | turn submission (`task.submit`) + streaming, and with it the non-weakening remote-profile check (AC-04) | not started |
+| R4c | turn submission (`task.submit`) + streaming, and with it the non-weakening remote-profile check (AC-04) | **merged** — flow 133, PR #220 |
 | R4d | asynchronous fail-closed approvals | not started |
 | R4e | maintenance operations projected from `src/standard/command-registry.ts` | not started |
 | R4f | one-time expiring loopback credential handoff | not started |
@@ -34,15 +34,21 @@ opening a socket acceptable as the first executable slice — the refusal paths
 landed proven before anything could execute. `refused` is terminal and binds no
 socket; it is never a degraded listen.
 
-Three items named elsewhere in this package are deliberately deferred out of
-R4b and are owed by a later slice: the non-weakening remote policy profile
-check (AC-04, deferred because there is no single `resolveLocalProfile` to
-compare against — profiles are built inline per command), the unauthenticated
-`GET /health` liveness route together with cross-process liveness (no PID file
-exists, so `keryx serve status` reports configuration state only and
-`listening` / `draining` are knowable only over `GET /v1/status`), and
-throttling of repeated authentication failures, which is owed from the first
-route that mutates state.
+R4c puts the harness behind that door. It adds `POST /v1/turns` with an
+idempotency key scoped per project, durable turn records, SSE streaming, and
+**two of the three items R4b deferred**: the non-weakening remote profile
+comparison (AC-04) now has a `resolveLocalProfile` to compare against, and
+authentication failures are throttled from the first mutating route, as they
+were owed. Approvals are not in R4c: an `ask` decision terminates in a
+**recorded denial**, written into `serve-turn.ts` as a stated boundary rather
+than left to emerge from there being no approval store — because an accident
+stops holding the moment R4d lands the store.
+
+Still deferred, and now the only items outstanding besides R4d–R4f: the
+unauthenticated `GET /health` liveness route together with cross-process
+liveness (no PID file exists, so `keryx serve status` reports configuration
+state only and `listening` / `draining` are knowable only over
+`GET /v1/status`).
 
 ## Scope
 
