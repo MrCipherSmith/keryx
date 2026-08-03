@@ -208,9 +208,42 @@ should stay reference material; these are the doors into them.
 **Evidence rule:** each guide ends with the command that verifies the reader got
 the intended result.
 
-### Phase 6 — Publish
+### Phase 6 — Publish — **link gate done; site awaiting its first CI build**
 
 **Goal:** a URL, not a directory listing.
+
+**Done and verified:** `scripts/check-doc-links.ts`, wired into CI as
+`check:doc-links`. It resolves every relative Markdown link in `README`,
+`CHANGELOG`, `CONTRIBUTING`, `SECURITY`, `CODE_OF_CONDUCT` and all of `docs/`,
+and checks `#anchor` fragments against the target file's headings — because
+`file.md#missing-section` is the failure a plain existence check survives. It
+also fails if it checked *zero* links, so a glob that silently stopped matching
+cannot look like a clean sweep.
+
+**It found 39 broken links the first time it ran, across 573.** Thirty-eight
+were one `../` too deep from `docs/decisions/keryx-harness/`; one pointed at a
+handoff document under a `.metaproject/jobs/` directory that does not exist —
+the real file is in `docs/decisions/keryx-harness/`. All fixed.
+
+That number is worth sitting with. Throughout this documentation work a
+link check was reported as passing, repeatedly — but it ran over a hand-picked
+list of files, and the result was generalised to the repository. The same
+mistake as the language row, one layer down.
+
+**Written but NOT yet verified:** `mkdocs.yml` (Material, `docs_dir:
+docs/docs`, explicit nav, Mermaid via `pymdownx.superfences`) and
+`.github/workflows/docs.yml`. `python3-venv` is not installed on the authoring
+machine, so `mkdocs build` could not be run locally, and installing a system
+package to check a docs config was not a trade worth making without asking.
+
+So CI is the oracle instead: the workflow's `build` job runs
+`mkdocs build --strict` on every pull request, where a broken internal link or a
+page missing from the nav is a failure. **This phase is not done until that job
+has gone green at least once** — a config nobody has executed is a claim, and
+this plan exists because of claims like it.
+
+Remaining after that: enabling GitHub Pages for the repository, which is a
+settings change no workflow can make for itself.
 
 - **Recommend MkDocs Material.** Rationale: the content is already Markdown with
   relative links; Material renders Mermaid natively; it is a single Python

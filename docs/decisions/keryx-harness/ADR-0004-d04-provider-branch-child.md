@@ -221,15 +221,15 @@ or the corpus-migration path.
 ## Traceability
 
 **Normative sources** (frozen, never modified):
-- [provider-protocol.md](../../../requirements/keryx-project-agent-harness/provider-protocol.md) — provider boundary, normalized request/events, error taxonomy, capability matrix, credentials (D4 / S-02).
-- [artifact-lifecycle.md](../../../requirements/keryx-project-agent-harness/artifact-lifecycle.md) — §Compaction branch model, atomicity, replay (D5 / S-08).
-- [agent-protocol.md](../../../requirements/keryx-project-agent-harness/agent-protocol.md) — §Phase 4 child dispatch and STATUS normalization (D6 / S-09).
-- [specification.md](../../../requirements/keryx-project-agent-harness/specification.md) — §Core Runtime Contracts › Model Provider (S-02), §Session / §CLI Surface (S-08), §Child Agent Model (S-09), §Normative Contract Registry.
-- [prd.md](../../../requirements/keryx-project-agent-harness/prd.md) — §Decisions and Open Questions (deferred questions).
-- [brainstorm.md](../../../requirements/keryx-project-agent-harness/brainstorm.md) — §Selected Decisions D3 (event-sourced session core), D4 (tool registry before prompt features), D8 (existing contracts reused); §Critical Questions.
-- [implementation-plan.md](../../../requirements/keryx-project-agent-harness/implementation-plan.md) — §W1 row D-04; W5/W9/W12/W14 consequence rows.
+- [provider-protocol.md](../../requirements/keryx-project-agent-harness/provider-protocol.md) — provider boundary, normalized request/events, error taxonomy, capability matrix, credentials (D4 / S-02).
+- [artifact-lifecycle.md](../../requirements/keryx-project-agent-harness/artifact-lifecycle.md) — §Compaction branch model, atomicity, replay (D5 / S-08).
+- [agent-protocol.md](../../requirements/keryx-project-agent-harness/agent-protocol.md) — §Phase 4 child dispatch and STATUS normalization (D6 / S-09).
+- [specification.md](../../requirements/keryx-project-agent-harness/specification.md) — §Core Runtime Contracts › Model Provider (S-02), §Session / §CLI Surface (S-08), §Child Agent Model (S-09), §Normative Contract Registry.
+- [prd.md](../../requirements/keryx-project-agent-harness/prd.md) — §Decisions and Open Questions (deferred questions).
+- [brainstorm.md](../../requirements/keryx-project-agent-harness/brainstorm.md) — §Selected Decisions D3 (event-sourced session core), D4 (tool registry before prompt features), D8 (existing contracts reused); §Critical Questions.
+- [implementation-plan.md](../../requirements/keryx-project-agent-harness/implementation-plan.md) — §W1 row D-04; W5/W9/W12/W14 consequence rows.
 - [ADR-0001](./ADR-0001-d01-release0-boundary.md) — Release 0 boundary (D-04 depends on D-01) and OPEN-1…OPEN-4.
-- [schemas/](../../../requirements/keryx-project-agent-harness/schemas/) — owning schemas + `schema-version-registry.json`.
+- [schemas/](../../requirements/keryx-project-agent-harness/schemas/) — owning schemas + `schema-version-registry.json`.
 - [research-ledger.md](./research-ledger.md) — provenance table for D-04.
 
 ---

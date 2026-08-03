@@ -1,0 +1,68 @@
+name: Docs
+
+# Two jobs with different purposes:
+#   * `build` runs on every pull request and is a GATE — `mkdocs build --strict`
+#     fails on a broken internal link, an unresolved reference, or a page missing
+#     from the nav. A site with dead ends should not be publishable.
+#   * `deploy` runs only on `main` and publishes to GitHub Pages.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: mkdocs build --strict
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MkDocs Material
+        run: pip install mkdocs-material
+
+      # `--strict` turns warnings into failures. That is the point: a relative
+      # link that resolves on GitHub but not inside the built site is exactly
+      # the class of breakage a reader finds and a contributor never does.
+      - name: Build the site
+        run: mkdocs build --strict
+
+  deploy:
+    name: deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MkDocs Material
+        run: pip install mkdocs-material
+
+      - name: Build the site
+        run: mkdocs build --strict
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

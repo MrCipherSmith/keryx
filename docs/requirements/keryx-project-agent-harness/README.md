@@ -247,7 +247,7 @@ These are contract ceilings, not benchmarks — the implementation may be faster
   - [Fixture matrix](schemas/fixtures/fixture-matrix.json)
   - [Positive contract catalog](schemas/fixtures/positive-contract-catalog.json)
   - [Negative contract catalog](schemas/fixtures/negative-contract-catalog.json)
-  - [Implementation handoff](../../../.metaproject/jobs/requirements-remediation--keryx-project-agent-harness/flow-orchestrator-handoff.md)
+  - [Implementation handoff](../../decisions/keryx-harness/flow-orchestrator-handoff.md)
 
 ## Scope
 

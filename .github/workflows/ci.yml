@@ -41,6 +41,13 @@ jobs:
       - name: Typecheck and tests
         run: bun run check
 
+      # `wiki check-links` covers the wiki; nothing covered `docs/` or the root
+      # Markdown until now — which is how a documentation pass could green-light
+      # a set of pages pointing at each other incorrectly. It found 39 broken
+      # links the first time it ran. A broken link fails the pull request.
+      - name: Documentation links
+        run: bun run check:doc-links
+
       - name: Security red-team FN-rate gate (Block E / E6)
         run: bun ./src/cli.ts security eval --corpus all
 

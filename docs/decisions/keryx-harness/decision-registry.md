@@ -110,13 +110,13 @@ Planned for T9 review (implementation-plan.md W16 task E-02):
 
 All decisions reference and cite (never modify) the frozen requirements package:
 
-- [README.md](../../../requirements/keryx-project-agent-harness/README.md) — Release boundaries, startup/resume preconditions, SLOs.
-- [prd.md](../../../requirements/keryx-project-agent-harness/prd.md) — Problem, thesis, functional requirements, success criteria, deferred questions.
-- [specification.md](../../../requirements/keryx-project-agent-harness/specification.md) — Architecture, runtime lifecycle, storage, manifest/config schemas, CLI, tool/policy, orchestration.
-- [brainstorm.md](../../../requirements/keryx-project-agent-harness/brainstorm.md) — Selected decisions D1–D8, critical questions, research basis.
-- [implementation-plan.md](../../../requirements/keryx-project-agent-harness/implementation-plan.md) — Wave structure, task contract, global constraints, verification gates.
-- [acceptance.feature](../../../requirements/keryx-project-agent-harness/acceptance.feature) — 80+ executable scenarios, Release 0–Release 2+, R1–R18 mappings.
-- [schemas/](../../../requirements/keryx-project-agent-harness/schemas/) — 35+ JSON schemas (Draft 2020-12), fixtures, version registry.
+- [README.md](../../requirements/keryx-project-agent-harness/README.md) — Release boundaries, startup/resume preconditions, SLOs.
+- [prd.md](../../requirements/keryx-project-agent-harness/prd.md) — Problem, thesis, functional requirements, success criteria, deferred questions.
+- [specification.md](../../requirements/keryx-project-agent-harness/specification.md) — Architecture, runtime lifecycle, storage, manifest/config schemas, CLI, tool/policy, orchestration.
+- [brainstorm.md](../../requirements/keryx-project-agent-harness/brainstorm.md) — Selected decisions D1–D8, critical questions, research basis.
+- [implementation-plan.md](../../requirements/keryx-project-agent-harness/implementation-plan.md) — Wave structure, task contract, global constraints, verification gates.
+- [acceptance.feature](../../requirements/keryx-project-agent-harness/acceptance.feature) — 80+ executable scenarios, Release 0–Release 2+, R1–R18 mappings.
+- [schemas/](../../requirements/keryx-project-agent-harness/schemas/) — 35+ JSON schemas (Draft 2020-12), fixtures, version registry.
 
 ---
 

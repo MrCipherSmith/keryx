@@ -194,25 +194,25 @@ No claim was reconciled by invention; no BLOCK condition arose.
 
 **Normative sources** (frozen, cited, never modified):
 
-- [specification.md](../../../requirements/keryx-project-agent-harness/specification.md)
+- [specification.md](../../requirements/keryx-project-agent-harness/specification.md)
   — §Architectural Position, §Canonical Ownership and Import Direction (ports),
   §Planned Module Map (`turn-control` is not a second orchestrator),
   §Orchestration Model ("only one loop authority"), §Completion Gates.
-- [agent-protocol.md](../../../requirements/keryx-project-agent-harness/agent-protocol.md)
+- [agent-protocol.md](../../requirements/keryx-project-agent-harness/agent-protocol.md)
   — §Ownership Model, Phase 2 ("`flow-orchestrator`/Task Manager is the only
   coordinator"), Phase 4/§Child Status Handling ("No worker may self-accept a
   parent flow"), Phase 6.
-- [implementation-plan.md](../../../requirements/keryx-project-agent-harness/implementation-plan.md)
+- [implementation-plan.md](../../requirements/keryx-project-agent-harness/implementation-plan.md)
   — §Purpose and authority, §Global constraints, §W1 row D-02 (contracts S-06,
   R1-03), §W2 TM-01…TM-03, §W11 FI-01/FI-02.
-- [acceptance.feature](../../../requirements/keryx-project-agent-harness/acceptance.feature)
+- [acceptance.feature](../../requirements/keryx-project-agent-harness/acceptance.feature)
   — `@SC_R09_DIRECT_FLOW_FILE_EDIT_DENIED` (@release-0),
   `@SC_R09_SINGLE_COORDINATOR` (@release-1), Feature preamble ("Managed-flow
   state and completion remain owned by Task Manager").
-- [prd.md](../../../requirements/keryx-project-agent-harness/prd.md)
+- [prd.md](../../requirements/keryx-project-agent-harness/prd.md)
   — §Decisions and Open Questions ("Task Manager is the sole managed-flow
   coordinator"), R1 Independent Runtime.
-- [brainstorm.md](../../../requirements/keryx-project-agent-harness/brainstorm.md)
+- [brainstorm.md](../../requirements/keryx-project-agent-harness/brainstorm.md)
   — §Selected Decisions D1 (Keryx owns the project lifecycle), D2 (single-agent
   first), D8 (existing contracts reused).
 
