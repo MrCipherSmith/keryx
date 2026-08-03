@@ -48,8 +48,36 @@ test("search_code maps input to `ctx rg <pattern> [path]` argv", async () => {
   const tools = builtinMetaprojectTools(ROOT, run);
   await tool(tools, "search_code").invoke({ pattern: "AppendOnlySession" });
   expect(calls[0]).toEqual(["ctx", "rg", "AppendOnlySession"]);
+  // The path is now the CONFINED, resolved path rather than the caller's raw
+  // string, so what was checked is what is used — a relative string would be
+  // re-resolved by the subprocess independently of the check.
   await tool(tools, "search_code").invoke({ pattern: "foo", path: "src" });
-  expect(calls[1]).toEqual(["ctx", "rg", "foo", "src"]);
+  expect(calls[1]).toEqual(["ctx", "rg", "foo", `${ROOT}/src`]);
+});
+
+test("search_code refuses a path that escapes the project root", async () => {
+  // The model supplies this path, the tool is classified read-only and
+  // auto-approved, and the result goes back to the provider — so an uncontained
+  // path is an arbitrary read with exfiltration attached. `read_file` in the
+  // same harness was already confined; this closes the gap beside it.
+  const { run, calls } = recordingRunner();
+  const tools = builtinMetaprojectTools(ROOT, run);
+
+  const result = await tool(tools, "search_code").invoke({ pattern: ".", path: "../../etc/passwd" });
+
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("escapes the project root");
+  expect(calls).toHaveLength(0); // nothing was executed
+});
+
+test("search_code refuses an absolute path outside the project root", async () => {
+  const { run, calls } = recordingRunner();
+  const tools = builtinMetaprojectTools(ROOT, run);
+
+  const result = await tool(tools, "search_code").invoke({ pattern: ".", path: "/etc/passwd" });
+
+  expect(result.isError).toBe(true);
+  expect(calls).toHaveLength(0);
 });
 
 test("graph_affected maps input to `gdgraph affected <file>` argv", async () => {

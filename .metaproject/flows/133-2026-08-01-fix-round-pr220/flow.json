@@ -1,0 +1,466 @@
+{
+  "schemaVersion": 2,
+  "id": "133",
+  "slug": "fix-round-pr220",
+  "title": "Fix round PR #220 (flow 131 / R4c): two blockers and the eleven remaining majors",
+  "status": "implemented",
+  "createdAt": "2026-08-01T23:22:55.451Z",
+  "updatedAt": "2026-08-03T10:53:28.986Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:37f04759f13a5e342a940f3f88d4073f1f962199cc815ba6ee7009f04871eeff",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-03T09:27:38.011Z"
+    },
+    "AC2": {
+      "at": "2026-08-03T09:27:56.704Z"
+    },
+    "AC3": {
+      "at": "2026-08-03T09:27:56.795Z"
+    },
+    "AC4": {
+      "at": "2026-08-03T09:27:56.895Z"
+    },
+    "AC5": {
+      "at": "2026-08-03T09:27:57.001Z"
+    },
+    "AC6": {
+      "at": "2026-08-03T09:27:57.109Z"
+    },
+    "AC7": {
+      "at": "2026-08-03T09:27:57.216Z"
+    },
+    "AC8": {
+      "at": "2026-08-03T09:27:57.313Z"
+    },
+    "AC9": {
+      "at": "2026-08-03T09:27:57.420Z"
+    },
+    "AC10": {
+      "at": "2026-08-03T09:27:57.536Z"
+    },
+    "AC11": {
+      "at": "2026-08-03T09:27:57.661Z"
+    },
+    "AC12": {
+      "at": "2026-08-03T09:27:57.766Z"
+    },
+    "AC13": {
+      "at": "2026-08-03T09:27:57.885Z"
+    },
+    "AC14": {
+      "at": "2026-08-03T09:27:58.032Z"
+    },
+    "AC15": {
+      "at": "2026-08-03T09:27:58.178Z"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/220"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "AC1/AC2: the real-socket route test",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "F-005/F-006/F-007: claim order, distinct ids, terminal event",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "F-003: an injection finding blocks, at both sites of the class",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "F-004: one profile ranking, trustMode included, guarded",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "F-008: the error boundary on the listener",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "F-009/F-010/F-011: the three test defects",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verify: full suite, typecheck, health",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix-round review, recorded as a managed package",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Update PR #220 and ready it",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-01T23:22:55.451Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-01T23:27:24.752Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-01T23:27:24.841Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-01T23:27:24.926Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-01T23:27:25.009Z",
+      "event": "task-added",
+      "detail": "T5: AC1/AC2: the real-socket route test"
+    },
+    {
+      "at": "2026-08-01T23:27:25.095Z",
+      "event": "task-added",
+      "detail": "T6: F-005/F-006/F-007: claim order, distinct ids, terminal event"
+    },
+    {
+      "at": "2026-08-01T23:27:25.179Z",
+      "event": "task-added",
+      "detail": "T7: F-003: an injection finding blocks, at both sites of the class"
+    },
+    {
+      "at": "2026-08-01T23:27:25.264Z",
+      "event": "task-added",
+      "detail": "T8: F-004: one profile ranking, trustMode included, guarded"
+    },
+    {
+      "at": "2026-08-01T23:27:25.346Z",
+      "event": "task-added",
+      "detail": "T9: F-008: the error boundary on the listener"
+    },
+    {
+      "at": "2026-08-01T23:27:25.429Z",
+      "event": "task-added",
+      "detail": "T10: F-009/F-010/F-011: the three test defects"
+    },
+    {
+      "at": "2026-08-01T23:27:25.514Z",
+      "event": "task-added",
+      "detail": "T11: Verify: full suite, typecheck, health"
+    },
+    {
+      "at": "2026-08-01T23:27:25.599Z",
+      "event": "task-added",
+      "detail": "T12: Fix-round review, recorded as a managed package"
+    },
+    {
+      "at": "2026-08-01T23:27:25.682Z",
+      "event": "task-added",
+      "detail": "T13: Update PR #220 and ready it"
+    },
+    {
+      "at": "2026-08-01T23:33:35.476Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-01T23:37:21.500Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-01T23:45:06.474Z",
+      "event": "task-done",
+      "detail": "T5: AC1/AC2: the real-socket route test"
+    },
+    {
+      "at": "2026-08-01T23:45:06.558Z",
+      "event": "task-done",
+      "detail": "T6: F-005/F-006/F-007: claim order, distinct ids, terminal event"
+    },
+    {
+      "at": "2026-08-01T23:45:06.642Z",
+      "event": "task-done",
+      "detail": "T7: F-003: an injection finding blocks, at both sites of the class"
+    },
+    {
+      "at": "2026-08-02T07:39:38.880Z",
+      "event": "task-done",
+      "detail": "T8: F-004: one profile ranking, trustMode included, guarded"
+    },
+    {
+      "at": "2026-08-02T07:41:42.236Z",
+      "event": "task-done",
+      "detail": "T9: F-008: the error boundary on the listener"
+    },
+    {
+      "at": "2026-08-02T07:46:02.910Z",
+      "event": "task-done",
+      "detail": "T10: F-009/F-010/F-011: the three test defects"
+    },
+    {
+      "at": "2026-08-02T07:47:16.715Z",
+      "event": "task-done",
+      "detail": "T11: Verify: full suite, typecheck, health"
+    },
+    {
+      "at": "2026-08-03T09:27:38.011Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-08-03T09:27:56.704Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-08-03T09:27:56.795Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-03T09:27:56.895Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-08-03T09:27:57.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-08-03T09:27:57.109Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-08-03T09:27:57.217Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-08-03T09:27:57.313Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-08-03T09:27:57.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-08-03T09:27:57.536Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-08-03T09:27:57.661Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-08-03T09:27:57.766Z",
+      "event": "ac-confirmed",
+      "detail": "AC12"
+    },
+    {
+      "at": "2026-08-03T09:27:57.885Z",
+      "event": "ac-confirmed",
+      "detail": "AC13"
+    },
+    {
+      "at": "2026-08-03T09:27:58.032Z",
+      "event": "ac-confirmed",
+      "detail": "AC14"
+    },
+    {
+      "at": "2026-08-03T09:27:58.178Z",
+      "event": "ac-confirmed",
+      "detail": "AC15"
+    },
+    {
+      "at": "2026-08-03T09:28:12.265Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-03T09:28:12.354Z",
+      "event": "task-done",
+      "detail": "T12: Fix-round review, recorded as a managed package"
+    },
+    {
+      "at": "2026-08-03T10:53:09.299Z",
+      "event": "task-done",
+      "detail": "T13: Update PR #220 and ready it"
+    },
+    {
+      "at": "2026-08-03T10:53:28.986Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/220 (warning: PR is not a draft)"
+    }
+  ]
+}

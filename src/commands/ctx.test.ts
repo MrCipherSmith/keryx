@@ -35,22 +35,30 @@ test("rgListMode detects file-listing and count flags", () => {
 // Review 2026-07-26, B-03: rg omits the filename for a single explicit file
 // path, so `keryx ctx rg "x" src/foo.ts` reported `(unknown)` and `0:0`.
 test("buildRgCommand always passes --with-filename", () => {
-  expect(buildRgCommand(["foo", "src/a.ts"], null)).toEqual([
+  // `buildRgCommand` returns a result rather than an argv, because flow 126
+  // made it refuse caller-supplied flags that ripgrep would parse as its own
+  // — `--pre=…` reached arbitrary command execution through the one operation
+  // agents are told to prefer over raw grep. The `--with-filename` fix rides
+  // inside that shape; both properties are asserted together here so neither
+  // can be dropped while the other still passes.
+  const search = buildRgCommand(["foo", "src/a.ts"], null);
+  expect(search.ok).toBe(true);
+  if (!search.ok) return;
+  expect(search.command).toEqual([
     "rg",
     "--with-filename",
     "--line-number",
     "--column",
     "--no-heading",
+    "--",
     "foo",
     "src/a.ts",
   ]);
-  expect(buildRgCommand(["foo", "-l"], "files")).toEqual([
-    "rg",
-    "--with-filename",
-    "--no-heading",
-    "foo",
-    "-l",
-  ]);
+
+  const listing = buildRgCommand(["foo", "-l"], "files");
+  expect(listing.ok).toBe(true);
+  if (!listing.ok) return;
+  expect(listing.command).toEqual(["rg", "--with-filename", "--no-heading", "-l", "--", "foo"]);
 });
 
 test("rg emits file:line:col for a single explicit file path", async () => {
@@ -59,8 +67,10 @@ test("rg emits file:line:col for a single explicit file path", async () => {
     const file = path.join(dir, "single.ts");
     await writeFile(file, "const a = 1;\nconst needle = 2;\n");
 
-    const command = buildRgCommand(["needle", file], null);
-    const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
+    const built = buildRgCommand(["needle", file], null);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const proc = Bun.spawn(built.command, { stdout: "pipe", stderr: "pipe" });
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     const line = stdout.trim().split("\n")[0] ?? "";
 

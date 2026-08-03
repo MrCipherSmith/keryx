@@ -55,3 +55,5 @@
 - 2026-07-13T01:49:48.831Z - ac-confirmed: AC3: RS-02 recovery.ts pure recoverFrom: crash-pre->safe-reexecute; crash-post+effect-confirmed->reconciled(no-dup); crash-post+indeterminate/missing->blocked-unknown-outcome; torn-write->last schema-valid entry; cancellation->cancelled-resumable; isolated-replay->replay-deferred (SC_R17). payloads schema-valid. 9 tests.
 - 2026-07-13T01:49:48.942Z - ac-confirmed: AC4: deterministic/offline: no Date.now/random/network/real-fs in resume runtime; InMemorySessionStore; recovery effect-free (recoverFrom appends nothing, no fetch).
 - 2026-07-13T01:49:49.098Z - ac-confirmed: AC5: tsc clean; full bun test 817/0 (797+20); W7 run.ts/session + W5/W6 + src/contracts unmodified (run.ts pure wrapper); deps={}; new code under src/harness/resume/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN.
+- 2026-07-30T16:12:27.215Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:27.227Z - done: all gates passed

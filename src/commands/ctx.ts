@@ -176,7 +176,13 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
   // `path:count`), not the `file:line:col:text` the match parser expects — so
   // summarize those as a file list instead of garbled "(unknown) 0:0" matches.
   const listMode = rgListMode(rgArgs);
-  const command = buildRgCommand(rgArgs, listMode);
+  const built = buildRgCommand(rgArgs, listMode);
+  if (!built.ok) {
+    console.error(built.reason);
+    process.exitCode = 1;
+    return;
+  }
+  const command = built.command;
   let result: CommandResult;
   try {
     result = await runCommand(command);
@@ -529,20 +535,173 @@ ${errors.length > 0 ? renderTextSection("Errors / Warnings", errors) : ""}
 `;
 }
 
-// Build the rg invocation for `keryx ctx rg`.
+// ---------------------------------------------------------------------------
+// ripgrep argv construction (flow 126 / S-001)
 //
-// `--with-filename` is passed UNCONDITIONALLY. rg omits the filename whenever it
-// is given a single explicit file path, which breaks the `file:line:col:text`
-// shape `parseRgMatches` expects — `keryx ctx rg "pattern" src/foo.ts` reported
-// `Top Files: (unknown)` and `0:0` for every hit, handing agents matches they
-// could not locate. `--no-heading` does not restore the filename; only `-H` does.
-// It is a no-op for the multi-path/directory case, so the common path is
-// byte-identical.
-export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | null): string[] {
+// The caller's pattern used to be spread straight into rg's argv. ripgrep then
+// parses any value beginning with `-` as one of ITS options — and ripgrep has
+// options that run an external program for every file it considers. So
+// `keryx ctx rg "--pre=…"` reached arbitrary command execution through the one
+// operation agents are explicitly told to prefer over raw grep.
+//
+// A `--` separator alone is not enough, because callers legitimately pass rg
+// flags and everything after `--` is positional. So flags are allowlisted and
+// the separator goes between them and the pattern:
+//
+//   rg <keryx flags> <allowlisted caller flags> -- <pattern> [paths]
+//
+// The allowlist is the part that fails closed. An unknown `-…` is refused
+// rather than forwarded, so an option added to a future ripgrep — including a
+// new way to execute something — is denied by default instead of inherited.
+
+/** rg boolean flags keryx forwards. */
+const RG_SAFE_FLAGS = new Set([
+  "-i", "--ignore-case",
+  "-s", "--case-sensitive",
+  "-S", "--smart-case",
+  "-w", "--word-regexp",
+  "-x", "--line-regexp",
+  "-F", "--fixed-strings",
+  "-v", "--invert-match",
+  "-U", "--multiline",
+  "--multiline-dotall",
+  "-l", "--files-with-matches",
+  "--files-without-match",
+  "--files",
+  "-c", "--count",
+  "--count-matches",
+  "--hidden",
+  "--no-ignore",
+  "--no-ignore-vcs",
+  "--follow",
+  "-n", "--line-number",
+  "-N", "--no-line-number",
+  "--column", "--no-column",
+  "--no-heading", "--heading",
+  "--stats",
+  "--crlf",
+  "--word-regexp",
+]);
+
+/** rg flags that consume a following value (or use `--flag=value`). */
+const RG_SAFE_VALUE_FLAGS = new Set([
+  "-e", "--regexp",
+  "-g", "--glob",
+  "--iglob",
+  "-t", "--type",
+  "-T", "--type-not",
+  "-A", "--after-context",
+  "-B", "--before-context",
+  "-C", "--context",
+  "-m", "--max-count",
+  "-M", "--max-columns",
+  "--max-depth",
+  "--sort", "--sortr",
+]);
+
+export type RgCommandResult =
+  | { ok: true; command: string[] }
+  | { ok: false; reason: string };
+
+/**
+ * Build the ripgrep argv, refusing any option that is not explicitly allowed.
+ *
+ * Exported so the separator and the allowlist can be asserted directly on the
+ * produced array. A behaviour-level test would prove less: ripgrep may not be
+ * installed (it is not, on some dev hosts), and a dangerous option may be
+ * absent from a given build — so such a test could pass for the wrong reason
+ * and keep passing after the guard was deleted.
+ */
+export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | null): RgCommandResult {
+  // `--with-filename` is passed UNCONDITIONALLY. ripgrep omits the filename
+  // whenever it is given a single explicit file path, which breaks the
+  // `file:line:col:text` shape `parseRgMatches` expects — so
+  // `keryx ctx rg "pattern" src/foo.ts` reported `Top Files: (unknown)` and
+  // `0:0` for every hit, handing agents matches they could not locate.
+  // `--no-heading` does not restore the filename; only `-H` / `--with-filename`
+  // does. It is a no-op for the multi-path and directory cases, so the common
+  // path is byte-identical.
   const base = listMode
     ? ["rg", "--with-filename", "--no-heading"]
     : ["rg", "--with-filename", "--line-number", "--column", "--no-heading"];
-  return [...base, ...rgArgs];
+
+  const flags: string[] = [];
+  const operands: string[] = [];
+  let index = 0;
+  let sawSeparator = false;
+
+  while (index < rgArgs.length) {
+    const arg = rgArgs[index]!;
+
+    // An explicit `--` from the caller: everything after it is already a
+    // pattern/path by their own intent.
+    if (arg === "--" && !sawSeparator) {
+      sawSeparator = true;
+      index += 1;
+      continue;
+    }
+
+    if (!sawSeparator && arg.startsWith("-") && arg !== "-") {
+      const [name] = arg.split("=", 1) as [string];
+      const inlineValue = arg.includes("=");
+
+      if (RG_SAFE_VALUE_FLAGS.has(name)) {
+        if (inlineValue) {
+          flags.push(arg);
+          index += 1;
+          continue;
+        }
+        const value = rgArgs[index + 1];
+        if (value === undefined) {
+          return { ok: false, reason: `keryx ctx rg: ${name} needs a value.` };
+        }
+        // A dash-leading VALUE is refused, not forwarded. As a separate token it
+        // is left to ripgrep's parser to classify, and older clap-based builds
+        // treat a `--…` token following a pending option as a new option — which
+        // re-opens the execution vector the separator closes. Folding into
+        // `--flag=value` is not a general fix either, because short flags do not
+        // accept the `=` form. Refusing is parser-independent, and the inline
+        // form remains available for a genuine dash-leading value.
+        if (value.startsWith("-") && value !== "-") {
+          return {
+            ok: false,
+            reason:
+              `keryx ctx rg: the value for ${name} may not start with a dash (${value}). ` +
+              `Use the inline form instead, which cannot be re-parsed as an option: ${name}=${value}.`,
+          };
+        }
+        flags.push(arg);
+        flags.push(value);
+        index += 2;
+        continue;
+      }
+
+      if (RG_SAFE_FLAGS.has(name) && !inlineValue) {
+        flags.push(arg);
+        index += 1;
+        continue;
+      }
+
+      return {
+        ok: false,
+        reason:
+          `keryx ctx rg: unsupported ripgrep option ${name}. ` +
+          `Only a reviewed set of options is forwarded, because ripgrep has options that execute external programs. ` +
+          `To search for a literal string that starts with a dash, put it after -- (keryx ctx rg -- "${arg}").`,
+      };
+    }
+
+    operands.push(arg);
+    index += 1;
+  }
+
+  if (operands.length === 0) {
+    return { ok: false, reason: 'keryx ctx rg: no pattern given. Usage: keryx ctx rg "<pattern>" [path]' };
+  }
+
+  // The separator is unconditional: with it present, no operand can be read as
+  // an option no matter what it looks like.
+  return { ok: true, command: [...base, ...flags, "--", ...operands] };
 }
 
 // rg flags that change output from matches to a file list (or per-file counts).

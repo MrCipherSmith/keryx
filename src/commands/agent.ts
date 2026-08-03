@@ -14,6 +14,7 @@
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
+import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 
@@ -507,7 +508,10 @@ export async function runAgentTurn(
       executedAny = true;
       const result = await executeCall(call, toolByName, io.requestApproval);
       io.onToolResult?.(call.name, result);
-      history.push({ role: "tool", content: result.output, provenance: "tool" });
+      // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
+      // (F3): the local UI above sees the raw output, but the model/provider must
+      // not receive a credential a command happened to read.
+      history.push({ role: "tool", content: redactSensitiveText(result.output), provenance: "tool" });
       const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
       toolLog.push(
         `${call.name}(${shortIn}) → ${result.isError ? "error" : "ok"} [attempt ${reservation.attempt}/${maxAttempts}, unique ${budgetUsed(budget)}/${maxToolCalls}]`,
@@ -694,8 +698,8 @@ async function executeCall(
   // Risk gate:
   // - `read` auto-allows
   // - `shell` / `destructive` require approval (DEFAULT-DENY when no approver)
-  // - `delegate` (spawn_subagent): auto-allow when no approver; when an approver
-  //   is present, ask (TUI may auto-approve read_only subagents)
+  // - `delegate` (spawn_subagent): DEFAULT-DENY when no approver, same as `shell`;
+  //   when an approver is present, ask (TUI may auto-approve read_only subagents)
   // - anything else is denied
   const risk = tool.definition.risk;
   if (risk === "shell" || risk === "destructive") {
@@ -719,12 +723,17 @@ async function executeCall(
       return { output: `command not approved by the user; not executed`, isError: true };
     }
   } else if (risk === "delegate") {
-    if (requestApproval !== undefined) {
-      const fingerprint = toolCallHash(call.name, call.input);
-      const response = await requestApproval(call.name, call.input, { fingerprint, destructive: false });
-      if (!isApprovalFor(response, fingerprint)) {
-        return { output: `subagent spawn not approved by the user; not executed`, isError: true };
-      }
+    // Fail-closed like `shell`: a delegate with no approver present is denied,
+    // never silently invoked (F6). The three MAE containment invariants
+    // (read-only child tools, child policy deny, hard-false child approver)
+    // still hold, but the gate no longer relies on them to stay safe.
+    const fingerprint = toolCallHash(call.name, call.input);
+    const response =
+      requestApproval === undefined
+        ? false
+        : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
+    if (!isApprovalFor(response, fingerprint)) {
+      return { output: `subagent spawn not approved by the user; not executed`, isError: true };
     }
   } else if (risk !== "read") {
     return { output: `tool "${call.name}" (risk ${risk}) is not permitted`, isError: true };

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/pending-approval/1.0.0",
+  "title": "Pending Approval",
+  "description": "Durable record of one policy-ask action awaiting a human answer while the operator is away from the terminal. It carries a bounded summary and no arguments a caller could use to reconstruct the command.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "approvalId",
+    "turnId",
+    "sessionId",
+    "summary",
+    "scope",
+    "consequence",
+    "createdAt",
+    "expiresAt",
+    "state",
+    "correlationId"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "approvalId": { "type": "string", "format": "uuid" },
+    "turnId": { "type": "string", "format": "uuid" },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "summary": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Concise redacted action summary."
+    },
+    "scope": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "What the answer would authorize, exactly. An answer can never broaden this."
+    },
+    "consequence": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "What changes if allowed."
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "On expiry the approval resolves to denied. Timeout is never an allow."
+    },
+    "state": {
+      "enum": ["pending", "allowed", "denied", "expired", "undeliverable"],
+      "description": "undeliverable is a terminal denial recorded when the transport could not deliver the prompt; it does not wait for expiry."
+    },
+    "resolvedAt": { "type": "string", "format": "date-time" },
+    "answeredBy": {
+      "type": "string",
+      "description": "Opaque caller identity. The turn that raised the approval may never appear here."
+    },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "deliveryAttempts": { "type": "integer", "minimum": 0 }
+  }
+}

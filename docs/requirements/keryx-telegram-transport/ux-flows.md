@@ -1,11 +1,12 @@
-# UX Flows: Telegram Companion Transport
-Version: 1.0.0
+# UX Flows: Telegram Transport
+Version: 2.2.0
 
 ## Experience principle
 
-Telegram is a low-friction companion surface. The desktop UI is the authoritative
+Telegram is a low-friction remote surface. The desktop UI is the authoritative
 place for setup, policy inspection, revocation, and recovery; Telegram gives
-brief, safe, time-bounded interactions.
+brief, safe, time-bounded interactions — and, from 2.0.0, the ability to start a
+turn against the project bound to the chat.
 
 ## Connection states
 
@@ -14,7 +15,7 @@ brief, safe, time-bounded interactions.
 | Disconnected | Connect action and reason, if known | No assumption of availability. |
 | Token validated | Credential check succeeded without exposing token | Not yet paired. |
 | Awaiting pairing | QR/deep link with expiry and cancel action | `/start` pairing handoff. |
-| Paired | Bound chat and test-message result; revoke action | Safe connected confirmation. |
+| Paired | Bound chat or forum, per-project topic mappings and their validation state, revoke action | Safe connected confirmation. |
 | Polling active | Last update/checkpoint and stop action | Status/notification capable. |
 | Degraded | Cause, retry state, desktop recovery options | Short degraded/final status if delivery remains possible. |
 
@@ -38,8 +39,27 @@ brief, safe, time-bounded interactions.
    `status.read`.
 3. Harness returns a safe status projection; transport redacts and renders a
    short correlated message.
-4. Unsupported text is not treated as an agent instruction and receives a
-   constrained help/fallback response.
+4. Text that is not a supported command is handled per the chat's binding: in a
+   project-bound chat it becomes a `task.submit` prompt (see Turn submission
+   below); in an unbound chat it receives a constrained help/fallback response
+   and starts nothing.
+
+## Turn submission
+
+1. User sends free text in a chat bound to a project.
+2. Transport authenticates the binding, bounds the input, and submits it to the
+   security boundary as untrusted content. A finding stops here: the reply says
+   only that the prompt was rejected.
+3. Transport emits `task.submit` with the bound project path declared
+   explicitly, and receives a turn id.
+4. Progress renders as a single edited message — a placeholder, throttled edits
+   while the turn runs, one final formatted edit — with overflow continuing as
+   further messages rather than being truncated.
+5. Any policy-`ask` raised during the turn appears as an approval card (see
+   Approval below). Unanswered, it denies at expiry; undeliverable, it denies at
+   once.
+6. The terminal outcome is rendered redacted, correlated with the same id the
+   local session records.
 
 ## Progress and failure notification
 
@@ -59,6 +79,112 @@ brief, safe, time-bounded interactions.
    callback nonce, expiry, deduplication, and policy context.
 4. Valid response is forwarded once. Expired, replayed, and denied actions show
    a safe final state; a `deny` never appears as an approvable card.
+
+## Multi-project setup
+
+1. Operator creates a supergroup with topics enabled and adds the bot with the
+   permission to manage topics. Both conditions are checked before anything is
+   created; a missing permission is named, not reported as a generic failure.
+2. Desktop configures the forum once. Every project already registered gets a
+   topic; projects registered later get theirs at registration.
+3. From then on the operator does nothing to add a project to Telegram: running
+   `keryx init` in a new project registers it and its topic appears. Re-running
+   init reuses the existing topic.
+4. A project whose directory disappears has its topic closed rather than
+   deleted — the conversation is still there — and reopening is deliberate.
+5. Bindings are validated periodically. A topic Telegram reports as gone is
+   cleared and named, and the project returns to pending so it can be
+   re-provisioned; a check that fails transiently changes nothing and is shown
+   as inconclusive rather than as a removal.
+6. Synchronization cannot discover topics belonging to no project — the Bot API
+   cannot enumerate a forum's topics — so the desktop presents what it created
+   and what it could not see.
+
+## Operating a project from its topic
+
+1. The topic offers the project's commands. The menu is generated from the
+   command registry, so it matches what this keryx install can actually do; a
+   command added to keryx appears here without anyone editing the bot.
+2. Read-only commands are offered directly. Commands that write to the project
+   are marked and ask first. Commands that spend tokens say so in the approval,
+   so cost is a decision rather than something noticed afterwards.
+3. Bringing a fresh project up is a sequence of those commands: build the graph,
+   index the wiki, enrich it, analyze tests, run health.
+4. Free text in the topic is a prompt to the agent. A command is a command. The
+   two are not the same request, and a graph rebuild never costs a model call.
+
+## Setting a provider without a web UI
+
+1. Operator picks a provider and a model from the topic. Neither is a secret, so
+   both are ordinary commands.
+2. What happens next depends on how that provider authorizes.
+
+**Provider using the device grant — works from the phone.**
+
+3. The bot sends a short code and the provider's own verification URL.
+4. The operator opens it in the phone's browser, signs in there, enters the code
+   and approves. keryx never sees the password or the session.
+5. keryx polls in the background and reports when the provider is authorized.
+   Nothing secret was in the chat, and no local page was needed.
+
+**Provider using an API key — needs the machine.**
+
+6. The bot says so plainly and offers the one-time local link for when the
+   operator is at the machine. It does not send a link that cannot open.
+7. At the machine, the operator opens the link and enters the value; it goes
+   straight into the credential store, never through a message.
+8. Reaching that link from elsewhere would need the non-loopback bind, with its
+   explicit flag and acknowledgement.
+9. Direct entry in a private chat exists only as an explicit fallback: never in
+   the supergroup, the message deleted immediately, the value kept out of logs,
+   evidence and history, and the operator told plainly that it passed through
+   Telegram's infrastructure and can be rotated.
+
+**Provider whose subscription cannot be used by a third-party client.**
+
+10. The bot says so at the point of choice, gives the reason, and offers the
+    API-key path. It does not attempt the flow and let the vendor refuse — the
+    cost of that would land on the operator's own account.
+
+## Working across projects
+
+1. Operator writes in a project's topic. The message routes to that project by
+   topic identifier.
+2. Writing in a topic mapped to no project produces a refusal that says so.
+   Nothing is delivered anywhere, and no other project's session is touched.
+3. Writing in a topic while that project is already busy queues the message and
+   answers immediately with its position. Other projects are unaffected and
+   continue in parallel.
+4. An unauthorized member of the supergroup gets nothing. Their messages produce
+   no privileged effect and no acknowledgement.
+
+## Voice in
+
+1. Operator sends a voice message in a bound topic or private chat.
+2. One status message appears and is edited through its phases: queued with
+   position, downloading, transcribing. There is no silent gap.
+3. Transcription runs locally. A remote service is used only if it was
+   explicitly enabled for this install and the egress policy permits it.
+4. The transcript becomes a prompt and is scanned as untrusted content, exactly
+   as typed text would be.
+5. If transcription produces nothing, the audio is handed to the agent as a file
+   marked not transcribed and the operator is told. The message is not lost.
+6. The same voice message delivered twice produces one transcription and one
+   turn.
+
+## Voice out
+
+1. A reply is produced and redacted.
+2. It is spoken only if it is worth hearing: long enough, not mostly code, not a
+   diff. Bullet lists are not diffs.
+3. Qualifying text is stripped of markup and, optionally, rewritten so it reads
+   naturally aloud. A rewrite that changed the language is discarded.
+4. Long replies become several clips, each within the duration cap, split at a
+   paragraph, sentence, line or word boundary — never mid-word.
+5. A recording indicator runs while synthesis is in progress, so the wait is
+   visible.
+6. Speech is synthesized from the redacted text only. What may not be written
+   may not be spoken.
 
 ## Cancellation
 

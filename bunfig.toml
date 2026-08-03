@@ -1,0 +1,9 @@
+# Bun configuration.
+#
+# The only entry is a test preload that redirects the user-global keryx config
+# directory into a per-run temp directory. Without it a `bun test` run writes
+# into the developer's real `~/.local/share/keryx` — see src/lib/test-preload.ts
+# for the measurement that motivated it.
+
+[test]
+preload = ["./src/lib/test-preload.ts"]

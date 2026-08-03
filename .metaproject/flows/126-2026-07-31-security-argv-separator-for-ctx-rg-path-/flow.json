@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 2,
+  "id": "126",
+  "slug": "security-argv-separator-for-ctx-rg-path-",
+  "title": "security: argv separator for ctx rg + path containment for caller-supplied paths (S-001/S-003)",
+  "status": "done",
+  "createdAt": "2026-07-31T09:04:03.572Z",
+  "updatedAt": "2026-07-31T11:48:36.881Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:560b3aff5ec98f96ebea46cb14e682983904003e63ec5aea59d03ed4571cd7d2",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-31T11:48:34.313Z",
+      "note": "buildRgCommand emits a literal -- immediately before the operand list; asserted on the constructed argv by 'places -- before the pattern' and 'every operand follows the separator' in src/commands/ctx.rg-argv.test.ts."
+    },
+    "AC2": {
+      "at": "2026-07-31T11:48:34.394Z",
+      "note": "A dash-leading pattern reaches ripgrep only after the separator, where it is an operand. Options are additionally allowlisted, so --pre, --pre-glob, --hostname-bin, --search-zip, -z and -f are refused outright rather than forwarded; a value beginning with a dash for a value-taking flag is refused too, since older clap-based builds would re-parse it as a new option."
+    },
+    "AC3": {
+      "at": "2026-07-31T11:48:34.476Z",
+      "note": "Mutation-checked, not asserted: removing the separator from buildRgCommand fails 8 argv tests; removing the dash-leading-value refusal fails 3 more. Both restore to green."
+    },
+    "AC4": {
+      "at": "2026-07-31T11:48:34.558Z",
+      "note": "test suggest and security scan resolve through resolveContainedPath before any read, with a typed refusal (outside-project vs not-found). agents monitor is deliberately excluded and the reasoning is recorded in plan.md. Additionally the harness search_code tool and its port fallback are confined - the review found a model-supplied path reaching the search argv unconfined while read_file in the same harness was already contained."
+    },
+    "AC5": {
+      "at": "2026-07-31T11:48:34.640Z",
+      "note": "Containment runs on the real path. Refused: relative traversal, absolute path outside the root, a symlink inside the project pointing outside, and a sibling directory sharing the root name prefix. Covered by src/lib/contained-path.test.ts."
+    },
+    "AC6": {
+      "at": "2026-07-31T11:48:34.723Z",
+      "note": "Accepted: a path inside the project, a symlink that stays inside, the project root itself, and an in-project file whose name begins with two dots (the segment-wise fix for a false refusal found in review). resolveProjectRoot keeps a subdirectory invocation working."
+    },
+    "AC7": {
+      "at": "2026-07-31T11:48:34.804Z",
+      "note": "Demonstrated: reverting the real-path resolution fails 2 containment tests, reverting the segment-wise check fails 1, and unconfining search_code fails 3. All restore to green."
+    },
+    "AC8": {
+      "at": "2026-07-31T11:48:34.886Z",
+      "note": "A traversal to a non-existent path returns outside-project, not not-found, so the refusal cannot be used as an existence oracle. Asserted by 'reports a traversal to a missing file as an escape, not as not-found'."
+    },
+    "AC9": {
+      "at": "2026-07-31T11:48:34.966Z",
+      "note": "tsc --noEmit exit 0. bun test 2295 pass, 14 skip, 0 fail (baseline 2253); both the file alone and the full suite exit 0, checked directly rather than through a pipe. keryx health run PASS score 93. CI on PR 214: all checks green."
+    },
+    "AC10": {
+      "at": "2026-07-31T11:48:35.049Z",
+      "note": "One pre-existing test changed: it pinned the search_code argv to the caller's relative path, and now asserts the confined resolved path plus two refusal cases - stronger, since the literal said nothing about containment. agents monitor containment was reverted precisely to avoid breaking its legitimate out-of-tree event file. All other pre-existing tests are unmodified and green."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/214"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-31T09:04:03.572Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-07-31T10:07:52.857Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-07-31T10:07:53.054Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-07-31T10:07:53.239Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-07-31T10:07:53.430Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-07-31T10:07:53.633Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-07-31T10:08:36.250Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-31T10:09:06.014Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/214"
+    },
+    {
+      "at": "2026-07-31T11:48:34.313Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: buildRgCommand emits a literal -- immediately before the operand list; asserted on the constructed argv by 'places -- before the pattern' and 'every operand follows the separator' in src/commands/ctx.rg-argv.test.ts."
+    },
+    {
+      "at": "2026-07-31T11:48:34.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: A dash-leading pattern reaches ripgrep only after the separator, where it is an operand. Options are additionally allowlisted, so --pre, --pre-glob, --hostname-bin, --search-zip, -z and -f are refused outright rather than forwarded; a value beginning with a dash for a value-taking flag is refused too, since older clap-based builds would re-parse it as a new option."
+    },
+    {
+      "at": "2026-07-31T11:48:34.476Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Mutation-checked, not asserted: removing the separator from buildRgCommand fails 8 argv tests; removing the dash-leading-value refusal fails 3 more. Both restore to green."
+    },
+    {
+      "at": "2026-07-31T11:48:34.559Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: test suggest and security scan resolve through resolveContainedPath before any read, with a typed refusal (outside-project vs not-found). agents monitor is deliberately excluded and the reasoning is recorded in plan.md. Additionally the harness search_code tool and its port fallback are confined - the review found a model-supplied path reaching the search argv unconfined while read_file in the same harness was already contained."
+    },
+    {
+      "at": "2026-07-31T11:48:34.640Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Containment runs on the real path. Refused: relative traversal, absolute path outside the root, a symlink inside the project pointing outside, and a sibling directory sharing the root name prefix. Covered by src/lib/contained-path.test.ts."
+    },
+    {
+      "at": "2026-07-31T11:48:34.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Accepted: a path inside the project, a symlink that stays inside, the project root itself, and an in-project file whose name begins with two dots (the segment-wise fix for a false refusal found in review). resolveProjectRoot keeps a subdirectory invocation working."
+    },
+    {
+      "at": "2026-07-31T11:48:34.804Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Demonstrated: reverting the real-path resolution fails 2 containment tests, reverting the segment-wise check fails 1, and unconfining search_code fails 3. All restore to green."
+    },
+    {
+      "at": "2026-07-31T11:48:34.886Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: A traversal to a non-existent path returns outside-project, not not-found, so the refusal cannot be used as an existence oracle. Asserted by 'reports a traversal to a missing file as an escape, not as not-found'."
+    },
+    {
+      "at": "2026-07-31T11:48:34.967Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: tsc --noEmit exit 0. bun test 2295 pass, 14 skip, 0 fail (baseline 2253); both the file alone and the full suite exit 0, checked directly rather than through a pipe. keryx health run PASS score 93. CI on PR 214: all checks green."
+    },
+    {
+      "at": "2026-07-31T11:48:35.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: One pre-existing test changed: it pinned the search_code argv to the caller's relative path, and now asserts the confined resolved path plus two refusal cases - stronger, since the literal said nothing about containment. agents monitor containment was reverted precisely to avoid breaking its legitimate out-of-tree event file. All other pre-existing tests are unmodified and green."
+    },
+    {
+      "at": "2026-07-31T11:48:35.135Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-07-31T11:48:36.881Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

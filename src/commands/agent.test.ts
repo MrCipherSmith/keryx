@@ -16,6 +16,7 @@ import {
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
   NormalizedMessage,
@@ -162,6 +163,49 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect((requests[0]?.tools ?? []).map((t) => t.name).sort()).toEqual(["get_cwd", "list_dir", "read_file"]);
   // History ends alternating with a tool message present.
   expect(history.some((m) => m.role === "tool")).toBe(true);
+});
+
+test("F6: a delegate (spawn) tool is fail-closed when no approver is present", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "do it" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  let invoked = false;
+  const delegateTool: InteractiveTool = {
+    definition: {
+      name: "spawn_subagent",
+      description: "spawn a subagent",
+      inputSchema: { type: "object", properties: { task: { type: "string" } }, required: ["task"] },
+      risk: "delegate",
+    },
+    invoke: async () => {
+      invoked = true;
+      return { output: "spawned", isError: false };
+    },
+  };
+  // collectingIo provides NO requestApproval → no approver present.
+  const { io, toolResults } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [delegateTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+
+  await runAgentTurn(io, deps, history, "spawn something");
+
+  // The spawn never ran, and the model saw an explicit not-approved result.
+  expect(invoked).toBe(false);
+  expect(toolResults).toContain("spawn_subagent:err");
+  const toolMsg = history.find((m) => m.role === "tool");
+  expect(toolMsg?.content).toContain("not approved");
 });
 
 test("runAgentTurn returns on a text-only finish without calling tools", async () => {

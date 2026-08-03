@@ -1,0 +1,110 @@
+[
+  {
+    "id": "F-001",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "a harness run that FAILED is recorded as `completed` / `ok`, on the default install",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-002",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the injection refusal returns an exit code no runtime treats as a refusal",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-003",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the claim is released on the one throw that proves the turn RAN, so one key buys two provider calls",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-004",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the production containment default is never executed under assertion",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-005",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the real PreToolUse guard is still inert for the injection class, and the comment names it as the one that was fixed",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-006",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "an attacker keeps one address unthrottled forever by interleaving one throw-away address per nine guesses",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-007",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "enforced mode would refuse 3.3% of this repository's own prose and source",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-008",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "three of the four source-level guards match a list of spellings where they mean a shape",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-009",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "seven branches added or changed this round have no test",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-010",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "`ensureTurnDir` still runs on every recorded append",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-011",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "round one's F-008 is closed at the site and not at the class",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-012",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "five policies now interpret six failure reasons, and they disagree about one",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]

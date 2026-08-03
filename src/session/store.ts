@@ -10,6 +10,7 @@
 // current project.
 
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -18,9 +19,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, readTranscriptFile } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
+  keryxDataDir,
   projectKeyFromPath,
   projectSessionsDir,
   resolveProjectRoot,
@@ -75,8 +78,100 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function ensureDir(dir: string): void {
-  mkdirSync(dir, { recursive: true });
+/**
+ * The `sessions/` directory keryx creates under a given data root.
+ *
+ * Derived from the data root, NOT searched for in the path. The first version
+ * did `dir.indexOf("/sessions/")`, which finds whichever `sessions` segment
+ * comes first — so with `KERYX_DATA_DIR=/srv/sessions/keryx` the walk started
+ * at `/srv/sessions`, a directory shared with other services, and chmodded it
+ * and the data root itself to 0700. The comment below it claimed the data root
+ * was left alone; a review measured 0775 → 0700 on both.
+ *
+ * The guard that was supposed to cover this asserted `mode(dataDir) === "775"`
+ * and passed, because its fixture path happened to contain no `sessions`
+ * segment. Deriving the answer removes the question.
+ */
+function sessionsRootFor(dataDir: string | undefined): string {
+  return path.join(keryxDataDir(dataDir), "sessions");
+}
+
+/**
+ * Create a session directory owner-only, without widening what is above it.
+ *
+ * A recursive `mkdirSync` with no mode created every level under the current
+ * umask, and with `KERYX_DATA_DIR` unset the top level IS the shared
+ * user-global config directory — the one that holds `auth.json`. A review ran
+ * `keryx shell` on a fresh install under `umask 002` and measured the result:
+ * `~/.local/share/keryx` and the whole `sessions/` subtree at 0775, so any
+ * member of the operator's primary group could pre-create or replace
+ * `auth.json` before the first `/connect`, and unlink transcripts indefinitely.
+ *
+ * So the shared root goes through `ensureKeryxConfigDir`, which owns its mode,
+ * and every level below it is forced to 0700.
+ *
+ * The walk runs under `KERYX_DATA_DIR` too. A first version skipped it there —
+ * scoped, again, to the call site the finding named — which left every install
+ * that sets that variable with a permanently group-writable `sessions/`, and
+ * transcripts anyone in the group could read or unlink. The data root itself is
+ * not touched in that case: it is the operator's chosen directory and may
+ * legitimately hold other things, so the tighten starts one level in, at
+ * `sessions/`.
+ *
+ * `chmod` is best-effort and skipped on Windows, matching `ensureKeryxConfigDir`.
+ */
+function ensureDir(dir: string, dataDir?: string): void {
+  const configRoot = keryxConfigDir();
+  const shared = dir === configRoot || dir.startsWith(configRoot + path.sep);
+  if (shared) {
+    // Only when the session tree really is inside the shared directory. With
+    // `KERYX_DATA_DIR` or an explicit `dataDir` it is not, and creating the
+    // shared directory as a side effect of writing somewhere else would be a
+    // surprise.
+    ensureKeryxConfigDir();
+  }
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (process.platform === "win32") {
+    return;
+  }
+  // `mode` applies at CREATION only, so a level that already exists — from a
+  // release before this one, or created under a umask that stripped the bits —
+  // keeps whatever it had. Walk down and force each level.
+  //
+  // Where the walk STARTS is the whole question. Inside the shared config
+  // directory it starts at the root, which `ensureKeryxConfigDir` has already
+  // tightened. Outside it, the root is the operator's own directory and is left
+  // alone; the walk begins at the first level keryx itself creates.
+  const root = shared ? configRoot : sessionsRootFor(dataDir);
+  if (!dir.startsWith(root + path.sep)) {
+    // Not under the tree this function is responsible for. Nothing outside it
+    // is keryx's to re-permission, and a walk that starts somewhere else is
+    // exactly the defect this guard replaced.
+    return;
+  }
+  if (!shared) {
+    // `sessions/` itself is the first level keryx creates outside the shared
+    // directory, so it is part of the walk rather than its already-tightened
+    // starting point. Omitting it left it at 0775 while every level below it
+    // was 0700 — which is the level that matters, since group write there is
+    // enough to unlink a whole project's transcripts.
+    tighten(root);
+  }
+  let current = root;
+  for (const segment of dir.slice(root.length + 1).split(path.sep)) {
+    current = path.join(current, segment);
+    tighten(current);
+  }
+}
+
+/** Force one directory owner-only. Best-effort, like every other mode here. */
+function tighten(target: string): void {
+  try {
+    chmodSync(target, 0o700);
+  } catch {
+    // Not ours to chmod, or a filesystem that refuses it. The directory is
+    // still created; the mode is best-effort, exactly as it is one level up.
+  }
 }
 
 function atomicWriteText(file: string, body: string): void {
@@ -90,9 +185,16 @@ function atomicWriteJson(file: string, value: unknown): void {
 }
 
 function readSummaryFile(file: string): SessionSummary | undefined {
+  // `readConfigFile`, not `readFileSync`: a summary is config-sized, and an
+  // oversized one aborts the process outright (SIGABRT, no output, uncatchable
+  // — the `try/catch` below does not run). A non-regular file in its place
+  // hangs the read forever. See MAX_CONFIG_FILE_BYTES.
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    return undefined;
+  }
   try {
-    const raw = readFileSync(file, "utf8");
-    const o = JSON.parse(raw) as Partial<SessionSummary> & { messageCount?: number };
+    const o = JSON.parse(read.text) as Partial<SessionSummary> & { messageCount?: number };
     if (typeof o.id !== "string" || typeof o.projectPath !== "string") {
       return undefined;
     }
@@ -148,12 +250,41 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
   atomicWriteText(file, lines.length > 0 ? `${lines.join("\n")}\n` : "");
 }
 
+/**
+ * A transcript that exists but could not be read, so history is UNKNOWN rather
+ * than empty.
+ *
+ * `readJsonl` returns `[]` for a session that has no transcript yet, which is a
+ * true statement about a new session. Returning the same `[]` for a transcript
+ * that is too large, or is a FIFO, or cannot be read, would say "this
+ * conversation had no messages" about an audit log the process could not open —
+ * and the caller would resume a session that silently appears to have no
+ * history. So it throws instead, and the operator is told which file and why.
+ */
+export class TranscriptUnreadableError extends Error {
+  constructor(
+    readonly file: string,
+    readonly reason: string,
+  ) {
+    super(`session transcript ${file} could not be read (${reason})`);
+    this.name = "TranscriptUnreadableError";
+  }
+}
+
 function readJsonl(file: string): NormalizedMessage[] {
   if (!existsSync(file)) {
     return [];
   }
+  // `readTranscriptFile`, not `readFileSync`: an oversized file aborts the
+  // process (SIGABRT, uncatchable) and a non-regular one blocks forever. The
+  // bound is the transcript bound, not the config bound — a real conversation
+  // legitimately exceeds the latter.
+  const read = readTranscriptFile(file);
+  if (!read.ok) {
+    throw new TranscriptUnreadableError(file, read.reason);
+  }
   const out: NormalizedMessage[] = [];
-  for (const line of readFileSync(file, "utf8").split("\n")) {
+  for (const line of read.text.split("\n")) {
     if (line.trim().length === 0) {
       continue;
     }
@@ -200,7 +331,7 @@ export function createSession(opts: {
   const projectKey = projectKeyFromPath(projectPath);
   const id = opts.id ?? randomUUID();
   const dir = sessionDirPath(projectPath, id, opts.dataDir);
-  ensureDir(dir);
+  ensureDir(dir, opts.dataDir);
   const ts = nowIso();
   const summary: SessionSummary = {
     schemaVersion: SESSION_SCHEMA_VERSION,
@@ -292,14 +423,44 @@ export function loadContext(cwd: string, sessionId: string, dataDir?: string): N
   return readJsonl(path.join(dir, "transcript.jsonl"));
 }
 
-/** Full archive for export (falls back to context/transcript). */
-export function loadArchive(cwd: string, sessionId: string, dataDir?: string): NormalizedMessage[] {
+/**
+ * Full archive for export (falls back to context/transcript).
+ *
+ * The fallback covers an UNREADABLE archive, not only an absent one. Before it
+ * did, a `TranscriptUnreadableError` on `archive.jsonl` aborted the resume of a
+ * session whose `context.jsonl` was perfectly readable — and `archive.jsonl` is
+ * the file most likely to reach the 64 MiB bound, because it is the one that
+ * keeps everything compaction removed. Every caller answers that throw by
+ * starting a brand new session, so the effect was that the longest
+ * conversations became the ones that could not be resumed.
+ *
+ * The degradation is REPORTED, never swallowed. `onDegraded` is how a caller
+ * tells "this session has no archive" from "this session's archive could not be
+ * read", and the module's rule — an unreadable file must not read back as an
+ * empty one — survives one level up instead of being traded away here.
+ *
+ * A failure of the CONTEXT still throws. Falling back from a fallback would be
+ * the silent-empty this whole area exists to prevent.
+ */
+export function loadArchive(
+  cwd: string,
+  sessionId: string,
+  dataDir?: string,
+  onDegraded?: (error: TranscriptUnreadableError) => void,
+): NormalizedMessage[] {
   const dir = sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir);
   const archivePath = path.join(dir, "archive.jsonl");
   if (existsSync(archivePath)) {
-    const archive = readJsonl(archivePath);
-    if (archive.length > 0) {
-      return archive;
+    try {
+      const archive = readJsonl(archivePath);
+      if (archive.length > 0) {
+        return archive;
+      }
+    } catch (cause) {
+      if (!(cause instanceof TranscriptUnreadableError)) {
+        throw cause;
+      }
+      onDegraded?.(cause);
     }
   }
   return loadContext(cwd, sessionId, dataDir);
@@ -413,6 +574,13 @@ export function openSession(opts: OpenSessionOptions): {
   history: NormalizedMessage[];
   archive: NormalizedMessage[];
   resumed: boolean;
+  /**
+   * Set when the session resumed WITHOUT its archive because the archive could
+   * not be read. The resume succeeded and is not a lie about what it loaded:
+   * a caller that ignores this reports a shorter history than the session has,
+   * which is the one thing the transcript readers throw to prevent.
+   */
+  archiveDegraded?: string;
 } {
   const cwd = opts.cwd;
   const dataDir = opts.dataDir;
@@ -422,12 +590,22 @@ export function openSession(opts: OpenSessionOptions): {
     history: NormalizedMessage[];
     archive: NormalizedMessage[];
     resumed: true;
+    archiveDegraded?: string;
   } => {
     const dir = sessionDirPath(resolveProjectRoot(cwd), found.id, dataDir);
     const handle: SessionHandle = { summary: found, dir };
     const history = loadContext(cwd, found.id, dataDir);
-    const archive = loadArchive(cwd, found.id, dataDir);
-    return { handle, history, archive, resumed: true };
+    let degraded: string | undefined;
+    const archive = loadArchive(cwd, found.id, dataDir, (error) => {
+      degraded = error.message;
+    });
+    return {
+      handle,
+      history,
+      archive,
+      resumed: true,
+      ...(degraded !== undefined ? { archiveDegraded: degraded } : {}),
+    };
   };
 
   if (opts.resumeId !== undefined && opts.resumeId.length > 0) {
@@ -462,7 +640,10 @@ export function openSession(opts: OpenSessionOptions): {
 export function exportSessionMarkdown(cwd: string, sessionId: string, dataDir?: string): string {
   const summary = findSession(cwd, sessionId, dataDir);
   const id = summary?.id ?? sessionId;
-  const history = loadArchive(cwd, id, dataDir);
+  let degraded: string | undefined;
+  const history = loadArchive(cwd, id, dataDir, (error) => {
+    degraded = error.message;
+  });
   const lines: string[] = [
     `# ${summary?.title ?? sessionId}`,
     "",
@@ -472,6 +653,12 @@ export function exportSessionMarkdown(cwd: string, sessionId: string, dataDir?: 
     summary?.model !== undefined ? `- model: ${summary.provider ?? ""}/${summary.model}` : "",
     summary !== undefined
       ? `- context: ${summary.messageCount} · archive: ${summary.archiveMessageCount} · compact×${summary.compactCount}`
+      : "",
+    // In the document, not on stderr: an export is read later, by someone who
+    // was not at the terminal, and "this is the whole conversation" is exactly
+    // what they will assume of a file that does not say otherwise.
+    degraded !== undefined
+      ? `- **incomplete**: exported from the active context because the archive could not be read (${degraded})`
       : "",
     "",
     "---",

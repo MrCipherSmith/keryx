@@ -149,10 +149,57 @@ export async function runGate(input: {
   return { status: "pass", reasons: [`security gate: ${latest.gate}`] };
 }
 
+/**
+ * Remember a resolved value, and NOT a rejection.
+ *
+ * Both memoised loads read the filesystem — the config file, and the HMAC key —
+ * and the first version of this cache was `once ??= load()`, which stores the
+ * PROMISE. A promise that rejects is still a value, so one transient fault
+ * poisoned the instance: every later `redact` in that turn re-awaited the same
+ * rejection, where an uncached caller retried the read and would have succeeded.
+ * On a 10,000-event turn that is one unlucky `EINTR` costing the whole turn's
+ * redaction, which is the control this memo was added underneath.
+ *
+ * Clearing the slot in the rejection handler is what makes the next call retry.
+ * Concurrent callers already awaiting the failed promise all see the same
+ * rejection, which is correct — they asked at the same time and got the same
+ * answer — and the call after it starts fresh.
+ */
+export function memoizeResolved<T>(load: () => Promise<T>): () => Promise<T> {
+  let once: Promise<T> | undefined;
+  return () => {
+    if (once === undefined) {
+      once = load().catch((error: unknown) => {
+        once = undefined;
+        throw error;
+      });
+    }
+    return once;
+  };
+}
+
 // The in-process service contract (specification.md §6a). `check` never throws
 // in advisory mode; the caller may proceed after logging. In enforced/ci mode a
 // fail/needs-approval decision must stop the controlled write.
 export function createSecurityService(cwd: string = process.cwd()): SecurityService {
+  // Per-INSTANCE, resolved once and reused. `redact` used to reload the config
+  // and the HMAC key on every call, which is invisible while every caller
+  // constructs a service per call — and is not once a caller has a loop.
+  //
+  // `keryx serve` made that loop production: the remote turn runner redacts
+  // every `assistant.delta` before it is appended, so a 10,000-event turn paid
+  // 10,000 config loads and 10,000 key reads. Measured at 80 microseconds per
+  // event, which was two thirds of the 121 microseconds the whole per-event path
+  // cost.
+  //
+  // Instance-scoped rather than module-scoped, deliberately. A module cache
+  // would outlive a config change on disk for the life of the process; an
+  // instance is held for one turn by the one caller that holds one at all, and
+  // every other caller still constructs per call and sees exactly the behaviour
+  // it saw before.
+  const configFor = memoizeResolved(() => loadSecurityConfig(cwd));
+  const hashOnce = memoizeResolved(() => hashFnFor(cwd));
+
   return {
     async check(input: SecurityCheck): Promise<SecurityDecision> {
       try {
@@ -168,9 +215,9 @@ export function createSecurityService(cwd: string = process.cwd()): SecurityServ
       content: string,
       opts?: { source?: SecuritySource },
     ): Promise<{ redacted: string; findings: SecurityFinding[] }> {
-      const config = await loadSecurityConfig(cwd);
+      const config = await configFor();
       const matches = await runDetectorsAsync(cwd, content, config);
-      const hashFn = await hashFnFor(cwd);
+      const hashFn = await hashOnce();
       const source: SecuritySource = opts?.source ?? "generated";
       const decision = resolveDecision(config, {
         matches,

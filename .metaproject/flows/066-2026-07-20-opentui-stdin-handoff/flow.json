@@ -3,15 +3,32 @@
   "id": "066",
   "slug": "opentui-stdin-handoff",
   "title": "OpenTUI stdin handoff fix — release readline BEFORE createCliRenderer (terminal query responses leaked)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-20T10:50:33.336Z",
-  "updatedAt": "2026-07-20T10:52:43.845Z",
+  "updatedAt": "2026-07-30T16:13:14.767Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2f9ff3a50c122ef7a46f8e32b133892840ee63f90378fff17f48c3f5553d6f15",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-07-30T16:13:14.338Z",
+      "note": "Met at merge 69d5340d (PR #103): src/tui/tui-shell.ts gained the onBeforeInit hook, invoked after the no-TTY / absent-dep guards and before createCliRenderer."
+    },
+    "AC2": {
+      "at": "2026-07-30T16:13:14.421Z",
+      "note": "Met at merge 69d5340d: src/commands/shell.ts passes onBeforeInit: () => rl.close(); fallback paths return before the hook and keep readline usable."
+    },
+    "AC3": {
+      "at": "2026-07-30T16:13:14.503Z",
+      "note": "Met at merge time (TUI still opt-in via --tui). Superseded by flow 067, which made the TUI own the terminal from start and become the default."
+    },
+    "AC4": {
+      "at": "2026-07-30T16:13:14.587Z",
+      "note": "Met at merge time (PR #103 CI green). Real-terminal validation was the user-facing caveat and was carried into flow 067. Re-verified today on main: keryx health run = PASS."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -65,7 +82,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +90,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped"
     },
     {
       "id": "T5",
@@ -154,6 +172,56 @@
       "at": "2026-07-20T10:52:43.845Z",
       "event": "task-done",
       "detail": "T6: verify"
+    },
+    {
+      "at": "2026-07-30T16:12:31.784Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-07-30T16:12:42.666Z",
+      "event": "completing",
+      "detail": "merged commit: 69d5340d343370773883319aab20689dfae6d399"
+    },
+    {
+      "at": "2026-07-30T16:12:42.675Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4"
+    },
+    {
+      "at": "2026-07-30T16:13:14.338Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Met at merge 69d5340d (PR #103): src/tui/tui-shell.ts gained the onBeforeInit hook, invoked after the no-TTY / absent-dep guards and before createCliRenderer."
+    },
+    {
+      "at": "2026-07-30T16:13:14.421Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Met at merge 69d5340d: src/commands/shell.ts passes onBeforeInit: () => rl.close(); fallback paths return before the hook and keep readline usable."
+    },
+    {
+      "at": "2026-07-30T16:13:14.503Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Met at merge time (TUI still opt-in via --tui). Superseded by flow 067, which made the TUI own the terminal from start and become the default."
+    },
+    {
+      "at": "2026-07-30T16:13:14.587Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Met at merge time (PR #103 CI green). Real-terminal validation was the user-facing caveat and was carried into flow 067. Re-verified today on main: keryx health run = PASS."
+    },
+    {
+      "at": "2026-07-30T16:13:14.757Z",
+      "event": "completing",
+      "detail": "merged commit: 69d5340d343370773883319aab20689dfae6d399"
+    },
+    {
+      "at": "2026-07-30T16:13:14.767Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "69d5340d343370773883319aab20689dfae6d399",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:13:14.766Z"
+  }
 }

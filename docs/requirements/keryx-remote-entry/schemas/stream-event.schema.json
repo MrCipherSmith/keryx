@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/stream-event/1.0.0",
+  "title": "Stream Event",
+  "description": "Provider-neutral turn progress event. Rendered from structured summary fields; raw provider payloads and raw tool output are never forwarded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "turnId", "seq", "kind", "at"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "turnId": { "type": "string", "format": "uuid" },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic within a turn. Used as the resume cursor for re-attachment; replay produces no duplicate side effect."
+    },
+    "kind": {
+      "enum": [
+        "turn.started",
+        "assistant.delta",
+        "tool.started",
+        "tool.finished",
+        "approval.pending",
+        "approval.resolved",
+        "turn.finished"
+      ]
+    },
+    "at": { "type": "string", "format": "date-time" },
+    "text": {
+      "type": "string",
+      "description": "Redacted assistant delta. Present only for assistant.delta."
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "summary": {
+          "type": "string",
+          "description": "Bounded structured summary. Never raw arguments, stdout, or stderr."
+        },
+        "decision": { "enum": ["allow", "ask", "deny"] },
+        "outcome": { "enum": ["ok", "error", "denied", "refused"] }
+      }
+    },
+    "approvalId": { "type": "string", "format": "uuid" },
+    "resolution": { "enum": ["allowed", "denied", "expired", "undeliverable"] },
+    "terminal": {
+      "type": "boolean",
+      "description": "True on the final event of a stream, including a stream closed because the backlog window elapsed. A stream is never truncated silently."
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/topic-provisioning/1.0.0",
+  "title": "Topic Provisioning",
+  "description": "Lifecycle of the topic created for a registered project. Topics follow keryx init: a project registered in the user-global project registry is provisioned a topic when a forum exists, and recorded pending until one does. Ordering between forum configuration and project registration must not matter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectId", "state", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "projectId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "References the project registry entry. The transport keeps no second list of projects."
+    },
+    "state": {
+      "enum": ["pending", "provisioned", "closed", "failed"],
+      "description": "pending: registered but no forum yet, or the topic was deleted and the project awaits re-provisioning. closed: the project's path went missing, so the topic was closed rather than deleted because it holds the conversation. failed: provisioning was attempted and could not complete."
+    },
+    "bindingId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The topic binding created for this project. Present when provisioned or closed."
+    },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": {
+          "enum": [
+            "forum-not-configured",
+            "topics-not-enabled",
+            "missing-manage-topics-permission",
+            "rate-limited",
+            "unknown"
+          ],
+          "description": "A missing permission is reported as exactly that, never as a generic failure, because the operator's fix differs entirely."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Safe explanation. No raw provider error body."
+        }
+      }
+    },
+    "reopenRequiresOperator": {
+      "type": "boolean",
+      "default": true,
+      "description": "A closed topic is reopened only by an explicit operator action; a path reappearing does not silently reopen it."
+    }
+  }
+}

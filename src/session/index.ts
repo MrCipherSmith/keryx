@@ -12,6 +12,7 @@ export { compactMessages, indexOfKeepFrom, type CompactOptions, type CompactResu
 
 export {
   SESSION_SCHEMA_VERSION,
+  TranscriptUnreadableError,
   compactSession,
   createSession,
   exportSessionMarkdown,

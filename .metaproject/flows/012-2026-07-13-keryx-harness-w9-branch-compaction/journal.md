@@ -54,3 +54,5 @@
 - 2026-07-13T02:24:54.551Z - ac-confirmed: AC3: B-02 compaction.ts: typed compaction-entry (schema-valid) + provenance (sourceEntryIds->derivedEntryId, summaryHash=sha256(summary)); evidence-preservation (source history/evidence NOT deleted, PURE append-only derived; untrusted summary NOT promoted); rebuild bounded context (SC_R07); assertEvidencePreserved throws EvidenceDeletionError. 14 tests. SC_R06_TYPED_COMPACTION/SC_R07.
 - 2026-07-13T02:24:54.603Z - ac-confirmed: AC4: deterministic/offline: no Date.now/random/network/real-fs in branch runtime; content-addressed sha256; clock/id injected; reuse W7 session (branch/compaction payloads) + W8 store.
 - 2026-07-13T02:24:54.656Z - ac-confirmed: AC5: tsc clean; full bun test 844/0 (817+27); W7/W8/W5/W6 + src/contracts unmodified; deps={}; new code under src/harness/branch/; frozen pkg+src/eval+src/contracts+ADRs untouched. T9 CLEAN (4 invariants upheld).
+- 2026-07-30T16:12:27.316Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:27.327Z - done: all gates passed

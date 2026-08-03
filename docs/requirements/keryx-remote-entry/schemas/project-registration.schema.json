@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/project-registration/1.0.0",
+  "title": "Project Registration",
+  "description": "User-global record of one project this install was initialized in. Addressing only: it answers which projects exist and how they are addressed, never what they contain. Project configuration, policy and content stay in each project's own .metaproject/. This record holds no credential material.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectId", "path", "state", "registeredAt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "projectId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Opaque, stable across path changes recorded by an explicit re-registration."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute project path. Declared explicitly by callers that route to this project; never inferred."
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-facing label. Safe to render in a transport."
+    },
+    "state": {
+      "enum": ["active", "missing", "deregistered"],
+      "description": "missing means the path no longer exists; the entry is retained and reported rather than deleted, because a disk being unmounted is not an instruction to forget a project. deregistered is always an explicit operator action."
+    },
+    "registeredAt": { "type": "string", "format": "date-time" },
+    "lastSeenAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last time the path was confirmed to exist."
+    },
+    "transportBindings": {
+      "type": "array",
+      "description": "Opaque references to transport-side bindings for this project, so a transport can reconcile. Contains no transport credential.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["transport", "bindingId"],
+        "properties": {
+          "transport": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "bindingId": { "type": "string", "format": "uuid" }
+        }
+      }
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["token"] },
+      { "required": ["apiKey"] },
+      { "required": ["secret"] },
+      { "required": ["credential"] }
+    ]
+  }
+}

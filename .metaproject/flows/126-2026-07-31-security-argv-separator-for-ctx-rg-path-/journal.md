@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-07-31T09:04:03.572Z - flow created
+- 2026-07-31T10:07:52.857Z - frozen: 10 criteria; checksum recorded
+- 2026-07-31T10:07:53.054Z - started
+- 2026-07-31T10:07:53.239Z - task-done: T1: Collect remaining context
+- 2026-07-31T10:07:53.430Z - task-done: T2: Implement per plan
+- 2026-07-31T10:07:53.633Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-31T10:08:36.250Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-31T10:09:06.014Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/214
+- 2026-07-31T11:48:34.313Z - ac-confirmed: AC1: buildRgCommand emits a literal -- immediately before the operand list; asserted on the constructed argv by 'places -- before the pattern' and 'every operand follows the separator' in src/commands/ctx.rg-argv.test.ts.
+- 2026-07-31T11:48:34.394Z - ac-confirmed: AC2: A dash-leading pattern reaches ripgrep only after the separator, where it is an operand. Options are additionally allowlisted, so --pre, --pre-glob, --hostname-bin, --search-zip, -z and -f are refused outright rather than forwarded; a value beginning with a dash for a value-taking flag is refused too, since older clap-based builds would re-parse it as a new option.
+- 2026-07-31T11:48:34.476Z - ac-confirmed: AC3: Mutation-checked, not asserted: removing the separator from buildRgCommand fails 8 argv tests; removing the dash-leading-value refusal fails 3 more. Both restore to green.
+- 2026-07-31T11:48:34.559Z - ac-confirmed: AC4: test suggest and security scan resolve through resolveContainedPath before any read, with a typed refusal (outside-project vs not-found). agents monitor is deliberately excluded and the reasoning is recorded in plan.md. Additionally the harness search_code tool and its port fallback are confined - the review found a model-supplied path reaching the search argv unconfined while read_file in the same harness was already contained.
+- 2026-07-31T11:48:34.640Z - ac-confirmed: AC5: Containment runs on the real path. Refused: relative traversal, absolute path outside the root, a symlink inside the project pointing outside, and a sibling directory sharing the root name prefix. Covered by src/lib/contained-path.test.ts.
+- 2026-07-31T11:48:34.723Z - ac-confirmed: AC6: Accepted: a path inside the project, a symlink that stays inside, the project root itself, and an in-project file whose name begins with two dots (the segment-wise fix for a false refusal found in review). resolveProjectRoot keeps a subdirectory invocation working.
+- 2026-07-31T11:48:34.804Z - ac-confirmed: AC7: Demonstrated: reverting the real-path resolution fails 2 containment tests, reverting the segment-wise check fails 1, and unconfining search_code fails 3. All restore to green.
+- 2026-07-31T11:48:34.886Z - ac-confirmed: AC8: A traversal to a non-existent path returns outside-project, not not-found, so the refusal cannot be used as an existence oracle. Asserted by 'reports a traversal to a missing file as an escape, not as not-found'.
+- 2026-07-31T11:48:34.967Z - ac-confirmed: AC9: tsc --noEmit exit 0. bun test 2295 pass, 14 skip, 0 fail (baseline 2253); both the file alone and the full suite exit 0, checked directly rather than through a pipe. keryx health run PASS score 93. CI on PR 214: all checks green.
+- 2026-07-31T11:48:35.049Z - ac-confirmed: AC10: One pre-existing test changed: it pinned the search_code argv to the caller's relative path, and now asserts the confined resolved path plus two refusal cases - stronger, since the literal said nothing about containment. agents monitor containment was reverted precisely to avoid breaking its legitimate out-of-tree event file. All other pre-existing tests are unmodified and green.
+- 2026-07-31T11:48:35.135Z - completing
+- 2026-07-31T11:48:36.881Z - done: all gates passed

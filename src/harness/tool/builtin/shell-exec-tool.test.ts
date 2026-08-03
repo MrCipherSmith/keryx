@@ -6,6 +6,7 @@ import path from "node:path";
 import { saveSandboxDefaults } from "../../../lib/sandbox-config";
 import {
   type CommandRunner,
+  extraReadDenyRoots,
   makeCommandRunner,
   resolveShellRestrictedMasks,
   resolveShellSandboxMode,
@@ -25,6 +26,16 @@ function recordingRunner(result = { output: "done", isError: false }): {
     },
   };
 }
+
+test("F2: extraReadDenyRoots parses KERYX_SANDBOX_READ_DENY and expands ~/", () => {
+  expect(extraReadDenyRoots({})).toEqual([]);
+  const home = homedir();
+  const roots = extraReadDenyRoots({ KERYX_SANDBOX_READ_DENY: "~/.secretcfg, /etc/keys ,, " });
+  // `~/` expands to the home dir; empty entries are dropped.
+  expect(roots).toContain(path.join(home, ".secretcfg"));
+  expect(roots).toContain("/etc/keys");
+  expect(roots.length).toBe(2);
+});
 
 test("shell_exec is risk shell with a command input schema", () => {
   const { run } = recordingRunner();

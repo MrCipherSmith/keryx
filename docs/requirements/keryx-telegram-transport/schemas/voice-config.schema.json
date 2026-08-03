@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/voice-config/1.0.0",
+  "title": "Voice Configuration",
+  "description": "Local-first voice configuration for the Telegram transport. Both directions are disabled by default. A remote transcription or synthesis service moves user content off the machine and is therefore never enabled implicitly by the presence of a credential: it requires an explicit opt-in and passes the egress policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "inbound", "outbound"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "inbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "localEngine": {
+          "type": "string",
+          "description": "Local transcription engine identifier. Attempted first whenever inbound voice is enabled."
+        },
+        "remote": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["optIn"],
+          "properties": {
+            "optIn": {
+              "type": "boolean",
+              "default": false,
+              "description": "Explicit acknowledgement that recordings leave this machine. A credential alone must never enable this."
+            },
+            "service": { "type": "string" },
+            "credentialRef": { "type": "string", "description": "Opaque credential reference. Never a raw key." }
+          }
+        },
+        "maxDurationSeconds": { "type": "integer", "minimum": 1 },
+        "maxBytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "outbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "localEngine": { "type": "string" },
+        "remote": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["optIn"],
+          "properties": {
+            "optIn": { "type": "boolean", "default": false },
+            "service": { "type": "string" },
+            "credentialRef": { "type": "string" }
+          }
+        },
+        "qualification": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Deterministic rules deciding whether a reply is worth hearing.",
+          "properties": {
+            "minChars": { "type": "integer", "minimum": 1 },
+            "maxCodeShare": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Share of the text inside fenced code blocks above which no speech is produced."
+            },
+            "diffLineThreshold": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Count of genuine diff lines above which no speech is produced. Markdown bullets must not count."
+            }
+          }
+        },
+        "maxClipSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "No single clip exceeds this. Longer replies are split at paragraph, sentence, line or word boundaries."
+        },
+        "normalization": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional model-backed rewrite so the text reads naturally aloud. Optional because it costs a model call per reply.",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "languageGuard": {
+              "type": "boolean",
+              "default": true,
+              "description": "Reject a normalization pass that changed the language of the text and fall back to the un-normalized text."
+            }
+          }
+        }
+      }
+    }
+  }
+}

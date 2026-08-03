@@ -11,8 +11,9 @@
 // keryx stores shell allow patterns in `~/.local/share/keryx/permissions.json`
 // (same XDG base as auth.json). Default is ask (prompt). Never throws.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
 import { shellConfigPath } from "./shell-config";
 import { isDestructiveCommand, touchesAgentCredentials } from "./command-risk";
 import { createHash } from "node:crypto";
@@ -63,6 +64,29 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // tools whose flags execute arbitrary commands
   "git", "find", "awk", "gawk", "sed", "vim", "vi", "ex", "emacs", "gdb", "lldb",
   "at", "batch", "crontab", "tmux", "screen", "osascript", "open", "tee", "cd",
+]);
+
+/**
+ * Broad file readers. A bare `<reader> *` grant auto-approves reading ANY path,
+ * so once remembered, `cat ~/.ssh/id_rsa` / `grep -r . /etc` would never prompt —
+ * an arbitrary-secret-read channel into the model transcript (findings F2/F4). A
+ * NARROWER pattern (`cat package.json*`, `grep foo *`) still constrains the target
+ * and stays offerable; only the "everything after this word" form is refused.
+ */
+const PREFIX_BANNED_READERS: ReadonlySet<string> = new Set([
+  "cat", "tac", "nl", "head", "tail", "less", "more", "grep", "egrep", "fgrep",
+  "zgrep", "rg", "ag", "sort", "uniq", "cut", "strings", "od", "xxd", "hexdump", "dd",
+]);
+
+/**
+ * Destructive-capable file mutators that the destructive classifier does NOT
+ * escalate for a non-catastrophic target (e.g. `rm somefile`, `mv a b`). A bare
+ * `<mutator> *` grant would then auto-approve `rm <glob>` / `mv <glob>` anywhere
+ * in the cwd — silent workspace data loss (finding F5). Only the bare
+ * "everything after this word" form is refused; a narrower pattern is offerable.
+ */
+const PREFIX_BANNED_MUTATORS: ReadonlySet<string> = new Set([
+  "rm", "rmdir", "unlink", "mv", "cp", "shred", "truncate", "ln",
 ]);
 
 /** Reason a pattern was refused (never silently dropped). */
@@ -116,25 +140,41 @@ export function validateShellPattern(pattern: string): PatternValidation {
   }
   const banned = bannedPrefixGrant(trimmed, firstToken);
   if (banned !== undefined) {
-    return {
-      ok: false,
-      reason: `\`${banned} *\` grants arbitrary execution: ${banned} is an interpreter or wrapper, so its first token does not constrain what runs`,
-    };
+    return { ok: false, reason: banned.reason };
   }
   return { ok: true };
 }
 
 /**
- * The banned command word when `pattern` is a bare "everything after this word"
- * grant, else undefined. A pattern that narrows the arguments (`bun test*`) is
- * not a bare grant and is allowed.
+ * When `pattern` is a bare "everything after this word" grant of a word we refuse
+ * to remember, the word and a category-specific reason; else undefined. A pattern
+ * that narrows the arguments (`bun test*`, `cat package.json*`) is not a bare
+ * grant and is allowed.
  */
-function bannedPrefixGrant(pattern: string, firstToken: string): string | undefined {
+function bannedPrefixGrant(pattern: string, firstToken: string): { word: string; reason: string } | undefined {
   const rest = pattern.slice(firstToken.length).trim();
   const wildcardOnly = /^\*+$/.test(rest) || (rest.length === 0 && /\*+$/.test(firstToken));
   if (!wildcardOnly) return undefined;
   const word = (firstToken.replace(/\*+$/, "").split("/").pop() ?? "").toLowerCase();
-  return PREFIX_BANNED.has(word) ? word : undefined;
+  if (PREFIX_BANNED.has(word)) {
+    return {
+      word,
+      reason: `\`${word} *\` grants arbitrary execution: ${word} is an interpreter or wrapper, so its first token does not constrain what runs`,
+    };
+  }
+  if (PREFIX_BANNED_READERS.has(word)) {
+    return {
+      word,
+      reason: `\`${word} *\` would auto-approve reading any file (including secrets outside the project); such a broad reader can be approved once, never remembered`,
+    };
+  }
+  if (PREFIX_BANNED_MUTATORS.has(word)) {
+    return {
+      word,
+      reason: `\`${word} *\` would auto-approve modifying/deleting any path in the working directory; such a broad mutator can be approved once, never remembered`,
+    };
+  }
+  return undefined;
 }
 
 /** Empty permissions (prompt everything). */
@@ -169,7 +209,15 @@ export function loadShellPermissionsWithAudit(dir?: string): ShellPermissionsAud
     if (!existsSync(file)) {
       return { permissions: emptyShellPermissions(), rejected: [] };
     }
-    const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+    // `readConfigFile`, not `readFileSync`: an oversized file aborts the process
+    // with SIGABRT, which the `catch` below cannot see, and this module's header
+    // promises it never throws. A file that cannot be read grants nothing, which
+    // is the fail-closed answer for an allowlist.
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return { permissions: emptyShellPermissions(), rejected: [] };
+    }
+    const raw: unknown = JSON.parse(read.text);
     if (raw === null || typeof raw !== "object") {
       return { permissions: emptyShellPermissions(), rejected: [] };
     }
@@ -217,12 +265,19 @@ export function saveShellPermissions(
 ): void {
   try {
     const file = shellPermissionsPath(dir);
-    mkdirSync(path.dirname(file), { recursive: true });
+    // Through the shared helpers, not `mkdirSync` + `writeFileSync(..., mode)`.
+    // Both of those apply their mode at CREATION only, and this writer sits in
+    // the same directory as `auth.json` — under `umask 002` it CREATED that
+    // directory at 0775, which is the precondition for replacing the credential
+    // store. This file is the worse half: it decides which shell commands are
+    // auto-approved, so a group member who appends `*` to the allowlist gets
+    // silent approval of arbitrary commands in the operator's shell.
+    ensureKeryxConfigDir(path.dirname(file));
     const cleaned = Array.from(new Set(perms.allow.map((p) => p.trim()).filter((p) => p.length > 0)));
     const body: ShellPermissions = {
       allow: options.skipValidation === true ? cleaned : cleaned.filter((p) => validateShellPattern(p).ok),
     };
-    writeFileSync(file, `${JSON.stringify(body, null, 2)}\n`, { mode: 0o600 });
+    writeOwnerOnlyFile(file, `${JSON.stringify(body, null, 2)}\n`);
   } catch {
     // best-effort
   }
@@ -330,7 +385,11 @@ export function shellPermissionsFingerprint(dir?: string): string {
     if (!existsSync(file)) {
       return "";
     }
-    return createHash("sha256").update(readFileSync(file)).digest("hex");
+    const read = readConfigFile(file);
+    if (!read.ok) {
+      return "";
+    }
+    return createHash("sha256").update(read.text, "utf8").digest("hex");
   } catch {
     return "";
   }

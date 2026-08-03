@@ -3,9 +3,9 @@
   "id": "110",
   "slug": "sync-requirements-roadmap-md-statuses-an",
   "title": "Sync requirements/roadmap.md statuses and bump stale package versions",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-21T17:22:43.662Z",
-  "updatedAt": "2026-07-21T17:32:40.397Z",
+  "updatedAt": "2026-07-30T16:12:42.766Z",
   "source": {
     "type": "description",
     "ref": null
@@ -201,6 +201,21 @@
       "at": "2026-07-21T17:32:40.397Z",
       "event": "ac-confirmed",
       "detail": "AC10: verified in journal.md Implementation record section"
+    },
+    {
+      "at": "2026-07-30T16:12:42.757Z",
+      "event": "completing",
+      "detail": "merged commit: c7298e8dde7c96f6cd096d58c1bb4718265aa097"
+    },
+    {
+      "at": "2026-07-30T16:12:42.766Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "c7298e8dde7c96f6cd096d58c1bb4718265aa097",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:42.766Z"
+  }
 }

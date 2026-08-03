@@ -1,0 +1,107 @@
+name: Release
+
+# A tag is the only trigger. Pushing `v0.2.0` publishes `0.2.0`; nothing else
+# does. `workflow_dispatch` is deliberately absent — a release that can be fired
+# by hand from an arbitrary ref is a release whose provenance nobody can read
+# off the tag afterwards.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm provenance attestation
+
+jobs:
+  release:
+    name: verify, publish, announce
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the changelog extraction reads history
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # npm (not bun) publishes, because provenance attestation is an npm CLI
+      # feature. Node is here for that, not to run the project.
+      - name: Set up Node for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: bun install
+
+      # The tag and the manifest are two independent statements of one fact.
+      # When they disagree, the published artifact carries a version nobody
+      # intended — so disagreement is a hard stop, before anything is built.
+      - name: Refuse a tag that disagrees with package.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          echo "tag:      $TAG_VERSION"
+          echo "manifest: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}."
+            exit 1
+          fi
+
+      # The same gates CI runs. A tag must not be able to ship something a pull
+      # request could not.
+      - name: Typecheck and tests
+        run: bun run check
+
+      - name: Security red-team FN-rate gate
+        run: bun ./src/cli.ts security eval --corpus all
+
+      - name: Metaproject Standard
+        run: bun ./src/cli.ts standard validate
+
+      # Prove the artifact runs before it is published, not after. `prepare`
+      # builds `dist/`; this asserts the built binary answers.
+      - name: Build and smoke-test the packed artifact
+        run: |
+          npm pack --pack-destination ./.release
+          TARBALL="$(ls ./.release/*.tgz)"
+          echo "packed: $TARBALL"
+          npm install -g --prefix ./.release/prefix "$TARBALL"
+          ./.release/prefix/bin/keryx --help > /dev/null
+          echo "the installed binary runs"
+
+      # Extract this version's section from CHANGELOG.md for the release body.
+      # An empty extraction fails the job: a release whose notes are blank is
+      # worse than no release, because it looks intentional.
+      - name: Extract the changelog section for this version
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { capture = 1; print; next }
+            capture && /^## \[/    { exit }
+            capture                { print }
+          ' CHANGELOG.md > ./.release/notes.md
+          if [ ! -s ./.release/notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for [${VERSION}]."
+            exit 1
+          fi
+          cat ./.release/notes.md
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file ./.release/notes.md \
+            ./.release/*.tgz

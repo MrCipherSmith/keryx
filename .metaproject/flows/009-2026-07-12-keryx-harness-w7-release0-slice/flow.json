@@ -3,9 +3,9 @@
   "id": "009",
   "slug": "keryx-harness-w7-release0-slice",
   "title": "W7 Release 0 read-only vertical slice (R0-01..R0-03): startup/session/policy/completion/run+cli+replay",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-12T22:42:37.740Z",
-  "updatedAt": "2026-07-13T00:34:36.569Z",
+  "updatedAt": "2026-07-30T16:12:27.027Z",
   "source": {
     "type": "description",
     "ref": null
@@ -440,6 +440,21 @@
       "at": "2026-07-13T00:34:36.569Z",
       "event": "ac-confirmed",
       "detail": "AC6: tsc clean; full bun test 797/0 (703 baseline + 94); W4/W5/W6 reused unmodified; all durable payloads schema-validated; deps={}; no SDK/network/fs-mutation; new code under src/harness/; frozen pkg+src/eval+src/contracts+ADRs untouched. T15 CLEAN on boundaries."
+    },
+    {
+      "at": "2026-07-30T16:12:27.017Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:27.027Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:27.027Z"
+  }
 }

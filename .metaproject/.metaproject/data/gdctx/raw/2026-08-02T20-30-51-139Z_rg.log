@@ -1,0 +1,13 @@
+memory/lessons/regex-guards-lose-to-spellings.md:39:46:writes `await import("…/shell-config.ts")` in four places. The guard living in
+flows/133-2026-08-01-fix-round-pr220/round4-review.md:215:38:"`await import(…/shell-config.ts)` in four places" — it appears once; four
+data/gdctx/raw/2026-08-02T20-30-51-039Z_rg.log:2:100:src/lib/config-dir.readers.test.ts:667:39:    // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/raw/2026-08-02T15-46-36-211Z_run.log:32:59:+    // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/raw/2026-08-02T15-29-19-137Z_diff.log:163:47:+writes `await import("…/shell-config.ts")` in four places. The guard living in
+data/gdctx/raw/2026-08-02T15-29-19-137Z_diff.log:753:9:+    // four places. It is the file's own idiom.
+data/gdctx/raw/2026-08-02T15-29-19-137Z_diff.log:1336:59:+    // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/raw/2026-08-02T18-29-37-178Z_run.log:32:59:+    // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/raw/latest.log:2:100:src/lib/config-dir.readers.test.ts:667:39:    // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/artifacts/2026-08-02T18-29-37-178Z_run.md:44:59:+    // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/artifacts/latest.md:17:65:  - 667:39 // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/artifacts/2026-08-02T20-30-51-039Z_rg.md:17:65:  - 667:39 // file writes `await import("…/shell-config.ts")` in four places. The guard
+data/gdctx/artifacts/2026-08-02T15-46-36-211Z_run.md:53:59:+    // file writes `await import("…/shell-config.ts")` in four places. The guard

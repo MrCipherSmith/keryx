@@ -3,9 +3,9 @@
   "id": "005",
   "slug": "keryx-harness-w3-corpus-relocation",
   "title": "W3 EV-01: relocate fixture-corpus evaluator src/harness -> src/eval (preserve corpus gates)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-12T15:16:49.352Z",
-  "updatedAt": "2026-07-12T15:53:50.726Z",
+  "updatedAt": "2026-07-30T16:12:26.622Z",
   "source": {
     "type": "description",
     "ref": null
@@ -231,6 +231,21 @@
       "at": "2026-07-12T15:53:50.726Z",
       "event": "ac-confirmed",
       "detail": "AC5: runCorpus/gateCorpus byte-identical (0 ins/0 del); compat-map covers 4 files + 1 importer; no other evaluator ref in code. T7 review CLEAN."
+    },
+    {
+      "at": "2026-07-30T16:12:26.610Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:26.622Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:26.621Z"
+  }
 }

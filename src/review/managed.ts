@@ -72,6 +72,17 @@ export async function createManagedReviewPackage(
     throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
   }
 
+  const violations = classScopeViolations(findings);
+  if (violations.length > 0) {
+    // Before the package is written, so a refused ingest leaves nothing behind
+    // that a later round could mistake for a recorded review.
+    throw new Error(
+      `Refusing to record findings that do not enumerate their class: ${violations
+        .map((finding) => `${finding.id} (${finding.severity})`)
+        .join(", ")}. A blocker or major must carry class_scope with sites and enumeration_method — every site holding the shape, and how the set was derived.`,
+    );
+  }
+
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "scope.md"), renderScope(input, flowMatch, at));
@@ -276,23 +287,188 @@ function normalizeFindings(
 ): NormalizedReviewFinding[] {
   const findings: NormalizedReviewFinding[] = [];
   const lines = report.split("\n");
-  for (const line of lines) {
-    const match = line.match(/\b(F-\d{3,})\b[:\]\s-]*(.*)/i);
-    if (!match?.[1]) {
+  for (const [index, line] of lines.entries()) {
+    const heading = findingHeading(line);
+    if (heading === null) {
       continue;
     }
-    const id = match[1].toUpperCase();
-    const summary = match[2]?.trim() || "Review finding";
+    const id = heading.id;
+    const summary = heading.summary || "Review finding";
+    // The block is everything up to the next finding, because severity and
+    // class_scope live on lines BELOW the heading in every report format the
+    // reviewer skills emit. Reading only the heading line, as this did, made
+    // severity depend on whether the word happened to appear in the title.
+    const block = findingBlock(lines, index);
     findings.push({
       id,
-      severity: severityFromLine(line),
+      severity: severityFor(line, block),
       reviewer: "review-orchestrator",
       summary,
       classification: mode === "ingest" ? "valid_followup" : "skill_learning_candidate",
       flow_relevance: attachedToFlow ? "post_flow_feedback" : "standalone_review",
+      class_scope_present: hasClassScope(block),
     });
   }
   return findings;
+}
+
+/** A markdown heading or list marker — the two markers a finding heading carries. */
+const HEADING_MARKER = /^(?:#{1,6}|[-*+])\s+/;
+/** `F-001`, optionally bracketed, at the start of what is left of the line. */
+const FINDING_IDENTIFIER = /^(\[)?\s*(F-\d{3,})\b\s*(\])?/i;
+/** What separates an identifier from its title: a colon or a dash of any length. */
+const TITLE_SEPARATOR = /^\s*[:—–-]+\s*/;
+/** What follows an identifier that is being REFERRED to inside a sentence. */
+const REFERENCE_PUNCTUATION = /^[,.;)\]]/;
+
+/**
+ * A line that OPENS a finding, as opposed to one that mentions an id in prose.
+ *
+ * Position alone cannot tell the two apart, and trying was the defect this
+ * replaces. Requiring the id to lead the line stopped counting mid-sentence
+ * cross-references, but ordinary text wrapping routinely puts a reference at
+ * line start: ingesting one real report produced eight phantom findings from a
+ * single prose section, and rewriting that section reproduced them a second
+ * time from the paragraph describing the defect.
+ *
+ * So a heading is identified POSITIVELY. It is one of the three shapes the
+ * reviewer skills emit:
+ *
+ *   `### F-001 — the summary`      marker + separator
+ *   `### [F-001] the summary`      marker + bracketed id
+ *   `- [F-001] major: the summary` marker + bracketed id
+ *
+ * and the same two shapes without a marker.
+ *
+ * So the marker is stripped but decides nothing; what decides is that the id is
+ * either BRACKETED or followed by a TITLE SEPARATOR. Everything else is a
+ * reference: an id followed by `,`, `.`, `;` or `)` whatever precedes it, and a
+ * bare `F-001 and F-002 belong to #220`, which is a sentence that happens to
+ * start with an id.
+ *
+ * The cost of this direction is stated rather than hidden: a heading written as
+ * a bare `F-001 the summary`, with neither bracket nor separator, is read as
+ * prose and its finding is not recorded. No producer in this repository emits
+ * that shape, and the alternative — accepting it — is what produced the
+ * phantoms. A phantom `major` makes the class-scope guard refuse a report over
+ * a finding that does not exist.
+ */
+function findingHeading(line: string): { id: string; summary: string } | null {
+  const marked = line.replace(/^\s+/, "");
+  const marker = marked.match(HEADING_MARKER);
+  const afterMarker = marker === null ? marked : marked.slice(marker[0].length);
+
+  const identifier = afterMarker.match(FINDING_IDENTIFIER);
+  if (identifier === null || identifier[2] === undefined) {
+    return null;
+  }
+  // An unbalanced bracket is prose: `F-001]` closes something this line did not
+  // open, and `[F-001` never became a label.
+  const bracketed = identifier[1] !== undefined;
+  if (bracketed !== (identifier[3] !== undefined)) {
+    return null;
+  }
+
+  const rest = afterMarker.slice(identifier[0].length);
+  if (REFERENCE_PUNCTUATION.test(rest)) {
+    return null;
+  }
+
+  const id = identifier[2].toUpperCase();
+  const separator = rest.match(TITLE_SEPARATOR);
+  if (separator !== null) {
+    return { id, summary: rest.slice(separator[0].length).trim() };
+  }
+  // No separator, so the bracket has to carry the intent. A marker does not:
+  // `- F-012 and F-014 are the same class` is a bullet of prose, and accepting
+  // it would put the phantoms back through a different door.
+  if (bracketed) {
+    return { id, summary: rest.trim() };
+  }
+  return null;
+}
+
+/** The lines of one finding: from its heading to the next finding or the end. */
+function findingBlock(lines: string[], headingIndex: number): string {
+  const out: string[] = [];
+  for (let i = headingIndex + 1; i < lines.length; i += 1) {
+    // The same predicate as the loop that found the heading. When these two
+    // disagreed, a phantom did not merely add a finding — it also truncated the
+    // real finding above it, taking that finding's `class_scope` with it.
+    if (findingHeading(lines[i] ?? "") !== null) {
+      break;
+    }
+    out.push(lines[i] ?? "");
+  }
+  return out.join("\n");
+}
+
+/**
+ * Does this finding enumerate its class?
+ *
+ * A SHAPE check over markdown, not schema validation — stated rather than
+ * implied. It requires the block to name `class_scope` and to supply both
+ * halves, because either alone is the thing it was added to prevent: a list of
+ * sites with no method is unverifiable, and a method with no sites enumerates
+ * nothing. `review-finding.schema.json` is the strict form and is what
+ * `keryx skills contracts validate` applies to a JSON finding.
+ */
+function hasClassScope(block: string): boolean {
+  const lower = block.toLowerCase();
+  return (
+    (lower.includes("class_scope") || lower.includes("class scope")) &&
+    lower.includes("sites") &&
+    lower.includes("enumeration_method")
+  );
+}
+
+/**
+ * Findings that must enumerate their class and do not.
+ *
+ * Fail-closed at ingest rather than a warning, because the rule this enforces
+ * was added after eleven review rounds in which a fix repaired the one site a
+ * finding named and left its siblings for the next round to find. A rule that
+ * only lives in a schema no path validates against is matched against nothing —
+ * which is the `allowlist-not-a-boundary` lesson, applied to this flow's own
+ * work.
+ */
+export function classScopeViolations(
+  findings: readonly NormalizedReviewFinding[],
+): NormalizedReviewFinding[] {
+  return findings.filter(
+    (finding) =>
+      (finding.severity === "blocker" || finding.severity === "major") &&
+      finding.class_scope_present !== true,
+  );
+}
+
+/**
+ * The severity of one finding, from its heading and body.
+ *
+ * Precedence matters and was learned by executing this on a real report. Reading
+ * the heading alone recorded every finding as `minor`, because every reviewer
+ * format puts severity on the line below. Then reading heading-plus-body
+ * keyword-scanned the prose, and a `minor` finding whose text merely DISCUSSED
+ * blockers was recorded as a blocker — which tripped the class-scope guard on a
+ * finding that did not need one.
+ *
+ * So: an explicit declaration wins wherever it appears; only in its absence does
+ * a keyword count, and then the heading outranks the body.
+ */
+function severityFor(heading: string, block: string): NormalizedReviewFinding["severity"] {
+  const declared = `${heading}\n${block}`.match(
+    /^[\s>*_-]*(?:\*\*|__)?severity(?:\*\*|__)?\s*[:=]\s*(?:\*\*|__|`)?\s*(blocker|major|minor|info)\b/im,
+  );
+  if (declared?.[1]) {
+    return declared[1].toLowerCase() as NormalizedReviewFinding["severity"];
+  }
+  const fromHeading = severityFromLine(heading);
+  // `severityFromLine` cannot say "nothing here", so ask whether the heading
+  // actually named one rather than trusting its `minor` default.
+  if (/\b(blocker|major|info)\b/i.test(heading)) {
+    return fromHeading;
+  }
+  return severityFromLine(block);
 }
 
 function severityFromLine(line: string): NormalizedReviewFinding["severity"] {

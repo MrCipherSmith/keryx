@@ -5,6 +5,194 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.3] — 2026-08-03
+
+### Fixed
+
+- **`keryx ctx rg "pattern" src/one-file.ts` reported `(unknown)` and `0:0` for
+  every hit.** ripgrep omits the filename whenever it is given a single explicit
+  file path, which breaks the `file:line:col:text` shape `parseRgMatches`
+  requires — so agents were handed matches they could not locate.
+  `--with-filename` now joins the base argv unconditionally; it is a no-op for
+  the multi-path and directory cases. (PR #211)
+- **The code graph was under-resolving edges on this repository.** After the
+  gdgraph fixes the same tree yields **1,873 edges against 1,397 before**, from
+  649 nodes. (PR #211)
+- Entropy and PII detector corrections, with fixture cases. (PR #211)
+
+### Added
+
+- **CI installs ripgrep.** One test spawns the real binary to prove ripgrep
+  emits `file:line:col` for a single explicit path — an oracle about an external
+  tool. Skipping it when the tool is absent would have left the assumption
+  unverified while the job stayed green, so the tool is installed instead. This
+  is what the pull request's red check actually was.
+
+### Note on the merge
+
+PR #211 was opened on 2026-07-26 and sat behind 24 commits. `buildRgCommand` had
+been rewritten on `main` in the meantime to allowlist ripgrep flags — a caller's
+`--pre=…` had reached arbitrary command execution through the one operation
+agents are told to prefer over raw grep — and it now returns a result rather
+than an argv. Both changes were kept: the security structure from `main`, the
+`--with-filename` fix from the branch, asserted together so neither can be
+dropped while the other still passes.
+
+## [0.2.2] — 2026-08-03
+
+### Security
+
+- **A credential that merely exists no longer chooses the network posture of an
+  unrelated command.** `keryx harness exec` decided "restricted network" from
+  the count of mask inject-hosts. Those come from masks resolved against every
+  provider key in the environment *and* in the user-global `auth.json` — so a
+  saved key for a provider the command never touches silently widened the run to
+  restricted networking with TLS termination on macOS, and blocked the command
+  outright on Linux, where `restricted` is refused. The same
+  `harness exec -- /bin/echo hi` worked or failed depending on whether an
+  unrelated key existed on the machine.
+
+  The posture is now decided by `resolveNetworkRestriction`, which takes the
+  operator's intent and nothing derived from the environment: credentials are
+  not a parameter, so they cannot reach the decision. Inject hosts still join
+  the allowlist once a restricted run has been asked for — they no longer cause
+  one.
+
+  The five ways an operator can ask are a discriminated union with a total
+  `switch`. The exhaustiveness was **verified, not assumed**: planting a sixth
+  member fails `tsc` with `TS2366`. Nine unit tests cover each way, the fixed
+  precedence, and the empty-list cases — `--allowed-domains ""` is not a request
+  to restrict with no domains.
+
+## [0.2.1] — 2026-08-03
+
+### Security
+
+- **The egress allowlist is now enforced inside terminated TLS tunnels.**
+  Previously the allowlist was checked against the CONNECT target only. Once TLS
+  termination was on, the decrypted request's `Host` header chose the upstream
+  and was never re-checked — so a contained process could CONNECT to an
+  allowlisted host and then address any other host from inside the tunnel. No
+  decision was recorded for that inner hop either, so the egress was invisible
+  in the reported rulings.
+
+  The inner `Host` is now matched against the allowlist and passed through
+  `decide(...)`, which closes both the bypass and the blind spot. Real
+  credentials were never exposed — masks filter on their own inject-hosts — so
+  this was a containment and observability failure, not a disclosure one.
+
+  It ships with **a planted counter-example**: a test that sets a foreign `Host`
+  inside the tunnel and asserts the refusal. Affects macOS only, because TLS
+  termination is macOS only. (PR #210)
+
+### Added
+
+- **A macOS real-host CI job** covering the OS sandbox and the TUI pty launch.
+  Until now the platform where the allowlist, credential masking and TLS
+  termination actually run was the platform with no live containment test.
+  (PR #210)
+
+### Documentation
+
+- A verification step in a flow plan is a task, not a sentence (PR #221).
+- `shared-definitions` for the rules library, so places that agree connect by
+  import instead of by restatement (PR #222).
+
+## [0.2.0] — 2026-08-03
+
+The first release since `v0.1.0`, covering 570 commits: the OS sandbox, the
+agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
+
+### Changed — packaging (read this before upgrading)
+
+- **The npm package is now `@mrciphersmith/keryx`.** The unscoped name `keryx`
+  on npm belongs to an unrelated, actively maintained project
+  ([actionhero/keryx](https://github.com/actionhero/keryx)) — installing it gets
+  you a different program. Install with:
+
+  ```bash
+  npm install -g @mrciphersmith/keryx
+  ```
+
+  The executable is still `keryx`; no command changes. The `curl` and `bun`
+  installers described in the README are unaffected.
+- `prepack` was removed. `prepare` alone builds `dist/`, so packing no longer
+  runs the build twice (flagged in the 2026-07-10 readiness report).
+
+### Added — remote entry (`keryx serve`)
+
+- **A loopback-bound HTTP entry over the agent harness**, off by default. Bearer
+  authentication compared in constant time, with only a salted hash persisted;
+  `serve token issue | rotate | revoke`. Authentication runs *before* routing, so
+  an unauthenticated caller cannot distinguish a known path from an unknown one.
+  `refused` binds no socket at all — it is never a degraded listen.
+  (R4b, flow 128, PR #216)
+- **`POST /v1/turns` — remote turn submission with SSE streaming.** Idempotency
+  keys are scoped per project, so two projects cannot collide on one key; turn
+  records are durable; the remote policy profile is compared against the local
+  one and may never be weaker; authentication failures are throttled. An `ask`
+  decision terminates in a **recorded denial** — approvals are a later slice.
+  (R4c, flow 133, PR #220)
+- **`keryx projects` — a user-global project registry**, populated by
+  `keryx init`, with `list | register | forget`. Nothing on the machine knew the
+  project set before this. (R4a, flow 127, PR #215)
+
+### Added — sandboxing and containment
+
+- **A kernel-enforced OS sandbox under the policy engine:** workspace-write
+  filesystem boundaries and secret read-deny via macOS Seatbelt and Linux
+  bubblewrap, with network off / on / restricted. No new npm dependencies.
+- **A loopback domain-allowlist proxy** reporting allow/deny rulings, plus opt-in
+  TLS termination for HTTPS masking. Both are macOS-only and **refuse to run on
+  Linux** rather than degrading to full host network.
+- **Credential auto-masking**, defaulting to `auto` when the restricted sandbox
+  is on, resolved env → project → global → built-in. Secrets come from the
+  user-global `auth.json` only.
+- **Harness hardening:** mask-without-TLS fails closed, spawn failures carry
+  structured diagnostics (the exit-71 class), and a portable deep-probe script
+  ships with a report schema.
+
+### Added — the agent harness and multi-agent orchestration
+
+- **A full execution loop** (`src/harness/`): append-only session store, an
+  allow/ask/deny policy engine, a tool registry, a provider port with fake,
+  Anthropic and Ollama adapters, resume and recovery, branching and compaction,
+  guarded mutation with approval, replay, budget and monitoring.
+  CLI: `keryx harness run | exec | extension | wave`.
+- **Subagent orchestration**, reachable today through the interactive shell's
+  spawn tool: a fail-closed child-model resolver, a policy-gated provider
+  allowlist, depth and count caps against one shared run-scoped budget ledger
+  including the cost dimension, and child-output injection quarantine (which
+  flags, and never rewrites, child text).
+  - Child containment rests on three things together: `shell_exec` is absent
+    from a child's tool list, the child policy denies it, and the approver is
+    hard-false.
+- **Implemented and tested, but not yet wired to any caller:** cost-aware model
+  escalation, git-worktree isolation, bounded peer messaging, and the
+  orchestrator-state fold. Each of these modules is imported by exactly one file
+  — its own test. They are extension points, not behaviour you get today.
+  Scoped per-child credentials are in the same position: the provider option
+  exists and is tested, but no production path passes it, so a live child reads
+  the ambient environment.
+- **A typed `MetaprojectPort`** with published schemas, so the harness, the
+  interactive agent and the MCP server reach graph/wiki/memory/context in-process
+  from one source instead of through subprocess wrappers.
+
+### Added — interactive shell
+
+- **A full-screen OpenTUI shell is now the default when `stdout` is a TTY**,
+  replacing the line-based renderer; `--no-tui` and a graceful readline fallback
+  remain. Adds a live `/` command composer, a persistent composer region,
+  per-block collapse, and framed markdown with code and diff rendering.
+
+### Added — observability
+
+- **Provenance-aware execution metrics:** active-time accounting, per-run
+  evidence, baseline-aware CI and a retry taxonomy. *No performance claim has
+  been made* — the paired Keryx/no-Keryx protocol exists to make one honestly.
+
 ### Added
 
 - Language-aware gdgraph import resolution: Java (Maven/Gradle source roots,
@@ -47,12 +235,41 @@ All notable changes to `keryx` are documented here. The format follows
   non-relative imports that fail to resolve are recorded as `unresolved` edges
   rather than silently dropped.
 
+### Security
+
+- The agent shell allowlist is a **boundary, not a string match**; the
+  destructive risk class is wired into the shell approval gate; an approval is
+  bound to the action it approves; and the agent can no longer grant itself
+  shell permissions.
+- Subagent isolation is pinned and a child's summary is bounded.
+- Search argv is separated and caller-supplied paths are contained.
+- Six adversarial review rounds on the remote-entry branch produced twelve
+  blockers, all closed. Their single common cause is recorded as a durable
+  lesson: [branching on a value whose domain you never wrote down](.metaproject/memory/lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md).
+
 ### Documentation
 
 - Refreshed public, developer, CLI, architecture, module, onboarding, workspace,
   and release-readiness documentation for the post-`v0.1.0` feature set.
 
-## [0.1.0] — 2026-07-08
+### Known gaps
+
+Recorded here rather than in a release announcement, because they are the things
+a reader would otherwise discover by hitting them.
+
+- **Approvals over the remote entry are not implemented.** Until they are, a
+  remote turn that needs one is denied and the denial is recorded.
+- **`GET /health` and cross-process liveness are absent.** No PID file exists, so
+  `keryx serve status` reports configuration state only; `listening` and
+  `draining` are knowable only over the authenticated `GET /v1/status`.
+- **The domain allowlist, credential masking and TLS termination are macOS-only**
+  and refuse to run on Linux rather than silently weakening.
+- **`pii: { action: "allow" }` still redacts** — an open question about the
+  policy resolver, not the detector.
+- **The source-pattern guards in `src/lib/config-dir.ast.ts` are heuristics, not
+  closures**, and carry a written list of known gaps as executable tests.
+
+## [0.1.0] — 2026-07-10
 
 First tagged release. `keryx` installs a deterministic, local, offline,
 git-diffable `.metaproject/` workspace of agent-facing tooling, with an opt-in
@@ -116,4 +333,8 @@ runtime dependencies, no sockets).
 - Serialized `process.chdir` in tests — no cross-file cwd races.
 
 [0.1.0]: https://github.com/MrCipherSmith/keryx/releases/tag/v0.1.0
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.1.0...HEAD
+[0.2.0]: https://github.com/MrCipherSmith/keryx/compare/v0.1.0...v0.2.0
+[0.2.1]: https://github.com/MrCipherSmith/keryx/compare/v0.2.0...v0.2.1
+[0.2.2]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...v0.2.2
+[0.2.3]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...v0.2.3
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...HEAD

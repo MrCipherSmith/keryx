@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-01-review-flow-fix-review-pipeline-metaproject-context",
+  "mode": "review-flow",
+  "status": "draft",
+  "target": {
+    "kind": "branch",
+    "ref": "fix/review-pipeline-metaproject-context"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-08-01-review-flow-fix-review-pipeline-metaproject-context/scope.md",
+    "coverage": ".metaproject/reviews/2026-08-01-review-flow-fix-review-pipeline-metaproject-context/coverage.md",
+    "report": ".metaproject/reviews/2026-08-01-review-flow-fix-review-pipeline-metaproject-context/report.md",
+    "findings": ".metaproject/reviews/2026-08-01-review-flow-fix-review-pipeline-metaproject-context/findings.json",
+    "learning": ".metaproject/reviews/2026-08-01-review-flow-fix-review-pipeline-metaproject-context/learning.md",
+    "decisions": ".metaproject/reviews/2026-08-01-review-flow-fix-review-pipeline-metaproject-context/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-01T16:36:39.323Z",
+  "updatedAt": "2026-08-01T16:36:39.323Z"
+}

@@ -16,6 +16,7 @@ import { RemainingBudgetLedger } from "../../child/ledger";
 import { spawnSubagent, foldChildSummary, DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { PolicyProfile } from "../../policy/types";
+import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../../commands/agent";
 import type { ProviderPort } from "../../provider/types";
@@ -88,53 +89,16 @@ function sha256(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
-/**
- * Parent shell policy. Network is `allow` because the interactive shell already
- * uses cloud LLM providers (deepseek/anthropic/…); children that *inherit* the
- * parent model must not fail G2 solely for tool-isolation.
- */
-function parentShellPolicy(): PolicyProfile {
-  return {
-    schemaVersion: 1,
-    profileId: "monitored-trusted-local",
-    profileVersion: "1.0.0",
-    fingerprint: sha256("shell-parent-policy:v1"),
-    trustMode: "trusted-local",
-    defaults: { read: "allow", write: "ask", shell: "ask", network: "allow", delegate: "allow" },
-    requiredControls: {
-      isolation: "not-required",
-      redactionFailure: "deny",
-      networkBrokerFailure: "deny",
-    },
-  };
-}
-
-/**
- * Child "read-only tools" policy for shell spawns.
- *
- * IMPORTANT: MAE G2 denies *network-class LLM providers* when trustMode is
- * `read-only` OR network !== allow. That gate is about model/provider resolution,
- * not about tool risk. Shell subagents still need the parent's cloud model
- * (deepseek, anthropic, …) while forbidding write/shell/delegate *tools*.
- *
- * So we use trusted-local + network allow, but write/shell/delegate deny.
- * The tool list in invoke() remains read-only / metaproject-only.
- */
-function childReadOnlyPolicy(): PolicyProfile {
-  return {
-    schemaVersion: 1,
-    profileId: "monitored-trusted-local",
-    profileVersion: "1.0.0-shell-child-tools-ro",
-    fingerprint: sha256("shell-child-tools-readonly:v2"),
-    trustMode: "trusted-local",
-    defaults: { read: "allow", write: "deny", shell: "deny", network: "allow", delegate: "deny" },
-    requiredControls: {
-      isolation: "not-required",
-      redactionFailure: "deny",
-      networkBrokerFailure: "deny",
-    },
-  };
-}
+// The two profiles that used to be built here moved to
+// `src/harness/policy/profiles.ts` when `keryx serve` needed a profile it could
+// COMPARE against — and the source-level guard written for that comparison found
+// these two, which the R4c launch prompt had recorded as not existing. Their
+// fingerprint inputs are preserved verbatim there; nothing about either posture
+// changed. They stay out of the operator-selectable name set, because
+// `network: allow` with `delegate: allow` is not something a `serve.json` should
+// be able to select by typing a name.
+const parentShellPolicy = shellParentProfile;
+const childReadOnlyPolicy = shellChildReadOnlyProfile;
 
 /**
  * Create the `spawn_subagent` tool bound to a live shell host.

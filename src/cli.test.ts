@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { CLI_ROUTES } from "./cli";
+import { shellCommand } from "./commands/shell";
 
 // RED tests for flow 021 (interactive `keryx` shell), T5 / AC3.
 //
@@ -30,12 +32,18 @@ test("bare `keryx` (no args) prints CLI usage, not the shell", async () => {
   expect(output).not.toMatch(/Select a provider/);
 });
 
-test("`keryx shell` is dispatched via shellCommand (source-text audit)", () => {
-  const cliSource = readFileSync(path.join(import.meta.dir, "cli.ts"), "utf8");
+test("`keryx shell` is dispatched via shellCommand, and bare `keryx` is not", () => {
+  // Flow 021 / AC3. This used to grep cli.ts for `if (command === "shell")`,
+  // which was a proxy for the real invariant: the verb `shell` reaches
+  // `shellCommand`, and the no-args path prints help instead of entering the
+  // shell. Dispatch is now a table, so the binding itself can be asserted —
+  // strictly stronger than matching the source text, which passed for any
+  // spelling and would keep passing if the handler were swapped.
+  expect(Object.keys(CLI_ROUTES)).toContain("shell");
+  expect(CLI_ROUTES.shell).toBe(shellCommand);
+  expect(CLI_ROUTES[""]).toBeUndefined();
 
-  expect(/shellCommand/.test(cliSource)).toBe(true);
-  expect(cliSource).toMatch(/if\s*\(\s*command\s*===\s*"shell"\s*\)/);
-  // Bare / no-args path must print help, not enter the shell.
+  const cliSource = readFileSync(path.join(import.meta.dir, "cli.ts"), "utf8");
   expect(cliSource).toMatch(/!command/);
   expect(cliSource).toMatch(/printHelp\(\)/);
 });

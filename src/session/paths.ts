@@ -11,7 +11,21 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
-/** Cross-platform keryx data root (auth.json, sessions, …). */
+/**
+ * Cross-platform keryx data root for SESSIONS.
+ *
+ * Not for `auth.json`, and the docstring that said so was wrong. The
+ * user-global configuration files — `auth.json`, `projects.json`, `serve.json`,
+ * `serve-credentials.json` — are resolved by `keryxConfigDir` in
+ * `src/lib/config-dir.ts`, which applies the same platform rules but does NOT
+ * honour `KERYX_DATA_DIR`. With that variable set the two diverge: `sessions/`
+ * moves and those four files do not.
+ *
+ * The divergence is deliberate for now — teaching `keryxConfigDir` about
+ * `KERYX_DATA_DIR` would relocate the `auth.json` of any existing install that
+ * sets it, which is a migration rather than a cleanup. What is not acceptable is
+ * a comment claiming the opposite of what the code does, so it is stated here.
+ */
 export function keryxDataDir(override?: string): string {
   if (override !== undefined && override.length > 0) {
     return override;

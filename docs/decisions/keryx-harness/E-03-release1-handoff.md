@@ -94,16 +94,15 @@ through `ca57c56`) is reused unchanged; see
 | W12 | Child agents | CA-01…CA-02 | Release 1 | ✅ done | `550f372` |
 | W13 | Parallel scheduling | PA-01 | Release 1 | ✅ done | `8ec1016` |
 | W15 | Security and recovery hardening | H-01…H-02 | Release 1/2+ | ✅ done | `de46260` |
-| W14 | First real provider adapter (run last per runbook: "W14 — последней") | RP-01 | Release 1 | ✅ done | `109c63c` |
+| W14 | First real provider adapter (run last per runbook: "W14 last") | RP-01 | Release 1 | ✅ done | `109c63c` |
 | W16(R1) | Documentation and release evidence (Release 1 boundary, this flow) | E-01…E-03 + H-01 provider-negative re-run | boundary | ✅ done (E-01 ✅, E-02 ✅, E-03 ✅ — this document) | uncommitted at authoring time |
 
 Execution order matches the runbook's stated dependency plan: Release 0
 (W1–W7) → its own W16 boundary → Release 1 W8→W13, W15, with **W14 last**
-("W14 — последней" per `docs/plans/keryx-harness-implementation-runbook.md`)
+("W14 last" per `docs/plans/keryx-harness-implementation-runbook.md`)
 because the real-provider wave reuses the W15-hardened `isPrivateEgressHost`
 egress predicate — and **W16 (E-01…E-03) re-runs at each release boundary**,
-per the runbook's standing instruction ("W16 (E-01…E-03) — запускать на
-каждой границе релиза"). This flow (019) is that second W16 re-run,
+per the runbook's standing instruction ("run W16 (E-01…E-03) at every release boundary"). This flow (019) is that second W16 re-run,
 including the deferred H-01 provider-negative red-team suite that W15
 could not run before RP-01 (W14) existed.
 
@@ -305,7 +304,7 @@ Release 2 track inherits them rather than rediscovering them.
   normative DAG, wave order, and verification gates.
 - `docs/requirements/keryx-project-agent-harness/acceptance.feature` —
   authoritative scenario definitions for every `@release-2` tag cited above.
-- `docs/plans/keryx-harness-implementation-runbook.md` — Стейт (progress
+- `docs/plans/keryx-harness-implementation-runbook.md` — state (progress
   tracker) table confirming every Release 1 wave (W8–W15, W14) as ✅.
 
 ---

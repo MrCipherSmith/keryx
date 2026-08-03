@@ -1,39 +1,40 @@
 # Keryx Context Operations
-Version: 1.0.0
+Version: 1.1.0
 
-## Назначение
+## Purpose
 
-Этот пакет фиксирует будущую реализацию **Context Operations**: управляемого
-слоя, который собирает для coding-agent минимальный, проверяемый и безопасный
-контекст из кода, wiki, memory, skills и quality-артефактов. Он развивает
-текущий `.metaproject/`, но не заменяет его детерминированное local-first ядро.
+This package specifies the future implementation of **Context Operations**: a
+governed layer that assembles a minimal, verifiable and safe context for a
+coding agent out of code, wiki, memory, skills and quality artifacts. It extends
+the current `.metaproject/` rather than replacing its deterministic, local-first
+core.
 
-## Статус
+## Status
 
-`specification ready — future implementation`. Ни один новый runtime, CLI или
-провайдер базы данных этим пакетом не объявляется реализованным.
+`specification ready — future implementation`. No new runtime, CLI or database
+provider is declared implemented by this package.
 
-## Проблема и результат
+## Problem and outcome
 
-Агенту сейчас доступны хорошие отдельные источники: `gdgraph`, `gdwiki`,
-`memory`, `gdskills`, `health`, `testing` и `security`. Однако выбор контекста
-распределён по командам и правилам: нельзя единообразно ответить, *какие именно
-факты были переданы агенту, почему они были выбраны, какой источник победил и
-помог ли он*. Context Operations превращает этот выбор в версионируемый,
-наблюдаемый и измеримый продуктовый контракт.
+An agent today has good individual sources: `gdgraph`, `gdwiki`, `memory`,
+`gdskills`, `health`, `testing` and `security`. But the *selection* of context is
+spread across commands and rules, so there is no uniform way to answer **which
+facts were handed to the agent, why they were chosen, which source won, and
+whether it helped**. Context Operations turns that selection into a versioned,
+observable and measurable product contract.
 
-## Состав пакета
+## Package contents
 
-- [PRD](prd.md) — пользователи, требования, риски и критерии успеха.
-- [Specification](specification.md) — архитектура, контракты, CLI и интеграции.
-- [Implementation plan](implementation-plan.md) — последовательность поставки.
-- [Agent protocol](agent-protocol.md) — правила поведения агентов при чтении,
-  записи и применении контекста.
-- [Artifact lifecycle](artifact-lifecycle.md) — источник истины, retention и
-  supersession артефактов.
-- [Metrics and validation](metrics-and-validation.md) — evals, SLO и gates.
-- [Research and positioning](research-and-positioning.md) — конкурентный ландшафт
-  и архитектурные решения.
+- [PRD](prd.md) — users, requirements, risks and success criteria.
+- [Specification](specification.md) — architecture, contracts, CLI and integrations.
+- [Implementation plan](implementation-plan.md) — delivery sequence.
+- [Agent protocol](agent-protocol.md) — how agents must behave when reading,
+  writing and applying context.
+- [Artifact lifecycle](artifact-lifecycle.md) — source of truth, retention and
+  supersession of artifacts.
+- [Metrics and validation](metrics-and-validation.md) — evals, SLOs and gates.
+- [Research and positioning](research-and-positioning.md) — competitive landscape
+  and architectural decisions.
 - [Schemas](schemas/) — machine-readable contracts:
   [manifest](schemas/context-assembly-manifest.schema.json),
   [candidate](schemas/context-candidate.schema.json),
@@ -41,41 +42,43 @@ Version: 1.0.0
   [error](schemas/context-error.schema.json) and
   [external adapter](schemas/external-adapter.schema.json).
 
-## Языковые варианты
+## Language variants
 
-Каноническая подробная версия — этот русскоязычный набор. Синхронизированные
-варианты требований для международной команды и агентов:
+**These English documents are canonical.** Version 1.1.0 translated the package
+in place: it was previously authored in Russian with abbreviated English and AI
+views alongside, which meant the detailed source and the readable source were
+different documents.
 
-- [English](en/README.md)
-- [English PRD](en/prd.md)
-- [English specification](en/specification.md)
-- [AI contract view](ai/README.md)
-- [AI PRD](ai/prd.md)
-- [AI specification](ai/specification.md)
+Two derived views remain, and both are summaries rather than translations:
 
-Каждое функциональное требование имеет стабильный идентификатор `CO-*`; это
-позволяет проверять синхронизацию между версиями и acceptance criteria.
+- [AI contract view](ai/README.md) · [AI PRD](ai/prd.md) · [AI specification](ai/specification.md)
+- [Condensed English view](en/README.md) — retained for its shorter framing;
+  where it disagrees with this package, this package wins.
+
+Every functional requirement carries a stable `CO-*` identifier, which is what
+lets the views and the acceptance criteria be checked against each other.
 
 ## Scope
 
-- Сборка bounded context пакета с доказуемым происхождением каждого элемента.
-- Единый hybrid retrieval: lexical, optional semantic и code-graph proximity.
-- Retrieval trace, feedback и lifecycle памяти без потери исходных Markdown
-  источников.
-- Security/policy gate до записи нового знания и перед передачей контекста.
-- Локальная CLI/MCP surface; внешние memory systems — только opt-in adapters.
+- Assembling a bounded context package with provable provenance for every item.
+- One hybrid retrieval path: lexical, optional semantic, and code-graph proximity.
+- Retrieval trace, feedback and memory lifecycle without losing the original
+  Markdown sources.
+- A security/policy gate before new knowledge is written and before context is
+  handed over.
+- A local CLI/MCP surface; external memory systems are opt-in adapters only.
 
 ## Non-goals
 
-- Не строить обязательную облачную или multi-tenant memory database.
-- Не заменять Graphiti, Cognee, Mem0, Letta или OpenViking их собственным
-  runtime-ядром.
-- Не внедрять новый LLM agent runtime: это зона пакета
+- Not to build a mandatory cloud or multi-tenant memory database.
+- Not to replace Graphiti, Cognee, Mem0, Letta or OpenViking with a runtime core
+  of our own.
+- Not to introduce a new LLM agent runtime — that is the
   [Keryx Project Agent Harness](../../keryx-project-agent-harness/README.md).
-- Не записывать автоматически недоверенный web/tool output как accepted memory.
+- Not to record untrusted web or tool output as accepted memory automatically.
 
-## Связанные модули
+## Related modules
 
 `src/memory`, `src/wiki`, `src/gdgraph`, `src/ctx`, `src/gdskills`,
-`src/security`, `src/health`, `src/testing`, `src/mcp`, `src/flow` и
+`src/security`, `src/health`, `src/testing`, `src/mcp`, `src/flow` and
 `src/capability`.

@@ -1,5 +1,5 @@
-# Metrics and Validation: Telegram Companion Transport
-Version: 1.0.0
+# Metrics and Validation: Telegram Transport
+Version: 2.2.0
 
 ## Status
 
@@ -17,6 +17,31 @@ documentation run.
 | Approval integrity | 100% of expired/replayed callbacks and policy-`deny` fixtures cannot confirm an action. |
 | Secret redaction | 100% of token/PII/path/sensitive-output fixtures are absent from rendered notifications and persisted fixture evidence. |
 | Reliability visibility | Every simulated timeout, polling failure, send failure, cancellation, and webhook conflict produces a correlated terminal or retrying status locally. |
+| Submission containment (2.0.0) | 100% of free-text fixtures in an **unbound** chat produce no `task.submit` and no turn. |
+| Declared project (2.0.0) | 100% of `task.submit` fixtures declare the bound project path; none derive it from message content. |
+| Prompt is not a tool call (2.0.0) | 100% of prompts naming a shell command are classified by the policy engine identically to the equivalent TUI turn; none execute on the strength of the message. |
+| Delegated semantics (2.0.0) | The transport defines no allowlist, no auto-approve rule, no approval timeout, and no session-addressing rule of its own; a static check asserts this against [keryx-remote-entry](../keryx-remote-entry/README.md). |
+| Cross-project delivery (2.1.0) | **Zero tolerance.** ≥4 concurrent sessions across ≥2 projects with interleaved arrival; no message reaches a session other than the one its binding names. |
+| Unmapped-topic refusal (2.1.0) | 100% of updates in topics mapped to no project are refused; none fall back to a private-chat binding or an active session. |
+| Membership containment (2.1.0) | 100% of updates from unauthorized members of an authorized supergroup produce no privileged effect and no acknowledgement. |
+| Binding validation safety (2.1.0) | **Zero tolerance.** No inconclusive validation result ever clears a binding; deleted-topic fixtures clear exactly the affected binding. |
+| Queue behaviour (2.1.0) | Two updates for one binding run in order; updates for different bindings run concurrently; every queued update reports its position at queueing time; every over-bound update is explicitly refused, none silently dropped. |
+| Voice default-off (2.1.0) | **Zero tolerance.** A fresh configuration, and a configuration carrying a credential but no opt-in, both contact zero voice services. |
+| Voice egress containment (2.1.0) | **Zero tolerance.** Every remote voice call passes the egress policy; a denial produces zero bytes of audio leaving the process in either direction. |
+| Voice loss (2.1.0) | 100% of transcription failures degrade to file delivery; zero messages discarded. |
+| Voice idempotency (2.1.0) | Duplicate audio delivery produces exactly one transcription and one turn. |
+| Speech redaction (2.1.0) | **Zero tolerance.** No secret, path, or PII fixture is audible in synthesized output; synthesis input is always post-redaction text. |
+| Speech qualification (2.1.0) | Short, mostly-code and diff fixtures produce no speech; markdown bullet fixtures are not classified as diffs; no clip exceeds the duration cap; no split falls mid-word. |
+| Provisioning idempotence (2.2.0) | **Zero tolerance.** No project ever holds two topics, in any ordering of forum configuration, registration and re-registration. |
+| Pending provisioning (2.2.0) | 100% of projects registered before a forum exists are provisioned when it is configured; none skipped, none duplicated. |
+| Topic retention (2.2.0) | 100% of projects whose path disappears have their topic closed, not deleted; reopening always requires an explicit operator action. |
+| Single project list (2.2.0) | **Zero tolerance.** The transport holds no project list of its own; a static check asserts projects come from the user-global registry. |
+| Unregistered topic (2.2.0) | 100% of topics created for unregistered projects are non-routable. |
+| Generated menu (2.2.0) | **Zero tolerance.** A command added to the command registry appears with no transport change; a command absent from it is not invocable, and no free-form command path exists. |
+| Maintenance is not a turn (2.2.0) | **Zero tolerance.** Commands the registry marks `model: false` make zero provider calls and construct zero prompts. |
+| Cost and write disclosure (2.2.0) | 100% of `model: true` commands state their token cost in the approval; 100% of `read: false` commands are classified `ask`. |
+| Secret containment (2.2.0) | **Zero tolerance.** No credential-like message is stored as a credential, logged, retained, or echoed; no rendered handoff message contains credential material. |
+| Handoff lifecycle (2.2.0) | **Zero tolerance.** No handoff link is usable twice or after expiry; every direct-entry attempt in a supergroup is refused. |
 
 ## Required validation layers
 
@@ -24,7 +49,16 @@ documentation run.
    2020-12; reject raw token fields in transport config fixtures.
 2. **Offline fake adapter:** inject updates, callbacks, failures, duplicate and
    reordered `update_id` values, webhook state, and restart checkpoints without
-   network access.
+   network access. It must additionally simulate forum topics — including
+   unmapped topics, deleted topics, and validation that fails transiently —
+   unauthorized supergroup members, interleaved arrival across ≥2 projects, and
+   both voice directions with a fake local engine and a fake remote service that
+   can be denied by policy. No real audio service is contacted. It must also
+   simulate project registration in every ordering relative to forum
+   configuration, re-registration, a vanished project path, a deleted topic, a
+   command-registry projection that gains an entry, and a credential handoff
+   issued, replayed and expired. No real provider credential appears in any
+   fixture.
 3. **Security tests:** cover injection scanning, binding/allowlist, redaction,
    `deny` containment, and no-secret/no-absolute-path output.
 4. **Lifecycle scenarios:** cover the acceptance criteria in
@@ -52,3 +86,24 @@ documentation run.
   implementation-era threat modeling and operational measurement.
 - Server/headless webhook deployment has separate infrastructure and security
   requirements and is not validated by Release 0 local polling scenarios.
+- The Bot API cannot enumerate a forum's topics. Synchronization can create
+  missing topics but cannot discover topics belonging to no project, so orphan
+  detection is limited to bindings the transport already knows about. This is a
+  platform limitation, not a gap to close by implementation effort.
+- Concrete voice engines, their licences, model sizes, and offline availability
+  per operating system are undecided. The specification commits only to
+  local-first ordering and an explicit remote opt-in, not to any particular
+  engine.
+- Speaking-rate estimation used to size clips is a heuristic and must be
+  calibratable without a code change; no accuracy claim is made for it.
+- The curated command registry does not yet cover every maintenance operation
+  the topic menu should offer — `gdgraph build`, for instance, is a refresh
+  command outside the sixteen curated entries. **Extending the command registry
+  is a dependency of this capability.** The fix is to extend the registry, not
+  to special-case a command inside the transport, and no claim is made that
+  today's registry is sufficient.
+- The user-global project registry is specified in
+  [keryx-remote-entry](../keryx-remote-entry/README.md) and does not exist yet.
+  Topic provisioning depends on it.
+- The credential handoff protects the secret from Telegram. It does not protect
+  it from a compromised local machine, which already holds the credential store.

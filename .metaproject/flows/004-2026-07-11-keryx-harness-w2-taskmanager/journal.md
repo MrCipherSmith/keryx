@@ -51,3 +51,5 @@
 - 2026-07-12T15:05:25.342Z - ac-confirmed: AC3: TM-03: additive fields + pure v1->v2 migration in src/flow; flows 001-004 load, list/status/check unchanged; --depends/--disposition settable; check accepts 1&2; TM-02 GREEN (34/34).
 - 2026-07-12T15:05:25.392Z - ac-confirmed: AC4: D-02 preserved: writeFlow only in TM save/init; runLink never assigned (reference type only); taskGateStatus pure & unwired; no 2nd coordinator. T8 review PASS.
 - 2026-07-12T15:05:25.449Z - ac-confirmed: AC5: tsc --noEmit clean; full bun test 554 pass/0 fail; legacy v1 flow.json byte-untouched (git clean); code-verifier PASS.
+- 2026-07-30T16:12:26.505Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:26.518Z - done: all gates passed

@@ -18,11 +18,12 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { HarnessConfig } from "../harness/config";
 import { makeProvider } from "../harness/provider/make-provider";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import type { PolicyProfile } from "../harness/policy/types";
+import { resolveLocalProfile } from "../harness/policy/profiles";
 import { type RunDeps, type RunResult, runOffline } from "../harness/run/run";
 import { ToolRegistry } from "../harness/tool/registry";
 import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/tool/types";
@@ -198,17 +199,14 @@ function resolveRuntime(deps?: HarnessCommandDeps): {
  * "approved argv and environment allowlist" posture the frozen
  * SC_R04_SHELL_CONTAINMENT scenario describes (mirrors the shell-allow fixture
  * in `executor.test.ts`). Only reached behind the `exec` opt-in gate.
+ *
+ * The literal moved to `src/harness/policy/profiles.ts` when `keryx serve`
+ * became the third consumer and needed a profile it could COMPARE against. This
+ * is now a named alias over the resolver, kept so the call site below still
+ * reads as what it selects rather than as a string.
  */
 function shellAllowProfile(): PolicyProfile {
-  return {
-    schemaVersion: 1,
-    profileId: "monitored-trusted-local",
-    profileVersion: "1.0.0-shell-contained",
-    fingerprint: sha256Hex("monitored-trusted-local:1.0.0-shell-contained"),
-    trustMode: "trusted-local",
-    defaults: { read: "allow", write: "ask", shell: "allow", network: "ask", delegate: "ask" },
-    requiredControls: { isolation: "not-required", redactionFailure: "deny", networkBrokerFailure: "deny" },
-  };
+  return resolveLocalProfile("monitored-trusted-local");
 }
 
 /** The structured result the command prints as its final JSON blob. */
@@ -236,22 +234,9 @@ const USAGE = [
   "       keryx harness wave --spec <path>",
 ].join("\n");
 
-function sha256Hex(input: string): string {
-  // Small stable fingerprint for the read-only profile — node built-in only.
-  return createHash("sha256").update(input, "utf8").digest("hex");
-}
-
 /** A read-only-review profile (defaults.read = "allow"), per policy-profile.schema.json. */
 function readOnlyProfile(): PolicyProfile {
-  return {
-    schemaVersion: 1,
-    profileId: "read-only-review",
-    profileVersion: "1.0.0",
-    fingerprint: sha256Hex("read-only-review:1.0.0"),
-    trustMode: "read-only",
-    defaults: { read: "allow", write: "deny", shell: "deny", network: "deny", delegate: "deny" },
-    requiredControls: { isolation: "not-required", redactionFailure: "deny", networkBrokerFailure: "deny" },
-  };
+  return resolveLocalProfile("read-only-review");
 }
 
 /**
@@ -447,6 +432,97 @@ interface ParsedExecArgs {
   commandArgs: string[];
 }
 
+/**
+ * Why a run is restricted — the domain of the question, written down.
+ *
+ * This exists because it was previously read off `maskHosts.length > 0`, and
+ * that number answers a DIFFERENT question. Inject hosts are derived from masks,
+ * masks are resolved against `envWithSavedApiKeys`, and that includes every
+ * provider key saved in the user-global `auth.json`. So the count meant both
+ * "the operator asked for masking" and "a credential for some unrelated provider
+ * happens to exist on this machine" — and the second reading silently widened
+ * `keryx harness exec` to a restricted run on macOS, and blocked it outright on
+ * Linux, where `restricted` is refused.
+ *
+ * Restricting the network is an operator decision. Below is every way to make
+ * it. A new way to ask is a new union member, and the `switch` in
+ * `describeRestriction` stops compiling until it is handled — which is the point
+ * of writing the domain down rather than inferring it.
+ */
+export type NetworkRestrictionRequest =
+  | { restricted: false }
+  | {
+      restricted: true;
+      because:
+        | "allowed-domains-flag"
+        | "env-or-policy-domains"
+        | "explicit-mask-spec"
+        | "mask-mode-flag"
+        | "tls-terminate-flag";
+    };
+
+/** The operator's intent, and nothing derived from the ambient environment. */
+export interface NetworkRestrictionIntent {
+  /** `--allowed-domains a,b`. An empty array is not a request. */
+  allowedDomainsFlag: string[] | undefined;
+  /** `KERYX_SANDBOX_ALLOWED_DOMAINS` or the project sandbox policy. */
+  envOrPolicyDomains: string[] | undefined;
+  /** `--mask-env NAME@host` specs, as typed. */
+  explicitMaskSpecs: readonly string[];
+  /** `--mask-mode <m>` / `--auto-mask`, present only when passed. */
+  maskModeFlag: MaskMode | undefined;
+  /** `--tls-terminate`. */
+  tlsTerminateFlag: boolean;
+}
+
+/**
+ * Answer whether the operator asked for a restricted-network run.
+ *
+ * Precedence is fixed so the reported reason is stable and a reader can tell
+ * which request produced the posture. Ambient credentials are deliberately not
+ * a parameter: they cannot reach this decision.
+ */
+export function resolveNetworkRestriction(
+  intent: NetworkRestrictionIntent,
+): NetworkRestrictionRequest {
+  if (intent.allowedDomainsFlag !== undefined && intent.allowedDomainsFlag.length > 0) {
+    return { restricted: true, because: "allowed-domains-flag" };
+  }
+  if (intent.envOrPolicyDomains !== undefined && intent.envOrPolicyDomains.length > 0) {
+    return { restricted: true, because: "env-or-policy-domains" };
+  }
+  if (intent.explicitMaskSpecs.length > 0) {
+    return { restricted: true, because: "explicit-mask-spec" };
+  }
+  // Passing the flag at all is a statement about masking, and masking only means
+  // anything on a restricted run. `off` counts too: what `off` does to the masks
+  // is the resolver's decision, not this function's — here we answer only who asked.
+  if (intent.maskModeFlag !== undefined) {
+    return { restricted: true, because: "mask-mode-flag" };
+  }
+  if (intent.tlsTerminateFlag) {
+    return { restricted: true, because: "tls-terminate-flag" };
+  }
+  return { restricted: false };
+}
+
+/** Operator-facing wording for each way of asking. Total over the union. */
+export function describeRestriction(request: NetworkRestrictionRequest): string {
+  if (!request.restricted) return "not restricted";
+  switch (request.because) {
+    case "allowed-domains-flag":
+      return "restricted by --allowed-domains";
+    case "env-or-policy-domains":
+      return "restricted by environment or project sandbox policy";
+    case "explicit-mask-spec":
+      return "restricted by --mask-env";
+    case "mask-mode-flag":
+      return "restricted by --mask-mode / --auto-mask";
+    case "tls-terminate-flag":
+      return "restricted by --tls-terminate";
+  }
+}
+
 /** Parse `exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess] -- <path> [args...]`. */
 function parseExecArgs(args: string[]): ParsedExecArgs {
   const allowEnvKeys: string[] = [];
@@ -622,13 +698,24 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   }));
   const wantsTlsTerminate = maskResult.resolution.tlsTerminate;
 
-  // Inject hosts must be reachable, so they join the allowlist automatically.
+  // SF-2. The posture is the OPERATOR's decision — see `resolveNetworkRestriction`.
+  // This used to be `baseDomains === undefined && maskHosts.length === 0`, which
+  // let a credential that merely EXISTS choose it.
+  const restriction = resolveNetworkRestriction({
+    allowedDomainsFlag: allowedDomains,
+    envOrPolicyDomains,
+    explicitMaskSpecs: maskEnv,
+    maskModeFlag: maskMode,
+    tlsTerminateFlag: tlsTerminate,
+  });
+
+  // Inject hosts must be reachable, so they join the allowlist — but only once a
+  // restricted run has already been asked for. They never cause one.
   const maskHosts = masks.flatMap((m) => m.injectHosts);
   const baseDomains = allowedDomains ?? envOrPolicyDomains;
-  const restrictedDomains =
-    baseDomains === undefined && maskHosts.length === 0
-      ? undefined
-      : [...new Set([...(baseDomains ?? []), ...maskHosts])];
+  const restrictedDomains = restriction.restricted
+    ? [...new Set([...(baseDomains ?? []), ...maskHosts])]
+    : undefined;
 
   let effectiveAllowEnvKeys = allowEnvKeys;
   let profileOverride: SandboxProfile | undefined;

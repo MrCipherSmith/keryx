@@ -1,7 +1,22 @@
 {
-  "generatedAt": "2026-07-23T19:03:52.348Z",
-  "entryCount": 3,
+  "generatedAt": "2026-08-03T15:18:53.206Z",
+  "entryCount": 8,
   "entries": [
+    {
+      "path": "constraints/code-blanks-string-literals.md",
+      "type": "constraint",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "`code()` blanks string literals, so a guard that matches one can never fire",
+      "updated": null,
+      "tags": [],
+      "scopes": {
+        "module": null,
+        "entity": null,
+        "files": [],
+        "skills": []
+      }
+    },
     {
       "path": "constraints/flow-ids-allocated-per-clone.md",
       "type": "constraint",
@@ -18,6 +33,36 @@
       }
     },
     {
+      "path": "constraints/stale-installed-keryx-binary.md",
+      "type": "constraint",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+      "updated": "2026-08-02",
+      "tags": [],
+      "scopes": {
+        "module": "review, memory",
+        "entity": "managed-review-package",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+      "type": "lesson",
+      "status": "accepted",
+      "confidence": "high",
+      "title": "A fix round needs its own review: three consecutive rounds each introduced a blocker",
+      "updated": "2026-08-02",
+      "tags": [],
+      "scopes": {
+        "module": "core",
+        "entity": "project-registry",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
       "path": "lessons/allowlist-not-a-boundary.md",
       "type": "lesson",
       "status": "accepted",
@@ -28,6 +73,36 @@
       "scopes": {
         "module": "src/lib, src/commands, src/tui",
         "entity": "shell-permissions, command-risk, approval gate",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md",
+      "type": "lesson",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "Every blocker in six review rounds came from branching on a value whose domain was never written down",
+      "updated": null,
+      "tags": [],
+      "scopes": {
+        "module": null,
+        "entity": null,
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "lessons/regex-guards-lose-to-spellings.md",
+      "type": "lesson",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "A source guard loses one spelling per round — and matching the AST only slows it down",
+      "updated": null,
+      "tags": [],
+      "scopes": {
+        "module": null,
+        "entity": null,
         "files": [],
         "skills": []
       }

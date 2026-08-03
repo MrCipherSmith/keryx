@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/device-authorization/1.0.0",
+  "title": "Device Authorization",
+  "description": "State of one in-flight OAuth 2.0 device authorization grant (RFC 8628). The device_code is confidential and is never rendered to a transport; only the user_code and verification_uri are shown, and neither is a credential. One pending grant per provider.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "grantId", "provider", "userCode", "verificationUri", "intervalSeconds", "expiresAt", "state"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "grantId": { "type": "string", "format": "uuid" },
+    "provider": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "userCode": {
+      "type": "string",
+      "description": "Short code the operator types at the verification URL. Single-use and short-lived; it authorizes only this pending grant and grants nothing on its own."
+    },
+    "verificationUri": {
+      "type": "string",
+      "description": "Public provider URL the operator opens. Safe to render."
+    },
+    "verificationUriComplete": {
+      "type": "string",
+      "description": "Optional provider-supplied URL with the code embedded, so the operator need not type it."
+    },
+    "intervalSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Minimum polling interval the provider requires. Never poll faster; increase on slow_down."
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Provider-declared grant expiry."
+    },
+    "pollingDeadline": {
+      "type": "string",
+      "format": "date-time",
+      "description": "keryx's own bound on total polling, independent of the provider's, so a stalled grant cannot poll indefinitely."
+    },
+    "state": {
+      "enum": ["pending", "authorized", "denied", "expired", "cancelled", "superseded"],
+      "description": "denied and expired are terminal and require a new grant. superseded means a later request for the same provider replaced this one, which stops polling."
+    },
+    "lastPolledAt": { "type": "string", "format": "date-time" },
+    "pollCount": { "type": "integer", "minimum": 0 },
+    "correlationId": { "type": "string", "format": "uuid" }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["deviceCode"] },
+      { "required": ["accessToken"] },
+      { "required": ["refreshToken"] }
+    ]
+  }
+}

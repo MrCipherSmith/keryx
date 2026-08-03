@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-07-31T11:54:22.746Z - flow created
+- 2026-07-31T11:55:45.721Z - frozen: 12 criteria; checksum recorded
+- 2026-07-31T11:55:45.803Z - started
+- 2026-07-31T12:01:22.805Z - task-done: T1: Collect remaining context
+- 2026-07-31T12:01:22.886Z - task-done: T2: Implement per plan
+- 2026-07-31T12:01:22.969Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-07-31T12:01:23.051Z - task-done: T4: Self-review and prepare draft PR
+- 2026-07-31T12:02:03.982Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/215
+- 2026-08-01T09:21:58.834Z - ac-confirmed: AC1: Registry lives in the same user-global config dir as auth.json, resolved by the same cross-platform logic; dir created 0700, file written 0600. Verified on disk by the review.
+- 2026-08-01T09:21:58.916Z - ac-confirmed: AC2: keryx init registers the project; re-running updates the existing record and keeps its projectId. Identity is the REAL path, so the same project via a symlink or a differently-cased path is one entry, not two - the lexical version created duplicates. Covered by two tests.
+- 2026-08-01T09:21:59.001Z - ac-confirmed: AC3: Entries carry addressing only. Enforced on write by stripSecretShapedFields, not asserted in a comment - the first version named a function that did not exist. 47 field names classify correctly in both directions; the detector itself has a test proving it can fail.
+- 2026-08-01T09:21:59.084Z - ac-confirmed: AC4: A vanished project is reported missing and retained; reachability is judged by the presence of the .metaproject directory rather than the bare path, which end-to-end testing caught reporting a de-initialized project as active. Only an explicit forget removes an entry, and an unknown id against a DAMAGED registry now destroys nothing - that was a blocker where quarantine renamed the file aside and returned without writing.
+- 2026-08-01T09:21:59.169Z - ac-confirmed: AC5: projects list renders for a human and --json emits sorted deterministic output carrying warnings, so a corrupt registry is distinguishable from an empty one. Byte-stability verified across 5 runs on a damaged registry with identical checksums.
+- 2026-08-01T09:21:59.252Z - ac-confirmed: AC6: register is explicit and idempotent; forget removes exactly one entry and returns a typed outcome, so a failed write is no longer reported as no-such-id while the project is still registered.
+- 2026-08-01T09:21:59.335Z - ac-confirmed: AC7: Registering a non-project is refused with a stated reason. The check requires a .metaproject DIRECTORY - existsSync accepted a plain file or a symlink to any directory, which registered and then reported active forever.
+- 2026-08-01T09:21:59.416Z - ac-confirmed: AC8: A malformed, unreadable or structurally wrong registry degrades to empty with a warning and is repaired by the next write; the damaged file is COPIED to a corrupt-timestamped backup before the repairing write, since renaming it left nothing in place when the write then failed. Per-entry validation drops malformed entries with the count warned.
+- 2026-08-01T09:21:59.496Z - ac-confirmed: AC9: The read-modify-write is serialized by an exclusive lock with a nonce, stale-lock breaking and a deadline checked before the stale branch. Verified by the review with 8, 24 and 48 real subprocesses: zero lost updates, no torn file, no leftover lock; removing the lock loses 2 to 4 of 8. The first version confused atomic writes with serialization and lost entries reproducibly.
+- 2026-08-01T09:21:59.579Z - ac-confirmed: AC10: projects list, register and forget are in the command descriptor registry with honest read and model flags, so the flow-087 coverage guard sees them rather than them becoming its first exception.
+- 2026-08-01T09:21:59.661Z - ac-confirmed: AC11: tsc --noEmit clean; bun test 2348 pass, 14 skip, 0 fail across 262 files; both the touched files alone and the full suite exit 0 checked directly rather than through a pipe; keryx health run PASS score 93. CI on PR 215 all green.
+- 2026-08-01T09:21:59.742Z - ac-confirmed: AC12: init still initializes when the registry cannot be written: registration is best-effort, reports the failure separately and never throws. The banner is otherwise unchanged apart from sanitizing the directory basename, which a hostile directory name required.
+- 2026-08-01T09:21:59.824Z - completing
+- 2026-08-01T09:22:01.509Z - done: all gates passed

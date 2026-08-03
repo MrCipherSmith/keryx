@@ -1,0 +1,65 @@
+[
+  {
+    "id": "F-033",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "a mode that does not refuse became a machine approval",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-034",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the bundler guard read one entry point of however many",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-035",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the commit about honest evidence shipped eight fixes and tested one",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-036",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the \"ten times\" traversal is 1.95x",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-037",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the COST header described the code it had replaced",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-038",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the gap list advertised a caught case",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-039",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the declared gaps and the tested gaps were different sets",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]

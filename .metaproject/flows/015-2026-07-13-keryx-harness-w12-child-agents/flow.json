@@ -3,9 +3,9 @@
   "id": "015",
   "slug": "keryx-harness-w12-child-agents",
   "title": "keryx harness W12 child agents",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T04:18:53.829Z",
-  "updatedAt": "2026-07-13T05:07:38.644Z",
+  "updatedAt": "2026-07-30T16:12:27.625Z",
   "source": {
     "type": "description",
     "ref": null
@@ -276,6 +276,21 @@
       "at": "2026-07-13T05:07:38.644Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-30T16:12:27.614Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:27.625Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:27.625Z"
+  }
 }

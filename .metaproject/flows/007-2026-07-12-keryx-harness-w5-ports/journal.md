@@ -57,3 +57,5 @@
 - 2026-07-12T17:52:37.751Z - ac-confirmed: AC3: src/harness/tool: ToolDefinition/Registry(+snapshot/registryHash)/ExecutorPort(only invoke); validateToolCall 3-stage (envelope+registration+inline inputSchema); ToolExecutionState; no fs/shell surface; unregistered/invalid rejected (T9 boundary proof b).
 - 2026-07-12T17:52:37.808Z - ac-confirmed: AC4: reuse W4 validateAgainstSchema (file) + additive validateAgainstSchemaObject (inline, reuses validateNode); src/contracts diff additive-only, contracts 79/0; deps={} (no new dep).
 - 2026-07-12T17:52:37.863Z - ac-confirmed: AC5: tsc --noEmit clean; full bun test 677/0 (633 baseline + new); new code under src/harness/ + 1 additive src/contracts export; frozen requirements pkg + src/eval + ADRs untouched (git empty).
+- 2026-07-30T16:12:26.819Z - completing: merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e
+- 2026-07-30T16:12:26.830Z - done: all gates passed

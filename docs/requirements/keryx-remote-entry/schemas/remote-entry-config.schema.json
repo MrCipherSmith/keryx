@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/remote-entry-config/1.0.0",
+  "title": "Remote Entry Configuration",
+  "description": "Safe configuration for keryx serve. Holds a credential reference only; a raw bearer token is forbidden in this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "enabled", "bind", "profile", "credentialRef", "approval"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "enabled": {
+      "type": "boolean",
+      "description": "Off by default. A fresh install must serialize this as false."
+    },
+    "bind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "port"],
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Bind address. Any value outside the loopback range additionally requires acknowledgeNonLoopback and an explicit CLI flag."
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "acknowledgeNonLoopback": {
+          "type": "boolean",
+          "default": false,
+          "description": "Explicit acknowledgement that the listener is reachable beyond loopback. Without it a non-loopback address is a startup refusal."
+        }
+      }
+    },
+    "profile": {
+      "type": "string",
+      "description": "Name of the remote policy profile, resolved through the existing policy source. It may never be weaker than the local profile."
+    },
+    "credentialRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["store", "id"],
+      "properties": {
+        "store": { "enum": ["auth-json", "os-credential-store"] },
+        "id": { "type": "string", "minLength": 1 }
+      },
+      "description": "Opaque reference to the bearer token. The token value never appears here."
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expirySeconds", "maxPendingPerSession"],
+      "properties": {
+        "expirySeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 86400,
+          "description": "Unanswered approvals resolve to deny at expiry."
+        },
+        "maxPendingPerSession": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxBodyBytes": { "type": "integer", "minimum": 1024 },
+        "maxPromptChars": { "type": "integer", "minimum": 1 },
+        "maxConcurrentTurnsPerSession": { "type": "integer", "minimum": 1 },
+        "eventBacklogSeconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "retentionDays": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Retention period for redacted turn evidence and approval records."
+    }
+  }
+}

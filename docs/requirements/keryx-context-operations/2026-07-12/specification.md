@@ -1,11 +1,11 @@
 # Keryx Context Operations — Specification
-Version: 1.0.0
+Version: 1.1.0
 
 ## Identity and status
 
-`context-operations` — будущая cross-cutting capability Keryx. Статус:
-`future`; действующие модули остаются источниками доменной логики. Новый слой
-только планирует, собирает, объясняет и оценивает контекст.
+`context-operations` — a future cross-cutting Keryx capability. Status:
+`future`. The existing modules remain the sources of domain logic; this new
+layer only plans, assembles, explains and evaluates context.
 
 ## Architecture
 
@@ -39,9 +39,9 @@ flowchart LR
   wiki/                                       # existing Markdown source of truth
 ```
 
-`data/context/` не является источником решений. Он может быть удалён и
-пересобран из commit, query, config и исходных artifacts. Write в `memory/`,
-`wiki/`, `project-skills/` остаётся под их собственными guards.
+`data/context/` is **not** a source of decisions. It can be deleted and rebuilt
+from the commit, the query, the config and the source artifacts. Writes to
+`memory/`, `wiki/` and `project-skills/` stay behind their own guards.
 
 ## Configuration
 
@@ -58,50 +58,53 @@ flowchart LR
 }
 ```
 
-Новая capability выключена по умолчанию. При `enabled=false` она не импортирует
-optional packages, не открывает сеть и не изменяет поведение текущих команд.
+The capability is **off by default**. With `enabled=false` it imports no optional
+packages, opens no network connection, and changes the behaviour of no existing
+command.
 
 ## CLI and MCP surface
 
 | Surface | Contract | Status |
 |---|---|---|
-| `keryx context assemble <query>` | Создаёт manifest/trace; возвращает bounded context и citations либо typed `context_overflow` | future |
-| `keryx context explain <assembly-id>` | Показывает selected/dropped candidates и score | future |
-| `keryx context feedback <assembly-id>` | Добавляет guarded feedback record | future |
-| `keryx context eval --corpus <path>` | Запускает fixture corpus и публикует report | future |
-| MCP `context_assemble`, `context_explain` | Read-only semantic parity с CLI | future |
+| `keryx context assemble <query>` | Creates a manifest and trace; returns bounded context with citations, or a typed `context_overflow` | future |
+| `keryx context explain <assembly-id>` | Shows selected and dropped candidates with their scores | future |
+| `keryx context feedback <assembly-id>` | Appends a guarded feedback record | future |
+| `keryx context eval --corpus <path>` | Runs a fixture corpus and publishes a report | future |
+| MCP `context_assemble`, `context_explain` | Read-only semantic parity with the CLI | future |
 
-`context feedback` никогда не создаёт accepted memory сам. Promotion происходит
-через существующий memory lifecycle и explicit approval.
+`context feedback` never creates accepted memory on its own. Promotion happens
+through the existing memory lifecycle and an explicit approval.
 
 ### Typed failure contract
 
-Если required items не умещаются в хотя бы один budget, `assemble` не создаёт
-partial successful manifest. Он возвращает schema-valid
-[ContextError](schemas/context-error.schema.json) с `code: "context_overflow"`,
-нарушенной размерностью (`bytes`, `estimated_tokens` или `items`), requested
-budget и списком required source IDs. CLI и MCP обязаны нормализовать один и
-тот же error object; raw/redacted content в ошибку не включается.
+If the required items do not fit within at least one budget, `assemble` does not
+produce a partial successful manifest. It returns a schema-valid
+[ContextError](schemas/context-error.schema.json) with `code:
+"context_overflow"`, the dimension that was breached (`bytes`,
+`estimated_tokens` or `items`), the requested budget, and the list of required
+source IDs. The CLI and MCP must normalize to the same error object; raw or
+redacted content is never included in the error.
 
 ## Planner algorithm
 
-1. Валидировать query/work-item и request budget.
-2. Извлечь mandatory items: active security policy, applicable procedural
-   rules, frozen flow acceptance criteria.
-3. Получить source candidates из доступных существующих services. Источник,
-   который unavailable/stale/invalid, фиксируется в trace, но не маскируется.
-4. Отфильтровать по scope, status, temporal validity, trust и policy.
-5. Рассчитать explainable deterministic score. Optional semantic и graph
-   adapters могут только rerank сформированный candidate pool.
-6. Собрать bounded manifest; mandatory policy items не вытесняются score.
-   Успешный manifest записывает `projectRevision`, `configHash`, used-item
-   accounting и `budgetStatus: "within-limits"`; service отдельно проверяет,
-   что used values не превышают maxima.
-7. Прогнать redaction/security gate, persist redacted receipt и trace.
+1. Validate the query or work item and the requested budget.
+2. Extract mandatory items: the active security policy, applicable procedural
+   rules, and frozen flow acceptance criteria.
+3. Collect source candidates from the existing services that are available. A
+   source that is unavailable, stale or invalid is **recorded in the trace, not
+   masked**.
+4. Filter by scope, status, temporal validity, trust and policy.
+5. Compute an explainable deterministic score. Optional semantic and graph
+   adapters may only rerank the candidate pool that has already been formed.
+6. Assemble the bounded manifest. Mandatory policy items are never evicted by
+   score. A successful manifest records `projectRevision`, `configHash`,
+   used-item accounting and `budgetStatus: "within-limits"`; the service
+   separately verifies that the used values do not exceed the maxima.
+7. Run the redaction/security gate, then persist the redacted receipt and trace.
 
 ## Data contracts
 
-Схемы являются частью контракта и должны валидироваться Draft 2020-12:
+The schemas are part of the contract and must validate against Draft 2020-12:
 
 - [ContextAssemblyManifest](schemas/context-assembly-manifest.schema.json)
 - [ContextCandidate](schemas/context-candidate.schema.json)
@@ -111,35 +114,35 @@ budget и списком required source IDs. CLI и MCP обязаны норм
 
 ### Integration contract
 
-- `gdgraph`: принимает только stored graph artifacts; graph distance — score
-  component, не доказательство актуальности факта.
-- `gdwiki`: принимаются accepted pages и validated drafts только с явным label.
-- `memory`: default — accepted/current entries; draft/conflict видны только при
-  explicit diagnostics request.
-- `gdskills`: procedural instructions попадают в manifest с version и
-  verification status.
-- `security`: единый choke point редактирует tool output и блокирует
-  запрещённые write intents в enforced/CI modes.
-- `flow`: mandatory constraints и acceptance criteria добавляются до ranking.
-- external adapter: descriptor обязан иметь immutable `id`, `mode`, namespace,
-  retention, provenance strategy и enabled flag. В R0/R1 adapter не получает
-  write authority; сетевой adapter выключен по умолчанию и проходит отдельный
-  capability/policy gate.
+- `gdgraph`: accepts stored graph artifacts only. Graph distance is a score
+  component, not evidence that a fact is current.
+- `gdwiki`: accepted pages, and validated drafts only when explicitly labelled.
+- `memory`: accepted/current entries by default; drafts and conflicts are visible
+  only on an explicit diagnostics request.
+- `gdskills`: procedural instructions enter the manifest carrying their version
+  and verification status.
+- `security`: a single choke point redacts tool output and blocks forbidden write
+  intents in enforced and CI modes.
+- `flow`: mandatory constraints and acceptance criteria are added before ranking.
+- external adapter: the descriptor must carry an immutable `id`, `mode`,
+  namespace, retention, provenance strategy and enabled flag. In R0/R1 an adapter
+  has no write authority; a network adapter is off by default and passes a
+  separate capability/policy gate.
 
 ## Acceptance criteria
 
-- **AC-1 / CO-1–4:** assembler создаёт schema-valid manifest, где у всех
-  selected items есть source reference/hash и причина выбора.
-- **AC-2 / CO-5–6:** disabled floor byte-identical; optional provider не
-  вызывается, пока capability выключена или assets не проверены.
-- **AC-3 / CO-7–9:** feedback и untrusted text не могут напрямую повысить
-  knowledge до accepted/procedural/skill.
-- **AC-4 / CO-10:** CLI/MCP parity fixtures дают одинаковый normalized manifest
-  и trace, кроме transport metadata.
-- **AC-5 / CO-11:** каждый adapter имеет explicit config, source namespace,
-  retention и provenance; network adapter off by default.
-- **AC-6 / CO-12–13:** documented checkout invocation работает; corpus suite,
-  schemas и reports проходят в CI.
-- **AC-7 / CO-3:** byte/token/item budget overflows возвращают typed
-  `context_overflow`, сохраняют required source IDs и никогда не выдают
+- **AC-1 / CO-1–4:** the assembler produces a schema-valid manifest in which
+  every selected item has a source reference, a hash, and a reason for selection.
+- **AC-2 / CO-5–6:** the disabled floor is byte-identical; an optional provider is
+  not called while the capability is off or its assets are unverified.
+- **AC-3 / CO-7–9:** feedback and untrusted text cannot directly promote
+  knowledge to accepted, procedural or skill status.
+- **AC-4 / CO-10:** CLI/MCP parity fixtures yield an identical normalized manifest
+  and trace, transport metadata aside.
+- **AC-5 / CO-11:** every adapter has an explicit config, source namespace,
+  retention and provenance; network adapters are off by default.
+- **AC-6 / CO-12–13:** the documented checkout invocation works; the corpus suite,
+  the schemas and the reports all pass in CI.
+- **AC-7 / CO-3:** byte, token and item budget overflows return a typed
+  `context_overflow`, preserve the required source IDs, and never emit a
   partial-success manifest.

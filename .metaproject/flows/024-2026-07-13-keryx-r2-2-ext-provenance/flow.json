@@ -3,9 +3,9 @@
   "id": "024",
   "slug": "keryx-r2-2-ext-provenance",
   "title": "keryx Release 2 R2-2 registered-extension provenance",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-13T16:10:25.694Z",
-  "updatedAt": "2026-07-13T16:27:40.444Z",
+  "updatedAt": "2026-07-30T16:12:42.494Z",
   "source": {
     "type": "description",
     "ref": null
@@ -226,6 +226,21 @@
       "at": "2026-07-13T16:27:40.444Z",
       "event": "ac-confirmed",
       "detail": "AC5"
+    },
+    {
+      "at": "2026-07-30T16:12:42.483Z",
+      "event": "completing",
+      "detail": "merged commit: e1a698075acef1005aba16e8584075a3622ae36a"
+    },
+    {
+      "at": "2026-07-30T16:12:42.494Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "e1a698075acef1005aba16e8584075a3622ae36a",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:42.494Z"
+  }
 }

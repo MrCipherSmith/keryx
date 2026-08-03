@@ -3,9 +3,9 @@
   "id": "006",
   "slug": "keryx-harness-w4-contracts",
   "title": "W4 contracts: registry inventory + deterministic validator (src/contracts) + fixture matrices (C-01..C-03)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-07-12T16:04:10.818Z",
-  "updatedAt": "2026-07-12T16:35:05.052Z",
+  "updatedAt": "2026-07-30T16:12:26.727Z",
   "source": {
     "type": "description",
     "ref": null
@@ -256,6 +256,21 @@
       "at": "2026-07-12T16:35:05.052Z",
       "event": "ac-confirmed",
       "detail": "AC5: frozen requirements pkg + ADR-0001..0004 untouched (git empty); new code only src/contracts/; new doc contract-inventory.md; src/harness/ reserved/empty. T8 review CLEAN."
+    },
+    {
+      "at": "2026-07-30T16:12:26.716Z",
+      "event": "completing",
+      "detail": "merged commit: 092b94a3c31c538371534ed790f6ee4f0efcf70e"
+    },
+    {
+      "at": "2026-07-30T16:12:26.727Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "092b94a3c31c538371534ed790f6ee4f0efcf70e",
+    "ref": "origin/main",
+    "at": "2026-07-30T16:12:26.727Z"
+  }
 }

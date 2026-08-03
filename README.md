@@ -9,14 +9,31 @@
 <p align="center">
   <a href="https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml"><img src="https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.2.0-blue.svg" alt="Version"></a>
 </p>
 
 `keryx` is a CLI that installs a small `.metaproject/` workspace into any codebase, giving AI agents and developers one shared, versioned source of context: a code graph, an architecture wiki, normalized health and test reports, long-term memory, and agent skills. Instead of context scattered across scratchpads, CI logs, and IDE rule files that never agree, everything lives in one git-diffable place that both humans and agents read from.
 
 The core is deterministic, local, and offline — with zero runtime dependencies. Every model-backed or precision feature is strictly opt-in, so a fresh install behaves identically whether or not you enable them.
 
-> **Model assets are optional.** Features like semantic memory search, ML-based security detection, and tree-sitter parsing use downloadable models/grammars that are **not bundled and not required**. When an asset is absent, keryx automatically falls back to its deterministic implementation — nothing to configure, nothing breaks.
+> **Model assets are optional.** Tree-sitter parsing uses downloadable grammars
+> that are **not bundled and not required**; when a grammar is absent, the graph
+> falls back to its deterministic resolver.
+>
+> **Two model-backed features are off in a way a download will not fix.**
+> Semantic memory search and the ML security detectors have no runtime shipped —
+> the ONNX stack was removed for weight, so their runtime identifiers are empty
+> strings (`src/security/detect/index.ts`, `src/memory/config.ts`). Re-enabling
+> them means editing those constants and installing a transformers.js-API
+> package, not supplying an asset. Both run on their deterministic floor
+> instead: lexical recall, and regex plus entropy.
+
+Most things degrade rather than break, but not everything. `keryx ctx rg` exits
+non-zero without `ripgrep` on `PATH` rather than falling back, and the
+model-backed commands — `test suggest`, `flow plan`, `memory reflect --narrate`,
+`health explain --narrate` — have no deterministic mode and exit non-zero
+without a credential. `wiki enrich` is the exception that degrades: it exits 0
+and marks pages skipped.
 
 ## Quick Start
 
@@ -28,8 +45,17 @@ reading files directly.
 
 ### Install / update (global)
 
-Managed layout: `~/.keryx/keryx` + wrapper at `~/.local/bin/keryx`.
-Re-run either command to upgrade.
+```bash
+npm install -g @mrciphersmith/keryx
+```
+
+> **The package is scoped, and the scope matters.** The unscoped name `keryx` on
+> npm belongs to [an unrelated project](https://github.com/actionhero/keryx) —
+> `npm install -g keryx` installs a different program. The executable this
+> package installs is still called `keryx`.
+
+Or use the managed installer, which lays out `~/.keryx/keryx` with a wrapper at
+`~/.local/bin/keryx`. Re-run either command to upgrade.
 
 ```bash
 # curl (short)
@@ -127,11 +153,21 @@ ships these modules:
 - **gdskills** — bundled and generated agent skills with routing, verification, learning, and export.
 - **health** — normalized code-health reports from TypeScript, tests, audit, complexity, coverage, and lint (optional SonarQube).
 - **testing** — testing context, related-test selection, changed-scope runs, and an opt-in coverage-map Test Impact Analysis.
-- **memory** — long-term Markdown project memory with indexing, search, dedup, bitemporal validity, and optional local embeddings.
+- **memory** — long-term Markdown project memory with indexing, lexical search, dedup and bitemporal validity. The embedding seam exists but ships with no runtime — see the note above.
 - **tasks** — an agent-first Task Manager driven by `keryx flow` for issue/task lifecycle tracking.
 - **security** — deterministic secrets / PII / prompt-injection / egress scanning, redaction, and a policy gate at agent write seams.
-- **review** — managed review packages that preserve reviewer coverage, findings, decisions, learning candidates, and optional Task Manager links.
-- **mcp** — opt-in [Model Context Protocol](https://modelcontextprotocol.io) server exposing read-only module services to agents.
+- **mcp** — opt-in [Model Context Protocol](https://modelcontextprotocol.io) server exposing read-only module services to agents. A real module, but **off by default** — the nine above are on after `init`, this one is not.
+
+`keryx modules` toggles modules by manifest key. Two caveats worth knowing:
+`security` is enabled by default but is **not** in that command's module list, so
+it cannot be toggled there; and toggling any module currently drops an enabled
+`mcp` from the manifest.
+
+**`review` and `serve` are commands, not modules.** They have no manifest entry
+and are not toggleable — `keryx review` writes managed review packages under
+`.metaproject/reviews/`, and `keryx serve` is the loopback HTTP entry described
+below. Earlier versions of this README listed them alongside the modules; that
+conflated three different things.
 
 Two cross-cutting commands improve agent startup and routing:
 
@@ -173,6 +209,36 @@ read-only MCP server into Cursor or Claude in one command (opt-in, off by
 default). See the [architecture doc](docs/docs/architecture.md) for the module
 data flows.
 
+## Remote Entry (opt-in, off by default)
+
+`keryx serve` is a second door into the same agent harness `keryx shell` uses —
+a loopback-bound HTTP listener, so a Telegram bot or a browser workspace can
+drive a run without a second agent runtime or a second owner of session state.
+
+```bash
+keryx serve config init          # write the listener config
+keryx serve token issue          # print a bearer token (only a salted hash is stored)
+keryx serve                      # bind 127.0.0.1 and listen
+keryx serve status --json        # configuration state
+```
+
+It is **off unless you configure it**, binds loopback unless you pass
+`--acknowledge-non-loopback`, and authenticates *before* routing — so an
+unauthenticated caller cannot tell a known path from an unknown one. Routes
+today: `GET /v1/status`, `GET /v1/projects`, `POST /v1/turns` with
+per-project idempotency keys, and `GET /v1/turns/<id>` for the durable record
+and its server-sent-event stream.
+
+Two boundaries worth knowing before you point anything at it:
+
+- **The remote policy profile may never be weaker than the local one**; it is
+  compared on every turn, and a weaker profile is refused rather than accepted.
+- **Approvals are not implemented yet.** A turn whose policy decision is `ask`
+  terminates in a *recorded denial* — it is never auto-approved.
+
+`keryx projects` manages the user-global registry these routes address projects
+by; `keryx init` registers a project into it.
+
 ## CI Integration
 
 `keryx` is designed so CI can publish normalized, committable artifacts that
@@ -199,6 +265,9 @@ Full developer documentation — reverse-engineered from the source — lives un
 - **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, mechanics, data paths.
 - **[CLI reference](docs/docs/cli-reference.md)** — every command, subcommand, and flag.
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
+
+- **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`, including a
+  standing list of known gaps.
 
 Run `keryx <command> --help` (or `keryx` with no arguments) for the live command
 surface.
