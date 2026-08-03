@@ -7,7 +7,7 @@ Confidence: high
 
 ## Summary
 
-`/home/altsay/.local/bin/keryx` is an installed build reporting version `0.1.0`.
+`~/.local/bin/keryx` is an installed build, and its version lags the working tree.
 It is NOT the working tree. Every `keryx …` invocation — including
 `keryx review ingest`, which is how a managed review package is recorded — runs
 that build, so the review pipeline routinely does not exercise the code being

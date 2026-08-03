@@ -6,10 +6,10 @@ Use this prompt to start the managed implementation flow for this package.
 ```text
 Run a managed implementation flow for:
 
-/Users/tsaitler.aleksandr/goodea/goodpro-manager/docs/requirements/keryx-project-agent-harness/
+<project-root>/docs/requirements/keryx-project-agent-harness/
 
 Project root:
-/Users/tsaitler.aleksandr/goodea/goodpro-manager/
+<project-root>
 
 Before searching or changing anything, read:
 - .metaproject/index.md
@@ -19,8 +19,7 @@ Before searching or changing anything, read:
 - docs/requirements/keryx-project-agent-harness/schemas/
 
 Use the local Metaproject flow, testing, gdctx, gdgraph, and gdwiki guidance.
-Keep the source review immutable:
-.metaproject/reviews/2026-07-10-review-flow-users-tsaitler-aleksandr-goodea-goodpro-/
+Keep the source review package immutable.
 
 Implement Release 0 first: offline fake provider, one read-only registered tool,
 provider-neutral turn control, append-only session, bounded context manifest,

@@ -1,7 +1,22 @@
 {
-  "generatedAt": "2026-08-02T10:23:09.133Z",
-  "entryCount": 5,
+  "generatedAt": "2026-08-03T15:18:53.206Z",
+  "entryCount": 8,
   "entries": [
+    {
+      "path": "constraints/code-blanks-string-literals.md",
+      "type": "constraint",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "`code()` blanks string literals, so a guard that matches one can never fire",
+      "updated": null,
+      "tags": [],
+      "scopes": {
+        "module": null,
+        "entity": null,
+        "files": [],
+        "skills": []
+      }
+    },
     {
       "path": "constraints/flow-ids-allocated-per-clone.md",
       "type": "constraint",
@@ -58,6 +73,36 @@
       "scopes": {
         "module": "src/lib, src/commands, src/tui",
         "entity": "shell-permissions, command-risk, approval gate",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md",
+      "type": "lesson",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "Every blocker in six review rounds came from branching on a value whose domain was never written down",
+      "updated": null,
+      "tags": [],
+      "scopes": {
+        "module": null,
+        "entity": null,
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "lessons/regex-guards-lose-to-spellings.md",
+      "type": "lesson",
+      "status": "draft",
+      "confidence": "medium",
+      "title": "A source guard loses one spelling per round — and matching the AST only slows it down",
+      "updated": null,
+      "tags": [],
+      "scopes": {
+        "module": null,
+        "entity": null,
         "files": [],
         "skills": []
       }

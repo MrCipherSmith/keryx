@@ -133,6 +133,6 @@ treatment of every remote prompt, and no self-granting of approvals. See
 ## Sources
 
 Architectural evidence was collected from two working systems and is recorded in
-[brainstorm.md](brainstorm.md): `helyx` (a Telegram-fronted Claude Code
-orchestrator running on the same host, studied at `/home/altsay/bots/helyx`) and
-the public Eggent workspace (`github.com/eggent-ai/eggent`).
+[brainstorm.md](brainstorm.md): `helyx`, a private Telegram-fronted agent
+orchestrator running on the same host and studied directly, and the public
+Eggent workspace (`github.com/eggent-ai/eggent`).

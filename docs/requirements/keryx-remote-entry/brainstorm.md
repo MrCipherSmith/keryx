@@ -8,10 +8,10 @@ alternatives were examined and what evidence closed them.
 
 ## Evidence collected
 
-### helyx (`/home/altsay/bots/helyx`)
+### helyx (a private system, studied directly)
 
-A working Telegram-fronted orchestrator for Claude Code sessions, running on the
-same host. Studied because it solves this exact problem in production.
+A working Telegram-fronted orchestrator for agent sessions, running on the same
+host. Studied because it solves this exact problem in production.
 
 Its shape is the **inverse** of a wrapping server:
 

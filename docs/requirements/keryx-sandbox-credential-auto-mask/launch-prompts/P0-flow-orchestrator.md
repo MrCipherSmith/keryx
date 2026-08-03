@@ -125,5 +125,5 @@ Reply in the docpack session with:
 3. link to PR if any  
 4. whether AC1–AC8 are green  
 
-Then request: **«дай промпт Verify»** — the next launch prompt will be written
+Then request: **"give me the Verify prompt"** — the next launch prompt will be written
 to `launch-prompts/Verify-flow-orchestrator.md` and pasted for you.

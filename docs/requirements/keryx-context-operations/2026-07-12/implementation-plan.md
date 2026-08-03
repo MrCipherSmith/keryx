@@ -1,57 +1,59 @@
 # Keryx Context Operations — Implementation Plan
-Version: 1.0.0
+Version: 1.1.0
 
 ## High-level plan
 
-Реализация делится на пять зависимых волн. Каждая волна должна завершаться
-тестами и evidence, а не только кодом.
+Delivery is split into five dependent waves. Every wave must end with tests and
+evidence, not only with code.
 
 ## Detailed plan
 
 ### Wave 0 — product and contract foundation
 
-- [ ] Зафиксировать package и schemas как design baseline.
-- [ ] Добавить `context` capability descriptor, default-off config и init/update
-  wiring без изменения disabled floor.
-- [ ] Добавить fixture corpus `fixtures/context-operations/cases.json`: project
-  queries, expected mandatory items, allowed source kinds, poison/stale и
-  byte/token/item-overflow cases.
-- [ ] Восстановить dev-checkout invocation (`bun ./src/cli.ts` или эквивалент)
-  в agent guidance; не требовать global `keryx` без fallback.
+- [ ] Freeze the package and its schemas as the design baseline.
+- [ ] Add the `context` capability descriptor, a default-off config, and
+  init/update wiring, without changing the disabled floor.
+- [ ] Add the fixture corpus `fixtures/context-operations/cases.json`: project
+  queries, expected mandatory items, permitted source kinds, poisoned and stale
+  cases, and byte/token/item overflow cases.
+- [ ] Restore the dev-checkout invocation (`bun ./src/cli.ts` or equivalent) in
+  the agent guidance; never require a global `keryx` without a fallback.
 
 ### Wave 1 — deterministic assembly vertical slice
 
-- [ ] Создать `src/context/{types,config,planner,service}.ts` без optional deps.
-- [ ] Реализовать candidates из memory/wiki/skills/rules/flow/quality.
-- [ ] Реализовать budget, mandatory-policy reservation, `context_overflow` и
-  score explanation.
-- [ ] Сохранить redacted manifest/trace под `data/context/`.
-- [ ] Добавить CLI `context assemble` и `context explain`.
-- [ ] Написать unit, schema, no-network, disabled-floor, replay и overflow
-  preservation tests.
+- [ ] Create `src/context/{types,config,planner,service}.ts` with no optional
+  dependencies.
+- [ ] Produce candidates from memory, wiki, skills, rules, flow and quality.
+- [ ] Implement the budget, the mandatory-policy reservation, `context_overflow`,
+  and the score explanation.
+- [ ] Persist the redacted manifest and trace under `data/context/`.
+- [ ] Add the `context assemble` and `context explain` CLI commands.
+- [ ] Write unit, schema, no-network, disabled-floor, replay, and
+  overflow-preservation tests.
 
 ### Wave 2 — governance and feedback
 
-- [ ] Реализовать append-only feedback ledger за `security.guardOutput`.
-- [ ] Добавить explicit review/promotion workflow в memory, без auto-accept.
-- [ ] Добавить freshness/staleness detector на основании source hash/version.
-- [ ] Добавить retention/pruning command только для generated data/context.
+- [ ] Implement the append-only feedback ledger behind `security.guardOutput`.
+- [ ] Add an explicit review/promotion workflow into memory, with no auto-accept.
+- [ ] Add a freshness/staleness detector keyed on source hash and version.
+- [ ] Add a retention/pruning command for generated `data/context` only.
 
 ### Wave 3 — MCP parity and evaluations
 
-- [ ] Добавить read-only MCP tools после стабилизации service facade.
-- [ ] Создать normalized CLI/MCP parity fixtures.
-- [ ] Реализовать `context eval`, top-k/provenance/policy metrics и baseline
-  comparison без маркетинговых claims.
-- [ ] Подключить corpus gate к CI.
+- [ ] Add read-only MCP tools once the service facade has stabilised.
+- [ ] Create normalized CLI/MCP parity fixtures.
+- [ ] Implement `context eval` with top-k, provenance and policy metrics, plus a
+  baseline comparison — and **no marketing claims**.
+- [ ] Wire the corpus gate into CI.
 
 ### Wave 4 — optional intelligence and adapters
 
-- [ ] Через Capability Seam добавить local semantic rerank над candidate pool.
-- [ ] Добавить graph-proximity rerank, если gdgraph artifacts валидны.
-- [ ] Реализовать schema-defined adapter SPI; начать с read-only external
-  adapter fixture, а не production network integration.
-- [ ] Рассмотреть Graphiti/Cognee/OpenViking только после Wave 3 evals.
+- [ ] Add local semantic rerank over the candidate pool, through the Capability
+  Seam.
+- [ ] Add graph-proximity rerank where the gdgraph artifacts are valid.
+- [ ] Implement the schema-defined adapter SPI, starting with a read-only
+  external adapter fixture rather than a production network integration.
+- [ ] Consider Graphiti, Cognee and OpenViking only after the Wave 3 evals.
 
 ## Dependencies and release gates
 

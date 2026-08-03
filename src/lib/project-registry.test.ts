@@ -377,7 +377,7 @@ describe("sanitizeForDisplay", () => {
   test("leaves ordinary text completely untouched", () => {
     // The broken version turned this into "roject-_".
     expect(sanitizeForDisplay("Project-42_ABC")).toBe("Project-42_ABC");
-    expect(sanitizeForDisplay("/home/altsay/keryx-9")).toBe("/home/altsay/keryx-9");
+    expect(sanitizeForDisplay("/home/dev/keryx-9")).toBe("/home/dev/keryx-9");
     expect(sanitizeForDisplay("проект-Ω")).toBe("проект-Ω");
     expect(sanitizeForDisplay("")).toBe("");
   });

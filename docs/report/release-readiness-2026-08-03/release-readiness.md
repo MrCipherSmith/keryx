@@ -34,7 +34,7 @@ All gates run on `feat/r4c-turn-submission` at 2026-08-03, with `main` at
 | Wiki links | **PASS** | 42 pages, 233 internal links, 0 broken |
 | Documentation links | **PASS** | 70 local links across 17 files, 0 broken (ad-hoc check — see gaps) |
 | Package build and install | **PASS** | 292 files, 1.02 MB packed / 3.68 MB unpacked; tarball installed into a clean prefix and exercised (see below). `prepack` removed, so the build now runs once — *the July "build runs twice" concern is fixed* |
-| Canonical documentation language | **PASS** | English throughout the published surface |
+| Canonical documentation language | **PASS, with one declared exception** | All of `docs/` is English except the archived harness runbook, whose progress notes and launch prompts are kept verbatim in Russian as an execution log, declared in the file's own header. `.metaproject/` is internal working state and is not held to this. Eleven `docs/` files were Russian when this report was first drafted; ten were translated and the eleventh was archived and declared. The July report's PASS — and this report's first draft, which repeated it — had checked the published surface and generalised to the repository |
 | Version coherence | **PASS** | `package.json` = `0.2.0`; the release workflow refuses a tag that disagrees with it — *was FAIL in this report's first draft* |
 
 ## Current project map
@@ -135,6 +135,15 @@ An `NPM_TOKEN` repository secret with publish rights. The workflow uses
   makes it a gate.
 - **`keryx metrics` top-level help omits `compare` and `rebuild`**, which the
   command implements. A source fix.
+- **Generated artifacts embed machine-absolute paths.**
+  `.metaproject/data/memory/artifacts/latest.json` carries an `absolutePath`
+  field per entry, so a committed artifact encodes one developer's home
+  directory. This contradicts the workspace contract the project is built on —
+  artifacts are meant to be committable and readable by anyone who clones the
+  repository. Found while scrubbing personal paths for publication: every other
+  occurrence could be rewritten, this one is structural. The fix is to store
+  repository-relative paths; a workaround is to stop committing the query
+  snapshots under `data/*/artifacts/`.
 - **`scripts/install.sh` ignores `KERYX_REPO_URL` when updating.** The variable is
   documented in the script's own `--help` as "Git repository URL", but
   `clone_or_update` only honours it on a *fresh* clone: when `~/.keryx/keryx/.git`
@@ -144,6 +153,53 @@ An `NPM_TOKEN` repository secret with publish rights. The workflow uses
   than an ignored URL. Found by installing this branch from a local path. The fix
   is to set the remote before fetching; the workaround is to remove the target
   directory so the clone path runs.
+
+## Public-exposure audit
+
+The repository is **public**, and `.metaproject/` is committed in full: 960 flow
+files, 70 review files, 10 memory files, 1341 tracked in total. Everything below
+is therefore already visible to anyone.
+
+### Clean
+
+- **No live credentials.** Every match for AWS, GitHub, OpenAI and Slack token
+  shapes is a *deliberate test fixture* (`fixtures/secret/`,
+  `fixtures/seed-secrets/`) or an illustration in
+  `.metaproject/rules/core/security-baseline.mdc`. `AKIAIOSFODNN7EXAMPLE` is
+  AWS's own published example key.
+- No bot tokens, chat identifiers, work GitHub organisation, or work remotes.
+- The published documentation surface — `README`, `CHANGELOG`, `CONTRIBUTING`,
+  `SECURITY`, `CODE_OF_CONDUCT`, all of `docs/docs/` — is English and consistent.
+
+### Should be removed
+
+| # | What | Where | Why |
+|---|---|---|---|
+| E1 | An absolute path carrying **a named individual and an unrelated employer project** | `docs/requirements/keryx-project-agent-harness/implementation-prompt.md`, 3 lines | Tied this repository to a real person and to a third party's internal project. The most serious item here, and the only one involving someone other than the author. The name is deliberately not repeated in this report. |
+| E2 | Personal absolute home paths, including one naming an unrelated private project | 9 tracked files | Leaks a local username and the existence of a separate private project. Low risk, reads as carelessness. |
+| E3 | `.metaproject/data/RESUME.md` | tracked | A scratch hand-off file whose own first lines say *"Delete this file when the work below is finished"*. The work merged on 2026-08-03; the file is stale and published. |
+| E4 | 11 Russian-language files under `docs/requirements`, `docs/plans`, `docs/decisions` | see the language row above | Violated the repository's stated English-only convention and read as unfinished to a visitor. |
+
+**All four are closed.** E1's three lines became `<project-root>` placeholders and
+a dangling reference to a review directory that does not exist in this repository
+was dropped. E2's absolute paths were rewritten or genericised, except the one
+structural case now recorded as a product defect below. E3 was deleted — its
+content was stale (it still listed R4c as not started) and fully superseded by
+the roadmap. E4: ten files were translated, and the eleventh — the archived
+harness runbook — keeps its execution log verbatim under a header that says so.
+
+`/Users/Goodea/goodea/keryx` (33 occurrences) is a machine account name, not a
+person, and `/home/u/.ssh`, `/home/u/.netrc`, `/home/u/.aws` are secret-path
+detector fixtures. Neither needs action.
+
+### Deliberately kept
+
+**`.metaproject/` stays published.** The project's entire claim is that the
+context lives in the repository, versioned and readable by both humans and
+agents; publishing it is the claim being demonstrated rather than asserted. The
+review records are candid — six rounds, twelve blockers, and a lesson about
+claims outrunning their evidence — and that candour is an asset, not a liability,
+provided the announcement does not pretend otherwise.
 
 ## Recommendation
 

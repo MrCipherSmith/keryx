@@ -253,7 +253,7 @@ to revisit harness extensions in the future.
 - `docs/requirements/keryx-project-agent-harness/acceptance.feature` —
   authoritative scenario definitions for all `@release-2` tags and the `@release-1`
   `SC_R04_SHELL_CONTAINMENT` runtime half.
-- `docs/plans/keryx-harness-implementation-runbook.md` — Стейт (progress tracker)
+- `docs/plans/keryx-harness-implementation-runbook.md` — state (progress tracker)
   confirming all Release 2 waves (R2-1…R2-5 + hardening) as ✅, and the model
   policy governing this work.
 - `flow-orchestrator-handoff.md` — Release 0 boundary handoff (mirrored structure).

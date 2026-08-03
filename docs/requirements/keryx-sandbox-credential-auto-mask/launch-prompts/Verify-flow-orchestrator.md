@@ -85,4 +85,4 @@ flow id, files, tests, AC table, residual risks, explicit "P1/P2 NOT done"
 
 ## After Verify
 
-Report flow id + outcome, then request: **«дай промпт P1»**.
+Report flow id + outcome, then request: **"give me the P1 prompt"**.
