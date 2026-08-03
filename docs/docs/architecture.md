@@ -1,12 +1,69 @@
 # Architecture
 
+> Reviewed against the source on **2026-08-03** for `0.2.3`. Where this document
+> and the code disagree, the code wins and the disagreement is a bug in this
+> file — the
+> [documentation audit](../report/release-readiness-2026-08-03/documentation-audit.md)
+> lists the ones found so far.
+
 ## System overview
 
-**keryx** is a single-binary Bun/TypeScript command-line tool (`keryx`, v0.1.0, ESM). It has **no database, no HTTP server, and no network service**. Its one job is to **scaffold and maintain a per-project `.metaproject/` workspace** — a file-based "agent operating system" that makes an AI coding agent more effective and more governable inside an existing repository.
+**keryx** is a single-binary Bun/TypeScript command-line tool (ESM). It has **no
+database and nothing running by default**. Its one job is to **scaffold and
+maintain a per-project `.metaproject/` workspace** — a file-based "agent
+operating system" that makes an AI coding agent more effective and more
+governable inside an existing repository.
 
-The core idea: instead of an agent re-deriving a project's structure, quality, tests, conventions, and history from raw files on every task, keryx materializes that knowledge as durable, human-editable Markdown plus machine-readable JSON artifacts under `.metaproject/`, and installs routing rules so any agent that reads the repo's `AGENTS.md`/`CLAUDE.md` is directed to consult that workspace first.
+Two HTTP surfaces do exist, and both are **opt-in and off until you start
+them**: `keryx mcp serve --http` (localhost-only, additionally gated on
+`http.enabled` in the module manifest) and `keryx serve`, the loopback-bound
+remote entry over the agent harness. Neither runs unless configured and
+launched. Earlier revisions of this document said "no HTTP server, and no
+network service"; that stopped being true when remote entry shipped.
 
-The CLI itself performs only **deterministic mechanics** — scanning, graphing, scoring, state transitions, checksums, template rendering. The "cognitive" work is delegated to the bundled agent skills that the workspace ships. Everything is **local-first and offline**: state lives on disk under `.metaproject/`, no implicit network or global-runtime writes happen, and external tools (git, gh, eslint, tsc) are optional — the system degrades gracefully when they are absent.
+The core idea: instead of an agent re-deriving a project's structure, quality,
+tests, conventions, and history from raw files on every task, keryx materializes
+that knowledge as durable, human-editable Markdown plus machine-readable JSON
+artifacts under `.metaproject/`, and installs routing rules so any agent that
+reads the repo's `AGENTS.md`/`CLAUDE.md` is directed to consult that workspace
+first.
+
+The CLI itself performs only **deterministic mechanics** — scanning, graphing,
+scoring, state transitions, checksums, template rendering. The "cognitive" work
+is delegated to the bundled agent skills that the workspace ships. Everything is
+**local-first and offline by default**: state lives on disk under
+`.metaproject/`, no implicit network or global-runtime writes happen, and
+external tools (git, gh, eslint, tsc) are optional.
+
+Most things degrade rather than break when a dependency is absent — but not
+everything, and the exceptions are named in
+[the README](../../README.md#quick-start) rather than glossed here.
+
+### Where keryx sits
+
+```mermaid
+flowchart LR
+  H["Human developer"]
+  A["Agent runtimes<br/>Claude · Codex · Cursor · Windsurf · OpenCode"]
+  R[("Your repository")]
+
+  subgraph K["keryx"]
+    direction TB
+    W["`.metaproject/` workspace<br/>graph · wiki · memory · health · skills"]
+    S["Agent harness<br/>policy · session · tools"]
+  end
+
+  H -->|"CLI"| K
+  A -->|"reads AGENTS.md / CLAUDE.md<br/>→ routed to `.metaproject/index.md`"| W
+  A -->|"MCP (opt-in)"| W
+  K -->|"scans, never mutates without a decision"| R
+  W -.->|"committed alongside the code"| R
+  S -->|"loopback HTTP, off by default"| E["`keryx serve` clients<br/>bot · browser workspace"]
+```
+
+Everything inside the box is files in the repository. That is the whole
+positioning: the project's context is versioned with the project, readable by a
+human in a diff and by an agent through one index, with nothing hosted.
 
 ## Layered architecture
 
@@ -14,7 +71,7 @@ The whole codebase follows one consistent four-layer pattern:
 
 ```
 src/cli.ts                        Layer 1 — Dispatch
-   │  flat if-chain on args[0]  → <name>Command(args.slice(1))
+   │  CLI_ROUTES table (~31 verbs) → <name>Command(args.slice(1))
    ▼
 src/commands/<name>.ts            Layer 2 — Command handlers
    │  parse flags, print output, set process.exitCode; NO domain logic
@@ -32,7 +89,7 @@ src/eval/        fixture-corpus precision/recall acceptance gates
 src/mcp/         stdio-first protocol surface over the service facades
 ```
 
-- **Layer 1 (`cli.ts`)** is a thin flat dispatcher: `command = args[0]`, one branch per subcommand, each returning after awaiting its handler. Top-level errors are caught only under `import.meta.main` and mapped to `exitCode = 1`.
+- **Layer 1 (`cli.ts`)** is a thin dispatcher over an exported `CLI_ROUTES` table (`src/cli.ts:51`) of roughly 31 verbs, each awaiting its handler. That table — not the hand-written `printHelp`, which has drifted — is the honest surface; `keryx commands --json` projects it. Top-level errors are caught only under `import.meta.main` and mapped to `exitCode = 1`. Handlers set `process.exitCode` and never call `process.exit`.
 - **Layer 2 (`commands/*.ts`)** handlers are deliberately thin: ad-hoc flag parsing, a `switch`/if-chain over the subcommand, a call into the feature service, then console/JSON rendering. They own `process.exitCode`.
 - **Layer 3 (`<feature>/`)** holds domain logic as stateless free functions over a `cwd` argument (no classes, no DI container). Some modules add an optional service-facade object (`createGdWikiService`, `createCodeHealthService`, `createMemoryService`) for DI/testing symmetry; `flow` uniquely uses constructor dependency injection (`tracker`, `healthGate`, `now`) for a genuinely testable state machine. Presentation strings live in per-module `templates.ts`; the type surface in `types.ts`.
 - **Layer 4 (`src/lib/`)** is the bottom layer everything imports (`fs` alone has 32 importers). It depends on nothing else in the project.
@@ -68,6 +125,25 @@ Two invariants define the system and recur across every module:
 | **assets** | `src/assets/` | `assets` (per module) | Local-only, sha256-verified asset resolution (`resolveAsset`); `pullAsset` is the sole network path (verify-or-refuse); `assets.lock.json` pins provenance; `assets list\|verify\|pull`. |
 | **eval** | `src/eval/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
 | **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry, read-only `metaproject://` Resources, single redaction choke point. |
+
+| **harness** | `src/harness/` | `harness run\|exec\|extension\|wave` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay. See "The agent harness" above. |
+| **sandbox** | `src/harness/process/sandbox/` | — (via `harness exec`) | OS-enforced containment: Seatbelt and bubblewrap launchers, the loopback allowlist proxy, the ephemeral run CA, credential masking. Two capability tiers with a hard platform split. |
+| **tui** | `src/tui/`, `src/commands/shell.ts` | `shell` | The OpenTUI full-screen shell, default when `stdout` is a TTY, with a readline fallback. One core with three renderers, not three shells. |
+| **session** | `src/session/`, `src/commands/sessions.ts` | `sessions` | Per-project append-only agent sessions: list, export, locate. |
+| **serve** | `src/commands/serve.ts`, `src/lib/serve-*.ts` | `serve` | Loopback-bound HTTP entry over the harness. Not a module in the manifest sense — a command. |
+| **projects** | `src/lib/project-registry.ts` | `projects` | The user-global project registry that remote entry addresses projects by. |
+| **metrics** | `src/metrics/` | `metrics` | Provenance-aware execution observability: run records, active-time accounting, baseline comparison, benchmark manifests. |
+| **contracts** | `src/contracts/` | — (substrate) | A dependency-free JSON Schema validator covering the whole used-keyword set, with cross-file and local `$ref`/`$defs`. |
+
+**Module, or command?** A *module* has a manifest entry, a manifest file and a
+`src/<feature>` behind a verb. Nine are enabled by `init`; `mcp` is a tenth,
+real but **off by default**. `review`, `serve`, `orient` and `sync` are commands
+— no manifest entry, not toggleable by `keryx modules`. Conflating the two is a
+recurring documentation error, including in earlier revisions of this file.
+
+Two live caveats about `keryx modules` itself: `security` is enabled by default
+but absent from that command's module list, so it cannot be toggled there; and
+toggling anything currently drops an enabled `mcp` from the manifest.
 
 The product modules are joined by cross-cutting command surfaces (`agents`,
 `orient`, and `review`), three opt-in substrates (`capability`, `assets`, and
@@ -136,9 +212,214 @@ Each feature module keeps its deterministic algorithm as the default+fallback an
 
 In every case the seam resolving to `null` (flag off, dep absent, or asset missing/tampered) transparently restores the deterministic floor.
 
+## The agent harness — and the two tool systems
+
+`src/harness/` (~171 files across ~20 subdirectories) is the execution loop that
+lets a model operate on a project through controlled tools. It is
+ports-and-adapters over 34 frozen JSON Schemas: every decision core is pure with
+`clock` and `idSeq` injected, and the only effect surfaces are injected adapters
+(`MutationAdapter`, `ProcessAdapter`, `ProviderPort`, `ToolExecutorPort`).
+
+### Read this before writing anything about tools
+
+**There are two tool systems, and a sentence that merges them is false in both
+directions.**
+
+| | Durable tool system | Interactive tool system |
+|---|---|---|
+| Types | `ToolRegistry` / `ToolExecutorPort` (`src/harness/tool/`) | `InteractiveTool` (`src/commands/agent.ts`) |
+| Returns | an `outputHash` — so it **structurally cannot** feed content back to a live model | content |
+| Used by | the schema-bound `runOffline` contract loop | the shell that people actually run |
+| Approval | `mutation/approval.ts:checkApproval`, reached only from `keryx harness extension` | a `y/N` prompt in `src/commands/agent.ts` |
+
+`tool/metaproject-operations.ts` is the only bridge, projecting one descriptor
+into both.
+
+**And no shipped path registers a tool.** Both production executors are
+refusals — `src/commands/harness.ts:247` ("Release 0 CLI runs register no
+tools") and `src/lib/serve-turn.ts:313` ("Remote turns register no tools in this
+slice"). `keryx harness run` and `keryx serve` are single text turns today.
+
+So "the policy engine gates the tools your agent runs" mixes the first system's
+code with the second system's behaviour. Describe them separately, and cite
+separately.
+
+### One turn, and who owns each decision
+
+```mermaid
+flowchart TB
+  P["Prompt"] --> ST["startRun<br/><i>startup.ts:49</i>"]
+  ST -->|"disabled ⇒ nothing constructed"| X1(["refused"])
+  ST --> CTX["Bounded context manifest"]
+  CTX --> PR["ProviderPort<br/><i>fake · Anthropic · Ollama</i>"]
+  PR --> GA["guardAction<br/><i>mutation/guard.ts:304</i><br/>structural safety, BEFORE policy"]
+  GA --> D{"decide<br/><i>policy/engine.ts:169</i>"}
+  D -->|"deny — terminal,<br/>no approval flips it"| X2(["denied"])
+  D -->|"ask — headless ⇒ deny"| AP["checkApproval<br/><i>approval.ts:111</i><br/>bound to actionFingerprint"]
+  D -->|"allow"| EX
+  AP -->|"valid, single-use"| EX["Injected adapter<br/><i>the sole effect surface</i>"]
+  AP -->|"stale · expired · consumed"| X2
+  EX --> EV["Evidence + append-only session<br/><i>redacted, or not persisted at all</i>"]
+  EV --> CG["evaluateCompletion<br/><i>completion/gate.ts:111</i><br/>reports; never advances flow state"]
+  CG --> MFP["ManagedFlowPort.completeFromGate<br/><i>the ONLY route to FlowService.taskDone</i>"]
+```
+
+Every arrow above is a named function. The seam table in the harness analysis
+carries the full list with citations; the properties worth stating in prose are:
+
+1. **The harness never writes `flow.json`** — three independent mechanisms. The
+   policy engine denies a `flow.json` target *even with a matching approval*
+   (`engine.ts:92-96, 189-197`); the managed-flow port performs no filesystem
+   write and imports only Task Manager *types*; and `child/spawn.ts` accepts no
+   `FlowService` or filesystem handle, so nothing in the child path can reach a
+   write structurally.
+2. **An approval authorizes one action.** It is valid only when
+   `grantedForFingerprint === ctx.actionFingerprint`, and a single-use grant is
+   terminal once consumed.
+3. **Hard denies are terminal.** No approval, role, or interactivity flips one;
+   `override` is a frozen `false`.
+4. **Headless never silently allows.** An `ask` with no live approver becomes
+   `deny`. This is what makes a remote turn's recorded denial correct rather
+   than incidental.
+5. **A transport cannot upgrade a decision.** CLI and RPC both delegate to the
+   same `runOffline`; framing carries data, the engine decides policy.
+6. **Nothing is persisted unscanned.** A failed scan blocks persistence entirely
+   and emits only a reason — no preview, no hash, no category.
+7. **History is append-only.** Entries are content-addressed and deep-frozen;
+   compaction adds a derived record and throws `EvidenceDeletionError` if any
+   prior entry would disappear.
+
+## Remote entry — the order is the control
+
+`keryx serve` is a second door into the same harness. Its security properties
+are **ordering** properties, which is why they are drawn rather than listed:
+the same nine checks in a different sequence is a finding
+(`src/lib/serve-turn.ts:3-7`, quoting `security-policy.md`).
+
+```mermaid
+flowchart TB
+  REQ["Inbound request"] --> B1["1 · Bound body size and content type<br/><i>before parsing semantics</i>"]
+  B1 --> B2["2 · Authenticate, constant-time<br/><i>serve-server.ts:680</i>"]
+  B2 -->|"fail"| F1(["one fixed 401 on every path<br/><i>a known route is indistinguishable<br/>from an unknown one</i>"])
+  B2 --> RT["Route<br/><i>URL first parsed at :709 —<br/>39 lines AFTER auth</i>"]
+  RT --> B3["3 · Stamp origin from the<br/>authenticated connection"]
+  B3 --> B4["4 · Resolve session identity-first<br/>from the declared project — never infer"]
+  B4 --> B5["5 · Prompt to `src/security` as<br/>UNTRUSTED content"]
+  B5 -->|"injection or secret finding"| F2(["no turn is created"])
+  B5 --> B6["6 · Remote profile compared to local<br/><i>may never be weaker</i>"]
+  B6 -->|"weaker"| F3(["refused"])
+  B6 --> B7["7 · Harness classifies each action"]
+  B7 -->|"ask"| F4(["recorded denial —<br/>approvals are R4d"])
+  B7 --> B9["9 · Redact every stream event,<br/>result, error body and notification"]
+  B9 --> OUT["SSE stream + durable turn record"]
+```
+
+Two properties people get wrong when summarising this:
+
+- **The prompt is scanned but reaches the provider unredacted.** Only *outbound*
+  content is redacted (`serve-turn.ts:356-364` discards the redacted string).
+- **The approval boundary is enforced in the policy engine, not the transport.**
+  `policy/engine.ts:233-241` converts `ask` to `deny` for a non-interactive
+  context, and a remote turn is non-interactive by construction. The transport
+  only *reports* it.
+
+## Containment — two tiers, and the platform split is not a footnote
+
+The sandbox sits **below** policy: policy decides *what runs*, the sandbox
+bounds *what a run can touch*.
+
+```mermaid
+flowchart TB
+  subgraph T1["Tier 1 — both platforms"]
+    FS["Filesystem boundaries<br/>workspace-write · secret read-deny"]
+    NET["Network off / on"]
+  end
+  subgraph T2["Tier 2 — macOS ONLY"]
+    AL["Domain allowlist proxy<br/><i>loopback, reports each ruling</i>"]
+    TLS["TLS termination<br/><i>ephemeral run CA</i>"]
+    MASK["Credential masking<br/><i>needs TLS — fails closed without it</i>"]
+  end
+
+  CMD["A command to run"] --> POL["Policy decision"]
+  POL --> W{"wrap.ts:31<br/>platform dispatch"}
+  W -->|"darwin"| SB["Seatbelt"]
+  W -->|"linux"| BW["bubblewrap"]
+  SB --> T1
+  SB --> T2
+  BW --> T1
+  BW -->|"network: restricted"| REF(["REFUSED, with a reason<br/><i>wrap.ts:49-55 · asserted in CI</i>"])
+```
+
+**Tier 2 does not exist on Linux and does not degrade there — it refuses.** A
+sentence like "keryx sandboxes commands" is misleading because it flattens that.
+The Linux refusal is asserted by a live CI job; since `0.2.1` a macOS real-host
+job exercises Tier 2, so the platform where the allowlist actually runs is no
+longer the platform with no live test.
+
+Two further things a reader needs:
+
+- **In the default configuration the load-bearing layer is the approval gate**
+  (`src/commands/agent.ts`, `src/lib/shell-permissions.ts`), because `shell_exec`
+  containment defaults to `off`.
+- **The network posture is an operator decision.** Since `0.2.2` it is resolved
+  by `resolveNetworkRestriction`, which takes the operator's intent and not the
+  ambient environment — a credential that merely exists on the machine can no
+  longer choose it.
+
 ## The `.metaproject/` workspace contract
 
-`.metaproject/` is the product. Its internal contract distinguishes **source-of-truth** files (human-editable, seed-once or hand-authored) from **generated `data/` artifacts** (disposable module outputs).
+`.metaproject/` is the product. Its internal contract distinguishes
+**source-of-truth** files (human-editable, seed-once or hand-authored) from
+**generated `data/` artifacts** (disposable module outputs).
+
+This is the single most load-bearing concept in the system, so it is worth one
+picture: the distinction is *who may write what*, and it is what makes
+`keryx update` safe to run on a workspace full of accumulated knowledge.
+
+```mermaid
+flowchart TB
+  subgraph MP[".metaproject/"]
+    direction TB
+    IDX["index.md<br/><i>the agent entrypoint</i>"]
+    subgraph SVC["Service files — reconciled by init / update"]
+      MOD["modules/*.md"]
+      SK["skills/"]
+      RU["rules/"]
+      MAN["metaproject.json"]
+    end
+    subgraph SOT["Source of truth — seeded once, then yours"]
+      WI["wiki/"]
+      ME["memory/"]
+      FL["flows/"]
+      RV["reviews/"]
+    end
+    subgraph DAT["data/ — generated, disposable"]
+      GG["gdgraph/artifacts/"]
+      GC["gdctx/artifacts/"]
+      HE["health/artifacts/"]
+      TE["testing/artifacts/"]
+    end
+  end
+
+  INIT["keryx init"] -->|"scaffolds"| SVC
+  INIT -->|"seeds, never clobbers"| SOT
+  UPD["keryx update"] -->|"reconciles to template"| SVC
+  UPD -.->|"NEVER writes here"| DAT
+  MODULES["module commands<br/>gdgraph build · health run · test analyze"] -->|"the only writers"| DAT
+  AGENT["Agents and humans"] -->|"read"| IDX
+  IDX -->|"routes to"| SVC
+  AGENT -->|"read and edit"| SOT
+```
+
+The rule that falls out of the picture: **the lifecycle commands treat `data/`
+as read-only, and the module commands are its only writers.** That is what lets
+a self-update refresh the toolchain without destroying accumulated project
+knowledge.
+
+One known violation of the spirit, recorded rather than hidden: generated memory
+artifacts embed an `absolutePath` per entry, so a committed artifact encodes one
+developer's home directory — which contradicts the "committable and readable by
+anyone who clones" half of the contract.
 
 ```
 .metaproject/
