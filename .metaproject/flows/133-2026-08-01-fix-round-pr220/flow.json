@@ -5,13 +5,59 @@
   "title": "Fix round PR #220 (flow 131 / R4c): two blockers and the eleven remaining majors",
   "status": "in-progress",
   "createdAt": "2026-08-01T23:22:55.451Z",
-  "updatedAt": "2026-08-02T07:47:16.715Z",
+  "updatedAt": "2026-08-03T09:28:12.354Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:37f04759f13a5e342a940f3f88d4073f1f962199cc815ba6ee7009f04871eeff",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-03T09:27:38.011Z"
+    },
+    "AC2": {
+      "at": "2026-08-03T09:27:56.704Z"
+    },
+    "AC3": {
+      "at": "2026-08-03T09:27:56.795Z"
+    },
+    "AC4": {
+      "at": "2026-08-03T09:27:56.895Z"
+    },
+    "AC5": {
+      "at": "2026-08-03T09:27:57.001Z"
+    },
+    "AC6": {
+      "at": "2026-08-03T09:27:57.109Z"
+    },
+    "AC7": {
+      "at": "2026-08-03T09:27:57.216Z"
+    },
+    "AC8": {
+      "at": "2026-08-03T09:27:57.313Z"
+    },
+    "AC9": {
+      "at": "2026-08-03T09:27:57.420Z"
+    },
+    "AC10": {
+      "at": "2026-08-03T09:27:57.536Z"
+    },
+    "AC11": {
+      "at": "2026-08-03T09:27:57.661Z"
+    },
+    "AC12": {
+      "at": "2026-08-03T09:27:57.766Z"
+    },
+    "AC13": {
+      "at": "2026-08-03T09:27:57.885Z"
+    },
+    "AC14": {
+      "at": "2026-08-03T09:27:58.032Z"
+    },
+    "AC15": {
+      "at": "2026-08-03T09:27:58.178Z"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -65,7 +111,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +119,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -184,7 +231,7 @@
       "id": "T12",
       "title": "Fix-round review, recorded as a managed package",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -192,7 +239,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -317,6 +365,91 @@
       "at": "2026-08-02T07:47:16.715Z",
       "event": "task-done",
       "detail": "T11: Verify: full suite, typecheck, health"
+    },
+    {
+      "at": "2026-08-03T09:27:38.011Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-08-03T09:27:56.704Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-08-03T09:27:56.795Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-03T09:27:56.895Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-08-03T09:27:57.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-08-03T09:27:57.109Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-08-03T09:27:57.217Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-08-03T09:27:57.313Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-08-03T09:27:57.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-08-03T09:27:57.536Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-08-03T09:27:57.661Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-08-03T09:27:57.766Z",
+      "event": "ac-confirmed",
+      "detail": "AC12"
+    },
+    {
+      "at": "2026-08-03T09:27:57.885Z",
+      "event": "ac-confirmed",
+      "detail": "AC13"
+    },
+    {
+      "at": "2026-08-03T09:27:58.032Z",
+      "event": "ac-confirmed",
+      "detail": "AC14"
+    },
+    {
+      "at": "2026-08-03T09:27:58.178Z",
+      "event": "ac-confirmed",
+      "detail": "AC15"
+    },
+    {
+      "at": "2026-08-03T09:28:12.265Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-03T09:28:12.354Z",
+      "event": "task-done",
+      "detail": "T12: Fix-round review, recorded as a managed package"
     }
   ]
 }

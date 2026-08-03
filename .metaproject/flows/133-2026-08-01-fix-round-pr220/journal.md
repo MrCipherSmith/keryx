@@ -22,3 +22,20 @@
 - 2026-08-02T07:41:42.236Z - task-done: T9: F-008: the error boundary on the listener
 - 2026-08-02T07:46:02.910Z - task-done: T10: F-009/F-010/F-011: the three test defects
 - 2026-08-02T07:47:16.715Z - task-done: T11: Verify: full suite, typecheck, health
+- 2026-08-03T09:27:38.011Z - ac-confirmed: AC1
+- 2026-08-03T09:27:56.704Z - ac-confirmed: AC2
+- 2026-08-03T09:27:56.795Z - ac-confirmed: AC3
+- 2026-08-03T09:27:56.895Z - ac-confirmed: AC4
+- 2026-08-03T09:27:57.001Z - ac-confirmed: AC5
+- 2026-08-03T09:27:57.109Z - ac-confirmed: AC6
+- 2026-08-03T09:27:57.217Z - ac-confirmed: AC7
+- 2026-08-03T09:27:57.313Z - ac-confirmed: AC8
+- 2026-08-03T09:27:57.420Z - ac-confirmed: AC9
+- 2026-08-03T09:27:57.536Z - ac-confirmed: AC10
+- 2026-08-03T09:27:57.661Z - ac-confirmed: AC11
+- 2026-08-03T09:27:57.766Z - ac-confirmed: AC12
+- 2026-08-03T09:27:57.885Z - ac-confirmed: AC13
+- 2026-08-03T09:27:58.032Z - ac-confirmed: AC14
+- 2026-08-03T09:27:58.178Z - ac-confirmed: AC15
+- 2026-08-03T09:28:12.265Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-03T09:28:12.354Z - task-done: T12: Fix-round review, recorded as a managed package
