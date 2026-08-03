@@ -146,6 +146,25 @@ Write or update:
 - `tasks.md` - task definitions grouped by context, test, implement, review, docs;
 - `acceptance-criteria.md` - verifiable `ACn` criteria.
 
+### A verification step in the plan is a task, not a sentence
+
+Every check the plan says must happen before the work is accepted - run the
+thing end to end, confirm two components agree, exercise the path no test
+covers - is added with `keryx flow task add` and closed with
+`keryx flow task done`. Prose in `plan.md` blocks nothing, and an
+orchestrator that wrote the step is the same one deciding whether to run it.
+
+The failure this prevents is specific and has happened: a plan listed
+"confirm both components agree on the same input" as step 5, the
+implementation shipped without it, and review found that the two did not
+agree at all - the change could not work in production. The check had been
+identified correctly and then skipped, because nothing made skipping it
+visible.
+
+Tasks are the mechanism that already exists for this: `flow complete` gates
+on them, so an unrun verification step keeps the flow open instead of being
+quietly dropped.
+
 Then freeze and start:
 
 ```bash
