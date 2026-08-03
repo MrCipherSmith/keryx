@@ -613,9 +613,17 @@ export type RgCommandResult =
  * and keep passing after the guard was deleted.
  */
 export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | null): RgCommandResult {
+  // `--with-filename` is passed UNCONDITIONALLY. ripgrep omits the filename
+  // whenever it is given a single explicit file path, which breaks the
+  // `file:line:col:text` shape `parseRgMatches` expects — so
+  // `keryx ctx rg "pattern" src/foo.ts` reported `Top Files: (unknown)` and
+  // `0:0` for every hit, handing agents matches they could not locate.
+  // `--no-heading` does not restore the filename; only `-H` / `--with-filename`
+  // does. It is a no-op for the multi-path and directory cases, so the common
+  // path is byte-identical.
   const base = listMode
-    ? ["rg", "--no-heading"]
-    : ["rg", "--line-number", "--column", "--no-heading"];
+    ? ["rg", "--with-filename", "--no-heading"]
+    : ["rg", "--with-filename", "--line-number", "--column", "--no-heading"];
 
   const flags: string[] = [];
   const operands: string[] = [];

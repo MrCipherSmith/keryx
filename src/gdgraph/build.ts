@@ -31,6 +31,12 @@ const ASSET_EXTENSIONS = [
 ];
 const IGNORE_DIRS = new Set([
   ".git",
+  // Agent-harness scratch space. `.claude/worktrees/**` holds full git worktrees
+  // — checked-out copies of THIS repository. Walking into them indexes every
+  // source file once per worktree, so a single module shows up N+1 times, the
+  // one real cycle is reported N+1 times, and `affected` can resolve a target to
+  // a stale copy. Never source-index a nested checkout of ourselves.
+  ".claude",
   ".metaproject",
   "node_modules",
   ".cache",
@@ -203,15 +209,29 @@ function extractImportSpecifiers(content: string, language: string): string[] {
   if (language === "java" || language === "python") {
     return extractImportSpecifiersFallback(content);
   }
+  // `Bun.Transpiler#scanImports` ERASES type-only imports: `import type {X} from
+  // "./m"` and `export type {X} from "./m"` are compiled away, so the transpiler
+  // never reports them. Using the regex fallback only as a catch handler meant
+  // every type-only edge was silently missing from the graph — a module imported
+  // exclusively for its types (e.g. `src/security/types.ts`) reported zero
+  // dependents and showed up as a false orphan. UNION the two extractors: the
+  // transpiler contributes the specifiers a regex cannot see (dynamic/`require`,
+  // odd formatting), the fallback contributes the type-only ones.
+  const scanned = scanImportsOrEmpty(content);
+  const fallback = extractImportSpecifiersFallback(content);
+  return [...new Set([...scanned, ...fallback])].sort();
+}
+
+function scanImportsOrEmpty(content: string): string[] {
   try {
     const scanner = new Bun.Transpiler({ loader: "tsx" });
-    return [...new Set(scanner
+    return scanner
       .scanImports(content)
       .map((entry) => entry.path)
-      .filter((specifier): specifier is string => typeof specifier === "string" && specifier.length > 0))]
-      .sort();
+      .filter((specifier): specifier is string => typeof specifier === "string" && specifier.length > 0);
   } catch {
-    return extractImportSpecifiersFallback(content);
+    // Unparseable source ⇒ the regex fallback alone still yields the imports.
+    return [];
   }
 }
 

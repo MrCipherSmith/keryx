@@ -7,6 +7,39 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.3] — 2026-08-03
+
+### Fixed
+
+- **`keryx ctx rg "pattern" src/one-file.ts` reported `(unknown)` and `0:0` for
+  every hit.** ripgrep omits the filename whenever it is given a single explicit
+  file path, which breaks the `file:line:col:text` shape `parseRgMatches`
+  requires — so agents were handed matches they could not locate.
+  `--with-filename` now joins the base argv unconditionally; it is a no-op for
+  the multi-path and directory cases. (PR #211)
+- **The code graph was under-resolving edges on this repository.** After the
+  gdgraph fixes the same tree yields **1,873 edges against 1,397 before**, from
+  649 nodes. (PR #211)
+- Entropy and PII detector corrections, with fixture cases. (PR #211)
+
+### Added
+
+- **CI installs ripgrep.** One test spawns the real binary to prove ripgrep
+  emits `file:line:col` for a single explicit path — an oracle about an external
+  tool. Skipping it when the tool is absent would have left the assumption
+  unverified while the job stayed green, so the tool is installed instead. This
+  is what the pull request's red check actually was.
+
+### Note on the merge
+
+PR #211 was opened on 2026-07-26 and sat behind 24 commits. `buildRgCommand` had
+been rewritten on `main` in the meantime to allowlist ripgrep flags — a caller's
+`--pre=…` had reached arbitrary command execution through the one operation
+agents are told to prefer over raw grep — and it now returns a result rather
+than an argv. Both changes were kept: the security structure from `main`, the
+`--with-filename` fix from the branch, asserted together so neither can be
+dropped while the other still passes.
+
 ## [0.2.2] — 2026-08-03
 
 ### Security
@@ -303,4 +336,5 @@ runtime dependencies, no sockets).
 [0.2.0]: https://github.com/MrCipherSmith/keryx/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/MrCipherSmith/keryx/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...v0.2.2
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...HEAD
+[0.2.3]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...v0.2.3
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...HEAD

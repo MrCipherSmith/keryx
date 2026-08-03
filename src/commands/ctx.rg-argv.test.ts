@@ -118,16 +118,27 @@ describe("buildRgCommand — unknown options fail closed", () => {
 });
 
 describe("buildRgCommand — existing behaviour is preserved", () => {
+  // `--with-filename` joined the base argv in the same change that fixed
+  // `keryx ctx rg "x" src/foo.ts` reporting `(unknown)` and `0:0`: ripgrep omits
+  // the filename for a single explicit file path, which breaks the
+  // `file:line:col:text` shape `parseRgMatches` requires. These assertions were
+  // updated deliberately — the flag is expected, not incidental.
   test("match mode keeps the line/column/no-heading flags", () => {
     const command = argv(["needle"]);
-    expect(command.slice(0, 4)).toEqual(["rg", "--line-number", "--column", "--no-heading"]);
+    expect(command.slice(0, 5)).toEqual([
+      "rg",
+      "--with-filename",
+      "--line-number",
+      "--column",
+      "--no-heading",
+    ]);
   });
 
   test("list mode drops line/column, as before", () => {
     const result = buildRgCommand(["-l", "needle"], "files");
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.command.slice(0, 2)).toEqual(["rg", "--no-heading"]);
+      expect(result.command.slice(0, 3)).toEqual(["rg", "--with-filename", "--no-heading"]);
       expect(result.command).not.toContain("--line-number");
     }
   });

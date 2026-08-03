@@ -2,26 +2,26 @@
 
 ## Stats
 
-- Source files indexed: 633
+- Source files indexed: 649
 - Imported asset files indexed: 4
-- Total nodes: 637
-- Edges: 1359
-- Import edges: 1354
+- Total nodes: 653
+- Edges: 1873
+- Import edges: 1849
 - Asset edges: 5
-- Unresolved imports: 0
-- Import resolution: 100%
-- Skipped generated/static directories: 6
+- Unresolved imports: 19
+- Import resolution: 99%
+- Skipped generated/static directories: 7
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 171 |
-| commands | 69 |
-| lib | 61 |
+| harness | 172 |
+| commands | 71 |
+| lib | 68 |
+| security | 40 |
 | health | 39 |
-| security | 37 |
-| gdgraph | 32 |
+| gdgraph | 34 |
 | memory | 28 |
 | flow | 19 |
 | tui | 18 |
@@ -41,10 +41,15 @@
 
 | Type | Count |
 |---|---:|
-| _none_ | 0 |
+| relative-code | 14 |
+| .js | 2 |
+| .css | 1 |
+| .scanner | 1 |
+| .scan-helper | 1 |
 
 ## Skipped Directories
 
+- `.claude`
 - `.git`
 - `.metaproject`
 - `dist`

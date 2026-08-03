@@ -2,7 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { isWorkingTreeDiff, rgListMode, summarizeDiff, summarizeRgFileList } from "./ctx";
+import {
+  buildRgCommand,
+  isWorkingTreeDiff,
+  rgListMode,
+  summarizeDiff,
+  summarizeRgFileList,
+} from "./ctx";
 
 const CONFIG = {
   maxOutputLines: 120,
@@ -24,6 +30,55 @@ test("rgListMode detects file-listing and count flags", () => {
   expect(rgListMode(["foo", "--count"])).toBe("count");
   expect(rgListMode(["foo", "-c"])).toBe("count");
   expect(rgListMode(["foo", "src/"])).toBeNull(); // normal match search
+});
+
+// Review 2026-07-26, B-03: rg omits the filename for a single explicit file
+// path, so `keryx ctx rg "x" src/foo.ts` reported `(unknown)` and `0:0`.
+test("buildRgCommand always passes --with-filename", () => {
+  // `buildRgCommand` returns a result rather than an argv, because flow 126
+  // made it refuse caller-supplied flags that ripgrep would parse as its own
+  // — `--pre=…` reached arbitrary command execution through the one operation
+  // agents are told to prefer over raw grep. The `--with-filename` fix rides
+  // inside that shape; both properties are asserted together here so neither
+  // can be dropped while the other still passes.
+  const search = buildRgCommand(["foo", "src/a.ts"], null);
+  expect(search.ok).toBe(true);
+  if (!search.ok) return;
+  expect(search.command).toEqual([
+    "rg",
+    "--with-filename",
+    "--line-number",
+    "--column",
+    "--no-heading",
+    "--",
+    "foo",
+    "src/a.ts",
+  ]);
+
+  const listing = buildRgCommand(["foo", "-l"], "files");
+  expect(listing.ok).toBe(true);
+  if (!listing.ok) return;
+  expect(listing.command).toEqual(["rg", "--with-filename", "--no-heading", "-l", "--", "foo"]);
+});
+
+test("rg emits file:line:col for a single explicit file path", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-ctx-rg-"));
+  try {
+    const file = path.join(dir, "single.ts");
+    await writeFile(file, "const a = 1;\nconst needle = 2;\n");
+
+    const built = buildRgCommand(["needle", file], null);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const proc = Bun.spawn(built.command, { stdout: "pipe", stderr: "pipe" });
+    const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const line = stdout.trim().split("\n")[0] ?? "";
+
+    // `<file>:<line>:<column>:<text>` — the shape parseRgMatches requires.
+    expect(line.startsWith(`${file}:2:7:`)).toBe(true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("summarizeRgFileList lists real paths, not (unknown) 0:0 garbage", () => {

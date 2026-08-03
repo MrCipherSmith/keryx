@@ -176,6 +176,40 @@ function countDigits(value: string): number {
   return n;
 }
 
+// A whitespace-separated run of numbers is a TABLE, not a phone number. The
+// loose phone pattern treats spaces as grouping separators, so every row of an
+// aligned numeric report (`keryx security eval`'s own output: `12  12  0  0
+// 0.0000`) was masked as `[REDACTED:phone]`, making the report unreadable
+// through `keryx ctx`.
+//
+// A phone number is therefore required to carry non-whitespace separator
+// context. A candidate qualifies when either:
+//   - it has no internal whitespace at all (`+14155550199`, `415-555-0199`), or
+//   - every whitespace-separated group is a real dialling group of 2-4 digits,
+//     apart from an optional leading country code (`+1 415 555 0199`).
+// Column alignment (a run of 2+ spaces) is always rejected — no phone format
+// pads its groups — and so is any group that is not a bare 2-4 digit run, which
+// is what disqualifies `12  12  0  0  0.0000`.
+function hasPhoneSeparatorShape(value: string): boolean {
+  if (/\s{2,}/.test(value)) {
+    return false;
+  }
+  if (!/\s/.test(value)) {
+    return true;
+  }
+  const groups = value.trim().split(/\s+/);
+  return groups.every((group, index) => {
+    // Leading country code: `+1`, `44`, `+380`.
+    if (index === 0 && /^\+?\d{1,4}$/.test(group)) {
+      return true;
+    }
+    // A dialling group: 2-4 digits, optionally parenthesised, optionally joined
+    // to further 2-4 digit runs by `-`/`.` (`555-0199`). A lone digit or a
+    // decimal (`0`, `0.0000`) is a report column, not a dialling group.
+    return /^\(?\d{2,4}\)?(?:[-.]\d{2,4})*$/.test(group);
+  });
+}
+
 export function detectPii(content: string): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
   for (const rule of RULES) {
@@ -192,6 +226,9 @@ export function detectPii(content: string): DetectorMatch[] {
       if (rule.policyId === "pii.phone") {
         const digits = countDigits(value);
         if (digits < 9 || digits > 15) {
+          continue;
+        }
+        if (!hasPhoneSeparatorShape(value)) {
           continue;
         }
       }

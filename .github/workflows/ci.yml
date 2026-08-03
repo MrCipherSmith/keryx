@@ -26,6 +26,18 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # ripgrep is a documented requirement of `keryx ctx rg` and of the agent's
+      # `search_code` tool, and one test spawns the real binary to prove ripgrep
+      # actually emits `file:line:col` for a single explicit file path — the
+      # shape `parseRgMatches` depends on. That assertion is an oracle about an
+      # external tool, so skipping it when the tool is absent would leave the
+      # assumption unverified while the job stayed green. Install it instead.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Confirm ripgrep is present
+        run: rg --version
+
       - name: Typecheck and tests
         run: bun run check
 
