@@ -12,6 +12,20 @@ this is where the release audit lives; closing them belongs in a flow.
 
 ## SF-1 — the domain allowlist is bypassable while TLS termination is on
 
+> **CLOSED in `0.2.1` by PR #210 (`648897cc`)** — and it was already fixed when
+> this section was written. The pull request had been open since 2026-07-26 with
+> all checks green; this audit reported the defect as open work without first
+> checking the open pull requests. The finding below is accurate about the code
+> as it stood; the recommendation at the bottom of this file was not.
+>
+> The fix matches the mechanism described here: `proxy.ts:214` now reads the
+> inner `Host`, `:221` matches it against the allowlist, and it passes through
+> `decide(...)` — closing the bypass and the blind spot together. It ships with
+> the planted counter-example this section asked for
+> (`proxy-tls.test.ts`, a foreign `Host` set inside the tunnel), and it adds the
+> macOS real-host CI job whose absence is noted under "What was not verified"
+> below (`.github/workflows/ci.yml:148`).
+
 **Severity: high.** Platform: macOS only, because TLS termination is macOS only.
 Requires `--tls-terminate` (or `maskMode=auto` deriving it).
 
@@ -162,9 +176,22 @@ TLS termination are macOS-only *and* untested in CI.
 
 ## Recommendation
 
-1. SF-1 and SF-2 need a flow, not a documentation edit. SF-1 should be closed
-   with a planted, executed counter-example — a test that performs the inner-Host
-   swap and asserts a refusal — because a fix without one is a claim.
-2. SF-3 and the drift table can ride along with the documentation refresh.
-3. Add a macOS containment job to CI, or state plainly in the docs that the
-   macOS-only capabilities are not exercised there.
+1. ~~SF-1 needs a flow, closed with a planted, executed counter-example.~~
+   **Already done** — PR #210, merged as `648897cc` in `0.2.1`, with exactly that
+   counter-example. See the note at the top of SF-1.
+2. **SF-2 is still open** and needs a flow: an unrelated saved credential must
+   not decide the network posture of an unrelated command.
+3. SF-3 and the drift table can ride along with the documentation refresh.
+4. ~~Add a macOS containment job to CI.~~ **Already done** in the same pull
+   request (`.github/workflows/ci.yml:148`).
+
+## Method note, worth more than the findings
+
+Two of the four recommendations above were closed a week before they were
+written. The audit read the source carefully and did not read the open pull
+requests, so it reported finished work as outstanding.
+
+That is the same failure this repository keeps recording, pointed the other way:
+not *a claim stronger than its evidence*, but **a claim that never checked the
+cheapest available evidence**. `gh pr list` costs one command and would have
+prevented it. The check now belongs before any finding is written up, not after.

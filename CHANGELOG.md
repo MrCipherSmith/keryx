@@ -7,6 +7,40 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.1] — 2026-08-03
+
+### Security
+
+- **The egress allowlist is now enforced inside terminated TLS tunnels.**
+  Previously the allowlist was checked against the CONNECT target only. Once TLS
+  termination was on, the decrypted request's `Host` header chose the upstream
+  and was never re-checked — so a contained process could CONNECT to an
+  allowlisted host and then address any other host from inside the tunnel. No
+  decision was recorded for that inner hop either, so the egress was invisible
+  in the reported rulings.
+
+  The inner `Host` is now matched against the allowlist and passed through
+  `decide(...)`, which closes both the bypass and the blind spot. Real
+  credentials were never exposed — masks filter on their own inject-hosts — so
+  this was a containment and observability failure, not a disclosure one.
+
+  It ships with **a planted counter-example**: a test that sets a foreign `Host`
+  inside the tunnel and asserts the refusal. Affects macOS only, because TLS
+  termination is macOS only. (PR #210)
+
+### Added
+
+- **A macOS real-host CI job** covering the OS sandbox and the TUI pty launch.
+  Until now the platform where the allowlist, credential masking and TLS
+  termination actually run was the platform with no live containment test.
+  (PR #210)
+
+### Documentation
+
+- A verification step in a flow plan is a task, not a sentence (PR #221).
+- `shared-definitions` for the rules library, so places that agree connect by
+  import instead of by restatement (PR #222).
+
 ## [0.2.0] — 2026-08-03
 
 The first release since `v0.1.0`, covering 570 commits: the OS sandbox, the
@@ -243,4 +277,5 @@ runtime dependencies, no sockets).
 
 [0.1.0]: https://github.com/MrCipherSmith/keryx/releases/tag/v0.1.0
 [0.2.0]: https://github.com/MrCipherSmith/keryx/compare/v0.1.0...v0.2.0
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.0...HEAD
+[0.2.1]: https://github.com/MrCipherSmith/keryx/compare/v0.2.0...v0.2.1
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...HEAD
