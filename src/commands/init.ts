@@ -15,6 +15,7 @@ import { sanitizeForDisplay } from "../lib/project-registry";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import { seedAssetsLock } from "../assets/seed";
+import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
 import { choice, confirm } from "../lib/prompt";
 import {
   banner,
@@ -1208,18 +1209,16 @@ async function installGdgraphCoreScripts(root: string): Promise<void> {
   const gdgraphCoreRoot = path.join(root, "core", "gdgraph");
   await mkdir(gdgraphCoreRoot, { recursive: true });
 
-  await copyFileIfChanged(
-    runtimeSourcePath("../gdgraph/build.ts"),
-    path.join(gdgraphCoreRoot, "build.ts"),
-  );
-  await copyFileIfChanged(
-    runtimeSourcePath("../gdgraph/query.ts"),
-    path.join(gdgraphCoreRoot, "query.ts"),
-  );
-  await copyFileIfChanged(
-    runtimeSourcePath("../gdgraph/types.ts"),
-    path.join(gdgraphCoreRoot, "types.ts"),
-  );
+  // One list, shared with `update`, checked by `gdgraph/core-sources.test.ts`
+  // against the transitive closure of runtime imports. A hand-maintained copy
+  // here is what let `query.ts`'s import of `./target` break `gdgraph build` on
+  // every fresh install while the suite stayed green.
+  for (const file of GDGRAPH_CORE_SOURCES) {
+    await copyFileIfChanged(
+      runtimeSourcePath(`../gdgraph/${file}`),
+      path.join(gdgraphCoreRoot, file),
+    );
+  }
   await writeTextIfChanged(
     path.join(gdgraphCoreRoot, "cli.ts"),
     renderGdgraphCoreCli(),

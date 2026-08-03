@@ -35,6 +35,72 @@ model-backed commands — `test suggest`, `flow plan`, `memory reflect --narrate
 without a credential. `wiki enrich` is the exception that degrades: it exits 0
 and marks pages skipped.
 
+## What this removes
+
+An agent starts every task by re-deriving what your repository already knows.
+Which files relate to which. What the architecture decision was and why. Which
+tests cover the thing being changed. What broke last time someone tried this.
+That work is repeated per task, per agent, per person — and the answers land in
+scratchpads, CI logs and IDE rule files that never agree with each other.
+
+keryx materializes those answers **into the repository**, as Markdown and JSON
+under `.metaproject/`, and points every agent at one index. The context is
+versioned with the code, readable in a diff, and shared by the humans and the
+agents alike.
+
+### What it looks like when it works
+
+Real output, from a real run on [express](https://github.com/expressjs/express)
+— cloned fresh, four commands, nothing edited:
+
+```console
+$ keryx init --yes
+  ✓ gdgraph  ✓ gdctx  ✓ gdwiki  ✓ gdskills
+  ✓ health   ✓ testing  ✓ memory  ✓ tasks  ✓ security
+
+$ keryx gdgraph build
+gdgraph build complete: 139 nodes, 153 edges
+
+$ keryx gdgraph query cycles
+No cycles found.
+
+$ keryx gdgraph affected lib/express.js
+# Affected context for lib/express.js
+
+## Dependencies
+- lib/application.js
+- lib/request.js
+- lib/response.js
+
+## Dependents
+- examples/route-map/index.js
+- examples/route-middleware/index.js
+- index.js
+```
+
+That last answer — *what breaks if I change this* — is the one an agent
+otherwise spends a dozen file reads guessing at, and gets wrong on the files
+that matter most.
+
+### Is this for you?
+
+**Probably not, if:**
+
+- **you want a hosted service.** There is no server, no account, no dashboard in
+  the cloud. If nothing runs on your machine, nothing runs.
+- **you are on Linux and need the network allowlist.** The domain allowlist,
+  credential masking and TLS termination are macOS-only and **refuse** to run on
+  Linux rather than quietly doing less. Filesystem containment and network
+  on/off work on both.
+- **you need remote approvals today.** `keryx serve` exists, but a turn whose
+  policy decision is `ask` terminates in a recorded denial. Approvals are not
+  implemented yet.
+- **you want it to think for you.** keryx does deterministic mechanics — scan,
+  graph, score, checksum. The judgement stays with the agent and with you.
+
+**Probably yes, if** you run agents against a repository you care about, more
+than once, and you have noticed them rediscovering the same things.
+
 ## Quick Start
 
 **Requirements:** `git` and `bun` (>= 1.1.0). Code search (`keryx ctx rg` and the

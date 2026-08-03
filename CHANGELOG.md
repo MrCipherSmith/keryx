@@ -7,6 +7,47 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.6] — 2026-08-03
+
+### Fixed
+
+- **`keryx gdgraph build` was broken on every fresh install.** `init` copies a
+  few `src/gdgraph/*.ts` files into `.metaproject/core/gdgraph/` so a scaffolded
+  project can run the graph builder without the full toolkit. That list was
+  hand-maintained, in two places, and nothing checked it against what those
+  files import — so when `query.ts` gained `import … from "./target"` in
+  `0.2.3`, the copied core stopped being import-closed:
+
+  ```
+  error: Cannot find module './target' from
+    .metaproject/core/gdgraph/query.ts
+  ```
+
+  This is the **first "Next step" `init` prints**, and the suite stayed green
+  throughout, because nothing ever ran the copied tree.
+
+  The list is one shared constant now, and `core-sources.test.ts` computes the
+  transitive closure of *runtime* imports from the entry points and asserts the
+  list covers it. A new `import` in a copied file now fails a test instead of a
+  stranger's first five minutes.
+
+  Two things the guard gets right on purpose: type-only imports are excluded
+  (they never reach runtime), and a `dynamic-import` is excluded because it is a
+  deliberate lazy edge — `build.ts` reaches `enrich` that way *precisely* so it
+  can run where `enrich` is absent, and that environment is the copied core
+  itself.
+
+### Documentation
+
+- **The README now opens with what keryx removes, not what it contains**, and
+  shows a real run on a freshly cloned `expressjs/express`: 139 nodes, 153
+  edges, no cycles, and the dependency/dependent answer for `lib/express.js`.
+  Every line of that output came from the run, which is also how the scaffold
+  bug above was found — the walkthrough died on its second command.
+- Adds **"Is this for you?"**, naming who should *not* install: people who want
+  a hosted service, people on Linux who need the network allowlist, people who
+  need remote approvals today, and people who expect it to do the thinking.
+
 ## [0.2.5] — 2026-08-03
 
 ### Fixed
@@ -406,4 +447,5 @@ runtime dependencies, no sockets).
 [0.2.3]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...v0.2.3
 [0.2.4]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...v0.2.4
 [0.2.5]: https://github.com/MrCipherSmith/keryx/compare/v0.2.4...v0.2.5
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.5...HEAD
+[0.2.6]: https://github.com/MrCipherSmith/keryx/compare/v0.2.5...v0.2.6
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.6...HEAD
