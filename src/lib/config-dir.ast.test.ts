@@ -384,9 +384,13 @@ describe("every predicate change this round made, pinned", () => {
     // The control: same two keys, values NOT all read off one object.
     const built = 'const p = { trustMode: "untrusted", requiredControls: buildControls() };';
     expect(constructsWith(parse("p.ts", built), ["trustMode", "requiredControls"])).toBe(true);
-    // And a projection off two different objects is a construction again.
+    // REVERSED in round six, deliberately. This used to assert that reading off
+    // two different objects made it a construction again — which was an
+    // artifact of how the first fix was written (one source identifier), not a
+    // decision. A projection off two profiles is still a projection, and
+    // reporting it was a false positive on ordinary code.
     const mixed = "const p = { trustMode: a.trustMode, requiredControls: b.requiredControls };";
-    expect(constructsWith(parse("p.ts", mixed), ["trustMode", "requiredControls"])).toBe(true);
+    expect(constructsWith(parse("p.ts", mixed), ["trustMode", "requiredControls"])).toBe(false);
   });
 
   test("gap: a spread carries keys this file cannot enumerate", () => {
@@ -428,5 +432,81 @@ describe("every predicate change this round made, pinned", () => {
     // must resolve the value, not merely notice that a const exists.
     const wrongConst = 'const SEAM = "somethingElse";\nconst o = { [SEAM]: () => true };';
     expect(suppliesProperty(parse("p.ts", wrongConst), "containmentAvailable")).toEqual([]);
+  });
+});
+
+describe("the spellings this repository actually writes", () => {
+  // Round six. Each of these is ordinary code from this codebase's own idiom,
+  // and each was wrong in the direction that matters: the ORDERING was invisible
+  // and the VALIDATION SET was reported. The predicate was inverted on exactly
+  // the two shapes it exists to separate.
+
+  test("a wrapped ordering table is still an ordering", () => {
+    // `as const` is the dominant idiom here — `CONFIG_PATH_RESOLVERS`,
+    // `POLICY_WORDS`, `WEAKENING_SEAMS` are all written that way. Reading only
+    // the array's immediate parent meant two keywords hid a second `trustMode`
+    // ranking, which is F-004 reintroduced.
+    for (const [form, source] of [
+      ["bare", 'const O = ["read-only","trusted-local","untrusted"];\nO.indexOf(v);'],
+      ["as const", 'const O = ["read-only","trusted-local","untrusted"] as const;\nO.indexOf(v);'],
+      ["satisfies", 'const O = ["read-only","untrusted"] satisfies readonly string[];\nO.indexOf(v);'],
+      ["Object.freeze", 'const O = Object.freeze(["read-only","untrusted"]);\nO.indexOf(v);'],
+      ["held on an object", 'const T = { levels: ["read-only","untrusted"] };\nT.levels.indexOf(v);'],
+    ] as const) {
+      expect({ form, ranks: ranks(source) }).toEqual({ form, ranks: true });
+    }
+  });
+
+  test("an index compared only against -1 is a membership test, not a rank", () => {
+    // `arr.indexOf(x) !== -1` is the pre-`.includes` spelling and is still
+    // written every day. Separating a rank from a set by METHOD NAME reported
+    // it as an ordering — a false positive on a validation list.
+    for (const [form, source] of [
+      ["includes", 'const V = ["deny","ask","allow"];\nV.includes(x);'],
+      ["indexOf !== -1", 'const V = ["deny","ask","allow"];\nV.indexOf(x) !== -1;'],
+      ["indexOf === -1", 'const V = ["deny","ask","allow"];\nif (V.indexOf(x) === -1) throw new Error("no");'],
+      ["indexOf >= 0", 'const V = ["deny","ask","allow"];\nconst ok = V.indexOf(x) >= 0;'],
+    ] as const) {
+      expect({ form, ranks: ranks(source) }).toEqual({ form, ranks: false });
+    }
+    // The control: the same array, index USED as a value, is a rank again.
+    expect(ranks('const V = ["deny","ask","allow"];\nconst rank = V.indexOf(x);')).toBe(true);
+  });
+
+  test("a method or a getter supplies a seam", () => {
+    // Both guarded seams are FUNCTION-valued, so a method is the most natural
+    // way to supply one — and a `MethodDeclaration` is not a
+    // `PropertyAssignment`, so the docstring's "in any spelling" was false for
+    // the spelling most likely to be written.
+    for (const [form, source] of [
+      ["arrow", "const d = { containmentAvailable: () => true };"],
+      ["method", "const d = { containmentAvailable() { return true; } };"],
+      ["getter", "const d = { get containmentAvailable() { return true; } };"],
+    ] as const) {
+      const supplied = suppliesProperty(parse("p.ts", source), "containmentAvailable");
+      expect({ form, supplied: supplied.length > 0 }).toEqual({ form, supplied: true });
+    }
+    // A method with a different name is not this seam.
+    expect(suppliesProperty(parse("p.ts", "const d = { other() { return 1; } };"), "containmentAvailable")).toEqual([]);
+  });
+
+  test("a projection is a projection however its properties are written", () => {
+    // The first fix required every property to be longhand and to read off ONE
+    // identifier. Writing `fingerprint` in shorthand — the ordinary thing when a
+    // local of that name is in scope — put the false positive straight back.
+    const both = ["trustMode", "requiredControls"];
+    for (const [form, source] of [
+      ["all longhand", "return { fingerprint: p.fingerprint, trustMode: p.trustMode, requiredControls: p.requiredControls };"],
+      ["one shorthand", "return { fingerprint, trustMode: p.trustMode, requiredControls: p.requiredControls };"],
+      ["two sources", "return { trustMode: local.trustMode, requiredControls: remote.requiredControls };"],
+    ] as const) {
+      expect({ form, constructs: constructsWith(parse("p.ts", source), both) }).toEqual({
+        form,
+        constructs: false,
+      });
+    }
+    // The controls, or "projection" would swallow every real construction.
+    expect(constructsWith(parse("p.ts", 'const p = { trustMode: "untrusted", requiredControls: buildControls() };'), both)).toBe(true);
+    expect(constructsWith(parse("p.ts", "const p = { trustMode, requiredControls };"), both)).toBe(true);
   });
 });

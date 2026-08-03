@@ -241,11 +241,80 @@ export function loadsModule(sourceFile: ts.SourceFile, moduleBasename: string): 
  * stated rather than claimed away.
  */
 function readsAPosition(array: ts.ArrayLiteralExpression): boolean {
-  const holder = array.parent;
-  const name =
-    holder !== undefined && ts.isVariableDeclaration(holder) && ts.isIdentifier(holder.name)
-      ? holder.name.text
-      : undefined;
+  /**
+   * The name the array is bound to, seen THROUGH the wrappers this codebase
+   * actually writes.
+   *
+   * `as const` inserts an `AsExpression` between the literal and the
+   * `VariableDeclaration`; `satisfies` a `SatisfiesExpression`; `Object.freeze`
+   * a `CallExpression`; a table on an object a `PropertyAssignment`. Reading
+   * only the immediate parent meant `const ORDER = [...] as const` was invisible
+   * — and `as const` is the dominant idiom here (`CONFIG_PATH_RESOLVERS`,
+   * `POLICY_WORDS`, `WEAKENING_SEAMS`). A second `trustMode` ranking written the
+   * way this repository writes every readonly table was reintroducible by two
+   * keywords.
+   */
+  const boundName = (): string | undefined => {
+    let node: ts.Node | undefined = array.parent;
+    while (node !== undefined) {
+      if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) {
+        node = node.parent;
+        continue;
+      }
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === "freeze"
+      ) {
+        node = node.parent;
+        continue;
+      }
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        return node.name.text;
+      }
+      if (ts.isPropertyAssignment(node)) {
+        // `const T = { levels: [...] }` — indexing goes through `T.levels`, so
+        // the property name is what a reader will write.
+        return propertyKey(node.name);
+      }
+      return undefined;
+    }
+    return undefined;
+  };
+
+  /**
+   * Is this index USED as a value, or only compared against `-1`?
+   *
+   * `arr.indexOf(x) !== -1` is the pre-`.includes` spelling of a membership
+   * test and is still written every day. The previous version separated a rank
+   * from a membership set by METHOD NAME, which is wrong in both directions at
+   * once: it reported `indexOf(v) !== -1` as an ordering (a false positive on a
+   * validation list) while missing `as const` orderings entirely.
+   */
+  const isMembershipComparison = (call: ts.Node): boolean => {
+    const parent = call.parent;
+    if (parent === undefined || !ts.isBinaryExpression(parent)) {
+      return false;
+    }
+    const op = parent.operatorToken.kind;
+    const other = parent.left === call ? parent.right : parent.left;
+    const isMinusOne =
+      ts.isPrefixUnaryExpression(other) &&
+      other.operator === ts.SyntaxKind.MinusToken &&
+      ts.isNumericLiteral(other.operand) &&
+      other.operand.text === "1";
+    const isZero = ts.isNumericLiteral(other) && other.text === "0";
+    const comparison =
+      op === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+      op === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      op === ts.SyntaxKind.EqualsEqualsToken ||
+      op === ts.SyntaxKind.ExclamationEqualsToken ||
+      op === ts.SyntaxKind.GreaterThanEqualsToken ||
+      op === ts.SyntaxKind.LessThanToken;
+    return comparison && (isMinusOne || isZero);
+  };
+
+  const name = boundName();
   const root = array.getSourceFile();
   for (const node of walk(root)) {
     if (ts.isPropertyAccessExpression(node)) {
@@ -253,12 +322,20 @@ function readsAPosition(array: ts.ArrayLiteralExpression): boolean {
       if (method !== "indexOf" && method !== "findIndex") {
         continue;
       }
-      if (node.expression === array) {
-        return true;
+      const onThisArray =
+        node.expression === array ||
+        (name !== undefined && ts.isIdentifier(node.expression) && node.expression.text === name) ||
+        (name !== undefined &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === name);
+      if (!onThisArray) {
+        continue;
       }
-      if (name !== undefined && ts.isIdentifier(node.expression) && node.expression.text === name) {
-        return true;
+      const call = node.parent;
+      if (call !== undefined && ts.isCallExpression(call) && isMembershipComparison(call)) {
+        continue; // a membership test, not a rank
       }
+      return true;
     }
     if (ts.isElementAccessExpression(node) && name !== undefined) {
       if (ts.isIdentifier(node.expression) && node.expression.text === name) {
@@ -484,6 +561,18 @@ export function suppliesProperty(sourceFile: ts.SourceFile, name: string): Suppl
           }
         } else if (ts.isShorthandPropertyAssignment(property) && property.name.text === name) {
           found.push("shorthand");
+        } else if (
+          (ts.isMethodDeclaration(property) ||
+            ts.isGetAccessorDeclaration(property) ||
+            ts.isSetAccessorDeclaration(property)) &&
+          propertyKey(property.name) === name
+        ) {
+          // `{ containmentAvailable() { … } }` and `{ get containmentAvailable() { … } }`.
+          // Both guarded seams are FUNCTION-valued, so a method is the most
+          // natural way to supply one — and neither is a `PropertyAssignment`,
+          // so the docstring's "in any spelling" was false for the spelling most
+          // likely to be written.
+          found.push("property");
         }
       }
       continue;
@@ -564,9 +653,20 @@ export function constructsWith(sourceFile: ts.SourceFile, required: readonly str
    * a false positive on ordinary code — the kind that gets a guard switched off.
    */
   const isProjection = (literal: ts.ObjectLiteralExpression): boolean => {
-    let source: string | undefined;
+    // Every value read off SOME object, and shorthand allowed.
+    //
+    // The first version required every property to be a longhand
+    // `PropertyAssignment` reading off ONE identifier, so writing `fingerprint`
+    // in shorthand — the ordinary thing when a local of that name is in scope —
+    // put the false positive straight back, and so did projecting two profiles.
+    // A guard that fires on an evidence record gets deleted by whoever trips on
+    // it, and then it protects nothing.
     let values = 0;
     for (const property of literal.properties) {
+      if (ts.isShorthandPropertyAssignment(property)) {
+        values += 1;
+        continue;
+      }
       if (!ts.isPropertyAssignment(property)) {
         return false;
       }
@@ -574,14 +674,16 @@ export function constructsWith(sourceFile: ts.SourceFile, required: readonly str
       if (!ts.isPropertyAccessExpression(value) || !ts.isIdentifier(value.expression)) {
         return false;
       }
-      const from = value.expression.text;
-      if (source !== undefined && from !== source) {
-        return false;
-      }
-      source = from;
       values += 1;
     }
-    return values > 0;
+    // At least one value must actually be READ off an object; an object of
+    // nothing but shorthand is a construction, not a projection.
+    const readsSomething = literal.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        ts.isPropertyAccessExpression(property.initializer),
+    );
+    return values > 0 && readsSomething;
   };
 
   for (const node of walk(sourceFile)) {
