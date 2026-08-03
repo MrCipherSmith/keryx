@@ -728,49 +728,86 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
 }
 
 /**
+ * What a hook should tell its runtime. Three outcomes, named.
+ *
+ * WHY THIS IS A TYPE. Two blockers in two consecutive rounds came from the same
+ * shape: branching on a value without enumerating what that value can mean.
+ *
+ *   round four   `code === 0` read as "the decision was clean". It also means
+ *                "this mode does not refuse on that gate", and `advisory` — the
+ *                default — returns 0 for `fail`. A live AWS key was approved.
+ *   round six    `gate === "pass"` read as "nothing found". It also means "found
+ *                something the policy asked us to REDACT". An SSN was approved.
+ *
+ * Both were one `if` on a value whose domain I never wrote down. The three
+ * places in this codebase where I DID write the domain down — `outcomeOf`,
+ * `isServerFault`, `isDefiniteAbsence`, each a total switch with no default arm
+ * — have produced zero defects across six review rounds.
+ *
+ * So the outcome is a union and `decideHookOutcome` is total over it. A fourth
+ * outcome, or a fourth reason to reach one, is a compile error here rather than
+ * a fall-through into whichever arm happens to be last.
+ */
+type HookOutcome =
+  /** The operator's mode refuses on this gate. Emit the refusal document. */
+  | { kind: "refuse" }
+  /** Nothing was asked of us. Emit the approval document. */
+  | { kind: "approve" }
+  /**
+   * Something was asked of us that this surface cannot do, or the policy is one
+   * this build cannot read — and the mode does not refuse. Emit NOTHING.
+   *
+   * Silence is a real answer on `cursor` and `antigravity`. On `claude`,
+   * `windsurf` and `generic-mcp` it is byte-identical to approval, because
+   * `allowAction` is a bare `{ exitCode: 0 }` there and exit 0 with no output IS
+   * proceed. So on those three the protection is the operator's `mode`, not this
+   * document, and what this function can honestly guarantee is that it never
+   * AFFIRMS a decision the policy was unhappy with. Tracked as OQ-4.
+   */
+  | { kind: "silent"; because: "policy-asked-for-an-action" | "policy-unreadable" };
+
+/**
+ * Decide the outcome. Total over its inputs, and every branch says which
+ * question it is answering.
+ */
+function decideHookOutcome(
+  refusesUnderThisMode: boolean,
+  decision: SecurityDecision,
+  policyIsKnown: boolean,
+): HookOutcome {
+  if (refusesUnderThisMode) {
+    return { kind: "refuse" };
+  }
+  if (!policyIsKnown) {
+    // An unknown policy is not a permissive one. keryx cannot affirm a decision
+    // it derived from rules it does not understand. It does not manufacture a
+    // refusal either: the operator's mode decides that, and a typo in a config
+    // file must not become an outage.
+    return { kind: "silent", because: "policy-unreadable" };
+  }
+  // `gate: pass` is not "nothing found". `computeGate` returns it for anything
+  // not `block`-actioned and not over `failOn` severity, which INCLUDES findings
+  // the policy asked us to redact — and this surface has no channel to redact
+  // anything. `warn` stays approvable: it is what the resolver assigns below the
+  // confidence floor, and §7a already makes a lone injection advisory.
+  const askedForAnAction = decision.findings.some(
+    (finding) => finding.action !== "allow" && finding.action !== "warn",
+  );
+  if (decision.gate !== "pass" || askedForAnAction) {
+    return { kind: "silent", because: "policy-asked-for-an-action" };
+  }
+  return { kind: "approve" };
+}
+
+/**
  * Emit the decision in the shape the invoking runtime reads, and return its code.
  *
  * `--runtime <id>` is written into the command by `security hooks install`, so a
  * hook knows which harness is asking. Without it — a human at a terminal, or a
  * script — the plain CLI convention of a non-zero exit stands.
  *
- * WHAT AN APPROVAL MEANS, and it is narrower than "the gate passed".
- *
- * `computeGate` returns `pass` for anything that is not `block`-actioned or over
- * `failOn` severity — which INCLUDES findings the policy asked us to redact. The
- * shipped default is `pii: redact`, so on a stock install a prompt carrying an
- * SSN produced `gate: PASS`, `action: redact`, two findings, and
- * `{"permission":"allow"}`. The hook has no channel to actually redact anything;
- * `decision.redacted` is text on stderr. So keryx's answer to "there is an SSN
- * here and my policy says redact it" was a machine-readable approval to proceed
- * with the unredacted content — the round-four blocker one precedence level
- * down.
- *
- * An approval is emitted only when NOTHING was asked of us: every finding, if
- * any, is `allow` or `warn`. `warn` is advisory by construction and `allow` is
- * the absence of a policy; anything above them means the policy wanted an action
- * this surface cannot take.
- *
- * WHAT SILENCE MEANS, and the honest limit on it.
- *
- * The three outcomes are only three on `cursor` and `antigravity`. For `claude`,
- * `windsurf` and `generic-mcp` — three of the four runtimes the installer
- * actually installs into — `allowAction` is a bare `{ exitCode: 0 }`, so silence
- * and approval are BYTE-IDENTICAL. An earlier version of this comment claimed
- * silence made a runtime "fall back to its OWN default, which for a permission
- * gate is to ask the operator". That is false for those three: exit 0 with no
- * output IS proceed, and there is no third signal to fall back to. For cursor it
- * is unverified — this repository contains no citation for what an empty hook
- * response means there.
- *
- * So on most runtimes the protection against a `redact` finding is not this
- * document at all: it is the operator's `mode`. In `advisory` nothing refuses,
- * by design, and `hooks install` now says so on the way in. What this function
- * can honestly do is never AFFIRM a decision the policy was unhappy with, and
- * that is what it does.
- *
- * Tracked as OQ-4: cursor's empty-response contract, and whether an `ask` shape
- * exists that would make the third outcome real rather than merely silent.
+ * The document shapes come from `src/ctx/runtimes.ts`, which owns them; the
+ * OUTCOME comes from `decideHookOutcome`, which owns that.
  */
 function applyRuntimeDecision(
   args: string[],
@@ -792,16 +829,15 @@ function applyRuntimeDecision(
     }
     return action.exitCode;
   };
-  if (code !== 0) {
-    return emit(refusalAction(runtime, message));
+  const outcome = decideHookOutcome(code !== 0, decision, policyIsKnown);
+  switch (outcome.kind) {
+    case "refuse":
+      return emit(refusalAction(runtime, message));
+    case "approve":
+      return emit(allowAction(runtime));
+    case "silent":
+      return 0;
   }
-  const nothingAsked = decision.findings.every(
-    (finding) => finding.action === "allow" || finding.action === "warn",
-  );
-  if (decision.gate === "pass" && nothingAsked && policyIsKnown) {
-    return emit(allowAction(runtime));
-  }
-  return 0;
 }
 
 /**
