@@ -208,7 +208,7 @@ should stay reference material; these are the doors into them.
 **Evidence rule:** each guide ends with the command that verifies the reader got
 the intended result.
 
-### Phase 6 — Publish — **link gate done; site awaiting its first CI build**
+### Phase 6 — Publish — **done, except enabling Pages**
 
 **Goal:** a URL, not a directory listing.
 
@@ -230,17 +230,29 @@ link check was reported as passing, repeatedly — but it ran over a hand-picked
 list of files, and the result was generalised to the repository. The same
 mistake as the language row, one layer down.
 
-**Written but NOT yet verified:** `mkdocs.yml` (Material, `docs_dir:
-docs/docs`, explicit nav, Mermaid via `pymdownx.superfences`) and
+**Shipped unverified, then verified by CI:** `mkdocs.yml` (Material,
+`docs_dir: docs/docs`, explicit nav, Mermaid via `pymdownx.superfences`) and
 `.github/workflows/docs.yml`. `python3-venv` is not installed on the authoring
-machine, so `mkdocs build` could not be run locally, and installing a system
-package to check a docs config was not a trade worth making without asking.
+machine, so `mkdocs build` could not run locally, and installing a system
+package to check a docs config was not a trade worth making unasked. The config
+was therefore labelled unverified and pushed behind a gate that would prove it.
 
-So CI is the oracle instead: the workflow's `build` job runs
-`mkdocs build --strict` on every pull request, where a broken internal link or a
-page missing from the nav is a failure. **This phase is not done until that job
-has gone green at least once** — a config nobody has executed is a claim, and
-this plan exists because of claims like it.
+**The gate earned its keep on the first run: 8 warnings, build aborted.** Two
+causes, both invisible to any amount of re-reading:
+
+1. MkDocs maps a directory's `README.md` onto its `index.md`, so
+   `docs/docs/README.md` collided with `index.md` — first when both were in the
+   nav, then structurally even after the nav entry was removed. Settled with
+   `exclude_docs`.
+2. Six links pointed **outside** `docs_dir` — at `CHANGELOG.md`, the readiness
+   report, the documentation audit, the plan and the root README. They resolve
+   on GitHub and cannot resolve inside a site rooted at `docs/docs`. They are
+   absolute GitHub URLs now, which work from both places.
+
+`mkdocs build --strict` is green. That sequence is the phase's real lesson:
+shipping the config *labelled unverified, behind a gate* turned an unknown into
+a known in two iterations, where shipping it labelled "done" would have shipped
+a site with dead ends.
 
 Remaining after that: enabling GitHub Pages for the repository, which is a
 settings change no workflow can make for itself.
