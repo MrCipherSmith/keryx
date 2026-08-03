@@ -138,13 +138,34 @@ one real result, without reading the architecture.
 **Evidence rule:** the walkthrough is executed end to end on a clean machine
 (or a fresh container) and the pasted output comes from that run.
 
-### Phase 4 — Architecture that can be seen
+### Phase 4 — Architecture that can be seen — **done**
 
 **Goal:** replace 310 lines of prose with something a reader can hold in their
 head.
 
-Diagrams, authored as **Mermaid in Markdown** so they diff in git and need no
-build step or binary assets:
+Five diagrams landed in `docs/docs/architecture.md`, authored as **Mermaid in
+Markdown** so they diff in git and need no build step or binary assets. The
+document was **corrected rather than rewritten** — most of its 310 lines were
+accurate, and replacing good prose with new prose would have traded verified
+content for unverified content.
+
+What the audit changed about the plan, which is the interesting part: the
+diagrams could not simply illustrate the existing text, because the text was
+wrong in ways the source revealed. Three of the five carry a correction:
+
+- The system-context diagram had to stop saying "no HTTP server".
+- The harness diagram had to be preceded by **the two-tool-systems table**, and
+  by the fact that no shipped path registers a tool at all — a single diagram of
+  "the tool loop" would have been false in both directions.
+- The containment diagram had to make the **macOS/Linux split structural**,
+  because Tier 2 does not degrade on Linux, it refuses.
+
+Also corrected while drawing: the module map gained the eleven missing rows
+(harness, sandbox, tui, session, serve, projects, metrics, contracts), and a
+module-versus-command discriminator, because listing `serve` and `review` as
+modules was an error this plan's own author had introduced.
+
+The original list, for the record:
 
 1. **System context** — the human, the agent runtimes, the repo, and `keryx`
    between them. One picture answering "where does this sit".
@@ -160,10 +181,14 @@ build step or binary assets:
    credential masking, and **which of them exist on which platform**. The
    macOS/Linux split must be visible in the picture, not a footnote.
 
-Then rewrite `architecture.md` around those five diagrams, and re-date it.
+**Evidence rule, applied:** every arrow corresponds to a named module or file,
+and the decision nodes carry their `file:line`. The nine-step remote-entry
+diagram is the ordered decision path from `security-policy.md`, quoted by
+`serve-turn.ts:3-7`, which states that *the order rather than the set is the
+control* — so it is drawn rather than listed.
 
-**Evidence rule:** every arrow corresponds to a named module or file. A diagram
-that cannot be traced to source is deleted rather than kept as an illustration.
+**Still open in this phase:** asciinema recordings (they belong with Phase 3,
+which is where the walkthrough lives).
 
 ### Phase 5 — Task-shaped guides
 
@@ -242,10 +267,11 @@ Phases 3–5 are independent of each other and can be worked in any order or in
 parallel. Phase 6 comes after them, because publishing a site freezes the
 structure. Phase 7 is last and is blocked on 3, 4 and 6.
 
-Suggested order of remaining value: **3 → 4 → 6 → 5 → 7**. Phase 5 is the
-largest and benefits most from being written after the diagrams exist to link
-into. The one thing worth pulling forward out of order is the **name decision**
-in Phase 7 — it gets more expensive every week and is nearly free today.
+Suggested order of remaining value: ~~3 → 4~~ **→ 6 → 5 → 7**, with Phase 3
+still open. Phases 1, 2 and 4 are done. Phase 5 is the largest and benefits most
+from being written now that the diagrams exist to link into. The one thing worth
+pulling forward out of order is the **name decision** in Phase 7 — it gets more
+expensive every week and is nearly free today.
 
 ## How this plan gets checked
 

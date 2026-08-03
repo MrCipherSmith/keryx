@@ -7,6 +7,44 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.4] — 2026-08-03
+
+### Documentation
+
+- **`docs/docs/architecture.md` now has five diagrams and no longer predates the
+  architecture.** It was corrected rather than rewritten: most of its 310 lines
+  were accurate, and replacing verified prose with new prose would have traded
+  content for churn.
+
+  The diagrams are Mermaid in Markdown, so they diff in git and need no build
+  step. Every arrow is a named module or file and the decision nodes carry their
+  `file:line`.
+
+  Three of the five exist to correct something the source contradicted:
+
+  - the system-context diagram had to stop the document saying "no HTTP server",
+    which stopped being true when remote entry shipped;
+  - the harness diagram is preceded by a **two-tool-systems table**, because a
+    single picture of "the tool loop" is false in both directions — the durable
+    `ToolExecutorPort` returns an `outputHash` and structurally cannot feed a
+    live model, while the `InteractiveTool` layer the shell runs returns content.
+    And no shipped path registers a tool at all;
+  - the containment diagram makes the **macOS/Linux split structural**, because
+    Tier 2 does not degrade on Linux — it refuses.
+
+  The remote-entry diagram draws the nine-step ordered decision path rather than
+  listing it, because `serve-turn.ts:3-7` states that *the order rather than the
+  set is the control*.
+
+- The module map gained eight missing rows — harness, sandbox, tui, session,
+  serve, projects, metrics, contracts — plus a module-versus-command
+  discriminator. A module has a manifest entry, a manifest file and a
+  `src/<feature>` behind a verb; `review`, `serve`, `orient` and `sync` have none
+  of that. Listing `serve` as a module was an error introduced in `0.2.0`.
+
+- Layer 1 is described as the `CLI_ROUTES` table it is, not the "flat if-chain"
+  it stopped being.
+
 ## [0.2.3] — 2026-08-03
 
 ### Fixed
@@ -337,4 +375,5 @@ runtime dependencies, no sockets).
 [0.2.1]: https://github.com/MrCipherSmith/keryx/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...v0.2.2
 [0.2.3]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...v0.2.3
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...HEAD
+[0.2.4]: https://github.com/MrCipherSmith/keryx/compare/v0.2.3...v0.2.4
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.4...HEAD
