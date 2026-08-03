@@ -1,0 +1,38 @@
+[
+  {
+    "id": "F-040",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "an approval for content the policy said to redact",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-041",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "a build step not spelled `bun build` was silently skipped",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-042",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the guard predicate was inverted on the two shapes it separates",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-046",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "what I said about my own evidence",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]

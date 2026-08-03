@@ -1,0 +1,83 @@
+[
+  {
+    "id": "F-013",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "the throttle is switched off by a table of stale decoys",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-014",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "on Cursor the refusal still does not refuse",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-015",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the four source guards this round widened are all still defeated",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-016",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "`isServerFault` owns one site of the five it documents",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-017",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "idempotency keys are global, so one project's key answers another's submission",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-018",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the two hook installers destroy each other's config",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-019",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the `startup-blocked` arm cannot be reached by a startup refusal",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-020",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the round's own durable memory note is 2× wrong",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-021",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "the pipeline docstring states the release policy this round inverted",
+    "classification": "valid_followup",
+    "flow_relevance": "standalone_review",
+    "class_scope_present": true
+  }
+]

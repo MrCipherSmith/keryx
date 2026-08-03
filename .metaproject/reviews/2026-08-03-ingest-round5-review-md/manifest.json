@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-03-ingest-round5-review-md",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "round5-review.md"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-08-03-ingest-round5-review-md/scope.md",
+    "coverage": ".metaproject/reviews/2026-08-03-ingest-round5-review-md/coverage.md",
+    "report": ".metaproject/reviews/2026-08-03-ingest-round5-review-md/report.md",
+    "findings": ".metaproject/reviews/2026-08-03-ingest-round5-review-md/findings.json",
+    "learning": ".metaproject/reviews/2026-08-03-ingest-round5-review-md/learning.md",
+    "decisions": ".metaproject/reviews/2026-08-03-ingest-round5-review-md/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-03T09:27:16.381Z",
+  "updatedAt": "2026-08-03T09:27:16.381Z"
+}
