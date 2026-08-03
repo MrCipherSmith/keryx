@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml"><img src="https://github.com/MrCipherSmith/keryx/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.2.0-blue.svg" alt="Version"></a>
 </p>
 
 `keryx` is a CLI that installs a small `.metaproject/` workspace into any codebase, giving AI agents and developers one shared, versioned source of context: a code graph, an architecture wiki, normalized health and test reports, long-term memory, and agent skills. Instead of context scattered across scratchpads, CI logs, and IDE rule files that never agree, everything lives in one git-diffable place that both humans and agents read from.
@@ -28,8 +28,17 @@ reading files directly.
 
 ### Install / update (global)
 
-Managed layout: `~/.keryx/keryx` + wrapper at `~/.local/bin/keryx`.
-Re-run either command to upgrade.
+```bash
+npm install -g @mrciphersmith/keryx
+```
+
+> **The package is scoped, and the scope matters.** The unscoped name `keryx` on
+> npm belongs to [an unrelated project](https://github.com/actionhero/keryx) —
+> `npm install -g keryx` installs a different program. The executable this
+> package installs is still called `keryx`.
+
+Or use the managed installer, which lays out `~/.keryx/keryx` with a wrapper at
+`~/.local/bin/keryx`. Re-run either command to upgrade.
 
 ```bash
 # curl (short)
@@ -132,6 +141,7 @@ ships these modules:
 - **security** — deterministic secrets / PII / prompt-injection / egress scanning, redaction, and a policy gate at agent write seams.
 - **review** — managed review packages that preserve reviewer coverage, findings, decisions, learning candidates, and optional Task Manager links.
 - **mcp** — opt-in [Model Context Protocol](https://modelcontextprotocol.io) server exposing read-only module services to agents.
+- **serve** — opt-in, off-by-default loopback HTTP entry (`keryx serve`) that puts the agent harness behind a token-authenticated local socket, so a bot or a browser workspace becomes a client of one surface instead of a second integration.
 
 Two cross-cutting commands improve agent startup and routing:
 
@@ -173,6 +183,36 @@ read-only MCP server into Cursor or Claude in one command (opt-in, off by
 default). See the [architecture doc](docs/docs/architecture.md) for the module
 data flows.
 
+## Remote Entry (opt-in, off by default)
+
+`keryx serve` is a second door into the same agent harness `keryx shell` uses —
+a loopback-bound HTTP listener, so a Telegram bot or a browser workspace can
+drive a run without a second agent runtime or a second owner of session state.
+
+```bash
+keryx serve config init          # write the listener config
+keryx serve token issue          # print a bearer token (only a salted hash is stored)
+keryx serve                      # bind 127.0.0.1 and listen
+keryx serve status --json        # configuration state
+```
+
+It is **off unless you configure it**, binds loopback unless you pass
+`--acknowledge-non-loopback`, and authenticates *before* routing — so an
+unauthenticated caller cannot tell a known path from an unknown one. Routes
+today: `GET /v1/status`, `GET /v1/projects`, `POST /v1/turns` with
+per-project idempotency keys, and `GET /v1/turns/<id>` for the durable record
+and its server-sent-event stream.
+
+Two boundaries worth knowing before you point anything at it:
+
+- **The remote policy profile may never be weaker than the local one**; it is
+  compared on every turn, and a weaker profile is refused rather than accepted.
+- **Approvals are not implemented yet.** A turn whose policy decision is `ask`
+  terminates in a *recorded denial* — it is never auto-approved.
+
+`keryx projects` manages the user-global registry these routes address projects
+by; `keryx init` registers a project into it.
+
 ## CI Integration
 
 `keryx` is designed so CI can publish normalized, committable artifacts that
@@ -199,6 +239,9 @@ Full developer documentation — reverse-engineered from the source — lives un
 - **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, mechanics, data paths.
 - **[CLI reference](docs/docs/cli-reference.md)** — every command, subcommand, and flag.
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
+
+- **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`, including a
+  standing list of known gaps.
 
 Run `keryx <command> --help` (or `keryx` with no arguments) for the live command
 surface.
