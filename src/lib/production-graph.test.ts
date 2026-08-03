@@ -122,6 +122,92 @@ interface ReleaseBuild {
   outDir: string;
 }
 
+/**
+ * Commands that genuinely cannot emit a module into the package.
+ *
+ * An allowlist, not a denylist, and that inversion is the fix. The first
+ * version skipped anything whose first two tokens were not `bun build` — so a
+ * build step the parser did not RECOGNISE was indistinguishable from a step
+ * that does not build, and it chose silence for both. Three ordinary spellings
+ * shipped `config-dir.scan.ts` into `dist/` with the suite fully green:
+ *
+ *   NODE_ENV=production bun build ./src/tools/report.ts …
+ *   bun --bun build ./src/tools/report.ts …
+ *   bun run build:tools
+ *
+ * That is the round-one-through-three defect — match the text, lose to a
+ * respelling — moved up a level, from the import to the build step. Everywhere
+ * else in this file an unparseable input throws; this one line was the
+ * exception, and it was the one that mattered.
+ */
+const BENIGN_COMMANDS = new Set([
+  "cp",
+  "mv",
+  "mkdir",
+  "rm",
+  "rmdir",
+  "chmod",
+  "echo",
+  "touch",
+  "true",
+  ":",
+]);
+
+/**
+ * Decide what a release-script step is: a build to ask about, benign, or
+ * something this parser must refuse to guess at.
+ *
+ * `bun run <name>` and `npm run <name>` are RESOLVED against the same scripts
+ * object, one level, because a sub-script is a build step wearing a different
+ * hat — and the comment that used to name it as safely skippable was the
+ * clearest statement of the bug.
+ */
+function classifyStep(command: string, scripts: Record<string, string>): string[] | "benign" {
+  let tokens = command.trim().split(/\s+/).filter((t) => t.length > 0);
+  // Leading `VAR=value` assignments belong to the environment, not the command.
+  while (tokens.length > 0 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0] as string)) {
+    tokens = tokens.slice(1);
+  }
+  if (tokens.length === 0) {
+    return "benign";
+  }
+  const head = path.basename(tokens[0] as string);
+  if (BENIGN_COMMANDS.has(head)) {
+    return "benign";
+  }
+  if (["bun", "bunx", "npm", "npx", "pnpm", "yarn"].includes(head)) {
+    // Skip the runner's OWN flags to find the subcommand: `bun --bun build …`.
+    let i = 1;
+    while (i < tokens.length && (tokens[i] as string).startsWith("-")) {
+      i += 1;
+    }
+    const subcommand = tokens[i];
+    if (subcommand === "build") {
+      return [tokens[0] as string, "build", ...tokens.slice(i + 1)];
+    }
+    if (subcommand === "run" || subcommand === "run-script") {
+      const name = tokens[i + 1];
+      const nested = name === undefined ? undefined : scripts[name];
+      if (nested === undefined) {
+        throw new Error(`release step runs an unknown script and cannot be checked: ${command.trim()}`);
+      }
+      // One level. A script that runs a script that runs a script is a shape
+      // nobody has, and guessing deeper would be the same silence in a loop.
+      const inner = nested.split("&&").map((c) => classifyStep(c, {}));
+      const builds = inner.filter((c): c is string[] => c !== "benign");
+      if (builds.length !== 1) {
+        throw new Error(
+          `release step \`${command.trim()}\` resolves to ${builds.length} build steps; this parser handles one`,
+        );
+      }
+      return builds[0] as string[];
+    }
+  }
+  throw new Error(
+    `release step cannot be classified as a build or as benign, so it is refused rather than skipped: ${command.trim()}`,
+  );
+}
+
 function releaseBuilds(root: string): ReleaseBuild[] {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
     scripts: Record<string, string>;
@@ -130,17 +216,22 @@ function releaseBuilds(root: string): ReleaseBuild[] {
   if (script === undefined) {
     throw new Error("package.json has no build script; this guard has nothing to ask about");
   }
-  return releaseBuildsFrom(script, root);
+  return releaseBuildsFrom(script, root, pkg.scripts);
 }
 
 /** The parsing half, separated so a test can drive shapes the real script lacks. */
-function releaseBuildsFrom(script: string, root: string): ReleaseBuild[] {
+function releaseBuildsFrom(
+  script: string,
+  root: string,
+  scripts: Record<string, string> = {},
+): ReleaseBuild[] {
   const builds: ReleaseBuild[] = [];
   script.split("&&").forEach((command, index) => {
-    const tokens = command.trim().split(/\s+/);
-    if (tokens[0] !== "bun" || tokens[1] !== "build") {
-      return; // not a build step — a copy, a chmod, a sub-script
+    const classified = classifyStep(command, scripts);
+    if (classified === "benign") {
+      return;
     }
+    const tokens = classified;
     // BOTH spellings of every flag. `--outdir ./dist` and `--outdir=./dist` are
     // the same instruction, and the first version knew only the first — so
     // switching the release script to the equals form did not weaken the guard,
@@ -371,6 +462,40 @@ describe("the shipped build contains no test scaffolding", () => {
       );
       expect({ label, redirected }).toEqual({ label, redirected: true });
     }
+
+    // A step is classified, never guessed at. The first version skipped
+    // anything whose first two tokens were not `bun build`, so a build step the
+    // parser did not RECOGNISE looked exactly like a step that does not build.
+    // Three ordinary spellings shipped the scanner into `dist/` with the suite
+    // green, and each is planted here.
+    const BUILD = "--outdir ./dist --target bun";
+    for (const [label, step] of [
+      ["canonical", `bun build ./src/tools/report.ts ${BUILD}`],
+      ["env-var prefix", `NODE_ENV=production bun build ./src/tools/report.ts ${BUILD}`],
+      ["runner flag before the subcommand", `bun --bun build ./src/tools/report.ts ${BUILD}`],
+    ] as const) {
+      const builds = releaseBuildsFrom(step, path.join(tmpdir(), "keryx-parse-probe"));
+      expect({ label, steps: builds.length }).toEqual({ label, steps: 1 });
+      expect({ label, entries: builds[0]?.entries.length ?? 0 }).toEqual({ label, entries: 1 });
+    }
+
+    // `bun run <name>` is RESOLVED, not skipped. A sub-script is a build step
+    // wearing a different hat, and the comment that used to call it safely
+    // skippable was the clearest statement of the bug.
+    const viaScript = releaseBuildsFrom(
+      "bun run build:tools",
+      path.join(tmpdir(), "keryx-parse-probe"),
+      { "build:tools": `bun build ./src/tools/report.ts ${BUILD}` },
+    );
+    expect(viaScript).toHaveLength(1);
+    expect(viaScript[0]?.entries.map((e) => path.basename(e))).toEqual(["report.ts"]);
+
+    // A step this parser cannot classify is REFUSED, not skipped. Silence about
+    // an unrecognised command is what let the three shapes above through.
+    expect(() => parse("./scripts/build-extra.sh && bun build ./src/cli.ts --outdir ./dist")).toThrow(
+      /cannot be classified/,
+    );
+    expect(() => parse("bun run nonexistent-script")).toThrow(/unknown script/);
 
     // A non-build step is skipped, not fatal — the guard used to throw on a
     // `cp`, so adding one to the release script broke the guard rather than the
