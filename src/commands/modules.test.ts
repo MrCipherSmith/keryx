@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { emitModulesJson, modulesCommand } from "./modules";
+import { buildInitFlags, emitModulesJson, modulesForTest, modulesCommand } from "./modules";
 
 type ModulesPayload = {
   schemaVersion: number;
@@ -140,5 +140,61 @@ describe("modulesCommand --json wiring", () => {
     await writeManifest(["gdgraph"]);
     await modulesCommand(["bogus", "--json"]);
     expect(process.exitCode).toBe(1);
+  });
+});
+
+// D1. `keryx modules` knew 8 of the 10 modules, and a toggle re-invokes `init`
+// with flags derived from that list — so the two it did not know were decided by
+// the absence of a flag rather than by the operator.
+//
+// The two absences behaved differently, which is why one number could not
+// describe both. `security` is default-ON: no `--no-security` meant it survived,
+// but it could never be turned off through this command and never appeared in
+// `status`. `mcp` is default-OFF: `init` adds its manifest entry ONLY when
+// `--mcp` is passed (`init.ts:595`), so a project with MCP enabled lost it on
+// any unrelated toggle. Silent manifest loss, from switching some other module.
+//
+// The fix writes the domain down: every module declares whether `init` scaffolds
+// it by default, and a default-off module carries the enable flag that must be
+// re-sent to preserve it.
+describe("D1 — modules must know every module, in both directions", () => {
+  test("the module list covers every module the manifest can hold", () => {
+    const names = new Set(modulesForTest().map((m) => m.name));
+    for (const expected of [
+      "gdgraph",
+      "gdctx",
+      "gdwiki",
+      "gdskills",
+      "health",
+      "testing",
+      "memory",
+      "tasks",
+      "security",
+      "mcp",
+    ]) {
+      expect(names.has(expected)).toBe(true);
+    }
+  });
+
+  test("a default-OFF module that is enabled re-sends its enable flag", () => {
+    // The regression. Toggling anything at all used to drop `mcp` here.
+    const flags = buildInitFlags(new Set(["gdgraph", "mcp"]), "recommended");
+    expect(flags).toContain("--mcp");
+  });
+
+  test("a default-OFF module that is disabled is not re-enabled", () => {
+    const flags = buildInitFlags(new Set(["gdgraph"]), "recommended");
+    expect(flags).not.toContain("--mcp");
+  });
+
+  test("a default-ON module that is disabled sends its --no- flag", () => {
+    const flags = buildInitFlags(new Set(["gdgraph"]), "recommended");
+    expect(flags).toContain("--no-security");
+    expect(flags).toContain("--no-memory");
+  });
+
+  test("a default-ON module that is enabled sends no flag for itself", () => {
+    const flags = buildInitFlags(new Set(["security"]), "recommended");
+    expect(flags).not.toContain("--no-security");
   });
 });

@@ -78,7 +78,7 @@ Worth recording, because the pass was adversarial and these survived it:
 
 | # | Defect | Evidence |
 |---|---|---|
-| D1 | `keryx modules` knows 8 of 10 modules — `security` and `mcp` are absent (`commands/modules.ts:23-32`). Every toggle re-invokes `init` with flags derived from that list, so toggling *anything* silently drops `modules.mcp` from a project that had it enabled. | `modules.ts:131-139`, `init.ts:347`, `:598-600` |
+| ~~D1~~ **FIXED in 0.2.5** | `keryx modules` knew 8 of 10 modules — `security` and `mcp` are absent (`commands/modules.ts:23-32`). Every toggle re-invokes `init` with flags derived from that list, so toggling *anything* silently drops `modules.mcp` from a project that had it enabled. | `modules.ts:131-139`, `init.ts:347`, `:598-600` |
 | D2 | The five model-backed commands disagree on the exit code for one condition. `wiki enrich` exits 0 and marks pages skipped; the four `narrate` users exit 1. | — |
 | D3 | `no-optional-imports.test.ts` derives its forbidden list from `optionalDependencies`, so a package that is externalized but undeclared is not covered by the guard. | `no-optional-imports.test.ts` |
 | D4 | `keryx harness run` returns an unstable `completion` shape, typed `unknown`: success emits a `CompletionGateResult`, the catch path emits an ad-hoc object. | `commands/harness.ts:213-216` |
