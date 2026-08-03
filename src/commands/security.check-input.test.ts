@@ -527,3 +527,126 @@ describe("a mode that does not refuse is not an approval", () => {
     expect(new Set([denied.out, allowed.out, silent.out]).size).toBe(3);
   }, 60_000);
 });
+
+describe("an approval means nothing was asked of us", () => {
+  // Round six's blocker, and it is round four's blocker one precedence level
+  // down. `computeGate` returns `pass` for anything not `block`-actioned and
+  // not over `failOn` severity — which INCLUDES findings the policy asked us to
+  // REDACT. The shipped default is `pii: redact`, so a stock install answered a
+  // prompt carrying an SSN with `gate: PASS`, `action: redact`, two findings,
+  // and `{"permission":"allow"}`.
+  //
+  // The hook has no channel to redact anything. So keryx's answer to "there is
+  // an SSN here and my policy says redact it" was a machine-readable approval
+  // to proceed with the unredacted content.
+
+  const SSN = "contact me at nobody@example.com, ssn 123-45-6789";
+
+  test("a redact finding does NOT get an approval, on the shipped default", async () => {
+    writeConfig("advisory");
+    for (const runtime of ["cursor", "antigravity"]) {
+      const { exit, out, err } = await checkInput(SSN, "untrusted-external", ["--runtime", runtime]);
+      expect({ runtime, exit, out }).toEqual({ runtime, exit: 0, out: "" });
+      // Detected and reported — silence here is a decision, not a miss.
+      expect(err).toContain("redact");
+    }
+  }, 60_000);
+
+  test("a warn-only finding still gets one — warn is advisory by construction", async () => {
+    // The line has to fall somewhere, and this is where the policy already puts
+    // it: §7a makes a lone injection advisory, and `warn` is what the resolver
+    // assigns below the confidence floor. Without this the fix above would be
+    // "never approve anything with a finding", which is a different policy and
+    // would make the guard refuse 2.4% of ordinary prose.
+    writeConfig("advisory");
+    const { exit, out } = await checkInput(INJECTION, "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect({ exit, parsed: JSON.parse(out) }).toEqual({ exit: 0, parsed: { permission: "allow" } });
+  }, 30_000);
+
+  test("a genuinely clean prompt still gets one", async () => {
+    writeConfig("advisory");
+    const { out } = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect(JSON.parse(out)).toEqual({ permission: "allow" });
+  }, 30_000);
+
+  test("check-output honours the same rule — a flagged WRITE is not approved", async () => {
+    // `PreToolUse` fires on every Write and Edit. An agent writing a file with
+    // PII in it was getting `{"permission":"allow"}` for a write the policy
+    // flagged.
+    writeConfig("advisory");
+    const { exit, out } = await checkOutput(SSN, "external", ["--runtime", "cursor"]);
+    expect({ exit, out }).toEqual({ exit: 0, out: "" });
+  }, 30_000);
+});
+
+describe("a policy this build cannot read does not produce an approval", () => {
+  // `loadSecurityConfig` never validates; `validateSecurityConfig` is called
+  // only by `policy validate`. So a config the validator rejects is applied
+  // verbatim on the enforcement path, and one out-of-range value rewrote the
+  // outcome: `minConfidence: 5` puts every detector below the floor, so a
+  // `block` finding becomes `warn`, and `failOn: "nope"` has no rank so the
+  // severity branch never fires. Gate `pass`, action `warn` — and a live AWS
+  // access key was answered with an approval.
+
+  /** A config that parses, is applied, and fails the schema. */
+  function writeInvalidConfig(): void {
+    writeFileSync(
+      path.join(project, ".metaproject", "security.config.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: "enforced",
+        rawRetention: "off",
+        gate: { failOn: "nope", minConfidence: 5 },
+        policies: {
+          secrets: { action: "block" },
+          pii: { action: "redact" },
+          promptInjection: { action: "warn" },
+          egress: { action: "warn" },
+          artifactSafety: { action: "warn" },
+        },
+      }),
+      "utf8",
+    );
+  }
+
+  test("an invalid config suppresses the approval and says why", async () => {
+    writeInvalidConfig();
+    const { exit, out, err } = await checkInput(AWS_KEY, "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect({ exit, out }).toEqual({ exit: 0, out: "" });
+    expect(err).toContain("does not match the policy schema");
+    // The downgrade really did happen — this is not passing because the key was
+    // still detected as a block.
+    expect(err).toContain("warn");
+  }, 30_000);
+
+  test("it does NOT manufacture a refusal — a typo must not become an outage", async () => {
+    // The operator's `mode` decides refusal. Inventing a block here would turn
+    // a bad character in a config file into a broken agent.
+    writeInvalidConfig();
+    const { exit } = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect(exit).toBe(0);
+  }, 30_000);
+
+  test("a VALID config is unaffected — the control", async () => {
+    writeConfig("enforced");
+    const refused = await checkInput(AWS_KEY, "untrusted-external", ["--runtime", "cursor"]);
+    expect(JSON.parse(refused.out)).toMatchObject({ permission: "deny" });
+    const clean = await checkInput("summarise the readme", "untrusted-external", [
+      "--runtime",
+      "cursor",
+    ]);
+    expect(JSON.parse(clean.out)).toEqual({ permission: "allow" });
+  }, 60_000);
+});

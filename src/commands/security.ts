@@ -1,4 +1,4 @@
-import { allowAction, refusalAction } from "../ctx/runtimes";
+import { allowAction, refusalAction, type HookAction } from "../ctx/runtimes";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -437,7 +437,8 @@ async function handleCheck(
     args,
     exitCodeFor(decision, cwd, await modeOf(cwd)),
     `keryx security: this ${kind} was refused by the configured security policy (gate: ${decision.gate}).`,
-    decision.gate,
+    decision,
+    await policyIsUnderstood(cwd),
   );
 }
 
@@ -733,47 +734,56 @@ function exitCodeFor(decision: SecurityDecision, _cwd: string, mode: string): nu
  * hook knows which harness is asking. Without it — a human at a terminal, or a
  * script — the plain CLI convention of a non-zero exit stands.
  *
- * THREE outcomes, not two, and conflating the middle one with a pass was a
- * security regression this function shipped and a review caught:
+ * WHAT AN APPROVAL MEANS, and it is narrower than "the gate passed".
  *
- *   the mode refuses          -> the refusal document
- *   the gate PASSED           -> the allow document
- *   neither                   -> NOTHING, and that is the whole fix
+ * `computeGate` returns `pass` for anything that is not `block`-actioned or over
+ * `failOn` severity — which INCLUDES findings the policy asked us to redact. The
+ * shipped default is `pii: redact`, so on a stock install a prompt carrying an
+ * SSN produced `gate: PASS`, `action: redact`, two findings, and
+ * `{"permission":"allow"}`. The hook has no channel to actually redact anything;
+ * `decision.redacted` is text on stderr. So keryx's answer to "there is an SSN
+ * here and my policy says redact it" was a machine-readable approval to proceed
+ * with the unredacted content — the round-four blocker one precedence level
+ * down.
  *
- * `exitCodeFor` returns 0 for two different reasons. One is "the decision was
- * clean". The other is "this mode does not refuse on that gate" — `advisory`
- * returns 0 for every gate including `fail`, and `ci` returns 0 for
- * `needs-approval`. The first version of this function read `code === 0` as a
- * pass and emitted `{"permission":"allow"}` for both, so on a DEFAULT install a
- * live AWS key produced:
+ * An approval is emitted only when NOTHING was asked of us: every finding, if
+ * any, is `allow` or `warn`. `warn` is advisory by construction and `allow` is
+ * the absence of a policy; anything above them means the policy wanted an action
+ * this surface cannot take.
  *
- *   stderr  gate: FAIL   ✗ secret/secrets.aws-access-key → block
- *   stdout  {"permission":"allow"}                          exit 0
+ * WHAT SILENCE MEANS, and the honest limit on it.
  *
- * That is strictly worse than the bug it replaced. Before, the allow path wrote
- * zero bytes and the runtime fell back to its OWN default, which for a
- * permission gate is to ask the operator. Emitting an approval suppresses that
- * prompt for exactly the inputs keryx flagged as blocking. And `require-approval`
- * — the `needs-approval` gate — literally means ask a human; answering it with a
- * machine-readable approval is the same error in its sharpest form.
+ * The three outcomes are only three on `cursor` and `antigravity`. For `claude`,
+ * `windsurf` and `generic-mcp` — three of the four runtimes the installer
+ * actually installs into — `allowAction` is a bare `{ exitCode: 0 }`, so silence
+ * and approval are BYTE-IDENTICAL. An earlier version of this comment claimed
+ * silence made a runtime "fall back to its OWN default, which for a permission
+ * gate is to ask the operator". That is false for those three: exit 0 with no
+ * output IS proceed, and there is no third signal to fall back to. For cursor it
+ * is unverified — this repository contains no citation for what an empty hook
+ * response means there.
  *
- * So silence is the correct third answer. It is not an omission: it says keryx
- * has a finding and the operator's configured mode does not refuse on it, which
- * leaves the decision where the operator's mode setting left it.
+ * So on most runtimes the protection against a `redact` finding is not this
+ * document at all: it is the operator's `mode`. In `advisory` nothing refuses,
+ * by design, and `hooks install` now says so on the way in. What this function
+ * can honestly do is never AFFIRM a decision the policy was unhappy with, and
+ * that is what it does.
  *
- * The document shapes come from `src/ctx/runtimes.ts`, which owns them.
+ * Tracked as OQ-4: cursor's empty-response contract, and whether an `ask` shape
+ * exists that would make the third outcome real rather than merely silent.
  */
 function applyRuntimeDecision(
   args: string[],
   code: number,
   message: string,
-  gate: SecurityDecision["gate"],
+  decision: SecurityDecision,
+  policyIsKnown: boolean,
 ): number {
   const runtime = optionValue(args, "--runtime");
   if (runtime === undefined) {
     return code;
   }
-  const emit = (action: { exitCode: number; stdout?: string; stderr?: string }): number => {
+  const emit = (action: HookAction): number => {
     if (action.stdout !== undefined) {
       process.stdout.write(action.stdout);
     }
@@ -785,10 +795,60 @@ function applyRuntimeDecision(
   if (code !== 0) {
     return emit(refusalAction(runtime, message));
   }
-  if (gate === "pass") {
+  const nothingAsked = decision.findings.every(
+    (finding) => finding.action === "allow" || finding.action === "warn",
+  );
+  if (decision.gate === "pass" && nothingAsked && policyIsKnown) {
     return emit(allowAction(runtime));
   }
   return 0;
+}
+
+/**
+ * Is the operator's policy one this build can actually reason about?
+ *
+ * `loadSecurityConfig` never validates — it merges whatever parses over the
+ * defaults, and `validateSecurityConfig` is called only by `policy validate`.
+ * So a config that the validator rejects is applied verbatim on the enforcement
+ * path, and a single out-of-range value rewrites the outcome:
+ *
+ *   {"gate":{"failOn":"nope","minConfidence":5}}
+ *
+ * `minConfidence: 5` puts every detector below the floor, so a `block` finding
+ * is rewritten to `warn`; `failOn: "nope"` has no rank, so the severity branch
+ * never fires. Gate `pass`, action `warn` — and a live AWS access key was
+ * answered with `{"permission":"allow"}`. That is the round-four blocker
+ * reachable through a config file rather than through a code path.
+ *
+ * An unknown policy is not a permissive one. keryx cannot affirm a decision it
+ * derived from rules it does not understand, so an invalid config suppresses the
+ * approval and says why on stderr. It does not manufacture a refusal: the
+ * operator's `mode` still decides that, and inventing a block here would make a
+ * typo in a config file into an outage.
+ *
+ * Fixing `loadSecurityConfig` to validate at the source is the better shape and
+ * has eight call sites across four modules; this closes the hole at the one
+ * place that turns a decision into a machine-readable approval.
+ */
+async function policyIsUnderstood(cwd: string): Promise<boolean> {
+  // The LOADED config, not the raw file. The schema describes a fully populated
+  // policy, and `loadSecurityConfig` merges a partial one over the defaults — so
+  // validating the file rejected every ordinary config, which omits `enabled`
+  // on each policy. The first version of this function did exactly that and
+  // turned eight passing tests red, which is how it was caught. `policy
+  // validate` validates the merged object for the same reason.
+  //
+  // Merging does not launder an out-of-range value: `minConfidence: 5` and
+  // `failOn: "nope"` survive it, which is the case this exists for.
+  const config = await loadSecurityConfig(cwd);
+  const errors = validateSecurityConfig(config);
+  if (errors.length > 0) {
+    process.stderr.write(
+      `keryx security: ${path.relative(cwd, configPath(cwd))} does not match the policy schema, so no approval is emitted — ${errors[0]}\n`,
+    );
+    return false;
+  }
+  return true;
 }
 
 export function printSecurityHelp(): void {
