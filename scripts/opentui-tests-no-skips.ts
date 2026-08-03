@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
-// Flow 114 / AC3 — run the OpenTUI-dependent suites and REFUSE to report success
-// if any test was skipped.
+// Flow 114 / AC3 — run the given suites and REFUSE to report success if any test
+// was skipped. Written for the OpenTUI suites (hence the name) and since reused
+// by every CI leg whose whole value is "this really ran on THIS platform": the
+// pty launch smoke and the macOS OS-sandbox legs.
 //
 // The suites in `src/tui` guard their renderer tests behind `test.skipIf(the
 // optional dependency is absent)`. That is right for a developer without the
@@ -73,7 +75,7 @@ try {
     xml = readFileSync(report, "utf8");
   } catch (error) {
     loud([
-      "OPENTUI TEST GUARD: the JUnit report was never written.",
+      "ZERO-SKIP GUARD: the JUnit report was never written.",
       `  ${error instanceof Error ? error.message : String(error)}`,
       "  The run's skip count cannot be established, so this leg proves nothing.",
     ]);
@@ -83,7 +85,7 @@ try {
   const totals = parseTotals(xml);
   if (totals === undefined) {
     loud([
-      "OPENTUI TEST GUARD: the JUnit report had no readable <testsuites> counts.",
+      "ZERO-SKIP GUARD: the JUnit report had no readable <testsuites> counts.",
       "  Without them a skipped test would pass unnoticed. Failing instead.",
     ]);
     process.exit(1);
@@ -91,14 +93,14 @@ try {
 
   console.log("");
   console.log(
-    `OpenTUI suites (${targets.join(", ")}): ` +
+    `Suites (${targets.join(", ")}): ` +
       `${totals.tests} tests, ${totals.failures} failures, ${totals.skipped} skipped ` +
       `on ${process.platform}-${process.arch}`,
   );
 
   if (totals.tests === 0) {
     loud([
-      `OPENTUI TEST GUARD: ${targets.join(", ")} matched ZERO tests.`,
+      `ZERO-SKIP GUARD: ${targets.join(", ")} matched ZERO tests.`,
       "  An empty run exits 0 and would be recorded as platform evidence.",
     ]);
     process.exit(1);
@@ -106,26 +108,28 @@ try {
 
   if (totals.skipped > 0) {
     loud([
-      `OPENTUI TEST GUARD: ${totals.skipped} test(s) SKIPPED on ${process.platform}-${process.arch}.`,
+      `ZERO-SKIP GUARD: ${totals.skipped} test(s) SKIPPED on ${process.platform}-${process.arch}.`,
       "",
       "  A skip means the environment could not run the thing under test, so",
       "  reporting green would record a platform as covered while nothing on it",
-      "  was ever exercised. The two gates that produce a skip here:",
+      "  was ever exercised. The gates that produce a skip here:",
       "",
       "    * src/tui — the optional TUI dependency's prebuilt native binary did",
       "      not resolve. Check the preceding native-binary verification step.",
       "    * the pty launch smoke — no `/usr/bin/script`, a non-darwin host, or",
       "      KERYX_ALLOW_REAL_SUBPROCESS was not set to 1.",
+      "    * the macOS OS-sandbox legs — a non-darwin host, or",
+      "      KERYX_ALLOW_REAL_SUBPROCESS / KERYX_DUAL_AXIS_LIVE not set to 1.",
     ]);
     process.exit(1);
   }
 
   if (run.exitCode !== 0 || totals.failures > 0) {
-    loud([`OPENTUI TEST GUARD: the suites failed (exit ${run.exitCode}, ${totals.failures} failures).`]);
+    loud([`ZERO-SKIP GUARD: the suites failed (exit ${run.exitCode}, ${totals.failures} failures).`]);
     process.exit(run.exitCode === 0 ? 1 : run.exitCode);
   }
 
-  console.log(`No skips: every OpenTUI-dependent test really ran on ${process.platform}-${process.arch}.`);
+  console.log(`No skips: every selected test really ran on ${process.platform}-${process.arch}.`);
 } finally {
   rmSync(workspace, { recursive: true, force: true });
 }

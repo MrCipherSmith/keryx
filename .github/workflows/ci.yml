@@ -137,7 +137,15 @@ jobs:
     # Not folded into `check` (ubuntu, where it would only ever skip) and not
     # into the default `bun test` (it spawns real processes, so it follows the
     # repository's KERYX_ALLOW_REAL_SUBPROCESS convention). ~40s, one runner.
-    name: TUI launches on a real pty (macOS)
+    #
+    # This job also carries the macOS-only OS-sandbox coverage (see the step
+    # below). Both legs need the same scarce thing — a macOS runner with
+    # KERYX_ALLOW_REAL_SUBPROCESS=1 — and the free tier's macOS concurrency
+    # ceiling is what actually rations CI here, so they share one runner rather
+    # than queueing two. The sandbox step runs FIRST, deliberately: the pty leg
+    # is gated on `/usr/bin/script`, and if the runner image ever drops it, that
+    # failure must not take the sandbox evidence down with it.
+    name: macOS real-host legs — OS sandbox + TUI pty launch
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -149,6 +157,38 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      # TEST-01. The macOS seatbelt path, the allowlist proxy (including TLS
+      # termination) and the dual-axis credential-mask check had NO CI job
+      # anywhere that could run them: `check` runs on ubuntu without
+      # KERYX_ALLOW_REAL_SUBPROCESS, and `linux-sandbox` exercises bwrap only.
+      # Restricted network is macOS-only in v1.x (bubblewrap cannot express
+      # "deny all network except this one loopback socket"), so the allowlist
+      # proxy's live behaviour — the egress boundary itself — was unverified in
+      # CI on the one platform that implements it.
+      #
+      # Every gate here is platform/env, never an optional binary, so on a macOS
+      # runner with both flags set the correct outcome is ZERO skips. Running it
+      # through the zero-skip guard is the point: without it a gate that quietly
+      # stopped matching would leave this green having proven nothing.
+      - name: Confirm the macOS sandbox launcher is present
+        run: test -x /usr/bin/sandbox-exec
+
+      - name: OS-sandbox macOS legs — seatbelt, allowlist proxy, dual-axis (fail on skip)
+        env:
+          KERYX_ALLOW_REAL_SUBPROCESS: "1"
+          KERYX_DUAL_AXIS_LIVE: "1"
+        run: |
+          bun ./scripts/opentui-tests-no-skips.ts \
+            src/harness/process/sandbox/seatbelt.test.ts \
+            src/harness/process/sandbox/network-restricted.smoke.test.ts \
+            src/harness/process/sandbox/proxy.test.ts \
+            src/harness/process/sandbox/proxy-tls.test.ts \
+            src/harness/process/sandbox/tls-ca.test.ts \
+            src/harness/process/sandbox/network-run.test.ts \
+            src/harness/process/sandbox/dual-axis-live.smoke.test.ts \
+            src/harness/process/sandbox/dual-axis-report.test.ts \
+            src/harness/process/sandbox/mask-resolve.test.ts
 
       # The gate is `darwin` + `/usr/bin/script`. If the runner image ever drops
       # `script`, the suite would SKIP and this job would go green having proven
