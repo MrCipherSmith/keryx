@@ -7,6 +7,32 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.2] — 2026-08-03
+
+### Security
+
+- **A credential that merely exists no longer chooses the network posture of an
+  unrelated command.** `keryx harness exec` decided "restricted network" from
+  the count of mask inject-hosts. Those come from masks resolved against every
+  provider key in the environment *and* in the user-global `auth.json` — so a
+  saved key for a provider the command never touches silently widened the run to
+  restricted networking with TLS termination on macOS, and blocked the command
+  outright on Linux, where `restricted` is refused. The same
+  `harness exec -- /bin/echo hi` worked or failed depending on whether an
+  unrelated key existed on the machine.
+
+  The posture is now decided by `resolveNetworkRestriction`, which takes the
+  operator's intent and nothing derived from the environment: credentials are
+  not a parameter, so they cannot reach the decision. Inject hosts still join
+  the allowlist once a restricted run has been asked for — they no longer cause
+  one.
+
+  The five ways an operator can ask are a discriminated union with a total
+  `switch`. The exhaustiveness was **verified, not assumed**: planting a sixth
+  member fails `tsc` with `TS2366`. Nine unit tests cover each way, the fixed
+  precedence, and the empty-list cases — `--allowed-domains ""` is not a request
+  to restrict with no domains.
+
 ## [0.2.1] — 2026-08-03
 
 ### Security
@@ -61,8 +87,6 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
   installers described in the README are unaffected.
 - `prepack` was removed. `prepare` alone builds `dist/`, so packing no longer
   runs the build twice (flagged in the 2026-07-10 readiness report).
-
-### Added — remote entry (`keryx serve`)
 
 ### Added — remote entry (`keryx serve`)
 
@@ -278,4 +302,5 @@ runtime dependencies, no sockets).
 [0.1.0]: https://github.com/MrCipherSmith/keryx/releases/tag/v0.1.0
 [0.2.0]: https://github.com/MrCipherSmith/keryx/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/MrCipherSmith/keryx/compare/v0.2.0...v0.2.1
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...HEAD
+[0.2.2]: https://github.com/MrCipherSmith/keryx/compare/v0.2.1...v0.2.2
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.2...HEAD

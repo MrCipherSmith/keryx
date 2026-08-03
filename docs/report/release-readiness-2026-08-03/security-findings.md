@@ -93,6 +93,20 @@ records that lesson — `.metaproject/memory/lessons/allowlist-not-a-boundary.md
 
 ## SF-2 — an ambient credential silently promotes `harness exec` to a restricted-network run
 
+> **CLOSED in `0.2.2`.** The posture is now decided by
+> `resolveNetworkRestriction` (`src/commands/harness.ts`), which takes the
+> operator's intent and **nothing derived from the ambient environment** —
+> credentials are not a parameter, so they cannot reach the decision. Inject
+> hosts still join the allowlist once a restricted run has been asked for; they
+> no longer cause one.
+>
+> The five ways to ask are a discriminated union with a total `switch` over it.
+> That exhaustiveness was verified rather than assumed: planting a sixth member
+> fails `tsc` with `TS2366`, so a new way to ask cannot be added without
+> handling it. Nine unit tests cover each way, the empty-list cases
+> (`--allowed-domains ""` is not a request for "restrict with no domains"), the
+> fixed precedence, and the regression itself.
+
 **Severity: high.** Behavioural, both platforms, opposite outcomes.
 
 `src/commands/harness.ts:587-596` resolves credential masks unconditionally
@@ -179,8 +193,8 @@ TLS termination are macOS-only *and* untested in CI.
 1. ~~SF-1 needs a flow, closed with a planted, executed counter-example.~~
    **Already done** — PR #210, merged as `648897cc` in `0.2.1`, with exactly that
    counter-example. See the note at the top of SF-1.
-2. **SF-2 is still open** and needs a flow: an unrelated saved credential must
-   not decide the network posture of an unrelated command.
+2. ~~SF-2 needs a flow.~~ **Closed in `0.2.2`** — see the note at the top of
+   SF-2. The fix is a written-down domain, not a patched condition.
 3. SF-3 and the drift table can ride along with the documentation refresh.
 4. ~~Add a macOS containment job to CI.~~ **Already done** in the same pull
    request (`.github/workflows/ci.yml:148`).
