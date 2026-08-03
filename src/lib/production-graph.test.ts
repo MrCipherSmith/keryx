@@ -130,26 +130,51 @@ function releaseBuilds(root: string): ReleaseBuild[] {
   if (script === undefined) {
     throw new Error("package.json has no build script; this guard has nothing to ask about");
   }
+  return releaseBuildsFrom(script, root);
+}
+
+/** The parsing half, separated so a test can drive shapes the real script lacks. */
+function releaseBuildsFrom(script: string, root: string): ReleaseBuild[] {
   const builds: ReleaseBuild[] = [];
   script.split("&&").forEach((command, index) => {
     const tokens = command.trim().split(/\s+/);
     if (tokens[0] !== "bun" || tokens[1] !== "build") {
       return; // not a build step — a copy, a chmod, a sub-script
     }
-    const outIndex = tokens.indexOf("--outdir");
-    if (outIndex === -1 || tokens[outIndex + 1] === undefined) {
+    // BOTH spellings of every flag. `--outdir ./dist` and `--outdir=./dist` are
+    // the same instruction, and the first version knew only the first — so
+    // switching the release script to the equals form did not weaken the guard,
+    // it CRASHED it. Fail-closed, but a guard that breaks on ordinary
+    // maintenance is a guard someone deletes, and this round made the equals
+    // form idiomatic across this CLI by teaching `optionValue` to accept it.
+    const outIndex = tokens.findIndex((t) => t === "--outdir" || t.startsWith("--outdir="));
+    if (outIndex === -1) {
       throw new Error(`build command has no --outdir to redirect: ${command.trim()}`);
     }
+    const outdirIsJoined = (tokens[outIndex] ?? "").startsWith("--outdir=");
+    if (!outdirIsJoined && tokens[outIndex + 1] === undefined) {
+      throw new Error(`--outdir has no value: ${command.trim()}`);
+    }
     // Every positional that is a `.ts` file and is not the value of a flag.
+    // A `--flag=value` token carries its own value, so the token AFTER it is a
+    // positional — which the space-form-only check would have misread.
+    const isFlagValue = (i: number): boolean => {
+      const previous = tokens[i - 1] ?? "";
+      return previous.startsWith("--") && !previous.includes("=");
+    };
     const entries = tokens.filter(
-      (token, i) => i > 1 && token.endsWith(".ts") && !(tokens[i - 1] ?? "").startsWith("--"),
+      (token, i) => i > 1 && token.endsWith(".ts") && !isFlagValue(i),
     );
     if (entries.length === 0) {
       throw new Error(`could not read an entry point out of: ${command.trim()}`);
     }
     const outDir = path.join(root, `step-${index}`);
     const rewritten = [...tokens];
-    rewritten[outIndex + 1] = outDir;
+    if (outdirIsJoined) {
+      rewritten[outIndex] = `--outdir=${outDir}`;
+    } else {
+      rewritten[outIndex + 1] = outDir;
+    }
     rewritten.push("--sourcemap=external");
     builds.push({ tokens: rewritten, entries: entries.map((e) => path.join(ROOT, e)), outDir });
   });
@@ -310,6 +335,50 @@ describe("the shipped build contains no test scaffolding", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  test("the build-script parser reads both flag spellings, and all positionals", () => {
+    // The parser is the guard's single point of failure: everything below reads
+    // what it produced. Two defects lived here, both found by planting rather
+    // than by reading.
+    //
+    //   `tokens[2]` as THE entry     -> a second entry point in the same command
+    //                                   shipped the scanner with the suite green
+    //   `--outdir` space form only   -> the equals form CRASHED the guard, which
+    //                                   is fail-closed but breaks on ordinary
+    //                                   maintenance — and this round made the
+    //                                   equals form idiomatic across this CLI
+    //
+    // Driven through `releaseBuilds` itself rather than by re-testing a regex
+    // against a string, so replacing the function body with a constant fails.
+    const parse = (script: string): ReleaseBuild[] =>
+      releaseBuildsFrom(script, path.join(tmpdir(), "keryx-parse-probe"));
+
+    const BASE = "--target bun --external some-pkg";
+    const shapes: Array<[string, string, number]> = [
+      ["space form", `bun build ./src/cli.ts --outdir ./dist ${BASE}`, 1],
+      ["equals form", `bun build ./src/cli.ts --outdir=./dist ${BASE}`, 1],
+      ["two entries, space", `bun build ./src/a.ts ./src/b.ts --outdir ./dist ${BASE}`, 2],
+      ["two entries, equals", `bun build ./src/a.ts ./src/b.ts --outdir=./dist ${BASE}`, 2],
+      ["entry after an equals flag", `bun build --outdir=./dist ./src/a.ts ${BASE}`, 1],
+    ];
+    for (const [label, script, expected] of shapes) {
+      const [build] = parse(script);
+      expect({ label, entries: build?.entries.length ?? 0 }).toEqual({ label, entries: expected });
+      // And the outdir really was redirected, in whichever spelling it used.
+      const redirected = (build?.tokens ?? []).some(
+        (t) => t === build?.outDir || t === `--outdir=${build?.outDir}`,
+      );
+      expect({ label, redirected }).toEqual({ label, redirected: true });
+    }
+
+    // A non-build step is skipped, not fatal — the guard used to throw on a
+    // `cp`, so adding one to the release script broke the guard rather than the
+    // property.
+    expect(parse(`cp README.md dist/ && bun build ./src/cli.ts --outdir ./dist ${BASE}`)).toHaveLength(1);
+    // A build step with no --outdir is still loud: it cannot be redirected, so
+    // running it would write into the real ./dist.
+    expect(() => parse(`bun build ./src/cli.ts ${BASE}`)).toThrow(/--outdir/);
   });
 
   test("the graph reader SEES real production modules — the numerator", () => {
