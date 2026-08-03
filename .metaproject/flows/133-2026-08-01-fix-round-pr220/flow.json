@@ -3,9 +3,9 @@
   "id": "133",
   "slug": "fix-round-pr220",
   "title": "Fix round PR #220 (flow 131 / R4c): two blockers and the eleven remaining majors",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-01T23:22:55.451Z",
-  "updatedAt": "2026-08-03T09:28:12.354Z",
+  "updatedAt": "2026-08-03T10:53:28.986Z",
   "source": {
     "type": "description",
     "ref": null
@@ -59,7 +59,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/220"
   },
   "tasks": [
     {
@@ -246,7 +246,7 @@
       "id": "T13",
       "title": "Update PR #220 and ready it",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -254,7 +254,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -450,6 +451,16 @@
       "at": "2026-08-03T09:28:12.354Z",
       "event": "task-done",
       "detail": "T12: Fix-round review, recorded as a managed package"
+    },
+    {
+      "at": "2026-08-03T10:53:09.299Z",
+      "event": "task-done",
+      "detail": "T13: Update PR #220 and ready it"
+    },
+    {
+      "at": "2026-08-03T10:53:28.986Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/220 (warning: PR is not a draft)"
     }
   ]
 }
