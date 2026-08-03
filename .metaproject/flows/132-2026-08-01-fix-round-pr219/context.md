@@ -82,8 +82,8 @@ executed verbatim".** Fifteen printed instructions:
 
 ## Verification surface
 
-- rg is not on `PATH` for this host; `keryx ctx rg` needs
-  `PATH=/home/altsay/.local/share/opencode/bin:$PATH` prepended.
+- rg is not on `PATH` for this host; `keryx ctx rg` needs the directory holding
+  `rg` prepended to `PATH`.
 - `bun test`, `bun run typecheck`, `bun run lint`, `keryx health run`.
 
 ## Agent Findings

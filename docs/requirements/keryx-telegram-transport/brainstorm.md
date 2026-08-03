@@ -44,8 +44,8 @@ is never a second Harness runtime or Task Manager writer.
 
 ### Evidence
 
-`helyx` (`/home/altsay/bots/helyx`) runs this exact surface in production against
-Claude Code sessions and was studied directly. Its Telegram layer settled two
+`helyx`, a private system on the same host, runs this exact surface in production
+against agent sessions and was studied directly. Its Telegram layer settled two
 questions this package had left open.
 
 **Multi-project.** It uses a forum supergroup with one topic per project.

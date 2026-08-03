@@ -1,57 +1,81 @@
-# Keryx Project Agent Harness — Implementation Runbook
+# Keryx Project Agent Harness — Implementation Runbook (archived)
 
-> Операционный ранбук для поэтапного запуска имплементации harness через
-> `flow-orchestrator`. Здесь же — **живой стейт-трекер**. Запускаешь фазу →
-> после завершения обновляешь таблицу «Стейт» (или просишь агента обновить её).
+> **Status: closed. This is a historical operating log, not a current plan.**
+>
+> This runbook drove the phased implementation of the agent harness through
+> `flow-orchestrator`. Every wave it tracks is complete — Release 0, Release 1
+> and Release 2 all landed, and the harness has since been extended well beyond
+> what this document scopes. It is kept for provenance: it records which wave
+> produced which module, under which decision, with which evidence.
+>
+> **On language.** The progress-table notes and the per-phase launch prompts
+> below are preserved **verbatim in Russian**, the language they were written and
+> executed in. They are a log of what was actually said to the agents, and
+> translating a log after the fact would make it a paraphrase rather than a
+> record. The structure around them — headings, rules and policy — is English so
+> the document remains navigable. This is the one deliberate exception to the
+> repository's English-only convention, and it is recorded as such in
+> [the 2026-08-03 readiness report](../report/release-readiness-2026-08-03/release-readiness.md).
+>
+> For the current architecture, read
+> [`docs/docs/architecture.md`](../docs/architecture.md); for what shipped, read
+> [`CHANGELOG.md`](../../CHANGELOG.md).
 
-- **Спецификация (заморожена, не переизобретать):** [`docs/requirements/keryx-project-agent-harness/`](../requirements/keryx-project-agent-harness/)
-  — `implementation-plan.md` (16 волн, DAG), `specification.md`, `prd.md`,
-  `acceptance.feature` (73 Gherkin), `schemas/` (35 схем).
-- **Handoff/провенанс:** ветка `origin/feature/keryx-harness-docs` →
+- **Specification (frozen — not to be reinvented):** [`docs/requirements/keryx-project-agent-harness/`](../requirements/keryx-project-agent-harness/)
+  — `implementation-plan.md` (16 waves, DAG), `specification.md`, `prd.md`,
+  `acceptance.feature` (73 Gherkin scenarios), `schemas/` (35 schemas).
+- **Handoff and provenance:** branch `origin/feature/keryx-harness-docs` →
   `.metaproject/jobs/requirements-remediation--keryx-project-agent-harness/flow-orchestrator-handoff.md`.
-- **Статус имплементации на старте:** 0% (пакет — только спека).
+- **Implementation status at the start:** 0% — the package was specification only.
 
 ---
 
-## Как запускать
+## How this was run
 
-1. Открой **новую сессию** `claude` в корне основного репозитория:
-   `/Users/Goodea/goodea/keryx` (worktree на `main`, где лежит спека).
-2. Поставь модель сессии **Opus 4.8** (`/model`).
-3. Скопируй промт нужной фазы из раздела [Фазы](#фазы) и вставь.
-4. Агент сначала покажет план и список тасков — подтверди, затем исполнение.
-5. После завершения фазы — обнови [Стейт](#стейт-progress-tracker).
+1. Open a **new session** at the root of the main repository (a worktree on
+   `main`, where the specification lives).
+2. Set the session model to the orchestration tier (see Model Policy).
+3. Copy the prompt for the phase from [Phases](#phases) and paste it.
+4. The agent first shows a plan and a task list — confirm it, then execute.
+5. When the phase finishes, update the [progress tracker](#progress-tracker).
 
-**Правила для всех фаз** (агент обязан соблюдать):
-- Hard-gate: прочитать `.metaproject/index.md` в корне worktree до любых действий.
-- Ветка: `feature/keryx-harness-impl` от `main`; работа в отдельном worktree;
-  в `main` напрямую не коммитить.
-- Только одна волна за flow (скоуп фазы). Волны вне скоупа не трогать.
+**Rules binding on every phase:**
+
+- Hard gate: read `.metaproject/index.md` at the worktree root before doing
+  anything else.
+- Branch `feature/keryx-harness-impl` off `main`; work in a separate worktree;
+  never commit directly to `main`.
+- One wave per flow, and only the phase's own scope. Waves outside it stay
+  untouched.
 - TDD: `tests-creator` → `task-implementer` → `code-verifier`.
-- Воркеры — через контракты `subagent-dispatch` / `subagent-result`.
-- Состояние работы — только через `keryx flow`; `flow.json` и замороженные
-  acceptance-критерии руками не править.
-- После волны — health-гейт (`keryx health run`) и краткий статус.
+- Workers are dispatched through the `subagent-dispatch` / `subagent-result`
+  contracts.
+- Work state lives only in `keryx flow`. `flow.json` and frozen acceptance
+  criteria are never hand-edited.
+- After each wave: the health gate (`keryx health run`) and a short status.
 
 ---
 
-## Model Policy (глобально)
+## Model Policy
 
-| Класс задачи | Модель | Примеры |
+| Task class | Tier | Examples |
 |---|---|---|
-| Оркестрация + «тяжёлое» | **Opus 4.8** | оркестратор; `kind=implement/logic/review`; всё в `src/harness`, `src/eval`; provider/tool-порты; контракт-валидатор |
-| Среднее | **Sonnet** | тесты, схемные негативы/мутации, неочевидные рефакторы |
-| Механическое | **Haiku 4.5** | docs-заморозки решений, генерация/проверка фикстур, миграции, перемещение файлов, обновление импортов |
+| Orchestration and hard work | **Top tier** | the orchestrator; `kind=implement/logic/review`; everything in `src/harness` and `src/eval`; provider and tool ports; the contract validator |
+| Middle | **Mid tier** | tests, schema negatives and mutations, non-obvious refactors |
+| Mechanical | **Small tier** | freezing decisions into docs, generating and checking fixtures, migrations, moving files, updating imports |
 
 ---
 
-## Стейт (progress tracker)
+## Progress tracker
 
-Легенда: ⬜ не начато · 🔄 в работе · ✅ готово · ⏸ заблокировано
+Legend: ⬜ not started · 🔄 in progress · ✅ done · ⏸ blocked
+
+Notes in the tables below are the verbatim execution log — see the language note
+at the top of this file.
 
 ### Release 0 — offline read-only vertical slice
 
-| Фаза | Волна | Таски | Осн. модель | Статус | Ветка/PR | Дата | Заметки |
+| Phase | Wave | Tasks | Primary tier | Status | Branch/PR | Date | Notes (verbatim log) |
 |---|---|---|---|---|---|---|---|
 | 1 | W1 Решения | D-01…D-04 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-12 | flow 003; 4 ADR + `decision-registry.md` + `research-ledger.md` в `docs/decisions/keryx-harness/`; AC1–AC5 ✅; T9 consistency-review PASS, contradiction-check NO-CONTRADICTION; OPEN-1…OPEN-4 сохранены; frozen requirements пакет не тронут. Health WARN — pre-existing `src/**` churn, не от W1 (docs-only). Осн. модель de-facto: оркестратор+D-02/03/04 — Opus, D-01 — Haiku 4.5. |
 | 2 | W2 Task Manager | TM-01…TM-03 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-12 | flow 004; TDD RED→GREEN. TM-01 [additive-fields spec](../decisions/keryx-harness/TM-01-task-manager-evolution.md) (7 опц. полей, schemaVersion 1→2 read-time migration, backward-compat matrix, 8 OPEN); TM-02 `src/flow/migration.test.ts`+`disposition.test.ts` (RED); TM-03 `src/flow/{types,store,service,machine}.ts`+`commands/flow.ts` (GREEN). AC1–AC5 ✅; T8 review PASS; D-02 инвариант сохранён (writeFlow только в TM save/init, runLink не присваивается). `tsc` clean, `bun test` 554/0; flows 001–003 flow.json не тронуты. Health WARN 90 (↑89), только service.ts complexity +4 (аддитивно). Модели: оркестратор/TM-03/review — Opus, TM-01 — Haiku, TM-02 — Sonnet. 2 LOW-ноты отложены (unreachable-branch в check(); новые флоу рождаются v1-on-disk). |
@@ -63,7 +87,7 @@
 
 ### Release 1 — resume / branching / mutation / flow / child / parallel
 
-| Фаза | Волна | Таски | Осн. модель | Статус | Ветка/PR | Дата | Заметки |
+| Phase | Wave | Tasks | Primary tier | Status | Branch/PR | Date | Notes (verbatim log) |
 |---|---|---|---|---|---|---|---|
 | 8 | W8 Durable resume | RS-01…RS-02 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-13 | flow 011; TDD RED→GREEN. RS-01 `src/harness/resume/{fingerprint,store,resume}.ts` — reconstruct leaf по worktree/toolchain fingerprints, immutable attempts (stale→new), evidence не дублируется, approval+evidence переживают resume (SC_R05/SC_R11); `runWithResume` — pure wrapper (W7 run.ts не тронут). **SC_R12_TRANSIENT_RETRY закрыт** (retryable→новый attempt в reservation, bounded). RS-02 `recovery.ts` — pure `recoverFrom`: crash-pre→safe; crash-post+effect-confirmed→reconciled; +indeterminate/missing→**blocked-unknown-outcome**; torn-write→last valid; cancellation→resumable; isolated-replay→deferred (SC_R17). AC1–AC5 ✅; T9 CLEAN (no findings). `tsc` clean, `bun test` **817/0** (797+20); deps `{}`; reuse-only (W7/W5/W6/contracts unmodified). Frozen/src/eval/src/contracts/ADR не тронуты. Health WARN 78. Модели: RS-01/RS-02/review — Opus, тесты — Sonnet. SessionStore real-fs адаптер отложен. |
 | 9 | W9 Branching+compaction | B-01…B-02 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-13 | flow 012; TDD RED→GREEN. B-01 `src/harness/branch/branch.ts` — append-only branch-metadata (fork/leaf/immutableAncestorIds inclusive via parentEventId; deep-frozen, mutation throws); pure forkBranch; atomic switch = pointer reassignment; **no-merge-v1** (mergeBranches всегда rejected, без мутаций). B-02 `compaction.ts` — typed compaction-entry (provenance sourceEntryIds→derivedEntryId, summaryHash=sha256(summary)); PURE append-only DERIVED; **evidence-preservation** (история/evidence не удаляются, assertEvidencePreserved→EvidenceDeletionError; недоверенный summary не промоутится); rebuild bounded context (SC_R07). AC1–AC5 ✅; T9 CLEAN — **4 инварианта** (no-merge-v1, no-evidence-deletion, no-untrusted-promotion, no-history-mutation). `tsc` clean, `bun test` **844/0** (817+27); deps `{}`; reuse-only (W7/W8/W5/W6/contracts unmodified). Frozen/src/eval/src/contracts/ADR не тронуты. Health WARN 78. Модели: B-01/B-02/review — Opus, тесты — Sonnet. |
@@ -73,9 +97,9 @@
 | 13 | W13 Parallel scheduling | PA-01 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-13 | flow 016 (commit `8ec1016`, option B); TDD RED→GREEN. **Bounded ready-set wave scheduler над child-графом (highload).** PA-01 `src/harness/parallel/scheduler.ts` — PURE детерминированный `planWaves(tasks, {maxConcurrency, parentRemaining})`: (1) **bounded waves** — dependency-satisfied ready-set, cap = maxConcurrency, стабильный порядок (by taskId), deps резолвятся строго в более ранней волне; (2) **aggregate reservations** — fold reused W12 `inheritBudget` по бегущему `remaining`, декрементящемуся ЧЕРЕЗ волны, Σ грантов ≤ parent remaining (fail-closed на breach; инвариант Σ+remaining=parent, remaining≥0 — доказан review); (3) **cancellation** — cancelled task + транзитивные dependents (fixpoint closure) исключены; (4) **loop detection** — tasks остались, ready-set пуст → cycle → deny, без partial waves; (5) **fail-closed на degenerate maxConcurrency** (<1/нецелое → deny вместо бесконечного цикла — найдено в highload review, DoS-liveness). Детерминизм (no Date.now/Math.random, stable sort, no real async); scheduler — pure function, НЕ пишет flow.json, parent владеет completion через W11 ManagedFlowPort (D-02). **Review (highload+security): budget-ceiling over-grant path НЕ найден, cycle detection sound обе стороны; 1 CONCERN (maxConcurrency≤0 infinite loop) — исправлено guard'ом + 3 теста.** AC1–AC5 ✅. `tsc` clean, `bun test` **1008/0** (991+17); deps `{}`; NO real fs/async; reuse-only (W5–W12 + inheritBudget composed not rewritten). Frozen/канонические схемы/src/eval/src/contracts/ADR не тронуты. **Release-tag boundary:** @release-2 `SC_R08_BOUND_PARALLEL_WAVE` (future concurrent coordinator) НЕ гейтится здесь. Модели: PA-01 impl + review — Opus (highload), тесты — Sonnet. |
 | 15 | W15 Security hardening | H-01…H-02 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-13 | flow 017 (commit `de46260`, option B); TDD RED→GREEN. **Cross-cutting hardening + закрытие отложенных @release-0 концернов (security).** H-01 (additive, fail-closed): (1) **SSRF/private-egress** `guard.ts` — декодирует encoded IPv4 (flat decimal/hex/octal, dotted mixed-radix + short forms, IPv4-mapped IPv6) и проверяет ВСЕ приватные диапазоны (loopback, 10/8, 172.16-31, 192.168/16, link-local+metadata 169.254/16, CGNAT 100.64/10, 0.0.0.0) → encoded cloud-metadata `169.254.169.254` и приватные формы denied до decide(); (2) **NaN-date fail-closed** `approval.ts` — unparseable/NaN expiresAt/now → invalid (не fail-open); (3) **SC_R18_UNREGISTERED_EXTENSION_DENIED** — новый `src/harness/extension/registry.ts` fail-closed registerExtension (нет pinned manifest+capability grant → deny, без discovery-time authority); (4) **SC_R16_BUDGET_RESERVATION** — новый `src/harness/budget/reconcile.ts` planned/reserved/consumed/remaining/reliability reconcile, fail-closed на over-consume; (5) recovery/replay/migration/perf hardening-suites (test-only regression-lock): W8 crash/torn-write + outcome-unknown блокирует unsafe retry + immutable attempts, W7 replay effect-free, schemaVersion migration детерминирована+fail-closed, детерминированные SLO-bounds; red-team lock W10/W12/W13 fail-closed инвариантов. H-02 — новый `docs/decisions/keryx-harness/H-02-deferred-extension-capability-contract.md` (deferred extension grants+isolation БЕЗ включения; @release-2 сценарии как later scope; frozen ADR не тронуты). **Review (security): no HIGH-severity fail-open; единственная находка (encoded non-loopback SSRF residual — metadata IP в decimal/hex) исправлена в волне** (generalized decoder + 17 тестов). AC1–AC5 ✅. `tsc` clean, `bun test` **1114/0** (1008+106); deps `{}`; NO real fs/network/SDK; только guard.ts+approval.ts изменены (additive), новый код под src/harness/{extension,budget}/. Frozen/канонические схемы/src/eval/src/contracts/ADR-0001..0004 не тронуты. **Deferred (не гейтились):** RP-01/real-provider negative-семейства H-01 → re-run после W14; @release-2 extension-сценарии → задокументированы в H-02. Модели: H-01 impl+review — Opus (security), тесты — Sonnet, H-02 docs — Sonnet. |
 
-### Release 2 — Стейт (отдельный трек, план в E-03-release1-handoff §4 AC-R2-1…R2-5)
+### Release 2 — separate track (plan in E-03-release1-handoff §4, AC-R2-1…R2-5)
 
-| Волна | Что | Сценарии | Статус | Ветка/PR | Дата | Заметки |
+| Wave | What | Scenarios | Status | Branch/PR | Date | Notes (verbatim log) |
 |---|---|---|---|---|---|---|
 | **R2-1** | **extension-execution** (registered extension → bounded policy-governed authority) | SC_R08_CHILD_DISPATCH_CANONICAL_RESULT, NEEDS_CONTEXT_ADAPTER, EXTENSION_ESCALATION (CA-01) | ✅ | `feature/keryx-release2-extension-exec` | 2026-07-13 | flow 023 (option B, PR в main). Новый `src/harness/extension/execute.ts` (композиция W12 contract/isolation + W15 registry + W10 approval + W8 immutable + src/contracts). **`dispatchExtension`** — зарегистрированный extension + coordinator reserved budget → canonical `subagent-dispatch` (валидируется схемой, `allowed_actions` = grant, bounded) + STATUS-first → canonical `subagent-result` ДО persist (reuse `parseChildResult`). **`evaluateExtensionGrant`** *(KEY security negative)* — requested ⊆ granted → ok; broader tools/provider = escalation, требует **все три**: `policyDecision:allow` ∧ provenance ∧ valid W10 approval; без любого → **deny, no silent authority gain**; out-of-enum capability → fail-closed. **`retryWithContext`** — NEEDS_CONTEXT → тот же dispatch id, add-only названный artifact, prior attempt immutable (reuse W8). **Review (security/contract): CLEAN, no HIGH** — adversarial escalation-анализ: bypass не найден (3 последовательных AND-гейта; denied result без capabilities; real W10 `checkApproval`). AC1–AC5 ✅. `tsc` clean, `bun test` **1233/0** (1210+23); deps `{}`; additive-only (единственная правка prior — `isKnownCapability` export в isolation.ts); D-02 (extension не пишет flow.json); frozen/канонические схемы/src/eval/src/contracts/ADR не тронуты; без соавторства. Модели: impl+review — Opus, тесты — Sonnet. |
 | **R2-2** | **registered-extension provenance** | SC_R18_REGISTERED_EXTENSION_PROVENANCE, EXTENSION_ESCALATION (H-02) | ✅ | `feature/keryx-release2-ext-provenance` | 2026-07-13 | flow 024 (option B, PR в main; от main с R2-1+R2-4). Новый `src/harness/extension/provenance.ts` (композиция W15 registry + R2-1 `evaluateExtensionGrant` + W12 `childProvenance` + W7 `Provenance` + W10 approval — **0 правок prior-модулей**, чистый reuse через import). **`registerExtensionWithProvenance`** — `registerExtension` ok → `ExtensionProvenanceRecord`: pinned `manifestHash` + `grantId` + `capabilities` (**свежая копия гранта, authority НЕ шире** — alias-immune) + `Provenance` (derived trust, `provenanceId` из idSeq, taint-линки); deny регистрации → propagate, без record. **`evaluateRegisteredExtensionCapability`** *(negative, registry-side)* — capability в гранте → ok; вне гранта → **deny/ask** (verbatim делегирование R2-1 `evaluateExtensionGrant`: policy+provenance+valid-approval); out-of-enum fail-closed; no silent gain. **Review (security/contract): CLEAN, no findings** — authority-not-widened доказан (mutation грант-массива не течёт в record), escalation adversarial: bypass не найден. AC1–AC5 ✅. `tsc` clean, `bun test` **1276/0** (1254+22); deps `{}`; D-02 (не пишет flow.json); frozen/канонические схемы/src/eval/src/contracts/ADR не тронуты; без соавторства. Модели: impl+review — Opus, тесты — Sonnet. |
@@ -86,19 +110,20 @@
 | **R2-postreview-2** | **полировка отложенных LOW/INFO из ревью** | 8 LOW/INFO items | ✅ | `feature/keryx-r2-review-polish` | 2026-07-14 | flow 028 (option B, PR в main). 7 закрыто TDD + 1 обоснованно отложен: **A** evidence causal-ids пробрасываются в `executor.ts` (`runId`/`sessionId`/`correlationId` опц. на `RunContainedProcessInput`, fallback на idSeq — evidence джойнится с ран'ом; пустая строка → fallback); **B** единая фабрика `src/harness/provider/make-provider.ts` (`makeProvider`) — `shell.ts`+`harness.ts` через неё (дубль-свитч убран, missing-key→fake сохранён); **C** DRY (USAGE-const в harness.ts, `applySelection` в shell.ts, унифицирован loop в select.ts); **D** тест default-root provenance; **E** `bound-wave.ts` planning-evidence больше не `child-result:DONE` — локальный `buildPlannedAttemptEvidence` (`kind:"custom"`/`artifact.kind:"extension-dispatch-planned"`), изоляция attempt'ов сохранена, **frozen `CanonicalSubagentStatus` НЕ тронут**; **F** `evidenceRefs` исхода нормализованы к prefixed-виду ресипта; **G** tautological smoke-guard → observable (конструктор `RealProcessAdapter` без флага throws). **H (DEFERRED)** — cap-less child под capped-родителем: имплементация вскрыла, что `inheritBudget` — ОБЩИЙ примитив, на который опирается R2-5 executor (subprocess делает 0 tool-call, cap-less budget под capped-родителем легитимен, не «unlimited»); blanket-deny ломает 14 тестов executor'а. Deny-рекомендация опровергнута фактами → H задокументирован как known-limitation (bounding по-настоящему-неограниченного tool-call child'а — забота runtime-enforcement, вне примитива); `inheritBudget`/`scheduler.ts` не изменены, тесты «H (deferred)» фиксируют текущее корректное поведение. **Review (security): PASS** (8/8, no new fail-open, frozen-enum/guard/spawn/schemas не тронуты). AC1–AC5 ✅ (AC1 амендился через `flow ac update` — H с deny→deferred). `tsc` clean, `bun test` **1338/0** (+2 skip). deps `{}`; D-02; reuse-only; secrets не логируются; frozen не тронут; без соавторства. Модели: impl+review — Opus, тесты — Sonnet. |
 | **post-R2 · CLI wiring** | **live end-to-end подключение R2-поверхностей в keryx CLI** (E-03-release2-handoff §6a) | — | ✅ | `feature/keryx-harness-cli-wiring` | 2026-07-14 | flow 030 (option B, PR в main). До этого R2-поверхности были только библиотечными (`ctx rg dispatchExtension\|planExtensionWave\|runContainedProcess src/commands` = 0). Три новые подкоманды под `keryx harness`, композиция R2-функций по паттерну `harness run` (injectable deps, fail-closed guards, structured JSON, **никогда не пишет flow.json**): **`harness exec`** (R2-5) — `[--allow-env K]... [--max-runtime-ms N] [--allow-real-subprocess] -- <path> args…` → `runContainedProcess` + `RealProcessAdapter`; **fail-closed без флага** (отказ, spawn'а нет), с флагом — реальный subprocess, печать `{outcome,receipt,evidenceRefs}`. **`harness extension`** (R2-1) — `--spec` (manifest+grant+task) → `registerExtension`→`dispatchExtension`, canonical dispatch/result; denied-регистрация/эскалация → fail-closed. **`harness wave`** (R2-3) — `--spec` → `planExtensionWave`, bounded waves (≤ maxConcurrency + budget); unregistered/cycle/breach → deny. **Review (security): PASS** — exec double-gated (CLI-флаг + конструктор адаптера), недостижим untrusted-путём; `worktreeRoot=/` для user-named binary признан defensible + задокументирован (injection/egress/env-allowlist/budget-гейты активны); D-02 (0 flow.json), secrets не логируются, reuse-only (R2-либы 0 правок, `git diff src/harness/` пуст). **Live-smoke (darwin):** без флага → отказ; `KERYX_ALLOW_REAL_SUBPROCESS=1 keryx harness exec -- /bin/echo` → `{kind:"completed",exitCode:0}`. AC1–AC5 ✅. `tsc` clean, `bun test` **1355/0** (+3 skip flag-smoke). deps `{}` (child_process/fs/path — stdlib); frozen не тронут; без соавторства. Модели: impl+review — Opus, тесты — Sonnet. Провайдер уже был прошит (`harness run`/`shell`); осталось опц.: реал-модели, закрытие H на runtime-слое. |
 
-### Release 2+ и сквозное
+### Release 2+ and cross-cutting
 
-| Фаза | Волна | Таски | Осн. модель | Статус | Ветка/PR | Дата | Заметки |
+| Phase | Wave | Tasks | Primary tier | Status | Branch/PR | Date | Notes (verbatim log) |
 |---|---|---|---|---|---|---|---|
 | 14 | W14 Real providers | RP-01 | Opus | ✅ | `feature/keryx-harness-impl` | 2026-07-13 | flow 018 (commit `109c63c`, option B); TDD RED→GREEN. **Первый реальный провайдер (Anthropic Messages API) за W5 ProviderPort — тонкий fetch/SSE, БЕЗ SDK → `deps` ОСТАЁТСЯ `{}`.** Решения (утв.): (1) Anthropic Messages API; (2) тонкий HTTP/fetch без SDK; (3) записанные SSE-transcripts (как W6). RP-01 `src/harness/provider/anthropic/`: `anthropic-provider.ts` (`AnthropicProvider implements ProviderPort` — `describe()` + `descriptorDocument()` валидируется `provider-descriptor.schema.json` с `remoteState.storage/retention/continuation=false` → **storage off by default**; `stream()` мапит `NormalizedRequest`→wire + нормализует SSE→точную `NormalizedEvent`-последовательность; `opts.signal` отменяет) + pure `sse.ts` (incremental parser). **Capability gate:** живой fetch ТОЛЬКО за явным grant (network+apiKey); нет grant → fail-closed, без сети. **Guarded egress:** base-URL host через reused W15 predicate (добавлен минимальный additive `isPrivateEgressHost` export в guard.ts — без изменения поведения); private/loopback/metadata (вкл. encoded/IPv4-mapped) → fail-closed. **Provider negatives → 9-kind taxonomy:** 401 authentication, 400 invalid_request, 429 rate_limit(+retryAfterMs), 529 overloaded, 5xx unavailable, malformed/torn SSE, AbortSignal cancelled — fail-closed, без spurious model_end. **Credential:** apiKey никогда не persist/log; redacted (exact-match scrub) из каждого error message — **доказано тестом, echoing key в error body**. **Весь тест-сьют OFFLINE/детерминирован** (записанные transcripts + injected/mocked fetch; живой вызов за capability-флагом, НИКОГДА в CI; FakeProvider — дефолт). Нет утечки SDK-типа через ProviderPort. **Review (provider/contract/security): no HIGH; 2 LOW (redaction-механизм wording + недоказанный redaction-путь) закрыты в волне** (AC2 amended + echo-тест). AC1–AC5 ✅ (AC1/AC2 amended: bare NormalizedEvent — не durable harness-event envelope, W6 precedent; descriptorDocument bridge). `tsc` clean, `bun test` **1150/0** (1114+36); **deps `{}`** (без SDK); единственная правка prior-модуля — additive guard.ts export. Frozen/канонические схемы/src/eval/src/contracts/ADR не тронуты. D-02 (adapter не пишет flow.json). **🎯 Последняя impl-волна трека.** Модели: RP-01 impl + review — Opus (provider/contract/security), тесты — Sonnet. **Далее:** re-run W16 (Release 1 evidence) + re-run H-01 provider negative-семейств на границе Release 1. |
 | 16 | W16 Docs/evidence | E-01…E-03 | Sonnet | ✅ (R0 + R1) | `feature/keryx-harness-impl` | 2026-07-13 | **Запускается на каждой границе релиза.** **① Release 0** (flow 010): E-01 [evidence-matrix](../decisions/keryx-harness/E-01-release0-evidence-matrix.md) (18 rows) + E-02 [7-lens review](../decisions/keryx-harness/E-02-release0-review-package.md) **GO** + E-03 [handoff](../decisions/keryx-harness/flow-orchestrator-handoff.md); AC1–AC4 ✅, `bun test` 797/0. Deferred→W8/W15. **② Release 1 boundary** (flow 019, commit `fe875ff`, option B): docs+тесты. **(B) H-01 provider negatives** (отложены из W15, зависели от W14) — consolidated OFFLINE red-team над Anthropic-адаптером (`anthropic-negatives.hardening.test.ts`): timeout/stalled-body, rate-limit variants, truncation mid-tool-call, malformed, empty body, encoded-SSRF egress-deny, cancel, auth — все fail-closed. **Сьют нашёл 2 РЕАЛЬНЫХ гепа в W14-адаптере → исправлены в волне (minimal additive, user-approved):** stalled body + deadline abort бросал uncaught AbortError → теперь guarded read → terminal `provider_error{cancelled}`; zero-byte 200 body молча давал 0 событий → теперь `provider_error{malformed}`. **(A) Release 1 evidence:** E-01 [release1-evidence-matrix](../decisions/keryx-harness/E-01-release1-evidence-matrix.md) (capability→source/test/commit для W8–W15+W14; SC_R04 live-process-group F-1 задокументирован как deferred→R2) + E-02 [release1-review-package](../decisions/keryx-harness/E-02-release1-review-package.md) 7-lens **GO (0 BLOCKER/P0/P1; 1 P2 disclosed)** + E-03 [release1-handoff](../decisions/keryx-harness/E-03-release1-handoff.md) (DAG/frozen-AC-proposal/gates/constraints/out-of-scope → Release 2). AC1–AC5 ✅; final verify CLEAN. `bun test` **1160/0**, `tsc` clean, deps `{}`; единственная runtime-правка — additive fail-closed adapter fix; frozen/схемы/eval/contracts/ADR/R0-доки не тронуты. **🎯 Release 1 complete + evidenced + handed off.** **Deferred→Release 2 (@release-2):** SC_R08_CHILD_DISPATCH/NEEDS_CONTEXT/BOUND_PARALLEL_WAVE, SC_R18_REGISTERED_EXTENSION_PROVENANCE, SC_R08/R18_EXTENSION_ESCALATION, SC_R13_TUI, SC_R04 live-subprocess (F-1). Модели: E-01/E-03/H-01-тесты Sonnet, E-02/verify/fix Opus. |
 
 ---
 
-## Фазы
+## Phases
 
-Каждый промт самодостаточен: он ссылается на этот ранбук (Model Policy + правила)
-и жёстко задаёт скоуп своей волны. **Открывай новую сессию под каждую фазу.**
+Each prompt is self-contained: it points back at this runbook (Model Policy plus
+the rules) and pins the scope of its own wave. A new session was opened per
+phase. The prompts are preserved verbatim — see the language note at the top.
 
 ### Фаза 1 — W1 Решения (D-01…D-04)
 
@@ -239,7 +264,7 @@ docs/requirements/keryx-project-agent-harness/implementation-plan.md — исп�
 
 ---
 
-## Как обновлять стейт
+## How the tracker was updated
 
 После завершения фазы попроси агента (или сделай вручную):
 1. В нужной таблице «Стейт» поставь статус ✅ (или 🔄/⏸).
