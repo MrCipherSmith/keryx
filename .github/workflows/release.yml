@@ -33,16 +33,31 @@ jobs:
       # line ships npm 10.x, so the CLI is upgraded explicitly — without this the
       # publish falls back to looking for a token and fails on the 2FA prompt
       # that a CI runner cannot answer.
+      # `22` resolves to the latest 22.x, NOT a pin. Pinning to 22.14.0 — the
+      # minimum the trusted-publishing docs name — broke the upgrade below,
+      # because `npm@latest` has since moved to 12.x and requires
+      # `^22.22.2 || ^24.15.0 || >=26.0.0`. Reading a floor from documentation
+      # and then asking for `latest` puts two moving parts in the same step.
       - name: Set up Node for npm publish
         uses: actions/setup-node@v4
         with:
-          node-version: "22.14.0"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
       - name: Upgrade npm to a trusted-publishing capable version
         run: |
+          set -euo pipefail
           npm install -g npm@latest
-          npm --version
+          INSTALLED="$(npm --version)"
+          echo "npm ${INSTALLED}"
+          # Assert the floor rather than assume the upgrade reached it. Without
+          # this, a too-old npm would fall through to the token path silently —
+          # which is exactly what has to stop happening once the token is gone.
+          MAJOR="${INSTALLED%%.*}"
+          if [ "$MAJOR" -lt 11 ]; then
+            echo "::error::npm ${INSTALLED} is below the 11.5.1 trusted-publishing floor"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: bun install
