@@ -29,11 +29,20 @@ jobs:
 
       # npm (not bun) publishes, because provenance attestation is an npm CLI
       # feature. Node is here for that, not to run the project.
+      # Trusted publishing needs npm >= 11.5.1 and Node >= 22.14.0. The Node 22
+      # line ships npm 10.x, so the CLI is upgraded explicitly — without this the
+      # publish falls back to looking for a token and fails on the 2FA prompt
+      # that a CI runner cannot answer.
       - name: Set up Node for npm publish
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.14.0"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm to a trusted-publishing capable version
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - name: Install dependencies
         run: bun install
@@ -118,10 +127,21 @@ jobs:
           fi
           cat ./.release/notes.md
 
-      - name: Publish to npm with provenance
+      # Published through TRUSTED PUBLISHING — no npm token anywhere in this
+      # workflow, and none stored in the repository.
+      #
+      # The reason is not theoretical. The token approach failed twice here, and
+      # neither failure was technical: once the secret arrived in plain text over
+      # a chat, once it ended up as the secret's NAME, which is visible to anyone
+      # with repository access. Both are failures of *handling a long-lived
+      # string*, and OIDC removes the string: npm mints a credential scoped to
+      # this repository and this workflow file, valid for one run.
+      #
+      # Requires a trusted publisher configured at npmjs.com for
+      # MrCipherSmith/keryx with workflow filename `release.yml`, and the
+      # `id-token: write` permission above.
+      - name: Publish to npm via trusted publishing
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create the GitHub Release
         env:
