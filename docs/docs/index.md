@@ -22,4 +22,13 @@ under `docs/report/`.
 - [Release readiness report](https://github.com/MrCipherSmith/keryx/blob/main/docs/report/release-readiness-2026-08-03/release-readiness.md) — the current readiness verdict and verification matrix.
 - [Community documentation plan](https://github.com/MrCipherSmith/keryx/blob/main/docs/plans/community-documentation-plan.md) — the plan for publishable documentation, diagrams, and a docs site.
 
-**Start here:** new to the project? Begin with [onboarding.md](./onboarding.md).
+## Guides — organised by what you are trying to do
+
+- [Give an agent context about my repository](guides/give-an-agent-context.md)
+- [Run an agent against a repository without giving it my machine](guides/contain-an-agent.md)
+- [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
+- [Review a branch and keep a durable record](guides/review-with-a-record.md)
+- [Run keryx in CI](guides/run-in-ci.md)
+
+**Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),
+then pick the guide that matches your task.

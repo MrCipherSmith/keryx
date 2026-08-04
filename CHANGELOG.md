@@ -7,6 +7,36 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.8] — 2026-08-04
+
+### Documentation
+
+- **Five task-shaped guides**, organised by what a reader is trying to do rather
+  than by which module implements it: give an agent context, run an agent
+  without giving it your machine, drive keryx from a bot, review with a durable
+  record, and run keryx in CI. They are doors into the reference, not a
+  replacement for it.
+
+  Every command shown was executed and the output is from those runs. Each guide
+  ends with a verification command **and with what a misleading pass looks
+  like** — a graph reporting `0 nodes` on a repository that has code, a review
+  package that ingested cleanly with zero findings, a health gate passing over
+  stale artifacts.
+
+  Two things only a real run would have surfaced:
+
+  - `keryx harness exec --allowed-domains api.example.com` produces an allowlist
+    of **five** domains. The extra four are hosts of provider credentials saved
+    on the machine — once a run is restricted, a masked credential's host has to
+    be reachable or the mask is pointless. It is disclosed in the output, and
+    the guide tells the reader to trust the effective list over the one they
+    typed.
+  - `security eval`'s `prompt-injection` row misses **three of eight** positives
+    and is still `ok`, because its committed ceiling is `0.5`. The CI guide
+    points at that row rather than the summary line: the gate does not claim the
+    detector is good, only that it has not got worse than a number someone wrote
+    down and can defend. Every other detector's ceiling is zero.
+
 ## [0.2.7] — 2026-08-03
 
 ### Added
@@ -479,4 +509,5 @@ runtime dependencies, no sockets).
 [0.2.5]: https://github.com/MrCipherSmith/keryx/compare/v0.2.4...v0.2.5
 [0.2.6]: https://github.com/MrCipherSmith/keryx/compare/v0.2.5...v0.2.6
 [0.2.7]: https://github.com/MrCipherSmith/keryx/compare/v0.2.6...v0.2.7
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.7...HEAD
+[0.2.8]: https://github.com/MrCipherSmith/keryx/compare/v0.2.7...v0.2.8
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.8...HEAD

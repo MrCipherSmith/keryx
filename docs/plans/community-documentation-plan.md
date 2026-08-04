@@ -190,7 +190,7 @@ control* — so it is drawn rather than listed.
 **Still open in this phase:** asciinema recordings (they belong with Phase 3,
 which is where the walkthrough lives).
 
-### Phase 5 — Task-shaped guides
+### Phase 5 — Task-shaped guides — **done**
 
 **Goal:** documentation organised by what someone is trying to do, not by which
 module implements it. `modules.md` (1117 lines) and
@@ -205,8 +205,27 @@ should stay reference material; these are the doors into them.
   registry, and the approval boundary.
 - *Run keryx in CI* — the artifacts, the gates, the exit codes.
 
-**Evidence rule:** each guide ends with the command that verifies the reader got
-the intended result.
+**Evidence rule, applied:** every command shown was executed, the output is from
+those runs, and each guide ends with a verification command *and* with what a
+misleading pass looks like — a graph reporting `0 nodes` on a repository that
+has code, a review package that ingested cleanly with zero findings, a health
+gate passing over stale artifacts.
+
+Two things the guides gained by being written from real runs rather than from
+the source:
+
+- **`keryx harness exec --allowed-domains api.example.com` produces an allowlist
+  of five domains, not one.** The extra four are hosts of provider credentials
+  saved on the machine — once a run is restricted, a masked credential's host
+  must be reachable or the mask is pointless. It is disclosed in the output, and
+  the guide tells the reader to read the effective list rather than the one they
+  typed. Nobody would have documented that from reading the code.
+- **The security eval's `prompt-injection` row misses three of eight positives**
+  and is still `ok`, because its committed ceiling is 0.5. The CI guide points
+  at that row rather than the summary line: the gate does not claim the detector
+  is good, it claims it has not got worse than a number someone wrote down.
+  Every other detector's ceiling is zero, which is the far stronger statement —
+  and that contrast is only visible in the real table.
 
 ### Phase 6 — Publish — **done, except enabling Pages**
 
