@@ -7,6 +7,27 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.14] — 2026-08-04
+
+### Documentation
+
+- **The documentation site stops describing itself as machine output.** The
+  landing page opened with "Auto-generated developer documentation … reverse
+  engineered from source", which is both wrong — you cannot reverse-engineer
+  your own code — and the first sentence a visitor read. The useful half of that
+  note survives: these pages describe shipped behaviour, `docs/requirements/`
+  describes intent, and where they disagree the docs section wins.
+
+- **The public documentation index no longer links to the scaffolding.** The
+  release-readiness audit and the community-documentation plan are working
+  material; they stay in the repository and leave the published index, which now
+  points at the changelog and the tagged releases.
+
+- **README images use absolute URLs.** The README is the npm page as well as the
+  GitHub one, and relative `docs/assets/` paths only render there by grace of
+  npm's URL rewriting. They are now pinned to `raw.githubusercontent.com`, so the
+  page renders the same wherever it is displayed.
+
 ## [0.2.13] — 2026-08-04
 
 ### Documentation
