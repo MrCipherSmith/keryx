@@ -112,9 +112,44 @@ never notice:
 **Evidence rule:** the release job's own smoke step is the evidence — it installs
 the tarball into a clean prefix and runs the binary.
 
-**Outstanding, and needed before the first publish:** an `NPM_TOKEN` repository
-secret with publish rights. The workflow uses `--provenance`, which additionally
-requires the `id-token: write` permission (already set).
+**Publishing goes through TRUSTED PUBLISHING, not a token.** Decided 2026-08-04,
+after the token approach failed twice — and neither failure was technical.
+
+Once the secret arrived in plain text over a chat. Once it ended up as the
+secret's **name**, which is visible to anyone with repository access. Both are
+failures of *handling a long-lived string*, and no amount of care removes the
+string. OIDC does: npm mints a credential scoped to this repository and this
+workflow file, valid for one run, with nothing stored anywhere.
+
+Requirements, from npm's documentation rather than memory:
+
+- **npm >= 11.5.1 and Node >= 22.14.0.** The Node 22 line ships npm 10.x, so the
+  workflow upgrades the CLI explicitly — without that the publish falls back to
+  looking for a token and dies on a 2FA prompt no runner can answer.
+- `id-token: write` on the job.
+- A trusted publisher configured at npmjs.com naming the user, the repository,
+  and the **workflow filename** (`release.yml`).
+
+**That unknown is now settled, and the answer was no.** A trusted publisher is
+configured at `npmjs.com → Packages → <package> → Settings → Trusted
+publishing` — it lives on the *package's* settings page, so **the package has to
+exist before trusted publishing can be turned on**. There is no such section
+under account settings, which is what the attempt to find it revealed.
+
+So the order is fixed rather than chosen:
+
+1. Publish **once** with a classic **Automation** token. Not a granular token —
+   a granular token obeys the account's 2FA setting, which is what produced the
+   `EOTP` failure. Automation is the type that bypasses it.
+2. Configure the trusted publisher on the now-existing package.
+3. Delete the token from the workflow and delete the secret.
+
+The workflow is already prepared for step 3: npm is upgraded past 11.5.1 and
+`id-token: write` is set. Only the `NODE_AUTH_TOKEN` env block has to go.
+
+Trying it is cheap, and that is measured rather than assumed: three tagged
+releases have now failed, each at a gate before publication, and **none
+published anything**.
 
 ### Phase 3 — The first five minutes — **done, except asciinema**
 

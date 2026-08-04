@@ -29,11 +29,20 @@ jobs:
 
       # npm (not bun) publishes, because provenance attestation is an npm CLI
       # feature. Node is here for that, not to run the project.
+      # Trusted publishing needs npm >= 11.5.1 and Node >= 22.14.0. The Node 22
+      # line ships npm 10.x, so the CLI is upgraded explicitly — without this the
+      # publish falls back to looking for a token and fails on the 2FA prompt
+      # that a CI runner cannot answer.
       - name: Set up Node for npm publish
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.14.0"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm to a trusted-publishing capable version
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - name: Install dependencies
         run: bun install
@@ -118,7 +127,21 @@ jobs:
           fi
           cat ./.release/notes.md
 
-      - name: Publish to npm with provenance
+      # TRANSITIONAL — this token is here for exactly one publish.
+      #
+      # Trusted publishing is the destination, and the workflow is otherwise
+      # ready for it: npm is upgraded above and `id-token: write` is set. But a
+      # trusted publisher is configured at
+      # `npmjs.com → Packages → <package> → Settings → Trusted publishing`,
+      # which means **the package has to exist first**. It does not. That was
+      # flagged as an open unknown when this workflow was written, and the
+      # answer turned out to be no.
+      #
+      # So: publish once with a classic AUTOMATION token — the only token type
+      # that bypasses the 2FA prompt a runner cannot answer — then configure the
+      # trusted publisher on the now-existing package, delete this env block,
+      # and delete the secret.
+      - name: Publish to npm
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
