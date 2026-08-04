@@ -15,6 +15,7 @@ under `docs/report/`.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
+- [limitations.md](./limitations.md) — Known gaps, platform support, optional AI features, and what to use instead.
 
 ## Release and planning
 

@@ -84,5 +84,6 @@ nav:
   - Modules: modules.md
   - CLI reference: cli-reference.md
   - Workspace and lifecycle: workspace-and-lifecycle.md
+  - Limitations: limitations.md
   - Complete setup and agent workflows: complete-setup-and-agent-workflows.md
   - Agent installation playbook: agent-installation-playbook.md

@@ -7,6 +7,43 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.11] — 2026-08-04
+
+### Documentation
+
+- **The README leads with what keryx is for, not with what it cannot do.** The
+  old first screen spent its attention on absent model runtimes, empty runtime
+  identifiers and non-zero exit codes — accurate, and the worst possible order
+  in which to say it. A reader met the limitations of a product before its
+  purpose, and concluded the product was unfinished rather than deliberate.
+
+  The new order is: one sentence of value, the install, the problem, a table of
+  what you get, a real end-to-end agent workflow, the express example, the
+  `.metaproject/` tree, capabilities grouped by what you are trying to do, and
+  only then requirements, optional AI features and limitations. Nothing was
+  softened into untruth — the macOS-only containment tier, the missing
+  approval transport, the unbundled embedding runtime and the external ripgrep
+  dependency are all still stated, with the impact and the alternative next to
+  each.
+
+- **`docs/docs/limitations.md`** now holds the detail the README used to carry:
+  the removed ONNX stack and the two constants that re-enable those seams, the
+  five commands that need a provider credential, the platform matrix, the
+  remote-approval gap and the pre-1.0 format-stability note. Linked from the
+  README and the docs index, and in the site nav.
+
+- **Two README caveats were removed because they had become false**, not
+  because they were inconvenient: `security` is in `keryx modules` and can be
+  toggled there, and enabling `mcp` no longer survives only until the next
+  unrelated toggle — `defaultEnabled`/`enableFlag` in `src/commands/modules.ts`
+  fixed that. Every command the README now shows was checked against the live
+  CLI surface.
+
+- **The npm `description` and `keywords` describe the product category** —
+  version-controlled project context for AI coding agents — rather than opening
+  with "metaproject workspace", a term that means nothing before the reader has
+  installed the thing.
+
 ## [0.2.10] — 2026-08-04
 
 ### Changed
