@@ -142,24 +142,26 @@ jobs:
           fi
           cat ./.release/notes.md
 
-      # TRANSITIONAL — this token is here for exactly one publish.
+      # No token. Authentication is the OIDC identity of this workflow, matched
+      # against the trusted publisher registered on the package
+      # (`MrCipherSmith/keryx`, `release.yml`). That registration is why the
+      # `NODE_AUTH_TOKEN` env block that used to sit here is gone, and why the
+      # `NPM_TOKEN` secret was deleted rather than left in place unused: a
+      # credential that nothing reads is still a credential that can be read.
       #
-      # Trusted publishing is the destination, and the workflow is otherwise
-      # ready for it: npm is upgraded above and `id-token: write` is set. But a
-      # trusted publisher is configured at
-      # `npmjs.com → Packages → <package> → Settings → Trusted publishing`,
-      # which means **the package has to exist first**. It does not. That was
-      # flagged as an open unknown when this workflow was written, and the
-      # answer turned out to be no.
+      # The bootstrap ordering is worth recording, because it is not obvious and
+      # cost four failed attempts to learn. A trusted publisher is configured at
+      # `npmjs.com → Packages → <package> → Settings → Trusted publishing`, so
+      # **the package must already exist** — the very first publish of a new
+      # package cannot use it. That first publish went out under a classic
+      # Automation token, which is the only token type that bypasses the 2FA
+      # prompt a runner cannot answer; a granular token obeys the account 2FA
+      # setting and fails with `EOTP`.
       #
-      # So: publish once with a classic AUTOMATION token — the only token type
-      # that bypasses the 2FA prompt a runner cannot answer — then configure the
-      # trusted publisher on the now-existing package, delete this env block,
-      # and delete the secret.
+      # `--provenance` needs `id-token: write`, which is already granted above
+      # for exactly this reason.
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create the GitHub Release
         env:

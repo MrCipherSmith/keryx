@@ -7,6 +7,32 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.10] — 2026-08-04
+
+### Changed
+
+- **The release workflow publishes with no credential at all.** The trusted
+  publisher is registered on the package (`MrCipherSmith/keryx`, `release.yml`,
+  permissions `npm publish` and `npm stage publish`), so `npm publish` now
+  authenticates as the OIDC identity of this workflow. The `NODE_AUTH_TOKEN`
+  env block is gone and the `NPM_TOKEN` repository secret has been deleted —
+  not merely left unused, because a credential nothing reads is still a
+  credential that can be read.
+
+  The bootstrap ordering is recorded in the workflow itself, because it is not
+  obvious and cost four failed attempts to learn: a trusted publisher is
+  configured under the **package's** settings, which means the package has to
+  exist before it can be configured, which means the first publish of a new
+  package cannot use it. `0.2.9` went out under a classic Automation token —
+  the only token type that bypasses the 2FA prompt a CI runner cannot answer.
+  A granular token obeys the account's 2FA setting and fails with `EOTP`, which
+  is exactly how the third attempt died.
+
+  Nothing published between those four failures. Every one of them stopped at a
+  gate before the publish step, which is the gate working; three of the four
+  were the same defect wearing different clothes — a requirement satisfied in
+  one place and never written down as belonging to the suite.
+
 ## [0.2.9] — 2026-08-04
 
 ### Documentation
@@ -540,4 +566,5 @@ runtime dependencies, no sockets).
 [0.2.7]: https://github.com/MrCipherSmith/keryx/compare/v0.2.6...v0.2.7
 [0.2.8]: https://github.com/MrCipherSmith/keryx/compare/v0.2.7...v0.2.8
 [0.2.9]: https://github.com/MrCipherSmith/keryx/compare/v0.2.8...v0.2.9
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.9...HEAD
+[0.2.10]: https://github.com/MrCipherSmith/keryx/compare/v0.2.9...v0.2.10
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.10...HEAD
