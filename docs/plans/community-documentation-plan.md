@@ -130,11 +130,22 @@ Requirements, from npm's documentation rather than memory:
 - A trusted publisher configured at npmjs.com naming the user, the repository,
   and the **workflow filename** (`release.yml`).
 
-**One thing is genuinely unknown and is not being presented as known:** npm's
-documentation does not say whether trusted publishing works for a package that
-has *never been published*. If the first publish is refused for that reason, the
-fallback is one publish with a classic Automation token, then switching to
-trusted publishing and deleting the secret.
+**That unknown is now settled, and the answer was no.** A trusted publisher is
+configured at `npmjs.com → Packages → <package> → Settings → Trusted
+publishing` — it lives on the *package's* settings page, so **the package has to
+exist before trusted publishing can be turned on**. There is no such section
+under account settings, which is what the attempt to find it revealed.
+
+So the order is fixed rather than chosen:
+
+1. Publish **once** with a classic **Automation** token. Not a granular token —
+   a granular token obeys the account's 2FA setting, which is what produced the
+   `EOTP` failure. Automation is the type that bypasses it.
+2. Configure the trusted publisher on the now-existing package.
+3. Delete the token from the workflow and delete the secret.
+
+The workflow is already prepared for step 3: npm is upgraded past 11.5.1 and
+`id-token: write` is set. Only the `NODE_AUTH_TOKEN` env block has to go.
 
 Trying it is cheap, and that is measured rather than assumed: three tagged
 releases have now failed, each at a gate before publication, and **none

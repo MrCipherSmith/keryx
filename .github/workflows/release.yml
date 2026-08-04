@@ -127,21 +127,24 @@ jobs:
           fi
           cat ./.release/notes.md
 
-      # Published through TRUSTED PUBLISHING — no npm token anywhere in this
-      # workflow, and none stored in the repository.
+      # TRANSITIONAL — this token is here for exactly one publish.
       #
-      # The reason is not theoretical. The token approach failed twice here, and
-      # neither failure was technical: once the secret arrived in plain text over
-      # a chat, once it ended up as the secret's NAME, which is visible to anyone
-      # with repository access. Both are failures of *handling a long-lived
-      # string*, and OIDC removes the string: npm mints a credential scoped to
-      # this repository and this workflow file, valid for one run.
+      # Trusted publishing is the destination, and the workflow is otherwise
+      # ready for it: npm is upgraded above and `id-token: write` is set. But a
+      # trusted publisher is configured at
+      # `npmjs.com → Packages → <package> → Settings → Trusted publishing`,
+      # which means **the package has to exist first**. It does not. That was
+      # flagged as an open unknown when this workflow was written, and the
+      # answer turned out to be no.
       #
-      # Requires a trusted publisher configured at npmjs.com for
-      # MrCipherSmith/keryx with workflow filename `release.yml`, and the
-      # `id-token: write` permission above.
-      - name: Publish to npm via trusted publishing
+      # So: publish once with a classic AUTOMATION token — the only token type
+      # that bypasses the 2FA prompt a runner cannot answer — then configure the
+      # trusted publisher on the now-existing package, delete this env block,
+      # and delete the secret.
+      - name: Publish to npm
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create the GitHub Release
         env:
