@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/keryx-logo.png" alt="keryx" width="440">
+  <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/keryx-logo.png" alt="keryx" width="440">
 </p>
 
 <h1 align="center">keryx</h1>
@@ -143,7 +143,7 @@ All Markdown and JSON. All diffable. All yours. And readable as a dashboard when
 a human wants to look at it (`keryx dash`):
 
 <p align="center">
-  <img src="docs/assets/dashboard.png" alt="The keryx dashboard: health score, attention signals, and the enabled modules" width="880">
+  <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/dashboard.png" alt="The keryx dashboard: health score, attention signals, and the enabled modules" width="880">
 </p>
 
 ## The agent harness
@@ -170,14 +170,14 @@ Here it is answering a blast-radius question through the project graph rather
 than by reading files and guessing — one tool call, twelve seconds:
 
 <p align="center">
-  <img src="docs/assets/shell.png" alt="keryx shell answering a blast-radius question with the graph_affected tool" width="880">
+  <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/shell.png" alt="keryx shell answering a blast-radius question with the graph_affected tool" width="880">
 </p>
 
 And when it needs a decision from you, it asks with structured options instead
 of guessing — the same `ask` the policy engine raises for a guarded action:
 
 <p align="center">
-  <img src="docs/assets/shell-ask.png" alt="keryx shell asking the user a structured question with selectable options" width="880">
+  <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/shell-ask.png" alt="keryx shell asking the user a structured question with selectable options" width="880">
 </p>
 
 What is in it today:
@@ -212,7 +212,7 @@ Provider-neutral means what it says — the same loop, the same tool registry an
 the same policy, with the model swapped out from under it:
 
 <p align="center">
-  <img src="docs/assets/shell-deepseek.png" alt="The same keryx shell running the same tools against a different provider" width="880">
+  <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/shell-deepseek.png" alt="The same keryx shell running the same tools against a different provider" width="880">
 </p>
 
 You do not have to use it. Every module above works with Codex, Claude Code or

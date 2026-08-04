@@ -1,10 +1,11 @@
 # keryx — Documentation Index
 
-Auto-generated developer documentation for the **keryx** CLI (reverse-engineered from source).
+Developer documentation for the **keryx** CLI.
 
-This index describes the current `main` implementation. Product intent and
-future work remain under `docs/requirements/`; release-readiness audits live
-under `docs/report/`.
+These pages describe what the current `main` implementation actually does.
+Product intent and future design work live separately, under
+`docs/requirements/` in the repository; where the two disagree, this section is
+the one that describes shipped behaviour.
 
 ## Contents
 
@@ -17,11 +18,10 @@ under `docs/report/`.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
 - [limitations.md](./limitations.md) — Known gaps, platform support, optional AI features, and what to use instead.
 
-## Release and planning
+## Releases
 
-- [CHANGELOG](https://github.com/MrCipherSmith/keryx/blob/main/CHANGELOG.md) — what has landed since `v0.1.0`, with a standing known-gaps list.
-- [Release readiness report](https://github.com/MrCipherSmith/keryx/blob/main/docs/report/release-readiness-2026-08-03/release-readiness.md) — the current readiness verdict and verification matrix.
-- [Community documentation plan](https://github.com/MrCipherSmith/keryx/blob/main/docs/plans/community-documentation-plan.md) — the plan for publishable documentation, diagrams, and a docs site.
+- [Changelog](https://github.com/MrCipherSmith/keryx/blob/main/CHANGELOG.md) — what has landed in each release, with a standing known-gaps list.
+- [Releases](https://github.com/MrCipherSmith/keryx/releases) — tagged versions, each published to npm with provenance.
 
 ## Guides — organised by what you are trying to do
 

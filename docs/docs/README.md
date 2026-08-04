@@ -49,4 +49,4 @@ The opt-in MCP module exposes read-only services over stdio or isolated localhos
 
 ---
 
-> **Note.** This `docs/docs/` folder is **auto-generated developer documentation**, reverse-engineered from the source and describing what the code actually does. It is distinct from `docs/requirements/`, which holds the product specs (the intended design). Where the two disagree, this folder documents current behavior.
+> **Note.** This `docs/docs/` folder documents **what the code actually does**. It is distinct from `docs/requirements/`, which holds the product specs — the intended design. Where the two disagree, this folder is the one describing shipped behaviour.
