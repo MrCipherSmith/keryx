@@ -24,10 +24,14 @@ Every agent and every teammate reads the same context, and it is reviewed in a
 diff like the rest of the code.
 
 The core is deterministic, local, offline, and has no required runtime
-dependencies.
-keryx does not replace your coding agent and does not make engineering
-decisions — it gives every agent the same project context instead of letting
-each one reconstruct the repository from scratch.
+dependencies. keryx does not take your coding agent away and does not make
+engineering decisions for you — it gives every agent the same project context
+instead of letting each one reconstruct the repository from scratch.
+
+It also ships **an agent runtime of its own**, built directly on that context:
+durable sessions, an allow/ask/deny policy engine, kernel-enforced sandboxing,
+child agents and evidence-gated completion. Keep using Codex, Claude or Cursor,
+run `keryx shell`, or do both — they all read the same project brain.
 
 ```bash
 npm install -g @mrciphersmith/keryx
@@ -68,6 +72,7 @@ alike, whichever agent runtime happens to be open.
 | Judge readiness | Normalized health reports and a quality gate over lint, types, tests, coverage, complexity |
 | Coordinate work | Versioned task flows, managed review packages, generated agent skills |
 | Keep agents inside boundaries | Deterministic secret / PII / prompt-injection scanning, redaction, policy gate, OS sandbox |
+| Run an agent at all | A first-party harness on top of all of the above: durable sessions, allow/ask/deny policy, child agents, evidence-gated completion |
 
 ## A typical agent workflow
 
@@ -134,7 +139,68 @@ affected graph supplies deterministically, in one command.
 └── flows/                # task flows with frozen acceptance criteria
 ```
 
-All Markdown and JSON. All diffable. All yours.
+All Markdown and JSON. All diffable. All yours. And readable as a dashboard when
+a human wants to look at it (`keryx dash`):
+
+<p align="center">
+  <img src="docs/assets/dashboard.png" alt="The keryx dashboard: health score, attention signals, and the enabled modules" width="880">
+</p>
+
+## The agent harness
+
+This is the half that makes the other half worth having.
+
+> **The agent is ephemeral; the project brain is durable.**
+
+keryx ships its own agent runtime — not a wrapper around someone else's. It owns
+the execution loop, the tool registry, permissions, sessions, subagents and
+completion gates, and it assembles its context from the same `.metaproject/`
+graph, wiki, memory, rules, skills, testing, health and security that every other
+agent reads. That combination is the point: an agent that starts a turn already
+knowing the repository, and that cannot end one by asserting it is done.
+
+```bash
+keryx shell                                   # TUI + agent (default UI)
+keryx shell --no-tui                          # classic readline shell
+keryx shell --chat                            # chat without tools
+keryx shell --provider ollama --model llama3.1:latest
+```
+
+<p align="center">
+  <img src="docs/assets/shell.png" alt="keryx shell: the TUI agent harness with session commands and a project sidebar" width="880">
+</p>
+
+What is in it today:
+
+- **Provider-neutral loop.** Anthropic, Ollama, OpenRouter and Grok, plus an
+  offline fake provider for deterministic runs. Swapping the model does not
+  change the loop, the tools or the policy.
+- **Durable sessions, per project.** Append-only event log on disk, resume across
+  a process restart, branching, and context compaction that keeps the archive.
+  `/resume`, `/compact`, `/new` — and `keryx sessions list|export`.
+- **A policy engine with three answers, not two.** `allow`, `ask`, `deny` over
+  paths, commands, tools, network and resources. Filesystem mutation is
+  path-checked, security-scanned, approval-bound and recorded as evidence.
+- **Kernel-enforced containment underneath.** The OS sandbox sits *below* the
+  policy engine — Seatbelt on macOS, bubblewrap on Linux — with network off/on,
+  and on macOS a loopback domain allowlist, credential masking behind a per-run
+  sentinel, and opt-in TLS termination. It fails closed when a launcher or a
+  posture is missing rather than quietly doing less.
+- **Child agents with budgets.** Dispatch over the canonical
+  `subagent-dispatch`/`subagent-result` contracts, token budgets per child,
+  bounded parallel scheduling, and a fleet monitor (`keryx agents monitor`).
+- **Completion you can audit.** An evidence ledger backs the completion gate: a
+  run that cannot produce the evidence its flow requires does not get to claim
+  it finished.
+- **Deterministic replay.** Recorded provider and tool fixtures replay a run with
+  no network and no mutation, and report where the state transitions diverge.
+- **Four doors, one loop.** The CLI (`keryx harness run|exec|extension|wave`),
+  JSONL/RPC, the TUI, and the loopback HTTP entry (`keryx serve`) all drive the
+  same execution loop and the same session state.
+
+You do not have to use it. Every module above works with Codex, Claude Code or
+Cursor driving them instead. But if you want an agent that is native to the
+project rather than a guest in it, it is here and it is the same install.
 
 ## Core capabilities
 
@@ -177,6 +243,17 @@ Grouped by what you are trying to do, not by internal module layout.
 - **mcp** — an opt-in [Model Context Protocol](https://modelcontextprotocol.io)
   server exposing read-only module services to agents.
 
+**Run agents inside boundaries**
+
+- **harness** — the first-party agent runtime described above: provider-neutral
+  loop, durable sessions, policy engine, child agents, evidence-gated completion,
+  deterministic replay.
+- **sandbox** — kernel-enforced containment under the policy engine
+  (`keryx harness exec`), with filesystem boundaries, network posture and, on
+  macOS, a domain allowlist with credential masking.
+- **remote entry** — `keryx serve`, a loopback-bound authenticated HTTP door into
+  the same harness, so a bot or a browser workspace can drive a run.
+
 `keryx modules` toggles modules by manifest key; `keryx status` shows what is
 enabled. Nine modules are on after `init`; `mcp` is opt-in.
 
@@ -207,18 +284,8 @@ Alternative install paths — the managed installer (`~/.keryx` with a wrapper i
 `~/.local/bin`), project-local installs, and running from source — are in the
 [onboarding guide](docs/docs/onboarding.md).
 
-### Interactive shell
-
-Bare `keryx` prints the CLI surface. The interactive TUI agent harness starts
-with `keryx shell`:
-
-```bash
-keryx                                              # CLI help
-keryx shell                                        # TUI + agent (default UI)
-keryx shell --no-tui                               # classic readline shell
-keryx shell --chat                                 # chat without tools
-keryx shell --provider ollama --model llama3.1:latest
-```
+Bare `keryx` prints the CLI surface; `keryx shell` starts the agent harness
+described [above](#the-agent-harness).
 
 ## Agent integrations
 
@@ -325,6 +392,8 @@ fails on any detector breaching its committed false-negative threshold. See
 [run keryx in CI](docs/docs/guides/run-in-ci.md).
 
 ## Documentation
+
+Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 
 - **[Onboarding](docs/docs/onboarding.md)** — install paths, first-run walkthrough, the build loop.
 - **[Architecture](docs/docs/architecture.md)** — the four-layer pattern, invariants, cross-module data flows.
