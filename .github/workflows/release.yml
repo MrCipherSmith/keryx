@@ -80,8 +80,21 @@ jobs:
       # builds `dist/`; this asserts the built binary answers.
       - name: Build and smoke-test the packed artifact
         run: |
+          set -euo pipefail
+          # `--pack-destination` does not create the directory, and the first
+          # attempt at this step assumed it did: `npm pack` wrote nothing there,
+          # the tarball lookup produced nothing, and the failure surfaced two
+          # commands later as an ENOENT on a path that had never existed. Make
+          # the directory, then assert the artifact before using it, so a broken
+          # pack fails HERE with a legible reason.
+          mkdir -p ./.release
           npm pack --pack-destination ./.release
-          TARBALL="$(ls ./.release/*.tgz)"
+          ls -l ./.release
+          TARBALL="$(find ./.release -maxdepth 1 -name '*.tgz' -print -quit)"
+          if [ -z "$TARBALL" ]; then
+            echo "::error::npm pack produced no tarball in ./.release"
+            exit 1
+          fi
           echo "packed: $TARBALL"
           npm install -g --prefix ./.release/prefix "$TARBALL"
           ./.release/prefix/bin/keryx --help > /dev/null
