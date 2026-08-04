@@ -7,6 +7,24 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.13] — 2026-08-04
+
+### Documentation
+
+- **The harness screenshots show the harness working.** The first pass shipped a
+  `/help` frame — the UI, with nothing in it. Replaced with three captures of
+  real turns against this repository: `glm-5.2` answering a blast-radius
+  question through the `graph_affected` tool in twelve seconds; the agent
+  raising a structured `ask_user` question with selectable options instead of
+  guessing; and the same loop with the same tools running a different provider,
+  which is the evidence behind the provider-neutral claim rather than a
+  restatement of it.
+
+- **The local example names a model that exists.** `keryx shell --provider
+  ollama --model llama3.1:latest` was a plausible-looking placeholder; the local
+  example now uses `gemma4:e4b`, which is what the capture was actually taken
+  against.
+
 ## [0.2.12] — 2026-08-04
 
 ### Documentation

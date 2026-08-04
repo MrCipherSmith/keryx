@@ -163,11 +163,21 @@ knowing the repository, and that cannot end one by asserting it is done.
 keryx shell                                   # TUI + agent (default UI)
 keryx shell --no-tui                          # classic readline shell
 keryx shell --chat                            # chat without tools
-keryx shell --provider ollama --model llama3.1:latest
+keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
 
+Here it is answering a blast-radius question through the project graph rather
+than by reading files and guessing — one tool call, twelve seconds:
+
 <p align="center">
-  <img src="docs/assets/shell.png" alt="keryx shell: the TUI agent harness with session commands and a project sidebar" width="880">
+  <img src="docs/assets/shell.png" alt="keryx shell answering a blast-radius question with the graph_affected tool" width="880">
+</p>
+
+And when it needs a decision from you, it asks with structured options instead
+of guessing — the same `ask` the policy engine raises for a guarded action:
+
+<p align="center">
+  <img src="docs/assets/shell-ask.png" alt="keryx shell asking the user a structured question with selectable options" width="880">
 </p>
 
 What is in it today:
@@ -197,6 +207,13 @@ What is in it today:
 - **Four doors, one loop.** The CLI (`keryx harness run|exec|extension|wave`),
   JSONL/RPC, the TUI, and the loopback HTTP entry (`keryx serve`) all drive the
   same execution loop and the same session state.
+
+Provider-neutral means what it says — the same loop, the same tool registry and
+the same policy, with the model swapped out from under it:
+
+<p align="center">
+  <img src="docs/assets/shell-deepseek.png" alt="The same keryx shell running the same tools against a different provider" width="880">
+</p>
 
 You do not have to use it. Every module above works with Codex, Claude Code or
 Cursor driving them instead. But if you want an agent that is native to the
