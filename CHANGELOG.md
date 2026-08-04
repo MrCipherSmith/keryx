@@ -7,6 +7,43 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.12] — 2026-08-04
+
+### Documentation
+
+- **The agent harness is now stated as a first-class part of the product.** The
+  previous README mentioned it twice in passing — once as the thing `keryx shell`
+  starts, once as the thing `keryx serve` is a second door into — and never in
+  the first screen, the value table or the capability list. A reader could
+  finish the page without learning that keryx owns an execution loop at all.
+
+  The new section says what is in it: a provider-neutral loop over Anthropic,
+  Ollama, OpenRouter and Grok plus an offline fake provider; durable per-project
+  append-only sessions with resume, branching and compaction; a policy engine
+  with `allow`/`ask`/`deny` over paths, commands, tools, network and resources;
+  guarded mutation that is path-checked, security-scanned, approval-bound and
+  evidence-recorded; kernel-enforced containment below the policy engine;
+  child agents over the canonical contracts with token budgets and bounded
+  parallel scheduling; an evidence ledger behind the completion gate;
+  deterministic replay from recorded fixtures; and four doors — CLI, JSONL/RPC,
+  TUI and loopback HTTP — onto one loop.
+
+  Framed as the combination rather than a feature list: the harness is worth
+  having *because* it reads the same `.metaproject/` context every other agent
+  reads, and the context is worth having *because* something can act on it
+  without rediscovering the repository first. The package's own thesis — the
+  agent is ephemeral, the project brain is durable — now appears where a reader
+  will meet it.
+
+- **The first two screenshots.** `docs/assets/dashboard.png` and
+  `docs/assets/shell.png`, both captured from real runs against this repository
+  rather than mocked up. A tool with a TUI and a dashboard that shows neither is
+  asking to be judged on prose alone.
+
+- **The README links the documentation site** (`mrciphersmith.github.io/keryx`),
+  which has been deploying on every push to `main` and was reachable from
+  nowhere in the README.
+
 ## [0.2.11] — 2026-08-04
 
 ### Documentation

@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
   "private": false,
   "publishConfig": {
@@ -15,6 +15,7 @@
   "keywords": [
     "ai-agents",
     "coding-agents",
+    "agent-harness",
     "agent-context",
     "repository-context",
     "code-graph",
