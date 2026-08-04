@@ -61,7 +61,7 @@ Two standing rules for all phases:
 
 ## Phases
 
-### Phase 1 — Stop the bleeding (correctness)
+### Phase 1 — Stop the bleeding (correctness) — **done**
 
 **Goal:** nothing published is false. This is a prerequisite for every other
 phase and is largely done.
@@ -116,7 +116,7 @@ the tarball into a clean prefix and runs the binary.
 secret with publish rights. The workflow uses `--provenance`, which additionally
 requires the `id-token: write` permission (already set).
 
-### Phase 3 — The first five minutes
+### Phase 3 — The first five minutes — **done, except asciinema**
 
 **Goal:** someone who found the repo from a link understands what it is and gets
 one real result, without reading the architecture.
@@ -135,8 +135,19 @@ one real result, without reading the architecture.
 - **Asciinema recordings** of `keryx shell` and one `gdgraph` query. The TUI is
   the most persuasive thing in the project and is currently invisible in text.
 
-**Evidence rule:** the walkthrough is executed end to end on a clean machine
-(or a fresh container) and the pasted output comes from that run.
+**Evidence rule, applied — and it earned its keep immediately.** The walkthrough
+was executed against a freshly cloned `expressjs/express`, and **it died on the
+second command**: `keryx gdgraph build`, the first "Next step" `init` itself
+prints, had been broken on every fresh install since `0.2.3`. The copied gdgraph
+core had stopped being import-closed and nothing ran the copied tree, so the
+suite stayed green. Fixed in `0.2.6` with a closure the tests now check.
+
+That is the entire argument for this rule in one incident: a walkthrough written
+from the source would have shipped, read plausibly, and failed for every reader.
+
+**Still open:** asciinema recordings of `keryx shell` and one `gdgraph` query.
+The TUI is the most persuasive thing in the project and remains invisible in
+text.
 
 ### Phase 4 — Architecture that can be seen — **done**
 
@@ -227,7 +238,7 @@ the source:
   Every other detector's ceiling is zero, which is the far stronger statement —
   and that contrast is only visible in the real table.
 
-### Phase 6 — Publish — **done, except enabling Pages**
+### Phase 6 — Publish — **done**
 
 **Goal:** a URL, not a directory listing.
 
@@ -273,8 +284,9 @@ shipping the config *labelled unverified, behind a gate* turned an unknown into
 a known in two iterations, where shipping it labelled "done" would have shipped
 a site with dead ends.
 
-Remaining after that: enabling GitHub Pages for the repository, which is a
-settings change no workflow can make for itself.
+GitHub Pages was enabled on 2026-08-03 and the site verified live:
+**https://mrciphersmith.github.io/keryx/** returns 200, as do all five guides
+and the architecture page with its diagram blocks intact.
 
 - **Recommend MkDocs Material.** Rationale: the content is already Markdown with
   relative links; Material renders Mermaid natively; it is a single Python
