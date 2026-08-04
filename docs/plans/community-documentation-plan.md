@@ -290,14 +290,26 @@ settings change no workflow can make for itself.
 
 **Evidence rule:** CI fails on a broken link. Not a checklist item — a gate.
 
-### Phase 7 — Announce
+### Phase 7 — Announce — **draft written; blocked on publishing, not on documentation**
 
 **Goal:** the announcement sends people to something that holds up when they
 arrive. It is last for that reason, not because it is least important.
 
-**Blocked on Phases 3, 4 and 6.** Announcing to a repository whose architecture
-document predates the architecture is how a good project acquires a bad first
-impression it then has to argue against.
+~~**Blocked on Phases 3, 4 and 6.**~~ **Unblocked 2026-08-04** — those phases are
+done: the architecture document carries five diagrams and was reviewed against
+the source, the README opens with a real run, five task guides exist, and the
+site is live at https://mrciphersmith.github.io/keryx/.
+
+The draft is at [announcement-draft.md](announcement-draft.md), with prepared
+answers to the three questions that will be asked and an explicit list of what
+not to claim.
+
+**Two things must be true before it is posted, and neither is documentation:**
+
+1. **`@mrciphersmith/keryx` is actually published.** It is not. The release
+   workflow needs an `NPM_TOKEN` repository secret and a `v0.2.8` tag. A post
+   whose install command 404s is worse than no post.
+2. The docs site is reachable — it is, verified 200 with all five guides.
 
 - **Settle the name question first.** The scope fixes `npm install`; it does not
   fix search. Someone told "keryx" who searches for it finds keryxjs.com — an

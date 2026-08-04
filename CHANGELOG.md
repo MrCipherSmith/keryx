@@ -7,6 +7,35 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.9] — 2026-08-04
+
+### Documentation
+
+- **The name question is settled: `keryx` stays**, published as
+  `@mrciphersmith/keryx`. Decided on evidence. Fourteen plausible single
+  classical words were checked against npm and **all were taken** — that
+  namespace was exhausted years ago, which is why a scope is normal practice
+  rather than a workaround. And the rename was measured, not guessed: **8,554
+  occurrences across 1,503 files, 621 of them file or directory names**.
+
+  The one candidate that would have made the project better rather than merely
+  different was `metaproject` — free, and already this project's own noun. Today
+  it has two names for one thing: the tool is `keryx`, the thing it makes is a
+  `metaproject`. Collapsing them would have been a simplification, and it was
+  still not worth six hundred renames.
+
+  The mitigation is discipline: always write the scope, because
+  `npm install -g keryx` installs an unrelated project.
+
+- **An announcement draft**, at `docs/plans/announcement-draft.md`, written to
+  the plan's rules — one demonstrated thing rather than a feature list,
+  boundaries stated in the post itself, prepared answers to the three questions
+  that will be asked, and an explicit **what not to claim** list: no performance
+  claim, not "ML-powered" (those runtimes are not shipped), not "fully
+  sandboxed" without naming the tier and platform.
+
+  It is a draft for a human to post. Nothing has been published.
+
 ## [0.2.8] — 2026-08-04
 
 ### Documentation
@@ -510,4 +539,5 @@ runtime dependencies, no sockets).
 [0.2.6]: https://github.com/MrCipherSmith/keryx/compare/v0.2.5...v0.2.6
 [0.2.7]: https://github.com/MrCipherSmith/keryx/compare/v0.2.6...v0.2.7
 [0.2.8]: https://github.com/MrCipherSmith/keryx/compare/v0.2.7...v0.2.8
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.8...HEAD
+[0.2.9]: https://github.com/MrCipherSmith/keryx/compare/v0.2.8...v0.2.9
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.9...HEAD
