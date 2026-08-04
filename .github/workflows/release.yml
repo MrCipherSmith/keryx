@@ -52,10 +52,23 @@ jobs:
             exit 1
           fi
 
+      # Any job that runs `bun run check` needs ripgrep, because one test spawns
+      # the real binary to prove ripgrep emits `file:line:col` for a single
+      # explicit path. That was added to `ci.yml` and not here, so the first
+      # tagged release failed on a missing executable — the gate did its job and
+      # published nothing, but the omission is the same shape as the defects
+      # this repository keeps recording: a requirement satisfied in one place
+      # and not written down as belonging to the suite.
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       # The same gates CI runs. A tag must not be able to ship something a pull
       # request could not.
       - name: Typecheck and tests
         run: bun run check
+
+      - name: Documentation links
+        run: bun run check:doc-links
 
       - name: Security red-team FN-rate gate
         run: bun ./src/cli.ts security eval --corpus all
