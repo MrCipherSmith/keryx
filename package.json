@@ -1,7 +1,7 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.10",
-  "description": "CLI-first metaproject workspace for AI agents, code graph, project memory, health reports, testing context, wiki, skills, and task flows.",
+  "version": "0.2.11",
+  "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -14,15 +14,20 @@
   },
   "keywords": [
     "ai-agents",
-    "agent-tooling",
+    "coding-agents",
+    "agent-context",
+    "repository-context",
     "code-graph",
     "project-memory",
+    "test-impact-analysis",
     "developer-tools",
-    "bun",
-    "typescript",
+    "model-context-protocol",
+    "mcp",
+    "claude-code",
+    "cursor",
+    "codex",
     "cli",
-    "knowledge-base",
-    "multi-agent"
+    "bun"
   ],
   "bin": {
     "keryx": "./dist/cli.js"
