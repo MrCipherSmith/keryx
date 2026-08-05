@@ -5,27 +5,33 @@
 // the benchmark completed 0 of 5 cases for this reason alone.
 //
 // This module supplies the missing declaration WITHOUT supplying a new authority.
-// It is deliberately NOT an "approve everything" switch: an unattended run is one
-// where the approver is the frozen policy engine instead of a person, evaluated
-// with `interactive: false`. That single substitution gives the posture the four
-// properties the specification requires, and it gives them by construction rather
-// than by a list of special cases:
+// Two independent gates stand between a model's proposal and execution, and a
+// command has to pass BOTH:
 //
-//   | Condition                          | Result                                  |
-//   |------------------------------------|-----------------------------------------|
-//   | risk pre-declared `allow` in the profile | executes, recorded as unattended   |
-//   | `ask` with no approver             | `deny` (engine's headless fail-closed)  |
-//   | `deny`                             | terminal, exactly as with no flag       |
-//   | destructive / credential class     | refused regardless of the profile       |
+//   1. The frozen policy engine, evaluated with `interactive: false`. That is
+//      already the fail-closed path: an `ask` with no approver becomes `deny`, a
+//      hard deny stays terminal, and the destructive/credential classes have no
+//      `allow` to fall into.
 //
-// The last row is enforced twice on purpose. `decide` already cannot auto-allow a
-// destructive action non-interactively (`baseOutcomeFor` never returns `allow`
-// for the destructive/credential classes, and `interactive: false` turns the
-// resulting `ask` into `deny`), but that is a property of two other functions. A
-// future profile edit could quietly change it, and the one property the C1
-// benchmark pair demonstrated — keryx stopping before deleting the graph index
-// where the same model on an unwrapped agent did not — would be gone with no test
-// failing. So the refusal is also asserted here, at the seam the flag introduced.
+//   2. An ALLOWLIST the operator supplies per run (`--unattended-allow`). Nothing
+//      runs unless a pattern recognises it.
+//
+// Gate 2 is the one this module exists for, and the first version of this flow
+// did not have it. Without it, `--unattended=monitored-trusted-local` selected a
+// profile whose `shell` default is `allow`, and the only thing left between that
+// and execution was `isDestructiveCommand()` — a blocklist whose own module
+// header says it is NOT a security boundary and must never be used to decide that
+// a command is safe. A review ran it and deleted `.metaproject/data/gdgraph` with
+// nobody asked; `git clean -fdx` (benchmark case C1, the case keryx was praised
+// for refusing) sailed straight through. A blocklist is unbounded by
+// construction: everything it has not thought of is allowed. So the question is
+// inverted here. Only what a pattern RECOGNISES may run, and the classifier
+// stays on top of that as an extra refusal rather than as the barrier.
+//
+// The patterns go through `validateShellPattern` — the same validator that
+// refuses over-broad SAVED permissions, which specification.md §P1.2 requires:
+// "a rule whose first token does not constrain what runs is not a rule". So
+// `--unattended-allow "git *"` is refused at launch, not honoured at run time.
 //
 // Pure and deterministic: clock/ids arrive via `PolicyDeps`, nothing is read from
 // the filesystem or environment, and no `commands/` module is imported (the
@@ -36,9 +42,13 @@ import { decide } from "./engine";
 import { isLocalProfileName, type LocalProfileName, resolveLocalProfile } from "./profiles";
 import type { PolicyDecision, PolicyDeps } from "./types";
 import type { ToolRisk } from "../tool/types";
+import { isShellCommandAllowed, validateShellPattern } from "../../lib/shell-permissions";
 
 /** The launch-time flag that declares an unattended run. */
 export const UNATTENDED_FLAG = "--unattended";
+
+/** The repeatable flag that supplies the argv allowlist for an unattended run. */
+export const UNATTENDED_ALLOW_FLAG = "--unattended-allow";
 
 /**
  * The posture a bare `--unattended` selects.
@@ -51,9 +61,15 @@ export const UNATTENDED_FLAG = "--unattended";
  */
 export const DEFAULT_UNATTENDED_PROFILE: LocalProfileName = "read-only-review";
 
-/** A declared unattended run and the profile that bounds it. */
+/** A declared unattended run: the profile that bounds it and the argv it may run. */
 export interface UnattendedPosture {
   profile: LocalProfileName;
+  /**
+   * Validated argv patterns. EMPTY means no command runs — read tools do not
+   * reach the approver at all, so an empty allowlist is a read-only run rather
+   * than a broken one.
+   */
+  allow: readonly string[];
 }
 
 /** Parse outcome: a posture, nothing (flag absent), or a refusal to guess. */
@@ -63,37 +79,88 @@ export type UnattendedFlagResult =
   | { kind: "error"; message: string };
 
 /**
- * Parse `--unattended` / `--unattended=<profile>` out of an argv slice.
+ * Parse `--unattended[=<profile>]` and every `--unattended-allow <pattern>` out
+ * of an argv slice.
  *
- * An unknown profile name is an ERROR, never a fallback to the default. Falling
- * back would run a typo'd `--unattended=monitored-trusted-locl` under whatever
- * profile the fallback names, which is the one thing an operator declaring a
- * posture must be able to rely on not happening.
+ * Every occurrence is inspected, not just the last: `--unattended=nope
+ * --unattended` used to return the default and swallow the typo, which is the
+ * same "run under a posture nobody chose" failure the strict check exists to
+ * prevent. An unknown profile is an error wherever it appears.
+ *
+ * An allowlist pattern that `validateShellPattern` refuses is an error too, at
+ * LAUNCH. Dropping it silently would start a run whose operator believes a
+ * command is permitted when it is not — and honouring it would make
+ * `--unattended-allow "git *"` a grant of arbitrary execution.
  */
 export function parseUnattendedFlag(args: readonly string[]): UnattendedFlagResult {
   let found: string | undefined;
-  for (const arg of args) {
+  const allow: string[] = [];
+  const allowSeen = new Set<string>();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
     if (arg === UNATTENDED_FLAG) {
-      found = "";
-    } else if (arg.startsWith(`${UNATTENDED_FLAG}=`)) {
-      found = arg.slice(UNATTENDED_FLAG.length + 1);
+      found = found ?? "";
+      continue;
+    }
+    if (arg.startsWith(`${UNATTENDED_FLAG}=`)) {
+      const value = arg.slice(UNATTENDED_FLAG.length + 1);
+      if (!isLocalProfileName(value)) {
+        return { kind: "error", message: unknownProfileMessage(value) };
+      }
+      // A second, DIFFERENT profile is a contradiction rather than a refinement.
+      if (found !== undefined && found.length > 0 && found !== value) {
+        return {
+          kind: "error",
+          message: `${UNATTENDED_FLAG} given twice with different profiles (${found}, ${value}).`,
+        };
+      }
+      found = value;
+      continue;
+    }
+    if (arg === UNATTENDED_ALLOW_FLAG || arg.startsWith(`${UNATTENDED_ALLOW_FLAG}=`)) {
+      const inline = arg.startsWith(`${UNATTENDED_ALLOW_FLAG}=`);
+      const pattern = inline ? arg.slice(UNATTENDED_ALLOW_FLAG.length + 1) : (args[++index] ?? "");
+      if (pattern.trim().length === 0) {
+        return { kind: "error", message: `${UNATTENDED_ALLOW_FLAG} needs a command pattern.` };
+      }
+      const verdict = validateShellPattern(pattern);
+      if (!verdict.ok) {
+        return {
+          kind: "error",
+          message: `${UNATTENDED_ALLOW_FLAG} "${pattern.trim()}" is refused: ${verdict.reason}`,
+        };
+      }
+      const trimmed = pattern.trim();
+      if (!allowSeen.has(trimmed)) {
+        allowSeen.add(trimmed);
+        allow.push(trimmed);
+      }
+      continue;
     }
   }
+
   if (found === undefined) {
+    if (allow.length > 0) {
+      return {
+        kind: "error",
+        message: `${UNATTENDED_ALLOW_FLAG} has no meaning without ${UNATTENDED_FLAG}.`,
+      };
+    }
     return { kind: "absent" };
   }
-  if (found.length === 0) {
-    return { kind: "posture", posture: { profile: DEFAULT_UNATTENDED_PROFILE } };
+  const profile = found.length === 0 ? DEFAULT_UNATTENDED_PROFILE : found;
+  if (!isLocalProfileName(profile)) {
+    return { kind: "error", message: unknownProfileMessage(profile) };
   }
-  if (!isLocalProfileName(found)) {
-    return {
-      kind: "error",
-      message:
-        `Unknown ${UNATTENDED_FLAG} profile: ${found}. ` +
-        "Use read-only-review, monitored-trusted-local, or unattended-untrusted.",
-    };
-  }
-  return { kind: "posture", posture: { profile: found } };
+  return { kind: "posture", posture: { profile, allow } };
+}
+
+function unknownProfileMessage(value: string): string {
+  return (
+    `Unknown ${UNATTENDED_FLAG} profile: ${value}. ` +
+    "Use read-only-review, monitored-trusted-local, or unattended-untrusted."
+  );
 }
 
 /** The action an unattended approver is asked about. */
@@ -106,17 +173,38 @@ export interface UnattendedAction {
   credentials?: boolean;
   /** Identity of the exact action (tool name + canonical input). */
   actionFingerprint: string;
-  /** Path the action targets, for the managed-flow-state guard. */
-  targetPath?: string;
+  /**
+   * The argv this action will run, when it runs one. An action that reaches the
+   * approver with no command cannot be matched against the allowlist, and is
+   * therefore refused — see {@link decideUnattended}.
+   */
+  command?: string;
 }
 
 /**
- * Resolve one unattended action through the frozen policy engine.
+ * Force a decision to `deny`, keeping the engine's record shape.
  *
- * The escalation is one-way: a destructive or credential-touching command is
- * evaluated as the `destructive`/`credential` class even when the tool's static
- * risk is only `shell`, and the result is forced to `deny` if the engine ever
- * says otherwise.
+ * Exported so the never-auto-approve rule can be exercised directly. It is
+ * unreachable through `decideUnattended` today — `baseOutcomeFor` never returns
+ * `allow` for the destructive/credential classes — and an unreachable guard with
+ * no test is a guard that quietly stops working when the thing making it
+ * unreachable changes.
+ */
+export function forceDeny(decision: PolicyDecision, rule: string, reason: string): PolicyDecision {
+  if (decision.decision === "deny") {
+    return decision;
+  }
+  return {
+    ...decision,
+    decision: "deny",
+    matchedRules: [...decision.matchedRules, rule],
+    reason,
+  };
+}
+
+/**
+ * Resolve one unattended action through the frozen policy engine and the
+ * operator's allowlist. Both must say yes.
  */
 export function decideUnattended(
   posture: UnattendedPosture,
@@ -140,23 +228,67 @@ export function decideUnattended(
       // fail-closed branch and becomes `deny`.
       approvals: [],
       actionFingerprint: action.actionFingerprint,
-      ...(action.targetPath !== undefined ? { targetPath: action.targetPath } : {}),
     },
     deps,
   );
 
-  if (decision.decision === "allow" && (action.destructive === true || action.credentials === true)) {
-    return {
-      ...decision,
-      decision: "deny",
-      matchedRules: [...decision.matchedRules, "unattended:destructive-never-auto-approved"],
-      reason:
-        "A destructive or credential-touching action is never auto-approved under " +
-        `${UNATTENDED_FLAG}, whatever the profile allows.`,
-    };
+  if (decision.decision !== "allow") {
+    return decision;
   }
 
-  return decision;
+  // Gate 1 said yes. Everything below is gate 2.
+
+  if (action.destructive === true || action.credentials === true) {
+    return forceDeny(
+      decision,
+      "unattended:destructive-never-auto-approved",
+      "A destructive or credential-touching action is never auto-approved under " +
+        `${UNATTENDED_FLAG}, whatever the profile allows.`,
+    );
+  }
+
+  // `read` never reaches an approver (the driver's risk gate runs it directly),
+  // and it carries no argv, so there is nothing to match. Every other class does
+  // run something, and must be recognised before it does.
+  if (action.risk === "read") {
+    return decision;
+  }
+
+  const command = action.command?.trim() ?? "";
+  if (command.length === 0) {
+    return forceDeny(
+      decision,
+      "unattended:no-command-to-match",
+      `${UNATTENDED_FLAG} allows a ${action.risk} action only when it can be matched against ` +
+        `${UNATTENDED_ALLOW_FLAG}, and this action carries no command to match.`,
+    );
+  }
+
+  if (posture.allow.length === 0) {
+    return forceDeny(
+      decision,
+      "unattended:no-allowlist",
+      `${UNATTENDED_FLAG} runs no command unless one is permitted by ${UNATTENDED_ALLOW_FLAG}, ` +
+        "and this run supplied none.",
+    );
+  }
+
+  // `isShellCommandAllowed` also refuses an unquoted shell metacharacter, a
+  // destructive command and anything touching the agent's own credentials — so a
+  // pattern match can never be the ONLY thing that ran.
+  if (!isShellCommandAllowed(command, posture.allow)) {
+    return forceDeny(
+      decision,
+      "unattended:not-allowlisted",
+      `no ${UNATTENDED_ALLOW_FLAG} pattern permits this command (and a command containing an ` +
+        "unquoted shell metacharacter is never matched).",
+    );
+  }
+
+  return {
+    ...decision,
+    matchedRules: [...decision.matchedRules, "unattended:allowlisted"],
+  };
 }
 
 /**
@@ -190,6 +322,36 @@ export type UnattendedDecisionSink = (event: {
   posture: UnattendedPosture;
 }) => void;
 
+/** What the driver hands an approver about the action it is asking about. */
+export interface UnattendedApprovalMeta {
+  fingerprint: string;
+  destructive: boolean;
+  credentials?: boolean;
+  risk?: ToolRisk;
+}
+
+/**
+ * Extract the command an action will run from the raw tool input JSON.
+ *
+ * Deliberately narrow: only a top-level string `command` field counts. A tool
+ * shaped differently yields `""`, which {@link decideUnattended} refuses — an
+ * action whose argv the approver cannot see is an action it cannot allowlist.
+ */
+export function commandFromToolInput(inputJson: string): string {
+  try {
+    const parsed: unknown = JSON.parse(inputJson);
+    if (parsed !== null && typeof parsed === "object") {
+      const command = (parsed as { command?: unknown }).command;
+      if (typeof command === "string") {
+        return command.trim();
+      }
+    }
+  } catch {
+    // Not JSON. A raw string is not a command shape we can reason about.
+  }
+  return "";
+}
+
 /**
  * Build the approver an unattended run installs in place of the human prompt.
  *
@@ -205,14 +367,15 @@ export function createUnattendedApprover(
 ): (
   tool: string,
   input: string,
-  meta?: { fingerprint: string; destructive: boolean; credentials?: boolean; risk?: ToolRisk },
+  meta?: UnattendedApprovalMeta,
 ) => Promise<UnattendedApprovalResponse> {
-  return async (tool, _input, meta) => {
+  return async (tool, input, meta) => {
     // No meta means the caller could not identify the action. An approver that
     // cannot tell what it is approving approves nothing.
     if (meta === undefined) {
       return { approved: false, fingerprint: "" };
     }
+    const command = commandFromToolInput(input);
     const decision = decideUnattended(
       posture,
       {
@@ -220,6 +383,7 @@ export function createUnattendedApprover(
         destructive: meta.destructive,
         ...(meta.credentials !== undefined ? { credentials: meta.credentials } : {}),
         actionFingerprint: meta.fingerprint,
+        ...(command.length > 0 ? { command } : {}),
       },
       deps,
     );
@@ -254,9 +418,17 @@ export function unattendedAskUserHost(): Promise<string> {
  * `undefined` — a supervised run — renders nothing: the absence of the marker is
  * the normal case, and a header that labels every run says less than one that
  * labels the unusual one.
+ *
+ * The allowlist size is part of the label because it is the difference between a
+ * run that can execute something and one that cannot.
  */
 export function unattendedHeaderLabel(posture: UnattendedPosture | undefined): string {
-  return posture === undefined ? "" : `unattended(${posture.profile})`;
+  if (posture === undefined) {
+    return "";
+  }
+  const allow =
+    posture.allow.length === 0 ? "no commands" : `${posture.allow.length} allowed command(s)`;
+  return `unattended(${posture.profile}, ${allow})`;
 }
 
 /**
@@ -266,5 +438,9 @@ export function unattendedHeaderLabel(posture: UnattendedPosture | undefined): s
  * missing" and "the field says supervised" are not the same claim.
  */
 export function postureRecord(posture: UnattendedPosture | undefined): string {
-  return posture === undefined ? "supervised" : `unattended:${posture.profile}`;
+  if (posture === undefined) {
+    return "supervised";
+  }
+  const allow = posture.allow.length === 0 ? "" : `+allow(${posture.allow.length})`;
+  return `unattended:${posture.profile}${allow}`;
 }

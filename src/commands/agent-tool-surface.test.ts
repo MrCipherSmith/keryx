@@ -15,7 +15,8 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { buildAgentSystemInstruction } from "./agent";
 import { advertisedToolNames, defaultAgentToolNames, groupToolNames } from "./agent-tool-surface";
-import { buildAgentTools, readlineAgentHelpText } from "./shell";
+import { buildAgentTools, readlineAgentHelpText, shellHeaderMeta } from "./shell";
+import { postureRecord } from "../harness/policy/unattended";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
@@ -56,7 +57,39 @@ test("AC9: the registered set, the system instruction and the shell help all nam
   for (const name of names) {
     expect(help, `shell help must advertise ${name}`).toContain(name);
   }
+
+  // 4. …and NOTHING ELSE. Checking only that every registered tool appears
+  //    leaves the failure that started this — a name in the prose that the
+  //    registry does not build — invisible. A model told about a tool that does
+  //    not exist calls it, gets "unknown tool", and falls back to the shell.
+  const registered = new Set(names);
+  for (const text of [instruction, help]) {
+    const mentions = toolShapedNames(text);
+    // A vacuous loop would pass this test while checking nothing. The bar is the
+    // number of registered names the extractor can SEE — `repomap` is one word,
+    // so it has no underscore to match and the forward direction covers it.
+    const visible = names.filter((name) => name.includes("_"));
+    expect(visible.length).toBeGreaterThan(10);
+    expect(mentions.length).toBeGreaterThanOrEqual(visible.length);
+    for (const mentioned of mentions) {
+      expect(
+        registered.has(mentioned),
+        `"${mentioned}" is advertised but not registered — the drift this derivation exists to stop`,
+      ).toBe(true);
+    }
+  }
 });
+
+/**
+ * Tool-shaped identifiers in prose: `snake_case` words of two or more parts.
+ * Deliberately crude — it over-collects rather than under-collects, and anything
+ * it finds that is not a tool has to be spelled differently.
+ */
+function toolShapedNames(text: string): string[] {
+  const KNOWN_NON_TOOLS = new Set(["read_only", "allow_freeform", "id_rsa"]);
+  const matches = [...text.matchAll(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g)].map((m) => m[1] ?? "");
+  return [...new Set(matches)].filter((name) => !KNOWN_NON_TOOLS.has(name));
+}
 
 test("AC9: a tool removed from the session disappears from both descriptions", () => {
   // The drift guard has to work in the other direction as well: if the two
@@ -121,29 +154,39 @@ test("the unattended posture is stated in the instruction when one is declared",
   expect(unattended).toMatch(/ask_user cannot be answered/);
 });
 
-test("AC8: both surfaces render the posture label and record it in the session", () => {
-  // The TUI cannot be rendered headlessly, so the guarantee is held at the seam:
-  // both surfaces must go through the shared formatter rather than composing a
-  // header string of their own, and both must stamp the run record.
+test("AC8: the posture reaches the header and the run record as VALUES", () => {
+  // Behaviour first: the composer both surfaces call returns a header that says
+  // so, and the record helper returns a value that distinguishes the two.
+  expect(
+    shellHeaderMeta({
+      provider: "fake",
+      model: "m",
+      agentMode: true,
+      cwdLabel: "~/p",
+      unattended: { profile: "read-only-review", allow: [] },
+    }),
+  ).toContain("unattended(read-only-review, no commands)");
+  expect(shellHeaderMeta({ provider: "fake", model: "m", agentMode: true, cwdLabel: "~/p" })).not.toContain(
+    "unattended",
+  );
+  expect(postureRecord({ profile: "read-only-review", allow: [] })).toBe("unattended:read-only-review");
+  expect(postureRecord(undefined)).toBe("supervised");
+});
+
+test("AC8: and the TUI, which cannot render headlessly, is held to the same seam", () => {
+  // The behavioural assertion above covers the readline surface's composer. The
+  // TUI mounts its header inside OpenTUI, which no unit test can start, so the
+  // guarantee there is that it goes through the SAME helpers rather than
+  // composing a string of its own. That is weaker, and it is stated as weaker.
   const repoRoot = path.join(import.meta.dir, "..", "..");
-  const readline = readFileSync(path.join(repoRoot, "src", "commands", "shell.ts"), "utf8");
   const tui = readFileSync(path.join(repoRoot, "src", "tui", "tui-shell.ts"), "utf8");
-
-  for (const [name, source] of [
-    ["readline shell", readline],
-    ["TUI shell", tui],
-  ] as const) {
-    expect(source, `${name} must render the posture through the shared formatter`).toContain(
-      "unattendedHeaderLabel(",
-    );
-    expect(source, `${name} must stamp the posture into the run record`).toContain("postureRecord(");
-    expect(source, `${name} must install the policy approver, not a bypass`).toContain(
-      "createUnattendedApprover(",
-    );
-  }
-
-  // And neither surface may reach for a blanket approval under the flag.
-  for (const source of [readline, tui]) {
-    expect(source).not.toMatch(/unattended[\s\S]{0,80}approved:\s*true/);
-  }
+  expect(tui, "the TUI must render the posture through the shared formatter").toContain(
+    "unattendedHeaderLabel(",
+  );
+  expect(tui, "the TUI must stamp the posture into the run record").toContain("postureRecord(");
+  expect(tui, "the TUI must install the policy approver, not a bypass").toContain(
+    "createUnattendedApprover(",
+  );
+  // And it must not short-circuit to an approval of its own under the flag.
+  expect(tui).not.toMatch(/unattended[\s\S]{0,80}approved:\s*true/);
 });

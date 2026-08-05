@@ -66,6 +66,7 @@ import {
   createUnattendedApprover,
   parseUnattendedFlag,
   postureRecord,
+  UNATTENDED_FLAG,
   unattendedAskUserHost,
   unattendedHeaderLabel,
   unattendedRefusal,
@@ -1249,6 +1250,66 @@ export function buildAgentTools(opts: {
   ];
 }
 
+/**
+ * Compose the shell header's right-hand meta line.
+ *
+ * Extracted so the posture's presence in the header is an assertion about a
+ * returned string rather than about the source text that builds one. Both
+ * surfaces render this through `unattendedHeaderLabel`, but only this one can be
+ * called from a test.
+ */
+export function shellHeaderMeta(input: {
+  provider: string;
+  model: string;
+  baseUrl?: string | undefined;
+  agentMode: boolean;
+  cwdLabel: string;
+  unattended?: UnattendedPosture | undefined;
+}): string {
+  const base = `${input.provider}/${input.model}${input.baseUrl !== undefined ? ` (${input.baseUrl})` : ""}`;
+  const mode = input.agentMode ? " · agent" : " · chat";
+  const posture = unattendedHeaderLabel(input.unattended);
+  return `${base}${mode}${posture.length > 0 ? ` · ${posture}` : ""} · ${input.cwdLabel}`;
+}
+
+/**
+ * Resolve the provider/model for an unattended launch, or say why it cannot.
+ *
+ * An unattended run must never reach an interactive picker. Without this, `keryx
+ * shell --unattended` with no `--provider` fell into `pickProviderModel` (and
+ * then `pickAgentMode`), both of which read a line from stdin — so a piped task
+ * was silently eaten by a prompt the operator never saw and the run answered a
+ * question nobody asked.
+ *
+ * Order: explicit flags, then the persisted selection, then a refusal. There is
+ * deliberately no third fallback: guessing a provider for a run nobody is
+ * watching is the same class of mistake as guessing a policy profile.
+ */
+export function resolveUnattendedSelection(
+  flags: Pick<ShellCliFlags, "providerArg" | "modelArg">,
+  saved: { provider?: string; model?: string },
+): { ok: true; provider: string; model?: string } | { ok: false; message: string } {
+  if (flags.providerArg !== undefined && flags.providerArg.length > 0) {
+    return {
+      ok: true,
+      provider: flags.providerArg,
+      ...(flags.modelArg !== undefined ? { model: flags.modelArg } : {}),
+    };
+  }
+  const provider = typeof saved.provider === "string" ? saved.provider.trim() : "";
+  const model = typeof saved.model === "string" ? saved.model.trim() : "";
+  if (provider.length > 0 && model.length > 0) {
+    return { ok: true, provider, model };
+  }
+  return {
+    ok: false,
+    message:
+      `${UNATTENDED_FLAG} cannot open the provider picker — there is nobody to answer it. ` +
+      "Pass --provider <p> --model <m>, or run keryx shell once interactively so the " +
+      "selection is saved.",
+  };
+}
+
 /** Which surface `shellCommand` should run for a given set of flags. */
 export type ShellSurface =
   /** The OpenTUI agent shell (`launchTuiAgentShell`). */
@@ -1306,6 +1367,39 @@ export async function shellCommand(args: string[]): Promise<void> {
   let providerArg = flags.providerArg;
   let modelArg = flags.modelArg;
   let baseUrl = flags.baseUrl;
+
+  if (unattended !== undefined) {
+    if (flags.modeFlag === false) {
+      // Chat mode registers no tools, so there is no approval to answer and
+      // nothing for a posture to bound. Silently ignoring the flag would let an
+      // operator believe a posture is in force when none exists.
+      process.stderr.write(
+        `${UNATTENDED_FLAG} has no meaning with --chat: chat mode runs no tools, ` +
+          "so there is nothing to approve. Drop one of the two flags.\n",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const saved = loadShellConfig();
+    const selection = resolveUnattendedSelection(flags, {
+      ...(typeof saved.provider === "string" ? { provider: saved.provider } : {}),
+      ...(typeof saved.model === "string" ? { model: saved.model } : {}),
+    });
+    if (!selection.ok) {
+      process.stderr.write(`${selection.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    providerArg = selection.provider;
+    modelArg = selection.model ?? modelArg;
+    if (modelArg === undefined) {
+      process.stderr.write(
+        `${UNATTENDED_FLAG} needs an explicit --model when --provider is given without one.\n`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
   // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
   // interactive picker asks (agent-default), and the non-interactive path
   // defaults to agent. `undefined` = "no explicit flag given".
@@ -1497,16 +1591,19 @@ export async function shellCommand(args: string[]): Promise<void> {
 
     // Resolve the mode: explicit flag wins; otherwise default to agent.
     const agentMode = modeFlag ?? true;
-    const modeLabel = agentMode ? " · agent" : " · chat";
-    const cwdLabel = collapseHome(process.cwd());
     // The posture is part of the header, not a startup notice that scrolls away:
     // a reader looking at a transcript mid-run has to be able to tell whether
     // anybody was being asked (AC8).
-    const postureLabel = unattendedHeaderLabel(unattended);
     printHeader(
       "keryx",
-      `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel}` +
-        `${postureLabel.length > 0 ? ` · ${postureLabel}` : ""} · ${cwdLabel}`,
+      shellHeaderMeta({
+        provider,
+        model,
+        baseUrl,
+        agentMode,
+        cwdLabel: collapseHome(process.cwd()),
+        unattended,
+      }),
     );
 
     if (agentMode) {

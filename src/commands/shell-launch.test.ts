@@ -12,7 +12,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chooseShellSurface, parseShellCliFlags, resolveTuiStartup } from "./shell";
+import {
+  chooseShellSurface,
+  parseShellCliFlags,
+  resolveTuiStartup,
+  resolveUnattendedSelection,
+  shellHeaderMeta,
+} from "./shell";
 import { DEFAULT_UNATTENDED_PROFILE } from "../harness/policy/unattended";
 import type { DetectedProvider } from "./select";
 
@@ -155,14 +161,16 @@ test("AC3: `keryx shell` accepts --unattended, with or without a profile", () =>
 
   expect(parseShellCliFlags(["--unattended"]).unattended).toEqual({
     profile: DEFAULT_UNATTENDED_PROFILE,
+    allow: [],
   });
   expect(parseShellCliFlags(["--unattended=monitored-trusted-local"]).unattended).toEqual({
     profile: "monitored-trusted-local",
+    allow: [],
   });
 
   // Composes with the other flags rather than swallowing them.
   const combined = parseShellCliFlags(["--no-tui", "--unattended", "--provider", "fake"]);
-  expect(combined.unattended).toEqual({ profile: DEFAULT_UNATTENDED_PROFILE });
+  expect(combined.unattended).toEqual({ profile: DEFAULT_UNATTENDED_PROFILE, allow: [] });
   expect(combined.wantTui).toBe(false);
   expect(combined.providerArg).toBe("fake");
 
@@ -170,4 +178,65 @@ test("AC3: `keryx shell` accepts --unattended, with or without a profile", () =>
   const bad = parseShellCliFlags(["--unattended=nope"]);
   expect(bad.unattended).toBeUndefined();
   expect(bad.unattendedError ?? "").toContain("nope");
+});
+
+test("the argv allowlist reaches the posture, and an over-broad one is refused", () => {
+  const withAllow = parseShellCliFlags([
+    "--unattended=monitored-trusted-local",
+    "--unattended-allow",
+    "bun test*",
+    "--unattended-allow=git status*",
+  ]);
+  expect(withAllow.unattended).toEqual({
+    profile: "monitored-trusted-local",
+    allow: ["bun test*", "git status*"],
+  });
+
+  const broad = parseShellCliFlags(["--unattended", "--unattended-allow", "git *"]);
+  expect(broad.unattended).toBeUndefined();
+  expect(broad.unattendedError ?? "").toContain("does not constrain what runs");
+});
+
+test("AC6/MAJOR 6: an unattended launch never opens a picker", () => {
+  // Explicit flags win.
+  expect(
+    resolveUnattendedSelection({ providerArg: "fake", modelArg: "fake-echo" }, {}),
+  ).toEqual({ ok: true, provider: "fake", model: "fake-echo" });
+
+  // Otherwise the persisted selection, which is what a previous interactive run
+  // left behind.
+  expect(resolveUnattendedSelection({}, { provider: "deepseek", model: "deepseek-v4-pro" })).toEqual({
+    ok: true,
+    provider: "deepseek",
+    model: "deepseek-v4-pro",
+  });
+
+  // And with neither, a refusal — not a picker that reads the piped task as an
+  // answer to a question the operator never saw.
+  const refused = resolveUnattendedSelection({}, {});
+  expect(refused.ok).toBe(false);
+  expect(refused.ok === false && refused.message).toContain("--provider");
+  expect(resolveUnattendedSelection({}, { provider: "deepseek" }).ok).toBe(false);
+});
+
+test("AC8: the posture is in the header the shell prints", () => {
+  const supervised = shellHeaderMeta({
+    provider: "fake",
+    model: "fake-echo",
+    agentMode: true,
+    cwdLabel: "~/p",
+  });
+  expect(supervised).toBe("fake/fake-echo · agent · ~/p");
+  expect(supervised).not.toContain("unattended");
+
+  const unattended = shellHeaderMeta({
+    provider: "fake",
+    model: "fake-echo",
+    agentMode: true,
+    cwdLabel: "~/p",
+    unattended: { profile: "monitored-trusted-local", allow: ["bun test*"] },
+  });
+  expect(unattended).toContain("unattended(monitored-trusted-local, 1 allowed command(s))");
+  expect(unattended).toContain("fake/fake-echo");
+  expect(unattended).toContain("~/p");
 });
