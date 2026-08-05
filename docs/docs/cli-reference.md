@@ -131,16 +131,38 @@ keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>]
 | Subcommand | Description |
 |---|---|
 | `run` | Execute one prompt through the run loop against the named provider and model. `fake` is a deterministic in-process provider, which is what makes the loop testable without a network. |
-
-`--provider` accepts `anthropic`, `ollama`, `fake`, and the OpenAI-compatible
-gateways — `openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`,
-`moonshot`, `grok`. `keryx shell` offers the same set through its picker, which
-lists each provider with the environment variable it reads.
-
 | `exec` | Run a subprocess under the containment options below. |
 | `extension` | Run a declared extension from a spec file. |
 | `wave` | Run a declared multi-agent wave from a spec file. |
 | `replay` | Check that a replay fixture still describes the run it was built from. `run --record <path>` writes the record; `replay --record <path>` builds a fixture from it and validates, `--write-fixture` keeps that fixture, and `--fixture` compares against a kept one. A divergence prints a typed mismatch naming the field and exits non-zero. |
+
+#### `harness run` providers
+
+`--provider` accepts `anthropic`, `ollama`, `fake`, and the OpenAI-compatible
+gateways — `openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`,
+`moonshot`, `grok`. `keryx shell` offers the same set through its picker, which
+lists each provider with the environment variable it reads. The command reads
+that set from the same registry the picker does, so this list and the accepted
+one cannot disagree; an unknown name prints the usage line and runs nothing.
+
+Every provider except `fake` (offline) and `ollama` (loopback) needs a
+credential in the environment — `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`,
+`OPENROUTER_API_KEY`, and so on. Without it the command prints which variable is
+missing and returns **before** constructing a provider or contacting anything.
+Keys saved in the shell's `auth.json` are not read here; export the variable.
+
+#### `harness run` tools
+
+A `run` registers the read-only metaproject tools — `search_code`,
+`graph_affected`, `graph_query`, `graph_path`, `graph_symbol`, `memory_search`,
+`read_wiki`, `wiki_ask`, `wiki_backlinks`, `test_related`, `health_status`,
+`repomap` — and advertises them to the model, so the non-interactive door
+reaches the same project knowledge the TUI does. Each executed tool appears in the printed JSON
+under `tools`, with its name, status and output; the output passes the same
+secret scan applied before anything is persisted, so a flagged result is masked
+rather than printed. Tool risk is still resolved by the `read-only-review`
+policy profile: a write, shell or network tool is not in this set and would be
+denied if it were.
 
 `harness replay` is `validate-log`: it recomputes hashes from a recorded run and
 compares them. It does **not** re-execute the run, so it answers "is this
