@@ -49,6 +49,17 @@ export interface SessionSummary {
   provider?: string;
   model?: string;
   parentSessionId?: string;
+  /**
+   * Who was answering approval requests during this run: `supervised` (a person
+   * at a prompt) or `unattended:<profile>` (the frozen policy engine, no person
+   * present). Stamped so a reader of the evidence can tell the two apart after
+   * the fact — an unattended run and a supervised one leave the same transcript
+   * otherwise.
+   *
+   * Optional because sessions written before this field existed do not carry it;
+   * absent means "not recorded", which is not the same claim as "supervised".
+   */
+  posture?: string;
 }
 
 export interface SessionHandle {
@@ -64,6 +75,8 @@ export interface OpenSessionOptions {
   provider?: string;
   model?: string;
   parentSessionId?: string;
+  /** Approval posture for this run — see {@link SessionSummary.posture}. */
+  posture?: string;
 }
 
 interface TranscriptLine {
@@ -326,6 +339,8 @@ export function createSession(opts: {
   title?: string;
   parentSessionId?: string;
   id?: string;
+  /** Approval posture for this run — see {@link SessionSummary.posture}. */
+  posture?: string;
 }): SessionHandle {
   const projectPath = resolveProjectRoot(opts.cwd);
   const projectKey = projectKeyFromPath(projectPath);
@@ -347,6 +362,7 @@ export function createSession(opts: {
     ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.parentSessionId !== undefined ? { parentSessionId: opts.parentSessionId } : {}),
+    ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
   };
   atomicWriteJson(path.join(dir, "summary.json"), summary);
   atomicWriteText(path.join(dir, "context.jsonl"), "");
@@ -476,6 +492,12 @@ export interface PersistMeta {
   model?: string;
   title?: string;
   /**
+   * Approval posture for this run. Re-stamped on every persist so a session
+   * RESUMED under a different posture records the posture it is running under
+   * rather than the one it was created with.
+   */
+  posture?: string;
+  /**
    * Full archive to write. When omitted, `context` is also used as the archive
    * (first-turn sessions / non-compact path).
    */
@@ -518,6 +540,7 @@ export function persistHistory(
     archiveMessageCount: archive.length,
     ...(meta?.provider !== undefined ? { provider: meta.provider } : {}),
     ...(meta?.model !== undefined ? { model: meta.model } : {}),
+    ...(meta?.posture !== undefined ? { posture: meta.posture } : {}),
   };
   atomicWriteJson(path.join(handle.dir, "summary.json"), summary);
   return { summary, dir: handle.dir };
@@ -531,7 +554,7 @@ export function compactSession(
   handle: SessionHandle,
   context: readonly NormalizedMessage[],
   archive: readonly NormalizedMessage[],
-  opts?: CompactOptions & { provider?: string; model?: string },
+  opts?: CompactOptions & { provider?: string; model?: string; posture?: string },
 ): { handle: SessionHandle; context: NormalizedMessage[]; result: ReturnType<typeof compactMessages> } {
   const result = compactMessages(context, opts);
   if (result.noop) {
@@ -544,6 +567,7 @@ export function compactSession(
     archive: nextArchive,
     ...(opts?.provider !== undefined ? { provider: opts.provider } : {}),
     ...(opts?.model !== undefined ? { model: opts.model } : {}),
+    ...(opts?.posture !== undefined ? { posture: opts.posture } : {}),
   });
   const withCount: SessionHandle = {
     dir: next.dir,
@@ -701,6 +725,7 @@ export function openSession(opts: OpenSessionOptions): {
     ...(opts.provider !== undefined ? { provider: opts.provider } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.parentSessionId !== undefined ? { parentSessionId: opts.parentSessionId } : {}),
+    ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
   });
   return { handle, history: [], archive: [], resumed: false };
 }
