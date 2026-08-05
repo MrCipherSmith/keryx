@@ -13,9 +13,11 @@
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
+import { defaultAgentToolNames, groupToolNames, renderToolList } from "./agent-tool-surface";
 import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import type { ToolRisk } from "../harness/tool/types";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 
 /**
@@ -42,6 +44,12 @@ export interface ApprovalMeta {
    * and never remembered, whatever the user picks.
    */
   credentials?: boolean;
+  /**
+   * The tool's static risk class. A human approver reads the command and does not
+   * need it; a POLICY approver (the unattended posture) does, because it resolves
+   * the action through the frozen engine and the engine decides by risk class.
+   */
+  risk?: ToolRisk;
 }
 
 /**
@@ -53,7 +61,19 @@ export interface ApprovalMeta {
  * a denial. That closes the gap where "the user said yes" and "this is what
  * runs" are two independent facts that merely happen to line up.
  */
-export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string };
+export type ApprovalResponse =
+  | boolean
+  | {
+      approved: boolean;
+      fingerprint?: string;
+      /**
+       * Why the action was refused. Passed to the model in place of the default
+       * "not approved by the user" line — an approver that is not a user (the
+       * unattended policy engine) would otherwise report the wrong reason, and
+       * the model would retry the wrong thing.
+       */
+      reason?: string;
+    };
 
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
@@ -212,6 +232,18 @@ export function buildRepeatedFailureHint(name: string, error: string): string {
 export interface AgentInstructionContext {
   providerId?: string;
   modelId?: string;
+  /**
+   * The tools this session actually registered. Supplied by the shell so the
+   * instruction advertises the real surface instead of a hand-written copy of it
+   * that drifts (D1 layer 3). Absent ⇒ {@link defaultAgentToolNames}.
+   */
+  toolNames?: readonly string[];
+  /**
+   * Set when the run declared an unattended posture. The model is told there is
+   * nobody to approve or answer, so it stops proposing actions that can only end
+   * in a refusal.
+   */
+  unattendedProfile?: string;
 }
 
 /**
@@ -231,38 +263,80 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
       ? ` --provider ${sessionProvider} --model ${sessionModel}`
       : "";
 
+  const surface = groupToolNames(ctx.toolNames ?? defaultAgentToolNames());
+  const hasShellExec = surface.gated.includes("shell_exec");
+  const hasAskUser = surface.all.includes("ask_user");
+  const hasSpawn = surface.gated.includes("spawn_subagent");
+
+  const unattended = ctx.unattendedProfile?.trim() ?? "";
+  const unattendedBlock =
+    unattended.length > 0
+      ? "Unattended run (no operator is present):\n" +
+        `- The session declared --unattended=${unattended}. Nobody will approve anything and nobody ` +
+        "will answer a question.\n" +
+        "- Approval-gated tools are resolved by the policy engine, not a person. A denied action stays " +
+        "denied; do not retry it and do not look for a way around it.\n" +
+        "- Destructive commands are refused whatever the profile says. If a task needs one, stop and " +
+        "report what you would have run and why.\n" +
+        (hasAskUser
+          ? "- ask_user cannot be answered. State the assumption you are making and continue, or stop " +
+            "and report what you needed to ask.\n"
+          : "") +
+        "\n"
+      : "";
+
   const base =
-    "You are the keryx interactive agent (project harness). You have read-only tools to " +
-    "inspect the real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
-    "graph_affected, memory_search, read_wiki, wiki_ask, graph_symbol (keryx metaproject). " +
-    "You may also propose shell_exec to run a command, which requires the user's explicit " +
-    "approval before it executes.\n\n" +
+    "You are the keryx interactive agent (project harness). Your tools this session:\n" +
+    `- filesystem (read-only): ${renderToolList(surface.filesystem)}\n` +
+    `- keryx metaproject (the project's own precomputed answers): ${renderToolList(surface.metaproject)}\n` +
+    (surface.other.length > 0 ? `- interactive: ${renderToolList(surface.other)}\n` : "") +
+    (surface.gated.length > 0
+      ? `- approval-gated (each call is put to the approver before it runs): ${renderToolList(surface.gated)}\n`
+      : "") +
+    "\n" +
+    unattendedBlock +
     "Tool-calling rules (critical):\n" +
     "- ALWAYS pass every required field in the tool JSON (e.g. search_code needs " +
     "`pattern`, read_wiki needs `path`, wiki_ask needs `question`). Never call a tool " +
     "with an empty object.\n" +
-    "- Prefer ONE correct shell_exec over many exploratory tool calls when the user asks " +
-    "to run a known keryx workflow.\n" +
-    "- When you need a decision, interview step, or clarification: use **ask_user** with " +
-    "2–6 options `{ id, label, description, recommended? }` (mark one recommended). " +
-    "Do not dump long prose questions without options.\n" +
-    "- For a focused independent subtask (investigate X, review Y, research Z): use " +
-    "**spawn_subagent** with `{ task, mode?: 'read_only'|'general', label? }`. " +
-    "Default mode is read_only (no shell). Prefer spawn for work that can finish " +
-    "without your intermediate turns; do not spawn for trivial one-line answers.\n\n" +
-    "Workflow routing (follow these instead of improvising):\n" +
-    "- User asks to enrich / enrich wiki / «обогати вики» (TUI also pre-routes this):\n" +
-    "  1) `keryx wiki enrich --list` — show drafts vs accepted.\n" +
-    "  2) Ask: drafts only | force all (`--force`) | cancel.\n" +
-    "  3) shell_exec (provider/model from auth.json if omitted):\n" +
-    `       keryx wiki enrich --all${enrichFlags}\n` +
-    `       keryx wiki enrich --all --force --concurrency 4${enrichFlags}\n` +
-    `       keryx wiki enrich --all --resume --limit 10${enrichFlags}\n` +
-    `       keryx wiki enrich --all --refresh-graph${enrichFlags}\n` +
-    "  Do NOT thrash search_code/read_wiki instead of wiki enrich.\n" +
-    "- Optional prep: `keryx wiki collect` then enrich.\n" +
-    "- Other keryx work (graph, health, memory, flow) → prefer `shell_exec` with the " +
-    "matching `keryx …` CLI when the user wants a full command run.\n\n" +
+    "- When a metaproject tool answers the question, CALL IT — do not shell out to the " +
+    "`keryx` CLI verb behind it. The tools take the same arguments the verbs do " +
+    "(graph_affected takes `depth` and `ranked`; graph_symbol takes `impact`; memory_search " +
+    "takes the filters), so there is no question the CLI can express that the tool cannot, " +
+    "and the tool needs no approval while a shell command does.\n" +
+    "- Read the tool's parameters before deciding it cannot help. \"What breaks if I change X, " +
+    "transitively\" is graph_affected with `depth`, not a shell call.\n" +
+    (hasAskUser
+      ? "- When you need a decision, interview step, or clarification: use **ask_user** with " +
+        "2–6 options `{ id, label, description, recommended? }` (mark one recommended). " +
+        "Do not dump long prose questions without options.\n"
+      : "") +
+    (hasSpawn
+      ? "- For a focused independent subtask (investigate X, review Y, research Z): use " +
+        "**spawn_subagent** with `{ task, mode?: 'read_only'|'general', label? }`. " +
+        "Default mode is read_only (no shell). Prefer spawn for work that can finish " +
+        "without your intermediate turns; do not spawn for trivial one-line answers.\n"
+      : "") +
+    "\n" +
+    (hasShellExec
+      ? "When shell_exec is the right tool:\n" +
+        "- A `keryx` workflow that CHANGES something or calls a model — `wiki enrich`, " +
+        "`gdgraph build`, `wiki index`, `memory index`, `health run`, `test run`, `flow …`. " +
+        "No read tool covers those.\n" +
+        "- Ordinary project commands (build, test, git, package managers) the user asked for.\n" +
+        "- NOT for a question a metaproject tool answers.\n\n" +
+        "Workflow routing (follow these instead of improvising):\n" +
+        "- User asks to enrich / enrich wiki / «обогати вики» (TUI also pre-routes this):\n" +
+        "  1) `keryx wiki enrich --list` — show drafts vs accepted.\n" +
+        "  2) Ask: drafts only | force all (`--force`) | cancel.\n" +
+        "  3) shell_exec (provider/model from auth.json if omitted):\n" +
+        `       keryx wiki enrich --all${enrichFlags}\n` +
+        `       keryx wiki enrich --all --force --concurrency 4${enrichFlags}\n` +
+        `       keryx wiki enrich --all --resume --limit 10${enrichFlags}\n` +
+        `       keryx wiki enrich --all --refresh-graph${enrichFlags}\n` +
+        "  Do NOT thrash search_code/read_wiki instead of wiki enrich.\n" +
+        "- Optional prep: `keryx wiki collect` then enrich.\n\n"
+      : "") +
     "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +
     "contents, or results. Be economical with output tokens: lead with the conclusion, " +
     "give the shortest correct answer, prefer bullet points over prose, and omit preamble. " +
@@ -674,6 +748,18 @@ function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean
   return response.fingerprint === undefined || response.fingerprint === fingerprint;
 }
 
+/**
+ * The approver's own words for a refusal, when it supplied any. A bare `false`
+ * (the historical form) has none, so the caller keeps its default wording and the
+ * supervised path stays byte-identical.
+ */
+function refusalReason(response: ApprovalResponse): string | undefined {
+  if (typeof response === "boolean") {
+    return undefined;
+  }
+  return typeof response.reason === "string" && response.reason.length > 0 ? response.reason : undefined;
+}
+
 /** Resolve, gate (risk + approval), validate, and invoke a call → a content result. */
 async function executeCall(
   call: PendingCall,
@@ -718,9 +804,13 @@ async function executeCall(
             fingerprint,
             destructive,
             ...(credentials ? { credentials } : {}),
+            risk,
           });
     if (!isApprovalFor(response, fingerprint)) {
-      return { output: `command not approved by the user; not executed`, isError: true };
+      return {
+        output: refusalReason(response) ?? `command not approved by the user; not executed`,
+        isError: true,
+      };
     }
   } else if (risk === "delegate") {
     // Fail-closed like `shell`: a delegate with no approver present is denied,
@@ -731,9 +821,12 @@ async function executeCall(
     const response =
       requestApproval === undefined
         ? false
-        : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
+        : await requestApproval(call.name, call.input, { fingerprint, destructive: false, risk });
     if (!isApprovalFor(response, fingerprint)) {
-      return { output: `subagent spawn not approved by the user; not executed`, isError: true };
+      return {
+        output: refusalReason(response) ?? `subagent spawn not approved by the user; not executed`,
+        isError: true,
+      };
     }
   } else if (risk !== "read") {
     return { output: `tool "${call.name}" (risk ${risk}) is not permitted`, isError: true };

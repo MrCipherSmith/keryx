@@ -30,6 +30,7 @@ import type {
 import { buildOrientation } from "../ctx/orient";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
 import { makeKeryxRunner, builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
@@ -60,6 +61,16 @@ import {
   resolveAgentMaxToolCalls,
   runAgentTurn,
 } from "./agent";
+import { advertisedToolNames, defaultAgentToolNames } from "./agent-tool-surface";
+import {
+  createUnattendedApprover,
+  parseUnattendedFlag,
+  postureRecord,
+  unattendedAskUserHost,
+  unattendedHeaderLabel,
+  unattendedRefusal,
+  type UnattendedPosture,
+} from "../harness/policy/unattended";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import {
   compactSession,
@@ -168,11 +179,18 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/exit",
 ];
 
-/** Agent-REPL help: registry-derived command list + the agent-specific preamble. */
-export function readlineAgentHelpText(): string {
+/**
+ * Agent-REPL help: registry-derived command list + the agent-specific preamble.
+ *
+ * `toolNames` comes from the tools the session actually registered. It used to be
+ * a hand-written list of six, while the agent registered fifteen and the system
+ * instruction named nine — three descriptions of one surface, all different
+ * (D1 layer 3). Absent ⇒ the default registered set.
+ */
+export function readlineAgentHelpText(toolNames?: readonly string[]): string {
+  const names = toolNames ?? defaultAgentToolNames();
   return (
-    "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
-    "graph_affected, memory_search, shell_exec (approval).\n" +
+    `Agent mode — describe a task; tools: ${names.join(", ")}.\n` +
     renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
   );
@@ -706,6 +724,7 @@ async function runAgentRepl(
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
+  unattended?: UnattendedPosture,
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -782,6 +801,25 @@ async function runAgentRepl(
     blockActive = false;
   };
 
+  // Unattended: the frozen policy engine stands in for the human approver. Its
+  // verdicts are still PRINTED — an auto-refusal nobody can see is as opaque as
+  // an auto-approval nobody can see, and the transcript is the only record an
+  // unattended run leaves behind while it is running.
+  let lastPostureLine = "";
+  const policyApprover =
+    unattended === undefined
+      ? undefined
+      : createUnattendedApprover(
+          unattended,
+          { clock: () => new Date().toISOString(), idSeq: () => randomUUID() },
+          ({ tool, decision }) => {
+            lastPostureLine =
+              decision.decision === "allow"
+                ? `${tool} allowed by ${unattended.profile}`
+                : `${tool} ${unattendedRefusal(unattended, decision)}`;
+          },
+        );
+
   const agentIo: AgentIO = {
     // Live path: append the token to the differential block (a coalescing timer
     // repaints it). Non-live path: no-op — `onAssistantText` renders once. Either
@@ -815,7 +853,17 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    requestApproval: async (_tool, input) => {
+    requestApproval: async (_tool, input, meta) => {
+      // Unattended: the policy engine answers, not a person. The prompt below is
+      // never reached, so there is nothing to block on and nothing to type.
+      if (policyApprover !== undefined) {
+        stopSpinner();
+        const answer = await policyApprover(_tool, input, meta);
+        out(
+          `\n${GUTTER}${answer.approved ? style.dim(`◇ ${lastPostureLine}`) : style.red(`◇ ${lastPostureLine}`)}\n`,
+        );
+        return answer;
+      }
       stopSpinner();
       let command = input;
       try {
@@ -864,6 +912,9 @@ async function runAgentRepl(
 
   const sessionCwd = sessionOpts?.cwd ?? process.cwd();
   const sessionsOn = sessionOpts !== undefined && sessionOpts.enabled !== false;
+  // Stamped into the durable session record on create AND on every persist, so a
+  // session resumed under a different posture records the one it is running under.
+  const sessionPosture = postureRecord(unattended);
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
@@ -879,6 +930,7 @@ async function runAgentRepl(
         ...(resumeId !== undefined ? { resumeId } : {}),
         provider: deps.providerId,
         model: deps.modelId,
+        posture: sessionPosture,
       });
       live = opened.handle;
       history = opened.history;
@@ -897,6 +949,7 @@ async function runAgentRepl(
         cwd: sessionCwd,
         provider: deps.providerId,
         model: deps.modelId,
+        posture: sessionPosture,
       });
       history = [];
       archive = [];
@@ -915,6 +968,7 @@ async function runAgentRepl(
         archive,
         provider: deps.providerId,
         model: deps.modelId,
+        posture: sessionPosture,
       });
     } catch {
       // best-effort
@@ -936,7 +990,7 @@ async function runAgentRepl(
         return;
       }
       if (command === "/help") {
-        agentIo.onSystem?.(readlineAgentHelpText());
+        agentIo.onSystem?.(readlineAgentHelpText(advertisedToolNames(deps.tools)));
       } else if (command === "/expand") {
         const expanded = expandedToolOutput(lastToolName, lastToolOutput);
         if (expanded !== undefined) {
@@ -951,6 +1005,7 @@ async function runAgentRepl(
             cwd: sessionCwd,
             provider: deps.providerId,
             model: deps.modelId,
+            posture: sessionPosture,
           });
           history = [];
           archive = [];
@@ -1102,6 +1157,14 @@ export interface ShellCliFlags {
   resumeId?: string;
   /** `-r` without id → open resume picker (TUI) or latest (non-TUI). */
   resumePick?: boolean;
+  /**
+   * `--unattended[=<profile>]`: nobody is watching, so the frozen policy engine
+   * answers approval requests instead of a person. Absent ⇒ supervised, and the
+   * supervised path is byte-identical to what it was.
+   */
+  unattended?: UnattendedPosture;
+  /** Set when `--unattended=<profile>` named a profile that does not exist. */
+  unattendedError?: string;
 }
 
 /**
@@ -1146,6 +1209,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       }
     }
   }
+  const unattended = parseUnattendedFlag(args);
   return {
     ...(providerArg !== undefined ? { providerArg } : {}),
     ...(modelArg !== undefined ? { modelArg } : {}),
@@ -1155,7 +1219,34 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(continueLast === true ? { continueLast: true } : {}),
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
+    ...(unattended.kind === "posture" ? { unattended: unattended.posture } : {}),
+    ...(unattended.kind === "error" ? { unattendedError: unattended.message } : {}),
   };
+}
+
+/**
+ * Build the agent's tool array. ONE builder for both surfaces (TUI and readline),
+ * because AC9 asks that the system instruction advertise exactly the registered
+ * set — a claim that cannot hold if each surface assembles its own array and the
+ * instruction is written against one of them.
+ *
+ * Under an unattended posture `ask_user` gets a host that refuses instead of the
+ * TUI/readline host that waits: the tool is `risk: "read"`, so the risk gate lets
+ * it through, and with nobody to answer it would otherwise hang the run forever.
+ */
+export function buildAgentTools(opts: {
+  cwd: string;
+  port: MetaprojectPort;
+  spawnTool: InteractiveTool;
+  unattended?: UnattendedPosture | undefined;
+}): InteractiveTool[] {
+  return [
+    ...builtinReadOnlyTools(opts.cwd),
+    ...builtinMetaprojectTools(opts.cwd, makeKeryxRunner(opts.cwd), opts.port),
+    shellExecTool(opts.cwd),
+    createAskUserTool(opts.unattended === undefined ? invokeAskUserHost : unattendedAskUserHost),
+    opts.spawnTool,
+  ];
 }
 
 /** Which surface `shellCommand` should run for a given set of flags. */
@@ -1203,6 +1294,15 @@ export function chooseShellSurface(
  */
 export async function shellCommand(args: string[]): Promise<void> {
   const flags = parseShellCliFlags(args);
+  if (flags.unattendedError !== undefined) {
+    // Refuse rather than fall back to a default posture. An operator who typed a
+    // profile name meant that profile; running under a different one because the
+    // name was misspelled is the failure mode the flag exists to prevent.
+    process.stderr.write(`${flags.unattendedError}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const unattended = flags.unattended;
   let providerArg = flags.providerArg;
   let modelArg = flags.modelArg;
   let baseUrl = flags.baseUrl;
@@ -1253,20 +1353,17 @@ export async function shellCommand(args: string[]): Promise<void> {
           return [...names].map((name) => ({ name }));
         },
       });
+      const tools = buildAgentTools({ cwd, port: metaprojectPort, spawnTool, unattended });
       return {
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
-        tools: [
-          ...builtinReadOnlyTools(cwd),
-          ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
-          shellExecTool(cwd),
-          createAskUserTool(invokeAskUserHost),
-          spawnTool,
-        ],
+        tools,
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,
+          toolNames: advertisedToolNames(tools),
+          ...(unattended !== undefined ? { unattendedProfile: unattended.profile } : {}),
         }),
         // Generous default (48) so multi-step operator prompts do not hit the
         // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
@@ -1336,6 +1433,7 @@ export async function shellCommand(args: string[]): Promise<void> {
           ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
           ...(flags.resumePick === true ? { pickOnStart: true } : {}),
         },
+        ...(unattended !== undefined ? { unattended } : {}),
       })
     ) {
       return;
@@ -1401,9 +1499,14 @@ export async function shellCommand(args: string[]): Promise<void> {
     const agentMode = modeFlag ?? true;
     const modeLabel = agentMode ? " · agent" : " · chat";
     const cwdLabel = collapseHome(process.cwd());
+    // The posture is part of the header, not a startup notice that scrolls away:
+    // a reader looking at a transcript mid-run has to be able to tell whether
+    // anybody was being asked (AC8).
+    const postureLabel = unattendedHeaderLabel(unattended);
     printHeader(
       "keryx",
-      `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel} · ${cwdLabel}`,
+      `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel}` +
+        `${postureLabel.length > 0 ? ` · ${postureLabel}` : ""} · ${cwdLabel}`,
     );
 
     if (agentMode) {
@@ -1430,20 +1533,22 @@ export async function shellCommand(args: string[]): Promise<void> {
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
         getDetectedProviders: () => [{ name: provider }],
       });
+      const agentTools = buildAgentTools({
+        cwd: agentCwd,
+        port: metaprojectPort,
+        spawnTool,
+        unattended,
+      });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: [
-          ...builtinReadOnlyTools(agentCwd),
-          ...builtinMetaprojectTools(agentCwd, makeKeryxRunner(agentCwd), metaprojectPort),
-          shellExecTool(agentCwd),
-          createAskUserTool(invokeAskUserHost),
-          spawnTool,
-        ],
+        tools: agentTools,
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
           modelId: model,
+          toolNames: advertisedToolNames(agentTools),
+          ...(unattended !== undefined ? { unattendedProfile: unattended.profile } : {}),
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
@@ -1456,11 +1561,18 @@ export async function shellCommand(args: string[]): Promise<void> {
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = latestSession(process.cwd())?.id;
       }
-      await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort, {
-        cwd: process.cwd(),
-        ...(flags.continueLast === true ? { continueLast: true } : {}),
-        ...(resumeId !== undefined ? { resumeId } : {}),
-      });
+      await runAgentRepl(
+        sharedLines,
+        { printPrompt },
+        agentDeps,
+        metaprojectPort,
+        {
+          cwd: process.cwd(),
+          ...(flags.continueLast === true ? { continueLast: true } : {}),
+          ...(resumeId !== undefined ? { resumeId } : {}),
+        },
+        unattended,
+      );
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

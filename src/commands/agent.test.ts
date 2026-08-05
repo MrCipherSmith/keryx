@@ -686,7 +686,9 @@ test("buildAgentSystemInstruction embeds an orient block when present, falls bac
 
   const withoutOrient = buildAgentSystemInstruction(undefined);
   expect(withoutOrient).not.toContain("orientation");
-  expect(withoutOrient).toContain("read-only tools");
+  // Same claim, new wording: the tool block is now grouped, and the read-only
+  // filesystem group is the line that used to read "read-only tools".
+  expect(withoutOrient).toContain("filesystem (read-only)");
 
   // Empty/whitespace orient must not throw and must fall back.
   expect(buildAgentSystemInstruction("   ")).toBe(buildAgentSystemInstruction(undefined));

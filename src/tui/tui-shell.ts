@@ -41,6 +41,13 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import { buildApprovalContext } from "../commands/agent-approval-context";
+import { randomUUID } from "node:crypto";
+import {
+  createUnattendedApprover,
+  postureRecord,
+  unattendedHeaderLabel,
+  type UnattendedPosture,
+} from "../harness/policy/unattended";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage } from "../harness/provider/types";
@@ -865,6 +872,13 @@ export async function launchTuiAgentShell(opts: {
     resumeId?: string;
     pickOnStart?: boolean;
   };
+  /**
+   * Declared unattended posture (`keryx shell --unattended[=<profile>]`).
+   * When set, the frozen policy engine answers approval requests instead of the
+   * composer-dock prompt, and the header says so — a run nobody is watching must
+   * not look like a run somebody is.
+   */
+  unattended?: UnattendedPosture;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -932,8 +946,13 @@ export async function launchTuiAgentShell(opts: {
     // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
     // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard and
     // copy-on-select. Everything below is agent-specific and mounts ON it.
+    // AC8: the posture belongs in the header, where it stays visible for the
+    // whole run, not in a startup line that the transcript scrolls away.
+    const postureLabel = unattendedHeaderLabel(opts.unattended);
     const chrome = await createShellChrome(otui, r, {
-      title: `keryx · agent · ${sel.provider}/${sel.model}`,
+      title:
+        `keryx · agent · ${sel.provider}/${sel.model}` +
+        (postureLabel.length > 0 ? ` · ${postureLabel}` : ""),
       status: `${sel.provider}/${sel.model}`,
       footerHint: FOOTER_IDLE,
       placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
@@ -1139,7 +1158,30 @@ export async function launchTuiAgentShell(opts: {
     // The flow-041 advisory context (blast radius + memory note) is loaded through
     // this loader — the same information the readline shell shows above its prompt.
     const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
+    // Unattended: the frozen policy engine answers every approval request. This
+    // is checked FIRST, before the spawn_subagent auto-approve and before the
+    // saved-permission allowlist, so neither can hand an unattended run an
+    // authority the posture did not grant.
+    const unattendedApprover =
+      opts.unattended === undefined
+        ? undefined
+        : createUnattendedApprover(opts.unattended, {
+            clock: () => new Date().toISOString(),
+            idSeq: () => randomUUID(),
+          });
     io.requestApproval = async (tool, inputJson, meta) => {
+      if (unattendedApprover !== undefined && opts.unattended !== undefined) {
+        const answer = await unattendedApprover(tool, inputJson, meta);
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: answer.approved
+              ? otui.t`${otui.cyan(`◇ ${tool} auto-approved`)} ${otui.dim(`unattended(${opts.unattended.profile})`)}`
+              : otui.t`${otui.red(`◇ ${tool} refused`)} ${otui.dim(answer.reason ?? "policy denied")}`,
+          }),
+        );
+        return answer;
+      }
       // Multi-agent spawn: auto-allow read_only; ask for general.
       if (tool === "spawn_subagent") {
         let mode = "read_only";
@@ -1381,6 +1423,9 @@ export async function launchTuiAgentShell(opts: {
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
+    // Stamped into the durable session record (AC8), so the evidence a run leaves
+    // behind says who was answering approval requests.
+    const sessionPostureTag = postureRecord(opts.unattended);
     // Definite assignment: every control-flow path calls `applyOpened` before
     // paint/save; `!` satisfies TS2454 (assignments inside nested closures are
     // invisible to control-flow analysis).
@@ -1408,6 +1453,7 @@ export async function launchTuiAgentShell(opts: {
               cwd: sessionCwd,
               provider: currentSel.provider,
               model: currentSel.model,
+              posture: sessionPostureTag,
             }),
           );
         } else {
@@ -1437,6 +1483,7 @@ export async function launchTuiAgentShell(opts: {
                 cwd: sessionCwd,
                 provider: currentSel.provider,
                 model: currentSel.model,
+                posture: sessionPostureTag,
               }),
             );
           } else {
@@ -1446,6 +1493,7 @@ export async function launchTuiAgentShell(opts: {
                 resumeId: pickId,
                 provider: currentSel.provider,
                 model: currentSel.model,
+                posture: sessionPostureTag,
               }),
             );
           }
@@ -1457,6 +1505,7 @@ export async function launchTuiAgentShell(opts: {
           ...(opts.session?.resumeId !== undefined ? { resumeId: opts.session.resumeId } : {}),
           provider: currentSel.provider,
           model: currentSel.model,
+          posture: sessionPostureTag,
         });
         applyOpened(opened);
         if (opened.archiveDegraded !== undefined) {
@@ -1502,6 +1551,7 @@ export async function launchTuiAgentShell(opts: {
           cwd: sessionCwd,
           provider: currentSel.provider,
           model: currentSel.model,
+          posture: sessionPostureTag,
         }),
       );
     }
@@ -1514,7 +1564,11 @@ export async function launchTuiAgentShell(opts: {
           ? `${liveSession.summary.title.slice(0, 21)}…`
           : liveSession.summary.title;
       const cx = liveSession.summary.compactCount > 0 ? ` · c×${liveSession.summary.compactCount}` : "";
-      chrome.setTitle(`keryx · ${title} · ${sid}${cx} · ${label}`);
+      // The posture rides along on every repaint. Without it here the label
+      // survives only until the first session save, which is the point at which
+      // an unattended run starts looking exactly like a supervised one.
+      const posture = postureLabel.length > 0 ? ` · ${postureLabel}` : "";
+      chrome.setTitle(`keryx · ${title} · ${sid}${cx} · ${label}${posture}`);
     };
 
     const saveSession = (): void => {
@@ -1522,6 +1576,7 @@ export async function launchTuiAgentShell(opts: {
         archive,
         provider: currentSel.provider,
         model: currentSel.model,
+        posture: sessionPostureTag,
       });
       paintSessionHeader();
     };
@@ -1531,6 +1586,7 @@ export async function launchTuiAgentShell(opts: {
         cwd: sessionCwd,
         provider: currentSel.provider,
         model: currentSel.model,
+        posture: sessionPostureTag,
       });
       history = [];
       archive = [];
@@ -1580,6 +1636,7 @@ export async function launchTuiAgentShell(opts: {
           resumeId: found.id,
           provider: currentSel.provider,
           model: currentSel.model,
+          posture: sessionPostureTag,
         });
       } catch (cause) {
         io.onSystem?.(
@@ -1835,6 +1892,7 @@ export async function launchTuiAgentShell(opts: {
             ...(focus.length > 0 ? { focus } : {}),
             provider: currentSel.provider,
             model: currentSel.model,
+            posture: sessionPostureTag,
           });
           liveSession = packed.handle;
           history = packed.context;
