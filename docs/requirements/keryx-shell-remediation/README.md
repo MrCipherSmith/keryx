@@ -1,9 +1,15 @@
 # Keryx Shell Remediation Requirements Package
-Version: 0.3.0
+Version: 1.0.0
 
 ## Status
 
-Specification ready; no implementation has started and no runtime claim is made.
+**Ready to implement.** Specification complete, reviewed against code, and broken
+into three agent-runnable flow dispatches. No implementation has started and no
+runtime claim is made.
+
+Start here: [`implementation/`](implementation/README.md) — one dispatch per flow,
+each with the flow commands, the acceptance criteria to paste before freezing, the
+exact files, and the definition of done.
 
 Source: [the benchmark run of 2026-08-05](../keryx-shell-benchmark/run-2026-08-05.md),
 which halted after 5 of 26 cases because it had already found two defects every
@@ -25,6 +31,7 @@ Both are reachability defects. Neither needs new capability built.
 
 ## Document Index
 
+- [**Implementation dispatches**](implementation/README.md) — three flows, each executable end to end under the project's flow rule.
 - [PRD](prd.md) — problem, users, requirements, success criteria, risks, and recommendation.
 - [Specification](specification.md) — the three phases in detail, with acceptance criteria per phase.
 - [Implementation Plan](implementation-plan.md) — phase ordering, flow grouping, and what each flow must not do.
