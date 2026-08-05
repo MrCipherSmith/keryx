@@ -30,7 +30,7 @@ import type {
   WikiBacklinksResult,
   WikiPageResult,
 } from "./metaproject-port";
-import { checkRgOption } from "../../lib/rg-options";
+import { checkSearchToolOption } from "../../lib/rg-options";
 import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
@@ -195,7 +195,7 @@ function validateRgFlags(
         },
       };
     }
-    const check = checkRgOption(token);
+    const check = checkSearchToolOption(token);
     if (!check.ok) {
       return { error: { output: `search_code: ${check.reason}`, isError: true } };
     }
@@ -578,7 +578,11 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       // The verb's option allowlist lives in `buildRgCommand`, not in the
       // handler, so the parity scan has to reach it.
       helpers: ["buildRgCommand", "rgListMode"],
-      expresses: {},
+      // `-e`/`--regexp` is expressed by the `pattern` field, NOT by `flags`. The
+      // capability is present; the second way of supplying it is refused,
+      // because with two pattern sources a positional operand means one thing or
+      // another depending on which was used — and the tool confines operands.
+      expresses: { "-e": "pattern", "--regexp": "pattern" },
       // `--json` is keryx's own summary switch, and the four base flags are
       // passed unconditionally to produce the `file:line:col:text` shape the
       // match parser needs. None of them is a question a caller can ask

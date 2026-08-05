@@ -62,6 +62,23 @@ export function forwardedRgOptions(): string[] {
   return [...RG_FORWARDED_BOOLEAN_FLAGS, ...RG_FORWARDED_VALUE_FLAGS].sort();
 }
 
+/**
+ * Options the `search_code` TOOL refuses even though the CLI forwards them.
+ *
+ * `-e`/`--regexp` supplies the pattern through a flag, which moves every
+ * positional operand from "the pattern" to "a path". A review used exactly that
+ * to turn a `risk: "read"`, auto-approved tool into an arbitrary file reader:
+ * `search_code {pattern: "/home/…/.aws/credentials", flags: ["-e", "."]}` built
+ * `rg -e . -- /home/…/.aws/credentials`, and the root confinement never applied
+ * because it only ever guarded `input.path`.
+ *
+ * The capability is not lost — the tool has a `pattern` field, which is the same
+ * question asked in the shape the tool can confine. What is refused is the
+ * SECOND way of asking it, because two pattern sources mean the operand's
+ * meaning depends on which one was used.
+ */
+export const SEARCH_TOOL_REJECTED_OPTIONS: ReadonlySet<string> = new Set(["-e", "--regexp"]);
+
 /** Outcome of validating one caller-supplied rg option token. */
 export type RgOptionCheck =
   | { ok: true; consumesValue: boolean }
@@ -89,4 +106,21 @@ export function checkRgOption(token: string): RgOptionCheck {
       `unsupported ripgrep option ${name}. Only a reviewed set of options is forwarded, ` +
       "because ripgrep has options that execute external programs.",
   };
+}
+
+/**
+ * Classify one option token for the `search_code` tool: the CLI's allowlist,
+ * minus the options that would move the meaning of a positional operand.
+ */
+export function checkSearchToolOption(token: string): RgOptionCheck {
+  const [name] = token.split("=", 1) as [string];
+  if (SEARCH_TOOL_REJECTED_OPTIONS.has(name)) {
+    return {
+      ok: false,
+      reason:
+        `${name} is not accepted here — it would supply a second pattern and turn the search ` +
+        "target into a path. Put the expression in `pattern` instead.",
+    };
+  }
+  return checkRgOption(token);
 }

@@ -47,12 +47,12 @@ test("search_code maps input to `ctx rg <pattern> [path]` argv", async () => {
   const { run, calls } = recordingRunner();
   const tools = builtinMetaprojectTools(ROOT, run);
   await tool(tools, "search_code").invoke({ pattern: "AppendOnlySession" });
-  expect(calls[0]).toEqual(["ctx", "rg", "AppendOnlySession"]);
+  expect(calls[0]).toEqual(["ctx", "rg", "--regexp=AppendOnlySession", "."]);
   // The path is now the CONFINED, resolved path rather than the caller's raw
   // string, so what was checked is what is used — a relative string would be
   // re-resolved by the subprocess independently of the check.
   await tool(tools, "search_code").invoke({ pattern: "foo", path: "src" });
-  expect(calls[1]).toEqual(["ctx", "rg", "foo", `${ROOT}/src`]);
+  expect(calls[1]).toEqual(["ctx", "rg", "--regexp=foo", `${ROOT}/src`]);
 });
 
 test("search_code refuses a path that escapes the project root", async () => {
@@ -218,7 +218,7 @@ test("search_code falls back to the subprocess runner when the port has no in-pr
   await tool(tools, "search_code").invoke({ pattern: "foo" });
 
   expect(calls.searchCode).toEqual([{ pattern: "foo" }]); // the port was consulted
-  expect(runnerCalls[0]).toEqual(["ctx", "rg", "foo"]); // then it fell back to subprocess
+  expect(runnerCalls[0]).toEqual(["ctx", "rg", "--regexp=foo", "."]); // then it fell back to subprocess
 });
 
 test("search_code surfaces the actionable message when ripgrep is missing (port fallback path)", async () => {

@@ -25,6 +25,7 @@ import type {
   MetaprojectPort,
   SearchCodeResult,
 } from "../metaproject-port";
+import { checkSearchToolOption } from "../../../lib/rg-options";
 import { confineToRoot } from "./interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 
@@ -127,6 +128,83 @@ function requireString(
 }
 
 /**
+ * Build the `keryx ctx rg` argv for `search_code` so that EVERY positional
+ * operand is a root-confined path.
+ *
+ * The shape is the fix. Passing the pattern as an operand meant the operand's
+ * meaning depended on the flags beside it: with `-e <expr>` the pattern slot
+ * becomes a path, and a review used that to read `~/.aws/credentials` through a
+ * `risk: "read"` tool that never reaches an approver. Confining `input.path`
+ * could not help, because the leak did not travel through `input.path`.
+ *
+ * So the pattern always goes in as `--regexp=<pattern>` — one token, inline, so
+ * it cannot be re-parsed as an option and cannot be mistaken for a path — and
+ * the operand list is exactly one confined directory or file. There is no
+ * operand left whose meaning could shift.
+ *
+ * Exported for the tests that hold this property.
+ */
+export function buildSearchArgv(input: {
+  root: string;
+  pattern: string;
+  path?: string | undefined;
+  flags?: readonly string[] | undefined;
+}): { ok: true; args: string[] } | { ok: false; reason: string } {
+  const flags: string[] = [];
+  const supplied = input.flags ?? [];
+  let index = 0;
+  while (index < supplied.length) {
+    const token = supplied[index] ?? "";
+    if (!token.startsWith("-")) {
+      return {
+        ok: false,
+        reason:
+          `search_code: "${token}" is not a ripgrep option. Put the search text in \`pattern\` ` +
+          "and the target in `path`; `flags` carries options only.",
+      };
+    }
+    const check = checkSearchToolOption(token);
+    if (!check.ok) {
+      return { ok: false, reason: `search_code: ${check.reason}` };
+    }
+    flags.push(token);
+    if (!check.consumesValue) {
+      index += 1;
+      continue;
+    }
+    const value = supplied[index + 1];
+    if (value === undefined) {
+      return { ok: false, reason: `search_code: ${token} needs a value.` };
+    }
+    // The CLI's own rule: a dash-leading value in a separate token can be
+    // re-parsed as an option by some ripgrep builds.
+    if (value.startsWith("-") && value !== "-") {
+      return {
+        ok: false,
+        reason:
+          `search_code: the value for ${token} may not start with a dash (${value}). ` +
+          `Use the inline form instead: ${token}=${value}.`,
+      };
+    }
+    flags.push(value);
+    index += 2;
+  }
+
+  // The ONE operand, always a path, always confined. `.` (the project root) when
+  // the caller named no target — the same scope `rg` searches by default.
+  let operand = ".";
+  if (input.path !== undefined && input.path.length > 0) {
+    const confined = confineToRoot(input.root, input.path);
+    if (confined === null) {
+      return { ok: false, reason: `search_code: path escapes the project root: ${input.path}` };
+    }
+    operand = confined;
+  }
+
+  return { ok: true, args: ["ctx", "rg", ...flags, `--regexp=${input.pattern}`, operand] };
+}
+
+/**
  * Wrap `port` so `searchCode` degrades to the subprocess `run`ner when the port
  * has no in-process backing (an `isError` result). The port is still CONSULTED
  * first (preserving the flow-037 behavior/tests); only a failed port result falls
@@ -140,25 +218,24 @@ function withSearchFallback(port: MetaprojectPort, run: KeryxRunner, root: strin
       if (!result.isError) {
         return result;
       }
-      // Flags go BEFORE the pattern: `buildRgCommand` reads options up to the
-      // first operand, and the operand is the pattern.
-      const args = ["ctx", "rg", ...(input.flags ?? []), input.pattern];
-      if (input.path !== undefined) {
-        // Same confinement as the non-port path: this fallback is reachable
-        // from the model whenever the port has no in-process backing, so
-        // leaving it open would defeat the check on the other branch.
-        const confined = confineToRoot(root, input.path);
-        if (confined === null) {
-          return {
-            pattern: input.pattern,
-            path: input.path,
-            output: `search_code: path escapes the project root: ${input.path}`,
-            isError: true,
-          };
-        }
-        args.push(confined);
+      // The SAME builder the no-port branch uses. This fallback is reachable
+      // from the model whenever the port has no in-process backing, so a second,
+      // laxer assembly here would simply be the hole on the other branch.
+      const built = buildSearchArgv({
+        root,
+        pattern: input.pattern,
+        path: input.path,
+        flags: input.flags,
+      });
+      if (!built.ok) {
+        return {
+          pattern: input.pattern,
+          ...(input.path !== undefined ? { path: input.path } : {}),
+          output: built.reason,
+          isError: true,
+        };
       }
-      const normalized = normalizeSearchResult(await run(args));
+      const normalized = normalizeSearchResult(await run(built.args));
       return {
         pattern: input.pattern,
         ...(input.path !== undefined ? { path: input.path } : {}),
@@ -208,29 +285,21 @@ export function builtinMetaprojectTools(
         return pattern.error;
       }
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
-      // Forwarded unvalidated on purpose: `keryx ctx rg` refuses an option that
-      // is not on its allowlist, with a better message than a second copy of the
-      // check here could give — and a second copy is a second thing to drift.
       const rawFlags = input.flags;
       const flags = Array.isArray(rawFlags)
         ? rawFlags.filter((flag): flag is string => typeof flag === "string" && flag.length > 0)
         : [];
-      const args = ["ctx", "rg", ...flags, pattern.value];
-      if (path !== undefined) {
-        // Confine the model-supplied path exactly as `read_file` does. Without
-        // this, `search_code {pattern: ".", path: "<any readable file>"}` returns
-        // every line of that file to the provider — an arbitrary read behind a
-        // tool the policy classifies as read-only and auto-approves.
-        const confined = confineToRoot(root, path);
-        if (confined === null) {
-          return {
-            output: `search_code: path escapes the project root: ${path}`,
-            isError: true,
-          };
-        }
-        args.push(confined);
+      // Validated and assembled by the shared builder. This branch used to
+      // forward `flags` verbatim on the reasoning that `keryx ctx rg` refuses an
+      // unknown option anyway — which was true and beside the point: the options
+      // that matter here are ones the CLI DOES accept, and they change what the
+      // operands mean. "The next layer will catch it" is how the layer that
+      // could not catch it got skipped.
+      const built = buildSearchArgv({ root, pattern: pattern.value, path, flags });
+      if (!built.ok) {
+        return { output: built.reason, isError: true };
       }
-      return normalizeSearchResult(await run(args));
+      return normalizeSearchResult(await run(built.args));
     },
   };
 

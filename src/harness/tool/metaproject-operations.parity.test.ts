@@ -21,7 +21,11 @@ import type { GraphData } from "../../gdgraph/types";
 import { createMetaprojectAdapter } from "./metaproject-adapter";
 import type { MetaprojectPort } from "./metaproject-port";
 import { METAPROJECT_OPERATIONS, toInteractiveTools } from "./metaproject-operations";
-import { forwardedRgOptions, RG_FORWARDED_VALUE_FLAGS } from "../../lib/rg-options";
+import {
+  forwardedRgOptions,
+  RG_FORWARDED_VALUE_FLAGS,
+  SEARCH_TOOL_REJECTED_OPTIONS,
+} from "../../lib/rg-options";
 import { builtinMetaprojectTools } from "./builtin/metaproject-tools";
 
 const REPO_ROOT = path.join(import.meta.dir, "..", "..", "..");
@@ -275,6 +279,13 @@ test("AC2: search_code forwards every ripgrep option `keryx ctx rg` forwards", (
     for (const option of forwarded) {
       const flags = RG_FORWARDED_VALUE_FLAGS.has(option) ? [option, "x"] : [option];
       const result = await searchCode?.invoke(port, { pattern: "needle", flags });
+      if (SEARCH_TOOL_REJECTED_OPTIONS.has(option)) {
+        // Expressed through `pattern`, not through `flags`. Accepting it too
+        // would give the operand two possible meanings, which is precisely the
+        // arbitrary-read channel a review found here.
+        expect(result?.isError, `${option} must be refused in flags`).toBe(true);
+        continue;
+      }
       expect(result?.isError, `search_code must accept ${option}, which the verb forwards`).toBe(false);
     }
     // …and an option the verb refuses, the tool refuses too — parity runs both
@@ -282,6 +293,12 @@ test("AC2: search_code forwards every ripgrep option `keryx ctx rg` forwards", (
     const refused = await searchCode?.invoke(port, { pattern: "needle", flags: ["--pre=/tmp/pwn.sh"] });
     expect(refused?.isError).toBe(true);
     expect(refused?.output ?? "").toContain("unsupported ripgrep option");
+
+    // The regexp capability the rejected options carry is not lost — it is the
+    // `pattern` field, which is where the tool can confine the operand.
+    const viaPattern = await searchCode?.invoke(port, { pattern: "^needle$" });
+    expect(viaPattern?.isError).toBe(false);
+    expect(seen.at(-1)?.pattern).toBe("^needle$");
   })();
 });
 

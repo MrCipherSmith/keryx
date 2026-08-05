@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "bun:test";
+import { validateAgainstSchemaObject } from "../../contracts/validator";
 import type { AffectedOptions, AffectedResult } from "../../gdgraph/affected";
 import type { GdgraphService } from "../../gdgraph/service";
 import type { GraphData } from "../../gdgraph/types";
@@ -156,6 +159,85 @@ test("graphQuery delegates to the fake for orphans and cycles", async () => {
     query: "cycles",
     cycles: [["a", "b", "a"]],
   });
+});
+
+test("memorySearch echoes only filters the frozen result schema declares", async () => {
+  // The widened filter set is passed to the SERVICE, but `filters` on the result
+  // is a schema-constrained field: memory-search-result.schema.json declares it
+  // `additionalProperties: false` with no `semantic`. Echoing it made every
+  // semantic search emit a result that fails its own schema — and nothing
+  // noticed, because nothing validated the result against the schema.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  const { deps } = fakeDeps({
+    search: { schemaVersion: 1, query: "q", results: [], markdownPath: "", jsonPath: "" },
+  });
+  const port = createMetaprojectAdapter(CWD, deps);
+  const result = await port.memorySearch({
+    query: "q",
+    module: "harness",
+    entity: "e",
+    status: "superseded",
+    class: "semantic",
+    asOf: "2026-01-01",
+    limit: 3,
+    semantic: true,
+  });
+
+  expect(result.filters).toEqual({
+    module: "harness",
+    entity: "e",
+    status: "superseded",
+    class: "semantic",
+    asOf: "2026-01-01",
+  });
+  expect(Object.keys(result.filters ?? {})).not.toContain("semantic");
+  expect(Object.keys(result.filters ?? {})).not.toContain("limit");
+
+  const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+  expect(validation.errors).toEqual([]);
+  expect(validation.valid).toBe(true);
+});
+
+test("PRE-EXISTING: the frozen schema's status enum omits real memory statuses", () => {
+  // Found while adding the test above, NOT introduced by this flow: the frozen
+  // memory-search-result schema allows only active/superseded/deprecated, while
+  // the memory module's own MemoryStatus also includes `draft`, `accepted` and
+  // `conflict`. So `memorySearch({status: "accepted"})` — an ordinary query —
+  // echoes a filter its own result schema rejects.
+  //
+  // Recorded rather than fixed: the schema is frozen, and reconciling it means
+  // deciding whether the schema or the module is wrong, which is a change with
+  // consequences beyond this flow. This test fails the day someone reconciles
+  // them, which is the right moment to delete it.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as {
+    properties: { filters: { properties: { status: { enum: string[] } } } };
+  };
+  const allowed = schema.properties.filters.properties.status.enum;
+  expect(allowed).toEqual(["active", "superseded", "deprecated"]);
+  expect(allowed).not.toContain("accepted");
 });
 
 test("memorySearch delegates to the injected memory fake and maps ranked hits", async () => {
