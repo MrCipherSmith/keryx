@@ -5,13 +5,50 @@
   "title": "Harden the harness: close the sandbox escape hatch, wire the mutation scanner, feed the completion gate, surface branching and replay",
   "status": "in-progress",
   "createdAt": "2026-08-05T11:01:14.590Z",
-  "updatedAt": "2026-08-05T11:07:09.429Z",
+  "updatedAt": "2026-08-05T13:31:13.578Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d005b5b86683d7e43177340d933919e8e9c7f139372a1f2aad5754c6f8d4b611",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-05T13:30:57.976Z",
+      "note": "a0b7c760: required:true whenever the resolved posture is restricted, enforced in the adapter at the spawn point; sandbox tests assert blocked with KERYX_SANDBOX_ALLOW_UNSANDBOXED=1"
+    },
+    "AC2": {
+      "at": "2026-08-05T13:30:58.062Z",
+      "note": "a0b7c760: missing-launcher path unchanged — test asserts a non-restricted profile still spawns with the variable set, so AC1 cannot be met by blanket refusal"
+    },
+    "AC3": {
+      "at": "2026-08-05T13:30:58.149Z",
+      "note": "f1a1935e: commands/harness.ts derives scanAvailable from buildHarnessScanner; src/security/harness-scan.test.ts covers the scanner-absent deny"
+    },
+    "AC4": {
+      "at": "2026-08-05T13:30:58.237Z",
+      "note": "f1a1935e: deps.scan runs guardOutput/redactRaw on the runOffline mutation path; harness-scan.test.ts covers one positive secret detection"
+    },
+    "AC5": {
+      "at": "2026-08-05T13:31:06.560Z",
+      "note": "b49163eb: RunDeps.completionRequirements threads requiredGates/requiredEvidenceRefs into evaluateCompletion; run.completion-requirements.test.ts covers a failing ref, a satisfied ref, a failing gate and the empty default"
+    },
+    "AC6": {
+      "at": "2026-08-05T13:31:06.649Z",
+      "note": "2640c872: keryx sessions fork <id> creates a session with parentSessionId set and the source history copied; sessions.fork.test.ts drives the command path and asserts the source is untouched"
+    },
+    "AC7": {
+      "at": "2026-08-05T13:31:06.735Z",
+      "note": "b9f40b93: keryx harness replay --record/--fixture/--write-fixture; harness.replay.test.ts covers a built fixture validating and a tampered fixture reporting a typed mismatch naming transcriptHash"
+    },
+    "AC8": {
+      "at": "2026-08-05T13:31:06.822Z",
+      "note": "bun run check green: 3052 pass, 14 skip, 0 fail; tsc --noEmit clean. No test skipped or weakened for this work"
+    },
+    "AC9": {
+      "at": "2026-08-05T13:31:13.386Z",
+      "note": "Only two README lines widened, both covered: sessions list|fork|export (sessions.fork.test.ts) and harness run|exec|extension|wave|replay (harness.replay.test.ts). The completion-gate and scanning sentences were left as they are — this work makes them true, it does not extend them. cli-reference gained fork and replay entries, replay explicitly stating validate-log and no re-execution"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -35,7 +72,7 @@
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -43,13 +80,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,7 +95,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -92,7 +131,7 @@
       "id": "T6",
       "title": "S2 wire the mutation scanner and derive scanAvailable",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -100,13 +139,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "S3 thread flow requirements into the completion gate",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -114,13 +154,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "S4 surface branching from the CLI",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -128,13 +169,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "S5 surface replay-fixture validation from the CLI",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -142,7 +184,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -212,6 +255,81 @@
       "at": "2026-08-05T11:07:09.429Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-05T11:11:18.719Z",
+      "event": "task-done",
+      "detail": "T6: S2 wire the mutation scanner and derive scanAvailable"
+    },
+    {
+      "at": "2026-08-05T13:17:18.676Z",
+      "event": "task-done",
+      "detail": "T7: S3 thread flow requirements into the completion gate"
+    },
+    {
+      "at": "2026-08-05T13:21:59.609Z",
+      "event": "task-done",
+      "detail": "T8: S4 surface branching from the CLI"
+    },
+    {
+      "at": "2026-08-05T13:28:50.591Z",
+      "event": "task-done",
+      "detail": "T9: S5 surface replay-fixture validation from the CLI"
+    },
+    {
+      "at": "2026-08-05T13:30:57.976Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: a0b7c760: required:true whenever the resolved posture is restricted, enforced in the adapter at the spawn point; sandbox tests assert blocked with KERYX_SANDBOX_ALLOW_UNSANDBOXED=1"
+    },
+    {
+      "at": "2026-08-05T13:30:58.062Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: a0b7c760: missing-launcher path unchanged — test asserts a non-restricted profile still spawns with the variable set, so AC1 cannot be met by blanket refusal"
+    },
+    {
+      "at": "2026-08-05T13:30:58.149Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: f1a1935e: commands/harness.ts derives scanAvailable from buildHarnessScanner; src/security/harness-scan.test.ts covers the scanner-absent deny"
+    },
+    {
+      "at": "2026-08-05T13:30:58.237Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: f1a1935e: deps.scan runs guardOutput/redactRaw on the runOffline mutation path; harness-scan.test.ts covers one positive secret detection"
+    },
+    {
+      "at": "2026-08-05T13:31:06.560Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: b49163eb: RunDeps.completionRequirements threads requiredGates/requiredEvidenceRefs into evaluateCompletion; run.completion-requirements.test.ts covers a failing ref, a satisfied ref, a failing gate and the empty default"
+    },
+    {
+      "at": "2026-08-05T13:31:06.649Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: 2640c872: keryx sessions fork <id> creates a session with parentSessionId set and the source history copied; sessions.fork.test.ts drives the command path and asserts the source is untouched"
+    },
+    {
+      "at": "2026-08-05T13:31:06.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: b9f40b93: keryx harness replay --record/--fixture/--write-fixture; harness.replay.test.ts covers a built fixture validating and a tampered fixture reporting a typed mismatch naming transcriptHash"
+    },
+    {
+      "at": "2026-08-05T13:31:06.822Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun run check green: 3052 pass, 14 skip, 0 fail; tsc --noEmit clean. No test skipped or weakened for this work"
+    },
+    {
+      "at": "2026-08-05T13:31:13.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Only two README lines widened, both covered: sessions list|fork|export (sessions.fork.test.ts) and harness run|exec|extension|wave|replay (harness.replay.test.ts). The completion-gate and scanning sentences were left as they are — this work makes them true, it does not extend them. cli-reference gained fork and replay entries, replay explicitly stating validate-log and no re-execution"
+    },
+    {
+      "at": "2026-08-05T13:31:13.483Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-05T13:31:13.578Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }

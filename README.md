@@ -188,7 +188,9 @@ What is in it today:
   change the loop, the tools or the policy.
 - **Durable sessions, per project.** JSONL transcripts on disk, resume across a
   process restart, and context compaction that keeps the full archive.
-  `/resume`, `/compact`, `/new` — and `keryx sessions list|export`.
+  `/resume`, `/compact`, `/new`, and `keryx sessions list|fork|export` — `fork`
+  branches a conversation into a new session that keeps its ancestry, without
+  editing a transcript by hand.
 - **A policy engine with three answers, not two.** `allow`, `ask`, `deny` over
   seven risk classes — read, write, shell, network, credential, delegate,
   destructive — with path and command rules underneath. Shell and destructive
@@ -205,7 +207,7 @@ What is in it today:
 - **Completion you can audit.** The completion gate blocks on missing evidence: a
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
-- **Four doors.** The CLI (`keryx harness run|exec|extension|wave`), JSONL/RPC
+- **Four doors.** The CLI (`keryx harness run|exec|extension|wave|replay`), JSONL/RPC
   and the loopback HTTP entry (`keryx serve`) share one execution loop; the
   interactive TUI runs its own on the same tool registry and the same policy.
 

@@ -11,3 +11,18 @@
 - 2026-08-05T11:03:04.261Z - started
 - 2026-08-05T11:07:09.257Z - task-done: T5: S1 sandbox: restricted profile fails closed regardless of the escape hatch
 - 2026-08-05T11:07:09.429Z - task-done: T1: Collect remaining context
+- 2026-08-05T11:11:18.719Z - task-done: T6: S2 wire the mutation scanner and derive scanAvailable
+- 2026-08-05T13:17:18.676Z - task-done: T7: S3 thread flow requirements into the completion gate
+- 2026-08-05T13:21:59.609Z - task-done: T8: S4 surface branching from the CLI
+- 2026-08-05T13:28:50.591Z - task-done: T9: S5 surface replay-fixture validation from the CLI
+- 2026-08-05T13:30:57.976Z - ac-confirmed: AC1: a0b7c760: required:true whenever the resolved posture is restricted, enforced in the adapter at the spawn point; sandbox tests assert blocked with KERYX_SANDBOX_ALLOW_UNSANDBOXED=1
+- 2026-08-05T13:30:58.062Z - ac-confirmed: AC2: a0b7c760: missing-launcher path unchanged — test asserts a non-restricted profile still spawns with the variable set, so AC1 cannot be met by blanket refusal
+- 2026-08-05T13:30:58.149Z - ac-confirmed: AC3: f1a1935e: commands/harness.ts derives scanAvailable from buildHarnessScanner; src/security/harness-scan.test.ts covers the scanner-absent deny
+- 2026-08-05T13:30:58.237Z - ac-confirmed: AC4: f1a1935e: deps.scan runs guardOutput/redactRaw on the runOffline mutation path; harness-scan.test.ts covers one positive secret detection
+- 2026-08-05T13:31:06.560Z - ac-confirmed: AC5: b49163eb: RunDeps.completionRequirements threads requiredGates/requiredEvidenceRefs into evaluateCompletion; run.completion-requirements.test.ts covers a failing ref, a satisfied ref, a failing gate and the empty default
+- 2026-08-05T13:31:06.649Z - ac-confirmed: AC6: 2640c872: keryx sessions fork <id> creates a session with parentSessionId set and the source history copied; sessions.fork.test.ts drives the command path and asserts the source is untouched
+- 2026-08-05T13:31:06.735Z - ac-confirmed: AC7: b9f40b93: keryx harness replay --record/--fixture/--write-fixture; harness.replay.test.ts covers a built fixture validating and a tampered fixture reporting a typed mismatch naming transcriptHash
+- 2026-08-05T13:31:06.822Z - ac-confirmed: AC8: bun run check green: 3052 pass, 14 skip, 0 fail; tsc --noEmit clean. No test skipped or weakened for this work
+- 2026-08-05T13:31:13.386Z - ac-confirmed: AC9: Only two README lines widened, both covered: sessions list|fork|export (sessions.fork.test.ts) and harness run|exec|extension|wave|replay (harness.replay.test.ts). The completion-gate and scanning sentences were left as they are — this work makes them true, it does not extend them. cli-reference gained fork and replay entries, replay explicitly stating validate-log and no re-execution
+- 2026-08-05T13:31:13.483Z - task-done: T2: Implement per plan
+- 2026-08-05T13:31:13.578Z - task-done: T3: Add/adjust tests and make them pass
