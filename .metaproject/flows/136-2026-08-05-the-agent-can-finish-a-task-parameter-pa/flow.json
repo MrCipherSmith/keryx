@@ -3,9 +3,9 @@
   "id": "136",
   "slug": "the-agent-can-finish-a-task-parameter-pa",
   "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-05T19:40:33.840Z",
-  "updatedAt": "2026-08-05T20:15:11.781Z",
+  "updatedAt": "2026-08-05T20:17:49.443Z",
   "source": {
     "type": "description",
     "ref": null
@@ -62,7 +62,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/253"
   },
   "tasks": [
     {
@@ -394,6 +394,11 @@
       "at": "2026-08-05T20:15:11.781Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-05T20:17:49.443Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/253"
     }
   ]
 }
