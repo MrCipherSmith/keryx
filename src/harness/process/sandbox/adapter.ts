@@ -10,6 +10,17 @@
 // a `required` profile (or `failIfUnavailable`, default true) yields a
 // `spawn-error` observation — which `runContainedProcess` classifies as
 // `blocked` — instead of silently running unsandboxed.
+//
+// A `restricted` network posture fails closed unconditionally, and that is not
+// the same judgement call as the rest of the flag. `KERYX_SANDBOX_ALLOW_UNSANDBOXED`
+// exists so a host without bubblewrap can still run: containment is weaker than
+// asked for, the operator set the variable, they know the trade. A domain
+// allowlist is different. By the time this adapter is reached the proxy is
+// already listening and `HTTP(S)_PROXY` is already merged into the command env
+// (`commands/harness.ts`), so falling through to an unsandboxed spawn hands the
+// process an allowlist proxy it is free to ignore — no egress restriction at all,
+// wearing the shape of one. That is not weaker than the request, it is the
+// opposite of it, so no environment variable reaches it.
 
 import { createHash } from "node:crypto";
 import type { ContainedCommand, ProcessAdapter, ProcessObservation } from "../executor";
@@ -54,7 +65,14 @@ export class SandboxedProcessAdapter implements ProcessAdapter {
 
   spawn(command: ContainedCommand): ProcessObservation {
     const { profile, inner, platform, launcherAvailable, bwrapPath } = this.opts;
-    const failClosed = profile.required || (this.opts.failIfUnavailable ?? true);
+    // `network === "restricted"` is checked here rather than only on the profile
+    // because `setupNetworkRun` spreads an incoming profile to attach the proxy
+    // and never sets `required` — enforcing the invariant at the single spawn
+    // boundary means no construction path can route around it.
+    const failClosed =
+      profile.required ||
+      profile.network === "restricted" ||
+      (this.opts.failIfUnavailable ?? true);
 
     // Escape hatch: explicit full access ⇒ no containment.
     if (profile.mode === "danger-full-access") {
