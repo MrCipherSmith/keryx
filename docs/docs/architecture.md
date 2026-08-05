@@ -235,10 +235,19 @@ directions.**
 `tool/metaproject-operations.ts` is the only bridge, projecting one descriptor
 into both.
 
-**And no shipped path registers a tool.** Both production executors are
-refusals — `src/commands/harness.ts:247` ("Release 0 CLI runs register no
-tools") and `src/lib/serve-turn.ts:313` ("Remote turns register no tools in this
-slice"). `keryx harness run` and `keryx serve` are single text turns today.
+**One shipped path registers a durable tool, and only when asked.**
+`keryx harness run --tools` registers the read-only metaproject operations and
+executes the ones the model names, reporting each result to the caller. Its
+executor is a real one; without the flag the registry is empty and the executor
+is the refusal it always was. `keryx serve` still registers nothing (see
+`src/lib/serve-turn.ts`, "Remote turns register no tools in this slice").
+
+Both are still **single provider turns**, which is why `--tools` is opt-in: the
+loop executes a tool and reports it, but never appends the result to the
+messages and never makes a second request. So the row above stays true in the
+sense that matters — the durable system returns an `outputHash` and cannot feed
+content back to a live model — and the reason no shipped path did this until now
+was the loop's shape, not a missing executor.
 
 So "the policy engine gates the tools your agent runs" mixes the first system's
 code with the second system's behaviour. Describe them separately, and cite

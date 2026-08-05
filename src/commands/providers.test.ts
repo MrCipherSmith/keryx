@@ -1,11 +1,19 @@
 import { expect, test } from "bun:test";
 import {
+  NON_REGISTRY_PROVIDERS,
   OPENAI_COMPAT_PROVIDERS,
+  credentialEnvKeyFor,
   fetchOpenAiCompatModels,
   fetchOpenAiCompatModelsDetailed,
+  isKnownProvider,
+  knownProviderNames,
   providerByName,
   resolveModelsForPicker,
 } from "./providers";
+// The PRODUCTION default resolver. AC5 is about what keryx actually hands a
+// caller who named no model, and that is this function — not a helper written
+// beside the registry for a test to call.
+import { defaultModelFor } from "../harness/provider/single-turn";
 
 test("registry lists the flow-085 providers with base URL + env key", () => {
   const names = OPENAI_COMPAT_PROVIDERS.map((p) => p.name);
@@ -41,6 +49,101 @@ test("Z.AI curated fallbacks include current GLM-5.x / Coding Plan models", () =
   expect(coding?.models).toContain("glm-4.7");
   // Newest first so a fallback-only picker surfaces 5.2 without scrolling.
   expect(coding?.models[0]).toBe("glm-5.2");
+});
+
+// --- flow 135 / AC5: declared model ids only ---------------------------------
+
+test("AC5: the PRODUCTION default resolver never names an id outside the provider's set", () => {
+  // Asserted through `defaultModelFor`, the function every model-backed command
+  // actually calls, because that is the only place a bad default can reach a
+  // user. It consults a DEFAULT_MODELS override map BEFORE the registry, so an
+  // entry added there for a registry provider — the realistic way this breaks —
+  // fails here. An earlier version of this test asked the registry for its own
+  // `models[0]` and compared it to `models`, which cannot fail and guarded
+  // nothing.
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    const resolved = defaultModelFor(provider.name);
+    expect(resolved.length).toBeGreaterThan(0);
+    expect(resolved).not.toBe("unknown");
+    expect(provider.models).toContain(resolved);
+    // No empty or duplicated ids: both make "the provider declares this" false
+    // for at least one entry in the list.
+    expect(new Set(provider.models).size).toBe(provider.models.length);
+    expect(provider.models.every((id) => id.trim().length > 0)).toBe(true);
+  }
+});
+
+test("AC5: every entry states where its list came from and how old it is", () => {
+  // The honest half of the criterion. A local test can prove the default is in
+  // this entry's list; it cannot prove the list matches what the gateway
+  // publishes today — that needs a credential and a network call.
+  //
+  // So `listedOn` is when THIS REPOSITORY last changed the list, not when the
+  // field was added, and `checkedAgainstProvider` is false unless that change
+  // actually compared it to the provider. The first version of this field was a
+  // free-text date and all eight entries got stamped with the day the field was
+  // introduced, which made 16-day-old lists read as verified that morning.
+  const today = "2026-08-05";
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    const { source, listedOn, checkedAgainstProvider } = provider.modelsProvenance;
+    expect(source.trim().length).toBeGreaterThan(0);
+    expect(listedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(listedOn <= today).toBe(true);
+    // A claim of having checked must cite the evidence, not just assert itself.
+    if (checkedAgainstProvider) {
+      expect(source).toMatch(/\/models|run-\d{4}-\d{2}-\d{2}\.md/);
+    }
+  }
+});
+
+test("AC5: only the entry this change actually verified claims to have been verified", () => {
+  // Pins the correction itself. DeepSeek's list was compared against the API's
+  // `/models` output recorded in the benchmark; the other seven were not.
+  //
+  // Deliberately does NOT pin the other seven to 2026-07-20. Someone refreshing
+  // groq's list next month should edit groq's entry — not this test. A test that
+  // polices provenance and also freezes it makes itself an obstacle to the thing
+  // it is asking for, and the dates it froze would be the first thing edited
+  // away. The load-bearing assertion is the one above: a claim of having checked
+  // must cite evidence.
+  const checked = OPENAI_COMPAT_PROVIDERS.filter((p) => p.modelsProvenance.checkedAgainstProvider);
+  expect(checked.map((p) => p.name)).toEqual(["deepseek"]);
+  expect(providerByName("deepseek")?.modelsProvenance.listedOn).toBe("2026-08-05");
+});
+
+test("AC5: DeepSeek names the ids the API lists, not the alias it merely answers on", () => {
+  // D5, pinned. `deepseek-chat` still responds and is not in the API's model
+  // list, which is exactly why it survived as keryx's default for this provider.
+  const deepseek = providerByName("deepseek");
+  expect(deepseek?.models).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
+  expect(deepseek?.models).not.toContain("deepseek-chat");
+  expect(defaultModelFor("deepseek")).toBe("deepseek-v4-flash");
+});
+
+// --- flow 135 / AC2: one source of truth for which providers exist -----------
+
+test("knownProviderNames is the built-ins plus every registry entry, with no duplicates", () => {
+  const names = knownProviderNames();
+  expect(names.slice(0, NON_REGISTRY_PROVIDERS.length)).toEqual([...NON_REGISTRY_PROVIDERS]);
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    expect(names).toContain(provider.name);
+    expect(isKnownProvider(provider.name)).toBe(true);
+  }
+  expect(new Set(names).size).toBe(names.length);
+  expect(isKnownProvider("nope")).toBe(false);
+  expect(isKnownProvider("")).toBe(false);
+});
+
+test("credentialEnvKeyFor names a key for every provider that needs one and none for the rest", () => {
+  expect(credentialEnvKeyFor("anthropic")).toBe("ANTHROPIC_API_KEY");
+  expect(credentialEnvKeyFor("fake")).toBeUndefined();
+  expect(credentialEnvKeyFor("ollama")).toBeUndefined();
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    expect(credentialEnvKeyFor(provider.name)).toBe(provider.envKey);
+  }
+  // An unknown name gets no key, so a caller cannot read a credential decision
+  // out of a provider that was never accepted in the first place.
+  expect(credentialEnvKeyFor("nope")).toBeUndefined();
 });
 
 test("providerByName returns undefined for a non-registry name", () => {

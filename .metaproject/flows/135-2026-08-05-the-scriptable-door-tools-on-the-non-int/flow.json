@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 2,
+  "id": "135",
+  "slug": "the-scriptable-door-tools-on-the-non-int",
+  "title": "The scriptable door: tools on the non-interactive path, providers from the registry, declared model ids",
+  "status": "implemented",
+  "createdAt": "2026-08-05T19:40:27.454Z",
+  "updatedAt": "2026-08-05T20:48:28.896Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6be9d2f8eda31c2b36107e8e0139da543b5d9d817078ad32e24508d125a1cf27",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-05T20:48:15.862Z",
+      "note": "DEVIATION, stated not silent: met behind an opt-in flag. `keryx harness run --tools` registers the read-only metaproject tools and executes them end to end; the default is OFF because runOffline takes a single provider turn, so twelve advertised tools whose results never return degrade the default path. Evidence: harness.scriptable-door.test.ts asserts a scripted graph_affected call runs and its output appears under `tools`; that exactly one provider stream is opened; that no tool result reaches the messages; and that without the flag nothing is registered or advertised. Frozen criterion text unchanged."
+    },
+    "AC2": {
+      "at": "2026-08-05T20:48:28.075Z",
+      "note": "Test iterates OPENAI_COMPAT_PROVIDERS; no literal list in the test. Each declared provider reaches the credential gate rather than the usage message."
+    },
+    "AC3": {
+      "at": "2026-08-05T20:48:28.236Z"
+    },
+    "AC4": {
+      "at": "2026-08-05T20:48:28.402Z",
+      "note": "cli-reference.md corrected in this PR; also architecture.md, modules.md, complete-setup-and-agent-workflows.md and the cli.ts usage line. Tests assert the documented tool list equals METAPROJECT_OPERATIONS (set equality) and that every registry provider is named. check:doc-links exit 0, 639 links, 0 broken."
+    },
+    "AC5": {
+      "at": "2026-08-05T20:48:28.569Z",
+      "note": "Asserted over defaultModelFor, the production resolver, which consults DEFAULT_MODELS before the registry. DeepSeek pinned to the two declared ids. Provenance is structured (source/listedOn/checkedAgainstProvider) with only deepseek claiming a check. LIMIT: no offline test can prove a curated list matches what a gateway publishes today; that is the criterion's escape clause."
+    },
+    "AC6": {
+      "at": "2026-08-05T20:48:28.732Z",
+      "note": "Per-provider abort enumerated from the registry, fetch spy asserts zero calls; credential-free set pinned to exactly [fake, ollama]. Additionally --base-url can no longer redirect a credential-bearing provider. Reviewer verified independently by mutation."
+    },
+    "AC7": {
+      "at": "2026-08-05T20:48:28.896Z",
+      "note": "bun run check exit 0: 3107 pass, 14 skip, 0 fail. The 14 skips are pre-existing; none added or weakened."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/252"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "T1 register read-only tools on harness run",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "T2 provider validation from OPENAI_COMPAT_PROVIDERS",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "T3 stop defaulting to an undeclared model id",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "T4 tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "T5 CLI reference correction and draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-05T19:40:27.454Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-05T19:41:04.453Z",
+      "event": "task-added",
+      "detail": "T5: T1 register read-only tools on harness run"
+    },
+    {
+      "at": "2026-08-05T19:41:04.540Z",
+      "event": "task-added",
+      "detail": "T6: T2 provider validation from OPENAI_COMPAT_PROVIDERS"
+    },
+    {
+      "at": "2026-08-05T19:41:04.630Z",
+      "event": "task-added",
+      "detail": "T7: T3 stop defaulting to an undeclared model id"
+    },
+    {
+      "at": "2026-08-05T19:41:04.714Z",
+      "event": "task-added",
+      "detail": "T8: T4 tests"
+    },
+    {
+      "at": "2026-08-05T19:41:04.800Z",
+      "event": "task-added",
+      "detail": "T9: T5 CLI reference correction and draft PR"
+    },
+    {
+      "at": "2026-08-05T19:41:52.137Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-05T19:41:52.223Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-05T19:52:39.407Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-05T19:52:39.504Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-05T19:52:39.604Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-05T19:52:39.706Z",
+      "event": "task-done",
+      "detail": "T5: T1 register read-only tools on harness run"
+    },
+    {
+      "at": "2026-08-05T19:52:39.800Z",
+      "event": "task-done",
+      "detail": "T6: T2 provider validation from OPENAI_COMPAT_PROVIDERS"
+    },
+    {
+      "at": "2026-08-05T19:52:39.896Z",
+      "event": "task-done",
+      "detail": "T7: T3 stop defaulting to an undeclared model id"
+    },
+    {
+      "at": "2026-08-05T19:52:39.994Z",
+      "event": "task-done",
+      "detail": "T8: T4 tests"
+    },
+    {
+      "at": "2026-08-05T19:58:16.722Z",
+      "event": "task-done",
+      "detail": "T9: T5 CLI reference correction and draft PR"
+    },
+    {
+      "at": "2026-08-05T19:58:16.819Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-05T19:58:36.833Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/252"
+    },
+    {
+      "at": "2026-08-05T20:48:15.862Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: DEVIATION, stated not silent: met behind an opt-in flag. `keryx harness run --tools` registers the read-only metaproject tools and executes them end to end; the default is OFF because runOffline takes a single provider turn, so twelve advertised tools whose results never return degrade the default path. Evidence: harness.scriptable-door.test.ts asserts a scripted graph_affected call runs and its output appears under `tools`; that exactly one provider stream is opened; that no tool result reaches the messages; and that without the flag nothing is registered or advertised. Frozen criterion text unchanged."
+    },
+    {
+      "at": "2026-08-05T20:48:28.075Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Test iterates OPENAI_COMPAT_PROVIDERS; no literal list in the test. Each declared provider reaches the credential gate rather than the usage message."
+    },
+    {
+      "at": "2026-08-05T20:48:28.236Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-05T20:48:28.402Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: cli-reference.md corrected in this PR; also architecture.md, modules.md, complete-setup-and-agent-workflows.md and the cli.ts usage line. Tests assert the documented tool list equals METAPROJECT_OPERATIONS (set equality) and that every registry provider is named. check:doc-links exit 0, 639 links, 0 broken."
+    },
+    {
+      "at": "2026-08-05T20:48:28.569Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Asserted over defaultModelFor, the production resolver, which consults DEFAULT_MODELS before the registry. DeepSeek pinned to the two declared ids. Provenance is structured (source/listedOn/checkedAgainstProvider) with only deepseek claiming a check. LIMIT: no offline test can prove a curated list matches what a gateway publishes today; that is the criterion's escape clause."
+    },
+    {
+      "at": "2026-08-05T20:48:28.733Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Per-provider abort enumerated from the registry, fetch spy asserts zero calls; credential-free set pinned to exactly [fake, ollama]. Additionally --base-url can no longer redirect a credential-bearing provider. Reviewer verified independently by mutation."
+    },
+    {
+      "at": "2026-08-05T20:48:28.896Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun run check exit 0: 3107 pass, 14 skip, 0 fail. The 14 skips are pre-existing; none added or weakened."
+    }
+  ]
+}

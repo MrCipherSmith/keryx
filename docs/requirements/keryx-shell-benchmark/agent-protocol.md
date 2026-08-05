@@ -28,7 +28,7 @@ Interactive, so the TUI is exercised and screenshots show what a user sees:
 ```bash
 git -C <target> worktree add <run-dir> <commit>
 cd <run-dir>
-keryx shell --provider deepseek --model deepseek-chat        # keryx-deepseek
+keryx shell --provider deepseek --model deepseek-v4-flash    # keryx-deepseek
 keryx shell --provider ollama  --model gemma4-coder:latest   # keryx-gemma
 ```
 
@@ -40,7 +40,7 @@ session is drivable from a pipe and yields a clean transcript:
 
 ```bash
 printf '%s\n/exit\n' "$(cat prompt.txt)" \
-  | keryx shell --no-tui --provider deepseek --model deepseek-chat \
+  | keryx shell --no-tui --provider deepseek --model deepseek-v4-flash \
   | tee transcript.txt
 ```
 
