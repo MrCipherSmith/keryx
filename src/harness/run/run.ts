@@ -141,6 +141,43 @@ export interface RunDeps {
    * is the production one.
    */
   scan?: (content: string) => ScanResult;
+  /**
+   * OPTIONAL completion requirements supplied by the caller (flow 134 / S3).
+   *
+   * The completion gate has always evaluated `requiredGates` and
+   * `requiredEvidenceRefs`, but this loop handed it two empty arrays that no
+   * caller could reach. Two of the gate's three conditions were therefore
+   * vacuous: a run passed on "a final message and no undisposed blocker", which
+   * is exactly the evidence-free completion the gate exists to reject.
+   *
+   * These live on `RunDeps` rather than on `HarnessRunInput` on purpose. The
+   * input document mirrors a frozen schema with `additionalProperties: false`
+   * and already carries the one documented local-only extension it is allowed
+   * (`credentialRef`); the RPC transport round-trips that document through
+   * JSON, so a second and third off-schema key would either be rejected there
+   * or silently dropped — a requirement that vanishes in transit is worse than
+   * no requirement at all. Deps are the in-process seam, and the caller that
+   * knows a flow's frozen acceptance criteria is in-process by construction.
+   *
+   * Absent ⇒ both lists are empty, i.e. exactly the previous behaviour, so an
+   * ad-hoc run with no flow behind it does not start failing.
+   */
+  completionRequirements?: CompletionRequirements;
+}
+
+/**
+ * Caller-stated completion requirements for one run (flow 134 / S3).
+ *
+ * `requiredGates` names verification gates that must report `pass`.
+ * `requiredEvidenceRefs` names evidence ids that must be present among the ones
+ * the run records; a missing ref fails the gate. Refs are only nameable by a
+ * caller that knows them ahead of time — a parent passing a child run's
+ * `evidenceId`, or a deterministic id sequence — which is the case this exists
+ * for. Naming an id the run cannot mint is a failing requirement, by design.
+ */
+export interface CompletionRequirements {
+  requiredGates?: readonly RequiredGate[];
+  requiredEvidenceRefs?: readonly string[];
 }
 
 /**
@@ -439,12 +476,17 @@ export async function runOffline(
   }
 
   // --- Completion gate (S4): the single authority on whether the run passed. ---
-  const requiredGates: RequiredGate[] = [];
+  // The two requirement lists come from the caller (flow 134 / S3); absent ⇒
+  // empty, which is the pre-S3 behaviour.
+  const requiredGates: RequiredGate[] = [...(deps.completionRequirements?.requiredGates ?? [])];
+  const requiredEvidenceRefs: string[] = [
+    ...(deps.completionRequirements?.requiredEvidenceRefs ?? []),
+  ];
   const gate = evaluateCompletion(
     {
       runId,
       requiredGates,
-      requiredEvidenceRefs: [],
+      requiredEvidenceRefs,
       presentEvidenceIds: uniqueInOrder(presentEvidenceIds),
       undisposedBlockerIds: uniqueInOrder(blockerIds),
       finalMessageEmitted,
@@ -568,6 +610,10 @@ function earlyTermination(
 ): RunResult {
   const runId = `run-${sha256(reason).slice(0, 32)}`;
   const evidenceId = deps.idSeq();
+  // Deliberately NOT carrying `deps.completionRequirements` (flow 134 / S3):
+  // the run never started, so no requirement was given a chance to be met.
+  // Reporting them as unmet would add noise to a verdict the startup blocker
+  // has already decided.
   const gate = evaluateCompletion(
     {
       runId,
