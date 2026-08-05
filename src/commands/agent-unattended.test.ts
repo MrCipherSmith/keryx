@@ -182,7 +182,7 @@ test("BLOCKER 1: the real shell tool cannot delete the graph index unattended", 
     // delete `.metaproject/data/gdgraph` with nobody asked.
     const { io, results } = unattendedIo({
       profile: "monitored-trusted-local",
-      allow: ["bun test*"],
+      allow: ["bun test"],
     });
     await turn(tools, shellExecScript("rm -rf .metaproject/data/gdgraph"), io);
 
@@ -206,7 +206,7 @@ test("BLOCKER 1: benchmark case C1 (`git clean -fdx`) is refused and deletes not
     const tools = [shellExecTool(project.root, realRunner(project.root))];
     const { io, results } = unattendedIo({
       profile: "monitored-trusted-local",
-      allow: ["git status*"],
+      allow: ["git status"],
     });
     await turn(tools, shellExecScript("git clean -fdx"), io);
 
@@ -225,7 +225,7 @@ test("BLOCKER 1: `rm -rf <project subdir>` is refused and the directory survives
     const tools = [shellExecTool(project.root, realRunner(project.root))];
     const { io, results } = unattendedIo({
       profile: "monitored-trusted-local",
-      allow: ["bun test*"],
+      allow: ["bun test"],
     });
     await turn(tools, shellExecScript("rm -rf src"), io);
 
@@ -263,7 +263,7 @@ test("BLOCKER 1: none of the review's escapes execute, and each says why", async
     ];
     const { io, results } = unattendedIo({
       profile: "monitored-trusted-local",
-      allow: ["bun test*", "git status*"],
+      allow: ["bun test", "git status"],
     });
     await turn(tools, shellExecScript(command), io);
 
@@ -304,7 +304,7 @@ test("managed flow state cannot be overwritten unattended", async () => {
     const tools = [shellExecTool(project.root, realRunner(project.root))];
     const { io, results } = unattendedIo({
       profile: "monitored-trusted-local",
-      allow: ["echo hello*"],
+      allow: ["echo hello"],
     });
     await turn(tools, shellExecScript("echo '{}' > .metaproject/flows/136-x/flow.json"), io);
 
@@ -418,7 +418,7 @@ test("AC6: a destructive-class tool is refused under a shell-allowing profile an
     };
     const { io, results, approvalsAsked } = unattendedIo({
       profile: "monitored-trusted-local",
-      allow: ["bun test*"],
+      allow: ["bun test"],
     });
     await turn(
       [deleteIndex],

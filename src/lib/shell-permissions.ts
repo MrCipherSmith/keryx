@@ -89,6 +89,25 @@ const PREFIX_BANNED_MUTATORS: ReadonlySet<string> = new Set([
   "rm", "rmdir", "unlink", "mv", "cp", "shred", "truncate", "ln",
 ]);
 
+/**
+ * Category of a command word that must never head a wildcard grant, or
+ * `undefined` when the word is ordinary.
+ *
+ * Exported because the unattended posture needs a STRICTER rule over the same
+ * vocabulary: {@link bannedPrefixGrant} only fires when the remainder is pure
+ * wildcard, so `bash -c *` and `bun x*` slip past it. That is tolerable for a
+ * saved permission a human chose at a prompt, and not tolerable for a run with
+ * no human in it. Sharing the word lists rather than copying them keeps the two
+ * rules disagreeing about strictness and never about vocabulary.
+ */
+export function bannedCommandWord(word: string): "interpreter" | "reader" | "mutator" | undefined {
+  const clean = (word.replace(/\*+$/, "").split("/").pop() ?? "").toLowerCase();
+  if (PREFIX_BANNED.has(clean)) return "interpreter";
+  if (PREFIX_BANNED_READERS.has(clean)) return "reader";
+  if (PREFIX_BANNED_MUTATORS.has(clean)) return "mutator";
+  return undefined;
+}
+
 /** Reason a pattern was refused (never silently dropped). */
 export interface PatternRejection {
   pattern: string;

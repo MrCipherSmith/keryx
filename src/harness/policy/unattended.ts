@@ -42,7 +42,11 @@ import { decide } from "./engine";
 import { isLocalProfileName, type LocalProfileName, resolveLocalProfile } from "./profiles";
 import type { PolicyDecision, PolicyDeps } from "./types";
 import type { ToolRisk } from "../tool/types";
-import { isShellCommandAllowed, validateShellPattern } from "../../lib/shell-permissions";
+import {
+  bannedCommandWord,
+  isShellCommandAllowed,
+  validateShellPattern,
+} from "../../lib/shell-permissions";
 
 /** The launch-time flag that declares an unattended run. */
 export const UNATTENDED_FLAG = "--unattended";
@@ -70,6 +74,103 @@ export interface UnattendedPosture {
    * than a broken one.
    */
   allow: readonly string[];
+}
+
+/**
+ * Wrappers whose first token says nothing about what will run, beyond the set
+ * `shell-permissions.ts` already knows about.
+ *
+ * `keryx` is here because of us: this repository's own agent instructions tell
+ * models to route commands through `keryx ctx run -- …`, so `keryx *` is the
+ * pattern an operator here is most likely to write — and a review used it to run
+ * `keryx ctx run -- rm -rf .metaproject/data/gdgraph`, `keryx ctx run -- sh -c …`
+ * and `keryx ctx read /etc/passwd`. A CLI with a run-anything verb is an
+ * interpreter with a longer name.
+ */
+const UNATTENDED_BANNED_WRAPPERS: ReadonlySet<string> = new Set([
+  "keryx",
+  "bunx",
+  "uvx",
+  "just",
+  "task",
+  "rake",
+  "mise",
+  "tox",
+  "hatch",
+  "pdm",
+  "poetry",
+  "pipenv",
+  "nx",
+  "turbo",
+  "lerna",
+]);
+
+/**
+ * Validate one `--unattended-allow` pattern. STRICTER than
+ * {@link validateShellPattern}, which it runs first.
+ *
+ * The base validator is calibrated for a grant a human chose at a prompt. Three
+ * classes walked straight through it into a run with no human at all, and a
+ * review executed 14 of 16 known-bad commands through the first of them:
+ *
+ *  1. A wildcard-only command word. `bannedPrefixGrant` strips the trailing
+ *     wildcard, is left with `""`, matches no banned word and returns ok — so
+ *     `*`, `**`, `?*` and `l?*` were accepted, and `*` matches everything.
+ *  2. An interpreter with any argument. The ban fires only when the remainder is
+ *     pure wildcard, so `bash -c *`, `node -e*`, `bun x*`, `git -c*`,
+ *     `nice sh*` and `find . -name*` were accepted.
+ *  3. A wrapper with a run-anything verb that the base vocabulary omits —
+ *     `keryx *` above all.
+ *
+ * The rules below are blunt on purpose. A wildcard is only available on a
+ * command word that is not an execution wrapper; everything else has to be named
+ * exactly. That costs convenience, and it is the cost of a grant no one is
+ * watching being honoured.
+ */
+export function validateUnattendedPattern(
+  pattern: string,
+): { ok: true } | { ok: false; reason: string } {
+  const base = validateShellPattern(pattern);
+  if (!base.ok) {
+    return base;
+  }
+  const trimmed = pattern.trim();
+  const firstToken = trimmed.split(/\s+/)[0] ?? "";
+
+  if (/[*?]/.test(firstToken)) {
+    return {
+      ok: false,
+      reason:
+        `the command word ("${firstToken}") may not contain a wildcard — a pattern that does not ` +
+        "name the program it permits does not constrain what runs",
+    };
+  }
+  if (!/[A-Za-z0-9]/.test(firstToken)) {
+    return { ok: false, reason: `"${firstToken}" is not a command word` };
+  }
+
+  const word = (firstToken.split("/").pop() ?? "").toLowerCase();
+  if (/[*?]/.test(trimmed)) {
+    const category = bannedCommandWord(word);
+    if (category !== undefined) {
+      return {
+        ok: false,
+        reason:
+          `\`${trimmed}\` is a wildcard grant headed by ${word}, which is an ${category === "interpreter" ? "interpreter or wrapper" : category === "reader" ? "arbitrary file reader" : "arbitrary file mutator"}. ` +
+          `Its arguments decide what runs, so no wildcard after it is safe. Name the exact command instead (\`${trimmed.replace(/[*?]+/g, "").trim()} …\`).`,
+      };
+    }
+    if (UNATTENDED_BANNED_WRAPPERS.has(word)) {
+      return {
+        ok: false,
+        reason:
+          `\`${trimmed}\` is a wildcard grant headed by ${word}, which can run an arbitrary ` +
+          "command through one of its own subcommands. Name the exact command instead.",
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 /** Parse outcome: a posture, nothing (flag absent), or a refusal to guess. */
@@ -124,7 +225,18 @@ export function parseUnattendedFlag(args: readonly string[]): UnattendedFlagResu
       if (pattern.trim().length === 0) {
         return { kind: "error", message: `${UNATTENDED_ALLOW_FLAG} needs a command pattern.` };
       }
-      const verdict = validateShellPattern(pattern);
+      // `--unattended-allow --provider` used to store "--provider" as a grant
+      // and swallow the flag behind it, so the operator got a posture and a
+      // provider selection they did not ask for.
+      if (!inline && pattern.startsWith("-")) {
+        return {
+          kind: "error",
+          message:
+            `${UNATTENDED_ALLOW_FLAG} needs a command pattern, but the next argument is the flag ` +
+            `"${pattern}". Quote the pattern, or use ${UNATTENDED_ALLOW_FLAG}=<pattern>.`,
+        };
+      }
+      const verdict = validateUnattendedPattern(pattern);
       if (!verdict.ok) {
         return {
           kind: "error",

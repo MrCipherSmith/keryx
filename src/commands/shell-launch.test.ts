@@ -184,12 +184,12 @@ test("the argv allowlist reaches the posture, and an over-broad one is refused",
   const withAllow = parseShellCliFlags([
     "--unattended=monitored-trusted-local",
     "--unattended-allow",
-    "bun test*",
-    "--unattended-allow=git status*",
+    "bun test",
+    "--unattended-allow=ls src*",
   ]);
   expect(withAllow.unattended).toEqual({
     profile: "monitored-trusted-local",
-    allow: ["bun test*", "git status*"],
+    allow: ["bun test", "ls src*"],
   });
 
   const broad = parseShellCliFlags(["--unattended", "--unattended-allow", "git *"]);

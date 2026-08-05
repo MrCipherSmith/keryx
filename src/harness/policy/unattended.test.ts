@@ -41,9 +41,11 @@ function deps(): PolicyDeps {
 const READ_ONLY: UnattendedPosture = { profile: "read-only-review", allow: [] };
 /** The most permissive posture an operator can select: `shell` defaults to allow. */
 const TRUSTED_LOCAL: UnattendedPosture = { profile: "monitored-trusted-local", allow: [] };
+// Exact commands, not wildcards: `bun` and `git` are execution wrappers, so a
+// wildcard after either is refused at launch (round 2, BLOCKER 2).
 const TRUSTED_LOCAL_WITH_ALLOW: UnattendedPosture = {
   profile: "monitored-trusted-local",
-  allow: ["bun test*", "git status*"],
+  allow: ["bun test", "git status"],
 };
 
 test("the flag parses bare, with a profile, and refuses an unknown one", () => {
@@ -80,14 +82,14 @@ test("a typo is still an error when a later bare flag follows it", () => {
 });
 
 test("the allowlist is validated at launch and refuses an over-broad grant", () => {
-  const ok = parseUnattendedFlag(["--unattended", UNATTENDED_ALLOW_FLAG, "bun test*"]);
+  const ok = parseUnattendedFlag(["--unattended", UNATTENDED_ALLOW_FLAG, "bun test"]);
   expect(ok).toEqual({
     kind: "posture",
-    posture: { profile: DEFAULT_UNATTENDED_PROFILE, allow: ["bun test*"] },
+    posture: { profile: DEFAULT_UNATTENDED_PROFILE, allow: ["bun test"] },
   });
-  expect(parseUnattendedFlag(["--unattended", `${UNATTENDED_ALLOW_FLAG}=git status*`])).toEqual({
+  expect(parseUnattendedFlag(["--unattended", `${UNATTENDED_ALLOW_FLAG}=ls src*`])).toEqual({
     kind: "posture",
-    posture: { profile: DEFAULT_UNATTENDED_PROFILE, allow: ["git status*"] },
+    posture: { profile: DEFAULT_UNATTENDED_PROFILE, allow: ["ls src*"] },
   });
 
   // specification.md §P1.2: "a rule whose first token does not constrain what
@@ -97,7 +99,21 @@ test("the allowlist is validated at launch and refuses an over-broad grant", () 
   expect(broad.kind).toBe("error");
   expect(broad.kind === "error" && broad.message).toContain("does not constrain what runs");
 
-  for (const pattern of ["bash *", "sh *", "cat *", "rm *", "rm -rf /", "echo hi; rm -rf x"]) {
+  for (const pattern of [
+    "bash *",
+    "sh *",
+    "cat *",
+    "rm *",
+    "rm -rf /",
+    "echo hi; rm -rf x",
+    // Round 2: a wildcard command word, an interpreter with arguments, and a
+    // wrapper with a run-anything verb.
+    "*",
+    "?*",
+    "bash -c *",
+    "bun x*",
+    "keryx *",
+  ]) {
     const verdict = parseUnattendedFlag(["--unattended", UNATTENDED_ALLOW_FLAG, pattern]);
     expect(verdict.kind, `${pattern} must be refused as an unattended grant`).toBe("error");
   }
@@ -233,14 +249,14 @@ test("BLOCKER 1: with no allowlist, the most permissive profile runs nothing", (
 test("an allowlisted command runs, and its neighbours do not", () => {
   const allowed = decideUnattended(
     TRUSTED_LOCAL_WITH_ALLOW,
-    { risk: "shell", actionFingerprint: "fp", command: "bun test src/foo.test.ts" },
+    { risk: "shell", actionFingerprint: "fp", command: "bun test" },
     deps(),
   );
   expect(allowed.decision).toBe("allow");
   expect(allowed.matchedRules).toContain("unattended:allowlisted");
 
   // A pattern grants what it names and nothing adjacent to it.
-  for (const command of ["bun run build", "bun x tsc", "git commit -m x", "gitstatus"]) {
+  for (const command of ["bun run build", "bun x tsc", "git commit -m x", "gitstatus", "bun test extra"]) {
     expect(
       decideUnattended(
         TRUSTED_LOCAL_WITH_ALLOW,
