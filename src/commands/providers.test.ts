@@ -8,9 +8,12 @@ import {
   isKnownProvider,
   knownProviderNames,
   providerByName,
-  registryDefaultModel,
   resolveModelsForPicker,
 } from "./providers";
+// The PRODUCTION default resolver. AC5 is about what keryx actually hands a
+// caller who named no model, and that is this function — not a helper written
+// beside the registry for a test to call.
+import { defaultModelFor } from "../harness/provider/single-turn";
 
 test("registry lists the flow-085 providers with base URL + env key", () => {
   const names = OPENAI_COMPAT_PROVIDERS.map((p) => p.name);
@@ -50,14 +53,19 @@ test("Z.AI curated fallbacks include current GLM-5.x / Coding Plan models", () =
 
 // --- flow 135 / AC5: declared model ids only ---------------------------------
 
-test("AC5: no registry entry defaults to a model id its own declared set omits", () => {
+test("AC5: the PRODUCTION default resolver never names an id outside the provider's set", () => {
+  // Asserted through `defaultModelFor`, the function every model-backed command
+  // actually calls, because that is the only place a bad default can reach a
+  // user. It consults a DEFAULT_MODELS override map BEFORE the registry, so an
+  // entry added there for a registry provider — the realistic way this breaks —
+  // fails here. An earlier version of this test asked the registry for its own
+  // `models[0]` and compared it to `models`, which cannot fail and guarded
+  // nothing.
   for (const provider of OPENAI_COMPAT_PROVIDERS) {
-    const fallback = registryDefaultModel(provider);
-    expect(fallback.length).toBeGreaterThan(0);
-    // `models[0]` is what `defaultModelFor` hands a caller who named no model.
-    // If a `defaultModel` field is ever added, this is the line that catches it
-    // naming something the entry does not list.
-    expect(provider.models).toContain(fallback);
+    const resolved = defaultModelFor(provider.name);
+    expect(resolved.length).toBeGreaterThan(0);
+    expect(resolved).not.toBe("unknown");
+    expect(provider.models).toContain(resolved);
     // No empty or duplicated ids: both make "the provider declares this" false
     // for at least one entry in the list.
     expect(new Set(provider.models).size).toBe(provider.models.length);
@@ -65,15 +73,38 @@ test("AC5: no registry entry defaults to a model id its own declared set omits",
   }
 });
 
-test("AC5: every entry says what its model list was checked against, because offline cannot", () => {
+test("AC5: every entry states where its list came from and how old it is", () => {
   // The honest half of the criterion. A local test can prove the default is in
   // this entry's list; it cannot prove the list matches what the gateway
-  // publishes today — that needs a credential and a network call. So each entry
-  // states its source and date, and a missing statement fails here rather than
-  // passing as if it had been verified.
+  // publishes today — that needs a credential and a network call.
+  //
+  // So `listedOn` is when THIS REPOSITORY last changed the list, not when the
+  // field was added, and `checkedAgainstProvider` is false unless that change
+  // actually compared it to the provider. The first version of this field was a
+  // free-text date and all eight entries got stamped with the day the field was
+  // introduced, which made 16-day-old lists read as verified that morning.
+  const today = "2026-08-05";
   for (const provider of OPENAI_COMPAT_PROVIDERS) {
-    expect(provider.modelsVerified.trim().length).toBeGreaterThan(0);
-    expect(/\d{4}-\d{2}-\d{2}/.test(provider.modelsVerified)).toBe(true);
+    const { source, listedOn, checkedAgainstProvider } = provider.modelsProvenance;
+    expect(source.trim().length).toBeGreaterThan(0);
+    expect(listedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(listedOn <= today).toBe(true);
+    // A claim of having checked must cite the evidence, not just assert itself.
+    if (checkedAgainstProvider) {
+      expect(source).toMatch(/\/models|run-\d{4}-\d{2}-\d{2}\.md/);
+    }
+  }
+});
+
+test("AC5: only the entry this change actually verified claims to have been verified", () => {
+  // Pins the correction itself. DeepSeek's list was compared against the API's
+  // `/models` output recorded in the benchmark; the other seven were not touched
+  // by that work and must not say they were.
+  const checked = OPENAI_COMPAT_PROVIDERS.filter((p) => p.modelsProvenance.checkedAgainstProvider);
+  expect(checked.map((p) => p.name)).toEqual(["deepseek"]);
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    if (provider.name === "deepseek") continue;
+    expect(provider.modelsProvenance.listedOn).toBe("2026-07-20");
   }
 });
 
@@ -83,7 +114,7 @@ test("AC5: DeepSeek names the ids the API lists, not the alias it merely answers
   const deepseek = providerByName("deepseek");
   expect(deepseek?.models).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
   expect(deepseek?.models).not.toContain("deepseek-chat");
-  expect(registryDefaultModel(deepseek!)).toBe("deepseek-v4-flash");
+  expect(defaultModelFor("deepseek")).toBe("deepseek-v4-flash");
 });
 
 // --- flow 135 / AC2: one source of truth for which providers exist -----------

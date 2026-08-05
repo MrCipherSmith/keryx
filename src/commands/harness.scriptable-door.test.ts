@@ -19,8 +19,11 @@
 // no `Math.random()`.
 
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { HarnessCommandDeps } from "./harness";
-import { harnessCommand } from "./harness";
+import { harnessCommand, refuseBaseUrl } from "./harness";
+import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
 import { OPENAI_COMPAT_PROVIDERS, credentialEnvKeyFor, knownProviderNames } from "./providers";
 import type {
   NormalizedEvent,
@@ -159,7 +162,7 @@ function fakeMetaprojectPort(): MetaprojectPort {
 
 // --- AC1 ----------------------------------------------------------------------
 
-describe("AC1 — harness run registers the read-only metaproject tools and executes one", () => {
+describe("AC1 — `--tools` registers the read-only metaproject tools and executes one", () => {
   test("the model's graph_affected call runs and its result is in the printed output", async () => {
     const { fetch: fetchMock, callCount } = makeThrowingFetch();
     const { provider, advertisedToolNames } = scriptedProvider(
@@ -169,7 +172,7 @@ describe("AC1 — harness run registers the read-only metaproject tools and exec
 
     try {
       await harnessCommand(
-        ["run", "--provider", "fake", "--model", "fixture-model", "what breaks if I change config"],
+        ["run", "--provider", "fake", "--model", "fixture-model", "--tools", "what breaks if I change config"],
         fixedDeps({
           fetch: fetchMock,
           env: {},
@@ -184,8 +187,9 @@ describe("AC1 — harness run registers the read-only metaproject tools and exec
     expect(callCount()).toBe(0);
 
     // Registered: the run loop told the provider which tools exist. Before this
-    // flow the registry was empty AND `NormalizedRequest.tools` was never set,
-    // so a model could not have named a tool even if one had been registered.
+    // flow the registry was empty AND `runOffline` never set
+    // `NormalizedRequest.tools`, so a model could not have named a tool even if
+    // one had been registered.
     expect(advertisedToolNames()).toContain("graph_affected");
     expect(advertisedToolNames()).toContain("search_code");
     expect(advertisedToolNames()).toContain("memory_search");
@@ -215,7 +219,7 @@ describe("AC1 — harness run registers the read-only metaproject tools and exec
 
     try {
       await harnessCommand(
-        ["run", "--provider", "fake", "--model", "fixture-model", "bad input"],
+        ["run", "--provider", "fake", "--model", "fixture-model", "--tools", "bad input"],
         fixedDeps({
           fetch: fetchMock,
           env: {},
@@ -229,6 +233,239 @@ describe("AC1 — harness run registers the read-only metaproject tools and exec
 
     const result = lastJson(logs);
     expect(result.tools).toEqual([]);
+  });
+
+  test("a tool output the scanner flags is masked, not printed", async () => {
+    // The redaction branch on the tool-output path, which is security-relevant
+    // and new. `search_code` can return file contents, and a piped structured
+    // result is as durable as a session record — so the output goes through the
+    // same scan the run loop applies before persistence.
+    const secret = "sk-live-000111222333444555666777888999";
+    const { fetch: fetchMock } = makeThrowingFetch();
+    const { provider } = scriptedProvider(toolCallScript("graph_affected", { file: "src/x.ts" }));
+    const { logs, restore } = captureConsoleLog();
+    const leakyPort: MetaprojectPort = {
+      ...fakeMetaprojectPort(),
+      graphAffected: async ({ target }) => ({
+        target,
+        depth: 1,
+        affected: [{ id: secret, path: secret, hop: 1 }],
+      }),
+    };
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--tools", "leak it"],
+        fixedDeps({
+          fetch: fetchMock,
+          env: {},
+          provider,
+          metaprojectPort: leakyPort,
+          scan: (content) =>
+            content.includes(secret) ? { hasSecret: true, category: "api-key" } : { hasSecret: false },
+        }),
+      );
+    } finally {
+      restore();
+    }
+
+    const combined = logs.join("\n");
+    expect(combined).not.toContain(secret);
+    const tools = lastJson(logs).tools as Array<Record<string, unknown>>;
+    expect(tools).toHaveLength(1);
+    expect(String(tools[0]?.output)).toContain("[redacted:api-key]");
+  });
+
+  test("a scan that cannot complete blocks the output entirely", async () => {
+    const { fetch: fetchMock } = makeThrowingFetch();
+    const { provider } = scriptedProvider(toolCallScript("graph_affected", { file: "src/x.ts" }));
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--tools", "scan fails"],
+        fixedDeps({
+          fetch: fetchMock,
+          env: {},
+          provider,
+          metaprojectPort: fakeMetaprojectPort(),
+          scan: () => ({ hasSecret: false, scanFailed: true }),
+        }),
+      );
+    } finally {
+      restore();
+    }
+
+    const combined = logs.join("\n");
+    // Nothing from the tool's own output survives an incomplete scan.
+    expect(combined).not.toContain("src/a.ts");
+    const tools = lastJson(logs).tools as Array<Record<string, unknown>>;
+    expect(tools[0]?.status).toBe("failed");
+    expect(String(tools[0]?.output)).toContain("scan failed");
+  });
+});
+
+describe("item 5 — tool registration is opt-in, and OFF is the previous behaviour", () => {
+  test("without --tools nothing is registered and nothing is advertised", async () => {
+    // The loop is single-turn: a model told about twelve tools it will never
+    // hear back from stops on a tool call and answers less well than one told
+    // about none. Until the loop takes a second turn, the default must be the
+    // run that existed before this flow.
+    const { fetch: fetchMock } = makeThrowingFetch();
+    const { provider, advertisedToolNames } = scriptedProvider([
+      { kind: "model_start", sequence: 0, attemptId: "" },
+      { kind: "text_delta", sequence: 1, attemptId: "", text: "answered without tools" },
+      { kind: "model_end", sequence: 2, attemptId: "" },
+    ]);
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "no tools please"],
+        fixedDeps({ fetch: fetchMock, env: {}, provider }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(advertisedToolNames()).toEqual([]);
+    const result = lastJson(logs);
+    expect(result.tools).toEqual([]);
+    expect(result.text).toBe("answered without tools");
+  });
+
+  test("without --tools a tool call the model makes anyway executes nothing", async () => {
+    const { fetch: fetchMock } = makeThrowingFetch();
+    const { provider } = scriptedProvider(toolCallScript("graph_affected", { file: "src/x.ts" }));
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "sneaky"],
+        fixedDeps({ fetch: fetchMock, env: {}, provider, metaprojectPort: fakeMetaprojectPort() }),
+      );
+    } finally {
+      restore();
+    }
+
+    const result = lastJson(logs);
+    expect(result.tools).toEqual([]);
+    expect(logs.join("\n")).not.toContain("src/a.ts");
+  });
+
+  test("the usage line advertises the flag", async () => {
+    const { logs, restore } = captureConsoleLog();
+    try {
+      await harnessCommand(["run"], fixedDeps({ env: {} }));
+    } finally {
+      restore();
+    }
+    expect(logs.join("\n")).toContain("--tools");
+  });
+});
+
+describe("destination guard — --base-url cannot redirect a run or its credential", () => {
+  test("ollama with a public --base-url is refused before any network call", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "ollama", "--model", "llama3.2", "--base-url", "https://any-public-host/", "hi"],
+        fixedDeps({ fetch: fetchMock, env: {} }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).toContain("not loopback");
+    expect(combined).toContain("no network was contacted");
+    expect(/"events"\s*:/.test(combined)).toBe(false);
+  });
+
+  for (const url of ["http://127.0.0.1:11434", "http://localhost:11434", "http://[::1]:11434"]) {
+    test(`ollama with the loopback base URL ${url} is accepted`, async () => {
+      const { fetch: fetchMock } = makeThrowingFetch();
+      const { provider } = scriptedProvider([
+        { kind: "model_start", sequence: 0, attemptId: "" },
+        { kind: "text_delta", sequence: 1, attemptId: "", text: "local" },
+        { kind: "model_end", sequence: 2, attemptId: "" },
+      ]);
+      const { logs, restore } = captureConsoleLog();
+
+      try {
+        await harnessCommand(
+          ["run", "--provider", "ollama", "--model", "llama3.2", "--base-url", url, "hi"],
+          fixedDeps({ fetch: fetchMock, env: {}, provider }),
+        );
+      } finally {
+        restore();
+      }
+
+      // Reached the run loop rather than a refusal line.
+      expect(lastJson(logs).text).toBe("local");
+    });
+  }
+
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    test(`${provider.name} refuses --base-url rather than sending ${provider.envKey} elsewhere`, async () => {
+      const { fetch: fetchMock, callCount } = makeThrowingFetch();
+      const { logs, restore } = captureConsoleLog();
+
+      try {
+        await harnessCommand(
+          [
+            "run",
+            "--provider",
+            provider.name,
+            "--model",
+            provider.models[0] ?? "m",
+            "--base-url",
+            "https://attacker.tld",
+            "hi",
+          ],
+          // The key IS present: this must be refused on the destination, not
+          // incidentally saved by a missing credential.
+          fixedDeps({ fetch: fetchMock, env: { [provider.envKey]: "sk-real-key" } }),
+        );
+      } finally {
+        restore();
+      }
+
+      expect(callCount()).toBe(0);
+      const combined = logs.join("\n");
+      expect(combined).toContain("--base-url is not accepted");
+      expect(combined).toContain(provider.envKey);
+      expect(combined).not.toContain("sk-real-key");
+      expect(/"events"\s*:/.test(combined)).toBe(false);
+    });
+  }
+
+  test("anthropic refuses --base-url too", async () => {
+    const { fetch: fetchMock, callCount } = makeThrowingFetch();
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "anthropic", "--model", "m", "--base-url", "https://attacker.tld", "hi"],
+        fixedDeps({ fetch: fetchMock, env: { ANTHROPIC_API_KEY: "sk-real-key" } }),
+      );
+    } finally {
+      restore();
+    }
+
+    expect(callCount()).toBe(0);
+    expect(logs.join("\n")).toContain("--base-url is not accepted");
+    expect(logs.join("\n")).not.toContain("sk-real-key");
+  });
+
+  test("a --base-url that is not a URL is refused rather than passed through", () => {
+    expect(refuseBaseUrl("ollama", "not a url")).toContain("is not a URL");
+    expect(refuseBaseUrl("ollama", "http://127.0.0.1:11434")).toBeUndefined();
+    expect(refuseBaseUrl("ollama", "http://169.254.169.254/")).toContain("not loopback");
+    expect(refuseBaseUrl("ollama", "http://10.0.0.5/")).toContain("not loopback");
   });
 });
 
@@ -361,5 +598,48 @@ describe("AC6 — the fail-closed credential behaviour is unchanged, and now cov
     expect(credentialEnvKeyFor("deepseek")).toBe("DEEPSEEK_API_KEY");
     expect(credentialEnvKeyFor("anthropic")).toBe("ANTHROPIC_API_KEY");
     expect(credentialEnvKeyFor("fake")).toBeUndefined();
+  });
+});
+
+// --- AC4 keeps holding: the reference cannot silently drift from the code -----
+
+describe("AC4 — the CLI reference is checked against the code it describes", () => {
+  const reference = readFileSync(
+    path.join(import.meta.dir, "..", "..", "docs", "docs", "cli-reference.md"),
+    "utf8",
+  );
+
+  test("every operation the registry projects is named in the documented tool list", () => {
+    // The list was hand-written once and a hand-written list of twelve names is
+    // a list that goes stale on the thirteenth. Adding an operation now fails
+    // here until the reference names it.
+    for (const operation of METAPROJECT_OPERATIONS) {
+      expect(reference).toContain(`\`${operation.name}\``);
+    }
+  });
+
+  test("the documented tool list is exactly the projected operation set", () => {
+    // Extracted from the one sentence that enumerates them, so the assertion is
+    // set equality rather than "contains" in both directions: a tool removed
+    // from the registry but left in the reference fails here too.
+    const start = reference.indexOf("registers the read-only metaproject tools — ");
+    expect(start).toBeGreaterThan(-1);
+    const listText = reference.slice(start, reference.indexOf(" — and advertises them", start));
+    const documented = [...listText.matchAll(/`([a-z_]+)`/g)].map((m) => m[1] as string);
+    expect([...documented].sort()).toEqual(METAPROJECT_OPERATIONS.map((o) => o.name).sort());
+  });
+
+  test("every provider the registry declares is named in the reference", () => {
+    for (const provider of OPENAI_COMPAT_PROVIDERS) {
+      expect(reference).toContain(`\`${provider.name}\``);
+    }
+  });
+
+  test("the reference does not promise tool results are returned to the model", () => {
+    // The claim this test exists to keep out: `runOffline` opens one provider
+    // stream and never appends a tool result to the messages. A reference that
+    // says otherwise is the same over-promise this flow was opened to remove.
+    expect(reference).toContain("**Tool results are not returned to the model.**");
+    expect(reference).not.toContain("reaches the same project knowledge the TUI does");
   });
 });

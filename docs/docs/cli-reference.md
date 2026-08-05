@@ -121,7 +121,7 @@ Drive the agent execution loop **non-interactively** — the same loop `shell`
 runs, without a terminal attached. This is the scriptable and CI-facing surface.
 
 ```
-keryx harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
+keryx harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] [--tools] "<prompt>"
 keryx harness exec [options] -- <path> [args...]
 keryx harness extension --spec <path>
 keryx harness wave --spec <path>
@@ -145,24 +145,47 @@ lists each provider with the environment variable it reads. The command reads
 that set from the same registry the picker does, so this list and the accepted
 one cannot disagree; an unknown name prints the usage line and runs nothing.
 
-Every provider except `fake` (offline) and `ollama` (loopback) needs a
-credential in the environment — `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`,
-`OPENROUTER_API_KEY`, and so on. Without it the command prints which variable is
-missing and returns **before** constructing a provider or contacting anything.
-Keys saved in the shell's `auth.json` are not read here; export the variable.
+Every provider except `fake` (an in-process fixture provider that never opens a
+socket) and `ollama` (a local runtime, see below) needs a credential in the
+environment — `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, and
+so on. Without it the command prints which variable is missing and returns
+**before** constructing a provider or contacting anything. Keys saved in the
+shell's `auth.json` are not read here; export the variable.
 
-#### `harness run` tools
+`--base-url` is honoured **only for `ollama`, and only for a loopback host**
+(`localhost`, `127.0.0.0/8`, `::1`). Anything else is refused before a provider
+is constructed:
 
-A `run` registers the read-only metaproject tools — `search_code`,
+- a non-loopback `--base-url` with `--provider ollama` is refused, because
+  "ollama is local" should be a property of the command and not a hope about how
+  it is invoked;
+- `--base-url` with any registry provider is refused outright — its base URL is
+  part of its identity, and overriding it would send that provider's API key to
+  a host the registry never named.
+
+#### `harness run` tools — opt-in with `--tools`
+
+With `--tools`, a run registers the read-only metaproject tools — `search_code`,
 `graph_affected`, `graph_query`, `graph_path`, `graph_symbol`, `memory_search`,
 `read_wiki`, `wiki_ask`, `wiki_backlinks`, `test_related`, `health_status`,
-`repomap` — and advertises them to the model, so the non-interactive door
-reaches the same project knowledge the TUI does. Each executed tool appears in the printed JSON
-under `tools`, with its name, status and output; the output passes the same
-secret scan applied before anything is persisted, so a flagged result is masked
-rather than printed. Tool risk is still resolved by the `read-only-review`
+`repomap` — and advertises them to the model. Each executed tool appears in the
+printed JSON under `tools`, with its name, status and output; that output passes
+the same secret scan applied before anything is persisted, so a flagged result is
+masked rather than printed. Tool risk is resolved by the `read-only-review`
 policy profile: a write, shell or network tool is not in this set and would be
 denied if it were.
+
+**Tool results are not returned to the model.** This loop takes exactly one
+provider turn: the tools the model names are executed and reported to *you*, but
+their output is not appended to the conversation and no second request is made.
+So `--tools` is for a script that wants the tool output; it is not the
+interactive agent's behaviour, where results feed back and the loop continues
+until the model answers. That is why the flag is off by default — a model told
+about twelve tools it will never hear back from tends to stop on a tool call and
+answer less well than one told about none.
+
+Without `--tools` the run registers nothing and is byte-for-byte the run it was
+before the flag existed.
 
 `harness replay` is `validate-log`: it recomputes hashes from a recorded run and
 compares them. It does **not** re-execute the run, so it answers "is this

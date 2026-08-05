@@ -308,14 +308,16 @@ export async function runOffline(
   let executedToolCalls = 0;
   let finalMessageEmitted = false;
 
-  // The registered tools, as the provider is told about them. This loop used to
-  // build the request without `tools` at all, so the registry gated execution of
-  // calls no model could know it was allowed to make: both live adapters
-  // serialize `request.tools` and neither ever received any. A registry that is
-  // never advertised is a door with no handle on the outside.
+  // The registered tools, as the provider is told about them. This loop never
+  // set `request.tools`, so the registry gated execution of calls no model could
+  // know it was allowed to make. (The interactive path in `commands/agent.ts`
+  // has always set it — the adapters read the field fine; it was this loop that
+  // did not fill it.) A registry that is never advertised is a door with no
+  // handle on the outside.
   //
   // Guarded on non-empty, so a run with an empty registry produces exactly the
   // request it produced before (the deterministic fixture floor is unchanged).
+  // `keryx harness run` without `--tools` is exactly that case.
   const advertisedTools: NormalizedToolDefinition[] = deps.toolRegistry.list().map((definition) => ({
     name: definition.toolId,
     ...(definition.description !== undefined ? { description: definition.description } : {}),
