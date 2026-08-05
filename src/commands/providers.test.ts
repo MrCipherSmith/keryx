@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
 import {
+  NON_REGISTRY_PROVIDERS,
   OPENAI_COMPAT_PROVIDERS,
+  credentialEnvKeyFor,
   fetchOpenAiCompatModels,
   fetchOpenAiCompatModelsDetailed,
+  isKnownProvider,
+  knownProviderNames,
   providerByName,
+  registryDefaultModel,
   resolveModelsForPicker,
 } from "./providers";
 
@@ -41,6 +46,70 @@ test("Z.AI curated fallbacks include current GLM-5.x / Coding Plan models", () =
   expect(coding?.models).toContain("glm-4.7");
   // Newest first so a fallback-only picker surfaces 5.2 without scrolling.
   expect(coding?.models[0]).toBe("glm-5.2");
+});
+
+// --- flow 135 / AC5: declared model ids only ---------------------------------
+
+test("AC5: no registry entry defaults to a model id its own declared set omits", () => {
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    const fallback = registryDefaultModel(provider);
+    expect(fallback.length).toBeGreaterThan(0);
+    // `models[0]` is what `defaultModelFor` hands a caller who named no model.
+    // If a `defaultModel` field is ever added, this is the line that catches it
+    // naming something the entry does not list.
+    expect(provider.models).toContain(fallback);
+    // No empty or duplicated ids: both make "the provider declares this" false
+    // for at least one entry in the list.
+    expect(new Set(provider.models).size).toBe(provider.models.length);
+    expect(provider.models.every((id) => id.trim().length > 0)).toBe(true);
+  }
+});
+
+test("AC5: every entry says what its model list was checked against, because offline cannot", () => {
+  // The honest half of the criterion. A local test can prove the default is in
+  // this entry's list; it cannot prove the list matches what the gateway
+  // publishes today — that needs a credential and a network call. So each entry
+  // states its source and date, and a missing statement fails here rather than
+  // passing as if it had been verified.
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    expect(provider.modelsVerified.trim().length).toBeGreaterThan(0);
+    expect(/\d{4}-\d{2}-\d{2}/.test(provider.modelsVerified)).toBe(true);
+  }
+});
+
+test("AC5: DeepSeek names the ids the API lists, not the alias it merely answers on", () => {
+  // D5, pinned. `deepseek-chat` still responds and is not in the API's model
+  // list, which is exactly why it survived as keryx's default for this provider.
+  const deepseek = providerByName("deepseek");
+  expect(deepseek?.models).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
+  expect(deepseek?.models).not.toContain("deepseek-chat");
+  expect(registryDefaultModel(deepseek!)).toBe("deepseek-v4-flash");
+});
+
+// --- flow 135 / AC2: one source of truth for which providers exist -----------
+
+test("knownProviderNames is the built-ins plus every registry entry, with no duplicates", () => {
+  const names = knownProviderNames();
+  expect(names.slice(0, NON_REGISTRY_PROVIDERS.length)).toEqual([...NON_REGISTRY_PROVIDERS]);
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    expect(names).toContain(provider.name);
+    expect(isKnownProvider(provider.name)).toBe(true);
+  }
+  expect(new Set(names).size).toBe(names.length);
+  expect(isKnownProvider("nope")).toBe(false);
+  expect(isKnownProvider("")).toBe(false);
+});
+
+test("credentialEnvKeyFor names a key for every provider that needs one and none for the rest", () => {
+  expect(credentialEnvKeyFor("anthropic")).toBe("ANTHROPIC_API_KEY");
+  expect(credentialEnvKeyFor("fake")).toBeUndefined();
+  expect(credentialEnvKeyFor("ollama")).toBeUndefined();
+  for (const provider of OPENAI_COMPAT_PROVIDERS) {
+    expect(credentialEnvKeyFor(provider.name)).toBe(provider.envKey);
+  }
+  // An unknown name gets no key, so a caller cannot read a credential decision
+  // out of a provider that was never accepted in the first place.
+  expect(credentialEnvKeyFor("nope")).toBeUndefined();
 });
 
 test("providerByName returns undefined for a non-registry name", () => {

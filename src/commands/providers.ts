@@ -4,9 +4,11 @@
 // single OpenAI-compatible adapter (`OllamaProvider` with an `apiKey`/`baseUrl`
 // grant) serves all of them — see `makeProvider`. The registry is the ONE source
 // of truth consumed by `detectProviders` (which providers to offer), the in-TUI
-// picker (label / API-key prompt / live model fetch), and `makeProvider`
-// (base URL + env var + chat path). Pure data + a pure fetch helper; no key is
-// ever stored on these shapes or logged.
+// picker (label / API-key prompt / live model fetch), `makeProvider`
+// (base URL + env var + chat path), and `keryx harness run` (which names it is
+// allowed to accept, and which credential each one fails closed without —
+// `knownProviderNames` / `credentialEnvKeyFor`). Pure data + a pure fetch helper;
+// no key is ever stored on these shapes or logged.
 //
 // Base URL = the part BEFORE the chat path. Most gateways answer at
 // `{baseUrl}/v1/chat/completions` + `{baseUrl}/v1/models`; Z.AI's GLM endpoints
@@ -27,8 +29,25 @@ export interface OpenAiCompatProvider {
   chatPath?: string;
   /** Model-list path appended to `baseUrl`; defaults to `/v1/models`. */
   modelsPath?: string;
-  /** Curated fallback model ids (used when the live `/models` fetch fails). */
+  /**
+   * Model ids offered when the live `/models` fetch fails, PREFERRED FIRST —
+   * `models[0]` is the id keryx defaults to when the caller names no model (see
+   * {@link registryDefaultModel}). Every id here must be one the provider itself
+   * declares. Naming an alias the provider still answers on but does not list is
+   * defect D5 of the 2026-08-05 shell benchmark: it works until the day it stops,
+   * and nothing in the product says it was never listed.
+   */
   models: string[];
+  /**
+   * What {@link OpenAiCompatProvider.models} was last checked against, and when.
+   *
+   * An offline test can prove the default is a member of this entry's own list;
+   * it cannot prove the list still matches what the gateway publishes today,
+   * because that needs a network call and a credential. So the claim carries its
+   * source and its date instead of being implied, and a stale one is legible as
+   * stale rather than looking freshly verified.
+   */
+  modelsVerified: string;
   /** Short picker note (e.g. `coding plan`). */
   note?: string;
 }
@@ -49,6 +68,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     baseUrl: "https://openrouter.ai/api",
     envKey: "OPENROUTER_API_KEY",
     models: ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001", "qwen/qwen-2.5-7b-instruct", "meta-llama/llama-3.1-8b-instruct"],
+    modelsVerified: "openrouter.ai/models listing, 2026-08-05",
     note: "hosted · 400+ models",
   },
   {
@@ -56,7 +76,14 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     label: "DeepSeek",
     baseUrl: "https://api.deepseek.com",
     envKey: "DEEPSEEK_API_KEY",
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    // D5 (2026-08-05 shell benchmark): this list used to read
+    // ["deepseek-chat", "deepseek-reasoner"]. The DeepSeek API lists neither —
+    // it declares deepseek-v4-flash and deepseek-v4-pro. `deepseek-chat` still
+    // answers, which is precisely why nobody noticed that keryx's default model
+    // for this provider was an undeclared alias.
+    models: ["deepseek-v4-flash", "deepseek-v4-pro"],
+    modelsVerified:
+      "api.deepseek.com GET /v1/models as recorded in docs/requirements/keryx-shell-benchmark/run-2026-08-05.md §7 (D5), 2026-08-05",
     note: "cheap per-token",
   },
   {
@@ -78,6 +105,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
       "glm-4.5",
       "glm-4.5-air",
     ],
+    modelsVerified: "docs.z.ai GLM model list, 2026-08-05",
     note: "GLM API",
   },
   {
@@ -97,6 +125,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
       "glm-4.6",
       "glm-4.5",
     ],
+    modelsVerified: "docs.z.ai Coding Plan model support table, 2026-08-05",
     note: "coding plan (flat rate)",
   },
   {
@@ -105,6 +134,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     baseUrl: "https://api.cerebras.ai",
     envKey: "CEREBRAS_API_KEY",
     models: ["llama-3.3-70b", "llama-3.1-8b", "gpt-oss-120b", "qwen-3-32b"],
+    modelsVerified: "inference-docs.cerebras.ai model list, 2026-08-05",
     note: "Cerebras Code plan · fast",
   },
   {
@@ -113,6 +143,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     baseUrl: "https://api.groq.com/openai",
     envKey: "GROQ_API_KEY",
     models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gpt-oss-120b"],
+    modelsVerified: "console.groq.com/docs/models, 2026-08-05",
     note: "free tier · fast",
   },
   {
@@ -121,6 +152,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     baseUrl: "https://api.moonshot.ai",
     envKey: "MOONSHOT_API_KEY",
     models: ["kimi-k2-turbo-preview", "moonshot-v1-128k", "moonshot-v1-32k"],
+    modelsVerified: "platform.moonshot.ai model list, 2026-08-05",
     note: "Kimi",
   },
   {
@@ -129,6 +161,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     baseUrl: "https://api.x.ai",
     envKey: "XAI_API_KEY",
     models: ["grok-2-latest", "grok-2", "grok-beta"],
+    modelsVerified: "docs.x.ai model list, 2026-08-05",
     note: "xAI · OpenAI-compatible",
   },
 ];
@@ -136,6 +169,51 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
 /** Look up a registry provider by its `name`. */
 export function providerByName(name: string): OpenAiCompatProvider | undefined {
   return OPENAI_COMPAT_PROVIDERS.find((p) => p.name === name);
+}
+
+/**
+ * The model id keryx uses for `provider` when the caller names none: the first
+ * curated id. Stated as a function rather than left implicit at each call site,
+ * so "what does keryx default to here" is one thing a test can ask.
+ */
+export function registryDefaultModel(provider: OpenAiCompatProvider): string {
+  return provider.models[0] ?? "";
+}
+
+/**
+ * Provider names that are not OpenAI-compat gateways but are still selectable:
+ * the offline fixture provider, the local loopback runtime, and the first-party
+ * Anthropic adapter. Kept beside the registry so "every provider keryx accepts"
+ * has ONE answer ({@link knownProviderNames}) instead of a literal set copied
+ * into each command — the copy in `harness run` is what let the CLI refuse
+ * DeepSeek while `docs/docs/cli-reference.md` promised it (benchmark D4).
+ */
+export const NON_REGISTRY_PROVIDERS = ["fake", "anthropic", "ollama"] as const;
+
+/** Every provider name keryx accepts, built-ins first, then the registry. */
+export function knownProviderNames(): string[] {
+  return [...NON_REGISTRY_PROVIDERS, ...OPENAI_COMPAT_PROVIDERS.map((p) => p.name)];
+}
+
+/** Whether `name` is a provider keryx knows how to construct. */
+export function isKnownProvider(name: string): boolean {
+  return knownProviderNames().includes(name);
+}
+
+/**
+ * The environment variable a provider's credential is read from, or `undefined`
+ * when it needs none (`fake` is offline; `ollama` is loopback).
+ *
+ * This is the fail-closed check's input: a caller that gets a name back MUST
+ * refuse to proceed when that variable is absent. Widening
+ * {@link knownProviderNames} without widening this would trade a usage error for
+ * a credential-less network attempt, which is the wrong direction.
+ */
+export function credentialEnvKeyFor(name: string): string | undefined {
+  if (name === "anthropic") {
+    return "ANTHROPIC_API_KEY";
+  }
+  return providerByName(name)?.envKey;
 }
 
 /** Default network timeout for live `/models` probes (offline must not hang the picker). */
