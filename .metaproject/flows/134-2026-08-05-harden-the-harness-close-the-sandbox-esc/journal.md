@@ -26,3 +26,6 @@
 - 2026-08-05T13:31:13.386Z - ac-confirmed: AC9: Only two README lines widened, both covered: sessions list|fork|export (sessions.fork.test.ts) and harness run|exec|extension|wave|replay (harness.replay.test.ts). The completion-gate and scanning sentences were left as they are — this work makes them true, it does not extend them. cli-reference gained fork and replay entries, replay explicitly stating validate-log and no re-execution
 - 2026-08-05T13:31:13.483Z - task-done: T2: Implement per plan
 - 2026-08-05T13:31:13.578Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-05T13:33:59.991Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/247 (warning: PR is not a draft)
+- 2026-08-05T13:34:00.078Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-05T13:34:00.165Z - task-done: T10: S6 full gate and draft PR

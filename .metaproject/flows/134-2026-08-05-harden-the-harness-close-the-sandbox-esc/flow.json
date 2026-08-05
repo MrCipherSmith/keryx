@@ -3,9 +3,9 @@
   "id": "134",
   "slug": "harden-the-harness-close-the-sandbox-esc",
   "title": "Harden the harness: close the sandbox escape hatch, wire the mutation scanner, feed the completion gate, surface branching and replay",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-05T11:01:14.590Z",
-  "updatedAt": "2026-08-05T13:31:13.578Z",
+  "updatedAt": "2026-08-05T13:34:00.165Z",
   "source": {
     "type": "description",
     "ref": null
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/247"
   },
   "tasks": [
     {
@@ -102,7 +102,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -110,7 +110,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -191,7 +192,7 @@
       "id": "T10",
       "title": "S6 full gate and draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -199,7 +200,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -330,6 +332,21 @@
       "at": "2026-08-05T13:31:13.578Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-05T13:33:59.991Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/247 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-05T13:34:00.078Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-05T13:34:00.165Z",
+      "event": "task-done",
+      "detail": "T10: S6 full gate and draft PR"
     }
   ]
 }
