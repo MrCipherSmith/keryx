@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 2,
+  "id": "134",
+  "slug": "harden-the-harness-close-the-sandbox-esc",
+  "title": "Harden the harness: close the sandbox escape hatch, wire the mutation scanner, feed the completion gate, surface branching and replay",
+  "status": "in-progress",
+  "createdAt": "2026-08-05T11:01:14.590Z",
+  "updatedAt": "2026-08-05T11:03:04.261Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d005b5b86683d7e43177340d933919e8e9c7f139372a1f2aad5754c6f8d4b611",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "S1 sandbox: restricted profile fails closed regardless of the escape hatch",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "S2 wire the mutation scanner and derive scanAvailable",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "S3 thread flow requirements into the completion gate",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "S4 surface branching from the CLI",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "S5 surface replay-fixture validation from the CLI",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "S6 full gate and draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-05T11:01:14.590Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-05T11:02:59.646Z",
+      "event": "task-added",
+      "detail": "T5: S1 sandbox: restricted profile fails closed regardless of the escape hatch"
+    },
+    {
+      "at": "2026-08-05T11:02:59.732Z",
+      "event": "task-added",
+      "detail": "T6: S2 wire the mutation scanner and derive scanAvailable"
+    },
+    {
+      "at": "2026-08-05T11:02:59.819Z",
+      "event": "task-added",
+      "detail": "T7: S3 thread flow requirements into the completion gate"
+    },
+    {
+      "at": "2026-08-05T11:02:59.902Z",
+      "event": "task-added",
+      "detail": "T8: S4 surface branching from the CLI"
+    },
+    {
+      "at": "2026-08-05T11:02:59.987Z",
+      "event": "task-added",
+      "detail": "T9: S5 surface replay-fixture validation from the CLI"
+    },
+    {
+      "at": "2026-08-05T11:03:00.070Z",
+      "event": "task-added",
+      "detail": "T10: S6 full gate and draft PR"
+    },
+    {
+      "at": "2026-08-05T11:03:04.093Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-05T11:03:04.261Z",
+      "event": "started"
+    }
+  ]
+}
