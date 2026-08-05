@@ -47,10 +47,26 @@ same thing twice.
 
 | Phase | Defects | The one sentence it must make true |
 |---|---|---|
-| **P1 — the agent can finish** | D1, D2, P4.1 | A scripted read-only question is answered through the native tool, with no human touching the terminal. |
+| **P1 — the tool surface answers** | D1, P4.1 | A structural question is answered through the native tool, and no tool is weaker than the CLI verb it wraps. |
+| **P1b — unattended posture** | D2 | **Descoped 2026-08-05** to [keryx-unattended-posture](../keryx-unattended-posture/README.md) after three review rounds. See below. |
 | **P2 — the scriptable door is real** | D3, D4, D5 | `keryx harness run` can do tool work, against any provider the registry declares. |
 | **P2b — the tool surface** | P4.2, P4.3 | Every question group A asks has a tool, and the common one takes a single call. |
 | **P3 — re-measure** | D6 | The benchmark runs to completion on a corrected catalog, and says what it finds. |
+
+## Why P1 was split
+
+P1 originally paired D1 and D2 on the argument that either alone leaves the
+scenario unprovable. That argument was correct and the pairing still cost more
+than it bought: three review rounds each found the unattended half letting
+something through, while the D1 half was clean after the first.
+
+The rounds are not wasted — they are the evidence base of the new package, and
+they established something worth more than the feature would have been: the
+containment cannot be a list of forbidden command words. Three rounds tried,
+three rounds were defeated by a word obviously in a category already banned.
+
+D1's half ships on its own. It unblocks the P3 re-measurement, which is the only
+thing that was actually waiting.
 
 ## Non-Goals
 

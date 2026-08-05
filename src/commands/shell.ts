@@ -30,6 +30,7 @@ import type {
 import { buildOrientation } from "../ctx/orient";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
 import { makeKeryxRunner, builtinMetaprojectTools } from "../harness/tool/builtin/metaproject-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
@@ -60,6 +61,7 @@ import {
   resolveAgentMaxToolCalls,
   runAgentTurn,
 } from "./agent";
+import { advertisedToolNames, defaultAgentToolNames } from "./agent-tool-surface";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import {
   compactSession,
@@ -168,11 +170,18 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/exit",
 ];
 
-/** Agent-REPL help: registry-derived command list + the agent-specific preamble. */
-export function readlineAgentHelpText(): string {
+/**
+ * Agent-REPL help: registry-derived command list + the agent-specific preamble.
+ *
+ * `toolNames` comes from the tools the session actually registered. It used to be
+ * a hand-written list of six, while the agent registered fifteen and the system
+ * instruction named nine — three descriptions of one surface, all different
+ * (D1 layer 3). Absent ⇒ the default registered set.
+ */
+export function readlineAgentHelpText(toolNames?: readonly string[]): string {
+  const names = toolNames ?? defaultAgentToolNames();
   return (
-    "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
-    "graph_affected, memory_search, shell_exec (approval).\n" +
+    `Agent mode — describe a task; tools: ${names.join(", ")}.\n` +
     renderCommandHelp("agent", READLINE_AGENT_COMMANDS) +
     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
   );
@@ -936,7 +945,7 @@ async function runAgentRepl(
         return;
       }
       if (command === "/help") {
-        agentIo.onSystem?.(readlineAgentHelpText());
+        agentIo.onSystem?.(readlineAgentHelpText(advertisedToolNames(deps.tools)));
       } else if (command === "/expand") {
         const expanded = expandedToolOutput(lastToolName, lastToolOutput);
         if (expanded !== undefined) {
@@ -1158,6 +1167,27 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   };
 }
 
+/**
+ * Build the agent's tool array. ONE builder for both surfaces (TUI and readline),
+ * because AC9 asks that the system instruction advertise exactly the registered
+ * set — a claim that cannot hold if each surface assembles its own array and the
+ * instruction is written against one of them.
+ *
+ */
+export function buildAgentTools(opts: {
+  cwd: string;
+  port: MetaprojectPort;
+  spawnTool: InteractiveTool;
+}): InteractiveTool[] {
+  return [
+    ...builtinReadOnlyTools(opts.cwd),
+    ...builtinMetaprojectTools(opts.cwd, makeKeryxRunner(opts.cwd), opts.port),
+    shellExecTool(opts.cwd),
+    createAskUserTool(invokeAskUserHost),
+    opts.spawnTool,
+  ];
+}
+
 /** Which surface `shellCommand` should run for a given set of flags. */
 export type ShellSurface =
   /** The OpenTUI agent shell (`launchTuiAgentShell`). */
@@ -1253,20 +1283,16 @@ export async function shellCommand(args: string[]): Promise<void> {
           return [...names].map((name) => ({ name }));
         },
       });
+      const tools = buildAgentTools({ cwd, port: metaprojectPort, spawnTool });
       return {
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
-        tools: [
-          ...builtinReadOnlyTools(cwd),
-          ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
-          shellExecTool(cwd),
-          createAskUserTool(invokeAskUserHost),
-          spawnTool,
-        ],
+        tools,
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,
+          toolNames: advertisedToolNames(tools),
         }),
         // Generous default (48) so multi-step operator prompts do not hit the
         // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
@@ -1430,20 +1456,16 @@ export async function shellCommand(args: string[]): Promise<void> {
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
         getDetectedProviders: () => [{ name: provider }],
       });
+      const agentTools = buildAgentTools({ cwd: agentCwd, port: metaprojectPort, spawnTool });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: [
-          ...builtinReadOnlyTools(agentCwd),
-          ...builtinMetaprojectTools(agentCwd, makeKeryxRunner(agentCwd), metaprojectPort),
-          shellExecTool(agentCwd),
-          createAskUserTool(invokeAskUserHost),
-          spawnTool,
-        ],
+        tools: agentTools,
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
           modelId: model,
+          toolNames: advertisedToolNames(agentTools),
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),

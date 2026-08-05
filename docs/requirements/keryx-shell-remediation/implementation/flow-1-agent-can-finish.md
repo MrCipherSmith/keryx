@@ -1,14 +1,21 @@
-# Flow 1 — the agent can finish a task
-Version: 1.0.0
+# Flow 1 — the tool surface answers
+Version: 2.0.0
 
-Covers D1 (all three layers) and D2. This is the flow that unblocks everything
-else: until it lands, no keryx run completes without a human, so no other change
-can be verified end to end.
+> **Narrowed 2026-08-05.** This dispatch originally paired D1 with the unattended
+> posture (D2). After three review rounds the unattended half was descoped —
+> design, semantics and acceptance criteria moved intact to
+> [keryx-unattended-posture](../../keryx-unattended-posture/specification.md),
+> nothing discarded. What remains here is D1 plus the out-of-root read channel
+> the work itself opened, which must be closed in this flow because this flow
+> created it.
+
+Covers D1 (all three layers) and the `search_code` read channel. It unblocks the
+P3 re-measurement, which was the only thing genuinely waiting on P1.
 
 ## Flow setup
 
 ```bash
-keryx flow init --title "The agent can finish a task: parameter parity, unattended posture, one tool story"
+keryx flow init --title "The tool surface answers: parameter parity, one tool story, and an unapproved read channel closed"
 ```
 
 Then paste the acceptance criteria below into the flow's
@@ -17,7 +24,6 @@ file and the criteria become immutable.
 
 ```bash
 keryx flow task add <id> --title "T1 graph_affected accepts depth and ranked" --kind implement
-keryx flow task add <id> --title "T2 unattended posture flag and policy wiring" --kind implement
 keryx flow task add <id> --title "T3 reconcile both system instructions with the registry" --kind implement
 keryx flow task add <id> --title "T4 remove the shell-first instruction" --kind implement
 keryx flow task add <id> --title "T5 tests: capability, refusal, drift" --kind test
@@ -31,17 +37,12 @@ keryx flow freeze <id> && keryx flow start <id>
 ```
 - AC1: `graph_affected` accepts an optional `depth` (positive integer) and an optional `ranked` (boolean), passes both through to the graph port, and a test asserts the depth-2 result differs from the depth-1 result on a fixture with a transitive dependent.
 - AC2: No metaproject tool accepts a strict subset of the arguments its wrapped CLI verb accepts. A test enumerates the tool/verb pairs and fails on any tool that cannot express what its verb can.
-- AC3: `keryx shell` accepts a documented unattended flag. Under it, a run whose only tool calls are `risk: "read"` completes with no prompt and no operator input.
-- AC4: Under the unattended flag, a `deny` remains terminal. A test asserts that a policy-denied action is refused with the flag set exactly as it is without it.
-- AC5: Under the unattended flag, an `ask` with no approver resolves to `deny`, never to allow. A test asserts the refusal.
-- AC6: Under the unattended flag, a destructive-class action is refused regardless of any profile entry. A test asserts the refusal and that no filesystem change occurred.
-- AC7: With no flag, behaviour is unchanged: a test pins that an `ask` still prompts and that the default posture was not loosened to make the flag look good.
-- AC8: The unattended posture is visible in the TUI header and recorded in the run record, so a reader can tell an unattended run from a supervised one.
-- AC9: `buildAgentSystemInstruction` (`src/commands/agent.ts`) and the shell instruction (`src/commands/shell.ts`) advertise the same tool set, and that set equals the registered tools. A test asserts all three agree and fails if any drifts.
-- AC10: The instruction "Prefer ONE correct shell_exec over many exploratory tool calls when the user asks to run a known keryx workflow" no longer routes the model to the shell for a question a registered tool answers. A test asserts the instruction text does not tell the model to prefer shell over a tool for those classes.
-- AC11: Benchmark case A1, run scripted under the unattended flag against a project with a built graph, produces a correct transitive dependent list with `human_interventions: 0` and a tool path containing `graph_affected` and no `shell_exec` invoking `keryx gdgraph`.
-- AC12: `bun run check` and `bun run check:doc-links` pass; no test is skipped or weakened for this work.
-- AC13: No documentation claim is widened beyond what a test covers. `docs/docs/harness.md` and `docs/docs/cli-reference.md` describe the new flag, including what it does NOT do.
+- AC3: `buildAgentSystemInstruction` (`src/commands/agent.ts`) and the shell instruction (`src/commands/shell.ts`) advertise the same tool set, and that set equals the registered tools. A test asserts all three agree and fails if any drifts.
+- AC4: The instruction "Prefer ONE correct shell_exec over many exploratory tool calls when the user asks to run a known keryx workflow" no longer routes the model to the shell for a question a registered tool answers. A test asserts the instruction text does not tell the model to prefer shell over a tool for those classes.
+- AC5: `bun run check` and `bun run check:doc-links` pass; no test is skipped or weakened for this work.
+- AC6: No documentation claim is widened beyond what a test covers. `docs/docs/harness.md` and `docs/docs/cli-reference.md` describe the new flag, including what it does NOT do.
+- AC7: `search_code` cannot read outside the project root by any combination of `pattern`, `path` and `flags`. Asserted end-to-end against real ripgrep, including a `flags` value that changes traversal rather than arguments, and including an in-root symlink pointing out.
+- AC8: The parity contract has teeth in both directions: a tool that silently refuses an option its verb accepts fails the scanner, and an option excepted from passthrough must be declared.
 ```
 
 ## Files
@@ -51,23 +52,25 @@ keryx flow freeze <id> && keryx flow start <id>
 | T1 | `src/harness/tool/metaproject-operations.ts` (~416–435) | Add `depth`, `ranked` to `graph_affected`'s input schema and pass them to `port.graphAffected` |
 | T1 | `src/harness/tool/metaproject-port.ts` | Widen the port input if it does not already carry depth/ranked |
 | T1 | `src/harness/tool/builtin/metaproject-tools.ts` (~214) | Same parity for the builtin registration |
-| T2 | `src/commands/shell.ts` | Parse the flag; thread the posture into the agent loop |
-| T2 | `src/harness/policy/` | Resolve the posture. **Do not** add a path that reaches a `deny` |
 | T3, T4 | `src/commands/agent.ts` (237, 244), `src/commands/shell.ts` (175) | One tool list, derived from the registry rather than hand-written twice; drop the shell-first rule for tool-answerable classes |
 | T5 | new test files beside each | See criteria |
-| T6 | `docs/docs/harness.md`, `docs/docs/cli-reference.md` | The flag, its limits, and the widened tool |
+| T6 | `docs/docs/harness.md`, `docs/docs/cli-reference.md` | The widened tools, and what `search_code` will not do |
 
-## The trap
+## The trap, and where it went
 
-The cheap way to pass AC3 and AC11 is a blanket `--yes`. That trades away the one
-property the benchmark actually demonstrated: on C1, keryx and opencode ran the
-**same model** and only keryx stopped before deleting the graph index.
+The original trap — a blanket approve-everything flag — belongs to the descoped
+half and is restated in the new package, whose design constraint now begins with
+what three rounds cost to learn.
 
-AC4, AC5, AC6 and AC7 exist to fail this flow if that happens. If a reviewer can
-construct a destructive action that succeeds under the new flag, the flow is not
-done regardless of what else passes.
+The trap that remains here is smaller and was demonstrated twice: **a tool that
+is weaker than the CLI verb it wraps teaches the model to bypass it, and a fix
+that confines one argument is not the same as confining the run.** `search_code`
+was given a `flags` array and immediately leaked out-of-root reads twice — first
+because the pattern was a positional operand a flag could redefine, then because
+`--follow` changes traversal rather than arguments. Close the class, not the
+instance.
 
 ## Definition of done
 
-`keryx flow ac confirm` for AC1–AC13 with evidence, `flow implemented --pr <url>`,
+`keryx flow ac confirm` for every criterion with evidence, `flow implemented --pr <url>`,
 review addressed, merged, `flow complete --merged <sha>`.

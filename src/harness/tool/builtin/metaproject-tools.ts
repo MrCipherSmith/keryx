@@ -25,6 +25,7 @@ import type {
   MetaprojectPort,
   SearchCodeResult,
 } from "../metaproject-port";
+import { checkSearchToolOption, SEARCH_TOOL_FORCED_OPTIONS } from "../../../lib/rg-options";
 import { confineToRoot } from "./interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 
@@ -36,6 +37,20 @@ export type { GraphAffectedResult, MemorySearchResult };
 export type KeryxRunner = (args: string[]) => Promise<InteractiveToolResult>;
 
 const MAX_OUTPUT_BYTES = 20_000;
+
+/**
+ * `memory_search` filter properties → the `keryx memory search` flag that carries
+ * them, for the subprocess fallback. Kept beside the descriptor's `cliParity`
+ * declaration in metaproject-operations.ts, which the parity test enforces.
+ */
+const MEMORY_SEARCH_VALUE_FLAGS: ReadonlyArray<readonly [string, string]> = [
+  ["--module", "module"],
+  ["--entity", "entity"],
+  ["--status", "status"],
+  ["--class", "class"],
+  ["--limit", "limit"],
+  ["--as-of", "asOf"],
+];
 
 /**
  * Signature of "ripgrep is unavailable" across the paths it can surface on: the
@@ -113,6 +128,98 @@ function requireString(
 }
 
 /**
+ * Build the `keryx ctx rg` argv for `search_code` so that EVERY positional
+ * operand is a root-confined path.
+ *
+ * The shape is the fix. Passing the pattern as an operand meant the operand's
+ * meaning depended on the flags beside it: with `-e <expr>` the pattern slot
+ * becomes a path, and a review used that to read `~/.aws/credentials` through a
+ * `risk: "read"` tool that never reaches an approver. Confining `input.path`
+ * could not help, because the leak did not travel through `input.path`.
+ *
+ * So the pattern always goes in as `--regexp=<pattern>` — one token, inline, so
+ * it cannot be re-parsed as an option and cannot be mistaken for a path — and
+ * the operand list is exactly one confined directory or file. There is no
+ * operand left whose meaning could shift.
+ *
+ * Exported for the tests that hold this property.
+ */
+export function buildSearchArgv(input: {
+  root: string;
+  pattern: string;
+  path?: string | undefined;
+  flags?: readonly string[] | undefined;
+}): { ok: true; args: string[] } | { ok: false; reason: string } {
+  const flags: string[] = [];
+  const supplied = input.flags ?? [];
+  let index = 0;
+  while (index < supplied.length) {
+    const token = supplied[index] ?? "";
+    if (!token.startsWith("-")) {
+      return {
+        ok: false,
+        reason:
+          `search_code: "${token}" is not a ripgrep option. Put the search text in \`pattern\` ` +
+          "and the target in `path`; `flags` carries options only.",
+      };
+    }
+    const check = checkSearchToolOption(token);
+    if (!check.ok) {
+      return { ok: false, reason: `search_code: ${check.reason}` };
+    }
+    flags.push(token);
+    if (!check.consumesValue) {
+      index += 1;
+      continue;
+    }
+    const value = supplied[index + 1];
+    if (value === undefined) {
+      return { ok: false, reason: `search_code: ${token} needs a value.` };
+    }
+    // The CLI's own rule: a dash-leading value in a separate token can be
+    // re-parsed as an option by some ripgrep builds.
+    if (value.startsWith("-") && value !== "-") {
+      return {
+        ok: false,
+        reason:
+          `search_code: the value for ${token} may not start with a dash (${value}). ` +
+          `Use the inline form instead: ${token}=${value}.`,
+      };
+    }
+    flags.push(value);
+    index += 2;
+  }
+
+  // The ONE operand, always a path, always confined. `.` (the project root) when
+  // the caller named no target — the same scope `rg` searches by default.
+  let operand = ".";
+  if (input.path !== undefined && input.path.length > 0) {
+    const confined = confineToRoot(input.root, input.path);
+    if (confined === null) {
+      return { ok: false, reason: `search_code: path escapes the project root: ${input.path}` };
+    }
+    operand = confined;
+  }
+
+  // `--no-follow` goes AFTER the caller's flags and before the pattern, so it is
+  // the last occurrence and ripgrep resolves it last. Confining the operand
+  // stops the tool being pointed outside the root; this stops it walking outside
+  // the root from inside, which a symlink in `node_modules`, a pnpm/bun store or
+  // a monorepo link makes an ordinary situation rather than an exotic one.
+  return {
+    ok: true,
+    args: [
+      "ctx",
+      "rg",
+      ...flags,
+      ...SEARCH_TOOL_FORCED_OPTIONS,
+      `--regexp=${input.pattern}`,
+      operand,
+    ],
+  };
+}
+
+/**
  * Wrap `port` so `searchCode` degrades to the subprocess `run`ner when the port
  * has no in-process backing (an `isError` result). The port is still CONSULTED
  * first (preserving the flow-037 behavior/tests); only a failed port result falls
@@ -126,23 +233,24 @@ function withSearchFallback(port: MetaprojectPort, run: KeryxRunner, root: strin
       if (!result.isError) {
         return result;
       }
-      const args = ["ctx", "rg", input.pattern];
-      if (input.path !== undefined) {
-        // Same confinement as the non-port path: this fallback is reachable
-        // from the model whenever the port has no in-process backing, so
-        // leaving it open would defeat the check on the other branch.
-        const confined = confineToRoot(root, input.path);
-        if (confined === null) {
-          return {
-            pattern: input.pattern,
-            path: input.path,
-            output: `search_code: path escapes the project root: ${input.path}`,
-            isError: true,
-          };
-        }
-        args.push(confined);
+      // The SAME builder the no-port branch uses. This fallback is reachable
+      // from the model whenever the port has no in-process backing, so a second,
+      // laxer assembly here would simply be the hole on the other branch.
+      const built = buildSearchArgv({
+        root,
+        pattern: input.pattern,
+        path: input.path,
+        flags: input.flags,
+      });
+      if (!built.ok) {
+        return {
+          pattern: input.pattern,
+          ...(input.path !== undefined ? { path: input.path } : {}),
+          output: built.reason,
+          isError: true,
+        };
       }
-      const normalized = normalizeSearchResult(await run(args));
+      const normalized = normalizeSearchResult(await run(built.args));
       return {
         pattern: input.pattern,
         ...(input.path !== undefined ? { path: input.path } : {}),
@@ -171,12 +279,14 @@ export function builtinMetaprojectTools(
     return toInteractiveTools(METAPROJECT_OPERATIONS, withSearchFallback(port, run, root));
   }
 
+  const searchOp = METAPROJECT_OPERATIONS.find((op) => op.name === "search_code");
+
   const searchCode: InteractiveTool = {
     definition: {
       name: "search_code",
       description:
-        "Search the project's code/text (compact ripgrep via `keryx ctx rg`). Input: { pattern: string, path?: string } (path relative to the project root).",
-      inputSchema: {
+        searchOp?.description ?? "Search the project's code/text (compact ripgrep via `keryx ctx rg`).",
+      inputSchema: searchOp?.inputSchema ?? {
         type: "object",
         properties: { pattern: { type: "string" }, path: { type: "string" } },
         required: ["pattern"],
@@ -190,31 +300,37 @@ export function builtinMetaprojectTools(
         return pattern.error;
       }
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
-      const args = ["ctx", "rg", pattern.value];
-      if (path !== undefined) {
-        // Confine the model-supplied path exactly as `read_file` does. Without
-        // this, `search_code {pattern: ".", path: "<any readable file>"}` returns
-        // every line of that file to the provider — an arbitrary read behind a
-        // tool the policy classifies as read-only and auto-approves.
-        const confined = confineToRoot(root, path);
-        if (confined === null) {
-          return {
-            output: `search_code: path escapes the project root: ${path}`,
-            isError: true,
-          };
-        }
-        args.push(confined);
+      const rawFlags = input.flags;
+      const flags = Array.isArray(rawFlags)
+        ? rawFlags.filter((flag): flag is string => typeof flag === "string" && flag.length > 0)
+        : [];
+      // Validated and assembled by the shared builder. This branch used to
+      // forward `flags` verbatim on the reasoning that `keryx ctx rg` refuses an
+      // unknown option anyway — which was true and beside the point: the options
+      // that matter here are ones the CLI DOES accept, and they change what the
+      // operands mean. "The next layer will catch it" is how the layer that
+      // could not catch it got skipped.
+      const built = buildSearchArgv({ root, pattern: pattern.value, path, flags });
+      if (!built.ok) {
+        return { output: built.reason, isError: true };
       }
-      return normalizeSearchResult(await run(args));
+      return normalizeSearchResult(await run(built.args));
     },
   };
+
+  // Parity with the descriptor projection (tool-surface.md §P4.1): the
+  // subprocess fallback advertises and forwards the SAME arguments the port-backed
+  // tool takes. A fallback that could only ask for depth 1 would send the model
+  // back to `shell_exec("keryx gdgraph affected … --depth 2")` — the exact path
+  // benchmark case A1 recorded, just on the other branch of this function.
+  const affectedOp = METAPROJECT_OPERATIONS.find((op) => op.name === "graph_affected");
+  const memoryOp = METAPROJECT_OPERATIONS.find((op) => op.name === "memory_search");
 
   const graphAffected: InteractiveTool = {
     definition: {
       name: "graph_affected",
-      description:
-        "Show the blast radius (dependents) of a file via the code graph (`keryx gdgraph affected`). Input: { file: string } relative to the project root.",
-      inputSchema: {
+      description: affectedOp?.description ?? "Show the blast radius (dependents) of a file via the code graph.",
+      inputSchema: affectedOp?.inputSchema ?? {
         type: "object",
         properties: { file: { type: "string" } },
         required: ["file"],
@@ -227,16 +343,23 @@ export function builtinMetaprojectTools(
       if ("error" in file) {
         return file.error;
       }
-      return run(["gdgraph", "affected", file.value]);
+      const args = ["gdgraph", "affected", file.value];
+      const depth = input.depth;
+      if (typeof depth === "number" && Number.isFinite(depth) && depth > 0) {
+        args.push("--depth", String(Math.floor(depth)));
+      }
+      if (input.ranked === true) {
+        args.push("--ranked");
+      }
+      return run(args);
     },
   };
 
   const memorySearch: InteractiveTool = {
     definition: {
       name: "memory_search",
-      description:
-        "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: { query: string }.",
-      inputSchema: {
+      description: memoryOp?.description ?? "Search project memory — decisions, lessons, constraints.",
+      inputSchema: memoryOp?.inputSchema ?? {
         type: "object",
         properties: { query: { type: "string" } },
         required: ["query"],
@@ -249,7 +372,19 @@ export function builtinMetaprojectTools(
       if ("error" in query) {
         return query.error;
       }
-      return run(["memory", "search", query.value]);
+      const args = ["memory", "search", query.value];
+      for (const [flag, key] of MEMORY_SEARCH_VALUE_FLAGS) {
+        const value = input[key];
+        if (typeof value === "string" && value.length > 0) {
+          args.push(flag, value);
+        } else if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+          args.push(flag, String(Math.floor(value)));
+        }
+      }
+      if (input.semantic === true) {
+        args.push("--semantic");
+      }
+      return run(args);
     },
   };
 

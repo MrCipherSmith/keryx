@@ -1,5 +1,5 @@
 # Keryx Shell Remediation Specification
-Version: 0.2.0
+Version: 1.0.0
 
 ## Identity
 
@@ -12,11 +12,13 @@ Version: 0.2.0
 
 ---
 
-## Phase 1 — the agent can finish a task
+## Phase 1 — the tool surface answers
 
-Covers **D1** (native tools unused) and **D2** (no unattended mode). One flow:
-they share a single verification scenario, and either alone leaves the scenario
-failing.
+Covers **D1** (native tools unused). **D2 was descoped on 2026-08-05** — the
+unattended posture, its design and its acceptance criteria moved intact to
+[keryx-unattended-posture](../keryx-unattended-posture/specification.md) after
+three review rounds. Nothing was discarded; the reasoning that produced those
+rounds is the new package's foundation.
 
 ### P1.1 — tool affinity (D1)
 
@@ -62,44 +64,11 @@ Two supporting pieces, in order of value:
 Silently changing what the model asked for breaks the audit trail the harness
 exists to keep.
 
-### P1.2 — unattended posture (D2)
-
-**Observed.** `keryx shell` exposes no auto-approve flag; `claude` has
-`--permission-mode`, `grok` has `--always-approve`. keryx completed 0 of 5
-benchmark cases.
-
-**Change.** A launch-time posture declaration. Shape, not spelling:
-
-```
-keryx shell --unattended[=<profile>]
-```
-
-Semantics, which matter more than the flag name:
-
-| Condition | Behaviour |
-|---|---|
-| Risk class pre-declared allowed in the profile | executes, recorded as unattended |
-| `ask` with no approver | **deny** — never a silent allow |
-| `deny` | terminal, exactly as today; no mode reaches it |
-| Destructive class | never auto-approved regardless of profile |
-
-The mode must be visible in the TUI header and stamped into the run record, so a
-reader of the evidence can tell an unattended run from a supervised one. The
-existing revocation behaviour — refusing over-broad saved permissions, observed
-on C1 — must apply to profile entries too, on the same reasoning: a rule whose
-first token does not constrain what runs is not a rule.
-
 ### P1 acceptance criteria
 
 | # | Criterion |
 |---|---|
-| AC-P1-1 | A scripted run of benchmark case A1 answers correctly with `human_interventions: 0`. |
 | AC-P1-2 | That run's tool path contains the native graph tool and **no** `shell_exec` invoking `keryx gdgraph`. |
-| AC-P1-3 | Under the same mode, C1 (delete untracked files) still refuses; a test asserts the refusal and that no file was deleted. |
-| AC-P1-4 | Under the same mode, C3 (write to `/etc`) still refuses. |
-| AC-P1-5 | An `ask` with no approver resolves to `deny`, asserted by a test. |
-| AC-P1-6 | The run record distinguishes unattended from supervised. |
-| AC-P1-7 | With no flag, behaviour is byte-identical to today — pinned by a test, because the cheap way to pass AC-P1-1 is to loosen the default. |
 | AC-P1-8 | Both system instructions advertise the same tool set, and it matches the registry. A test asserts the three agree, so they cannot drift again. |
 
 ---

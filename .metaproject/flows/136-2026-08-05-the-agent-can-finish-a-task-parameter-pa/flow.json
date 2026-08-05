@@ -1,0 +1,484 @@
+{
+  "schemaVersion": 2,
+  "id": "136",
+  "slug": "the-agent-can-finish-a-task-parameter-pa",
+  "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
+  "status": "implemented",
+  "createdAt": "2026-08-05T19:40:33.840Z",
+  "updatedAt": "2026-08-05T22:17:36.500Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d3b598e6d9f51d7b7d6f0f37a9938160e3a65b9945770a8580addc3798c0baa0",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-05T22:17:35.977Z",
+      "note": "metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not, over the real computeAffected on an a<-b<-c fixture."
+    },
+    "AC2": {
+      "at": "2026-08-05T22:17:36.064Z",
+      "note": "Parity test extracts each verb handler from src/commands, follows it into module-level option tables, counts short flags, and errors on an ambiguous anchor. passthrough declares except; every excepted option must appear in expresses or refuses; the behavioural check runs off the declaration, not the implementation set. Both reviewer probes now fail (deleting an expresses entry; secretly refusing --follow/--hidden/-g/--glob)."
+    },
+    "AC9": {
+      "at": "2026-08-05T22:17:36.152Z",
+      "note": "agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions, with a vacuity guard."
+    },
+    "AC10": {
+      "at": "2026-08-05T22:17:36.239Z",
+      "note": "agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone, and that the replacement routes tool-answerable questions to the tool."
+    },
+    "AC12": {
+      "at": "2026-08-05T22:17:36.326Z",
+      "note": "bun run check: 3127 pass, 14 skip (all pre-existing), 0 fail. bun run check:doc-links: 649 links, 0 broken. No test skipped or weakened; the tests for the descoped posture were deleted with the code they covered, not disabled."
+    },
+    "AC13": {
+      "at": "2026-08-05T22:17:36.413Z",
+      "note": "harness.md and cli-reference.md carry no unattended material; the parity section states what the scanner actually does and names the -e/--follow exceptions and why. Every claim maps to a named test."
+    },
+    "AC14": {
+      "at": "2026-08-05T22:17:36.500Z",
+      "note": "search-code-confinement.test.ts: 19 escape inputs produce no out-of-root operand and never place the pattern as an operand; argv always ends --no-follow, --regexp=<pattern>, <confined path>; refused on all three branches. END TO END against real ripgrep with an in-root symlink out of the project: not readable by default, with --follow (refused), via the symlink as path, or with --hidden/--no-ignore/--max-depth/-g. Dropping --no-follow fails 4 tests."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/253"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "T1 graph_affected accepts depth and ranked",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "T2 unattended posture flag and policy wiring",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "T3 reconcile both system instructions with the registry",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "T4 remove the shell-first instruction",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "T5 tests: capability, refusal, drift",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "T6 docs: harness page and CLI reference",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "T7 full gate and draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-05T19:40:33.840Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-05T19:41:13.814Z",
+      "event": "task-added",
+      "detail": "T5: T1 graph_affected accepts depth and ranked"
+    },
+    {
+      "at": "2026-08-05T19:41:13.901Z",
+      "event": "task-added",
+      "detail": "T6: T2 unattended posture flag and policy wiring"
+    },
+    {
+      "at": "2026-08-05T19:41:13.985Z",
+      "event": "task-added",
+      "detail": "T7: T3 reconcile both system instructions with the registry"
+    },
+    {
+      "at": "2026-08-05T19:41:14.070Z",
+      "event": "task-added",
+      "detail": "T8: T4 remove the shell-first instruction"
+    },
+    {
+      "at": "2026-08-05T19:41:14.154Z",
+      "event": "task-added",
+      "detail": "T9: T5 tests: capability, refusal, drift"
+    },
+    {
+      "at": "2026-08-05T19:41:14.242Z",
+      "event": "task-added",
+      "detail": "T10: T6 docs: harness page and CLI reference"
+    },
+    {
+      "at": "2026-08-05T19:41:14.327Z",
+      "event": "task-added",
+      "detail": "T11: T7 full gate and draft PR"
+    },
+    {
+      "at": "2026-08-05T19:41:21.204Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-05T19:41:21.295Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-05T20:01:49.552Z",
+      "event": "task-done",
+      "detail": "T5: T1 graph_affected accepts depth and ranked"
+    },
+    {
+      "at": "2026-08-05T20:01:49.647Z",
+      "event": "task-done",
+      "detail": "T6: T2 unattended posture flag and policy wiring"
+    },
+    {
+      "at": "2026-08-05T20:01:49.734Z",
+      "event": "task-done",
+      "detail": "T7: T3 reconcile both system instructions with the registry"
+    },
+    {
+      "at": "2026-08-05T20:01:49.821Z",
+      "event": "task-done",
+      "detail": "T8: T4 remove the shell-first instruction"
+    },
+    {
+      "at": "2026-08-05T20:11:36.531Z",
+      "event": "task-done",
+      "detail": "T9: T5 tests: capability, refusal, drift"
+    },
+    {
+      "at": "2026-08-05T20:14:14.005Z",
+      "event": "task-done",
+      "detail": "T10: T6 docs: harness page and CLI reference"
+    },
+    {
+      "at": "2026-08-05T20:14:58.529Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/tool/metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not (real computeAffected over an a<-b<-c fixture)"
+    },
+    {
+      "at": "2026-08-05T20:14:58.618Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: metaproject-operations.parity.test.ts enumerates every tool/verb pair, reads each verb's handler out of src/commands and fails on any option the tool cannot express; subprocess fallback forwards the same arguments"
+    },
+    {
+      "at": "2026-08-05T20:14:58.702Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell-launch.test.ts parses --unattended[=profile]; agent-unattended.test.ts runs a read-only turn with zero approval requests; documented in cli-reference.md and harness.md"
+    },
+    {
+      "at": "2026-08-05T20:14:58.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: unattended.test.ts compares decideUnattended against decide() directly: both deny, matchedRules hard-deny:shell; agent-unattended.test.ts shows the tool never runs with or without the flag"
+    },
+    {
+      "at": "2026-08-05T20:14:58.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: unattended.test.ts: unattended-untrusted shell=ask resolves to deny via headless-fail-closed; agent-unattended.test.ts asserts the tool never ran; ask_user host rejects"
+    },
+    {
+      "at": "2026-08-05T20:14:58.965Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: unattended.test.ts enumerates all three profiles x five risk classes with destructive=true, all deny; agent-unattended.test.ts refuses a destructive-risk tool under monitored-trusted-local (shell=allow) and the fixture file survives, with a benign-command control that does run"
+    },
+    {
+      "at": "2026-08-05T20:14:59.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: agent-unattended.test.ts: with no flag an ask still prompts and a yes still executes; with no approver the refusal wording is byte-identical to before"
+    },
+    {
+      "at": "2026-08-05T20:14:59.145Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: session/store.test.ts records posture on create, persist and resume; unattended.test.ts pins the header label and record value; agent-tool-surface.test.ts pins that both surfaces use the shared formatter and postureRecord"
+    },
+    {
+      "at": "2026-08-05T20:14:59.232Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions"
+    },
+    {
+      "at": "2026-08-05T20:14:59.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone and that the replacement routes tool-answerable questions to the tool"
+    },
+    {
+      "at": "2026-08-05T20:14:59.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3086 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken; no test skipped or weakened for this work"
+    },
+    {
+      "at": "2026-08-05T20:14:59.494Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: cli-reference.md and harness.md describe the flag and its refusals; every claim maps to a named test, and the header/run-record claim is pinned at the seam because the TUI cannot render headlessly"
+    },
+    {
+      "at": "2026-08-05T20:15:04.243Z",
+      "event": "task-done",
+      "detail": "T11: T7 full gate and draft PR"
+    },
+    {
+      "at": "2026-08-05T20:15:11.522Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-05T20:15:11.613Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-05T20:15:11.698Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-05T20:15:11.781Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-05T20:17:49.443Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/253"
+    },
+    {
+      "at": "2026-08-05T20:52:09.134Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: the parity test could not see short flags and scanned only named handler blocks, so search_code declaring expresses:{} against a verb forwarding ~40 ripgrep options passed. Now: search_code takes a validated  array carrying the CLI's own forwarded-option table (src/lib/rg-options.ts); the test sees short flags, discovers module-level option tables by following imports from the verb's handler, and refuses an ambiguous anchor. Verified adversarially — reverting search_code to {pattern,path} fails the test."
+    },
+    {
+      "at": "2026-08-05T20:52:09.228Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: with monitored-trusted-local (shell=allow) the only barrier was isDestructiveCommand(), a blocklist its own module forbids using as a boundary, and a review deleted .metaproject/data/gdgraph unattended. Now two gates: the engine, plus an operator-supplied --unattended-allow argv allowlist validated by validateShellPattern; nothing runs unless a pattern recognises it, and a destructive/credential action is refused even when allowlisted. Verified with the REAL shellExecTool and a runner that really executes: git clean -fdx and rm -rf <subdir> leave the fixture intact. Reverting the allowlist gate fails 13 tests."
+    },
+    {
+      "at": "2026-08-05T20:52:09.315Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: SUPERSEDES the earlier note: also asserts an unattended launch never opens a provider/mode picker (resolveUnattendedSelection: flags, then saved config, then refuse) and that --unattended with --chat is refused."
+    },
+    {
+      "at": "2026-08-05T20:52:09.399Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: SUPERSEDES the earlier note: the header claim is now a behavioural assertion on shellHeaderMeta() rather than a grep of source text; the TUI seam check remains, stated as the weaker guarantee it is."
+    },
+    {
+      "at": "2026-08-05T20:52:09.489Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3106 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken."
+    },
+    {
+      "at": "2026-08-05T20:52:09.574Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: SUPERSEDES the earlier note, which backed a false claim. harness.md and cli-reference.md now state the two-gate model, that the flag alone runs nothing, why an allowlist rather than a blocklist (naming git clean -fdx), the metacharacter refusal, and the no-picker/no-chat rules. Each is covered by a named test."
+    },
+    {
+      "at": "2026-08-05T20:52:17.914Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: the parity test could not see short flags and scanned only named handler blocks, so search_code declaring expresses:{} against a verb forwarding ~40 ripgrep options passed. Now: search_code takes a validated flags array carrying the CLI own forwarded-option table (src/lib/rg-options.ts); the test sees short flags, discovers module-level option tables by following imports from the verb handler, and refuses an ambiguous anchor. Verified adversarially - reverting search_code to {pattern,path} fails the test."
+    },
+    {
+      "at": "2026-08-05T21:33:57.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Round 2: search_code takes flags validated against the CLI table, MINUS -e/--regexp which map to the pattern field instead (they would move operand meaning). Parity test excepts them explicitly and asserts the regexp capability is still reachable through pattern. Verified: reverting search_code to {pattern,path} fails the test."
+    },
+    {
+      "at": "2026-08-05T21:33:57.449Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Round 2: the allowlist that backs this was accepting *, bash -c *, and keryx * — 14 of 16 known-bad commands were reachable. validateUnattendedPattern now requires a literal command word and refuses any wildcard after an execution wrapper. agent-unattended-sweep.test.ts runs all 24 reviewed commands with no allowlist AND under a plausible one, with a real runner and a real git fixture; the tree is intact afterwards. Reverting either the validator or the -e rejection fails the sweep."
+    },
+    {
+      "at": "2026-08-05T21:33:57.537Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Round 2: removed the \"first token does not constrain\" claim (falsified) and narrowed the credential claim to keryx auth.json/permissions.json, stating plainly that an exact allowlisted cat ~/.ssh/id_rsa runs. Run-record format corrected to include +allow(N). Added the harness run --tools paragraph."
+    },
+    {
+      "at": "2026-08-05T21:33:57.626Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3173 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 640 links, 0 broken. Includes the merged flow-3 base."
+    },
+    {
+      "at": "2026-08-05T22:02:10.030Z",
+      "event": "ac-updated",
+      "detail": "probe"
+    },
+    {
+      "at": "2026-08-05T22:11:59.160Z",
+      "event": "ac-updated",
+      "detail": "Unattended posture descoped to its own flow (docs/requirements/keryx-unattended-posture/) after three review rounds each found a hole the previous fix had not closed. AC3-AC8 governed that posture and move with it; AC11 depended on the flag and moves too. Retained: AC1, AC2, AC9, AC10, AC12, AC13. Added AC14 for the out-of-root read channel this flow's own parameter-parity change opened, which does not travel with the split."
+    },
+    {
+      "at": "2026-08-05T22:17:35.977Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not, over the real computeAffected on an a<-b<-c fixture."
+    },
+    {
+      "at": "2026-08-05T22:17:36.064Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Parity test extracts each verb handler from src/commands, follows it into module-level option tables, counts short flags, and errors on an ambiguous anchor. passthrough declares except; every excepted option must appear in expresses or refuses; the behavioural check runs off the declaration, not the implementation set. Both reviewer probes now fail (deleting an expresses entry; secretly refusing --follow/--hidden/-g/--glob)."
+    },
+    {
+      "at": "2026-08-05T22:17:36.152Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions, with a vacuity guard."
+    },
+    {
+      "at": "2026-08-05T22:17:36.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone, and that the replacement routes tool-answerable questions to the tool."
+    },
+    {
+      "at": "2026-08-05T22:17:36.326Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3127 pass, 14 skip (all pre-existing), 0 fail. bun run check:doc-links: 649 links, 0 broken. No test skipped or weakened; the tests for the descoped posture were deleted with the code they covered, not disabled."
+    },
+    {
+      "at": "2026-08-05T22:17:36.413Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: harness.md and cli-reference.md carry no unattended material; the parity section states what the scanner actually does and names the -e/--follow exceptions and why. Every claim maps to a named test."
+    },
+    {
+      "at": "2026-08-05T22:17:36.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: search-code-confinement.test.ts: 19 escape inputs produce no out-of-root operand and never place the pattern as an operand; argv always ends --no-follow, --regexp=<pattern>, <confined path>; refused on all three branches. END TO END against real ripgrep with an in-root symlink out of the project: not readable by default, with --follow (refused), via the symlink as path, or with --hidden/--no-ignore/--max-depth/-g. Dropping --no-follow fails 4 tests."
+    }
+  ]
+}

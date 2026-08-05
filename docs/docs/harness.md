@@ -77,6 +77,35 @@ Four properties are worth knowing before you rely on it:
 4. **Structural safety runs before policy.** `guardAction` refuses malformed or
    unsafe shapes ahead of any allow/ask/deny question.
 
+## Tools are as capable as the CLI verbs they wrap
+
+A metaproject tool exposes the arguments of the `keryx` verb behind it. This is a
+rule and not an accident: a tool that can ask less than its own CLI teaches the
+model to reach for `shell_exec` instead, and `shell_exec` is default-deny — so a
+narrow tool turns into a stalled run rather than a slower one.
+
+`graph_affected` therefore takes `depth` and `ranked` like `keryx gdgraph
+affected`, `graph_symbol` takes `impact` and `depth`, `memory_search` takes the
+verb's filters, `repomap` takes `budget` and `seed`, `wiki_ask` takes `k` and
+`rerank`, and `search_code` takes a `flags` array carrying every ripgrep option
+`keryx ctx rg` forwards — `-g`, `-t`, `-A/-B/-C`, `-i`, `-m`, `--max-depth`,
+`--hidden`, `--no-ignore`, `--sort`, `-l`, `-c` and the rest — read from the one
+table the CLI itself uses, so the two cannot drift apart.
+
+One exception, and it is a deliberate one: `-e`/`--regexp` is expressed through
+`search_code`'s `pattern` field rather than through `flags`. Supplying the pattern
+by flag turns every positional operand into a path, and a review used exactly
+that to read `~/.aws/credentials` through a `risk: "read"` tool that never
+reaches an approver. `search_code` now passes the pattern as `--regexp=<pattern>`
+itself and hands ripgrep exactly one operand: a root-confined path. There is no
+operand left whose meaning a flag could change.
+
+Each descriptor declares the verb it wraps and where that verb reads its options,
+and a test extracts that verb's handler from the command source, follows it into
+any module-level option table, and compares. Short flags count; an ambiguous
+anchor is an error rather than a guess. Widening the CLI without widening the tool
+fails the build.
+
 ## Containment underneath
 
 The OS sandbox sits *below* the policy engine — Seatbelt on macOS, bubblewrap on
@@ -141,6 +170,21 @@ reach flow state structurally.
 keryx agents monitor <events-file>    # offline fleet report over a recorded log
 ```
 
+## Tools without a terminal
+
+`keryx harness run --tools` registers the read-only metaproject tools —
+`search_code`, `graph_affected`, `memory_search`, `read_wiki` and the rest — on
+the non-interactive door, so a scripted run can inspect a project instead of
+answering from the prompt alone. Every one of them is `risk: "read"` and needs no
+approval, so nothing about the flag reintroduces the stall it exists beside.
+
+Two things it deliberately does not do. It is **off by default**: without
+`--tools` the run registers nothing and behaves byte-for-byte as it did before.
+And the tool results are **not fed back to the model** — the run records what was
+called and what came back, for the script to read. `--tools` is for a caller that
+wants the tool output; the agentic loop that reasons over it is `keryx shell`.
+See [CLI reference](./cli-reference.md#harness-run-tools-opt-in-with---tools).
+
 ## Record and replay
 
 ```bash
@@ -176,9 +220,9 @@ extension needs a grant bound to its action fingerprint.
 
 Stated here rather than left to be discovered:
 
-- **No shipped path registers a tool.** Both production executors are refusals, so
-  `keryx harness run` and `keryx serve` are single text turns today. The
-  interactive shell is where tools actually run.
+- **`keryx serve` registers no tool.** Its production executor is a refusal, so a
+  served turn is a single text turn. `keryx harness run` is no longer in this
+  list — see below — and the interactive shell is where the full tool set runs.
 - **No remote approvals.** A `keryx serve` turn whose decision is `ask` ends in a
   recorded denial. Run approval-requiring work locally through `keryx shell`.
 - **No real replay.** See above — `validate-log` only.

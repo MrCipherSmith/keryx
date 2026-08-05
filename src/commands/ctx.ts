@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { RG_FORWARDED_BOOLEAN_FLAGS, RG_FORWARDED_VALUE_FLAGS } from "../lib/rg-options";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { redactRaw } from "../security/guard";
@@ -554,51 +555,6 @@ ${errors.length > 0 ? renderTextSection("Errors / Warnings", errors) : ""}
 // rather than forwarded, so an option added to a future ripgrep — including a
 // new way to execute something — is denied by default instead of inherited.
 
-/** rg boolean flags keryx forwards. */
-const RG_SAFE_FLAGS = new Set([
-  "-i", "--ignore-case",
-  "-s", "--case-sensitive",
-  "-S", "--smart-case",
-  "-w", "--word-regexp",
-  "-x", "--line-regexp",
-  "-F", "--fixed-strings",
-  "-v", "--invert-match",
-  "-U", "--multiline",
-  "--multiline-dotall",
-  "-l", "--files-with-matches",
-  "--files-without-match",
-  "--files",
-  "-c", "--count",
-  "--count-matches",
-  "--hidden",
-  "--no-ignore",
-  "--no-ignore-vcs",
-  "--follow",
-  "-n", "--line-number",
-  "-N", "--no-line-number",
-  "--column", "--no-column",
-  "--no-heading", "--heading",
-  "--stats",
-  "--crlf",
-  "--word-regexp",
-]);
-
-/** rg flags that consume a following value (or use `--flag=value`). */
-const RG_SAFE_VALUE_FLAGS = new Set([
-  "-e", "--regexp",
-  "-g", "--glob",
-  "--iglob",
-  "-t", "--type",
-  "-T", "--type-not",
-  "-A", "--after-context",
-  "-B", "--before-context",
-  "-C", "--context",
-  "-m", "--max-count",
-  "-M", "--max-columns",
-  "--max-depth",
-  "--sort", "--sortr",
-]);
-
 export type RgCommandResult =
   | { ok: true; command: string[] }
   | { ok: false; reason: string };
@@ -645,7 +601,7 @@ export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | n
       const [name] = arg.split("=", 1) as [string];
       const inlineValue = arg.includes("=");
 
-      if (RG_SAFE_VALUE_FLAGS.has(name)) {
+      if (RG_FORWARDED_VALUE_FLAGS.has(name)) {
         if (inlineValue) {
           flags.push(arg);
           index += 1;
@@ -676,7 +632,7 @@ export function buildRgCommand(rgArgs: string[], listMode: "files" | "count" | n
         continue;
       }
 
-      if (RG_SAFE_FLAGS.has(name) && !inlineValue) {
+      if (RG_FORWARDED_BOOLEAN_FLAGS.has(name) && !inlineValue) {
         flags.push(arg);
         index += 1;
         continue;
