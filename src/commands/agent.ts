@@ -17,7 +17,6 @@ import { defaultAgentToolNames, groupToolNames, renderToolList } from "./agent-t
 import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import type { ToolRisk } from "../harness/tool/types";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 
 /**
@@ -44,12 +43,6 @@ export interface ApprovalMeta {
    * and never remembered, whatever the user picks.
    */
   credentials?: boolean;
-  /**
-   * The tool's static risk class. A human approver reads the command and does not
-   * need it; a POLICY approver (the unattended posture) does, because it resolves
-   * the action through the frozen engine and the engine decides by risk class.
-   */
-  risk?: ToolRisk;
 }
 
 /**
@@ -61,19 +54,7 @@ export interface ApprovalMeta {
  * a denial. That closes the gap where "the user said yes" and "this is what
  * runs" are two independent facts that merely happen to line up.
  */
-export type ApprovalResponse =
-  | boolean
-  | {
-      approved: boolean;
-      fingerprint?: string;
-      /**
-       * Why the action was refused. Passed to the model in place of the default
-       * "not approved by the user" line — an approver that is not a user (the
-       * unattended policy engine) would otherwise report the wrong reason, and
-       * the model would retry the wrong thing.
-       */
-      reason?: string;
-    };
+export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string };
 
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
@@ -238,12 +219,6 @@ export interface AgentInstructionContext {
    * that drifts (D1 layer 3). Absent ⇒ {@link defaultAgentToolNames}.
    */
   toolNames?: readonly string[];
-  /**
-   * Set when the run declared an unattended posture. The model is told there is
-   * nobody to approve or answer, so it stops proposing actions that can only end
-   * in a refusal.
-   */
-  unattendedProfile?: string;
 }
 
 /**
@@ -268,23 +243,6 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
   const hasAskUser = surface.all.includes("ask_user");
   const hasSpawn = surface.gated.includes("spawn_subagent");
 
-  const unattended = ctx.unattendedProfile?.trim() ?? "";
-  const unattendedBlock =
-    unattended.length > 0
-      ? "Unattended run (no operator is present):\n" +
-        `- The session declared --unattended=${unattended}. Nobody will approve anything and nobody ` +
-        "will answer a question.\n" +
-        "- Approval-gated tools are resolved by the policy engine, not a person. A denied action stays " +
-        "denied; do not retry it and do not look for a way around it.\n" +
-        "- Destructive commands are refused whatever the profile says. If a task needs one, stop and " +
-        "report what you would have run and why.\n" +
-        (hasAskUser
-          ? "- ask_user cannot be answered. State the assumption you are making and continue, or stop " +
-            "and report what you needed to ask.\n"
-          : "") +
-        "\n"
-      : "";
-
   const base =
     "You are the keryx interactive agent (project harness). Your tools this session:\n" +
     `- filesystem (read-only): ${renderToolList(surface.filesystem)}\n` +
@@ -294,7 +252,6 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
       ? `- approval-gated (each call is put to the approver before it runs): ${renderToolList(surface.gated)}\n`
       : "") +
     "\n" +
-    unattendedBlock +
     "Tool-calling rules (critical):\n" +
     "- ALWAYS pass every required field in the tool JSON (e.g. search_code needs " +
     "`pattern`, read_wiki needs `path`, wiki_ask needs `question`). Never call a tool " +
@@ -748,18 +705,6 @@ function isApprovalFor(response: ApprovalResponse, fingerprint: string): boolean
   return response.fingerprint === undefined || response.fingerprint === fingerprint;
 }
 
-/**
- * The approver's own words for a refusal, when it supplied any. A bare `false`
- * (the historical form) has none, so the caller keeps its default wording and the
- * supervised path stays byte-identical.
- */
-function refusalReason(response: ApprovalResponse): string | undefined {
-  if (typeof response === "boolean") {
-    return undefined;
-  }
-  return typeof response.reason === "string" && response.reason.length > 0 ? response.reason : undefined;
-}
-
 /** Resolve, gate (risk + approval), validate, and invoke a call → a content result. */
 async function executeCall(
   call: PendingCall,
@@ -804,13 +749,9 @@ async function executeCall(
             fingerprint,
             destructive,
             ...(credentials ? { credentials } : {}),
-            risk,
           });
     if (!isApprovalFor(response, fingerprint)) {
-      return {
-        output: refusalReason(response) ?? `command not approved by the user; not executed`,
-        isError: true,
-      };
+      return { output: `command not approved by the user; not executed`, isError: true };
     }
   } else if (risk === "delegate") {
     // Fail-closed like `shell`: a delegate with no approver present is denied,
@@ -821,12 +762,9 @@ async function executeCall(
     const response =
       requestApproval === undefined
         ? false
-        : await requestApproval(call.name, call.input, { fingerprint, destructive: false, risk });
+        : await requestApproval(call.name, call.input, { fingerprint, destructive: false });
     if (!isApprovalFor(response, fingerprint)) {
-      return {
-        output: refusalReason(response) ?? `subagent spawn not approved by the user; not executed`,
-        isError: true,
-      };
+      return { output: `subagent spawn not approved by the user; not executed`, isError: true };
     }
   } else if (risk !== "read") {
     return { output: `tool "${call.name}" (risk ${risk}) is not permitted`, isError: true };

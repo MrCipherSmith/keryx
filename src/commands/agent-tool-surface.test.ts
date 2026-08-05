@@ -15,8 +15,7 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { buildAgentSystemInstruction } from "./agent";
 import { advertisedToolNames, defaultAgentToolNames, groupToolNames } from "./agent-tool-surface";
-import { buildAgentTools, readlineAgentHelpText, shellHeaderMeta } from "./shell";
-import { postureRecord } from "../harness/policy/unattended";
+import { buildAgentTools, readlineAgentHelpText } from "./shell";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
@@ -137,56 +136,4 @@ test("AC10: the instruction no longer routes tool-answerable questions to the sh
   // tool. Removing it would trade one wrong routing rule for another.
   expect(instruction).toContain("shell_exec");
   expect(instruction).toContain("wiki enrich");
-});
-
-test("the unattended posture is stated in the instruction when one is declared", () => {
-  const names = advertisedToolNames(registeredTools());
-  const supervised = buildAgentSystemInstruction(undefined, { toolNames: names });
-  expect(supervised).not.toContain("Unattended run");
-
-  const unattended = buildAgentSystemInstruction(undefined, {
-    toolNames: names,
-    unattendedProfile: "read-only-review",
-  });
-  expect(unattended).toContain("Unattended run");
-  expect(unattended).toContain("--unattended=read-only-review");
-  expect(unattended).toMatch(/Destructive commands are refused/);
-  expect(unattended).toMatch(/ask_user cannot be answered/);
-});
-
-test("AC8: the posture reaches the header and the run record as VALUES", () => {
-  // Behaviour first: the composer both surfaces call returns a header that says
-  // so, and the record helper returns a value that distinguishes the two.
-  expect(
-    shellHeaderMeta({
-      provider: "fake",
-      model: "m",
-      agentMode: true,
-      cwdLabel: "~/p",
-      unattended: { profile: "read-only-review", allow: [] },
-    }),
-  ).toContain("unattended(read-only-review, no commands)");
-  expect(shellHeaderMeta({ provider: "fake", model: "m", agentMode: true, cwdLabel: "~/p" })).not.toContain(
-    "unattended",
-  );
-  expect(postureRecord({ profile: "read-only-review", allow: [] })).toBe("unattended:read-only-review");
-  expect(postureRecord(undefined)).toBe("supervised");
-});
-
-test("AC8: and the TUI, which cannot render headlessly, is held to the same seam", () => {
-  // The behavioural assertion above covers the readline surface's composer. The
-  // TUI mounts its header inside OpenTUI, which no unit test can start, so the
-  // guarantee there is that it goes through the SAME helpers rather than
-  // composing a string of its own. That is weaker, and it is stated as weaker.
-  const repoRoot = path.join(import.meta.dir, "..", "..");
-  const tui = readFileSync(path.join(repoRoot, "src", "tui", "tui-shell.ts"), "utf8");
-  expect(tui, "the TUI must render the posture through the shared formatter").toContain(
-    "unattendedHeaderLabel(",
-  );
-  expect(tui, "the TUI must stamp the posture into the run record").toContain("postureRecord(");
-  expect(tui, "the TUI must install the policy approver, not a bypass").toContain(
-    "createUnattendedApprover(",
-  );
-  // And it must not short-circuit to an approval of its own under the flag.
-  expect(tui).not.toMatch(/unattended[\s\S]{0,80}approved:\s*true/);
 });

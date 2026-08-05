@@ -76,7 +76,6 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
             [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
-            [--unattended[=<profile>]] [--unattended-allow "<pattern>"]…
 ```
 
 | Flag | Description |
@@ -88,82 +87,9 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
 | `--base-url <url>` | Point the provider at a custom endpoint. |
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
-| `--unattended[=<profile>]` | Declare that nobody is watching: the policy engine answers approval requests instead of a person. See below. |
-| `--unattended-allow "<pattern>"` | Repeatable. The argv patterns an unattended run may execute. Without at least one, no command runs. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
-
-### `--unattended` — what it does and what it does not
-
-`--unattended` replaces the human approver with the frozen policy engine,
-evaluated as a non-interactive session. Bare, it means `read-only-review`;
-`--unattended=<profile>` selects one of `read-only-review`,
-`monitored-trusted-local`, `unattended-untrusted`. An unrecognised profile name
-is rejected — it is never silently replaced with the default.
-
-A command must clear **two** gates: the profile's risk class, and an argv
-allowlist you supply with `--unattended-allow`.
-
-```bash
-# Read-only: answers questions, runs no commands, never prompts.
-keryx shell --unattended --provider fake --model fake-echo
-
-# Allowed to run the test suite and nothing else.
-keryx shell --unattended=monitored-trusted-local \
-  --unattended-allow "bun test" --unattended-allow "git status" \
-  --provider fake --model fake-echo
-```
-
-| Under the flag | Behaviour |
-|---|---|
-| A read-only tool | Runs with no prompt (it never reaches an approver) |
-| A command matching an `--unattended-allow` pattern, whose risk class the profile allows | Runs, recorded as unattended |
-| A command matching no pattern | **Refused**, whatever the profile allows |
-| Any command when no `--unattended-allow` was given | **Refused** — the flag by itself runs nothing |
-| A risk class the profile marks `ask` | **Refused** — an approval request with no approver fails closed |
-| A risk class the profile marks `deny` | **Refused**, terminally, exactly as without the flag |
-| A command with an unquoted shell metacharacter (`;` `&&` `\|` `` ` `` `$(` `<` `>` `&`) | **Refused** — a pattern match cannot describe what `/bin/sh -c` would then run |
-| An action the destructive classifier flags, or one touching keryx's own `auth.json` / `permissions.json` | **Refused**; allowlisting it does not change that |
-| `ask_user` | **Refused** — there is nobody to answer, so it fails instead of blocking |
-
-Patterns are validated **at launch**, by a rule stricter than the one governing
-saved permissions:
-
-- the command word must be literal — `*`, `**`, `?*`, `l?*` and `-` are refused;
-- no wildcard is accepted after an execution wrapper, whatever comes between —
-  `bash -c *`, `bun x*`, `bun test*`, `git status*`, `npm run*`, `find . -name*`,
-  `cat *`, `rm *` are all refused;
-- `keryx` counts as a wrapper (`keryx ctx run -- …` runs anything), as do `bunx`,
-  `uvx`, `just`, `task` and `rake`;
-- metacharacters and destructive commands are refused as they are for saved
-  permissions.
-
-So an entry is normally an **exact** command (`bun test`, `git status`,
-`tsc --noEmit`). Wildcards stay available on non-wrapper commands, e.g. `ls src*`.
-
-The credential guard covers keryx's own permission and credential files, not
-yours: an exact `cat ~/.ssh/id_rsa` that you allowlist will run. Name only
-commands you would have approved at the prompt.
-
-**It is not an auto-approve switch.** The allowlist is the whole point: a
-blocklist of dangerous commands permits everything it has not thought of, and
-`git clean -fdx`, `rm -rf <subdir>`, `find . -delete` and `cat .env` are all
-things it did not think of. Only what a pattern recognises runs.
-
-**It does not change the default.** Without the flag every mutating call still
-goes to a prompt, and with no approver present the gate is still default-deny.
-
-**It never opens a picker.** An unattended launch takes `--provider`/`--model` or
-the selection a previous interactive run saved, and refuses to start with
-neither, rather than reading a piped task as the answer to a prompt nobody saw.
-`--unattended` with `--chat` is refused: chat mode runs no tools.
-
-The posture appears in the shell header for the whole run and is written to the
-session's `summary.json` as `posture`: `"supervised"`,
-`"unattended:<profile>"`, or `"unattended:<profile>+allow(N)"` when an allowlist
-was supplied — so the record says whether the run could execute anything, not
-just that it was unattended.
 
 ---
 

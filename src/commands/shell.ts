@@ -62,16 +62,6 @@ import {
   runAgentTurn,
 } from "./agent";
 import { advertisedToolNames, defaultAgentToolNames } from "./agent-tool-surface";
-import {
-  createUnattendedApprover,
-  parseUnattendedFlag,
-  postureRecord,
-  UNATTENDED_FLAG,
-  unattendedAskUserHost,
-  unattendedHeaderLabel,
-  unattendedRefusal,
-  type UnattendedPosture,
-} from "../harness/policy/unattended";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import {
   compactSession,
@@ -725,7 +715,6 @@ async function runAgentRepl(
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
-  unattended?: UnattendedPosture,
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -802,25 +791,6 @@ async function runAgentRepl(
     blockActive = false;
   };
 
-  // Unattended: the frozen policy engine stands in for the human approver. Its
-  // verdicts are still PRINTED — an auto-refusal nobody can see is as opaque as
-  // an auto-approval nobody can see, and the transcript is the only record an
-  // unattended run leaves behind while it is running.
-  let lastPostureLine = "";
-  const policyApprover =
-    unattended === undefined
-      ? undefined
-      : createUnattendedApprover(
-          unattended,
-          { clock: () => new Date().toISOString(), idSeq: () => randomUUID() },
-          ({ tool, decision }) => {
-            lastPostureLine =
-              decision.decision === "allow"
-                ? `${tool} allowed by ${unattended.profile}`
-                : `${tool} ${unattendedRefusal(unattended, decision)}`;
-          },
-        );
-
   const agentIo: AgentIO = {
     // Live path: append the token to the differential block (a coalescing timer
     // repaints it). Non-live path: no-op — `onAssistantText` renders once. Either
@@ -854,17 +824,7 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    requestApproval: async (_tool, input, meta) => {
-      // Unattended: the policy engine answers, not a person. The prompt below is
-      // never reached, so there is nothing to block on and nothing to type.
-      if (policyApprover !== undefined) {
-        stopSpinner();
-        const answer = await policyApprover(_tool, input, meta);
-        out(
-          `\n${GUTTER}${answer.approved ? style.dim(`◇ ${lastPostureLine}`) : style.red(`◇ ${lastPostureLine}`)}\n`,
-        );
-        return answer;
-      }
+    requestApproval: async (_tool, input) => {
       stopSpinner();
       let command = input;
       try {
@@ -913,9 +873,6 @@ async function runAgentRepl(
 
   const sessionCwd = sessionOpts?.cwd ?? process.cwd();
   const sessionsOn = sessionOpts !== undefined && sessionOpts.enabled !== false;
-  // Stamped into the durable session record on create AND on every persist, so a
-  // session resumed under a different posture records the one it is running under.
-  const sessionPosture = postureRecord(unattended);
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
@@ -931,7 +888,6 @@ async function runAgentRepl(
         ...(resumeId !== undefined ? { resumeId } : {}),
         provider: deps.providerId,
         model: deps.modelId,
-        posture: sessionPosture,
       });
       live = opened.handle;
       history = opened.history;
@@ -950,7 +906,6 @@ async function runAgentRepl(
         cwd: sessionCwd,
         provider: deps.providerId,
         model: deps.modelId,
-        posture: sessionPosture,
       });
       history = [];
       archive = [];
@@ -969,7 +924,6 @@ async function runAgentRepl(
         archive,
         provider: deps.providerId,
         model: deps.modelId,
-        posture: sessionPosture,
       });
     } catch {
       // best-effort
@@ -1006,7 +960,6 @@ async function runAgentRepl(
             cwd: sessionCwd,
             provider: deps.providerId,
             model: deps.modelId,
-            posture: sessionPosture,
           });
           history = [];
           archive = [];
@@ -1158,14 +1111,6 @@ export interface ShellCliFlags {
   resumeId?: string;
   /** `-r` without id → open resume picker (TUI) or latest (non-TUI). */
   resumePick?: boolean;
-  /**
-   * `--unattended[=<profile>]`: nobody is watching, so the frozen policy engine
-   * answers approval requests instead of a person. Absent ⇒ supervised, and the
-   * supervised path is byte-identical to what it was.
-   */
-  unattended?: UnattendedPosture;
-  /** Set when `--unattended=<profile>` named a profile that does not exist. */
-  unattendedError?: string;
 }
 
 /**
@@ -1210,7 +1155,6 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       }
     }
   }
-  const unattended = parseUnattendedFlag(args);
   return {
     ...(providerArg !== undefined ? { providerArg } : {}),
     ...(modelArg !== undefined ? { modelArg } : {}),
@@ -1220,8 +1164,6 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(continueLast === true ? { continueLast: true } : {}),
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
-    ...(unattended.kind === "posture" ? { unattended: unattended.posture } : {}),
-    ...(unattended.kind === "error" ? { unattendedError: unattended.message } : {}),
   };
 }
 
@@ -1231,83 +1173,19 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
  * set — a claim that cannot hold if each surface assembles its own array and the
  * instruction is written against one of them.
  *
- * Under an unattended posture `ask_user` gets a host that refuses instead of the
- * TUI/readline host that waits: the tool is `risk: "read"`, so the risk gate lets
- * it through, and with nobody to answer it would otherwise hang the run forever.
  */
 export function buildAgentTools(opts: {
   cwd: string;
   port: MetaprojectPort;
   spawnTool: InteractiveTool;
-  unattended?: UnattendedPosture | undefined;
 }): InteractiveTool[] {
   return [
     ...builtinReadOnlyTools(opts.cwd),
     ...builtinMetaprojectTools(opts.cwd, makeKeryxRunner(opts.cwd), opts.port),
     shellExecTool(opts.cwd),
-    createAskUserTool(opts.unattended === undefined ? invokeAskUserHost : unattendedAskUserHost),
+    createAskUserTool(invokeAskUserHost),
     opts.spawnTool,
   ];
-}
-
-/**
- * Compose the shell header's right-hand meta line.
- *
- * Extracted so the posture's presence in the header is an assertion about a
- * returned string rather than about the source text that builds one. Both
- * surfaces render this through `unattendedHeaderLabel`, but only this one can be
- * called from a test.
- */
-export function shellHeaderMeta(input: {
-  provider: string;
-  model: string;
-  baseUrl?: string | undefined;
-  agentMode: boolean;
-  cwdLabel: string;
-  unattended?: UnattendedPosture | undefined;
-}): string {
-  const base = `${input.provider}/${input.model}${input.baseUrl !== undefined ? ` (${input.baseUrl})` : ""}`;
-  const mode = input.agentMode ? " · agent" : " · chat";
-  const posture = unattendedHeaderLabel(input.unattended);
-  return `${base}${mode}${posture.length > 0 ? ` · ${posture}` : ""} · ${input.cwdLabel}`;
-}
-
-/**
- * Resolve the provider/model for an unattended launch, or say why it cannot.
- *
- * An unattended run must never reach an interactive picker. Without this, `keryx
- * shell --unattended` with no `--provider` fell into `pickProviderModel` (and
- * then `pickAgentMode`), both of which read a line from stdin — so a piped task
- * was silently eaten by a prompt the operator never saw and the run answered a
- * question nobody asked.
- *
- * Order: explicit flags, then the persisted selection, then a refusal. There is
- * deliberately no third fallback: guessing a provider for a run nobody is
- * watching is the same class of mistake as guessing a policy profile.
- */
-export function resolveUnattendedSelection(
-  flags: Pick<ShellCliFlags, "providerArg" | "modelArg">,
-  saved: { provider?: string; model?: string },
-): { ok: true; provider: string; model?: string } | { ok: false; message: string } {
-  if (flags.providerArg !== undefined && flags.providerArg.length > 0) {
-    return {
-      ok: true,
-      provider: flags.providerArg,
-      ...(flags.modelArg !== undefined ? { model: flags.modelArg } : {}),
-    };
-  }
-  const provider = typeof saved.provider === "string" ? saved.provider.trim() : "";
-  const model = typeof saved.model === "string" ? saved.model.trim() : "";
-  if (provider.length > 0 && model.length > 0) {
-    return { ok: true, provider, model };
-  }
-  return {
-    ok: false,
-    message:
-      `${UNATTENDED_FLAG} cannot open the provider picker — there is nobody to answer it. ` +
-      "Pass --provider <p> --model <m>, or run keryx shell once interactively so the " +
-      "selection is saved.",
-  };
 }
 
 /** Which surface `shellCommand` should run for a given set of flags. */
@@ -1355,51 +1233,9 @@ export function chooseShellSurface(
  */
 export async function shellCommand(args: string[]): Promise<void> {
   const flags = parseShellCliFlags(args);
-  if (flags.unattendedError !== undefined) {
-    // Refuse rather than fall back to a default posture. An operator who typed a
-    // profile name meant that profile; running under a different one because the
-    // name was misspelled is the failure mode the flag exists to prevent.
-    process.stderr.write(`${flags.unattendedError}\n`);
-    process.exitCode = 1;
-    return;
-  }
-  const unattended = flags.unattended;
   let providerArg = flags.providerArg;
   let modelArg = flags.modelArg;
   let baseUrl = flags.baseUrl;
-
-  if (unattended !== undefined) {
-    if (flags.modeFlag === false) {
-      // Chat mode registers no tools, so there is no approval to answer and
-      // nothing for a posture to bound. Silently ignoring the flag would let an
-      // operator believe a posture is in force when none exists.
-      process.stderr.write(
-        `${UNATTENDED_FLAG} has no meaning with --chat: chat mode runs no tools, ` +
-          "so there is nothing to approve. Drop one of the two flags.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    const saved = loadShellConfig();
-    const selection = resolveUnattendedSelection(flags, {
-      ...(typeof saved.provider === "string" ? { provider: saved.provider } : {}),
-      ...(typeof saved.model === "string" ? { model: saved.model } : {}),
-    });
-    if (!selection.ok) {
-      process.stderr.write(`${selection.message}\n`);
-      process.exitCode = 1;
-      return;
-    }
-    providerArg = selection.provider;
-    modelArg = selection.model ?? modelArg;
-    if (modelArg === undefined) {
-      process.stderr.write(
-        `${UNATTENDED_FLAG} needs an explicit --model when --provider is given without one.\n`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-  }
   // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
   // interactive picker asks (agent-default), and the non-interactive path
   // defaults to agent. `undefined` = "no explicit flag given".
@@ -1447,7 +1283,7 @@ export async function shellCommand(args: string[]): Promise<void> {
           return [...names].map((name) => ({ name }));
         },
       });
-      const tools = buildAgentTools({ cwd, port: metaprojectPort, spawnTool, unattended });
+      const tools = buildAgentTools({ cwd, port: metaprojectPort, spawnTool });
       return {
         provider: agentProvider,
         providerId: sel.provider,
@@ -1457,7 +1293,6 @@ export async function shellCommand(args: string[]): Promise<void> {
           providerId: sel.provider,
           modelId: sel.model,
           toolNames: advertisedToolNames(tools),
-          ...(unattended !== undefined ? { unattendedProfile: unattended.profile } : {}),
         }),
         // Generous default (48) so multi-step operator prompts do not hit the
         // loop-safety budget mid-task; override with KERYX_AGENT_MAX_TOOL_CALLS.
@@ -1527,7 +1362,6 @@ export async function shellCommand(args: string[]): Promise<void> {
           ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
           ...(flags.resumePick === true ? { pickOnStart: true } : {}),
         },
-        ...(unattended !== undefined ? { unattended } : {}),
       })
     ) {
       return;
@@ -1591,19 +1425,11 @@ export async function shellCommand(args: string[]): Promise<void> {
 
     // Resolve the mode: explicit flag wins; otherwise default to agent.
     const agentMode = modeFlag ?? true;
-    // The posture is part of the header, not a startup notice that scrolls away:
-    // a reader looking at a transcript mid-run has to be able to tell whether
-    // anybody was being asked (AC8).
+    const modeLabel = agentMode ? " · agent" : " · chat";
+    const cwdLabel = collapseHome(process.cwd());
     printHeader(
       "keryx",
-      shellHeaderMeta({
-        provider,
-        model,
-        baseUrl,
-        agentMode,
-        cwdLabel: collapseHome(process.cwd()),
-        unattended,
-      }),
+      `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel} · ${cwdLabel}`,
     );
 
     if (agentMode) {
@@ -1630,12 +1456,7 @@ export async function shellCommand(args: string[]): Promise<void> {
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
         getDetectedProviders: () => [{ name: provider }],
       });
-      const agentTools = buildAgentTools({
-        cwd: agentCwd,
-        port: metaprojectPort,
-        spawnTool,
-        unattended,
-      });
+      const agentTools = buildAgentTools({ cwd: agentCwd, port: metaprojectPort, spawnTool });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
@@ -1645,7 +1466,6 @@ export async function shellCommand(args: string[]): Promise<void> {
           providerId: provider,
           modelId: model,
           toolNames: advertisedToolNames(agentTools),
-          ...(unattended !== undefined ? { unattendedProfile: unattended.profile } : {}),
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
@@ -1658,18 +1478,11 @@ export async function shellCommand(args: string[]): Promise<void> {
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = latestSession(process.cwd())?.id;
       }
-      await runAgentRepl(
-        sharedLines,
-        { printPrompt },
-        agentDeps,
-        metaprojectPort,
-        {
-          cwd: process.cwd(),
-          ...(flags.continueLast === true ? { continueLast: true } : {}),
-          ...(resumeId !== undefined ? { resumeId } : {}),
-        },
-        unattended,
-      );
+      await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort, {
+        cwd: process.cwd(),
+        ...(flags.continueLast === true ? { continueLast: true } : {}),
+        ...(resumeId !== undefined ? { resumeId } : {}),
+      });
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

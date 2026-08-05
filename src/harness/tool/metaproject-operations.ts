@@ -83,9 +83,29 @@ export type MetaprojectCliParity =
         property: string;
         /** Exported constants whose entries are the verb's option names. */
         options: Array<{ source: string; constant: string }>;
+        /**
+         * Options the passthrough does NOT carry. Every one of them must also
+         * appear in `expresses` (routed to another property) or in `refuses`
+         * (deliberately not offered, with a reason).
+         *
+         * Without this the subtraction was invisible: the tool could quietly
+         * start refusing `--glob` or `--follow` and the scanner stayed silent,
+         * because the passthrough table it compared against still listed them.
+         * A parity contract that cannot see a capability being removed is not
+         * checking parity.
+         */
+        except?: readonly string[];
       };
       /** CLI option → the input-schema property that expresses it. */
       expresses: Record<string, string>;
+      /**
+       * CLI option → why the tool deliberately does not offer it at all.
+       *
+       * Distinct from `expresses`: that says "same question, different field",
+       * this says "this question is not on offer here, and here is why". Both
+       * are declarations; the difference is whether the capability survives.
+       */
+      refuses?: Record<string, string>;
       /**
        * Options that shape only the CLI's own rendering (`--json`, …). A tool
        * returns structured data already, so these have no tool equivalent.
@@ -583,6 +603,11 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       // because with two pattern sources a positional operand means one thing or
       // another depending on which was used — and the tool confines operands.
       expresses: { "-e": "pattern", "--regexp": "pattern" },
+      refuses: {
+        "--follow":
+          "symlink traversal would walk out of the project root from inside it, which confining " +
+          "the operand cannot prevent. `--no-follow` is appended to every invocation.",
+      },
       // `--json` is keryx's own summary switch, and the four base flags are
       // passed unconditionally to produce the `file:line:col:text` shape the
       // match parser needs. None of them is a question a caller can ask
@@ -597,6 +622,7 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
           { source: "src/lib/rg-options.ts", constant: "RG_FORWARDED_BOOLEAN_FLAGS" },
           { source: "src/lib/rg-options.ts", constant: "RG_FORWARDED_VALUE_FLAGS" },
         ],
+        except: ["-e", "--regexp", "--follow"],
       },
     },
     invoke: async (port, input) => {

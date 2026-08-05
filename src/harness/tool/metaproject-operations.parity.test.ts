@@ -215,6 +215,21 @@ test("AC2: no metaproject tool accepts a strict subset of its CLI verb's argumen
         `${op.name} forwards its verb's option table through "${parity.passthrough.property}", ` +
           "which its inputSchema does not declare",
       ).toBe(true);
+      // Every subtraction from the passthrough must be declared, and declared as
+      // one of two DIFFERENT things: routed elsewhere, or not offered. Without
+      // this the tool could quietly narrow and the scanner would agree with it.
+      for (const option of parity.passthrough.except ?? []) {
+        const routed = Object.prototype.hasOwnProperty.call(parity.expresses, option);
+        const refused = Object.prototype.hasOwnProperty.call(parity.refuses ?? {}, option);
+        expect(
+          routed || refused,
+          `${op.name} excepts ${option} from its passthrough but says nothing about it: put it in ` +
+            "`expresses` (same question, another field) or `refuses` (not offered, with a reason)",
+        ).toBe(true);
+        if (refused) {
+          expect((parity.refuses ?? {})[option]?.length ?? 0).toBeGreaterThan(20);
+        }
+      }
       expect(
         tableFlags.size,
         `${op.name} declares a passthrough, but no option table was reachable from the code its ` +
@@ -258,6 +273,14 @@ test("AC2: search_code forwards every ripgrep option `keryx ctx rg` forwards", (
   const searchCode = METAPROJECT_OPERATIONS.find((op) => op.name === "search_code");
   expect(schemaProperties(searchCode?.inputSchema ?? {})).toContain("flags");
 
+  const parity = searchCode?.cliParity;
+  const declaredExceptions = new Set(
+    parity !== undefined && parity.verb !== null ? (parity.passthrough?.except ?? []) : [],
+  );
+  // The implementation's rejection set and the declared exceptions must agree —
+  // otherwise "declared" and "enforced" drift and the loop below checks neither.
+  expect([...declaredExceptions].sort()).toEqual([...SEARCH_TOOL_REJECTED_OPTIONS].sort());
+
   const forwarded = forwardedRgOptions();
   expect(forwarded.length).toBeGreaterThan(30);
   expect(forwarded).toContain("-g");
@@ -279,11 +302,12 @@ test("AC2: search_code forwards every ripgrep option `keryx ctx rg` forwards", (
     for (const option of forwarded) {
       const flags = RG_FORWARDED_VALUE_FLAGS.has(option) ? [option, "x"] : [option];
       const result = await searchCode?.invoke(port, { pattern: "needle", flags });
-      if (SEARCH_TOOL_REJECTED_OPTIONS.has(option)) {
-        // Expressed through `pattern`, not through `flags`. Accepting it too
-        // would give the operand two possible meanings, which is precisely the
-        // arbitrary-read channel a review found here.
-        expect(result?.isError, `${option} must be refused in flags`).toBe(true);
+      // Compared against the CONTRACT, not against the implementation's own
+      // rejection set. Reading the set the code uses meant the code could add to
+      // it and the test would follow along agreeing — which is how a tool can
+      // become materially weaker than its verb with the scanner silent.
+      if (declaredExceptions.has(option)) {
+        expect(result?.isError, `${option} is declared excepted, so flags must refuse it`).toBe(true);
         continue;
       }
       expect(result?.isError, `search_code must accept ${option}, which the verb forwards`).toBe(false);

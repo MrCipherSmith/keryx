@@ -5,62 +5,13 @@
   "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
   "status": "implemented",
   "createdAt": "2026-08-05T19:40:33.840Z",
-  "updatedAt": "2026-08-05T21:33:57.626Z",
+  "updatedAt": "2026-08-05T22:11:59.160Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:059af75490509b8e47b2176663ce05ba792493a58cbef3c0e8e711db6c516c38",
-  "acConfirmed": {
-    "AC1": {
-      "at": "2026-08-05T20:14:58.529Z",
-      "note": "src/harness/tool/metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not (real computeAffected over an a<-b<-c fixture)"
-    },
-    "AC2": {
-      "at": "2026-08-05T21:33:57.362Z",
-      "note": "Round 2: search_code takes flags validated against the CLI table, MINUS -e/--regexp which map to the pattern field instead (they would move operand meaning). Parity test excepts them explicitly and asserts the regexp capability is still reachable through pattern. Verified: reverting search_code to {pattern,path} fails the test."
-    },
-    "AC3": {
-      "at": "2026-08-05T20:52:09.315Z",
-      "note": "SUPERSEDES the earlier note: also asserts an unattended launch never opens a provider/mode picker (resolveUnattendedSelection: flags, then saved config, then refuse) and that --unattended with --chat is refused."
-    },
-    "AC4": {
-      "at": "2026-08-05T20:14:58.791Z",
-      "note": "unattended.test.ts compares decideUnattended against decide() directly: both deny, matchedRules hard-deny:shell; agent-unattended.test.ts shows the tool never runs with or without the flag"
-    },
-    "AC5": {
-      "at": "2026-08-05T20:14:58.878Z",
-      "note": "unattended.test.ts: unattended-untrusted shell=ask resolves to deny via headless-fail-closed; agent-unattended.test.ts asserts the tool never ran; ask_user host rejects"
-    },
-    "AC6": {
-      "at": "2026-08-05T21:33:57.449Z",
-      "note": "Round 2: the allowlist that backs this was accepting *, bash -c *, and keryx * — 14 of 16 known-bad commands were reachable. validateUnattendedPattern now requires a literal command word and refuses any wildcard after an execution wrapper. agent-unattended-sweep.test.ts runs all 24 reviewed commands with no allowlist AND under a plausible one, with a real runner and a real git fixture; the tree is intact afterwards. Reverting either the validator or the -e rejection fails the sweep."
-    },
-    "AC7": {
-      "at": "2026-08-05T20:14:59.054Z",
-      "note": "agent-unattended.test.ts: with no flag an ask still prompts and a yes still executes; with no approver the refusal wording is byte-identical to before"
-    },
-    "AC8": {
-      "at": "2026-08-05T20:52:09.399Z",
-      "note": "SUPERSEDES the earlier note: the header claim is now a behavioural assertion on shellHeaderMeta() rather than a grep of source text; the TUI seam check remains, stated as the weaker guarantee it is."
-    },
-    "AC9": {
-      "at": "2026-08-05T20:14:59.232Z",
-      "note": "agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions"
-    },
-    "AC10": {
-      "at": "2026-08-05T20:14:59.319Z",
-      "note": "agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone and that the replacement routes tool-answerable questions to the tool"
-    },
-    "AC12": {
-      "at": "2026-08-05T21:33:57.626Z",
-      "note": "bun run check: 3173 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 640 links, 0 broken. Includes the merged flow-3 base."
-    },
-    "AC13": {
-      "at": "2026-08-05T21:33:57.537Z",
-      "note": "Round 2: removed the \"first token does not constrain\" claim (falsified) and narrowed the credential claim to keryx auth.json/permissions.json, stating plainly that an exact allowlisted cat ~/.ssh/id_rsa runs. Run-record format corrected to include +allow(N). Added the harness run --tools paragraph."
-    }
-  },
+  "acChecksum": "sha256:d3b598e6d9f51d7b7d6f0f37a9938160e3a65b9945770a8580addc3798c0baa0",
+  "acConfirmed": {},
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/253"
   },
@@ -454,6 +405,16 @@
       "at": "2026-08-05T21:33:57.626Z",
       "event": "ac-confirmed",
       "detail": "AC12: bun run check: 3173 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 640 links, 0 broken. Includes the merged flow-3 base."
+    },
+    {
+      "at": "2026-08-05T22:02:10.030Z",
+      "event": "ac-updated",
+      "detail": "probe"
+    },
+    {
+      "at": "2026-08-05T22:11:59.160Z",
+      "event": "ac-updated",
+      "detail": "Unattended posture descoped to its own flow (docs/requirements/keryx-unattended-posture/) after three review rounds each found a hole the previous fix had not closed. AC3-AC8 governed that posture and move with it; AC11 depended on the flag and moves too. Retained: AC1, AC2, AC9, AC10, AC12, AC13. Added AC14 for the out-of-root read channel this flow's own parameter-parity change opened, which does not travel with the split."
     }
   ]
 }

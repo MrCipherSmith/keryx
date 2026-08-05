@@ -25,7 +25,7 @@ import type {
   MetaprojectPort,
   SearchCodeResult,
 } from "../metaproject-port";
-import { checkSearchToolOption } from "../../../lib/rg-options";
+import { checkSearchToolOption, SEARCH_TOOL_FORCED_OPTIONS } from "../../../lib/rg-options";
 import { confineToRoot } from "./interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 
@@ -201,7 +201,22 @@ export function buildSearchArgv(input: {
     operand = confined;
   }
 
-  return { ok: true, args: ["ctx", "rg", ...flags, `--regexp=${input.pattern}`, operand] };
+  // `--no-follow` goes AFTER the caller's flags and before the pattern, so it is
+  // the last occurrence and ripgrep resolves it last. Confining the operand
+  // stops the tool being pointed outside the root; this stops it walking outside
+  // the root from inside, which a symlink in `node_modules`, a pnpm/bun store or
+  // a monorepo link makes an ordinary situation rather than an exotic one.
+  return {
+    ok: true,
+    args: [
+      "ctx",
+      "rg",
+      ...flags,
+      ...SEARCH_TOOL_FORCED_OPTIONS,
+      `--regexp=${input.pattern}`,
+      operand,
+    ],
+  };
 }
 
 /**

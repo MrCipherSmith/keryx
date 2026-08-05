@@ -32,7 +32,7 @@ export const RG_FORWARDED_BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
   "--hidden",
   "--no-ignore",
   "--no-ignore-vcs",
-  "--follow",
+  "--follow", "--no-follow",
   "-n", "--line-number",
   "-N", "--no-line-number",
   "--column", "--no-column",
@@ -77,7 +77,33 @@ export function forwardedRgOptions(): string[] {
  * SECOND way of asking it, because two pattern sources mean the operand's
  * meaning depends on which one was used.
  */
-export const SEARCH_TOOL_REJECTED_OPTIONS: ReadonlySet<string> = new Set(["-e", "--regexp"]);
+export const SEARCH_TOOL_REJECTED_OPTIONS: ReadonlySet<string> = new Set([
+  "-e",
+  "--regexp",
+  // `--follow` is the second lesson of the same shape, one level up. Confining
+  // the OPERAND is not confining the SEARCH: ripgrep given an in-root directory
+  // will walk out of it through a symlink when told to follow one. A review
+  // watched the tool correctly refuse a symlink as `path` and then read the
+  // identical out-of-root file through that same symlink with `--follow` — no
+  // approver, because `search_code` is `risk: "read"`, and the secret landed
+  // unredacted in the gdctx raw log on the way past.
+  //
+  // Refused rather than silently neutralised: {@link SEARCH_TOOL_FORCED_OPTIONS}
+  // appends `--no-follow` regardless, but a caller who asks for traversal should
+  // be told it is not on offer instead of watching the flag do nothing.
+  "--follow",
+]);
+
+/**
+ * Options the tool appends to EVERY invocation, after the caller's flags and
+ * before the pattern, so the last occurrence wins.
+ *
+ * This is the belt to {@link SEARCH_TOOL_REJECTED_OPTIONS}'s braces. The
+ * rejection is a list and lists are behind; this is positional and holds even
+ * for an alias nobody has thought of, because ripgrep resolves the last
+ * occurrence of a boolean and this one is always last.
+ */
+export const SEARCH_TOOL_FORCED_OPTIONS: readonly string[] = ["--no-follow"];
 
 /** Outcome of validating one caller-supplied rg option token. */
 export type RgOptionCheck =
