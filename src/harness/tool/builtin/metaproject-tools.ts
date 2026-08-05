@@ -38,6 +38,20 @@ export type KeryxRunner = (args: string[]) => Promise<InteractiveToolResult>;
 const MAX_OUTPUT_BYTES = 20_000;
 
 /**
+ * `memory_search` filter properties → the `keryx memory search` flag that carries
+ * them, for the subprocess fallback. Kept beside the descriptor's `cliParity`
+ * declaration in metaproject-operations.ts, which the parity test enforces.
+ */
+const MEMORY_SEARCH_VALUE_FLAGS: ReadonlyArray<readonly [string, string]> = [
+  ["--module", "module"],
+  ["--entity", "entity"],
+  ["--status", "status"],
+  ["--class", "class"],
+  ["--limit", "limit"],
+  ["--as-of", "asOf"],
+];
+
+/**
  * Signature of "ripgrep is unavailable" across the paths it can surface on: the
  * bare `Bun.spawn` throw (`Executable not found in $PATH: "rg"`), a generic
  * ENOENT, and the graceful `keryx ctx rg` exit message (see `MISSING_RG_MESSAGE`
@@ -209,12 +223,19 @@ export function builtinMetaprojectTools(
     },
   };
 
+  // Parity with the descriptor projection (tool-surface.md §P4.1): the
+  // subprocess fallback advertises and forwards the SAME arguments the port-backed
+  // tool takes. A fallback that could only ask for depth 1 would send the model
+  // back to `shell_exec("keryx gdgraph affected … --depth 2")` — the exact path
+  // benchmark case A1 recorded, just on the other branch of this function.
+  const affectedOp = METAPROJECT_OPERATIONS.find((op) => op.name === "graph_affected");
+  const memoryOp = METAPROJECT_OPERATIONS.find((op) => op.name === "memory_search");
+
   const graphAffected: InteractiveTool = {
     definition: {
       name: "graph_affected",
-      description:
-        "Show the blast radius (dependents) of a file via the code graph (`keryx gdgraph affected`). Input: { file: string } relative to the project root.",
-      inputSchema: {
+      description: affectedOp?.description ?? "Show the blast radius (dependents) of a file via the code graph.",
+      inputSchema: affectedOp?.inputSchema ?? {
         type: "object",
         properties: { file: { type: "string" } },
         required: ["file"],
@@ -227,16 +248,23 @@ export function builtinMetaprojectTools(
       if ("error" in file) {
         return file.error;
       }
-      return run(["gdgraph", "affected", file.value]);
+      const args = ["gdgraph", "affected", file.value];
+      const depth = input.depth;
+      if (typeof depth === "number" && Number.isFinite(depth) && depth > 0) {
+        args.push("--depth", String(Math.floor(depth)));
+      }
+      if (input.ranked === true) {
+        args.push("--ranked");
+      }
+      return run(args);
     },
   };
 
   const memorySearch: InteractiveTool = {
     definition: {
       name: "memory_search",
-      description:
-        "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: { query: string }.",
-      inputSchema: {
+      description: memoryOp?.description ?? "Search project memory — decisions, lessons, constraints.",
+      inputSchema: memoryOp?.inputSchema ?? {
         type: "object",
         properties: { query: { type: "string" } },
         required: ["query"],
@@ -249,7 +277,19 @@ export function builtinMetaprojectTools(
       if ("error" in query) {
         return query.error;
       }
-      return run(["memory", "search", query.value]);
+      const args = ["memory", "search", query.value];
+      for (const [flag, key] of MEMORY_SEARCH_VALUE_FLAGS) {
+        const value = input[key];
+        if (typeof value === "string" && value.length > 0) {
+          args.push(flag, value);
+        } else if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+          args.push(flag, String(Math.floor(value)));
+        }
+      }
+      if (input.semantic === true) {
+        args.push("--semantic");
+      }
+      return run(args);
     },
   };
 

@@ -34,6 +34,53 @@ import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
 /**
+ * Where the CLI verb an operation wraps is implemented, so the parity test can
+ * read the verb's real option set out of the source instead of trusting a table.
+ * `fn` names a top-level handler function; `guard` names the `if (...)` condition
+ * of a verb dispatched inline in its command's router.
+ */
+export type CliHandlerLocation = { fn: string } | { guard: string };
+
+/**
+ * The declared parameter-parity contract between a metaproject tool and the
+ * `keryx` verb it wraps.
+ *
+ * The rule this encodes (tool-surface.md §P4.1): **a tool that wraps a CLI verb
+ * exposes that verb's arguments.** A tool weaker than its own CLI teaches the
+ * model to bypass it through a default-deny shell — which is exactly what
+ * benchmark case A1 recorded.
+ *
+ * `metaproject-operations.parity.test.ts` reads `source`/`handler` and fails when
+ * the handler reads an option that is neither mapped in `expresses` nor listed
+ * in `presentation`, so adding a CLI flag without widening the tool breaks the
+ * build rather than the model's next run.
+ */
+export type MetaprojectCliParity =
+  | {
+      /** This operation wraps no CLI verb. */
+      verb: null;
+      /** Why there is nothing to be at parity with. */
+      reason: string;
+    }
+  | {
+      /** The wrapped verb, e.g. `gdgraph affected`. */
+      verb: string;
+      /** The file implementing the verb (repo-relative). */
+      source: string;
+      /** Where in `source` the verb's options are read. */
+      handler: CliHandlerLocation;
+      /** Extra helper functions in `source` that also read the verb's options. */
+      helpers?: string[];
+      /** CLI option → the input-schema property that expresses it. */
+      expresses: Record<string, string>;
+      /**
+       * Options that shape only the CLI's own rendering (`--json`, …). A tool
+       * returns structured data already, so these have no tool equivalent.
+       */
+      presentation?: string[];
+    };
+
+/**
  * A single metaproject operation descriptor — the source of truth projected into
  * the agent InteractiveTool set and the harness ToolRegistry. Mirrors
  * metaproject-operation.schema.json (name/module/description/risk/input+output
@@ -52,6 +99,8 @@ export interface MetaprojectOperation {
   inputSchema: Record<string, unknown>;
   /** JSON Schema for the structured operation result. */
   outputSchema: Record<string, unknown>;
+  /** The wrapped CLI verb and the parity contract with it (enforced by a test). */
+  cliParity: MetaprojectCliParity;
   /** Call the backing MetaprojectPort method and format the result to text. */
   invoke(port: MetaprojectPort, input: Record<string, unknown>): Promise<InteractiveToolResult>;
 }
@@ -69,6 +118,41 @@ function requireString(
     return { error: { output: `${op} requires a non-empty '${key}'`, isError: true } };
   }
   return { value };
+}
+
+/**
+ * Read an optional positive integer (the shape every `--depth`/`--budget`/`--k`
+ * style option has). A present-but-nonsensical value is dropped rather than
+ * passed on, so the port sees "not asked for" instead of `depth: -1`.
+ */
+function optionalPositiveInt(input: Record<string, unknown>, key: string): number | undefined {
+  const value = input[key];
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.floor(value);
+}
+
+/** Read an optional boolean field; anything else reads as "not asked for". */
+function optionalBoolean(input: Record<string, unknown>, key: string): boolean | undefined {
+  const value = input[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+/** Read an optional non-empty string field. */
+function optionalString(input: Record<string, unknown>, key: string): string | undefined {
+  const value = input[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** Read an optional array of non-empty strings (empty ⇒ "not asked for"). */
+function optionalStringArray(input: Record<string, unknown>, key: string): string[] | undefined {
+  const value = input[key];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return items.length > 0 ? items : undefined;
 }
 
 /** Render a structured `graphAffected` result as readable text for the model. */
@@ -262,6 +346,14 @@ export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   if (result.callees.length > 0) {
     lines.push(`Callees (${result.callees.length}):`, ...result.callees.map((c) => `  - ${c}`));
   }
+  if (result.impact !== undefined) {
+    lines.push(
+      `Impact — transitive callers, depth ${result.impactDepth ?? "?"} (${result.impact.length}):`,
+      ...(result.impact.length > 0
+        ? result.impact.map((node) => `  - [hop ${node.hop}] ${node.label}`)
+        : ["  - none"]),
+    );
+  }
   return { output: lines.join("\n"), isError: false };
 }
 
@@ -347,6 +439,8 @@ const SYMBOL_OUTPUT_SCHEMA: Record<string, unknown> = {
     definitions: { type: "array" },
     callers: { type: "array", items: { type: "string" } },
     callees: { type: "array", items: { type: "string" } },
+    impact: { type: "array" },
+    impactDepth: { type: "integer" },
     error: { type: "string" },
   },
   required: ["name", "definitions", "callers", "callees"],
@@ -399,6 +493,13 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       additionalProperties: false,
     },
     outputSchema: SEARCH_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "ctx rg",
+      source: "src/commands/ctx.ts",
+      handler: { fn: "rgAndSummarize" },
+      expresses: {},
+      presentation: ["--json"],
+    },
     invoke: async (port, input) => {
       const pattern = requireString(input, "pattern", "search_code");
       if ("error" in pattern) {
@@ -417,20 +518,41 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Show the blast radius (dependents) of a file via the code graph (`keryx gdgraph affected`). Input: { file: string } relative to the project root.",
+      'Answer "what breaks if I change X" / "what depends on X, directly and transitively" from the code graph (`keryx gdgraph affected`). ' +
+      "Input: { file: string, depth?: number, ranked?: boolean } — `file` relative to the project root, `depth` the number of dependency hops " +
+      "(1 = direct dependents only; use 2+ for transitive), `ranked` to order the blast radius by hop then fan-in.",
     inputSchema: {
       type: "object",
-      properties: { file: { type: "string" } },
+      properties: {
+        file: { type: "string" },
+        depth: { type: "integer", minimum: 1 },
+        ranked: { type: "boolean" },
+      },
       required: ["file"],
       additionalProperties: false,
     },
     outputSchema: AFFECTED_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "gdgraph affected",
+      source: "src/commands/gdgraph.ts",
+      handler: { fn: "runAffected" },
+      expresses: { "--depth": "depth", "--ranked": "ranked" },
+      presentation: ["--json"],
+    },
     invoke: async (port, input) => {
       const file = requireString(input, "file", "graph_affected");
       if ("error" in file) {
         return file.error;
       }
-      return formatAffected(await port.graphAffected({ target: file.value }));
+      const depth = optionalPositiveInt(input, "depth");
+      const ranked = optionalBoolean(input, "ranked");
+      return formatAffected(
+        await port.graphAffected({
+          target: file.value,
+          ...(depth !== undefined ? { depth } : {}),
+          ...(ranked !== undefined ? { ranked } : {}),
+        }),
+      );
     },
   },
   {
@@ -446,6 +568,14 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       additionalProperties: false,
     },
     outputSchema: QUERY_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "gdgraph query",
+      source: "src/commands/gdgraph.ts",
+      // Dispatched inline in the gdgraph router rather than via a named handler.
+      handler: { guard: 'command === "query"' },
+      expresses: {},
+      presentation: ["--json"],
+    },
     invoke: async (port, input) => {
       const query = input.query;
       if (query !== "cycles" && query !== "orphans") {
@@ -459,20 +589,64 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "memory",
     description:
-      "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: { query: string }.",
+      'Answer "was this decided before" / "what did we learn about X" from project memory — decisions, lessons, constraints, known mistakes ' +
+      "(`keryx memory search`). Input: { query: string, module?: string, entity?: string, status?: string, class?: string, limit?: number, " +
+      'asOf?: string (YYYY-MM-DD), semantic?: boolean }. Use `status: "accepted"` for settled decisions.',
     inputSchema: {
       type: "object",
-      properties: { query: { type: "string" } },
+      properties: {
+        query: { type: "string" },
+        module: { type: "string" },
+        entity: { type: "string" },
+        status: { type: "string" },
+        class: { type: "string", enum: ["semantic", "episodic", "procedural"] },
+        limit: { type: "integer", minimum: 1 },
+        asOf: { type: "string" },
+        semantic: { type: "boolean" },
+      },
       required: ["query"],
       additionalProperties: false,
     },
     outputSchema: MEMORY_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "memory search",
+      source: "src/commands/memory.ts",
+      handler: { fn: "runSearch" },
+      expresses: {
+        "--module": "module",
+        "--entity": "entity",
+        "--status": "status",
+        "--class": "class",
+        "--limit": "limit",
+        "--as-of": "asOf",
+        "--semantic": "semantic",
+      },
+      presentation: ["--json"],
+    },
     invoke: async (port, input) => {
       const query = requireString(input, "query", "memory_search");
       if ("error" in query) {
         return query.error;
       }
-      return formatMemory(await port.memorySearch({ query: query.value }));
+      const module = optionalString(input, "module");
+      const entity = optionalString(input, "entity");
+      const status = optionalString(input, "status");
+      const cls = optionalString(input, "class");
+      const limit = optionalPositiveInt(input, "limit");
+      const asOf = optionalString(input, "asOf");
+      const semantic = optionalBoolean(input, "semantic");
+      return formatMemory(
+        await port.memorySearch({
+          query: query.value,
+          ...(module !== undefined ? { module } : {}),
+          ...(entity !== undefined ? { entity } : {}),
+          ...(status !== undefined ? { status } : {}),
+          ...(cls !== undefined ? { class: cls } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+          ...(asOf !== undefined ? { asOf } : {}),
+          ...(semantic !== undefined ? { semantic } : {}),
+        }),
+      );
     },
   },
   {
@@ -488,6 +662,11 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       additionalProperties: false,
     },
     outputSchema: WIKI_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: null,
+      reason:
+        "read_wiki is a root-confined file read under .metaproject/wiki/, not a wrapper around a `keryx wiki` verb.",
+    },
     invoke: async (port, input) => {
       const path = requireString(input, "path", "read_wiki");
       if ("error" in path) {
@@ -509,6 +688,12 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       additionalProperties: false,
     },
     outputSchema: PATH_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "gdgraph path",
+      source: "src/commands/gdgraph.ts",
+      handler: { fn: "runPath" },
+      expresses: {},
+    },
     invoke: async (port, input) => {
       if (port.graphPath === undefined) {
         return { output: "graph_path is not available in this session.", isError: true };
@@ -537,6 +722,12 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       additionalProperties: false,
     },
     outputSchema: TEST_RELATED_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "test related",
+      source: "src/commands/test.ts",
+      handler: { fn: "runRelated" },
+      expresses: {},
+    },
     invoke: async (port, input) => {
       if (port.testRelated === undefined) {
         return { output: "test_related is not available in this session.", isError: true };
@@ -556,6 +747,12 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       "Show the latest code-health snapshot: gate, project score, regressions (`keryx health status`). No input.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     outputSchema: HEALTH_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "health status",
+      source: "src/commands/health.ts",
+      handler: { fn: "runStatus" },
+      expresses: {},
+    },
     invoke: async (port) => {
       if (port.healthStatus === undefined) {
         return { output: "health_status is not available in this session.", isError: true };
@@ -568,14 +765,26 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Look up where a symbol is defined plus its callers/callees over the code-graph symbol layer (`keryx gdgraph symbol`). Input: { name: string }.",
+      'Answer "where is this function defined" / "who calls it" over the code-graph symbol layer (`keryx gdgraph symbol`). ' +
+      "Input: { name: string, impact?: boolean, depth?: number } — set `impact` for the transitive-caller blast radius, " +
+      "`depth` for how many call hops it walks (default 3).",
     inputSchema: {
       type: "object",
-      properties: { name: { type: "string" } },
+      properties: {
+        name: { type: "string" },
+        impact: { type: "boolean" },
+        depth: { type: "integer", minimum: 1 },
+      },
       required: ["name"],
       additionalProperties: false,
     },
     outputSchema: SYMBOL_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "gdgraph symbol",
+      source: "src/commands/gdgraph.ts",
+      handler: { fn: "runSymbol" },
+      expresses: { "--impact": "impact", "--depth": "depth" },
+    },
     invoke: async (port, input) => {
       if (port.graphSymbol === undefined) {
         return { output: "graph_symbol is not available in this session.", isError: true };
@@ -584,7 +793,15 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in name) {
         return name.error;
       }
-      return formatSymbol(await port.graphSymbol({ name: name.value }));
+      const impact = optionalBoolean(input, "impact");
+      const depth = optionalPositiveInt(input, "depth");
+      return formatSymbol(
+        await port.graphSymbol({
+          name: name.value,
+          ...(impact !== undefined ? { impact } : {}),
+          ...(depth !== undefined ? { depth } : {}),
+        }),
+      );
     },
   },
   {
@@ -592,19 +809,45 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Produce a ranked, token-budgeted repo map (top files + symbols by PageRank, `keryx gdgraph repomap`). Input: { budget?: number } token budget.",
+      'Answer "give me a map of this repo in N tokens" — ranked top files + symbols by PageRank (`keryx gdgraph repomap`). ' +
+      "Input: { budget?: number, seed?: string[] } — `budget` the token budget, `seed` files to bias the ranking towards " +
+      "(pass the files you are working on).",
     inputSchema: {
       type: "object",
-      properties: { budget: { type: "integer", minimum: 1 } },
+      properties: {
+        budget: { type: "integer", minimum: 1 },
+        seed: { type: "array", items: { type: "string" } },
+      },
       additionalProperties: false,
     },
     outputSchema: REPOMAP_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "gdgraph repomap",
+      source: "src/commands/gdgraph.ts",
+      handler: { fn: "runRepomap" },
+      helpers: ["collectSeeds"],
+      expresses: {
+        "--budget": "budget",
+        "--seed": "seed",
+        // `--changed` is CLI sugar: it seeds the ranking with the git-changed
+        // files. A tool caller passes those files to `seed` directly, so the
+        // question the flag asks is expressible — running git is not the tool's
+        // job, and a `risk: "read"` tool must not shell out to find out.
+        "--changed": "seed",
+      },
+    },
     invoke: async (port, input) => {
       if (port.repomap === undefined) {
         return { output: "repomap is not available in this session.", isError: true };
       }
-      const budget = typeof input.budget === "number" && input.budget > 0 ? input.budget : undefined;
-      return formatRepomap(await port.repomap(budget !== undefined ? { budget } : {}));
+      const budget = optionalPositiveInt(input, "budget");
+      const seed = optionalStringArray(input, "seed");
+      return formatRepomap(
+        await port.repomap({
+          ...(budget !== undefined ? { budget } : {}),
+          ...(seed !== undefined ? { seed } : {}),
+        }),
+      );
     },
   },
   {
@@ -612,14 +855,26 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdwiki",
     description:
-      "Ask a question answered deterministically from the project's own wiki + memory with citations (`keryx wiki ask`). Input: { question: string }.",
+      'Answer "how does X work here" / "why was it built this way" from the project\'s own wiki + memory, with citations ' +
+      "(`keryx wiki ask`). Input: { question: string, k?: number, rerank?: boolean } — `k` how many citations to consider, " +
+      "`rerank` to apply the embedding rerank over the lexical set.",
     inputSchema: {
       type: "object",
-      properties: { question: { type: "string" } },
+      properties: {
+        question: { type: "string" },
+        k: { type: "integer", minimum: 1 },
+        rerank: { type: "boolean" },
+      },
       required: ["question"],
       additionalProperties: false,
     },
     outputSchema: WIKI_ASK_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "wiki ask",
+      source: "src/commands/wiki.ts",
+      handler: { fn: "runAsk" },
+      expresses: { "--k": "k", "--rerank": "rerank" },
+    },
     invoke: async (port, input) => {
       if (port.wikiAsk === undefined) {
         return { output: "wiki_ask is not available in this session.", isError: true };
@@ -628,7 +883,15 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in question) {
         return question.error;
       }
-      return formatWikiAsk(await port.wikiAsk({ question: question.value }));
+      const k = optionalPositiveInt(input, "k");
+      const rerank = optionalBoolean(input, "rerank");
+      return formatWikiAsk(
+        await port.wikiAsk({
+          question: question.value,
+          ...(k !== undefined ? { k } : {}),
+          ...(rerank !== undefined ? { rerank } : {}),
+        }),
+      );
     },
   },
   {
@@ -644,6 +907,12 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       additionalProperties: false,
     },
     outputSchema: WIKI_BACKLINKS_OUTPUT_SCHEMA,
+    cliParity: {
+      verb: "wiki backlinks",
+      source: "src/commands/wiki.ts",
+      handler: { fn: "runBacklinks" },
+      expresses: {},
+    },
     invoke: async (port, input) => {
       if (port.wikiBacklinks === undefined) {
         return { output: "wiki_backlinks is not available in this session.", isError: true };
