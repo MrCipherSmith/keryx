@@ -93,15 +93,13 @@ it by reading files at random.
 ### What it looks like on a real repository
 
 Real output from a fresh clone of
-[express](https://github.com/expressjs/express) — four commands, nothing edited:
+[express](https://github.com/expressjs/express) — three commands after `init`,
+nothing edited:
 
 ```console
-$ keryx init --yes
-  ✓ gdgraph  ✓ gdctx  ✓ gdwiki  ✓ gdskills
-  ✓ health   ✓ testing  ✓ memory  ✓ tasks  ✓ security
-
 $ keryx gdgraph build
 gdgraph build complete: 139 nodes, 153 edges
+summary: .metaproject/data/gdgraph/artifacts/summary.md
 
 $ keryx gdgraph query cycles
 No cycles found.
@@ -127,6 +125,7 @@ affected graph supplies deterministically, in one command.
 
 ```text
 .metaproject/
+├── metaproject.json      # the module manifest
 ├── index.md              # the routing index every agent reads first
 ├── wiki/                 # architecture, domain models, decisions, flows
 ├── memory/               # lessons, decisions, constraints, known mistakes
@@ -136,7 +135,8 @@ affected graph supplies deterministically, in one command.
 ├── data/gdgraph/         # graph artifacts, module map, query results
 ├── data/testing/         # test context, related tests, normalized reports
 ├── data/health/          # normalized health artifacts and trends
-└── flows/                # task flows with frozen acceptance criteria
+├── flows/                # task flows with frozen acceptance criteria
+└── …                     # per-module config, hooks, templates, dashboard
 ```
 
 All Markdown and JSON. All diffable. All yours. And readable as a dashboard when
@@ -182,31 +182,32 @@ of guessing — the same `ask` the policy engine raises for a guarded action:
 
 What is in it today:
 
-- **Provider-neutral loop.** Anthropic, Ollama, OpenRouter and Grok, plus an
+- **Provider-neutral loop.** Anthropic, Ollama, and any OpenAI-compatible
+  gateway — OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok — plus an
   offline fake provider for deterministic runs. Swapping the model does not
   change the loop, the tools or the policy.
-- **Durable sessions, per project.** Append-only event log on disk, resume across
-  a process restart, branching, and context compaction that keeps the archive.
+- **Durable sessions, per project.** JSONL transcripts on disk, resume across a
+  process restart, and context compaction that keeps the full archive.
   `/resume`, `/compact`, `/new` — and `keryx sessions list|export`.
 - **A policy engine with three answers, not two.** `allow`, `ask`, `deny` over
-  paths, commands, tools, network and resources. Filesystem mutation is
-  path-checked, security-scanned, approval-bound and recorded as evidence.
+  seven risk classes — read, write, shell, network, credential, delegate,
+  destructive — with path and command rules underneath. Shell and destructive
+  actions are default-deny and need an explicit approval before they run.
 - **Kernel-enforced containment underneath.** The OS sandbox sits *below* the
   policy engine — Seatbelt on macOS, bubblewrap on Linux — with network off/on,
   and on macOS a loopback domain allowlist, credential masking behind a per-run
-  sentinel, and opt-in TLS termination. It fails closed when a launcher or a
-  posture is missing rather than quietly doing less.
+  sentinel, and TLS termination where masking requires it. It fails closed when a
+  launcher or a posture is missing rather than quietly doing less.
 - **Child agents with budgets.** Dispatch over the canonical
   `subagent-dispatch`/`subagent-result` contracts, token budgets per child,
-  bounded parallel scheduling, and a fleet monitor (`keryx agents monitor`).
-- **Completion you can audit.** An evidence ledger backs the completion gate: a
+  bounded parallel scheduling, and an offline fleet report over a recorded event
+  log (`keryx agents monitor <events-file>`).
+- **Completion you can audit.** The completion gate blocks on missing evidence: a
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
-- **Deterministic replay.** Recorded provider and tool fixtures replay a run with
-  no network and no mutation, and report where the state transitions diverge.
-- **Four doors, one loop.** The CLI (`keryx harness run|exec|extension|wave`),
-  JSONL/RPC, the TUI, and the loopback HTTP entry (`keryx serve`) all drive the
-  same execution loop and the same session state.
+- **Four doors.** The CLI (`keryx harness run|exec|extension|wave`), JSONL/RPC
+  and the loopback HTTP entry (`keryx serve`) share one execution loop; the
+  interactive TUI runs its own on the same tool registry and the same policy.
 
 Provider-neutral means what it says — the same loop, the same tool registry and
 the same policy, with the model swapped out from under it:
@@ -226,7 +227,7 @@ Grouped by what you are trying to do, not by internal module layout.
 **Understand the codebase**
 
 - **gdgraph** — language-aware dependency graph for TypeScript/JavaScript, Java
-  (Maven/Gradle) and Python: cycle and orphan queries, concept and symbol lookup,
+  (Maven/Gradle) and Python: cycle and orphan queries, file and symbol search,
   shortest paths, affected-set blast radius, PageRank repo map, and an optional
   tree-sitter symbol/call graph.
 - **gdwiki** — a Markdown architecture wiki with hierarchical indexes, link
@@ -237,7 +238,7 @@ Grouped by what you are trying to do, not by internal module layout.
 **Preserve knowledge**
 
 - **memory** — long-term project memory with indexing, lexical search, dedup and
-  bitemporal validity, so a lesson learned once stays learned.
+  as-of validity queries, so a lesson learned once stays learned.
 - **gdskills** — bundled and project-generated agent skills with routing,
   verification, learning from reviews, and export to different agent runtimes.
 
@@ -246,9 +247,11 @@ Grouped by what you are trying to do, not by internal module layout.
 - **testing** — testing context, related-test selection, changed-scope runs, and
   an opt-in coverage-map Test Impact Analysis.
 - **health** — normalized reports from TypeScript, tests, audit, complexity,
-  coverage and lint (optional SonarQube), plus a quality gate and trends.
-- **review** — managed review packages under `.metaproject/reviews/`, standalone
-  or attached to a flow, so review findings become durable project artifacts.
+  coverage and lint (optional SonarQube issue import), plus a quality gate and
+  trends.
+- **review** — managed review packages, standalone under `.metaproject/reviews/`
+  or inside the flow package when attached to a flow, so review findings become
+  durable project artifacts.
 
 **Operate agents**
 
@@ -258,13 +261,13 @@ Grouped by what you are trying to do, not by internal module layout.
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
 - **mcp** — an opt-in [Model Context Protocol](https://modelcontextprotocol.io)
-  server exposing read-only module services to agents.
+  server exposing read-only module services to agents, plus one report-writing
+  security scan.
 
 **Run agents inside boundaries**
 
 - **harness** — the first-party agent runtime described above: provider-neutral
-  loop, durable sessions, policy engine, child agents, evidence-gated completion,
-  deterministic replay.
+  loop, durable sessions, policy engine, child agents, evidence-gated completion.
 - **sandbox** — kernel-enforced containment under the policy engine
   (`keryx harness exec`), with filesystem boundaries, network posture and, on
   macOS, a domain allowlist with credential masking.
@@ -301,7 +304,7 @@ Alternative install paths — the managed installer (`~/.keryx` with a wrapper i
 `~/.local/bin`), project-local installs, and running from source — are in the
 [onboarding guide](docs/docs/onboarding.md).
 
-Bare `keryx` prints the CLI surface; `keryx shell` starts the agent harness
+Bare `keryx` prints the main commands; `keryx shell` starts the agent harness
 described [above](#the-agent-harness).
 
 ## Agent integrations
@@ -323,18 +326,21 @@ keryx agents bootstrap install --runtime claude
 keryx mcp install --runtime cursor          # opt-in read-only MCP server
 ```
 
+Each of those commands has its own `--runtime` vocabulary — run
+`keryx <command> --help` for the values it accepts.
+
 ## Requirements and compatibility
 
 | Requirement | Status |
 |-------------|--------|
 | Bun | >= 1.1.0 |
-| Git | Required |
+| Git | Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
 | ripgrep | Required only for `keryx ctx rg` and the agent's `search_code` tool |
 | Model provider credential | Required only for the optional AI commands below |
 | macOS | Full support, including the complete policy sandbox |
 | Linux | Full core support; filesystem containment and network on/off (needs `bubblewrap`) |
 | Windows | Core CLI is not verified in CI; the OS sandbox is macOS/Linux only |
-| CI | Ubuntu and macOS runners on every push |
+| CI | Ubuntu and macOS runners on every pull request and every push to `main` |
 
 ## Optional AI features
 
@@ -365,7 +371,7 @@ graph falls back to its deterministic resolver when a grammar is absent.
 | Domain allowlist is macOS-only | Domain-level egress policy, credential masking and TLS termination refuse to run on Linux rather than silently doing less | Filesystem containment and network on/off work on both |
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
-| Model commands need a credential | The five commands above exit non-zero without one | Everything else runs deterministically offline |
+| Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
 
 Full detail, including known defects and platform caveats:
 [limitations](docs/docs/limitations.md).
@@ -383,11 +389,12 @@ keryx serve                      # bind 127.0.0.1 and listen
 keryx serve status --json        # configuration state
 ```
 
-It is off unless you configure it, binds loopback unless you pass
-`--acknowledge-non-loopback`, and authenticates *before* routing, so an
-unauthenticated caller cannot tell a known path from an unknown one. The remote
-policy profile may never be weaker than the local one — it is compared on every
-turn and a weaker profile is refused. See
+It is off unless you configure it, and moving it off loopback takes a `--bind`
+address plus an explicit acknowledgement in *both* the stored config and the
+command line — either one alone refuses to start. It authenticates *before*
+routing, so an unauthenticated caller cannot tell a known path from an unknown
+one. The remote policy profile may never be weaker than the local one — it is
+compared at startup, and a weaker profile refuses to bind at all. See
 [drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md) for routes and
 setup.
 
@@ -405,7 +412,9 @@ keryx dashboard build
 
 `keryx health gate --strict-warn` fails a job on the normalized health gate
 instead of parsing raw linter/test logs, and `keryx security eval --corpus all`
-fails on any detector breaching its committed false-negative threshold. See
+fails on any detector breaching its committed false-negative threshold — from a
+repository checkout, since the evaluation corpus is not shipped in the npm
+package. See
 [run keryx in CI](docs/docs/guides/run-in-ci.md).
 
 ## Documentation
@@ -415,13 +424,12 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Onboarding](docs/docs/onboarding.md)** — install paths, first-run walkthrough, the build loop.
 - **[Architecture](docs/docs/architecture.md)** — the four-layer pattern, invariants, cross-module data flows.
 - **[Module reference](docs/docs/modules.md)** — one section per module: purpose, CLI surface, mechanics, data paths.
-- **[CLI reference](docs/docs/cli-reference.md)** — every command, subcommand, flag and exit code.
+- **[CLI reference](docs/docs/cli-reference.md)** — the command surface: subcommands, flags and exit codes.
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 
-Run `keryx <command> --help` (or `keryx` with no arguments) for the live command
-surface.
+Run `keryx <command> --help` for the live flag surface of any command.
 
 ## Local development
 
