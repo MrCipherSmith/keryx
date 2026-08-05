@@ -3,9 +3,9 @@
   "id": "134",
   "slug": "harden-the-harness-close-the-sandbox-esc",
   "title": "Harden the harness: close the sandbox escape hatch, wire the mutation scanner, feed the completion gate, surface branching and replay",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-05T11:01:14.590Z",
-  "updatedAt": "2026-08-05T13:34:00.165Z",
+  "updatedAt": "2026-08-05T13:37:22.024Z",
   "source": {
     "type": "description",
     "ref": null
@@ -347,6 +347,20 @@
       "at": "2026-08-05T13:34:00.165Z",
       "event": "task-done",
       "detail": "T10: S6 full gate and draft PR"
+    },
+    {
+      "at": "2026-08-05T13:37:22.013Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-05T13:37:22.024Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "ef5f9555",
+    "ref": "origin/main",
+    "at": "2026-08-05T13:37:22.024Z"
+  }
 }
