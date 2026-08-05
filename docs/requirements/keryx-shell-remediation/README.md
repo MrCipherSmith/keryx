@@ -1,5 +1,5 @@
 # Keryx Shell Remediation Requirements Package
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
@@ -28,6 +28,7 @@ Both are reachability defects. Neither needs new capability built.
 - [PRD](prd.md) — problem, users, requirements, success criteria, risks, and recommendation.
 - [Specification](specification.md) — the three phases in detail, with acceptance criteria per phase.
 - [Implementation Plan](implementation-plan.md) — phase ordering, flow grouping, and what each flow must not do.
+- [Review 2026-08-05](review-2026-08-05.md) — the package checked against code, the report and the docs. Two blockers found and folded in: D1's root cause is a single instruction line, and there are two divergent system prompts.
 
 ## Scope
 
