@@ -151,7 +151,13 @@ export function sandboxProfileFromPolicy(input: SandboxProfileInput): SandboxPro
       ? "restricted"
       : "on";
   const writableRoots = mode === "workspace-write" ? dedupe([input.cwd, input.tmpDir]) : [];
-  const required = input.policy.requiredControls.isolation === "required-fail-closed";
+  // A domain allowlist is fail-closed whether or not the policy said so. The
+  // enforcement lives in `SandboxedProcessAdapter` (no construction path can
+  // route around it there); setting it here as well keeps the profile from
+  // describing itself as optional when it is not.
+  const required =
+    input.policy.requiredControls.isolation === "required-fail-closed" ||
+    network === "restricted";
 
   return {
     mode,

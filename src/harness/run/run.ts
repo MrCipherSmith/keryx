@@ -21,7 +21,7 @@ import {
   type RequiredGate,
   evaluateCompletion,
 } from "../completion/gate";
-import { redactForPersistence } from "../evidence/redaction";
+import { redactForPersistence, type ScanResult } from "../evidence/redaction";
 import { decide } from "../policy/engine";
 import { escalateForBlastRadius, metaprojectBlastRadius } from "../policy/metaproject-escalation";
 import type { PolicyContext, PolicyDecision, PolicyProfile } from "../policy/types";
@@ -124,6 +124,60 @@ export interface RunDeps {
    * exactly `decide()`'s output.
    */
   blastRadiusThreshold?: number;
+  /**
+   * OPTIONAL content scanner for redaction-before-persistence (flow 134 / S2).
+   *
+   * The seam was here from the start but the only implementation was a local
+   * stub that answered `hasSecret: false` to everything, so every tool result
+   * this loop persisted was scanned by a function that could not find anything.
+   * The real detectors (`security/detect/runDetectors`) are synchronous and
+   * pure, which is exactly what this loop's determinism contract needs — what
+   * they are not is free of configuration, and configuration lives on disk. So
+   * the caller resolves the config once, outside the loop, and injects the
+   * closure; the loop stays sync, offline and replayable.
+   *
+   * Absent ⇒ the previous permissive stub, so a fixture run and every existing
+   * caller are byte-identical. `buildSecurityScan` in `security/harness-scan.ts`
+   * is the production one.
+   */
+  scan?: (content: string) => ScanResult;
+  /**
+   * OPTIONAL completion requirements supplied by the caller (flow 134 / S3).
+   *
+   * The completion gate has always evaluated `requiredGates` and
+   * `requiredEvidenceRefs`, but this loop handed it two empty arrays that no
+   * caller could reach. Two of the gate's three conditions were therefore
+   * vacuous: a run passed on "a final message and no undisposed blocker", which
+   * is exactly the evidence-free completion the gate exists to reject.
+   *
+   * These live on `RunDeps` rather than on `HarnessRunInput` on purpose. The
+   * input document mirrors a frozen schema with `additionalProperties: false`
+   * and already carries the one documented local-only extension it is allowed
+   * (`credentialRef`); the RPC transport round-trips that document through
+   * JSON, so a second and third off-schema key would either be rejected there
+   * or silently dropped — a requirement that vanishes in transit is worse than
+   * no requirement at all. Deps are the in-process seam, and the caller that
+   * knows a flow's frozen acceptance criteria is in-process by construction.
+   *
+   * Absent ⇒ both lists are empty, i.e. exactly the previous behaviour, so an
+   * ad-hoc run with no flow behind it does not start failing.
+   */
+  completionRequirements?: CompletionRequirements;
+}
+
+/**
+ * Caller-stated completion requirements for one run (flow 134 / S3).
+ *
+ * `requiredGates` names verification gates that must report `pass`.
+ * `requiredEvidenceRefs` names evidence ids that must be present among the ones
+ * the run records; a missing ref fails the gate. Refs are only nameable by a
+ * caller that knows them ahead of time — a parent passing a child run's
+ * `evidenceId`, or a deterministic id sequence — which is the case this exists
+ * for. Naming an id the run cannot mint is a failing requirement, by design.
+ */
+export interface CompletionRequirements {
+  requiredGates?: readonly RequiredGate[];
+  requiredEvidenceRefs?: readonly string[];
 }
 
 /**
@@ -238,9 +292,11 @@ export async function runOffline(
   const blockerIds: string[] = [];
   const unresolvedRisks: UnresolvedRisk[] = [];
 
-  // Deterministic, offline redaction scanner (S4). No content is protected in a
-  // fixture run; the seam is exercised so a real scanner drops in unchanged.
-  const scan = () => ({ hasSecret: false }) as const;
+  // Deterministic, offline redaction scanner (S4). `deps.scan` is the real one
+  // when the caller resolved a security config; the fallback keeps a fixture run
+  // byte-identical to what it produced before the seam was fillable.
+  const scan: (content: string) => ScanResult =
+    deps.scan ?? (() => ({ hasSecret: false }));
 
   const toolNameByCall = new Map<string, string>();
   const actionCounts = new Map<string, number>();
@@ -420,12 +476,17 @@ export async function runOffline(
   }
 
   // --- Completion gate (S4): the single authority on whether the run passed. ---
-  const requiredGates: RequiredGate[] = [];
+  // The two requirement lists come from the caller (flow 134 / S3); absent ⇒
+  // empty, which is the pre-S3 behaviour.
+  const requiredGates: RequiredGate[] = [...(deps.completionRequirements?.requiredGates ?? [])];
+  const requiredEvidenceRefs: string[] = [
+    ...(deps.completionRequirements?.requiredEvidenceRefs ?? []),
+  ];
   const gate = evaluateCompletion(
     {
       runId,
       requiredGates,
-      requiredEvidenceRefs: [],
+      requiredEvidenceRefs,
       presentEvidenceIds: uniqueInOrder(presentEvidenceIds),
       undisposedBlockerIds: uniqueInOrder(blockerIds),
       finalMessageEmitted,
@@ -549,6 +610,10 @@ function earlyTermination(
 ): RunResult {
   const runId = `run-${sha256(reason).slice(0, 32)}`;
   const evidenceId = deps.idSeq();
+  // Deliberately NOT carrying `deps.completionRequirements` (flow 134 / S3):
+  // the run never started, so no requirement was given a chance to be met.
+  // Reporting them as unmet would add noise to a verdict the startup blocker
+  // has already decided.
   const gate = evaluateCompletion(
     {
       runId,

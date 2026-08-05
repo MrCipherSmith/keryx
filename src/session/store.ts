@@ -556,6 +556,75 @@ export function compactSession(
   return { handle: withCount, context: result.context, result };
 }
 
+/** Typed rejection for a fork whose source session is not in this project. */
+export class UnknownSessionError extends Error {
+  constructor(readonly idOrPrefix: string) {
+    super(`no session matching "${idOrPrefix}" in this project`);
+    this.name = "UnknownSessionError";
+  }
+}
+
+/**
+ * Fork `sourceIdOrPrefix` into a NEW session that starts from the same history.
+ *
+ * Branching existed in the harness as `harness/branch/forkBranch` — deterministic,
+ * append-only, tested — and had no way in: no CLI verb, no slash command, and
+ * nothing that ever set `parentSessionId`. The only way to try an alternative
+ * line from a point in a conversation was to copy transcript files by hand,
+ * which is exactly the kind of edit the store's atomic writes exist to avoid.
+ *
+ * This is the interactive-session half of that, and it is deliberately not a
+ * call into `forkBranch`: that operates on the harness's in-memory append-only
+ * entry trail, which has no durable store behind it, while THIS store is what
+ * `keryx shell -r` resumes from. Ancestry here is `parentSessionId` on the
+ * summary, which the store, the resume path and `sessions list` already carry.
+ *
+ * The copy is a copy, not a reference: the fork owns its files from the first
+ * turn, so writing to it can never mutate the session it came from. Both
+ * `context` and `archive` come across, because a fork that resumed with the
+ * model window but lost the pre-compact history would silently be a different
+ * conversation from the one it claims to branch.
+ */
+export function forkSession(opts: {
+  cwd: string;
+  sourceIdOrPrefix: string;
+  title?: string;
+  dataDir?: string;
+}): { handle: SessionHandle; source: SessionSummary; messageCount: number; archiveCount: number } {
+  const source = findSession(opts.cwd, opts.sourceIdOrPrefix, opts.dataDir);
+  if (source === undefined) {
+    throw new UnknownSessionError(opts.sourceIdOrPrefix);
+  }
+
+  // Throws `TranscriptUnreadableError` rather than forking an empty session off
+  // a transcript it could not open — a fork that silently starts blank is the
+  // worst outcome here, because it looks like it worked.
+  const context = loadContext(opts.cwd, source.id, opts.dataDir);
+  const archive = loadArchive(opts.cwd, source.id, opts.dataDir);
+
+  const title = opts.title !== undefined && opts.title.trim().length > 0
+    ? opts.title.trim()
+    : `${source.title} (fork)`;
+
+  const created = createSession({
+    cwd: opts.cwd,
+    parentSessionId: source.id,
+    title,
+    ...(opts.dataDir !== undefined ? { dataDir: opts.dataDir } : {}),
+    ...(source.provider !== undefined ? { provider: source.provider } : {}),
+    ...(source.model !== undefined ? { model: source.model } : {}),
+  });
+
+  const handle = persistHistory(created, context, {
+    archive,
+    title,
+    ...(source.provider !== undefined ? { provider: source.provider } : {}),
+    ...(source.model !== undefined ? { model: source.model } : {}),
+  });
+
+  return { handle, source, messageCount: context.length, archiveCount: archive.length };
+}
+
 export function renameSession(handle: SessionHandle, title: string): SessionHandle {
   const summary: SessionSummary = {
     ...handle.summary,

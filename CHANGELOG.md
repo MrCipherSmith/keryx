@@ -7,6 +7,51 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.16] — 2026-08-05
+
+The other half of the 0.2.15 audit. That release corrected what the README
+claimed; this one closes the five gaps it found in the code — one live security
+weakness, two safety mechanisms that could not fire, and two finished features
+with no way in.
+
+### Security
+
+- **A `network: "restricted"` sandbox profile now fails closed on Linux
+  regardless of `KERYX_SANDBOX_ALLOW_UNSANDBOXED`.** One variable covered two
+  unrelated failure modes. A missing launcher is a degradation an operator can
+  knowingly accept; a domain allowlist that is not implemented on this platform
+  is not. In the second case the allowlist proxy had already started and the
+  proxy variables were already merged into the command environment, and then the
+  command was spawned uncontained and free to ignore both. The check lives at the
+  spawn point, where profiles from all three construction paths converge and the
+  invariant cannot be routed around. The missing-launcher escape hatch is
+  unchanged, and is pinned by its own test so the fix cannot be satisfied by
+  refusing everything.
+- **The harness mutation path is scanned by a scanner that can find
+  something.** The redaction seam was real, but the only implementation behind it
+  answered "no secret here" to every input, so every tool result the run loop
+  persisted came out verbatim. `scanAvailable` — a fail-closed capability signal
+  the guard denies on — was hardcoded `true` at the production call site. Both
+  now derive from the real detectors, resolved once before the run so the loop
+  stays synchronous, offline and replayable.
+
+### Added
+
+- **`keryx sessions fork <id>`** branches a conversation into a new session that
+  keeps its ancestry (`parentSessionId`) and starts from the same context and
+  archive. Writing to the fork never touches its source. Forks are marked `↳` in
+  `keryx sessions list`.
+- **`keryx harness replay --record <path>`** validates a recorded run's log
+  against a replay fixture, and **`keryx harness run --record <path>`** writes
+  the record. `--write-fixture` keeps a fixture, `--fixture` compares against a
+  kept one, and a divergence prints a typed mismatch naming the field and exits
+  non-zero. This is `validate-log` and says so: it checks that a fixture still
+  describes the run it was built from, and re-executes nothing.
+- **The completion gate can be told what to require.** `runOffline` accepts
+  `requiredEvidenceRefs` and `requiredGates` instead of building two empty arrays
+  itself, so two of the gate's three conditions stop being vacuous. Supplying
+  nothing keeps the previous behaviour, which has its own test.
+
 ## [0.2.15] — 2026-08-05
 
 A claim-by-claim audit of the README against source. Three commands turned out
