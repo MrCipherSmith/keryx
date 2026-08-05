@@ -50,7 +50,7 @@ const VERSION = packageJson.version;
  */
 export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void> = {
   init: initCommand,
-  status: () => statusCommand(),
+  status: statusCommand,
   modules: modulesCommand,
   projects: projectsCommand,
   serve: serveCommand,
