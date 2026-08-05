@@ -5,7 +5,7 @@
   "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
   "status": "implemented",
   "createdAt": "2026-08-05T19:40:33.840Z",
-  "updatedAt": "2026-08-05T20:17:49.443Z",
+  "updatedAt": "2026-08-05T20:52:17.914Z",
   "source": {
     "type": "description",
     "ref": null
@@ -17,12 +17,12 @@
       "note": "src/harness/tool/metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not (real computeAffected over an a<-b<-c fixture)"
     },
     "AC2": {
-      "at": "2026-08-05T20:14:58.618Z",
-      "note": "metaproject-operations.parity.test.ts enumerates every tool/verb pair, reads each verb's handler out of src/commands and fails on any option the tool cannot express; subprocess fallback forwards the same arguments"
+      "at": "2026-08-05T20:52:17.914Z",
+      "note": "RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: the parity test could not see short flags and scanned only named handler blocks, so search_code declaring expresses:{} against a verb forwarding ~40 ripgrep options passed. Now: search_code takes a validated flags array carrying the CLI own forwarded-option table (src/lib/rg-options.ts); the test sees short flags, discovers module-level option tables by following imports from the verb handler, and refuses an ambiguous anchor. Verified adversarially - reverting search_code to {pattern,path} fails the test."
     },
     "AC3": {
-      "at": "2026-08-05T20:14:58.702Z",
-      "note": "shell-launch.test.ts parses --unattended[=profile]; agent-unattended.test.ts runs a read-only turn with zero approval requests; documented in cli-reference.md and harness.md"
+      "at": "2026-08-05T20:52:09.315Z",
+      "note": "SUPERSEDES the earlier note: also asserts an unattended launch never opens a provider/mode picker (resolveUnattendedSelection: flags, then saved config, then refuse) and that --unattended with --chat is refused."
     },
     "AC4": {
       "at": "2026-08-05T20:14:58.791Z",
@@ -33,16 +33,16 @@
       "note": "unattended.test.ts: unattended-untrusted shell=ask resolves to deny via headless-fail-closed; agent-unattended.test.ts asserts the tool never ran; ask_user host rejects"
     },
     "AC6": {
-      "at": "2026-08-05T20:14:58.965Z",
-      "note": "unattended.test.ts enumerates all three profiles x five risk classes with destructive=true, all deny; agent-unattended.test.ts refuses a destructive-risk tool under monitored-trusted-local (shell=allow) and the fixture file survives, with a benign-command control that does run"
+      "at": "2026-08-05T20:52:09.228Z",
+      "note": "RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: with monitored-trusted-local (shell=allow) the only barrier was isDestructiveCommand(), a blocklist its own module forbids using as a boundary, and a review deleted .metaproject/data/gdgraph unattended. Now two gates: the engine, plus an operator-supplied --unattended-allow argv allowlist validated by validateShellPattern; nothing runs unless a pattern recognises it, and a destructive/credential action is refused even when allowlisted. Verified with the REAL shellExecTool and a runner that really executes: git clean -fdx and rm -rf <subdir> leave the fixture intact. Reverting the allowlist gate fails 13 tests."
     },
     "AC7": {
       "at": "2026-08-05T20:14:59.054Z",
       "note": "agent-unattended.test.ts: with no flag an ask still prompts and a yes still executes; with no approver the refusal wording is byte-identical to before"
     },
     "AC8": {
-      "at": "2026-08-05T20:14:59.145Z",
-      "note": "session/store.test.ts records posture on create, persist and resume; unattended.test.ts pins the header label and record value; agent-tool-surface.test.ts pins that both surfaces use the shared formatter and postureRecord"
+      "at": "2026-08-05T20:52:09.399Z",
+      "note": "SUPERSEDES the earlier note: the header claim is now a behavioural assertion on shellHeaderMeta() rather than a grep of source text; the TUI seam check remains, stated as the weaker guarantee it is."
     },
     "AC9": {
       "at": "2026-08-05T20:14:59.232Z",
@@ -53,12 +53,12 @@
       "note": "agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone and that the replacement routes tool-answerable questions to the tool"
     },
     "AC12": {
-      "at": "2026-08-05T20:14:59.407Z",
-      "note": "bun run check: 3086 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken; no test skipped or weakened for this work"
+      "at": "2026-08-05T20:52:09.489Z",
+      "note": "bun run check: 3106 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken."
     },
     "AC13": {
-      "at": "2026-08-05T20:14:59.494Z",
-      "note": "cli-reference.md and harness.md describe the flag and its refusals; every claim maps to a named test, and the header/run-record claim is pinned at the seam because the TUI cannot render headlessly"
+      "at": "2026-08-05T20:52:09.574Z",
+      "note": "SUPERSEDES the earlier note, which backed a false claim. harness.md and cli-reference.md now state the two-gate model, that the flag alone runs nothing, why an allowlist rather than a blocklist (naming git clean -fdx), the metacharacter refusal, and the no-picker/no-chat rules. Each is covered by a named test."
     }
   },
   "pr": {
@@ -399,6 +399,41 @@
       "at": "2026-08-05T20:17:49.443Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/253"
+    },
+    {
+      "at": "2026-08-05T20:52:09.134Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: the parity test could not see short flags and scanned only named handler blocks, so search_code declaring expresses:{} against a verb forwarding ~40 ripgrep options passed. Now: search_code takes a validated  array carrying the CLI's own forwarded-option table (src/lib/rg-options.ts); the test sees short flags, discovers module-level option tables by following imports from the verb's handler, and refuses an ambiguous anchor. Verified adversarially — reverting search_code to {pattern,path} fails the test."
+    },
+    {
+      "at": "2026-08-05T20:52:09.228Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: with monitored-trusted-local (shell=allow) the only barrier was isDestructiveCommand(), a blocklist its own module forbids using as a boundary, and a review deleted .metaproject/data/gdgraph unattended. Now two gates: the engine, plus an operator-supplied --unattended-allow argv allowlist validated by validateShellPattern; nothing runs unless a pattern recognises it, and a destructive/credential action is refused even when allowlisted. Verified with the REAL shellExecTool and a runner that really executes: git clean -fdx and rm -rf <subdir> leave the fixture intact. Reverting the allowlist gate fails 13 tests."
+    },
+    {
+      "at": "2026-08-05T20:52:09.315Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: SUPERSEDES the earlier note: also asserts an unattended launch never opens a provider/mode picker (resolveUnattendedSelection: flags, then saved config, then refuse) and that --unattended with --chat is refused."
+    },
+    {
+      "at": "2026-08-05T20:52:09.399Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: SUPERSEDES the earlier note: the header claim is now a behavioural assertion on shellHeaderMeta() rather than a grep of source text; the TUI seam check remains, stated as the weaker guarantee it is."
+    },
+    {
+      "at": "2026-08-05T20:52:09.489Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3106 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken."
+    },
+    {
+      "at": "2026-08-05T20:52:09.574Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: SUPERSEDES the earlier note, which backed a false claim. harness.md and cli-reference.md now state the two-gate model, that the flag alone runs nothing, why an allowlist rather than a blocklist (naming git clean -fdx), the metacharacter refusal, and the no-picker/no-chat rules. Each is covered by a named test."
+    },
+    {
+      "at": "2026-08-05T20:52:17.914Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: RETRACTS the 2026-08-05T20:14:58Z confirmation, which was false: the parity test could not see short flags and scanned only named handler blocks, so search_code declaring expresses:{} against a verb forwarding ~40 ripgrep options passed. Now: search_code takes a validated flags array carrying the CLI own forwarded-option table (src/lib/rg-options.ts); the test sees short flags, discovers module-level option tables by following imports from the verb handler, and refuses an ambiguous anchor. Verified adversarially - reverting search_code to {pattern,path} fails the test."
     }
   ]
 }
