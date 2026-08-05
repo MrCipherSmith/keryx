@@ -1073,6 +1073,151 @@ managed sentinel/config entry and preserve surrounding user configuration.
 
 ---
 
+## harness
+
+**Purpose.** The harness (`src/harness/`) is keryx's own agent runtime: the loop
+that lets a model operate on a project through controlled tools, with a policy
+engine above it, an OS sandbox below it, and an append-only evidence record beside
+it. It is not a `.metaproject/` module in the manifest sense — nothing enables or
+disables it — but it is the largest subsystem in the repository and the one every
+other runtime surface (`shell`, `serve`, `sessions`) sits on.
+
+**CLI surface.** Dispatched by `harnessCommand`:
+
+| Subcommand | Behavior |
+|---|---|
+| `harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] "<prompt>"` | one prompt through the run loop; prints one structured JSON blob |
+| `harness exec [containment flags] -- <path> [args...]` | one contained subprocess under the OS sandbox |
+| `harness extension --spec <path>` | dispatch one declared extension (the only path that reaches `checkApproval`) |
+| `harness wave --spec <path>` | plan and run a declared multi-agent wave |
+| `harness replay --record <path> [--fixture <p>] [--write-fixture <p>] [--json]` | validate a replay fixture against a recorded run |
+
+**Key files.**
+- `src/harness/run/run.ts` — `runOffline`, the assembled loop: startup → context manifest → provider stream → policy decision → budget/loop guards → tool executor → redaction + append-only session → completion gate.
+- `src/harness/policy/engine.ts` — `decide()` over seven risk classes.
+- `src/harness/mutation/guard.ts`, `approval.ts` — structural safety before policy; fingerprint-bound single-use approvals.
+- `src/harness/process/sandbox/` — Seatbelt and bubblewrap launchers, the loopback allowlist proxy, credential masking, the fail-closed adapter.
+- `src/harness/completion/gate.ts` — the completion verdict; `flow/managed-flow-port.ts` is its only route into Task Manager.
+- `src/harness/replay/replay.ts` — fixture build and `validate-log` comparison.
+- `src/harness/child/`, `extension/` — child dispatch with budgets, extensions and bounded waves.
+
+**How it works.** Every decision core is pure with `clock` and `idSeq` injected;
+the only effect surfaces are injected adapters (`MutationAdapter`,
+`ProcessAdapter`, `ProviderPort`, `ToolExecutorPort`), which is what makes a run
+deterministic and offline-testable. Tool results are scanned and redacted *before*
+persistence — a failed scan blocks the write entirely. The completion gate reports
+and never advances flow state itself; the harness cannot write `flow.json`, and
+three independent mechanisms enforce that.
+
+**Data & artifacts.** Sessions live under the per-project session store (see
+below), not under `.metaproject/data/`. `--record` writes a run record wherever
+the caller points it.
+
+**Dependencies / integrations.** Reads `.metaproject/` through an optional
+metaproject port for blast-radius escalation; calls `src/security` for the
+redaction scanner; reaches Task Manager only through `ManagedFlowPort`.
+
+See [the harness page](./harness.md) for the feature-level tour, including what
+the harness deliberately does not do.
+
+---
+
+## sessions & shell
+
+**Purpose.** `src/session/` is the durable per-project conversation store, and
+`src/commands/shell.ts` + `src/tui/` are the interactive front end over it. This is
+where tools actually run: the non-interactive harness paths register none.
+
+**CLI surface.**
+
+| Command | Behavior |
+|---|---|
+| `shell [-c\|--continue] [-r\|--resume [id]] [--provider <p>] [--model <m>] [--agent\|--chat] [--tui\|--no-tui]` | start the interactive agent shell |
+| `sessions list [--json]` | sessions for this project, newest first; forks marked `↳` |
+| `sessions fork <id> [--title "<t>"] [--json]` | branch a session, ancestry recorded |
+| `sessions export <id>` | Markdown transcript |
+| `sessions path` | the on-disk sessions directory |
+
+`session` is a singular alias for `sessions`.
+
+**Key files.**
+- `src/session/store.ts` — create, list, find, load, persist, compact, fork; atomic multi-file writes.
+- `src/session/paths.ts` — project-keyed directory layout under the data root.
+- `src/session/compact.ts` — model-window compaction that preserves the archive.
+- `src/commands/sessions.ts`, `src/commands/shell.ts`, `src/tui/` — CLI and TUI adapters.
+
+**How it works.** Sessions never cross project roots: the key is the git toplevel,
+or the absolute cwd outside a repository. Each session directory holds
+`context.jsonl` (the model window a resume loads) and `archive.jsonl` (the full
+audit log, which survives `/compact`); `transcript.jsonl` is a legacy mirror. All
+writes are temp-plus-rename. Directories are forced owner-only below the data
+root. `fork` copies both files into a new session and sets `parentSessionId`, so a
+branch starts from the same history without sharing files with its source.
+
+**Data & artifacts.** `<data root>/sessions/<project-key>/<session-id>/`. Nothing
+under `.metaproject/`.
+
+**Dependencies / integrations.** `lib/config-dir` for the shared root and its
+permissions; the harness for the turn loop.
+
+---
+
+## sync
+
+**Purpose.** Keep the derived layers — graph, wiki, memory — in step with the code
+after a `git pull`, a fetch, or a branch switch, so an agent never reads a map of a
+tree that no longer exists.
+
+**CLI surface.**
+
+| Subcommand | Behavior |
+|---|---|
+| `sync` | advisory report: per artifact, either "up to date" or the added/changed/deleted counts since it was built |
+| `sync --apply` | rebuild each stale artifact incrementally and advance its provenance |
+| `sync install-hooks` / `uninstall-hooks` | `post-merge` + `post-checkout` git hooks that run the report |
+
+**Key files.** `src/commands/sync.ts` (dispatcher), `src/sync/provenance.ts`
+(per-artifact commit record and `SYNCED_MODULES`), `src/sync/diff.ts` (the
+code-only diff since a commit), `src/sync/hooks.ts` (hook install/removal).
+
+**How it works.** Each synced artifact records the commit it was built from.
+`sync` diffs that commit against `HEAD`, filters to code paths, and reports. With
+`--apply` it calls the module's own incremental builder — `gdgraph build`,
+`wikiCollect --changed` plus a reindex, `memory index` — then advances provenance.
+An artifact with no provenance is built as a baseline. When the wiki updates and
+files were deleted, orphaned pages are pruned; a human-owned page whose module
+disappeared is reported rather than deleted. Outside a git repository the command
+says there is nothing to sync. The bare report always exits `0` — it is advisory,
+and the hook decides what to do with it.
+
+**Data & artifacts.** Reads and advances the provenance records; delegates every
+artifact write to the owning module.
+
+**Dependencies / integrations.** `gdgraph`, `gdwiki`, `memory`.
+
+---
+
+## serve
+
+**Purpose.** A loopback-bound HTTP entry over the harness, so a bot or another
+product can drive turns. Opt-in and off until started; not a manifest module.
+
+**CLI surface.** `serve` with the flags in the
+[CLI reference](./cli-reference.md#serve).
+
+**How it works.** Authentication happens *before* routing, so an unauthenticated
+caller cannot distinguish a known path from an unknown one. The remote policy
+profile is compared against the local one on every turn and a weaker remote
+profile is refused. There is no approval transport yet: a turn whose decision is
+`ask` ends in a recorded denial rather than being auto-approved.
+
+**Key files.** `src/commands/serve.ts`, `src/lib/serve-*.ts`.
+
+**Dependencies / integrations.** The harness (`runOffline`), the project registry
+that remote entry addresses projects by (`projects`).
+
+---
+
 ## shared-lib
 
 **Purpose.** `src/lib/` is the cross-cutting utility toolkit every feature module and

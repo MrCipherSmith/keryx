@@ -673,18 +673,71 @@ Task kinds: `context`, `implement`, `test`, `review`, and `docs`.
 | `keryx mcp install --runtime <id|all> --dry-run` | Preview client changes. |
 | `keryx mcp uninstall --runtime <id|all>` | Remove only the managed keryx server. |
 
+### Keeping the derived layers in sync
+
+| Command | Description |
+|---|---|
+| `keryx sync` | Report what changed in the code since graph, wiki and memory were last built. |
+| `keryx sync --apply` | Rebuild the stale ones incrementally and advance their provenance. |
+| `keryx sync install-hooks` | Run the report automatically on `git pull` and branch switch. |
+| `keryx sync uninstall-hooks` | Remove those hooks. |
+
+### The agent runtime
+
+| Command | Description |
+|---|---|
+| `keryx shell` | Interactive TUI agent shell; sessions are per-project. |
+| `keryx shell -c` / `-r [id]` | Continue the last session, or resume one by id, short id, or title. |
+| `keryx sessions list [--json]` | Sessions for this project, newest first; forks marked `↳`. |
+| `keryx sessions fork <id> [--title "<t>"]` | Branch a conversation into a new session with its ancestry recorded. |
+| `keryx sessions export <id>` | Export a transcript as Markdown. |
+| `keryx harness run --provider <p> --model <m> [--record <path>] "<prompt>"` | One prompt through the run loop, non-interactively. |
+| `keryx harness exec [containment flags] -- <path> [args...]` | Run a subprocess under the OS sandbox. |
+| `keryx harness extension --spec <path>` / `wave --spec <path>` | Run a declared extension, or a bounded multi-agent wave. |
+| `keryx harness replay --record <path> [--fixture <path>]` | Validate a replay fixture against a recorded run. |
+| `keryx agents monitor <events-file>` | Offline fleet report over a recorded child-agent event log. |
+
+See [the harness page](./harness.md) for what each of these actually guarantees —
+and the four things the runtime does not do yet.
+
+### Remote entry and observability
+
+| Command | Description |
+|---|---|
+| `keryx serve [flags]` | Loopback-bound HTTP entry over the harness (opt-in, off by default). |
+| `keryx projects` | The user-global project registry remote entry addresses projects by. |
+| `keryx metrics` | Collect, validate, and report execution-observability metrics. |
+
+### Command discovery for agents
+
+| Command | Description |
+|---|---|
+| `keryx commands` | Markdown registry of agent-callable commands. |
+| `keryx commands --json` | Machine-readable descriptors, for a harness or MCP client. |
+| `keryx commands --intent "<phrase>"` | Resolve a natural-language phrase to the matching command(s). |
+| `keryx commands --intents` | The full intent → command table. |
+
 ## 12. Daily command workflows
 
 ### After pulling repository changes
 
 ```bash
 keryx update --skip-runtime
-keryx gdgraph build
+keryx sync --apply          # graph + wiki + memory, incrementally, from recorded provenance
 keryx test analyze
-keryx wiki collect --changed
-keryx wiki index
 keryx dashboard build
 keryx standard validate
+```
+
+`keryx sync install-hooks` does the first half of this for you: the report runs on
+`post-merge` and `post-checkout`, so a pull tells you what drifted without being
+asked. The long form is still available if you want to drive each layer yourself:
+
+```bash
+keryx gdgraph build
+keryx wiki collect --changed
+keryx wiki index
+keryx memory index
 ```
 
 ### Before committing
