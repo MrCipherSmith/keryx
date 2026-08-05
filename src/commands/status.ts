@@ -13,7 +13,16 @@ type Manifest = {
   modules?: Record<string, ManifestModule>;
 };
 
-export async function statusCommand(): Promise<void> {
+// `args` exists so `--help` answers with help. It used to be dropped at the
+// dispatch table, so `keryx status --help` ran the report instead of printing
+// usage — harmless for a read-only command, and the wrong reflex to teach for
+// the ones that are not.
+export async function statusCommand(args: string[] = []): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printHelp();
+    return;
+  }
+
   const root = path.join(process.cwd(), ".metaproject");
   const manifestPath = path.join(root, "metaproject.json");
 
@@ -45,4 +54,15 @@ export async function statusCommand(): Promise<void> {
   for (const [name, moduleConfig] of Object.entries(manifest.modules ?? {})) {
     console.log(`  ${name}: ${moduleConfig.enabled ? "enabled" : "disabled"}`);
   }
+}
+
+function printHelp(): void {
+  console.log(`keryx status — whether this project has a .metaproject workspace, and which modules are on
+
+Usage:
+  keryx status
+
+Reports the workspace root and one enabled/disabled line per module. Use
+\`keryx modules\` to toggle a module, and \`keryx init\` to create the workspace.
+`);
 }

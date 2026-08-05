@@ -16,6 +16,11 @@ import {
 //   keryx orient [<runtime>]                emit the orientation (hook target)
 //   keryx orient install-hook [--runtime]   install the session/prompt hook
 //   keryx orient uninstall-hook [--runtime]
+//
+// `--dry-run` was accepted by the shell and ignored by this file: nothing parsed
+// it, so the install ran and wrote settings anyway. A --dry-run that mutates is
+// worse than no flag, because it is exactly the flag someone reaches for when
+// they are unsure the command is safe to run.
 
 export async function orientCommand(args: string[]): Promise<void> {
   const first = args[0];
@@ -42,6 +47,10 @@ export async function orientCommand(args: string[]): Promise<void> {
 function parseRuntimeArg(args: string[]): string[] {
   const value = optionValue(args, "--runtime") ?? "claude";
   return value.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function isDryRun(args: string[]): boolean {
+  return args.includes("--dry-run");
 }
 
 async function readSettings(file: string): Promise<Settings> {
@@ -84,6 +93,7 @@ function reportUnsupported(ids: string[]): void {
 
 async function handleInstall(args: string[]): Promise<void> {
   const cwd = process.cwd();
+  const dryRun = isDryRun(args);
   const { runtimes, unknown, unsupported } = resolveOrientRuntimes(parseRuntimeArg(args));
   if (unknown.length > 0) {
     console.error(`Unknown runtime(s): ${unknown.join(", ")}`);
@@ -92,17 +102,22 @@ async function handleInstall(args: string[]): Promise<void> {
     return;
   }
 
-  console.log("# keryx orientation injector installed");
+  console.log(`# keryx orientation injector ${dryRun ? "install — dry run, nothing written" : "installed"}`);
   console.log("");
   console.log("injects: compact code-graph map + wiki index + freshness at turn start");
   console.log("");
   for (const runtime of runtimes) {
+    const target = path.relative(cwd, runtime.locate(cwd));
+    if (dryRun) {
+      console.log(`  · ${runtime.id} -> would write ${target}`);
+      continue;
+    }
     const errors = await installOne(cwd, runtime);
     if (errors.length > 0) {
       for (const e of errors) console.error(`  ✗ ${e}`);
       process.exitCode = 1;
     } else {
-      console.log(`  ✓ ${runtime.id} -> ${path.relative(cwd, runtime.locate(cwd))}`);
+      console.log(`  ✓ ${runtime.id} -> ${target}`);
     }
   }
   reportUnsupported(unsupported);
@@ -110,6 +125,7 @@ async function handleInstall(args: string[]): Promise<void> {
 
 async function handleUninstall(args: string[]): Promise<void> {
   const cwd = process.cwd();
+  const dryRun = isDryRun(args);
   const { runtimes, unknown, unsupported } = resolveOrientRuntimes(parseRuntimeArg(args));
   if (unknown.length > 0) {
     console.error(`Unknown runtime(s): ${unknown.join(", ")}`);
@@ -117,11 +133,17 @@ async function handleUninstall(args: string[]): Promise<void> {
     return;
   }
 
-  console.log("# keryx orientation injector uninstall");
+  console.log(`# keryx orientation injector uninstall${dryRun ? " — dry run, nothing written" : ""}`);
   console.log("");
   for (const runtime of runtimes) {
+    const target = path.relative(cwd, runtime.locate(cwd));
+    if (dryRun) {
+      const present = await pathExists(runtime.locate(cwd));
+      console.log(`  · ${runtime.id} ${present ? `-> would strip ${target}` : "nothing to remove"}`);
+      continue;
+    }
     const removed = await uninstallOne(cwd, runtime);
-    console.log(`  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${path.relative(cwd, runtime.locate(cwd))}` : "nothing to remove"}`);
+    console.log(`  ${removed ? "✓" : "·"} ${runtime.id} ${removed ? `-> ${target}` : "nothing to remove"}`);
   }
   reportUnsupported(unsupported);
 }
@@ -131,8 +153,11 @@ function printHelp(): void {
 
 Usage:
   keryx orient [<runtime>]                      emit the orientation block
-  keryx orient install-hook [--runtime <id|all>]
-  keryx orient uninstall-hook [--runtime <id|all>]
+  keryx orient install-hook [--runtime <id|all>] [--dry-run]
+  keryx orient uninstall-hook [--runtime <id|all>] [--dry-run]
+
+Options:
+  --dry-run    report what would be written or stripped; change nothing
 
 Runtimes with a context-injection hook: ${orientRuntimeIds().join(", ")}
 (Windsurf/Zed have no context-injection hook — use their rules/memories.)

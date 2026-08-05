@@ -933,6 +933,13 @@ export async function initCommand(args: string[]): Promise<void> {
     statusLine("mcp", true, "Model Context Protocol server (opt-in)");
   }
 
+  // `installManagedHook` no-ops when there is no git hooks root, so reporting
+  // these lines from the intent flags alone claimed success for work that never
+  // happened: run `keryx init` before `git init` and every hook reads installed
+  // while nothing was written and nothing would ever fire. Ask git first, and
+  // say "skipped" when the answer is no. The agent hook is not a git hook — it
+  // lands in .claude/settings.json and works without a repository.
+  const gitHooksRoot = await resolveGitHooksRoot(projectRoot);
   const hookLines: Array<[string, boolean]> = [];
   if (enableGdgraph) {
     hookLines.push(["gdgraph post-commit", enableGdgraphHook]);
@@ -949,12 +956,27 @@ export async function initCommand(args: string[]): Promise<void> {
   }
   if (enableSecurity) {
     hookLines.push(["security pre-push", enableSecurityPrePushHook]);
-    hookLines.push(["security agent (.claude)", enableSecurityAgentHook]);
   }
-  if (hookLines.length > 0) {
+  const agentHookLines: Array<[string, boolean]> = enableSecurity
+    ? [["security agent (.claude)", enableSecurityAgentHook]]
+    : [];
+
+  if (hookLines.length > 0 || agentHookLines.length > 0) {
     heading("Git hooks");
     for (const [label, on] of hookLines) {
+      if (gitHooksRoot) {
+        statusLine(label, on);
+      } else {
+        statusLine(label, false, "skipped - not a git repository");
+      }
+    }
+    for (const [label, on] of agentHookLines) {
       statusLine(label, on);
+    }
+    if (!gitHooksRoot && hookLines.length > 0) {
+      console.log(
+        `  ${style.dim("Run")} ${style.cyan("git init")} ${style.dim("and then")} ${style.cyan("keryx init")} ${style.dim("again to install them.")}`,
+      );
     }
   }
 
