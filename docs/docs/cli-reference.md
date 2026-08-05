@@ -113,7 +113,7 @@ Drive the agent execution loop **non-interactively** — the same loop `shell`
 runs, without a terminal attached. This is the scriptable and CI-facing surface.
 
 ```
-keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
+keryx harness run --provider <p> --model <m> [--base-url <url>] "<prompt>"
 keryx harness exec [options] -- <path> [args...]
 keryx harness extension --spec <path>
 keryx harness wave --spec <path>
@@ -122,6 +122,12 @@ keryx harness wave --spec <path>
 | Subcommand | Description |
 |---|---|
 | `run` | Execute one prompt through the run loop against the named provider and model. `fake` is a deterministic in-process provider, which is what makes the loop testable without a network. |
+
+`--provider` accepts `anthropic`, `ollama`, `fake`, and the OpenAI-compatible
+gateways — `openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`,
+`moonshot`, `grok`. `keryx shell` offers the same set through its picker, which
+lists each provider with the environment variable it reads.
+
 | `exec` | Run a subprocess under the containment options below. |
 | `extension` | Run a declared extension from a spec file. |
 | `wave` | Run a declared multi-agent wave from a spec file. |
@@ -215,10 +221,10 @@ clobbering existing settings) two Claude Code hooks into `.claude/settings.json`
 
 ## status
 
-Print the local Metaproject status. Takes no arguments. Read-only — never writes.
+Print the local Metaproject status. Read-only — never writes.
 
 ```
-keryx status
+keryx status [--help]
 ```
 
 Reports one of: `not initialized` (no `.metaproject/`), `incomplete` (missing or
@@ -446,6 +452,8 @@ keryx wiki index
 keryx wiki check-links
 keryx wiki validate
 keryx wiki ask "<question>" [--k <n>] [--rerank]
+keryx wiki enrich [<page>|--all] [--force] [--list] [--resume] [--limit <n>] [--concurrency <n>]
+                  [--provider <p>] [--model <m>] [--dry-run] [--json]
 keryx wiki context
 keryx wiki backlinks <wiki-page-or-code-file>
 ```
@@ -459,6 +467,7 @@ keryx wiki backlinks <wiki-page-or-code-file>
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
+| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
 | `context` | — | Emit the bounded wiki-index half of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 
@@ -540,7 +549,7 @@ keryx health run [--strict] [--scope <sel>] [--changed [--since <ref>]] [--sourc
 keryx health status
 keryx health gate [--strict-warn]
 keryx health sources
-keryx health explain <file-or-module>
+keryx health explain <file-or-module> [--narrate] [--provider <p>] [--json]
 keryx health baseline update [--scope <sel>]
 keryx health trend [--scope <key>] [--limit <n>]
 ```
@@ -551,7 +560,7 @@ keryx health trend [--scope <key>] [--limit <n>]
 | `status` | — | Read the last report: enabled, last run, gate, project score, regressed scopes, per-source status, trend. |
 | `gate` | `--strict-warn` | Re-read the last report's gate (no re-run). Exit `1` on fail, or on warn with `--strict-warn`. |
 | `sources` | — | Detect and list each source's mode/required/status without running the tools. |
-| `explain <file-or-module>` | — | Print a scope's metrics + its first 20 findings from the last report. |
+| `explain <file-or-module>` | `--narrate`, `--provider <p>`, `--json` | Print a scope's metrics + its first 20 findings from the last report. `--narrate` adds a model-written explanation and **needs a credential** — without one it exits `1`. Note it returns `0` before reaching the model when the scope has no metrics yet; run `keryx health run` first. |
 | `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
 | `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
 
@@ -570,6 +579,7 @@ keryx test status
 keryx test context
 keryx test report latest [--json]
 keryx test related <file>
+keryx test suggest <file> [--provider <p>] [--model <m>] [--json]
 keryx test explain <file-or-scope>
 keryx test coverage-map build|status
 ```
@@ -583,6 +593,7 @@ keryx test coverage-map build|status
 | `context` | — | Print saved context + recommendations (hints to run `analyze` if absent). |
 | `report latest` | `--json` | Print the latest normalized report (Markdown, or raw JSON with `--json`). |
 | `related <file>` | — | List tests related to a source file by naming/directory heuristics. |
+| `suggest <file>` | `--provider <p>`, `--model <m>`, `--json` | **Needs a model credential.** Propose a test plan for the file, matching the frameworks already detected in the project. Exits `1` without a credential. |
 | `explain <file-or-scope>` | — | Frameworks + related tests + latest failures filtered by the target. |
 | `coverage-map build` | — | Build the test-impact coverage map (source → covering tests) and write the artifact. Prints the source strategy and entry count. |
 | `coverage-map status` (default) | — | Report the coverage-map capability + config state, whether a map is present, its `gitRef`, and whether it is stale (a stale map falls back to static selection). Bare `coverage-map` defaults to `status`. |
@@ -652,7 +663,7 @@ keryx memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
 keryx memory assets list | verify [<id>] | pull <id>
 keryx memory ingest --from-<source> <path>
 keryx memory check
-keryx memory reflect
+keryx memory reflect [--narrate] [--provider <p>]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -664,7 +675,7 @@ keryx memory reflect
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json` (`list`/`verify`/`pull`; `pull` is the only networked verb). |
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
 | `check` | — | Integrity/lint pass (metadata, links, dedup, conflicts, index). Exit `1` on issues. |
-| `reflect` | — | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. |
+| `reflect` | `--narrate`, `--provider <p>` | Cluster entries by tag and create `pattern` drafts for clusters ≥ min size. `--narrate` adds a model-written summary of the memory and **needs a credential** — without one it exits `1`. |
 
 Entry types: `lesson`, `decision`, `constraint`, `known-mistake`,
 `historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
@@ -688,6 +699,7 @@ keryx flow init (--issue <url> | --title "<t>") [--slug <s>]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
+keryx flow plan <id> [--provider <p>] [--json]
 keryx flow start <id>
 keryx flow task add <id> --title "<t>" [--kind <k>]
 keryx flow task done <id> <taskId>
@@ -698,6 +710,8 @@ keryx flow complete <id> [--comment]
 keryx flow block <id> --reason "<why>"
 keryx flow unblock <id>
 keryx flow check
+keryx flow renumber <dir> --to <id> --reason "<why>"
+keryx flow schema [--out <path>]
 ```
 
 | Subcommand | Flags / args | Description |
@@ -706,6 +720,7 @@ keryx flow check
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, tasks, recent history. |
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
+| `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
 | `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|review\|docs` | Append a task. |
 | `task done <id> <taskId>` | — | Mark a task `done`. |
@@ -716,6 +731,8 @@ keryx flow check
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
 | `check` | — | Consistency audit across all flows. |
+| `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. |
+| `schema` | `--out <path>` | Emit the flow JSON schema. |
 
 Statuses: `initializing`, `ready`, `in-progress`, `implemented`, `completing`,
 `done`, `blocked`. `task` and `ac` are command groups — the atomic verbs are
@@ -820,15 +837,15 @@ controls which shell/search commands an agent may run directly.
 
 ```text
 keryx orient [<runtime>]
-keryx orient install-hook [--runtime <id|all>]
-keryx orient uninstall-hook [--runtime <id|all>]
+keryx orient install-hook [--runtime <id|all>] [--dry-run]
+keryx orient uninstall-hook [--runtime <id|all>] [--dry-run]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | default emit | optional runtime id | Build the bounded graph + wiki orientation and format it for the selected runtime (`claude` by default). |
-| `install-hook` | `--runtime <id\|all>` | Merge-safely install the runtime's turn-start/prompt hook. Supported hook runtimes are `claude`, `codex`, and `cursor`. |
-| `uninstall-hook` | `--runtime <id\|all>` | Remove only the managed orientation integration. |
+| `install-hook` | `--runtime <id\|all>`, `--dry-run` | Merge-safely install the runtime's turn-start/prompt hook. Supported hook runtimes are `claude`, `codex`, and `cursor`. `--dry-run` reports the file it would write and changes nothing. |
+| `uninstall-hook` | `--runtime <id\|all>`, `--dry-run` | Remove only the managed orientation integration. `--dry-run` reports what it would strip and changes nothing. |
 
 Windsurf and Zed do not expose a compatible context-injection hook; use their
 rules or memories instead. Unknown runtimes exit `1` without modifying config.
