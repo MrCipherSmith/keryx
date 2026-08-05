@@ -26,8 +26,8 @@ code `1`.
 | Command | Purpose |
 |---|---|
 | `shell` | Start the interactive TUI agent shell (sessions are per-project). |
-| `sessions` | List, export, or locate agent sessions for the current project. |
-| `harness` | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`). |
+| `sessions` | List, fork, export, or locate agent sessions for the current project. |
+| `harness` | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`, `replay`). |
 | `init` | Initialize `.metaproject/` in the current project. |
 | `status` | Show local Metaproject status. |
 | `modules` | View, enable, or disable workspace modules. |
@@ -35,6 +35,8 @@ code `1`.
 | `serve` | Loopback-bound HTTP entry over the agent harness (opt-in, off by default). |
 | `metrics` | Collect, validate, and report execution-observability metrics. |
 | `update` | Refresh managed service files without touching data artifacts. |
+| `sync` | Reconcile graph, wiki and memory with the current code; optional git hooks keep them in step. |
+| `commands` | The agent-facing command registry: descriptors, and natural-language intent resolution. |
 | `dashboard` / `dash` | Build or open the project admin dashboard. |
 | `gdgraph` | Build and query the code dependency graph. |
 | `ctx` | Run compact, token-aware context commands and save raw output. |
@@ -105,6 +107,11 @@ keryx sessions list | fork <id> | export <id> | path
 | `fork <id>` | Branch a session: a new session with the same history and `parentSessionId` set to the original. `--title "<t>"` names it, `--json` prints the result as JSON. Writing to the fork never touches its source. |
 | `export <id>` | Emit one session in full, for archiving or review. |
 | `path` | Print the directory sessions are stored under. |
+
+`session` is accepted as a singular alias. Sessions are per-project — isolated by
+git root, or by absolute cwd outside a repository — so `list` never shows another
+project's work. The [harness page](./harness.md#sessions) covers what a session
+holds and what forking copies.
 
 ---
 
@@ -352,6 +359,62 @@ keryx update [--skip-runtime] [--hooks] [--no-tasks]
 | `--hooks` | After refreshing, run every executable in `.metaproject/hooks/post-update.d`. Without it, a hint is printed instead. |
 | `--no-tasks` | Do not auto-enable (backfill) the tasks/flow module on pre-tasks workspaces. |
 | `--help`, `-h` | Print `update` usage and exit. |
+
+---
+
+## sync
+
+Reconcile the derived layers — graph, wiki, memory — with the current code. Each
+artifact records the commit it was built from; `sync` diffs that commit against
+`HEAD` and reports exactly what changed, or updates the artifact incrementally and
+advances its provenance. This is what keeps a `git pull` or a branch switch from
+leaving the agent reading a stale map.
+
+```
+keryx sync                    # report added / changed / deleted since each artifact was built
+keryx sync --apply            # update the artifacts incrementally and advance provenance
+keryx sync install-hooks      # run sync on git pull (post-merge) and branch switch (post-checkout)
+keryx sync uninstall-hooks
+```
+
+| Subcommand / flag | Description |
+|---|---|
+| *(none)* | Advisory report per module. Prints `HEAD`, then per artifact either "up to date" or the change counts with the first few paths. Always exits `0` — the hooks decide what to do with the report. |
+| `--apply` | Rebuild each stale artifact incrementally and record the new provenance. An artifact with no provenance yet is built as a baseline. |
+| `install-hooks` | Install `post-merge` and `post-checkout` git hooks that run the advisory report. Prints that nothing was installed when there is no `.git`. |
+| `uninstall-hooks` | Remove them. |
+| `--help`, `-h` | Print `sync` usage and exit. |
+
+Outside a git repository the command reports that there is nothing to sync and
+returns. When `--apply` updates the wiki and files were deleted, orphaned pages
+are pruned; a human-owned page whose module disappeared is reported rather than
+deleted.
+
+---
+
+## commands
+
+The agent-facing command registry: every keryx command as a machine-readable
+descriptor, with the natural-language intents that resolve to it. This is the
+surface `.metaproject/index.md` points an agent at so it can pick the right
+command from a phrase instead of guessing, and it is the source of truth the
+curated intent table in that file is derived from.
+
+```
+keryx commands                        # Markdown registry
+keryx commands --json                 # machine-readable descriptors (harness / MCP)
+keryx commands --module <name>        # filter to one module
+keryx commands --intent "<phrase>"    # resolve a phrase to the matching command(s)
+keryx commands --intents              # the intent → command table
+```
+
+| Flag | Description |
+|---|---|
+| `--json` | Stable descriptor payload: module, command, summary, intents, arguments, output shape, whether it uses a model. |
+| `--module <name>` | Restrict the output to one module. |
+| `--intent "<phrase>"` | Print the best-matching command(s). Exits `1` when nothing matches, so a caller can branch on it. Combines with `--json`. |
+| `--intents` | Emit the full intent → command table. |
+| `--help`, `-h` | Print `commands` usage and exit. |
 
 ---
 
