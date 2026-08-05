@@ -1,0 +1,35 @@
+# Flow Journal
+
+- 2026-08-05T19:40:33.840Z - flow created
+- 2026-08-05T19:41:13.814Z - task-added: T5: T1 graph_affected accepts depth and ranked
+- 2026-08-05T19:41:13.901Z - task-added: T6: T2 unattended posture flag and policy wiring
+- 2026-08-05T19:41:13.985Z - task-added: T7: T3 reconcile both system instructions with the registry
+- 2026-08-05T19:41:14.070Z - task-added: T8: T4 remove the shell-first instruction
+- 2026-08-05T19:41:14.154Z - task-added: T9: T5 tests: capability, refusal, drift
+- 2026-08-05T19:41:14.242Z - task-added: T10: T6 docs: harness page and CLI reference
+- 2026-08-05T19:41:14.327Z - task-added: T11: T7 full gate and draft PR
+- 2026-08-05T19:41:21.204Z - frozen: 13 criteria; checksum recorded
+- 2026-08-05T19:41:21.295Z - started
+- 2026-08-05T20:01:49.552Z - task-done: T5: T1 graph_affected accepts depth and ranked
+- 2026-08-05T20:01:49.647Z - task-done: T6: T2 unattended posture flag and policy wiring
+- 2026-08-05T20:01:49.734Z - task-done: T7: T3 reconcile both system instructions with the registry
+- 2026-08-05T20:01:49.821Z - task-done: T8: T4 remove the shell-first instruction
+- 2026-08-05T20:11:36.531Z - task-done: T9: T5 tests: capability, refusal, drift
+- 2026-08-05T20:14:14.005Z - task-done: T10: T6 docs: harness page and CLI reference
+- 2026-08-05T20:14:58.529Z - ac-confirmed: AC1: src/harness/tool/metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not (real computeAffected over an a<-b<-c fixture)
+- 2026-08-05T20:14:58.618Z - ac-confirmed: AC2: metaproject-operations.parity.test.ts enumerates every tool/verb pair, reads each verb's handler out of src/commands and fails on any option the tool cannot express; subprocess fallback forwards the same arguments
+- 2026-08-05T20:14:58.702Z - ac-confirmed: AC3: shell-launch.test.ts parses --unattended[=profile]; agent-unattended.test.ts runs a read-only turn with zero approval requests; documented in cli-reference.md and harness.md
+- 2026-08-05T20:14:58.792Z - ac-confirmed: AC4: unattended.test.ts compares decideUnattended against decide() directly: both deny, matchedRules hard-deny:shell; agent-unattended.test.ts shows the tool never runs with or without the flag
+- 2026-08-05T20:14:58.878Z - ac-confirmed: AC5: unattended.test.ts: unattended-untrusted shell=ask resolves to deny via headless-fail-closed; agent-unattended.test.ts asserts the tool never ran; ask_user host rejects
+- 2026-08-05T20:14:58.965Z - ac-confirmed: AC6: unattended.test.ts enumerates all three profiles x five risk classes with destructive=true, all deny; agent-unattended.test.ts refuses a destructive-risk tool under monitored-trusted-local (shell=allow) and the fixture file survives, with a benign-command control that does run
+- 2026-08-05T20:14:59.054Z - ac-confirmed: AC7: agent-unattended.test.ts: with no flag an ask still prompts and a yes still executes; with no approver the refusal wording is byte-identical to before
+- 2026-08-05T20:14:59.145Z - ac-confirmed: AC8: session/store.test.ts records posture on create, persist and resume; unattended.test.ts pins the header label and record value; agent-tool-surface.test.ts pins that both surfaces use the shared formatter and postureRecord
+- 2026-08-05T20:14:59.232Z - ac-confirmed: AC9: agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions
+- 2026-08-05T20:14:59.319Z - ac-confirmed: AC10: agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone and that the replacement routes tool-answerable questions to the tool
+- 2026-08-05T20:14:59.407Z - ac-confirmed: AC12: bun run check: 3086 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken; no test skipped or weakened for this work
+- 2026-08-05T20:14:59.494Z - ac-confirmed: AC13: cli-reference.md and harness.md describe the flag and its refusals; every claim maps to a named test, and the header/run-record claim is pinned at the seam because the TUI cannot render headlessly
+- 2026-08-05T20:15:04.243Z - task-done: T11: T7 full gate and draft PR
+- 2026-08-05T20:15:11.522Z - task-done: T1: Collect remaining context
+- 2026-08-05T20:15:11.613Z - task-done: T2: Implement per plan
+- 2026-08-05T20:15:11.698Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-05T20:15:11.781Z - task-done: T4: Self-review and prepare draft PR

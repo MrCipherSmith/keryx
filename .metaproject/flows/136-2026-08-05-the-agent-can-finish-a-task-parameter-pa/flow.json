@@ -1,0 +1,399 @@
+{
+  "schemaVersion": 2,
+  "id": "136",
+  "slug": "the-agent-can-finish-a-task-parameter-pa",
+  "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
+  "status": "in-progress",
+  "createdAt": "2026-08-05T19:40:33.840Z",
+  "updatedAt": "2026-08-05T20:15:11.781Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:059af75490509b8e47b2176663ce05ba792493a58cbef3c0e8e711db6c516c38",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-05T20:14:58.529Z",
+      "note": "src/harness/tool/metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not (real computeAffected over an a<-b<-c fixture)"
+    },
+    "AC2": {
+      "at": "2026-08-05T20:14:58.618Z",
+      "note": "metaproject-operations.parity.test.ts enumerates every tool/verb pair, reads each verb's handler out of src/commands and fails on any option the tool cannot express; subprocess fallback forwards the same arguments"
+    },
+    "AC3": {
+      "at": "2026-08-05T20:14:58.702Z",
+      "note": "shell-launch.test.ts parses --unattended[=profile]; agent-unattended.test.ts runs a read-only turn with zero approval requests; documented in cli-reference.md and harness.md"
+    },
+    "AC4": {
+      "at": "2026-08-05T20:14:58.791Z",
+      "note": "unattended.test.ts compares decideUnattended against decide() directly: both deny, matchedRules hard-deny:shell; agent-unattended.test.ts shows the tool never runs with or without the flag"
+    },
+    "AC5": {
+      "at": "2026-08-05T20:14:58.878Z",
+      "note": "unattended.test.ts: unattended-untrusted shell=ask resolves to deny via headless-fail-closed; agent-unattended.test.ts asserts the tool never ran; ask_user host rejects"
+    },
+    "AC6": {
+      "at": "2026-08-05T20:14:58.965Z",
+      "note": "unattended.test.ts enumerates all three profiles x five risk classes with destructive=true, all deny; agent-unattended.test.ts refuses a destructive-risk tool under monitored-trusted-local (shell=allow) and the fixture file survives, with a benign-command control that does run"
+    },
+    "AC7": {
+      "at": "2026-08-05T20:14:59.054Z",
+      "note": "agent-unattended.test.ts: with no flag an ask still prompts and a yes still executes; with no approver the refusal wording is byte-identical to before"
+    },
+    "AC8": {
+      "at": "2026-08-05T20:14:59.145Z",
+      "note": "session/store.test.ts records posture on create, persist and resume; unattended.test.ts pins the header label and record value; agent-tool-surface.test.ts pins that both surfaces use the shared formatter and postureRecord"
+    },
+    "AC9": {
+      "at": "2026-08-05T20:14:59.232Z",
+      "note": "agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions"
+    },
+    "AC10": {
+      "at": "2026-08-05T20:14:59.319Z",
+      "note": "agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone and that the replacement routes tool-answerable questions to the tool"
+    },
+    "AC12": {
+      "at": "2026-08-05T20:14:59.407Z",
+      "note": "bun run check: 3086 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken; no test skipped or weakened for this work"
+    },
+    "AC13": {
+      "at": "2026-08-05T20:14:59.494Z",
+      "note": "cli-reference.md and harness.md describe the flag and its refusals; every claim maps to a named test, and the header/run-record claim is pinned at the seam because the TUI cannot render headlessly"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "T1 graph_affected accepts depth and ranked",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "T2 unattended posture flag and policy wiring",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "T3 reconcile both system instructions with the registry",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "T4 remove the shell-first instruction",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "T5 tests: capability, refusal, drift",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "T6 docs: harness page and CLI reference",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "T7 full gate and draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-05T19:40:33.840Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-05T19:41:13.814Z",
+      "event": "task-added",
+      "detail": "T5: T1 graph_affected accepts depth and ranked"
+    },
+    {
+      "at": "2026-08-05T19:41:13.901Z",
+      "event": "task-added",
+      "detail": "T6: T2 unattended posture flag and policy wiring"
+    },
+    {
+      "at": "2026-08-05T19:41:13.985Z",
+      "event": "task-added",
+      "detail": "T7: T3 reconcile both system instructions with the registry"
+    },
+    {
+      "at": "2026-08-05T19:41:14.070Z",
+      "event": "task-added",
+      "detail": "T8: T4 remove the shell-first instruction"
+    },
+    {
+      "at": "2026-08-05T19:41:14.154Z",
+      "event": "task-added",
+      "detail": "T9: T5 tests: capability, refusal, drift"
+    },
+    {
+      "at": "2026-08-05T19:41:14.242Z",
+      "event": "task-added",
+      "detail": "T10: T6 docs: harness page and CLI reference"
+    },
+    {
+      "at": "2026-08-05T19:41:14.327Z",
+      "event": "task-added",
+      "detail": "T11: T7 full gate and draft PR"
+    },
+    {
+      "at": "2026-08-05T19:41:21.204Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-05T19:41:21.295Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-05T20:01:49.552Z",
+      "event": "task-done",
+      "detail": "T5: T1 graph_affected accepts depth and ranked"
+    },
+    {
+      "at": "2026-08-05T20:01:49.647Z",
+      "event": "task-done",
+      "detail": "T6: T2 unattended posture flag and policy wiring"
+    },
+    {
+      "at": "2026-08-05T20:01:49.734Z",
+      "event": "task-done",
+      "detail": "T7: T3 reconcile both system instructions with the registry"
+    },
+    {
+      "at": "2026-08-05T20:01:49.821Z",
+      "event": "task-done",
+      "detail": "T8: T4 remove the shell-first instruction"
+    },
+    {
+      "at": "2026-08-05T20:11:36.531Z",
+      "event": "task-done",
+      "detail": "T9: T5 tests: capability, refusal, drift"
+    },
+    {
+      "at": "2026-08-05T20:14:14.005Z",
+      "event": "task-done",
+      "detail": "T10: T6 docs: harness page and CLI reference"
+    },
+    {
+      "at": "2026-08-05T20:14:58.529Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/harness/tool/metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not (real computeAffected over an a<-b<-c fixture)"
+    },
+    {
+      "at": "2026-08-05T20:14:58.618Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: metaproject-operations.parity.test.ts enumerates every tool/verb pair, reads each verb's handler out of src/commands and fails on any option the tool cannot express; subprocess fallback forwards the same arguments"
+    },
+    {
+      "at": "2026-08-05T20:14:58.702Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell-launch.test.ts parses --unattended[=profile]; agent-unattended.test.ts runs a read-only turn with zero approval requests; documented in cli-reference.md and harness.md"
+    },
+    {
+      "at": "2026-08-05T20:14:58.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: unattended.test.ts compares decideUnattended against decide() directly: both deny, matchedRules hard-deny:shell; agent-unattended.test.ts shows the tool never runs with or without the flag"
+    },
+    {
+      "at": "2026-08-05T20:14:58.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: unattended.test.ts: unattended-untrusted shell=ask resolves to deny via headless-fail-closed; agent-unattended.test.ts asserts the tool never ran; ask_user host rejects"
+    },
+    {
+      "at": "2026-08-05T20:14:58.965Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: unattended.test.ts enumerates all three profiles x five risk classes with destructive=true, all deny; agent-unattended.test.ts refuses a destructive-risk tool under monitored-trusted-local (shell=allow) and the fixture file survives, with a benign-command control that does run"
+    },
+    {
+      "at": "2026-08-05T20:14:59.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: agent-unattended.test.ts: with no flag an ask still prompts and a yes still executes; with no approver the refusal wording is byte-identical to before"
+    },
+    {
+      "at": "2026-08-05T20:14:59.145Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: session/store.test.ts records posture on create, persist and resume; unattended.test.ts pins the header label and record value; agent-tool-surface.test.ts pins that both surfaces use the shared formatter and postureRecord"
+    },
+    {
+      "at": "2026-08-05T20:14:59.232Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions"
+    },
+    {
+      "at": "2026-08-05T20:14:59.319Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone and that the replacement routes tool-answerable questions to the tool"
+    },
+    {
+      "at": "2026-08-05T20:14:59.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3086 pass, 14 skip (all pre-existing), 0 fail; bun run check:doc-links: 639 links, 0 broken; no test skipped or weakened for this work"
+    },
+    {
+      "at": "2026-08-05T20:14:59.494Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: cli-reference.md and harness.md describe the flag and its refusals; every claim maps to a named test, and the header/run-record claim is pinned at the seam because the TUI cannot render headlessly"
+    },
+    {
+      "at": "2026-08-05T20:15:04.243Z",
+      "event": "task-done",
+      "detail": "T11: T7 full gate and draft PR"
+    },
+    {
+      "at": "2026-08-05T20:15:11.522Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-05T20:15:11.613Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-05T20:15:11.698Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-05T20:15:11.781Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
