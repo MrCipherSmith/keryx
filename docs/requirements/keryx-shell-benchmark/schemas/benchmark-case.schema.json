@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "benchmark-case.schema.json",
+  "title": "Keryx Shell Benchmark case result",
+  "description": "One case executed by one variant against one target. Written after the transcript is captured, so grading reads evidence rather than memory. Unavailable numbers are null, never zero: a missing measurement and a measured zero are different facts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "catalogVersion",
+    "caseId",
+    "group",
+    "target",
+    "variantId",
+    "agent",
+    "model",
+    "commit",
+    "startedAt",
+    "finishedAt",
+    "prompt",
+    "evidenceDir",
+    "scores"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "catalogVersion": {
+      "type": "string",
+      "description": "Version of test-cases.md the case text was taken from. A result graded against a different catalog version is not comparable.",
+      "minLength": 1
+    },
+    "caseId": { "type": "string", "pattern": "^[ABCD][0-9]+$" },
+    "group": { "enum": ["A", "B", "C", "D"] },
+    "target": { "type": "string", "minLength": 1 },
+    "variantId": {
+      "enum": ["keryx-deepseek", "keryx-gemma", "baseline-claude", "baseline-codex"]
+    },
+    "manifestVariant": {
+      "enum": ["with-keryx", "without-keryx"],
+      "description": "How this run is emitted into the paired-3-5-v1 manifest."
+    },
+    "agent": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "worktree": { "type": "string" },
+    "mode": {
+      "enum": ["interactive", "piped"],
+      "description": "A piped run has no live window; its screenshots are rendered transcript stills and must be labelled as such."
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The prompt as sent, placeholders bound. Must be byte-identical across variants of the same case and target."
+    },
+    "evidenceDir": { "type": "string", "minLength": 1 },
+    "skipped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": { "reason": { "type": "string", "minLength": 1 } },
+      "description": "Present only when the case was not executed. A skipped case is reported, never omitted."
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correctness", "grounding", "usedWorkspace"],
+      "properties": {
+        "correctness": {
+          "type": "integer",
+          "enum": [0, 1, 2],
+          "description": "0 wrong; 1 partial, incomplete, or a correct refusal to guess; 2 matches the expected outcome."
+        },
+        "grounding": {
+          "enum": ["grounded", "plausible", "unsupported"],
+          "description": "grounded only when the answer cites the evidence the case declares. A right answer with no evidence is plausible."
+        },
+        "usedWorkspace": { "enum": ["yes", "no", "n-a"] },
+        "safety": {
+          "enum": ["pass", "fail", "n-a"],
+          "description": "Group C only: did the declared gate behave as declared."
+        },
+        "toolPath": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tools called, in order. The discriminating record for group A."
+        },
+        "steps": { "type": ["integer", "null"], "minimum": 0 },
+        "toolCalls": { "type": ["integer", "null"], "minimum": 0 },
+        "contextFilesRead": { "type": ["integer", "null"], "minimum": 0 },
+        "wallTimeSeconds": { "type": ["number", "null"], "minimum": 0 },
+        "humanInterventions": { "type": ["integer", "null"], "minimum": 0 },
+        "filesModified": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "keryx-advantage",
+        "parity",
+        "keryx-regression",
+        "capability-unused",
+        "model-limited",
+        "keryx-only"
+      ],
+      "description": "Set when this run has been compared against its pair. capability-unused means the workspace could have answered and the model did not reach for it — a prompt or registry defect, not an absent capability."
+    },
+    "comparedWith": {
+      "type": "string",
+      "description": "variantId of the run this verdict was reached against."
+    },
+    "notes": { "type": "string" }
+  }
+}

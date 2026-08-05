@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.12.0
+Version: 0.13.0
 
 ## Status
 
@@ -7,6 +7,21 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.13.0** — Added `keryx-shell-benchmark` (specification ready; no run
+>   executed, no result claimed). It supplies the single input
+>   `keryx-execution-observability` declared out of scope for itself —
+>   *"representative task selection remains a product decision"* — so the paired
+>   Keryx/no-Keryx protocol built there can finally be executed. 26 frozen cases
+>   in four groups: workspace leverage, ordinary work as a floor check,
+>   containment, and session durability. Two keryx legs (DeepSeek and a free
+>   local `gemma4-coder`) against Claude Code and Codex, one git worktree per
+>   run from one commit, byte-identical prompts, and a rubric that grades
+>   *grounding* separately from correctness — a right answer with no cited
+>   evidence scores `plausible`, not `grounded`. Records two findings from
+>   scoping: the non-interactive `keryx harness run` registers no tools and so
+>   cannot host an agentic benchmark at all, and it hardcodes
+>   `fake|anthropic|ollama` instead of consulting the provider registry while
+>   `cli-reference.md` documents the opposite. Docs-only; no `src/` changes.
 > - **0.12.0** — `keryx-remote-entry` **R4c merged** (flow 133, PR #220,
 >   `0b54411b`): `POST /v1/turns` with a per-project idempotency key, durable
 >   turn records, SSE streaming, and two items R4b had deferred — the
@@ -97,6 +112,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |
+| [Keryx Shell Benchmark](keryx-shell-benchmark/README.md) | specification ready (no run executed) | The task selection `keryx-execution-observability` left as a product decision, made concrete: 26 frozen cases in four groups — workspace leverage (blast radius, call chains, cycles, orphans, wiki architecture and recorded decisions, memory, related tests, budgeted repomap, health, context assembly), ordinary coding work as a floor check, containment, and session durability. Two keryx legs (DeepSeek, and free local `gemma4-coder`) against Claude Code and Codex on the same commit, one git worktree per run, byte-identical prompts, and a rubric that scores **grounding** apart from correctness so a lucky guess cannot pass as retrieval. Fairness is stated where it cuts against keryx: the baselines run frontier models against a 7B local leg, and they may read `.metaproject/` files — what they lack is the query layer. Negative outcomes (`keryx-regression`, `capability-unused`) are reported with the same prominence as wins, and no speed claim is published unless the observability decision rule is satisfied. Results emit into the existing `paired-3-5-v1` manifest and validate with `keryx metrics benchmark validate`. |
 | [Keryx Execution Observability](keryx-execution-observability/README.md) | implemented (runtime capability; benchmark harness ready) | Provenance-aware execution metrics, active-time accounting, per-run evidence, baseline-aware CI, lightweight profiles, retry taxonomy, and paired Keryx/no-Keryx validation protocol. No performance claim has been made. |
 | [Keryx Context Operations](keryx-context-operations/2026-07-12/README.md) | specification ready (future) | Git-native bounded context assembly with provenance, deterministic-first hybrid retrieval, policy gates, feedback lifecycle and corpus evaluation. It extends existing project sources; no new runtime is implemented yet. |
 | [Keryx Provider Auth](keryx-provider-auth/README.md) | specification ready (future) | Expands the **implemented** provider registry (`src/commands/providers.ts` — eight OpenAI-compatible entries plus native Anthropic and Ollama, all Bearer API key today) with a declared authentication method per entry: `none`, `api-key`, `device-code`, `oauth-pkce-loopback`, `cloud-credentials`. Adds the **OAuth 2.0 device authorization grant** (RFC 8628), which needs no loopback listener and no browser on the keryx machine and so closes the gap the credential handoff link cannot — a provider can be authorized by opening a link on a phone, with only a short single-use code and a public verification URL crossing the transport. Expands the list: **OpenAI** (conspicuously absent today), Google Gemini, Mistral, Together/Fireworks/DeepInfra/Perplexity/Nebius, LM Studio and llama.cpp, plus **GitHub Copilot** as the first sanctioned subscription provider. Records D-01 with sources: subscription login only where the vendor permits third-party clients — Anthropic Claude Pro/Max and ChatGPT Plus/Pro are deliberately excluded because the cost of ignoring their terms falls on the operator's own account. The method is registry data, so a vendor's terms changing is a one-line edit and the compliance boundary stays reviewable. |
