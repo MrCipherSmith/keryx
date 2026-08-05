@@ -77,6 +77,50 @@ Four properties are worth knowing before you rely on it:
 4. **Structural safety runs before policy.** `guardAction` refuses malformed or
    unsafe shapes ahead of any allow/ask/deny question.
 
+### Unattended runs
+
+`keryx shell --unattended[=<profile>]` declares at launch that no operator is
+present. It does not add an authority; it changes **who answers**. The frozen
+policy engine resolves each approval request as a non-interactive session, which
+is the fail-closed path property 3 above describes.
+
+| Under the flag | Result |
+|---|---|
+| Risk class the profile allows | Runs, recorded as unattended |
+| Risk class the profile marks `ask` | Refused — no approver means `deny` |
+| Risk class the profile marks `deny` | Refused, terminally, exactly as without the flag |
+| Destructive or credential-touching action | Refused, whatever the profile allows |
+| `ask_user` | Refused — it fails rather than blocking on an answer nobody will give |
+
+Bare `--unattended` selects `read-only-review`, whose write, shell, network and
+delegate defaults are all `deny` — so the flag on its own buys a read-only run
+that does not stall, and nothing else. Running shell commands unattended has to
+be asked for by name (`--unattended=monitored-trusted-local`), and a destructive
+command is still refused there.
+
+**What it does not do:** it does not approve everything, it cannot turn a `deny`
+into an `allow`, and it does not touch the supervised default. Without the flag,
+a mutating call still goes to a prompt and an absent approver is still a refusal.
+
+The posture is shown in the shell header for the whole run and written into the
+session's `summary.json` (`posture: "unattended:<profile>"`, or `"supervised"`),
+so evidence from an unattended run is distinguishable from a supervised one after
+the fact.
+
+## Tools are as capable as the CLI verbs they wrap
+
+A metaproject tool exposes the arguments of the `keryx` verb behind it. This is a
+rule and not an accident: a tool that can ask less than its own CLI teaches the
+model to reach for `shell_exec` instead, and `shell_exec` is default-deny — so a
+narrow tool turns into a stalled run rather than a slower one.
+
+`graph_affected` therefore takes `depth` and `ranked` like `keryx gdgraph
+affected`, `graph_symbol` takes `impact` and `depth`, `memory_search` takes the
+verb's filters, `repomap` takes `budget` and `seed`, and `wiki_ask` takes `k` and
+`rerank`. Each descriptor declares the verb it wraps and where that verb reads its
+options, and a test reads the command source to check the claim — so widening the
+CLI without widening the tool fails the build.
+
 ## Containment underneath
 
 The OS sandbox sits *below* the policy engine — Seatbelt on macOS, bubblewrap on

@@ -76,6 +76,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
             [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
+            [--unattended[=<profile>]]
 ```
 
 | Flag | Description |
@@ -87,9 +88,40 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
 | `--base-url <url>` | Point the provider at a custom endpoint. |
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
+| `--unattended[=<profile>]` | Declare that nobody is watching: the policy engine answers approval requests instead of a person. See below. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
+
+### `--unattended` — what it does and what it does not
+
+`--unattended` replaces the human approver with the frozen policy engine,
+evaluated as a non-interactive session. Bare, it means `read-only-review`;
+`--unattended=<profile>` selects one of `read-only-review`,
+`monitored-trusted-local`, `unattended-untrusted`. An unrecognised profile name
+is rejected — it is never silently replaced with the default.
+
+| Under the flag | Behaviour |
+|---|---|
+| A tool the profile allows for its risk class | Runs with no prompt, recorded as unattended |
+| A risk class the profile marks `ask` | **Refused** — an approval request with no approver fails closed |
+| A risk class the profile marks `deny` | **Refused**, terminally, exactly as without the flag |
+| A destructive or credential-touching action | **Refused**, whatever the profile allows |
+| `ask_user` | **Refused** — there is nobody to answer, so it fails instead of blocking |
+
+**It is not an auto-approve switch.** It grants no authority the chosen profile
+does not already grant, and it cannot turn a `deny` into anything else. The
+default profile denies write, shell, network and delegate outright, so a bare
+`--unattended` run can read and nothing more; running a shell command unattended
+requires naming `--unattended=monitored-trusted-local`, and even then a
+destructive command is refused.
+
+**It does not change the default.** Without the flag every mutating call still
+goes to a prompt, and with no approver present the gate is still default-deny.
+
+The posture appears in the shell header for the whole run and is written to the
+session's `summary.json` as `posture: "unattended:<profile>"` (a supervised run
+records `posture: "supervised"`), so a reader can tell the two apart afterwards.
 
 ---
 

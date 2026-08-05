@@ -9,7 +9,9 @@
 // The test builds the tool array the shell actually registers and holds all three
 // descriptions to it.
 
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test } from "bun:test";
 import { buildAgentSystemInstruction } from "./agent";
 import { advertisedToolNames, defaultAgentToolNames, groupToolNames } from "./agent-tool-surface";
@@ -117,4 +119,31 @@ test("the unattended posture is stated in the instruction when one is declared",
   expect(unattended).toContain("--unattended=read-only-review");
   expect(unattended).toMatch(/Destructive commands are refused/);
   expect(unattended).toMatch(/ask_user cannot be answered/);
+});
+
+test("AC8: both surfaces render the posture label and record it in the session", () => {
+  // The TUI cannot be rendered headlessly, so the guarantee is held at the seam:
+  // both surfaces must go through the shared formatter rather than composing a
+  // header string of their own, and both must stamp the run record.
+  const repoRoot = path.join(import.meta.dir, "..", "..");
+  const readline = readFileSync(path.join(repoRoot, "src", "commands", "shell.ts"), "utf8");
+  const tui = readFileSync(path.join(repoRoot, "src", "tui", "tui-shell.ts"), "utf8");
+
+  for (const [name, source] of [
+    ["readline shell", readline],
+    ["TUI shell", tui],
+  ] as const) {
+    expect(source, `${name} must render the posture through the shared formatter`).toContain(
+      "unattendedHeaderLabel(",
+    );
+    expect(source, `${name} must stamp the posture into the run record`).toContain("postureRecord(");
+    expect(source, `${name} must install the policy approver, not a bypass`).toContain(
+      "createUnattendedApprover(",
+    );
+  }
+
+  // And neither surface may reach for a blanket approval under the flag.
+  for (const source of [readline, tui]) {
+    expect(source).not.toMatch(/unattended[\s\S]{0,80}approved:\s*true/);
+  }
 });
