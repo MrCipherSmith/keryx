@@ -15,3 +15,5 @@
 - 2026-08-05T19:52:39.800Z - task-done: T6: T2 provider validation from OPENAI_COMPAT_PROVIDERS
 - 2026-08-05T19:52:39.896Z - task-done: T7: T3 stop defaulting to an undeclared model id
 - 2026-08-05T19:52:39.994Z - task-done: T8: T4 tests
+- 2026-08-05T19:58:16.722Z - task-done: T9: T5 CLI reference correction and draft PR
+- 2026-08-05T19:58:16.819Z - task-done: T4: Self-review and prepare draft PR

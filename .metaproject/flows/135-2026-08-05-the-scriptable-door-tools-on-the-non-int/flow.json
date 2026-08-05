@@ -5,7 +5,7 @@
   "title": "The scriptable door: tools on the non-interactive path, providers from the registry, declared model ids",
   "status": "in-progress",
   "createdAt": "2026-08-05T19:40:27.454Z",
-  "updatedAt": "2026-08-05T19:52:39.994Z",
+  "updatedAt": "2026-08-05T19:58:16.819Z",
   "source": {
     "type": "description",
     "ref": null
@@ -65,7 +65,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +73,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -139,7 +140,7 @@
       "id": "T9",
       "title": "T5 CLI reference correction and draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -147,7 +148,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -223,6 +225,16 @@
       "at": "2026-08-05T19:52:39.994Z",
       "event": "task-done",
       "detail": "T8: T4 tests"
+    },
+    {
+      "at": "2026-08-05T19:58:16.722Z",
+      "event": "task-done",
+      "detail": "T9: T5 CLI reference correction and draft PR"
+    },
+    {
+      "at": "2026-08-05T19:58:16.819Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
