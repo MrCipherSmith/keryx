@@ -1,5 +1,5 @@
 # Keryx Shell Remediation Requirements Package
-Version: 0.2.0
+Version: 0.3.0
 
 ## Status
 
@@ -28,6 +28,7 @@ Both are reachability defects. Neither needs new capability built.
 - [PRD](prd.md) — problem, users, requirements, success criteria, risks, and recommendation.
 - [Specification](specification.md) — the three phases in detail, with acceptance criteria per phase.
 - [Implementation Plan](implementation-plan.md) — phase ordering, flow grouping, and what each flow must not do.
+- [Phase 4 — the tool surface](tool-surface.md) — the finding that reverses D1: `graph_affected` takes no `depth`, so A1's question was **unanswerable** through the native tool and the model was right to shell out. Plus the seven group-A questions with no tool at all, and the composite call that collapses six round trips into one.
 - [Review 2026-08-05](review-2026-08-05.md) — the package checked against code, the report and the docs. Two blockers found and folded in: D1's root cause is a single instruction line, and there are two divergent system prompts.
 
 ## Scope
@@ -39,8 +40,9 @@ same thing twice.
 
 | Phase | Defects | The one sentence it must make true |
 |---|---|---|
-| **P1 — the agent can finish** | D1, D2 | A scripted read-only question is answered through the native tool, with no human touching the terminal. |
+| **P1 — the agent can finish** | D1, D2, P4.1 | A scripted read-only question is answered through the native tool, with no human touching the terminal. |
 | **P2 — the scriptable door is real** | D3, D4, D5 | `keryx harness run` can do tool work, against any provider the registry declares. |
+| **P2b — the tool surface** | P4.2, P4.3 | Every question group A asks has a tool, and the common one takes a single call. |
 | **P3 — re-measure** | D6 | The benchmark runs to completion on a corrected catalog, and says what it finds. |
 
 ## Non-Goals
