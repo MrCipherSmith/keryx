@@ -13,6 +13,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chooseShellSurface, parseShellCliFlags, resolveTuiStartup } from "./shell";
+import { DEFAULT_UNATTENDED_PROFILE } from "../harness/policy/unattended";
 import type { DetectedProvider } from "./select";
 
 /** A env var name no other test or real environment uses. */
@@ -145,4 +146,28 @@ test("AC12: `--base-url` is carried into the reused selection", async () => {
       baseUrl: "http://127.0.0.1:11434/v1",
     });
   });
+});
+
+test("AC3: `keryx shell` accepts --unattended, with or without a profile", () => {
+  // Absent by default — the supervised path is what you get when you type
+  // nothing, and it must stay that way.
+  expect(parseShellCliFlags(["--provider", "fake"]).unattended).toBeUndefined();
+
+  expect(parseShellCliFlags(["--unattended"]).unattended).toEqual({
+    profile: DEFAULT_UNATTENDED_PROFILE,
+  });
+  expect(parseShellCliFlags(["--unattended=monitored-trusted-local"]).unattended).toEqual({
+    profile: "monitored-trusted-local",
+  });
+
+  // Composes with the other flags rather than swallowing them.
+  const combined = parseShellCliFlags(["--no-tui", "--unattended", "--provider", "fake"]);
+  expect(combined.unattended).toEqual({ profile: DEFAULT_UNATTENDED_PROFILE });
+  expect(combined.wantTui).toBe(false);
+  expect(combined.providerArg).toBe("fake");
+
+  // An unknown profile is reported, not defaulted away.
+  const bad = parseShellCliFlags(["--unattended=nope"]);
+  expect(bad.unattended).toBeUndefined();
+  expect(bad.unattendedError ?? "").toContain("nope");
 });

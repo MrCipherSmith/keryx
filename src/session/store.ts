@@ -227,6 +227,10 @@ function readSummaryFile(file: string): SessionSummary | undefined {
       ...(typeof o.provider === "string" ? { provider: o.provider } : {}),
       ...(typeof o.model === "string" ? { model: o.model } : {}),
       ...(typeof o.parentSessionId === "string" ? { parentSessionId: o.parentSessionId } : {}),
+      // Read back, not defaulted: a session written before this field existed
+      // has no posture, and inventing "supervised" for it would turn "nobody
+      // recorded this" into a claim about how the run was answered.
+      ...(typeof o.posture === "string" ? { posture: o.posture } : {}),
     };
   } catch {
     return undefined;

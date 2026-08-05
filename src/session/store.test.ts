@@ -167,3 +167,41 @@ test("loadContext returns empty for unknown session", () => {
     rmSync(proj, { recursive: true, force: true });
   }
 });
+
+test("AC8: the run record distinguishes an unattended run from a supervised one", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-posture-"));
+  try {
+    // An unattended run stamps the posture on create AND keeps it across saves,
+    // so the evidence a finished run leaves behind says who was answering.
+    const unattended = openSession({
+      cwd: proj,
+      dataDir,
+      provider: "p",
+      model: "m",
+      posture: "unattended:read-only-review",
+    });
+    expect(unattended.handle.summary.posture).toBe("unattended:read-only-review");
+    const saved = persistHistory(unattended.handle, [{ role: "user", content: "hi", provenance: "project" }], {
+      posture: "unattended:read-only-review",
+    });
+    expect(saved.summary.posture).toBe("unattended:read-only-review");
+    expect(findSession(proj, saved.summary.id, dataDir)?.posture).toBe("unattended:read-only-review");
+
+    // A supervised run says supervised — a reader must not have to infer it from
+    // an absent field, which is also what a pre-upgrade session looks like.
+    const supervised = createSession({ cwd: proj, dataDir, posture: "supervised" });
+    expect(supervised.summary.posture).toBe("supervised");
+    expect(findSession(proj, supervised.summary.id, dataDir)?.posture).toBe("supervised");
+
+    // A session RESUMED under a different posture records the one it is now
+    // running under, not the one it was created with.
+    const resumed = persistHistory(saved, [{ role: "user", content: "hi", provenance: "project" }], {
+      posture: "supervised",
+    });
+    expect(resumed.summary.posture).toBe("supervised");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
