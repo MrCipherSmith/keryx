@@ -120,7 +120,8 @@ Usage:
   keryx sessions list|fork <id>|export <id>|path
                                                List / branch / export sessions for the current project
   keryx harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] [--tools] "<prompt>"
-                                               <p> is any provider the registry declares (keryx harness run prints the list)
+                                               <p> is any provider the registry declares (keryx harness run prints the list);
+                                               --base-url is ollama + loopback only; --tools registers the read-only metaproject tools
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
                      [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]
   keryx harness extension --spec <path>

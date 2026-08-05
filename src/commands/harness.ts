@@ -220,9 +220,14 @@ export interface HarnessCommandDeps {
   metaprojectPort?: MetaprojectPort;
   /**
    * Injected secret scanner. A real CLI invocation supplies none and
-   * `buildHarnessScanner(process.cwd())` resolves the project's detectors; a
-   * test supplies one so the redaction branch on the tool-output path can be
-   * exercised without planting a real secret on disk.
+   * `buildHarnessScanner(process.cwd())` resolves the project's detectors.
+   *
+   * SCOPE: this replaces the scanner for the WHOLE run, not just the tool-output
+   * path — the same function is handed to `runOffline` as `deps.scan` and is
+   * what redaction-before-persistence uses for every tool result the session
+   * records. It exists so the tool-output redaction branch can be exercised
+   * without planting a real secret on disk, but a test that injects a permissive
+   * stub has disabled redaction everywhere in that run, not in one branch.
    */
   scan?: (content: string) => ScanResult;
 }
@@ -320,17 +325,39 @@ function readOnlyProfile(): PolicyProfile {
  *
  * Refusal rather than silent ignoring: a flag that is accepted and discarded
  * teaches the caller a false model of what ran.
+ *
+ * WHAT THIS DOES NOT COVER. It constrains the URL the flag names, not every
+ * host the session can reach: nothing here sets `redirect: "manual"`, so a
+ * process listening on loopback could answer with a 3xx and `fetch` would
+ * follow it to a public host. The refusal messages therefore say what the FLAG
+ * will not do, not what the session cannot do — an earlier draft said "this
+ * command will not point it at a remote host", which was a claim about the
+ * session and was not true.
+ *
+ * Left as-is deliberately. Reaching that redirect requires an attacker already
+ * running a process on the user's loopback interface — i.e. local code
+ * execution, at which point a redirect is not their cheapest option — and no
+ * credential is attached to an ollama request, so the exposure is prompt text.
+ * The fix belongs in the adapter (`OllamaProvider`), which every OpenAI-compat
+ * gateway shares, and pinning `redirect: "manual"` there would break any
+ * legitimate gateway that 3xx-es. That is a change with its own blast radius and
+ * its own tests, not a rider on this one.
  */
 export function refuseBaseUrl(provider: string, baseUrl: string): string | undefined {
   if (provider === "ollama") {
-    let host: string;
+    let url: URL;
     try {
-      host = new URL(baseUrl).hostname;
+      url = new URL(baseUrl);
     } catch {
       return `--base-url ${baseUrl} is not a URL. The ollama provider accepts a loopback base URL only (e.g. http://127.0.0.1:11434).`;
     }
-    if (!isLoopbackHost(host)) {
-      return `--base-url ${baseUrl} names ${host}, which is not loopback. The ollama provider is a LOCAL runtime and this command will not point it at a remote host; no network was contacted.`;
+    // Scheme first: a loopback HOST is not the same as an HTTP destination, and
+    // `file:`/`ftp:`/`data:` all parse to something with a hostname.
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return `--base-url ${baseUrl} uses the ${url.protocol.replace(":", "")} scheme; only http and https are accepted. No network was contacted.`;
+    }
+    if (!isLoopbackHost(url.hostname)) {
+      return `--base-url ${baseUrl} names ${url.hostname}, which is not loopback. The ollama provider is a LOCAL runtime and this flag will not point it at a remote host; no network was contacted.`;
     }
     return undefined;
   }

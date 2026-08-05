@@ -98,14 +98,17 @@ test("AC5: every entry states where its list came from and how old it is", () =>
 
 test("AC5: only the entry this change actually verified claims to have been verified", () => {
   // Pins the correction itself. DeepSeek's list was compared against the API's
-  // `/models` output recorded in the benchmark; the other seven were not touched
-  // by that work and must not say they were.
+  // `/models` output recorded in the benchmark; the other seven were not.
+  //
+  // Deliberately does NOT pin the other seven to 2026-07-20. Someone refreshing
+  // groq's list next month should edit groq's entry — not this test. A test that
+  // polices provenance and also freezes it makes itself an obstacle to the thing
+  // it is asking for, and the dates it froze would be the first thing edited
+  // away. The load-bearing assertion is the one above: a claim of having checked
+  // must cite evidence.
   const checked = OPENAI_COMPAT_PROVIDERS.filter((p) => p.modelsProvenance.checkedAgainstProvider);
   expect(checked.map((p) => p.name)).toEqual(["deepseek"]);
-  for (const provider of OPENAI_COMPAT_PROVIDERS) {
-    if (provider.name === "deepseek") continue;
-    expect(provider.modelsProvenance.listedOn).toBe("2026-07-20");
-  }
+  expect(providerByName("deepseek")?.modelsProvenance.listedOn).toBe("2026-08-05");
 });
 
 test("AC5: DeepSeek names the ids the API lists, not the alias it merely answers on", () => {

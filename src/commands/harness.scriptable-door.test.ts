@@ -27,6 +27,7 @@ import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
 import { OPENAI_COMPAT_PROVIDERS, credentialEnvKeyFor, knownProviderNames } from "./providers";
 import type {
   NormalizedEvent,
+  NormalizedMessage,
   ProviderPort,
   StreamOptions,
 } from "../harness/provider/types";
@@ -88,8 +89,14 @@ function fixedDeps(overrides?: Partial<HarnessCommandDeps>): HarnessCommandDeps 
 function scriptedProvider(events: NormalizedEvent[]): {
   provider: ProviderPort;
   advertisedToolNames: () => string[];
+  /** How many times the loop opened a stream — i.e. how many provider turns. */
+  streamCalls: () => number;
+  /** Every message list the loop sent, in order. */
+  sentMessages: () => NormalizedMessage[][];
 } {
   let advertised: string[] = [];
+  let calls = 0;
+  const messageLists: NormalizedMessage[][] = [];
   const provider: ProviderPort = {
     describe: () => ({
       capabilities: {
@@ -106,7 +113,9 @@ function scriptedProvider(events: NormalizedEvent[]): {
       descriptor: { providerId: "scripted", providerRevision: "scripted-1.0.0" },
     }),
     stream: (request, opts: StreamOptions) => {
+      calls += 1;
       advertised = (request.tools ?? []).map((tool) => tool.name);
+      messageLists.push(request.messages.map((message) => ({ ...message })));
       return (async function* () {
         for (const event of events) {
           yield { ...event, attemptId: opts.attemptId };
@@ -114,7 +123,12 @@ function scriptedProvider(events: NormalizedEvent[]): {
       })();
     },
   };
-  return { provider, advertisedToolNames: () => advertised };
+  return {
+    provider,
+    advertisedToolNames: () => advertised,
+    streamCalls: () => calls,
+    sentMessages: () => messageLists,
+  };
 }
 
 /** The event script for "the model calls `graph_affected`, then answers". */
@@ -467,6 +481,22 @@ describe("destination guard — --base-url cannot redirect a run or its credenti
     expect(refuseBaseUrl("ollama", "http://169.254.169.254/")).toContain("not loopback");
     expect(refuseBaseUrl("ollama", "http://10.0.0.5/")).toContain("not loopback");
   });
+
+  test("only http and https are accepted, not every scheme with a loopback host", () => {
+    // A loopback HOST is not an HTTP destination. `file:`, `ftp:` and friends
+    // all parse, and `ftp://127.0.0.1/` passed the host check before this.
+    expect(refuseBaseUrl("ollama", "https://127.0.0.1:11434")).toBeUndefined();
+    for (const url of [
+      "ftp://127.0.0.1/",
+      "file://localhost/etc/passwd",
+      "gopher://127.0.0.1/",
+      "ws://127.0.0.1/",
+    ]) {
+      const refusal = refuseBaseUrl("ollama", url);
+      expect(refusal).toBeDefined();
+      expect(refusal).toContain("only http and https are accepted");
+    }
+  });
 });
 
 // --- AC2 ----------------------------------------------------------------------
@@ -635,11 +665,75 @@ describe("AC4 — the CLI reference is checked against the code it describes", (
     }
   });
 
-  test("the reference does not promise tool results are returned to the model", () => {
-    // The claim this test exists to keep out: `runOffline` opens one provider
-    // stream and never appends a tool result to the messages. A reference that
-    // says otherwise is the same over-promise this flow was opened to remove.
+  test("the reference states the single-turn limit somewhere", () => {
+    // A weak assertion, and labelled as one: it pins that the sentence exists,
+    // not that it is true. The test below is the one that pins the behaviour.
     expect(reference).toContain("**Tool results are not returned to the model.**");
     expect(reference).not.toContain("reaches the same project knowledge the TUI does");
+  });
+});
+
+describe("the single-turn limit is pinned to the loop, not to the prose", () => {
+  // Why this exists: the doc assertions above grep for a sentence, and a
+  // reviewer mutated the sentence NEXT to it to say the opposite and got a
+  // fully green suite. A prose grep pins prose. These pin the loop, so the
+  // documented claim cannot quietly stop being true — whatever the page says.
+
+  test("a tool-calling run opens exactly ONE provider stream", async () => {
+    const { fetch: fetchMock } = makeThrowingFetch();
+    const script = scriptedProvider(toolCallScript("graph_affected", { file: "src/config.ts" }));
+    const { restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--tools", "one turn only"],
+        fixedDeps({
+          fetch: fetchMock,
+          env: {},
+          provider: script.provider,
+          metaprojectPort: fakeMetaprojectPort(),
+        }),
+      );
+    } finally {
+      restore();
+    }
+
+    // The model called a tool and the tool ran. An agent loop would now send a
+    // second request carrying the result. This loop does not, and the reference
+    // says so; if that ever changes, this fails and the docs get revisited.
+    expect(script.streamCalls()).toBe(1);
+  });
+
+  test("no tool result is ever appended to the messages the provider receives", async () => {
+    const { fetch: fetchMock } = makeThrowingFetch();
+    const script = scriptedProvider(toolCallScript("graph_affected", { file: "src/config.ts" }));
+    const { logs, restore } = captureConsoleLog();
+
+    try {
+      await harnessCommand(
+        ["run", "--provider", "fake", "--model", "fixture-model", "--tools", "one turn only"],
+        fixedDeps({
+          fetch: fetchMock,
+          env: {},
+          provider: script.provider,
+          metaprojectPort: fakeMetaprojectPort(),
+        }),
+      );
+    } finally {
+      restore();
+    }
+
+    // The tool really did run — otherwise this test would pass vacuously.
+    const tools = lastJson(logs).tools as Array<Record<string, unknown>>;
+    expect(tools).toHaveLength(1);
+    expect(String(tools[0]?.output)).toContain("src/a.ts");
+
+    // And none of what it produced reached the conversation.
+    const sent = script.sentMessages();
+    expect(sent).toHaveLength(1);
+    for (const messages of sent) {
+      expect(messages.some((message) => message.role === "tool")).toBe(false);
+      expect(messages.some((message) => message.content.includes("src/a.ts"))).toBe(false);
+    }
   });
 });
