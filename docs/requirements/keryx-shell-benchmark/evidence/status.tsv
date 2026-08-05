@@ -1,0 +1,77 @@
+C1	RUNNING	keryx-deepseek	16:02:53
+C1	DONE	keryx-deepseek	16:02:53	220.3s
+C1	RUNNING	opencode-deepseek	16:06:40
+C1	DONE	opencode-deepseek	16:06:40	52.1s
+C1	RUNNING	baseline-grok	16:07:38
+C1	DONE	baseline-grok	16:07:38	68.1s
+C1	BATCH-COMPLETE	16:08:52
+C2	RUNNING	keryx-deepseek	16:10:27
+C2	DONE	keryx-deepseek	16:10:27	100.1s
+C2	RUNNING	opencode-deepseek	16:12:13
+C2	DONE	opencode-deepseek	16:12:13	72.1s
+C2	RUNNING	baseline-claude	16:13:31
+C2	DONE	baseline-claude	16:13:31	88.2s
+C2	RUNNING	baseline-grok	16:15:07
+C2	DONE	baseline-grok	16:15:07	76.2s
+C2	RUNNING	keryx-gemma	16:16:29
+C2	DONE	keryx-gemma	16:16:29	220.4s
+C2	BATCH-COMPLETE	16:20:17
+C3	RUNNING	keryx-deepseek	16:22:43
+C3	DONE	keryx-deepseek	16:22:43	220.3s
+C3	RUNNING	opencode-deepseek	16:26:29
+C3	DONE	opencode-deepseek	16:26:29	36.1s
+C3	RUNNING	baseline-claude	16:27:08
+C3	DONE	baseline-claude	16:27:08	220.2s
+C3	RUNNING	baseline-grok	16:30:55
+C3	DONE	baseline-grok	16:30:55	52.1s
+C3	RUNNING	keryx-gemma	16:31:53
+C3	DONE	keryx-gemma	16:31:53	220.4s
+C3	BATCH-COMPLETE	16:35:45
+C4	RUNNING	keryx-deepseek	16:37:24
+C4	DONE	keryx-deepseek	16:37:24	220.4s
+C4	RUNNING	opencode-deepseek	16:41:10
+C4	DONE	opencode-deepseek	16:41:10	36.1s
+C4	RUNNING	baseline-claude	16:41:50
+C4	DONE	baseline-claude	16:41:50	48.1s
+C4	RUNNING	baseline-grok	16:42:43
+C4	DONE	baseline-grok	16:42:43	40.1s
+C4	RUNNING	keryx-gemma	16:43:27
+C4	DONE	keryx-gemma	16:43:27	220.4s
+C4	BATCH-COMPLETE	16:47:17
+A1	RUNNING	keryx-deepseek	16:50:55
+A1	FAILED	keryx-deepseek	16:50:55	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	RUNNING	opencode-deepseek	16:51:26
+A1	DONE	opencode-deepseek	16:51:26	52.1s
+A1	RUNNING	baseline-claude	16:52:24
+A1	DONE	baseline-claude	16:52:24	64.1s
+A1	RUNNING	baseline-grok	16:53:34
+A1	DONE	baseline-grok	16:53:34	96.1s
+A1	BATCH-COMPLETE	16:55:16
+A1	RUNNING	keryx-deepseek	17:06:16
+A1	RUNNING	keryx-deepseek	17:07:15
+A1	FAILED	keryx-deepseek	17:07:15	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	RUNNING	opencode-deepseek	17:07:49
+A1	DONE	opencode-deepseek	17:07:49	92.6s
+A1	RUNNING	baseline-claude	17:09:28
+A1	DONE	baseline-claude	17:09:28	220.8s
+A1	RUNNING	baseline-grok	17:13:15
+A1	DONE	baseline-grok	17:13:15	120.7s
+A1	BATCH-COMPLETE	17:15:22
+A1	RUNNING	naked-claude	17:39:57
+A1	DONE	naked-claude	17:39:57	72.6s
+A1	RUNNING	naked-grok	17:41:16
+A1	DONE	naked-grok	17:41:16	124.7s
+A1	RUNNING	keryx-gemma	17:43:26
+A1	FAILED	keryx-gemma	17:43:26	prompt never appeared in the keryx-gemma pane after 6 attempts — not recording a result for a prompt that was never su
+A1	BATCH-COMPLETE	17:44:01
+A1	RUNNING	keryx-deepseek	17:52:45
+A1	FAILED	keryx-deepseek	17:52:45	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	BATCH-COMPLETE	17:53:20
+A1	RUNNING	keryx-deepseek	18:04:05
+A1	FAILED	keryx-deepseek	18:04:05	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	BATCH-COMPLETE	18:04:39
+A1	RUNNING	keryx-deepseek	18:21:19
+A1	DONE	keryx-deepseek	18:21:19	220.9s
+A1	RUNNING	keryx-gemma	18:25:07
+A1	DONE	keryx-gemma	18:25:07	220.9s
+A1	BATCH-COMPLETE	18:28:59

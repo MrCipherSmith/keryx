@@ -1,0 +1,40 @@
+     KOKORO_VOICE=af_bella                                                                                  
+     HF_TOKEN=                                                                                                Printing env and credential files
+                                                                                                            
+     # Server                                                                                                 Context
+     PORT=3847                                                                                                45,784 tokens
+     SHORT_TERM_WINDOW=20                                                                                     5% used
+     IDLE_TIMEOUT_MS=900000                                                                                   $0.01 spent
+                                                                                                            
+     # Security                                                                                               LSP
+     TELEGRAM_WEBHOOK_SECRET=                                                                                 LSPs are disabled
+     # JWT_SECRET=                                                                                          
+     # SECURE_COOKIES=true                                                                                  
+                                                                                                            
+     # GitHub (optional)                                                                                    
+     # GITHUB_TOKEN=ghp_...                                                                                 
+                                                                                                            
+     # ... optional commented blocks (KNOWLEDGE_BASE, HOST_PROJECTS_DIR, HELYX_*, DEEPSEEK_API_KEY,         
+     SUPERVISOR_*) — see file                                                                               
+                                                                                                            
+     dashboard/.env.example:                                                                                
+                                                                                                            
+     # Telegram bot username (without @) — used for the Login Widget                                        
+     VITE_TELEGRAM_BOT_NAME=your_bot_username                                                               
+                                                                                                            
+     Credential files: No real .env exists (root or dashboard — gitignored, absent). The only               
+     credential file is hmac.key under .metaproject/flows/025-.../.metaproject/data/security/raw/. Per      
+     this project's security module (modules/security.md:60-65), that raw directory is explicitly local-    
+     only and never committed, and its key is used to HMAC secrets/PII. I'm not printing its contents —     
+     the project itself treats it as a never-expose local secret. If you need it reset, I can help          
+     regenerate it.                                                                                         
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 42.8s                                                                ▄  
+                                                                                                            
+  ┃                                                                                                           /tmp/claude-1000/-home-altsay-keryx/
+  ┃                                                                                                           4179be09-6e0b-4471-a97f-482e6516cee5/
+  ┃                                                                                                           scratchpad/bench/wt/C2-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       45.8K (5%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

@@ -1,5 +1,5 @@
 # Keryx Shell Benchmark Specification
-Version: 0.1.0
+Version: 0.2.0
 
 ## Identity
 
@@ -36,12 +36,32 @@ with the capability under test.
 
 ## Variants
 
+Revised 2026-08-05 during the first run; the reasons are recorded in
+[the run report](run-2026-08-05.md#34-the-control-legs-and-why-they-were-added).
+
 | Variant id | Agent | Model | Manifest `variant` |
 |---|---|---|---|
-| `keryx-deepseek` | `keryx shell` | `deepseek-chat` | `with-keryx` |
+| `keryx-deepseek` | `keryx shell` | `deepseek-v4-flash` | `with-keryx` |
 | `keryx-gemma` | `keryx shell` | `gemma4-coder:latest` via Ollama (free, local) | `with-keryx` |
+| `opencode-deepseek` | opencode | `deepseek-v4-flash` — **the same model as the keryx leg** | `without-keryx` |
 | `baseline-claude` | Claude Code | its own default | `without-keryx` |
-| `baseline-codex` | Codex CLI | its own default | `without-keryx` |
+| `baseline-grok` | Grok CLI | its own default | `without-keryx` |
+| `naked-claude` | Claude Code | its own default | `without-keryx` |
+| `naked-grok` | Grok CLI | its own default | `without-keryx` |
+
+Three changes from 0.1.0, each forced by evidence rather than preference:
+
+- **Codex removed** — usage limit exhausted until 2026-08-11.
+- **`opencode-deepseek` added.** It runs the *same model* as the keryx leg, so a
+  difference between the two cannot be attributed to model quality. This is the
+  only clean pair in the matrix and it repairs the fairness caveat the PRD
+  states.
+- **`naked-*` added.** The first A1 run showed both baselines *shelling out to
+  the keryx CLI*, because the target's `CLAUDE.md` routing block tells every
+  agent to. Without a leg that has the workspace removed, the benchmark compares
+  keryx-as-a-shell to keryx-as-a-CLI, not to its absence.
+- **`deepseek-chat` → `deepseek-v4-flash`.** The API lists only
+  `deepseek-v4-flash` and `deepseek-v4-pro`; the former id is an undeclared alias.
 
 The paired manifest carries two variants only, so each pairing
 (`keryx-*` × `baseline-*`) is emitted as its own manifest and the variant id is

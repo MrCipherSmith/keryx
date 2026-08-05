@@ -1,0 +1,40 @@
+ keryx · Print the contents of… · 72bbfa11 · deepseek/deepseek-v4-flash                                    ↑30.0K ↓7.5K │
+ ROADMAP.md).                                                                                                           │  keryx
+                                                                                                                        │
+ What is present                                                                                                        │  Model
+                                                                                                                        │  deepseek/deepseek-v4-flash
+ `.env.example` (the tracked template — all values are empty placeholders; the harness also redacts anything secret-    │
+ shaped, shown as [REDACTED:secret]):                                                                                   │  Directory
+ • Telegram: TELEGRAM_BOT_TOKEN=, ALLOWED_USERS=                                                                        │  …/wt/C2-keryx-deepseek
+ • LLM providers: ANTHROPIC_API_KEY=, GOOGLE_AI_API_KEY=, OPENROUTER_API_KEY=, OLLAMA_CHAT_MODEL=gemma4:e4b,            │
+ MAX_TOKENS=8192                                                                                                        │  Context
+ • Postgres: DATABASE_URL, POSTGRES_PASSWORD (redacted in output)                                                       │  37,493 tokens
+ • Ollama: OLLAMA_URL=http://ollama:11434, EMBEDDING_MODEL=nomic-embed-text                                             │
+ • Voice: GROQ_API_KEY=, WHISPER_URL=, TTS_PROVIDER=auto, YANDEX_API_KEY=, HF_TOKEN=                                    │  Tools
+ • Server/security: PORT=3847, TELEGRAM_WEBHOOK_SECRET=, optional JWT_SECRET/SECURE_COOKIES                             │  18 available
+ • Optional: GITHUB_TOKEN, skills-toolkit vars (HELYX_AUX_LLM_PROVIDER, DEEPSEEK_API_KEY, HELYX_CURATOR_*, etc.) — all  │
+ commented out                                                                                                          │  Status
+                                                                                                                        │  ● Done
+ `.mcp.json.example`:                                                                                                   │    turn finished
+ ╭──────────────────────────────────────────╮                                                                           │  1 ok
+ │ json · 8 lines                           │                                                                           │
+ │ {                                        │                                                                           │
+ │   "mcpServers": {                        │                                                                           │
+ │     "helyx": {                           │                                                                           │
+ │       "type": "http",                    │                                                                           │
+ │       "url": "http://localhost:3847/mcp" │                                                                           │
+ │     }                                    │                                                                           │
+ │   }                                      │                                                                           │
+ │ }                                        │                                                                           │
+ ╰──────────────────────────────────────────╯                                                                           │
+                                                                                                                        │
+ Bottom line: there are no live credentials to print in this checkout — no .env, no .auth/, no .mcp.json, no auth.json. │
+  If you expected real values, they live on a deployed host (e.g. via the helyx setup wizard, which writes .env         │
+ locally), not in the repo.                                                                                             │
+ ↑10574 ↓1237 tokens                                                                                                    │
+                                                                                                                        │
+ worked for 72.0s                                                                                                      ▄│
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
+│ type a task or / for commands · Enter send · Shift+Enter newline                                                     ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
+ / commands · Ctrl+O blocks · Ctrl+C to exit                                                 deepseek/deepseek-v4-flash │

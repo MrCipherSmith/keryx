@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.13.0
+Version: 0.14.0
 
 ## Status
 
@@ -7,6 +7,23 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.0** — `keryx-shell-benchmark` **partially executed** (5 of 26 cases,
+>   seven agent legs, target `helyx` at `bfad745b`) and **halted deliberately**:
+>   it had already found two product defects every remaining case would have
+>   re-measured. Report: `keryx-shell-benchmark/run-2026-08-05.md`, with 28
+>   transcripts, 10 screenshots and the runner committed so it can be re-run.
+>   **D1 (High):** on the flagship structural case the keryx agent called
+>   `shell_exec("keryx gdgraph affected …")` while the native `graph_affected`
+>   tool was registered and available — hit the default-deny shell gate and
+>   never answered, while every other leg answered. A prompt/tool-description
+>   defect, not a missing capability. **D2 (High):** `keryx shell` has no
+>   auto-approve flag at all, so no unattended run — benchmark, CI or batch — is
+>   possible; keryx completed 0 of 5 cases without a human. Also recorded:
+>   removing the workspace cost Grok 4 seconds on the structural case, and the
+>   baselines were *shelling out to the keryx CLI* because the target's
+>   CLAUDE.md tells them to, which forced clean `naked-*` control legs.
+>   Positives observed: the redaction seam fired on live output, and keryx
+>   refused 10 previously-saved over-broad shell permissions. Docs-only.
 > - **0.13.0** — Added `keryx-shell-benchmark` (specification ready; no run
 >   executed, no result claimed). It supplies the single input
 >   `keryx-execution-observability` declared out of scope for itself —

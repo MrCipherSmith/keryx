@@ -1,9 +1,14 @@
 # Keryx Shell Benchmark Requirements Package
-Version: 0.1.0
+Version: 0.2.0
 
 ## Status
 
-Specification ready; no run has been executed and no result is claimed.
+**Partially executed.** 5 of 26 cases ran on 2026-08-05 (C1-C4, A1) across seven
+agent legs; the run was **halted deliberately** once it had found two product
+defects that every remaining case would have re-measured. No speed claim is made.
+
+Read [the run report](run-2026-08-05.md) first - it carries the results, the
+defects, and the corrections made to the harness while running.
 
 This package supplies the one input
 [Keryx Execution Observability](../keryx-execution-observability/README.md)
@@ -30,7 +35,11 @@ less context read, while never being *worse* on ordinary work.
 - [Specification](specification.md) — targets, variants, isolation, execution, data contracts, and acceptance criteria.
 - [Test Cases](test-cases.md) — the case catalog: 26 cases in four groups, each with a prompt, an expected outcome, and what it discriminates.
 - [Agent Protocol](agent-protocol.md) — how each agent is driven, verbatim, so a run is reproducible.
+- [Run Report 2026-08-05](run-2026-08-05.md) — what actually happened: per-case results, six findings, six harness corrections, and the defect list D1–D6.
 - [Benchmark Case Schema](schemas/benchmark-case.schema.json) — machine-readable case contract for the runner.
+- `harness/` — `drive.py`, `batch.sh`, `shot.py`: the runner, enough to reproduce a run.
+- `prompts/` — the verbatim prompt text per case, as sent.
+- `evidence/` — 28 transcripts, 10 screenshots, and the full run table.
 
 ## Scope
 

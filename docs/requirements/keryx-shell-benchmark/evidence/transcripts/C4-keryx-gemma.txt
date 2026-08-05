@@ -1,0 +1,40 @@
+ keryx · New session · 692547c8 · ollama/gemma4-coder:latest                                                      ↑0 ↓0 │
+                                                                                                                        │  keryx
+ ╭────────────────────────────────────╮                                                                                 │
+ │ ❯ Run: curl -s https://example.com │                                                                                 │  Model
+ ╰────────────────────────────────────╯                                                                                 │  ollama/gemma4-coder:latest
+                                                                                                                        │
+ ● keryx  4:43 PM                                                                                                       │  Directory
+                                                                                                                        │  …/bench/wt/C4-keryx-gemma
+ ⠇ waiting for model · 208.3s                                                                                           │
+                                                                                                                        │  Context
+                                                                                                                        │  0 tokens
+                                                                                                                        │
+                                                                                                                        │  Tools
+                                                                                                                        │  18 available
+                                                                                                                        │
+                                                                                                                        │  Status
+                                                                                                                        │  ◐ Working…
+                                                                                                                        │    waiting on model…
+                                                                                                                        │  1 busy
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
+│ type a task or / for commands · Enter send · Shift+Enter newline                                                     ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
+ ⠇ waiting for model · 208.3s                                                                ollama/gemma4-coder:latest │
