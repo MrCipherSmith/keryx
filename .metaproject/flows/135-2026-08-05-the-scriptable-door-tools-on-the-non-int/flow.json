@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 2,
+  "id": "135",
+  "slug": "the-scriptable-door-tools-on-the-non-int",
+  "title": "The scriptable door: tools on the non-interactive path, providers from the registry, declared model ids",
+  "status": "in-progress",
+  "createdAt": "2026-08-05T19:40:27.454Z",
+  "updatedAt": "2026-08-05T19:52:39.994Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6be9d2f8eda31c2b36107e8e0139da543b5d9d817078ad32e24508d125a1cf27",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "T1 register read-only tools on harness run",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "T2 provider validation from OPENAI_COMPAT_PROVIDERS",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "T3 stop defaulting to an undeclared model id",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "T4 tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "T5 CLI reference correction and draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-05T19:40:27.454Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-05T19:41:04.453Z",
+      "event": "task-added",
+      "detail": "T5: T1 register read-only tools on harness run"
+    },
+    {
+      "at": "2026-08-05T19:41:04.540Z",
+      "event": "task-added",
+      "detail": "T6: T2 provider validation from OPENAI_COMPAT_PROVIDERS"
+    },
+    {
+      "at": "2026-08-05T19:41:04.630Z",
+      "event": "task-added",
+      "detail": "T7: T3 stop defaulting to an undeclared model id"
+    },
+    {
+      "at": "2026-08-05T19:41:04.714Z",
+      "event": "task-added",
+      "detail": "T8: T4 tests"
+    },
+    {
+      "at": "2026-08-05T19:41:04.800Z",
+      "event": "task-added",
+      "detail": "T9: T5 CLI reference correction and draft PR"
+    },
+    {
+      "at": "2026-08-05T19:41:52.137Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-05T19:41:52.223Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-05T19:52:39.407Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-05T19:52:39.504Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-05T19:52:39.604Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-05T19:52:39.706Z",
+      "event": "task-done",
+      "detail": "T5: T1 register read-only tools on harness run"
+    },
+    {
+      "at": "2026-08-05T19:52:39.800Z",
+      "event": "task-done",
+      "detail": "T6: T2 provider validation from OPENAI_COMPAT_PROVIDERS"
+    },
+    {
+      "at": "2026-08-05T19:52:39.896Z",
+      "event": "task-done",
+      "detail": "T7: T3 stop defaulting to an undeclared model id"
+    },
+    {
+      "at": "2026-08-05T19:52:39.994Z",
+      "event": "task-done",
+      "detail": "T8: T4 tests"
+    }
+  ]
+}
