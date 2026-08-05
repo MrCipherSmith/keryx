@@ -5,13 +5,42 @@
   "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
   "status": "implemented",
   "createdAt": "2026-08-05T19:40:33.840Z",
-  "updatedAt": "2026-08-05T22:11:59.160Z",
+  "updatedAt": "2026-08-05T22:17:36.500Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d3b598e6d9f51d7b7d6f0f37a9938160e3a65b9945770a8580addc3798c0baa0",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-05T22:17:35.977Z",
+      "note": "metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not, over the real computeAffected on an a<-b<-c fixture."
+    },
+    "AC2": {
+      "at": "2026-08-05T22:17:36.064Z",
+      "note": "Parity test extracts each verb handler from src/commands, follows it into module-level option tables, counts short flags, and errors on an ambiguous anchor. passthrough declares except; every excepted option must appear in expresses or refuses; the behavioural check runs off the declaration, not the implementation set. Both reviewer probes now fail (deleting an expresses entry; secretly refusing --follow/--hidden/-g/--glob)."
+    },
+    "AC9": {
+      "at": "2026-08-05T22:17:36.152Z",
+      "note": "agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions, with a vacuity guard."
+    },
+    "AC10": {
+      "at": "2026-08-05T22:17:36.239Z",
+      "note": "agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone, and that the replacement routes tool-answerable questions to the tool."
+    },
+    "AC12": {
+      "at": "2026-08-05T22:17:36.326Z",
+      "note": "bun run check: 3127 pass, 14 skip (all pre-existing), 0 fail. bun run check:doc-links: 649 links, 0 broken. No test skipped or weakened; the tests for the descoped posture were deleted with the code they covered, not disabled."
+    },
+    "AC13": {
+      "at": "2026-08-05T22:17:36.413Z",
+      "note": "harness.md and cli-reference.md carry no unattended material; the parity section states what the scanner actually does and names the -e/--follow exceptions and why. Every claim maps to a named test."
+    },
+    "AC14": {
+      "at": "2026-08-05T22:17:36.500Z",
+      "note": "search-code-confinement.test.ts: 19 escape inputs produce no out-of-root operand and never place the pattern as an operand; argv always ends --no-follow, --regexp=<pattern>, <confined path>; refused on all three branches. END TO END against real ripgrep with an in-root symlink out of the project: not readable by default, with --follow (refused), via the symlink as path, or with --hidden/--no-ignore/--max-depth/-g. Dropping --no-follow fails 4 tests."
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/253"
   },
@@ -415,6 +444,41 @@
       "at": "2026-08-05T22:11:59.160Z",
       "event": "ac-updated",
       "detail": "Unattended posture descoped to its own flow (docs/requirements/keryx-unattended-posture/) after three review rounds each found a hole the previous fix had not closed. AC3-AC8 governed that posture and move with it; AC11 depended on the flag and moves too. Retained: AC1, AC2, AC9, AC10, AC12, AC13. Added AC14 for the out-of-root read channel this flow's own parameter-parity change opened, which does not travel with the split."
+    },
+    {
+      "at": "2026-08-05T22:17:35.977Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: metaproject-operations.parity.test.ts: schema declares depth+ranked, both forwarded to the port, and depth-2 returns src/c.ts where depth-1 does not, over the real computeAffected on an a<-b<-c fixture."
+    },
+    {
+      "at": "2026-08-05T22:17:36.064Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Parity test extracts each verb handler from src/commands, follows it into module-level option tables, counts short flags, and errors on an ambiguous anchor. passthrough declares except; every excepted option must appear in expresses or refuses; the behavioural check runs off the declaration, not the implementation set. Both reviewer probes now fail (deleting an expresses entry; secretly refusing --follow/--hidden/-g/--glob)."
+    },
+    {
+      "at": "2026-08-05T22:17:36.152Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: agent-tool-surface.test.ts builds the real registered array via buildAgentTools and asserts the instruction and the shell help name exactly that set, in both directions, with a vacuity guard."
+    },
+    {
+      "at": "2026-08-05T22:17:36.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: agent-tool-surface.test.ts asserts the shell-first sentence and the graph/health/memory/flow catch-all are gone, and that the replacement routes tool-answerable questions to the tool."
+    },
+    {
+      "at": "2026-08-05T22:17:36.326Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun run check: 3127 pass, 14 skip (all pre-existing), 0 fail. bun run check:doc-links: 649 links, 0 broken. No test skipped or weakened; the tests for the descoped posture were deleted with the code they covered, not disabled."
+    },
+    {
+      "at": "2026-08-05T22:17:36.413Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: harness.md and cli-reference.md carry no unattended material; the parity section states what the scanner actually does and names the -e/--follow exceptions and why. Every claim maps to a named test."
+    },
+    {
+      "at": "2026-08-05T22:17:36.500Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: search-code-confinement.test.ts: 19 escape inputs produce no out-of-root operand and never place the pattern as an operand; argv always ends --no-follow, --regexp=<pattern>, <confined path>; refused on all three branches. END TO END against real ripgrep with an in-root symlink out of the project: not readable by default, with --follow (refused), via the symlink as path, or with --hidden/--no-ignore/--max-depth/-g. Dropping --no-follow fails 4 tests."
     }
   ]
 }
