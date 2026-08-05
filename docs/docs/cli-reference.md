@@ -111,7 +111,7 @@ keryx shell --unattended --provider fake --model fake-echo
 
 # Allowed to run the test suite and nothing else.
 keryx shell --unattended=monitored-trusted-local \
-  --unattended-allow "bun test*" --unattended-allow "git status*" \
+  --unattended-allow "bun test" --unattended-allow "git status" \
   --provider fake --model fake-echo
 ```
 
@@ -124,13 +124,27 @@ keryx shell --unattended=monitored-trusted-local \
 | A risk class the profile marks `ask` | **Refused** — an approval request with no approver fails closed |
 | A risk class the profile marks `deny` | **Refused**, terminally, exactly as without the flag |
 | A command with an unquoted shell metacharacter (`;` `&&` `\|` `` ` `` `$(` `<` `>` `&`) | **Refused** — a pattern match cannot describe what `/bin/sh -c` would then run |
-| A destructive or credential-touching action | **Refused**; allowlisting it does not change that |
+| An action the destructive classifier flags, or one touching keryx's own `auth.json` / `permissions.json` | **Refused**; allowlisting it does not change that |
 | `ask_user` | **Refused** — there is nobody to answer, so it fails instead of blocking |
 
-Patterns are validated **at launch**, by the same rule that refuses over-broad
-saved permissions: a pattern whose first token does not constrain what runs is
-not a rule. `--unattended-allow "git *"`, `"bash *"`, `"cat *"` and `"rm *"` are
-refused before the run starts, with the reason printed.
+Patterns are validated **at launch**, by a rule stricter than the one governing
+saved permissions:
+
+- the command word must be literal — `*`, `**`, `?*`, `l?*` and `-` are refused;
+- no wildcard is accepted after an execution wrapper, whatever comes between —
+  `bash -c *`, `bun x*`, `bun test*`, `git status*`, `npm run*`, `find . -name*`,
+  `cat *`, `rm *` are all refused;
+- `keryx` counts as a wrapper (`keryx ctx run -- …` runs anything), as do `bunx`,
+  `uvx`, `just`, `task` and `rake`;
+- metacharacters and destructive commands are refused as they are for saved
+  permissions.
+
+So an entry is normally an **exact** command (`bun test`, `git status`,
+`tsc --noEmit`). Wildcards stay available on non-wrapper commands, e.g. `ls src*`.
+
+The credential guard covers keryx's own permission and credential files, not
+yours: an exact `cat ~/.ssh/id_rsa` that you allowlist will run. Name only
+commands you would have approved at the prompt.
 
 **It is not an auto-approve switch.** The allowlist is the whole point: a
 blocklist of dangerous commands permits everything it has not thought of, and
@@ -146,8 +160,10 @@ neither, rather than reading a piped task as the answer to a prompt nobody saw.
 `--unattended` with `--chat` is refused: chat mode runs no tools.
 
 The posture appears in the shell header for the whole run and is written to the
-session's `summary.json` as `posture: "unattended:<profile>"` (a supervised run
-records `posture: "supervised"`), so a reader can tell the two apart afterwards.
+session's `summary.json` as `posture`: `"supervised"`,
+`"unattended:<profile>"`, or `"unattended:<profile>+allow(N)"` when an allowlist
+was supplied — so the record says whether the run could execute anything, not
+just that it was unattended.
 
 ---
 

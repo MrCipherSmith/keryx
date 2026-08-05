@@ -98,14 +98,38 @@ a command has to pass **both**:
 | Risk class the profile marks `ask` | Refused — no approver means `deny` |
 | Risk class the profile marks `deny` | Refused, terminally, exactly as without the flag |
 | Command containing an unquoted shell metacharacter (`;` `&&` `\|` `` ` `` `$(` `<` `>` `&`) | Refused — a pattern match would say nothing about what `/bin/sh -c` then runs |
-| Destructive or credential-touching action | Refused, and allowlisting it does not change that |
+| Action the destructive classifier flags, or one touching keryx's own `auth.json` / `permissions.json` | Refused, and allowlisting it does not change that |
 | `ask_user` | Refused — it fails rather than blocking on an answer nobody will give |
 
-Allowlist patterns go through the same validator that refuses over-broad **saved**
-permissions, and they are checked at launch rather than at run time. So
-`--unattended-allow "git *"` does not start a run: its first token does not
-constrain what would run, which is the property that makes it not a rule.
-`bun test*` and `git status*` do.
+#### What may be allowlisted
+
+Patterns are validated at launch, by a rule stricter than the one governing saved
+permissions — a saved grant was chosen by a human at a prompt; this one is
+honoured with no human in the room.
+
+- **The command word must be literal.** `*`, `**`, `?*`, `l?*` and `-` are
+  refused: a pattern that does not name a program does not constrain anything.
+- **No wildcard after an execution wrapper.** If the command word is an
+  interpreter, a runner, a broad file reader or a broad file mutator — `bash`,
+  `sh`, `node`, `python`, `bun`, `npm`, `npx`, `git`, `find`, `xargs`, `env`,
+  `sudo`, `ssh`, `curl`, `docker`, `cat`, `grep`, `rm`, `mv`, and the rest of the
+  list in `src/lib/shell-permissions.ts` — then **no** wildcard after it is
+  accepted, whatever comes in between. `bash -c *`, `bun x*`, `bun test*`,
+  `git status*` and `find . -name*` are all refused.
+- **`keryx` counts as a wrapper.** `keryx ctx run -- <anything>` runs anything, so
+  `keryx *` is arbitrary execution. Same for `bunx`, `uvx`, `just`, `task`,
+  `rake` and friends.
+- **Metacharacters and destructive commands** are refused by the shared
+  validator, as they are for saved permissions.
+
+So the usual shape of an allowlist entry is an **exact command**: `bun test`,
+`git status`, `tsc --noEmit`. Wildcards remain available on command words that
+are not execution wrappers, e.g. `ls src*`.
+
+**What this does not cover.** The credential guard knows about keryx's own
+permission and credential files, not about yours. If you allowlist
+`cat ~/.ssh/id_rsa` exactly, it runs. Name only commands you would have approved
+at the prompt.
 
 **Why an allowlist and not a blocklist.** The destructive classifier
 (`isDestructiveCommand`) is a heuristic, and its own module says it must never be
@@ -127,9 +151,9 @@ neither. `--unattended` with `--chat` is refused too — chat mode runs no tools
 there is nothing for a posture to bound.
 
 The posture is shown in the shell header for the whole run and written into the
-session's `summary.json` (`posture: "unattended:<profile>"`, or `"supervised"`),
-so evidence from an unattended run is distinguishable from a supervised one after
-the fact.
+session's `summary.json`: `posture: "supervised"`, `"unattended:<profile>"`, or
+`"unattended:<profile>+allow(N)"` when an allowlist was supplied — so the record
+says not only that a run was unattended but whether it could execute anything.
 
 ## Tools are as capable as the CLI verbs they wrap
 
@@ -145,6 +169,14 @@ verb's filters, `repomap` takes `budget` and `seed`, `wiki_ask` takes `k` and
 `keryx ctx rg` forwards — `-g`, `-t`, `-A/-B/-C`, `-i`, `-m`, `--max-depth`,
 `--hidden`, `--no-ignore`, `--sort`, `-l`, `-c` and the rest — read from the one
 table the CLI itself uses, so the two cannot drift apart.
+
+One exception, and it is a deliberate one: `-e`/`--regexp` is expressed through
+`search_code`'s `pattern` field rather than through `flags`. Supplying the pattern
+by flag turns every positional operand into a path, and a review used exactly
+that to read `~/.aws/credentials` through a `risk: "read"` tool that never
+reaches an approver. `search_code` now passes the pattern as `--regexp=<pattern>`
+itself and hands ripgrep exactly one operand: a root-confined path. There is no
+operand left whose meaning a flag could change.
 
 Each descriptor declares the verb it wraps and where that verb reads its options,
 and a test extracts that verb's handler from the command source, follows it into
@@ -216,6 +248,21 @@ reach flow state structurally.
 keryx agents monitor <events-file>    # offline fleet report over a recorded log
 ```
 
+## Tools without a terminal
+
+`keryx harness run --tools` registers the read-only metaproject tools —
+`search_code`, `graph_affected`, `memory_search`, `read_wiki` and the rest — on
+the non-interactive door, so a scripted run can inspect a project instead of
+answering from the prompt alone. Every one of them is `risk: "read"` and needs no
+approval, so nothing about the flag reintroduces the stall it exists beside.
+
+Two things it deliberately does not do. It is **off by default**: without
+`--tools` the run registers nothing and behaves byte-for-byte as it did before.
+And the tool results are **not fed back to the model** — the run records what was
+called and what came back, for the script to read. `--tools` is for a caller that
+wants the tool output; the agentic loop that reasons over it is `keryx shell`.
+See [CLI reference](./cli-reference.md#harness-run-tools-opt-in-with---tools).
+
 ## Record and replay
 
 ```bash
@@ -251,9 +298,9 @@ extension needs a grant bound to its action fingerprint.
 
 Stated here rather than left to be discovered:
 
-- **No shipped path registers a tool.** Both production executors are refusals, so
-  `keryx harness run` and `keryx serve` are single text turns today. The
-  interactive shell is where tools actually run.
+- **`keryx serve` registers no tool.** Its production executor is a refusal, so a
+  served turn is a single text turn. `keryx harness run` is no longer in this
+  list — see below — and the interactive shell is where the full tool set runs.
 - **No remote approvals.** A `keryx serve` turn whose decision is `ask` ends in a
   recorded denial. Run approval-requiring work locally through `keryx shell`.
 - **No real replay.** See above — `validate-log` only.
