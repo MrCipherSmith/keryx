@@ -13,6 +13,7 @@ the one that describes shipped behaviour.
 - [complete-setup-and-agent-workflows.md](./complete-setup-and-agent-workflows.md) — Complete global installation, project configuration, commands, operational scripts, and agent prompts.
 - [agent-installation-playbook.md](./agent-installation-playbook.md) — Agent-executable Gherkin setup, repair, validation, and handoff scenarios.
 - [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
+- [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.

@@ -81,6 +81,7 @@ nav:
       - Review with a durable record: guides/review-with-a-record.md
       - Run keryx in CI: guides/run-in-ci.md
   - Architecture: architecture.md
+  - The agent harness: harness.md
   - Modules: modules.md
   - CLI reference: cli-reference.md
   - Workspace and lifecycle: workspace-and-lifecycle.md
