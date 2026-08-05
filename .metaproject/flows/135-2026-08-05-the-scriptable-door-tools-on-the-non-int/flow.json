@@ -3,9 +3,9 @@
   "id": "135",
   "slug": "the-scriptable-door-tools-on-the-non-int",
   "title": "The scriptable door: tools on the non-interactive path, providers from the registry, declared model ids",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-05T19:40:27.454Z",
-  "updatedAt": "2026-08-05T19:58:16.819Z",
+  "updatedAt": "2026-08-05T19:58:36.833Z",
   "source": {
     "type": "description",
     "ref": null
@@ -13,7 +13,7 @@
   "acChecksum": "sha256:6be9d2f8eda31c2b36107e8e0139da543b5d9d817078ad32e24508d125a1cf27",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/252"
   },
   "tasks": [
     {
@@ -235,6 +235,11 @@
       "at": "2026-08-05T19:58:16.819Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-05T19:58:36.833Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/252"
     }
   ]
 }
