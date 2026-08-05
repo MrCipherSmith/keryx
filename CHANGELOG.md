@@ -7,6 +7,55 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.15] — 2026-08-05
+
+A claim-by-claim audit of the README against source. Three commands turned out
+to report work they had not done, and the fixes are the substance of this
+release; the documentation changes are what the audit found on the way.
+
+### Fixed
+
+- **`keryx orient install-hook --dry-run` wrote the file anyway.** The flag was
+  accepted by the shell and parsed by nobody. A `--dry-run` that mutates is worse
+  than no flag at all, because it is the flag someone reaches for when they are
+  unsure a command is safe to run. Both `install-hook` and `uninstall-hook` now
+  honour it and report the file they would have touched.
+
+- **`keryx init` claimed the git hooks were installed when there was no
+  repository.** The hook installer returns early with no hooks root, but the
+  summary rendered its rows from the intent flags — so running `keryx init`
+  before `git init` reported every hook as installed while nothing was written
+  and nothing would ever fire. It now reports them as skipped and says how to get
+  them installed. The security agent hook keeps its row; it lands in
+  `.claude/settings.json` and does not need a repository.
+
+- **`keryx status --help` ran the report instead of printing help.** Harmless in
+  itself — `status` is read-only — and fixed for the reflex it teaches for the
+  commands that are not.
+
+### Documentation
+
+- **The README stops claiming four harness capabilities that are built but not
+  reachable**, and stops describing a replay path that cannot detect a divergent
+  run. The capabilities are tracked in the issue tracker rather than dropped
+  silently.
+
+- **The provider list was four of eleven.** Anthropic, Ollama and the
+  OpenAI-compatible gateways — OpenRouter, DeepSeek, Z.AI, Cerebras, Groq,
+  Moonshot, Grok — with the offline fake provider alongside them.
+
+- **Corrections where the README and the code disagreed:** CI runs on pull
+  requests and pushes to `main`, not every push; four of the five model commands
+  exit non-zero without a credential, and `wiki enrich` is the one that exits `0`
+  and skips pages; the remote policy profile is compared once at startup, where a
+  weaker profile refuses to bind at all; git is required for hooks, changed-scope
+  runs and the managed installer, not by the core.
+
+- **The CLI reference gained the five model commands it was missing** —
+  `wiki enrich`, `test suggest`, `flow plan`, and `--narrate` on `memory reflect`
+  and `health explain` — and its `harness run` signature no longer names three
+  providers out of eleven.
+
 ## [0.2.14] — 2026-08-04
 
 ### Documentation
