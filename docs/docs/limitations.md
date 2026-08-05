@@ -16,6 +16,9 @@ each gap actually costs you, and what to use instead.
 | ripgrep is external | `keryx ctx rg` exits non-zero without `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
 | Model commands need a credential | Five commands exit non-zero without one | Every other command is deterministic and offline |
 | Windows is unverified | The core CLI is not exercised on Windows in CI | Use macOS or Linux, or WSL |
+| No tools in the non-interactive harness | `keryx harness run` and `keryx serve` are single text turns | `keryx shell` is where tools actually run |
+| Replay validates a log, it does not re-execute | A fixture check cannot tell you whether a run would behave the same today | Record and compare fixtures for integrity |
+| Session branches never merge | A fork diverges permanently | Re-fork from a shared ancestor |
 
 ## Optional AI features are not bundled
 
@@ -80,6 +83,10 @@ still work. Grammar-backed symbol extraction is the part that is unavailable.
 
 The macOS-only tier is a fail-closed decision: a domain allowlist that quietly
 became "all network" on Linux would be worse than one that says it cannot run.
+The refusal is enforced at the spawn point, so `KERYX_SANDBOX_ALLOW_UNSANDBOXED`
+cannot reach it. That variable still does what it was written for — running
+uncontained when no launcher is installed, which is a degradation an operator
+knowingly accepts — and nothing more.
 See the [operator guide](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-os-sandbox/operator-guide.md)
 for the containment matrix and the
 [Linux verification runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/verification/linux-sandbox-verification.md)
@@ -98,6 +105,20 @@ Two boundaries that do hold today:
   a weaker remote profile is refused rather than accepted.
 - Authentication happens *before* routing, so an unauthenticated caller cannot
   distinguish a known path from an unknown one.
+
+## Harness gaps
+
+Three of them, each stated in full on [the harness page](./harness.md#what-the-harness-does-not-do-yet):
+
+- **No shipped non-interactive path registers a tool.** Both production
+  executors are refusals, so `keryx harness run` and `keryx serve` complete a
+  single text turn. Tools run in `keryx shell`.
+- **Replay is `validate-log`.** `keryx harness replay` checks that a fixture
+  still describes the run it was built from. It re-executes nothing and contacts
+  nothing, so it is an integrity check, not divergence detection.
+  `simulate-recorded-results` is not implemented.
+- **Branch merge is out of scope.** `keryx sessions fork` branches a
+  conversation and records its ancestry; there is no merge back.
 
 ## Format stability
 

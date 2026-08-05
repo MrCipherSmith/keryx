@@ -210,6 +210,12 @@ What is in it today:
 - **Four doors.** The CLI (`keryx harness run|exec|extension|wave|replay`), JSONL/RPC
   and the loopback HTTP entry (`keryx serve`) share one execution loop; the
   interactive TUI runs its own on the same tool registry and the same policy.
+- **A record you can check.** `keryx harness run --record` writes a run's
+  recomputable hash surface and `keryx harness replay` validates a fixture
+  against it, naming the diverging field when one moves.
+
+The full tour — including what the harness does *not* do yet — is in
+[the harness page](docs/docs/harness.md).
 
 Provider-neutral means what it says — the same loop, the same tool registry and
 the same policy, with the model swapped out from under it:

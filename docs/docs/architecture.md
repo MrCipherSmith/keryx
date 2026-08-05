@@ -126,10 +126,10 @@ Two invariants define the system and recur across every module:
 | **eval** | `src/eval/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
 | **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry, read-only `metaproject://` Resources, single redaction choke point. |
 
-| **harness** | `src/harness/` | `harness run\|exec\|extension\|wave` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay. See "The agent harness" above. |
+| **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation. See "The agent harness" above, and [the feature-level tour](./harness.md). |
 | **sandbox** | `src/harness/process/sandbox/` | — (via `harness exec`) | OS-enforced containment: Seatbelt and bubblewrap launchers, the loopback allowlist proxy, the ephemeral run CA, credential masking. Two capability tiers with a hard platform split. |
 | **tui** | `src/tui/`, `src/commands/shell.ts` | `shell` | The OpenTUI full-screen shell, default when `stdout` is a TTY, with a readline fallback. One core with three renderers, not three shells. |
-| **session** | `src/session/`, `src/commands/sessions.ts` | `sessions` | Per-project append-only agent sessions: list, export, locate. |
+| **session** | `src/session/`, `src/commands/sessions.ts` | `sessions` | Per-project append-only agent sessions: list, fork (branch with `parentSessionId` ancestry), export, locate. |
 | **serve** | `src/commands/serve.ts`, `src/lib/serve-*.ts` | `serve` | Loopback-bound HTTP entry over the harness. Not a module in the manifest sense — a command. |
 | **projects** | `src/lib/project-registry.ts` | `projects` | The user-global project registry that remote entry addresses projects by. |
 | **metrics** | `src/metrics/` | `metrics` | Provenance-aware execution observability: run records, active-time accounting, baseline comparison, benchmark manifests. |
