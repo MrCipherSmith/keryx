@@ -117,7 +117,8 @@ Usage:
   keryx                                        Show CLI usage
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)
-  keryx sessions list|export <id>|path         List / export sessions for the current project
+  keryx sessions list|fork <id>|export <id>|path
+                                               List / branch / export sessions for the current project
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
                      [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]

@@ -96,12 +96,13 @@ off a TTY the shell is non-interactive by default.
 Inspect the append-only agent sessions recorded for the current project.
 
 ```
-keryx sessions list | export <id> | path
+keryx sessions list | fork <id> | export <id> | path
 ```
 
 | Subcommand | Description |
 |---|---|
-| `list` | Print the sessions recorded for this project, newest first. |
+| `list` | Print the sessions recorded for this project, newest first. Forks are marked `↳`. |
+| `fork <id>` | Branch a session: a new session with the same history and `parentSessionId` set to the original. `--title "<t>"` names it, `--json` prints the result as JSON. Writing to the fork never touches its source. |
 | `export <id>` | Emit one session in full, for archiving or review. |
 | `path` | Print the directory sessions are stored under. |
 

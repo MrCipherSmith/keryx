@@ -13,10 +13,12 @@ export { compactMessages, indexOfKeepFrom, type CompactOptions, type CompactResu
 export {
   SESSION_SCHEMA_VERSION,
   TranscriptUnreadableError,
+  UnknownSessionError,
   compactSession,
   createSession,
   exportSessionMarkdown,
   findSession,
+  forkSession,
   latestSession,
   listSessions,
   loadArchive,
