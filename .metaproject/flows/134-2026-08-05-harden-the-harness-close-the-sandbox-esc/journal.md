@@ -9,3 +9,5 @@
 - 2026-08-05T11:03:00.070Z - task-added: T10: S6 full gate and draft PR
 - 2026-08-05T11:03:04.093Z - frozen: 9 criteria; checksum recorded
 - 2026-08-05T11:03:04.261Z - started
+- 2026-08-05T11:07:09.257Z - task-done: T5: S1 sandbox: restricted profile fails closed regardless of the escape hatch
+- 2026-08-05T11:07:09.429Z - task-done: T1: Collect remaining context
