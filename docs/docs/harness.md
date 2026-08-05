@@ -4,7 +4,7 @@ The harness is keryx's own agent runtime: the loop that lets a model operate on 
 project through controlled tools, with a policy engine above it, an OS sandbox
 below it, and an append-only record of what happened beside it.
 
-This page is the feature-level tour. [Architecture](./architecture.md#the-agent-harness--and-the-two-tool-systems)
+This page is the feature-level tour. [Architecture](./architecture.md#the-agent-harness-and-the-two-tool-systems)
 has the internals and the seam-by-seam citations; [CLI reference](./cli-reference.md#harness)
 has every flag.
 
