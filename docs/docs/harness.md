@@ -79,28 +79,52 @@ Four properties are worth knowing before you rely on it:
 
 ### Unattended runs
 
-`keryx shell --unattended[=<profile>]` declares at launch that no operator is
-present. It does not add an authority; it changes **who answers**. The frozen
-policy engine resolves each approval request as a non-interactive session, which
-is the fail-closed path property 3 above describes.
+`keryx shell --unattended[=<profile>] [--unattended-allow "<pattern>"]…` declares
+at launch that no operator is present. It does not add an authority; it changes
+**who answers**. Two gates stand between the model's proposal and execution, and
+a command has to pass **both**:
+
+1. **The policy engine**, resolved as a non-interactive session — the fail-closed
+   path property 3 above describes.
+2. **An argv allowlist you supply.** Nothing runs unless a `--unattended-allow`
+   pattern recognises it.
 
 | Under the flag | Result |
 |---|---|
-| Risk class the profile allows | Runs, recorded as unattended |
+| Read-only tool | Runs with no prompt (it never reaches an approver) |
+| Command matching an `--unattended-allow` pattern, under a profile that allows its risk class | Runs, recorded as unattended |
+| Command matching nothing on the allowlist | **Refused**, whatever the profile allows |
+| Any command when no allowlist was supplied | **Refused** — the flag alone runs nothing |
 | Risk class the profile marks `ask` | Refused — no approver means `deny` |
 | Risk class the profile marks `deny` | Refused, terminally, exactly as without the flag |
-| Destructive or credential-touching action | Refused, whatever the profile allows |
+| Command containing an unquoted shell metacharacter (`;` `&&` `\|` `` ` `` `$(` `<` `>` `&`) | Refused — a pattern match would say nothing about what `/bin/sh -c` then runs |
+| Destructive or credential-touching action | Refused, and allowlisting it does not change that |
 | `ask_user` | Refused — it fails rather than blocking on an answer nobody will give |
 
-Bare `--unattended` selects `read-only-review`, whose write, shell, network and
-delegate defaults are all `deny` — so the flag on its own buys a read-only run
-that does not stall, and nothing else. Running shell commands unattended has to
-be asked for by name (`--unattended=monitored-trusted-local`), and a destructive
-command is still refused there.
+Allowlist patterns go through the same validator that refuses over-broad **saved**
+permissions, and they are checked at launch rather than at run time. So
+`--unattended-allow "git *"` does not start a run: its first token does not
+constrain what would run, which is the property that makes it not a rule.
+`bun test*` and `git status*` do.
+
+**Why an allowlist and not a blocklist.** The destructive classifier
+(`isDestructiveCommand`) is a heuristic, and its own module says it must never be
+used to decide a command is safe. Left as the only barrier it allowed
+`git clean -fdx` — benchmark case C1, the case keryx is otherwise praised for
+refusing — along with `rm -rf <subdir>`, `find . -delete` and `cat .env`, because
+a blocklist permits everything it has not thought of. The question is inverted
+here: only what a pattern recognises may run, and the classifier is a second
+refusal on top rather than the thing holding the line.
 
 **What it does not do:** it does not approve everything, it cannot turn a `deny`
-into an `allow`, and it does not touch the supervised default. Without the flag,
-a mutating call still goes to a prompt and an absent approver is still a refusal.
+into an `allow`, an allowlist entry cannot unlock a destructive command, and it
+does not touch the supervised default. Without the flag, a mutating call still
+goes to a prompt and an absent approver is still a refusal.
+
+An unattended launch also never opens a picker: it takes `--provider`/`--model`,
+or the selection a previous interactive run saved, and refuses to start if it has
+neither. `--unattended` with `--chat` is refused too — chat mode runs no tools, so
+there is nothing for a posture to bound.
 
 The posture is shown in the shell header for the whole run and written into the
 session's `summary.json` (`posture: "unattended:<profile>"`, or `"supervised"`),
@@ -116,10 +140,17 @@ narrow tool turns into a stalled run rather than a slower one.
 
 `graph_affected` therefore takes `depth` and `ranked` like `keryx gdgraph
 affected`, `graph_symbol` takes `impact` and `depth`, `memory_search` takes the
-verb's filters, `repomap` takes `budget` and `seed`, and `wiki_ask` takes `k` and
-`rerank`. Each descriptor declares the verb it wraps and where that verb reads its
-options, and a test reads the command source to check the claim — so widening the
-CLI without widening the tool fails the build.
+verb's filters, `repomap` takes `budget` and `seed`, `wiki_ask` takes `k` and
+`rerank`, and `search_code` takes a `flags` array carrying every ripgrep option
+`keryx ctx rg` forwards — `-g`, `-t`, `-A/-B/-C`, `-i`, `-m`, `--max-depth`,
+`--hidden`, `--no-ignore`, `--sort`, `-l`, `-c` and the rest — read from the one
+table the CLI itself uses, so the two cannot drift apart.
+
+Each descriptor declares the verb it wraps and where that verb reads its options,
+and a test extracts that verb's handler from the command source, follows it into
+any module-level option table, and compares. Short flags count; an ambiguous
+anchor is an error rather than a guess. Widening the CLI without widening the tool
+fails the build.
 
 ## Containment underneath
 

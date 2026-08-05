@@ -76,7 +76,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
             [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
-            [--unattended[=<profile>]]
+            [--unattended[=<profile>]] [--unattended-allow "<pattern>"]…
 ```
 
 | Flag | Description |
@@ -89,6 +89,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
 | `--unattended[=<profile>]` | Declare that nobody is watching: the policy engine answers approval requests instead of a person. See below. |
+| `--unattended-allow "<pattern>"` | Repeatable. The argv patterns an unattended run may execute. Without at least one, no command runs. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -101,23 +102,48 @@ evaluated as a non-interactive session. Bare, it means `read-only-review`;
 `monitored-trusted-local`, `unattended-untrusted`. An unrecognised profile name
 is rejected — it is never silently replaced with the default.
 
+A command must clear **two** gates: the profile's risk class, and an argv
+allowlist you supply with `--unattended-allow`.
+
+```bash
+# Read-only: answers questions, runs no commands, never prompts.
+keryx shell --unattended --provider fake --model fake-echo
+
+# Allowed to run the test suite and nothing else.
+keryx shell --unattended=monitored-trusted-local \
+  --unattended-allow "bun test*" --unattended-allow "git status*" \
+  --provider fake --model fake-echo
+```
+
 | Under the flag | Behaviour |
 |---|---|
-| A tool the profile allows for its risk class | Runs with no prompt, recorded as unattended |
+| A read-only tool | Runs with no prompt (it never reaches an approver) |
+| A command matching an `--unattended-allow` pattern, whose risk class the profile allows | Runs, recorded as unattended |
+| A command matching no pattern | **Refused**, whatever the profile allows |
+| Any command when no `--unattended-allow` was given | **Refused** — the flag by itself runs nothing |
 | A risk class the profile marks `ask` | **Refused** — an approval request with no approver fails closed |
 | A risk class the profile marks `deny` | **Refused**, terminally, exactly as without the flag |
-| A destructive or credential-touching action | **Refused**, whatever the profile allows |
+| A command with an unquoted shell metacharacter (`;` `&&` `\|` `` ` `` `$(` `<` `>` `&`) | **Refused** — a pattern match cannot describe what `/bin/sh -c` would then run |
+| A destructive or credential-touching action | **Refused**; allowlisting it does not change that |
 | `ask_user` | **Refused** — there is nobody to answer, so it fails instead of blocking |
 
-**It is not an auto-approve switch.** It grants no authority the chosen profile
-does not already grant, and it cannot turn a `deny` into anything else. The
-default profile denies write, shell, network and delegate outright, so a bare
-`--unattended` run can read and nothing more; running a shell command unattended
-requires naming `--unattended=monitored-trusted-local`, and even then a
-destructive command is refused.
+Patterns are validated **at launch**, by the same rule that refuses over-broad
+saved permissions: a pattern whose first token does not constrain what runs is
+not a rule. `--unattended-allow "git *"`, `"bash *"`, `"cat *"` and `"rm *"` are
+refused before the run starts, with the reason printed.
+
+**It is not an auto-approve switch.** The allowlist is the whole point: a
+blocklist of dangerous commands permits everything it has not thought of, and
+`git clean -fdx`, `rm -rf <subdir>`, `find . -delete` and `cat .env` are all
+things it did not think of. Only what a pattern recognises runs.
 
 **It does not change the default.** Without the flag every mutating call still
 goes to a prompt, and with no approver present the gate is still default-deny.
+
+**It never opens a picker.** An unattended launch takes `--provider`/`--model` or
+the selection a previous interactive run saved, and refuses to start with
+neither, rather than reading a piped task as the answer to a prompt nobody saw.
+`--unattended` with `--chat` is refused: chat mode runs no tools.
 
 The posture appears in the shell header for the whole run and is written to the
 session's `summary.json` as `posture: "unattended:<profile>"` (a supervised run
