@@ -289,7 +289,13 @@ export interface ContextSummaryResult {
  * a structured empty/error result (see each result type's `error`/`isError`).
  */
 export interface MetaprojectPort {
-  searchCode(input: { pattern: string; path?: string }): Promise<SearchCodeResult>;
+  /**
+   * `flags` are ripgrep options forwarded verbatim, drawn from the same
+   * allowlist `keryx ctx rg` forwards (`src/lib/rg-options.ts`). Anything the
+   * verb refuses, the tool refuses — the point is that the tool can ask every
+   * question the verb can, not that it can ask more.
+   */
+  searchCode(input: { pattern: string; path?: string; flags?: string[] }): Promise<SearchCodeResult>;
   graphAffected(input: { target: string; depth?: number; ranked?: boolean }): Promise<GraphAffectedResult>;
   graphQuery(input: { query: "cycles" | "orphans" }): Promise<GraphQueryResult>;
   memorySearch(input: {

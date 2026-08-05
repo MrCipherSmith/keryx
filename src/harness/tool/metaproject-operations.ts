@@ -30,6 +30,7 @@ import type {
   WikiBacklinksResult,
   WikiPageResult,
 } from "./metaproject-port";
+import { checkRgOption } from "../../lib/rg-options";
 import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
@@ -71,6 +72,18 @@ export type MetaprojectCliParity =
       handler: CliHandlerLocation;
       /** Extra helper functions in `source` that also read the verb's options. */
       helpers?: string[];
+      /**
+       * The verb keeps its forwarded options in module-level tables and the tool
+       * forwards that table verbatim through one property. Declaring it here lets
+       * the parity test read the table instead of a transcription of it — and
+       * means the tool widens automatically when the verb does.
+       */
+      passthrough?: {
+        /** The input-schema property that carries the options. */
+        property: string;
+        /** Exported constants whose entries are the verb's option names. */
+        options: Array<{ source: string; constant: string }>;
+      };
       /** CLI option → the input-schema property that expresses it. */
       expresses: Record<string, string>;
       /**
@@ -153,6 +166,63 @@ function optionalStringArray(input: Record<string, unknown>, key: string): strin
   }
   const items = value.filter((item): item is string => typeof item === "string" && item.length > 0);
   return items.length > 0 ? items : undefined;
+}
+
+/**
+ * Validate model-supplied ripgrep flags against the allowlist `keryx ctx rg`
+ * itself forwards.
+ *
+ * Checked HERE as well as in the CLI so the model gets one clear refusal instead
+ * of a subprocess error, and so the tool can never forward an option the verb
+ * would have refused — the parity claim runs in both directions.
+ */
+function validateRgFlags(
+  flags: string[] | undefined,
+): { value: string[] | undefined } | { error: InteractiveToolResult } {
+  if (flags === undefined) {
+    return { value: undefined };
+  }
+  let index = 0;
+  while (index < flags.length) {
+    const token = flags[index] ?? "";
+    if (!token.startsWith("-")) {
+      return {
+        error: {
+          output:
+            `search_code: "${token}" is not a ripgrep option. Put the search text in \`pattern\` and ` +
+            "the target in `path`; `flags` carries options only.",
+          isError: true,
+        },
+      };
+    }
+    const check = checkRgOption(token);
+    if (!check.ok) {
+      return { error: { output: `search_code: ${check.reason}`, isError: true } };
+    }
+    if (check.consumesValue) {
+      const value = flags[index + 1];
+      if (value === undefined) {
+        return { error: { output: `search_code: ${token} needs a value.`, isError: true } };
+      }
+      // Same rule the CLI applies: a dash-leading value as a separate token can
+      // be re-parsed as an option by some ripgrep builds, which is the hole the
+      // allowlist exists to close.
+      if (value.startsWith("-") && value !== "-") {
+        return {
+          error: {
+            output:
+              `search_code: the value for ${token} may not start with a dash (${value}). ` +
+              `Use the inline form instead: ${token}=${value}.`,
+            isError: true,
+          },
+        };
+      }
+      index += 2;
+      continue;
+    }
+    index += 1;
+  }
+  return { value: flags };
 }
 
 /** Render a structured `graphAffected` result as readable text for the model. */
@@ -485,10 +555,18 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdctx",
     description:
-      "Search the project's code/text (compact ripgrep via `keryx ctx rg`). Input: { pattern: string, path?: string } (path relative to the project root).",
+      "Search the project's code/text (compact ripgrep via `keryx ctx rg`). " +
+      "Input: { pattern: string, path?: string, flags?: string[] } — `path` relative to the project root, " +
+      "`flags` any ripgrep option the CLI forwards: -i, -w, -F, -g/--glob, -t/--type, -A/-B/-C, -m/--max-count, " +
+      "--max-depth, --hidden, --no-ignore, --sort, -l/--files-with-matches, -c/--count. " +
+      'Example: { pattern: "TODO", flags: ["-t", "ts", "-C", "2"] }.',
     inputSchema: {
       type: "object",
-      properties: { pattern: { type: "string" }, path: { type: "string" } },
+      properties: {
+        pattern: { type: "string" },
+        path: { type: "string" },
+        flags: { type: "array", items: { type: "string" } },
+      },
       required: ["pattern"],
       additionalProperties: false,
     },
@@ -497,8 +575,25 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       verb: "ctx rg",
       source: "src/commands/ctx.ts",
       handler: { fn: "rgAndSummarize" },
+      // The verb's option allowlist lives in `buildRgCommand`, not in the
+      // handler, so the parity scan has to reach it.
+      helpers: ["buildRgCommand", "rgListMode"],
       expresses: {},
-      presentation: ["--json"],
+      // `--json` is keryx's own summary switch, and the four base flags are
+      // passed unconditionally to produce the `file:line:col:text` shape the
+      // match parser needs. None of them is a question a caller can ask
+      // differently, so there is nothing for the tool to expose.
+      presentation: ["--json", "--with-filename", "--line-number", "--column", "--no-heading"],
+      // The verb's own forwarded-option allowlist, read from the shared table.
+      // `flags` forwards it verbatim, so the tool widens whenever the verb does
+      // and the two cannot drift apart in the first place.
+      passthrough: {
+        property: "flags",
+        options: [
+          { source: "src/lib/rg-options.ts", constant: "RG_FORWARDED_BOOLEAN_FLAGS" },
+          { source: "src/lib/rg-options.ts", constant: "RG_FORWARDED_VALUE_FLAGS" },
+        ],
+      },
     },
     invoke: async (port, input) => {
       const pattern = requireString(input, "pattern", "search_code");
@@ -506,9 +601,14 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return pattern.error;
       }
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
+      const flags = validateRgFlags(optionalStringArray(input, "flags"));
+      if ("error" in flags) {
+        return flags.error;
+      }
       const result = await port.searchCode({
         pattern: pattern.value,
         ...(path !== undefined ? { path } : {}),
+        ...(flags.value !== undefined ? { flags: flags.value } : {}),
       });
       return { output: result.output, isError: result.isError };
     },

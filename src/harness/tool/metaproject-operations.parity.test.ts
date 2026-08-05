@@ -13,7 +13,7 @@
 // consults an option the table does not account for, so widening the CLI without
 // widening the tool breaks the build instead of the next agent run.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "bun:test";
 import { computeAffected } from "../../gdgraph/affected";
@@ -21,43 +21,100 @@ import type { GraphData } from "../../gdgraph/types";
 import { createMetaprojectAdapter } from "./metaproject-adapter";
 import type { MetaprojectPort } from "./metaproject-port";
 import { METAPROJECT_OPERATIONS, toInteractiveTools } from "./metaproject-operations";
+import { forwardedRgOptions, RG_FORWARDED_VALUE_FLAGS } from "../../lib/rg-options";
 import { builtinMetaprojectTools } from "./builtin/metaproject-tools";
 
 const REPO_ROOT = path.join(import.meta.dir, "..", "..", "..");
 
 /**
- * Extract the body of a named top-level function, or of the `if (<guard>) { … }`
- * block a verb is dispatched from, by brace counting from the first `{` after the
- * anchor. Good enough to be exact for this codebase's command routers and, unlike
- * a whole-file scan, it cannot borrow a sibling verb's flags.
+ * Extract the body of a named top-level function, of the `if (<guard>) { … }`
+ * block a verb is dispatched from, or of an exported constant's initialiser, by
+ * brace/bracket counting from the anchor.
+ *
+ * The anchor must be UNIQUE. The first version used `indexOf("function
+ * runSymbol")`, which prefix-matched `runSymbolsCapability` earlier in the same
+ * file and scanned a function that reads no options at all — so `graph_symbol`'s
+ * parity passed by luck rather than by check. A substring that names two things
+ * names neither.
  */
-function extractBlock(source: string, anchor: string): string {
-  const at = source.indexOf(anchor);
-  if (at < 0) {
+function extractBlock(source: string, anchor: string, open: "{" | "[" = "{"): string {
+  const close = open === "{" ? "}" : "]";
+  const occurrences = source.split(anchor).length - 1;
+  if (occurrences === 0) {
     throw new Error(`parity: anchor not found in source: ${anchor}`);
   }
-  const open = source.indexOf("{", at);
-  if (open < 0) {
-    throw new Error(`parity: no block after anchor: ${anchor}`);
+  if (occurrences > 1) {
+    throw new Error(
+      `parity: anchor "${anchor}" matches ${occurrences} places; it must identify exactly one`,
+    );
+  }
+  const at = source.indexOf(anchor);
+  const start = source.indexOf(open, at);
+  if (start < 0) {
+    throw new Error(`parity: no ${open} block after anchor: ${anchor}`);
   }
   let depth = 0;
-  for (let i = open; i < source.length; i += 1) {
+  for (let i = start; i < source.length; i += 1) {
     const ch = source[i];
-    if (ch === "{") {
+    if (ch === open) {
       depth += 1;
-    } else if (ch === "}") {
+    } else if (ch === close) {
       depth -= 1;
       if (depth === 0) {
-        return source.slice(open, i + 1);
+        return source.slice(start, i + 1);
       }
     }
   }
   throw new Error(`parity: unbalanced block after anchor: ${anchor}`);
 }
 
-/** Every `--flag` string literal the block reads. */
+/**
+ * Every option literal a block reads — SHORT flags included.
+ *
+ * The first version matched only `/"(--[a-z]…)"/`, so `-g`, `-t`, `-A/-B/-C`,
+ * `-i`, `-m`, `-l` and `-c` were invisible for every verb. A parity test that
+ * cannot see half the option space is not a parity test; it is a formality that
+ * makes the docs' "widening the CLI without widening the tool fails the build"
+ * claim false.
+ */
 function flagsIn(block: string): string[] {
-  return [...new Set([...block.matchAll(/"(--[a-z][a-z0-9-]*)"/g)].map((m) => m[1] ?? ""))].sort();
+  const matches = [...block.matchAll(/"(-{1,2}[A-Za-z][A-Za-z0-9-]*)"/g)].map((m) => m[1] ?? "");
+  return [...new Set(matches)].sort();
+}
+
+/**
+ * Resolve a SCREAMING_CASE constant referenced by a scanned block to the file
+ * that exports it, following `source`'s own import statements.
+ *
+ * Without this the CLI side of the comparison is only as complete as the
+ * declaration: dropping a `passthrough` entry would remove the options from BOTH
+ * sides at once and the test would go quiet. Discovering them from the code the
+ * verb actually runs is what makes the check adversarial rather than agreeable.
+ */
+function resolveConstantSource(source: string, sourcePath: string, constant: string): string | undefined {
+  if (new RegExp(`export const ${constant}\\b`).test(source)) {
+    return sourcePath;
+  }
+  for (const match of source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"([^"]+)"/g)) {
+    const names = (match[1] ?? "").split(",").map((n) => n.trim().split(/\s+as\s+/)[0]?.trim() ?? "");
+    if (!names.includes(constant)) {
+      continue;
+    }
+    const specifier = match[2] ?? "";
+    if (!specifier.startsWith(".")) {
+      continue;
+    }
+    const resolved = `${path.normalize(path.join(path.dirname(sourcePath), specifier))}.ts`;
+    if (existsSync(path.join(REPO_ROOT, resolved))) {
+      return resolved;
+    }
+  }
+  return undefined;
+}
+
+/** SCREAMING_CASE identifiers a block references (candidate option tables). */
+function referencedConstants(block: string): string[] {
+  return [...new Set([...block.matchAll(/\b([A-Z][A-Z0-9_]{3,})\b/g)].map((m) => m[1] ?? ""))];
 }
 
 /** Property names a JSON Schema object declares. */
@@ -91,13 +148,48 @@ test("AC2: no metaproject tool accepts a strict subset of its CLI verb's argumen
     }
     const source = readFileSync(path.join(REPO_ROOT, parity.source), "utf8");
     const anchor =
-      "fn" in parity.handler ? `function ${parity.handler.fn}` : `if (${parity.handler.guard})`;
+      "fn" in parity.handler ? `function ${parity.handler.fn}(` : `if (${parity.handler.guard})`;
     const blocks = [
       extractBlock(source, anchor),
-      ...(parity.helpers ?? []).map((helper) => extractBlock(source, `function ${helper}`)),
+      ...(parity.helpers ?? []).map((helper) => extractBlock(source, `function ${helper}(`)),
     ];
-    const cliFlags = [...new Set(blocks.flatMap((block) => flagsIn(block)))].sort();
-    const declared = new Set([...Object.keys(parity.expresses), ...(parity.presentation ?? [])]);
+
+    // Options the verb keeps in a module-level table rather than in its handler.
+    // DISCOVERED from the scanned blocks, not read off the declaration: scanning
+    // only the handler missed these entirely (which is how `search_code`
+    // declared `expresses: {}` against a verb forwarding forty ripgrep options),
+    // and reading them off the declaration would let a dropped declaration
+    // remove them from both sides of the comparison at once.
+    const tableFlags = new Set<string>();
+    const tablesFound: string[] = [];
+    for (const constant of blocks.flatMap((block) => referencedConstants(block))) {
+      const owner = resolveConstantSource(source, parity.source, constant);
+      if (owner === undefined) {
+        continue;
+      }
+      const ownerSource =
+        owner === parity.source ? source : readFileSync(path.join(REPO_ROOT, owner), "utf8");
+      const initialiser = extractBlock(ownerSource, `export const ${constant}`, "[");
+      const flags = flagsIn(initialiser);
+      if (flags.length === 0) {
+        continue; // not an option table
+      }
+      tablesFound.push(constant);
+      for (const flag of flags) {
+        tableFlags.add(flag);
+      }
+    }
+
+    const cliFlags = [
+      ...new Set([...blocks.flatMap((block) => flagsIn(block)), ...tableFlags]),
+    ].sort();
+    const declared = new Set([
+      ...Object.keys(parity.expresses),
+      ...(parity.presentation ?? []),
+      // Only a DECLARED passthrough excuses a table's options. An undeclared
+      // table leaves them in `cliFlags` and out of `declared`, which fails.
+      ...(parity.passthrough !== undefined ? tableFlags : []),
+    ]);
     const properties = new Set(schemaProperties(op.inputSchema));
 
     for (const flag of cliFlags) {
@@ -113,6 +205,25 @@ test("AC2: no metaproject tool accepts a strict subset of its CLI verb's argumen
         `${op.name} maps ${flag} to input property "${property}", which its inputSchema does not declare`,
       ).toBe(true);
     }
+    if (parity.passthrough !== undefined) {
+      expect(
+        properties.has(parity.passthrough.property),
+        `${op.name} forwards its verb's option table through "${parity.passthrough.property}", ` +
+          "which its inputSchema does not declare",
+      ).toBe(true);
+      expect(
+        tableFlags.size,
+        `${op.name} declares a passthrough, but no option table was reachable from the code its ` +
+          "verb runs — an empty table would make this check vacuous",
+      ).toBeGreaterThan(0);
+      for (const table of parity.passthrough.options) {
+        expect(
+          tablesFound,
+          `${op.name} declares passthrough table ${table.constant}, which the verb's own code ` +
+            "does not reach",
+        ).toContain(table.constant);
+      }
+    }
     checked.push(op.name);
   }
   // Guards the enumeration itself: a descriptor list that quietly emptied would
@@ -121,6 +232,57 @@ test("AC2: no metaproject tool accepts a strict subset of its CLI verb's argumen
   expect(checked).toContain("graph_affected");
   expect(checked).toContain("memory_search");
   expect(checked).toContain("graph_symbol");
+  expect(checked).toContain("search_code");
+});
+
+test("the parity scanner sees short flags and refuses an ambiguous anchor", () => {
+  // Both guards are here because both were broken and neither failed anything.
+  expect(flagsIn('const t = ["-g", "--glob", "-A", "--max-depth"];')).toEqual([
+    "--glob",
+    "--max-depth",
+    "-A",
+    "-g",
+  ]);
+  // `function runSymbol` is a prefix of `function runSymbolsCapability`; the
+  // scanner must refuse rather than pick whichever comes first.
+  const gdgraph = readFileSync(path.join(REPO_ROOT, "src/commands/gdgraph.ts"), "utf8");
+  expect(() => extractBlock(gdgraph, "function runSymbol")).toThrow(/matches 2 places/);
+  expect(flagsIn(extractBlock(gdgraph, "function runSymbol("))).toEqual(["--depth", "--impact"]);
+});
+
+test("AC2: search_code forwards every ripgrep option `keryx ctx rg` forwards", () => {
+  const searchCode = METAPROJECT_OPERATIONS.find((op) => op.name === "search_code");
+  expect(schemaProperties(searchCode?.inputSchema ?? {})).toContain("flags");
+
+  const forwarded = forwardedRgOptions();
+  expect(forwarded.length).toBeGreaterThan(30);
+  expect(forwarded).toContain("-g");
+  expect(forwarded).toContain("-t");
+  expect(forwarded).toContain("-C");
+  expect(forwarded).toContain("--max-depth");
+  expect(forwarded).toContain("--hidden");
+
+  // Every one of them is accepted by the tool's own validator…
+  const seen: Array<{ pattern: string; flags?: string[] }> = [];
+  const port = {
+    async searchCode(input: { pattern: string; flags?: string[] }) {
+      seen.push(input);
+      return { pattern: input.pattern, output: "", isError: false };
+    },
+  } as unknown as MetaprojectPort;
+
+  return (async () => {
+    for (const option of forwarded) {
+      const flags = RG_FORWARDED_VALUE_FLAGS.has(option) ? [option, "x"] : [option];
+      const result = await searchCode?.invoke(port, { pattern: "needle", flags });
+      expect(result?.isError, `search_code must accept ${option}, which the verb forwards`).toBe(false);
+    }
+    // …and an option the verb refuses, the tool refuses too — parity runs both
+    // ways, or the tool becomes a wider hole than the CLI it wraps.
+    const refused = await searchCode?.invoke(port, { pattern: "needle", flags: ["--pre=/tmp/pwn.sh"] });
+    expect(refused?.isError).toBe(true);
+    expect(refused?.output ?? "").toContain("unsupported ripgrep option");
+  })();
 });
 
 test("AC1: graph_affected declares depth and ranked and passes both to the port", async () => {

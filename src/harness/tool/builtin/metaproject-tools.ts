@@ -140,7 +140,9 @@ function withSearchFallback(port: MetaprojectPort, run: KeryxRunner, root: strin
       if (!result.isError) {
         return result;
       }
-      const args = ["ctx", "rg", input.pattern];
+      // Flags go BEFORE the pattern: `buildRgCommand` reads options up to the
+      // first operand, and the operand is the pattern.
+      const args = ["ctx", "rg", ...(input.flags ?? []), input.pattern];
       if (input.path !== undefined) {
         // Same confinement as the non-port path: this fallback is reachable
         // from the model whenever the port has no in-process backing, so
@@ -185,12 +187,14 @@ export function builtinMetaprojectTools(
     return toInteractiveTools(METAPROJECT_OPERATIONS, withSearchFallback(port, run, root));
   }
 
+  const searchOp = METAPROJECT_OPERATIONS.find((op) => op.name === "search_code");
+
   const searchCode: InteractiveTool = {
     definition: {
       name: "search_code",
       description:
-        "Search the project's code/text (compact ripgrep via `keryx ctx rg`). Input: { pattern: string, path?: string } (path relative to the project root).",
-      inputSchema: {
+        searchOp?.description ?? "Search the project's code/text (compact ripgrep via `keryx ctx rg`).",
+      inputSchema: searchOp?.inputSchema ?? {
         type: "object",
         properties: { pattern: { type: "string" }, path: { type: "string" } },
         required: ["pattern"],
@@ -204,7 +208,14 @@ export function builtinMetaprojectTools(
         return pattern.error;
       }
       const path = typeof input.path === "string" && input.path.length > 0 ? input.path : undefined;
-      const args = ["ctx", "rg", pattern.value];
+      // Forwarded unvalidated on purpose: `keryx ctx rg` refuses an option that
+      // is not on its allowlist, with a better message than a second copy of the
+      // check here could give — and a second copy is a second thing to drift.
+      const rawFlags = input.flags;
+      const flags = Array.isArray(rawFlags)
+        ? rawFlags.filter((flag): flag is string => typeof flag === "string" && flag.length > 0)
+        : [];
+      const args = ["ctx", "rg", ...flags, pattern.value];
       if (path !== undefined) {
         // Confine the model-supplied path exactly as `read_file` does. Without
         // this, `search_code {pattern: ".", path: "<any readable file>"}` returns

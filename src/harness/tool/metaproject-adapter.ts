@@ -210,7 +210,12 @@ export function createMetaprojectAdapter(
         ...(input.entity !== undefined ? { entity: input.entity } : {}),
         ...(input.asOf !== undefined ? { asOf: input.asOf } : {}),
         ...(filters.class !== undefined ? { class: filters.class } : {}),
-        ...(input.semantic === true ? { semantic: true } : {}),
+        // `semantic` is deliberately NOT echoed: the frozen
+        // memory-search-result schema declares `filters` with
+        // `additionalProperties: false` and no `semantic` key, so echoing it
+        // would make every semantic search emit a result that fails its own
+        // schema. It is a ranking mode rather than a filter on the corpus, which
+        // is presumably why the schema leaves it out.
       };
       try {
         const result = await memory.search({ cwd, query: input.query, filters });
