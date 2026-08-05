@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.15.0
+Version: 0.16.0
 
 ## Status
 
@@ -7,6 +7,26 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.16.0** — Added `keryx-unattended-posture` (specification ready) and
+>   narrowed `keryx-shell-remediation` P1 accordingly. The unattended half was
+>   descoped out of PR #253 after **three** review rounds, each of which ran the
+>   code rather than reading it and each of which found a hole the previous
+>   fix had not closed: the destructive-command classifier as a barrier (16
+>   commands, including benchmark case C1 verbatim); then an allowlist that
+>   accepted `*` and `bash -c *` and `keryx *`; then a literal-command-word rule
+>   whose word list omitted `timeout`, `setsid`, `busybox`, `parallel` and
+>   eleven more in categories already banned, plus shell escapes through
+>   `psql -c '\! …'`, `sqlite3 '.shell …'` and `tar --to-command`. The pattern
+>   is the finding and it is now the new package's design constraint:
+>   **containment may not be a list of forbidden command words** — each round's
+>   rule was better and each round's vocabulary was behind. The corpus from all
+>   three rounds ships as the new package's required regression suite so nobody
+>   has to rediscover it. Recommended first release is the smallest honest one:
+>   a posture that grants no shell at all and exposes only read-risk tools,
+>   which is sufficient for the benchmark re-measurement that was the only thing
+>   waiting. D1's half — parameter parity, one tool surface, and closing an
+>   unapproved out-of-root read channel the work itself opened — ships on its
+>   own. Docs-only.
 > - **0.15.0** — Added `keryx-shell-remediation` (specification ready; no
 >   implementation started). Turns the benchmark's six defects into **three
 >   flows instead of six**, grouped by shared verification rather than
@@ -145,6 +165,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |
+| [Keryx Unattended Posture](keryx-unattended-posture/README.md) | specification ready (descoped from PR #253) | D2 on its own, with the evidence of three review rounds as its foundation. The design constraint is stated up front because it was learned the expensive way: **containment may not be a list of forbidden command words**. Round 1 leaned on the destructive-command classifier — whose own header forbids using it to block a command — and 16 dangerous commands executed. Round 2 added an operator allowlist and it accepted `*`, `bash -c *`, and `keryx *` (the pattern an operator on this repo is most likely to write, because our own CLAUDE.md tells agents to route through `keryx ctx run --`). Round 3 required a literal command word and banned wildcards after wrapper words, and `timeout *` still launched and read `~/.ssh/id_rsa`. Every command, pattern and escape from all three rounds ships as a mandatory regression corpus run against a real runner and a real fixture. Recommended first release: no shell at all, read-risk tools only — it cannot be defeated by a word nobody thought of, and it is enough for the benchmark's group A. Explicitly out of scope and explicitly not forgotten: a saved `keryx *` grant auto-approves `keryx ctx run -- rm -rf /` on the supervised path today; not reachable from an unattended run, and it needs its own change. |
 | [Keryx Shell Remediation](keryx-shell-remediation/README.md) | specification ready (not started) | The benchmark's D1-D6 as three flows. **P1 (D1+D2)** — the agent reached past its own registered `graph_affected` tool for a `shell_exec` of the equivalent CLI, hit default-deny and answered nothing while six other legs answered; and no `keryx shell` run can complete unattended because there is no way to declare a posture at launch. Paired because either alone leaves the scenario unprovable or passes it for the wrong reason. **P2 (D3-D5)** — register tools on the non-interactive path, read `OPENAI_COMPAT_PROVIDERS` instead of a literal set and fix `cli-reference.md` in the same change, stop defaulting to an undeclared model id. **P3 (D6)** — re-run the catalog after planting a real secret for C2, using `--allowed-domains` for C4, moving A6/A7 to a target with decision pages, and adjudicating the 106-vs-102 transitive count, which is the only surviving candidate for a keryx advantage on A1 and is a correctness argument rather than a speed one. Out of scope everywhere: weakening a `deny`, rewriting a shell call behind the model's back, and any performance claim. |
 | [Keryx Shell Benchmark](keryx-shell-benchmark/README.md) | specification ready (no run executed) | The task selection `keryx-execution-observability` left as a product decision, made concrete: 26 frozen cases in four groups — workspace leverage (blast radius, call chains, cycles, orphans, wiki architecture and recorded decisions, memory, related tests, budgeted repomap, health, context assembly), ordinary coding work as a floor check, containment, and session durability. Two keryx legs (DeepSeek, and free local `gemma4-coder`) against Claude Code and Codex on the same commit, one git worktree per run, byte-identical prompts, and a rubric that scores **grounding** apart from correctness so a lucky guess cannot pass as retrieval. Fairness is stated where it cuts against keryx: the baselines run frontier models against a 7B local leg, and they may read `.metaproject/` files — what they lack is the query layer. Negative outcomes (`keryx-regression`, `capability-unused`) are reported with the same prominence as wins, and no speed claim is published unless the observability decision rule is satisfied. Results emit into the existing `paired-3-5-v1` manifest and validate with `keryx metrics benchmark validate`. |
 | [Keryx Execution Observability](keryx-execution-observability/README.md) | implemented (runtime capability; benchmark harness ready) | Provenance-aware execution metrics, active-time accounting, per-run evidence, baseline-aware CI, lightweight profiles, retry taxonomy, and paired Keryx/no-Keryx validation protocol. No performance claim has been made. |
