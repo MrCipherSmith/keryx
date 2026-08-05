@@ -21,7 +21,7 @@ import {
   type RequiredGate,
   evaluateCompletion,
 } from "../completion/gate";
-import { redactForPersistence } from "../evidence/redaction";
+import { redactForPersistence, type ScanResult } from "../evidence/redaction";
 import { decide } from "../policy/engine";
 import { escalateForBlastRadius, metaprojectBlastRadius } from "../policy/metaproject-escalation";
 import type { PolicyContext, PolicyDecision, PolicyProfile } from "../policy/types";
@@ -124,6 +124,23 @@ export interface RunDeps {
    * exactly `decide()`'s output.
    */
   blastRadiusThreshold?: number;
+  /**
+   * OPTIONAL content scanner for redaction-before-persistence (flow 134 / S2).
+   *
+   * The seam was here from the start but the only implementation was a local
+   * stub that answered `hasSecret: false` to everything, so every tool result
+   * this loop persisted was scanned by a function that could not find anything.
+   * The real detectors (`security/detect/runDetectors`) are synchronous and
+   * pure, which is exactly what this loop's determinism contract needs — what
+   * they are not is free of configuration, and configuration lives on disk. So
+   * the caller resolves the config once, outside the loop, and injects the
+   * closure; the loop stays sync, offline and replayable.
+   *
+   * Absent ⇒ the previous permissive stub, so a fixture run and every existing
+   * caller are byte-identical. `buildSecurityScan` in `security/harness-scan.ts`
+   * is the production one.
+   */
+  scan?: (content: string) => ScanResult;
 }
 
 /**
@@ -238,9 +255,11 @@ export async function runOffline(
   const blockerIds: string[] = [];
   const unresolvedRisks: UnresolvedRisk[] = [];
 
-  // Deterministic, offline redaction scanner (S4). No content is protected in a
-  // fixture run; the seam is exercised so a real scanner drops in unchanged.
-  const scan = () => ({ hasSecret: false }) as const;
+  // Deterministic, offline redaction scanner (S4). `deps.scan` is the real one
+  // when the caller resolved a security config; the fallback keeps a fixture run
+  // byte-identical to what it produced before the seam was fillable.
+  const scan: (content: string) => ScanResult =
+    deps.scan ?? (() => ({ hasSecret: false }));
 
   const toolNameByCall = new Map<string, string>();
   const actionCounts = new Map<string, number>();

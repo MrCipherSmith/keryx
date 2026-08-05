@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { HarnessConfig } from "../harness/config";
+import { buildHarnessScanner } from "../security/harness-scan";
 import { makeProvider } from "../harness/provider/make-provider";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import type { PolicyProfile } from "../harness/policy/types";
@@ -372,6 +373,10 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     policyProfile: "read-only-review",
     limits: { maxRunSeconds: 300, maxConcurrentChildren: 1, maxToolOutputBytes: 65_536, maxRetries: 1 },
   };
+  // The real content scanner for redaction-before-persistence. Resolved here,
+  // once, because the run loop is synchronous and may not read the config from
+  // inside itself; without it the loop falls back to a stub that finds nothing.
+  const { scan } = await buildHarnessScanner(process.cwd());
   const runDeps: RunDeps = {
     provider: providerPort,
     toolRegistry: new ToolRegistry(),
@@ -380,6 +385,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     clock,
     idSeq,
     interactive: false,
+    scan,
   };
 
   let structured: StructuredResult;
@@ -742,6 +748,11 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     effectiveAllowEnvKeys = [...allowEnvKeys, ...Object.keys(net.envAdditions)];
   }
 
+  // Resolved once, before the run: the detectors are synchronous and pure, but
+  // their config lives on disk, and the contained-process path must not reach
+  // for the filesystem mid-run.
+  const scanner = await buildHarnessScanner(cwd);
+
   const command: ContainedCommand = {
     path: commandPath,
     argv: [commandPath, ...commandArgs],
@@ -784,7 +795,12 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
       envAllowlist: effectiveAllowEnvKeys,
       profile: shellAllowProfile(),
       interactive: true,
-      scanAvailable: true,
+      // `scanAvailable` is a FAIL-CLOSED signal: `guardAction` denies outright
+      // when it is false. It was hardcoded `true` here, which meant the guard
+      // could never fire — a safety catch pinned open. It now reports whether a
+      // scanner is genuinely behind it, so a guarded mutation in a project with
+      // security disabled is denied rather than waved through unscanned.
+      scanAvailable: scanner.available,
       risk: "shell" satisfies ToolRisk,
     },
     budget,
