@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.0
+Version: 0.15.0
 
 ## Status
 
@@ -7,6 +7,22 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.15.0** — Added `keryx-shell-remediation` (specification ready; no
+>   implementation started). Turns the benchmark's six defects into **three
+>   flows instead of six**, grouped by shared verification rather than
+>   convenience. **P1** pairs D1 and D2 deliberately: fixing tool affinity alone
+>   leaves nothing able to prove the fix, and fixing the unattended mode alone
+>   passes the scenario for the wrong reason — by approving the shell
+>   round-trip the agent should not have taken. Only together do they yield the
+>   assertion that matters: answered correctly, through the native tool, with
+>   nobody at the terminal. **P2** groups the three scriptable-door corrections
+>   (tools on the non-interactive path, provider list from the registry with the
+>   CLI reference fixed in the same change, no undeclared model default). **P3**
+>   re-measures after the catalog corrections the run report names. Records the
+>   trap explicitly: a blanket `--yes` would pass P1 while trading away the one
+>   property the benchmark demonstrated keryx has, so three acceptance criteria
+>   exist to fail the flow if a destructive action stops failing closed, and one
+>   more to fail it if the default posture is loosened. Docs-only.
 > - **0.14.0** — `keryx-shell-benchmark` **partially executed** (5 of 26 cases,
 >   seven agent legs, target `helyx` at `bfad745b`) and **halted deliberately**:
 >   it had already found two product defects every remaining case would have
@@ -129,6 +145,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |
+| [Keryx Shell Remediation](keryx-shell-remediation/README.md) | specification ready (not started) | The benchmark's D1-D6 as three flows. **P1 (D1+D2)** — the agent reached past its own registered `graph_affected` tool for a `shell_exec` of the equivalent CLI, hit default-deny and answered nothing while six other legs answered; and no `keryx shell` run can complete unattended because there is no way to declare a posture at launch. Paired because either alone leaves the scenario unprovable or passes it for the wrong reason. **P2 (D3-D5)** — register tools on the non-interactive path, read `OPENAI_COMPAT_PROVIDERS` instead of a literal set and fix `cli-reference.md` in the same change, stop defaulting to an undeclared model id. **P3 (D6)** — re-run the catalog after planting a real secret for C2, using `--allowed-domains` for C4, moving A6/A7 to a target with decision pages, and adjudicating the 106-vs-102 transitive count, which is the only surviving candidate for a keryx advantage on A1 and is a correctness argument rather than a speed one. Out of scope everywhere: weakening a `deny`, rewriting a shell call behind the model's back, and any performance claim. |
 | [Keryx Shell Benchmark](keryx-shell-benchmark/README.md) | specification ready (no run executed) | The task selection `keryx-execution-observability` left as a product decision, made concrete: 26 frozen cases in four groups — workspace leverage (blast radius, call chains, cycles, orphans, wiki architecture and recorded decisions, memory, related tests, budgeted repomap, health, context assembly), ordinary coding work as a floor check, containment, and session durability. Two keryx legs (DeepSeek, and free local `gemma4-coder`) against Claude Code and Codex on the same commit, one git worktree per run, byte-identical prompts, and a rubric that scores **grounding** apart from correctness so a lucky guess cannot pass as retrieval. Fairness is stated where it cuts against keryx: the baselines run frontier models against a 7B local leg, and they may read `.metaproject/` files — what they lack is the query layer. Negative outcomes (`keryx-regression`, `capability-unused`) are reported with the same prominence as wins, and no speed claim is published unless the observability decision rule is satisfied. Results emit into the existing `paired-3-5-v1` manifest and validate with `keryx metrics benchmark validate`. |
 | [Keryx Execution Observability](keryx-execution-observability/README.md) | implemented (runtime capability; benchmark harness ready) | Provenance-aware execution metrics, active-time accounting, per-run evidence, baseline-aware CI, lightweight profiles, retry taxonomy, and paired Keryx/no-Keryx validation protocol. No performance claim has been made. |
 | [Keryx Context Operations](keryx-context-operations/2026-07-12/README.md) | specification ready (future) | Git-native bounded context assembly with provenance, deterministic-first hybrid retrieval, policy gates, feedback lifecycle and corpus evaluation. It extends existing project sources; no new runtime is implemented yet. |
