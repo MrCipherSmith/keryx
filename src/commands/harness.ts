@@ -16,7 +16,7 @@
 // invocation stays fully offline; a real CLI invocation supplies none and falls
 // back to `globalThis.fetch` / wall-clock / a uuid sequence / `process.env`.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { HarnessConfig } from "../harness/config";
@@ -26,6 +26,13 @@ import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
 import type { PolicyProfile } from "../harness/policy/types";
 import { resolveLocalProfile } from "../harness/policy/profiles";
 import { type RunDeps, type RunResult, runOffline } from "../harness/run/run";
+import {
+  buildReplayFixture,
+  parseReplayFixture,
+  parseRunRecord,
+  replayOffline,
+  toRunRecord,
+} from "../harness/replay/replay";
 import { ToolRegistry } from "../harness/tool/registry";
 import type { ToolExecutorPort, ToolInvocation, ToolResult } from "../harness/tool/types";
 import type { HarnessRunInput } from "../harness/types";
@@ -223,6 +230,8 @@ interface ParsedArgs {
   model: string;
   baseUrl?: string;
   prompt: string;
+  /** `--record <path>`: write the run's replayable hash surface to a file. */
+  record?: string;
 }
 
 /** The usage text, printed on an unknown subcommand or invalid args. */
@@ -233,6 +242,7 @@ const USAGE = [
       "         -- <path> [args...]",
   "       keryx harness extension --spec <path>",
   "       keryx harness wave --spec <path>",
+  "       keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>] [--json]",
 ].join("\n");
 
 /** A read-only-review profile (defaults.read = "allow"), per policy-profile.schema.json. */
@@ -256,6 +266,7 @@ function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
   let model = "";
   let baseUrl: string | undefined;
+  let record: string | undefined;
   const positional: string[] = [];
 
   // args[0] is the "run" subcommand.
@@ -267,6 +278,8 @@ function parseArgs(args: string[]): ParsedArgs {
       model = args[++i] ?? "";
     } else if (arg === "--base-url") {
       baseUrl = args[++i];
+    } else if (arg === "--record") {
+      record = args[++i];
     } else if (arg !== undefined) {
       positional.push(arg);
     }
@@ -274,6 +287,7 @@ function parseArgs(args: string[]): ParsedArgs {
 
   const parsed: ParsedArgs = { provider, model, prompt: positional.join(" ") };
   if (baseUrl !== undefined) parsed.baseUrl = baseUrl;
+  if (record !== undefined) parsed.record = record;
   return parsed;
 }
 
@@ -305,12 +319,16 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     harnessWave(args, deps);
     return;
   }
+  if (subcommand === "replay") {
+    harnessReplay(args, deps);
+    return;
+  }
   if (subcommand !== "run") {
     console.log(USAGE);
     return;
   }
 
-  const { provider, model, baseUrl, prompt } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running
@@ -392,6 +410,24 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   try {
     const result = await runOffline(input, config, runDeps);
     structured = toStructured(result);
+    if (record !== undefined && record.length > 0) {
+      // Written before the structured blob is printed, so a caller that pipes
+      // stdout still gets the file, and a write failure surfaces as the error
+      // it is rather than being swallowed after a "success" line.
+      writeFileSync(
+        record,
+        `${JSON.stringify(
+          toRunRecord(result, {
+            runId: result.output.runId,
+            status: result.output.status,
+            recordedAt: result.output.startedAt,
+          }),
+          null,
+          2,
+        )}\n`,
+        { encoding: "utf8", mode: 0o600 },
+      );
+    }
   } catch (error) {
     // Never let a live/replay failure escape as an uncaught exception: fold it
     // into a structured, non-throwing result.
@@ -404,6 +440,148 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   }
 
   console.log(JSON.stringify(structured));
+}
+
+// ---------------------------------------------------------------------------
+// replay — validate a recorded run's log against a replay fixture.
+// ---------------------------------------------------------------------------
+//
+// What this checks, precisely: that a fixture still describes the run it was
+// built from. `mode` is always `validate-log`; nothing is re-executed, no
+// provider or tool is contacted, and a run that would produce different output
+// today is NOT what this detects. That is `simulate-recorded-results`, which
+// Release 0 does not implement. The help text says the same thing, because the
+// README once did not and it took an audit to notice.
+
+interface ParsedReplayArgs {
+  record?: string;
+  fixture?: string;
+  writeFixture?: string;
+  json: boolean;
+}
+
+function parseReplayArgs(args: string[]): ParsedReplayArgs {
+  const parsed: ParsedReplayArgs = { json: false };
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--record") {
+      parsed.record = args[++i] ?? "";
+    } else if (arg === "--fixture") {
+      parsed.fixture = args[++i] ?? "";
+    } else if (arg === "--write-fixture") {
+      parsed.writeFixture = args[++i] ?? "";
+    } else if (arg === "--json") {
+      parsed.json = true;
+    }
+  }
+  return parsed;
+}
+
+/** Read + JSON-parse a file, returning a typed failure rather than throwing. */
+function readJsonFile(file: string): { ok: true; value: unknown } | { ok: false; reason: string } {
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch (error) {
+    return { ok: false, reason: `not valid JSON (${error instanceof Error ? error.message : String(error)})` };
+  }
+}
+
+export function harnessReplay(args: string[], deps?: HarnessCommandDeps): void {
+  const parsed = parseReplayArgs(args);
+  if (parsed.record === undefined || parsed.record.length === 0) {
+    console.log(USAGE);
+    process.exitCode = 1;
+    return;
+  }
+
+  const recordRead = readJsonFile(parsed.record);
+  if (!recordRead.ok) {
+    console.error(`Cannot read run record ${parsed.record}: ${recordRead.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  const run = parseRunRecord(recordRead.value);
+  if (run === undefined) {
+    console.error(
+      `${parsed.record} is not a harness run record (expected runId plus the five recorded hashes; write one with \`keryx harness run --record\`).`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const clock = deps?.clock ?? (() => new Date().toISOString());
+  let idCounter = 0;
+  const idSeq = deps?.idSeq ?? (() => `${randomUUID()}-${idCounter++}`);
+
+  // No `--fixture` means "build one from this record and check it round-trips".
+  // It always matches, and saying so is the point: it is the baseline a later
+  // comparison is made against, and `--write-fixture` is how it is kept.
+  const fixture = (() => {
+    if (parsed.fixture === undefined || parsed.fixture.length === 0) {
+      return { ok: true as const, value: buildReplayFixture(run, { idSeq }), built: true };
+    }
+    const read = readJsonFile(parsed.fixture);
+    if (!read.ok) {
+      return { ok: false as const, reason: `Cannot read fixture ${parsed.fixture}: ${read.reason}` };
+    }
+    const parsedFixture = parseReplayFixture(read.value);
+    if (parsedFixture === undefined) {
+      return {
+        ok: false as const,
+        reason: `${parsed.fixture} is not a replay fixture (expected fixtureId, mode and the five hashes).`,
+      };
+    }
+    return { ok: true as const, value: parsedFixture, built: false };
+  })();
+
+  if (!fixture.ok) {
+    console.error(fixture.reason);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (parsed.writeFixture !== undefined && parsed.writeFixture.length > 0) {
+    writeFileSync(parsed.writeFixture, `${JSON.stringify(fixture.value, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+  }
+
+  const outcome = replayOffline(fixture.value, run, { clock, idSeq });
+
+  if (parsed.json) {
+    console.log(
+      JSON.stringify({
+        schemaVersion: 1,
+        mode: fixture.value.mode,
+        runId: run.runId,
+        fixtureId: fixture.value.fixtureId,
+        fixtureSource: fixture.built ? "built-from-record" : parsed.fixture,
+        ok: outcome.ok,
+        ...(outcome.ok ? {} : { mismatch: outcome.mismatch }),
+      }),
+    );
+  } else if (outcome.ok) {
+    console.log(`Replay OK (${fixture.value.mode}): fixture ${fixture.value.fixtureId} matches run ${run.runId}.`);
+    if (fixture.built) {
+      console.log("Fixture was built from this record, so a match is expected; keep it with --write-fixture.");
+    }
+  } else {
+    console.error(`Replay MISMATCH (${outcome.mismatch.kind}) on run ${run.runId}:`);
+    console.error(`  ${outcome.mismatch.detail ?? "hash diverged"}`);
+    console.error(`  expected ${outcome.mismatch.expectedHash}`);
+    console.error(`  actual   ${outcome.mismatch.actualHash}`);
+  }
+
+  if (!outcome.ok) {
+    process.exitCode = 1;
+  }
 }
 
 // ---------------------------------------------------------------------------

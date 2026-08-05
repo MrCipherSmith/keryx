@@ -114,10 +114,11 @@ Drive the agent execution loop **non-interactively** — the same loop `shell`
 runs, without a terminal attached. This is the scriptable and CI-facing surface.
 
 ```
-keryx harness run --provider <p> --model <m> [--base-url <url>] "<prompt>"
+keryx harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
 keryx harness exec [options] -- <path> [args...]
 keryx harness extension --spec <path>
 keryx harness wave --spec <path>
+keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>] [--json]
 ```
 
 | Subcommand | Description |
@@ -132,6 +133,12 @@ lists each provider with the environment variable it reads.
 | `exec` | Run a subprocess under the containment options below. |
 | `extension` | Run a declared extension from a spec file. |
 | `wave` | Run a declared multi-agent wave from a spec file. |
+| `replay` | Check that a replay fixture still describes the run it was built from. `run --record <path>` writes the record; `replay --record <path>` builds a fixture from it and validates, `--write-fixture` keeps that fixture, and `--fixture` compares against a kept one. A divergence prints a typed mismatch naming the field and exits non-zero. |
+
+`harness replay` is `validate-log`: it recomputes hashes from a recorded run and
+compares them. It does **not** re-execute the run, so it answers "is this
+fixture still true of this record", not "would this prompt behave the same
+today". Nothing is contacted — no provider, no tool, no network.
 
 ### `harness exec` containment options
 

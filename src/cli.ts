@@ -119,11 +119,13 @@ Usage:
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
                                                List / branch / export sessions for the current project
-  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"
+  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
                      [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]
   keryx harness extension --spec <path>
   keryx harness wave --spec <path>
+  keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>] [--json]
+                                               Validate a recorded run's log against a fixture (no re-execution)
   keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   keryx status
   keryx modules [status | enable <name> | disable <name>]
