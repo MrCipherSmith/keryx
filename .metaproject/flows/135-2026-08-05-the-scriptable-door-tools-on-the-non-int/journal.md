@@ -117,3 +117,5 @@ the shortfall in front of them.
 - 2026-08-05T20:48:28.569Z - ac-confirmed: AC5: Asserted over defaultModelFor, the production resolver, which consults DEFAULT_MODELS before the registry. DeepSeek pinned to the two declared ids. Provenance is structured (source/listedOn/checkedAgainstProvider) with only deepseek claiming a check. LIMIT: no offline test can prove a curated list matches what a gateway publishes today; that is the criterion's escape clause.
 - 2026-08-05T20:48:28.733Z - ac-confirmed: AC6: Per-provider abort enumerated from the registry, fetch spy asserts zero calls; credential-free set pinned to exactly [fake, ollama]. Additionally --base-url can no longer redirect a credential-bearing provider. Reviewer verified independently by mutation.
 - 2026-08-05T20:48:28.896Z - ac-confirmed: AC7: bun run check exit 0: 3107 pass, 14 skip, 0 fail. The 14 skips are pre-existing; none added or weakened.
+- 2026-08-05T22:23:59.803Z - completing
+- 2026-08-05T22:23:59.811Z - completion-failed: main-merge: 0c544c2e is not contained in origin/main

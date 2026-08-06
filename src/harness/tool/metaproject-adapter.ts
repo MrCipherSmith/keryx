@@ -26,7 +26,7 @@ import {
   type RepomapResult as GdgraphRepomapResult,
 } from "../../gdgraph/repomap";
 import { createMemoryService } from "../../memory/service";
-import { MEMORY_CLASS_VALUES } from "../../memory/types";
+import { MEMORY_CLASS_VALUES, MEMORY_STATUS_VALUES } from "../../memory/types";
 import type { MemoryClass, MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
 import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
@@ -96,15 +96,6 @@ const MAX_EXCERPT_BYTES = 400;
  * symbol --impact` CLI default so the tool and the verb answer the same question.
  */
 const SYMBOL_IMPACT_DEFAULT_DEPTH = 3;
-/** The subset of MemoryStatus values exposed as a `status` filter. */
-const MEMORY_STATUS_VALUES: readonly MemoryStatus[] = [
-  "draft",
-  "accepted",
-  "deprecated",
-  "conflict",
-  "superseded",
-];
-
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }

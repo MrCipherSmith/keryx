@@ -158,10 +158,14 @@ test("F5: no bare prefix grant for destructive-capable file mutators", () => {
 });
 
 test("B3: an ordinary command still offers both grants", () => {
-  const s = suggestShellPatterns("keryx wiki index");
+  // Was `keryx wiki index` until flow 138, when `keryx *` joined the banned
+  // prefixes and this stopped being an example of "ordinary". The claim under
+  // test — a command whose first token DOES constrain what runs offers both —
+  // needs a first token that still qualifies.
+  const s = suggestShellPatterns("hostname -f");
   expect(s).toEqual({
-    exact: "keryx wiki index",
-    prefix: "keryx *",
+    exact: "hostname -f",
+    prefix: "hostname *",
     offerExact: true,
     offerPrefix: true,
   });
@@ -182,7 +186,14 @@ test("B3: an empty or comment-only first token is never a pattern", () => {
 // --- validation + migration -------------------------------------------------
 
 test("validateShellPattern names why a pattern is refused", () => {
-  expect(validateShellPattern("keryx *").ok).toBe(true);
+  // INVERTED 2026-08-06 (flow 138). This line asserted `keryx *` was SAFE to
+  // remember. It was not: `keryx ctx run -- rm -rf /` then auto-approved with no
+  // prompt, because the destructive check reads the line it is given and not the
+  // one after the `--`. The grant was not hypothetical — this repository's own
+  // CLAUDE.md tells agents to route commands through `keryx ctx run`.
+  const ownCli = validateShellPattern("keryx *");
+  expect(ownCli.ok).toBe(false);
+  expect(ownCli.ok === false && ownCli.reason).toMatch(/keryx ctx run/);
   expect(validateShellPattern("git status").ok).toBe(true);
 
   const meta = validateShellPattern("hostname; *");
@@ -230,9 +241,17 @@ test("migration: loading drops unsafe patterns and reports every one", () => {
   );
 
   const audit = loadShellPermissionsWithAudit(dir);
-  expect(audit.permissions.allow).toEqual(["keryx *", "free *", "ps *", "df *", "echo *", "which *"]);
+  // INVERTED 2026-08-06 (flow 138). `keryx *` used to appear in the SURVIVING
+  // list here — the migration kept it, so an allowlist written by an older keryx
+  // carried the hole forward on every load. It now moves to `rejected`, which is
+  // the whole point of re-validating on load: a pattern that stopped being safe
+  // stops being honoured, and the user is told which and why.
+  expect(audit.permissions.allow).toEqual(["free *", "ps *", "df *", "echo *", "which *"]);
   expect(audit.rejected.map((r) => r.pattern).sort()).toEqual(
-    ["# *", "bash *", "bun *", "cd *", "curl *", "docker *", "hostname; *", "python3 *", "rm -rf /", "sudo *"].sort(),
+    [
+      "# *", "bash *", "bun *", "cd *", "curl *", "docker *", "hostname; *", "keryx *",
+      "python3 *", "rm -rf /", "sudo *",
+    ].sort(),
   );
   for (const r of audit.rejected) {
     expect(r.reason.length).toBeGreaterThan(0);
@@ -248,6 +267,68 @@ test("migration is non-destructive: the file on disk is not rewritten by loading
   loadShellPermissions(dir);
   const audit = loadShellPermissionsWithAudit(dir);
   // Still reported as rejected on every load ⇒ nothing was silently deleted.
-  expect(audit.rejected.map((r) => r.pattern)).toEqual(["rm -rf /"]);
+  // `keryx *` joined the list on 2026-08-06 (flow 138); before that it survived
+  // the filter and this assertion read `["rm -rf /"]`.
+  expect(audit.rejected.map((r) => r.pattern).sort()).toEqual(["keryx *", "rm -rf /"]);
+  cleanup();
+});
+
+// --- B4: the wrappers the list did not know (flow 138) ----------------------
+
+/**
+ * Words added on 2026-08-06. `keryx` closed a live hole; the rest were executed
+ * by a review round against a gate that already banned `sh` and `bash` — same
+ * category, absent from the list. Adding them completes an EXPEDIENT; it does
+ * not make the list a boundary, and nothing here should be read as claiming so.
+ */
+const NEWLY_BANNED_PREFIXES = [
+  "keryx",
+  // wrappers that execute their argument
+  "timeout", "setsid", "stdbuf", "flock", "unshare", "strace", "ltrace",
+  "busybox", "parallel", "command", "chroot", "expect", "pwsh", "powershell",
+  "sshpass", "runuser", "setpriv",
+  // programs with their own escape into a shell, or their own credential /
+  // exfiltration channel: `psql -c '\! …'`, `sqlite3 '.shell …'`,
+  // `tar --to-command`, `cmake -P`, `pip install -e`, `gh auth token`,
+  // `aws s3 cp .env s3://…`
+  "psql", "mysql", "sqlite3", "mongo", "mongosh", "redis-cli",
+  "gh", "glab", "aws", "gcloud", "az",
+  "pip", "pip3", "pipx", "uv", "gem", "brew", "apt", "apt-get",
+  "tar", "cmake", "bazel", "terraform", "ansible", "ansible-playbook",
+] as const;
+
+test("B4: every newly banned wrapper is refused as a bare prefix grant", () => {
+  for (const word of NEWLY_BANNED_PREFIXES) {
+    const bare = validateShellPattern(`${word} *`);
+    expect(bare.ok, `\`${word} *\` must not be remembered`).toBe(false);
+    expect(bare.ok === false && bare.reason.length).toBeGreaterThan(0);
+    // The other bare spelling: the wildcard glued to the word.
+    expect(validateShellPattern(`${word}*`).ok, `\`${word}*\` must not be remembered`).toBe(false);
+    // And through a path, so `/usr/bin/timeout *` cannot walk around the check.
+    expect(validateShellPattern(`/usr/bin/${word} *`).ok).toBe(false);
+  }
+});
+
+test("B4: a NARROWING pattern for the same word is still offerable", () => {
+  // The existing entries deliberately keep this (`bun test*` is fine while
+  // `bun *` is not). A fix that took it away would be a different, worse change.
+  expect(validateShellPattern("keryx flow status*").ok).toBe(true);
+  expect(validateShellPattern("keryx ctx rg foo*").ok).toBe(true);
+  expect(validateShellPattern("timeout 5 bun test*").ok).toBe(true);
+});
+
+test("B4: a saved `keryx *` no longer auto-approves an arbitrary command", () => {
+  // The hole itself, end to end. Written by an older keryx (skipValidation),
+  // then loaded by this one.
+  const dir = tempDir();
+  saveShellPermissions({ allow: ["keryx *"] }, dir, { skipValidation: true });
+
+  const allow = loadShellPermissions(dir).allow;
+  expect(isShellCommandAllowed("keryx ctx run -- rm -rf /", allow)).toBe(false);
+  expect(isShellCommandAllowed("keryx flow list", allow)).toBe(false);
+
+  const audit = loadShellPermissionsWithAudit(dir);
+  expect(audit.rejected.map((r) => r.pattern)).toEqual(["keryx *"]);
+  expect(audit.rejected[0]?.reason).toMatch(/keryx ctx run/);
   cleanup();
 });
