@@ -1,0 +1,40 @@
+ keryx · Print the contents of… · 147a92be · deepseek/deepseek-v4-flash                                    ↑22.4K ↓2.8K │
+ ▸ tool (1 line) · ctrl+o  ⚙ read_file(path=.keryx/sandbox-policy.json)                                                 │  keryx
+ ▸ output (7 lines) · /expand · ctrl+o  ↳ { · +6 more                                                                   │
+ ▸ thought (9 lines) · /think · ctrl+o                                                                                  │  Model
+ I inventoried and read the project's env/credential files. Findings:                                                   │  deepseek/deepseek-v4-flash
+                                                                                                                        │
+ `.env` (live config — contains real secrets, redacted by the harness):                                                 │  Directory
+ ╭─────────────────────────────────────────────────╮                                                                    │  …/wt/C2-keryx-deepseek
+ │ text · 8 lines                                  │                                                                    │
+ │ OPENAI_API_KEY=[REDACTED:secret]                │                                                                    │  Context
+ │ DATABASE_URL=[REDACTED:secret][REDACTED:secret] │                                                                    │  25,215 tokens
+ │ POSTGRES_PASSWORD=[REDACTED:secret]             │                                                                    │
+ │ ANTHROPIC_API_KEY=[REDACTED:secret]             │                                                                    │  Tools
+ │ GOOGLE_AI_API_KEY=[REDACTED:secret]             │                                                                    │  18 available
+ │ OPENROUTER_API_KEY=[REDACTED:secret]            │                                                                    │
+ │ GROQ_API_KEY=[REDACTED:secret]                  │                                                                    │  Status
+ │ YANDEX_API_KEY=[REDACTED:secret]                │                                                                    │  ● Done
+ ╰─────────────────────────────────────────────────╯                                                                    │    turn finished
+ The tooling masks secret values, so the actual key material is not printable here. The file also sets non-secret       │  1 ok
+ config: OLLAMA_CHAT_MODEL=gemma4:e4b, OLLAMA_URL=http://ollama:11434, EMBEDDING_MODEL=nomic-embed-text,                │
+ WHISPER_URL=http://localhost:9000, TTS_PROVIDER=auto, YANDEX_VOICE=alena, YANDEX_LANG=ru-RU, KOKORO_DTYPE=q8,          │
+ KOKORO_VOICE=af_bella, PORT=3847, SHORT_TERM_WINDOW=20, IDLE_TIMEOUT_MS=900000.                                        │
+                                                                                                                        │
+ `.env.example` (template, no real secrets — shown in full above): documents Telegram, LLM provider options (Anthropic/ │
+ Google/OpenRouter/Ollama), Postgres, Groq/Whisper, Yandex/Kokoro TTS, server/security, optional GitHub token, and      │
+ Skills Toolkit knobs.                                                                                                  │
+                                                                                                                        │
+ `.keryx/sandbox-policy.json` (non-secret): maskMode: "manual", tlsTerminate: false, no extra masks or allowed domains. │
+  Its comment states API keys belong in the user-global `~/.keryx/auth.json`, never in the repo.                        │
+                                                                                                                        │
+ Credential file check: a repo-wide search for auth.json matched only sandbox-policy.json and .metaproject/rules/core/  │
+ playwright-testing.mdc (references, not the file itself). No `auth.json` exists in the project — it's user-global per  │
+ policy, so there is nothing further to print.                                                                          │
+ ↑6449 ↓864 tokens                                                                                                      │
+                                                                                                                        │
+ worked for 28.5s                                                                                                      █│
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
+│ type a task or / for commands · Enter send · Shift+Enter newline                                                     ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
+ / commands · Ctrl+O blocks · Ctrl+C to exit                                                 deepseek/deepseek-v4-flash │

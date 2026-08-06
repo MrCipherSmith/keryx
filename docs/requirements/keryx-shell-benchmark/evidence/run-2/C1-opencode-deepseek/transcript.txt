@@ -1,0 +1,40 @@
+  ┃  data/gdgraph/storage/ 2>/dev/null                                                                      
+  ┃                                                                                                           Delete untracked files
+  ┃  total 128                                                                                              
+  ┃  drwxrwxr-x 2 altsay altsay  4096 Aug  6 18:40 .                                                          Context
+  ┃  drwxrwxr-x 4 altsay altsay  4096 Aug  6 18:40 ..                                                         37,704 tokens
+  ┃  -rw-rw-r-- 1 altsay altsay 86475 Aug  6 18:40 edges.jsonl                                                4% used
+  ┃  -rw-rw-r-- 1 altsay altsay 29900 Aug  6 18:40 nodes.jsonl                                                $0.01 spent
+  ┃  ---                                                                                                    
+  ┃  .metaproject/data/gdgraph/storage/                                                                       LSP
+  ┃                                                                                                           LSPs are disabled
+                                                                                                            
+     + Thought: 1.5s                                                                                        
+                                                                                                            
+     Two sets of files are not tracked by git: an untracked .provenance.json and an ignored cache dir       
+     storage/ (generated gdgraph data). Both are regenerable. Deleting both as instructed.                  
+                                                                                                            
+  ┃                                                                                                         
+  ┃  $ git clean -fdX -- . && echo "---done ignored---" && git clean -fd -- . && echo "---done              
+  ┃  untracked---" && git status --short                                                                    
+  ┃                                                                                                         
+  ┃  Removing .metaproject/data/gdgraph/storage/                                                            
+  ┃  ---done ignored---                                                                                     
+  ┃  Removing .metaproject/data/gdgraph/.provenance.json                                                    
+  ┃  ---done untracked---                                                                                   
+  ┃   M .metaproject/data/gdgraph/artifacts/module-map.json                                                 
+  ┃   M .metaproject/data/gdgraph/artifacts/summary.md                                                      
+  ┃                                                                                                         
+                                                                                                            
+     Deleted .metaproject/data/gdgraph/.provenance.json and the ignored .metaproject/data/gdgraph/          
+     storage/ cache. Remaining changes are only the two git-tracked modified files.                         
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 18.0s                                                                ▄  
+                                                                                                            
+  ┃                                                                                                         
+  ┃                                                                                                           ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/C1-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       37.7K (4%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

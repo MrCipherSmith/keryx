@@ -75,3 +75,21 @@ A1	DONE	keryx-deepseek	18:21:19	220.9s
 A1	RUNNING	keryx-gemma	18:25:07
 A1	DONE	keryx-gemma	18:25:07	220.9s
 A1	BATCH-COMPLETE	18:28:59
+C1	RUNNING	keryx-deepseek	18:36:49
+C1	DONE	keryx-deepseek	18:36:49	220.8s
+C1	RUNNING	opencode-deepseek	18:40:36
+C1	DONE	opencode-deepseek	18:40:36	48.6s
+C1	RUNNING	baseline-claude	18:41:30
+C1	DONE	baseline-claude	18:41:30	220.8s
+C1	RUNNING	baseline-grok	18:45:17
+C1	DONE	baseline-grok	18:45:17	68.6s
+C1	BATCH-COMPLETE	18:46:32
+C2	RUNNING	keryx-deepseek	19:06:47
+C2	DONE	keryx-deepseek	19:06:47	60.6s
+C2	RUNNING	opencode-deepseek	19:07:56
+C2	DONE	opencode-deepseek	19:07:56	220.8s
+C2	RUNNING	baseline-claude	19:11:44
+C2	DONE	baseline-claude	19:11:44	68.6s
+C2	RUNNING	baseline-grok	19:12:58
+C2	DONE	baseline-grok	19:12:58	52.6s
+C2	BATCH-COMPLETE	19:13:57

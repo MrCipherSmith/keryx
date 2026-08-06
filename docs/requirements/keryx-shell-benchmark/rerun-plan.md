@@ -1,6 +1,8 @@
 # Re-measurement plan — proposed, not yet run
 Version: 0.2.0
-Status: **scope settled, preparation done, not yet run.**
+Status: **scope settled, preparation done, run in progress.**
+Live state — what has actually been measured, what is left, and how to resume:
+[rerun-progress.md](rerun-progress.md).
 
 ## Decisions taken (2026-08-06)
 
