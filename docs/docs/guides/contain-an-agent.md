@@ -145,6 +145,13 @@ offered, and if that program happens to run its argument, the grant is arbitrary
 execution. `hostname *` and `whatever-tool *` are the same shape to this code.
 Do not read `<program> *` as safe because it was offered.
 
+**A wrapper in front changes nothing.** `cat *` is refused because it would
+auto-approve reading any file on the machine; so are `env cat *`, `nice cat *`
+and `timeout 5 cat *`, because the file being read is the same either way. That
+applies to a pass-through wrapper — one that runs its argument as a program — and
+not to a subcommand: `git diff *` is git's own diff and its glob is a pathspec
+inside the repository, so it stays offerable.
+
 **A word list, which is an expedient.** On top of the shape rule, some plain
 program names are refused as bare grants: interpreters (`bash *`, `python3 *`),
 shell builtins that source a file (`. *`, `source *`), generic wrappers (`env *`,

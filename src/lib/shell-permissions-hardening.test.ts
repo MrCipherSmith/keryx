@@ -826,6 +826,54 @@ test("B11: an unconstraining remainder is refused on its own terms", () => {
   expect(validateShellPattern("hostname ?*").ok).toBe(true);
 });
 
+test("B12: a wrapper in front does not launder a broad reader or mutator", () => {
+  // Round 8. `cat *` is refused as an arbitrary-secret-read channel — the reason
+  // the reader list exists — and `env cat *` reads the same files. The reader and
+  // mutator lists were consulted only at token 0, so one word in front laundered
+  // them. Introduced in round 7 and half-closed in round 8: `env grep *` came
+  // back under control because `grep` is not inert, `env cat *` did not because
+  // `cat` is, leaving the file refusing one threat in two places and permitting
+  // it in a third.
+  for (const pattern of [
+    "env cat *",
+    "nice cat *",
+    "ionice cat *",
+    "timeout 5 cat *",
+    "LC_ALL=C cat *",
+    "FOO=1 cat *",
+    "env diff *",
+    "env grep *",
+    "env head *",
+    "env rm *",
+    "sudo cat *",
+    "xargs cat *",
+  ]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+  }
+  expect(isShellCommandAllowed("env cat /home/x/.ssh/id_rsa", ["env cat *"])).toBe(true);
+
+  // The control that keeps the rule honest: only a PASS-THROUGH wrapper makes the
+  // next word the program. `git diff *` is git's own diff and its glob is a
+  // pathspec inside the repository, not a filename for diff(1).
+  for (const pattern of ["git diff *", "git log *", "docker ps *", "env cat package.json*", "env cat /etc/hosts"]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
+  // And the older half of the same gap, which was never a launder: `diff` reads
+  // any file it is pointed at, so the bare grant goes too.
+  expect(validateShellPattern("diff *").ok).toBe(false);
+  expect(validateShellPattern("diff a k*").ok).toBe(true);
+});
+
+test("B12: `npm audit` is not an inert subcommand", () => {
+  // `npm audit fix` is a mutating install whose own help documents
+  // `--ignore-scripts` and `--foreground-scripts` — options that exist because it
+  // runs package lifecycle scripts.
+  expect(validateShellPattern("npm audit *").ok).toBe(false);
+  // The report verbs it sat next to are unaffected.
+  expect(validateShellPattern("npm ls *").ok).toBe(true);
+  expect(validateShellPattern("npm outdated *").ok).toBe(true);
+});
+
 test("B9: a pattern that ends inside a verb is a fixed string, and stays offerable", () => {
   // Pins the run-out branch of the verb scan. A mutation showed both this branch
   // and the lookback it replaced were provably constant — the reasoning is sound

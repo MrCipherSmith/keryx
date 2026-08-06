@@ -126,6 +126,11 @@ const KERYX_PREFIX_REASON =
 const PREFIX_BANNED_READERS: ReadonlySet<string> = new Set([
   "cat", "tac", "nl", "head", "tail", "less", "more", "grep", "egrep", "fgrep",
   "zgrep", "rg", "ag", "sort", "uniq", "cut", "strings", "od", "xxd", "hexdump", "dd",
+  // `diff /etc/shadow /dev/null` prints the file. A review demonstrated it on
+  // this host while showing that `env diff *` was offerable; the launder was the
+  // finding, but `diff *` at token 0 had always been offerable too, which is the
+  // older half of the same gap.
+  "diff", "cmp",
 ]);
 
 /**
@@ -203,6 +208,10 @@ export function validateShellPattern(pattern: string): PatternValidation {
   const openWildcard = openWildcardBehindWrapper(trimmed);
   if (openWildcard !== undefined) {
     return { ok: false, reason: openWildcard };
+  }
+  const laundered = launderedBroadGrant(trimmed);
+  if (laundered !== undefined) {
+    return { ok: false, reason: laundered };
   }
   return { ok: true };
 }
@@ -361,8 +370,12 @@ function programPositions(tokens: readonly string[], executes: (word: string) =>
     const wildcardAt = token.search(/[*?]/);
     const literal = wildcardAt === -1 ? token : token.slice(0, wildcardAt);
     const isFlag = literal.length > 1 && literal.startsWith("-");
-    const isNumber = /^\d+$/.test(token);
-    if (isFlag || isNumber) {
+    // A bare-number skip used to sit beside the flag skip. A mutation run showed
+    // it was pinned by nothing, and it turned out redundant: a number is not an
+    // inert subcommand, so the continue-branch below carries the chain past it
+    // for the same result. Deleted rather than left reading like a guard — the
+    // fifth such branch removed from this file.
+    if (isFlag) {
       continue;
     }
     positions.add(index);
@@ -409,8 +422,99 @@ function programPositions(tokens: readonly string[], executes: (word: string) =>
 const INERT_SUBCOMMANDS: ReadonlySet<string> = new Set([
   "ps", "ls", "log", "list", "status", "show", "diff", "version", "help",
   "get", "describe", "info", "view", "cat", "inspect", "history", "search",
-  "outdated", "audit", "why", "tree", "blame", "branch", "tag", "remote",
+  "outdated", "why", "tree", "blame", "branch", "tag", "remote",
+  // `audit` was here and is not: `npm audit fix` is a mutating install whose own
+  // help documents `--ignore-scripts` and `--foreground-scripts`, options that
+  // exist because it runs package lifecycle scripts.
+  //
+  // Worth stating for whoever edits this next: inertness is a property of the
+  // PROGRAM AND THE VERB TOGETHER, not of the verb. `ls`, `log`, `status`,
+  // `list` and `ps` report in every CLI that has them. `get`, `view`, `search`
+  // and `remote` report in some and act in others, and they are here on the
+  // judgement that the CLIs this project meets treat them as reports. That
+  // judgement is the thing to re-examine, not the spelling.
 ]);
+
+/**
+ * Wrappers that run their argument AS A PROGRAM, rather than taking a subcommand.
+ *
+ * The distinction matters for exactly one thing: whether the word after them is
+ * the program the reader/mutator bans are about. `env cat *` is `cat *` with a
+ * word in front — the argument is still whatever file the model names — while
+ * `git diff *` is git's own diff, and its glob is a pathspec inside the repo.
+ *
+ * A subset of {@link PREFIX_BANNED}, and an expedient like it: a pass-through
+ * nobody listed means a launder this rule does not catch. It is narrower than
+ * the enclosing list on purpose, because being wrong here refuses `git diff *`.
+ */
+const PASSTHROUGH_WRAPPERS: ReadonlySet<string> = new Set([
+  "env", "nice", "ionice", "timeout", "nohup", "setsid", "stdbuf", "taskset",
+  "chrt", "numactl", "setarch", "eatmydata", "fakeroot", "unbuffer", "xargs",
+  "command", "sudo", "doas", "su", "runuser", "setpriv", "proxychains",
+  "torsocks", "firejail", "bwrap", "valgrind", "script", "watch", "time",
+  "flock", "unshare", "ssh-agent", "dbus-run-session", "systemd-inhibit",
+  "xvfb-run", "exec", "strace", "ltrace",
+]);
+
+/**
+ * A broad-reader or broad-mutator grant with a pass-through wrapper in front.
+ *
+ * `cat *` is refused — it is an arbitrary-secret-read channel into the model
+ * transcript, which is the finding this file's reader list exists for. `env cat
+ * *` was not, and it reads the same files. The reader and mutator lists were
+ * consulted only at token 0, so one word in front laundered them.
+ *
+ * The classification that let it through was not wrong: after `env`, the chain
+ * stops at `cat` — an inert word — and the trailing `*` really is an argument TO
+ * `cat`. The inference was wrong. For a reader, the argument is the secret, and
+ * that is precisely why `cat *` is banned at token 0.
+ *
+ * Only {@link PASSTHROUGH_WRAPPERS} count, so `git diff *` keeps working: its
+ * glob is a pathspec inside the repository, not a filename for `diff(1)`.
+ *
+ * Introduced as a round-7 regression and half-closed by round 8 — `env grep *`
+ * came back under control because `grep` is not inert, while `env cat *` did not
+ * because `cat` is. Leaving that would have left the file refusing one threat in
+ * two places and permitting it in a third.
+ */
+function launderedBroadGrant(pattern: string): string | undefined {
+  const tokens = pattern.split(/\s+/);
+  for (const [index, token] of tokens.entries()) {
+    if (index === 0) {
+      continue; // token 0 is bannedPrefixGrant's job
+    }
+    const before = tokens.slice(0, index);
+    const allPassThrough = before.every((earlier) => {
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(earlier)) {
+        return true; // an environment assignment passes through by definition
+      }
+      const word = normalizeCommandWord(earlier);
+      return PASSTHROUGH_WRAPPERS.has(word) || /^-/.test(earlier) || /^\d+$/.test(earlier);
+    });
+    if (!allPassThrough) {
+      return undefined; // a subcommand intervened; this token is not the program
+    }
+    const word = normalizeCommandWord(token);
+    const rest = tokens.slice(index + 1).join(" ");
+    if (!restIsUnconstraining(rest) || rest.length === 0) {
+      continue;
+    }
+    if (PREFIX_BANNED_READERS.has(word)) {
+      return (
+        `\`${pattern}\` is \`${word} *\` with a wrapper in front, and \`${word} *\` would auto-approve ` +
+        "reading any file, including secrets outside the project. A word before it changes nothing about " +
+        "which file gets read"
+      );
+    }
+    if (PREFIX_BANNED_MUTATORS.has(word)) {
+      return (
+        `\`${pattern}\` is \`${word} *\` with a wrapper in front, and \`${word} *\` would auto-approve ` +
+        "modifying or deleting any path in the working directory"
+      );
+    }
+  }
+  return undefined;
+}
 
 /**
  * A wildcard that OPENS the last token, behind a word that runs what follows it.
