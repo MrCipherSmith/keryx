@@ -70,6 +70,15 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   "timeout", "setsid", "stdbuf", "flock", "unshare", "strace", "ltrace",
   "busybox", "parallel", "command", "chroot", "expect", "pwsh", "powershell",
   "sshpass", "runuser", "setpriv",
+  // …and the util-linux scheduling/personality family, plus the environment
+  // wrappers, all verified present in /usr/bin and executing their argument on
+  // the machine a review checked. `ionice *` and `eatmydata *` were offerable
+  // bare grants of arbitrary execution.
+  "ionice", "taskset", "chrt", "numactl", "setarch", "eatmydata", "fakeroot",
+  "ssh-agent", "dbus-run-session", "systemd-inhibit", "unbuffer", "xvfb-run",
+  "proxychains", "torsocks", "firejail", "bwrap", "valgrind", "perf",
+  "direnv", "poetry", "pipenv", "just", "rake", "mise", "asdf", "conda",
+  "bunx", "uvx",
   // our own CLI: `keryx ctx run -- <anything>` executes an arbitrary program,
   // and the destructive classifier reads the command line it is given rather
   // than the one after the `--`. See KERYX_PREFIX_REASON.
@@ -273,6 +282,85 @@ function wildcardOutOfPosition(pattern: string, firstToken: string): string | un
 }
 
 /**
+ * Words that do not run what follows them, so a glob after one is an argument
+ * rather than a program.
+ *
+ * An INVERTED list, and the inversion is the point. The gate used to ask "is the
+ * preceding word a known wrapper?", which meant a wrapper nobody had listed left
+ * the gate shut: a review found `ionice`, `taskset`, `setarch`, `chrt`,
+ * `numactl`, `eatmydata`, `fakeroot` and `ssh-agent` all present in /usr/bin on
+ * the first machine it looked at, all executing their argument, and none on the
+ * list. A missing word was a hole.
+ *
+ * Asking the opposite question makes a missing word an OVER-REFUSAL instead: a
+ * program that cannot execute anything, but is not written here, costs its user
+ * one pattern rather than costing everyone a bypass. That is the direction the
+ * rest of this file already chose, and it is the only way to be wrong safely
+ * about a list of outside-world names.
+ */
+const NON_EXECUTING_PREFIXES: ReadonlySet<string> = new Set([
+  "ls", "cat", "echo", "printf", "ln", "cp", "mv", "touch", "mkdir", "rmdir",
+  "head", "tail", "wc", "stat", "file", "du", "df", "basename", "dirname",
+  "realpath", "readlink", "chmod", "chown", "diff", "cmp", "jq", "pwd", "date",
+]);
+
+/**
+ * The indices at which a token names a PROGRAM rather than an argument.
+ *
+ * Index 0 always. Then ONE hop: if the first word can execute what follows it,
+ * the next token that is not a wildcard-free flag or a bare number is also a
+ * program position — and the chain stops there, whatever that token turns out to
+ * be. One hop is what separates `timeout 5 *` (the `*` IS the program) from
+ * `docker ps *` (the `*` is an argument to `ps`, which is pinned). Following the
+ * chain further would refuse `docker ps *`, `git log *`, `gh pr list *` and
+ * `npm ls *`, which are ordinary read-only grants.
+ *
+ * `executes` is supplied by the caller, and the two callers ask OPPOSITE
+ * questions on purpose, because being wrong costs them different things:
+ *
+ *  - the keryx rule asks "is this word known NOT to execute?" — an unlisted word
+ *    is treated as a wrapper, so a missing entry over-refuses one pattern
+ *    (`ionice k*` was live because `ionice` was not a known wrapper);
+ *  - the open-wildcard rule asks "is this word a known wrapper?" — because there
+ *    an unlisted word means every ordinary bare grant is refused, and `hostname *`
+ *    and `myapp2 *` are exactly what the file has always kept.
+ */
+function programPositions(tokens: readonly string[], executes: (word: string) => boolean): ReadonlySet<number> {
+  const positions = new Set<number>([0]);
+  const first = normalizeCommandWord(tokens[0] ?? "");
+  if (first.length === 0 || !executes(first)) {
+    return positions;
+  }
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index] ?? "";
+    // A flag is a `-` followed by a NAME. `-tf*` names a flag and is skipped, so
+    // `tar -tf*` keeps working; `-*` names nothing and is not skipped, so
+    // `timeout 5 -*` cannot reach `timeout 5 -k 1 /bin/sh` unexamined.
+    const wildcardAt = token.search(/[*?]/);
+    const literal = wildcardAt === -1 ? token : token.slice(0, wildcardAt);
+    const isFlag = literal.length > 1 && literal.startsWith("-");
+    const isNumber = /^\d+$/.test(token);
+    if (isFlag || isNumber) {
+      continue;
+    }
+    positions.add(index);
+    // The chain continues only while the program it just named ALSO executes
+    // what follows it. `env sh *` needs it — one hop stopped at `sh`, and `sh`
+    // is an interpreter, so the `*` was still the program. `docker ps *` and
+    // `git log *` stop here, because `ps` and `log` are subcommands and the glob
+    // behind them is an argument.
+    //
+    // `.` and `..` never continue it: at index ≥ 1 they are paths, whatever `.`
+    // means to a shell at index 0. Without that, `find . -name k*` was refused.
+    const word = normalizeCommandWord(token);
+    if (word === "." || word === ".." || hasWildcard(token) || !executes(word)) {
+      return positions;
+    }
+  }
+  return positions;
+}
+
+/**
  * A wildcard that OPENS the last token, behind a word that runs what follows it.
  *
  * `timeout 5 *` and `env *x` are not bare grants — their remainder holds a
@@ -290,13 +378,28 @@ function wildcardOutOfPosition(pattern: string, firstToken: string): string | un
  */
 function openWildcardBehindWrapper(pattern: string): string | undefined {
   const tokens = pattern.split(/\s+/);
-  const last = tokens[tokens.length - 1] ?? "";
-  if (last.search(/[*?]/) !== 0) {
+  const lastIndex = tokens.length - 1;
+  const last = tokens[lastIndex] ?? "";
+  // Known-wrapper gate: an unlisted word here would refuse every ordinary bare
+  // grant, `hostname *` included.
+  if (lastIndex === 0 || !programPositions(tokens, (word) => PREFIX_BANNED.has(word)).has(lastIndex)) {
     return undefined;
   }
-  if (!tokens.slice(0, -1).some((earlier) => PREFIX_BANNED.has(normalizeCommandWord(earlier)))) {
+  // The literal PREFIX decides, not the first character. Looking only at
+  // position 0 meant one literal character skipped the rule while the token
+  // still named no program: `env /b*` reached `/bin/sh`, and `timeout 5 .*`,
+  // `timeout 5 -*` and `env ~*` did the same with `.`, `-` and `~`.
+  const wildcardAt = last.search(/[*?]/);
+  if (wildcardAt === -1) {
     return undefined;
   }
+  const literal = last.slice(0, wildcardAt);
+  if (/^[A-Za-z0-9_+]/.test(literal) && !literal.includes("/")) {
+    return undefined; // `bun test*` — the program after the wrapper is named
+  }
+  // A `/` before the wildcard leaves the program unpinned however alphabetic the
+  // prefix looks: `env /b*` reaches `/bin/sh`, and `env a/*` reaches anything in
+  // `a/`. A path plus a glob is a directory, not a program.
   return (
     `\`${last}\` names no program, and \`${pattern}\` puts it behind a word that runs what follows ` +
     "it — so the pattern grants whatever the wildcard turns out to be. Pin the first word after the " +
@@ -356,14 +459,18 @@ function unpinnedKeryxVerb(pattern: string): string | undefined {
   const advice =
     "Pin the verb literally instead (`keryx flow status*`, `keryx ctx rg*`), which today means editing " +
     "permissions.json by hand — the approval prompt only offers the exact command or `keryx *`.";
+  // Inverted gate: an unlisted word is assumed to execute, so a wrapper nobody
+  // wrote down costs one over-refused pattern rather than opening a hole.
+  const positions = programPositions(tokens, (word) => !NON_EXECUTING_PREFIXES.has(word));
   for (const [position, token] of tokens.entries()) {
-    if (!couldNameKeryx(token, tokens.slice(0, position))) {
+    if (!couldNameKeryx(token, position, positions)) {
       continue;
     }
     if (hasWildcard(token)) {
       return (
-        `\`${pattern}\` has a wildcard in the token that names keryx (\`${token}\`), so it can match ` +
-        "`keryx ctx run -- <any command>`. A program name that is partly a glob names nothing. " +
+        `\`${token}\` sits where \`${pattern}\` names a program to run, and a wildcard there can be ` +
+        "`keryx`, which reaches `keryx ctx run -- <any command>`. A program name that is partly a glob " +
+        "names nothing. " +
         advice
       );
     }
@@ -412,15 +519,11 @@ function hasWildcard(token: string): boolean {
  * an earlier version refused those too, and told the user that `k*` "names
  * keryx", which is buying safety by taking away ordinary grants.
  */
-function couldNameKeryx(token: string, before: readonly string[]): boolean {
-  if (before.length === 0) {
-    // Index 0 is a program position by definition, and the positional rule has
-    // already refused a wildcard here, so equality is the whole question.
-    return normalizeCommandWord(token) === "keryx";
-  }
-  if (!before.some((earlier) => PREFIX_BANNED.has(normalizeCommandWord(earlier)))) {
-    // Nothing ahead of it can execute what follows, so this token is an argument,
-    // not a program. `ls keryx*` lists files; it does not run keryx.
+function couldNameKeryx(token: string, index: number, positions: ReadonlySet<number>): boolean {
+  if (!positions.has(index)) {
+    // An argument, not a program. `ls keryx*` lists files; it does not run keryx,
+    // and neither does `cat keryx.log*`. The position question comes FIRST: asking
+    // it second let the equality branch refuse `ls keryx*` on its own.
     return false;
   }
   if (normalizeCommandWord(token) === "keryx") {
@@ -431,7 +534,11 @@ function couldNameKeryx(token: string, before: readonly string[]): boolean {
     .filter((run) => run.length > 0)
     .some((run) => {
       const bare = (run.split("/").pop() ?? "").toLowerCase();
-      return bare.startsWith("keryx") || "keryx".startsWith(bare);
+      // `bare.length > 0` matters: without it a run ending in `/` normalises to
+      // the empty string, `"keryx".startsWith("")` is true, and `env /*` was
+      // refused for "naming keryx" — a true refusal with a false reason, and the
+      // only thing refusing that shape.
+      return bare.length > 0 && (bare.startsWith("keryx") || "keryx".startsWith(bare));
     });
 }
 

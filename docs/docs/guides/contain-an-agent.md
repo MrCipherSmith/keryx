@@ -122,8 +122,28 @@ Flags before the glob, glob last. `ls src/*.ts`, `tar czf out.tgz *.md`,
 
 One more, for the same reason: behind a word that runs whatever follows it, the
 part after the wrapper has to name something. `bun test*` and
-`timeout 5 bun test*` are fine; `timeout 5 *` and `env *x` are not, because the
-wrapper would run whatever the wildcard turned out to be.
+`timeout 5 bun test*` are fine; `timeout 5 *`, `env *x`, `env /b*` and
+`timeout 5 .*` are not, because the wrapper would run whatever the wildcard
+turned out to be — and a path with a glob in it (`/b*` → `/bin/sh`) names a
+directory, not a program.
+
+**Where this is a list, and which way it fails.** Deciding whether the word
+before your glob runs what follows it is not something the shape of a pattern can
+answer, so there are two lists. They are wrong in opposite directions on purpose:
+
+- For **`keryx` patterns**, a word is assumed to run what follows it unless it is
+  known not to. A wrapper nobody wrote down therefore costs you one refused
+  pattern, not a bypass. `git add k*` and `docker ps k*` are refused for this
+  reason — `git` and `docker` can execute their arguments and nothing here knows
+  that `add` and `ps` do not.
+- For **everything else**, only a known wrapper triggers the rule, because the
+  other direction would refuse every ordinary grant — `hostname *` included.
+
+That second list is an expedient, and it has the failure you would expect: if
+the first word of your pattern is a program nobody has listed, `<program> *` is
+offered, and if that program happens to run its argument, the grant is arbitrary
+execution. `hostname *` and `whatever-tool *` are the same shape to this code.
+Do not read `<program> *` as safe because it was offered.
 
 **A word list, which is an expedient.** On top of the shape rule, some plain
 program names are refused as bare grants: interpreters (`bash *`, `python3 *`),

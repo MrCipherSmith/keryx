@@ -639,9 +639,112 @@ test("B9: a partial keryx name with nothing that could execute it is ordinary", 
   for (const pattern of ["ls k*", "ls ke*", "ls keryx*", "cat keryx.log*", "echo k*", "ln -s k*"]) {
     expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
   }
-  // And the cost of the gate, asserted rather than left to be discovered: `git`
-  // can execute its arguments, and nothing here knows that `add` neutralises it.
+  // One hop, not a chain: after a wrapper the next literal word IS the program,
+  // so `add`, `log`, `ps` and `pr` pin it and the glob behind them is an
+  // argument. Following the chain further refused all of these.
+  for (const pattern of [
+    "git log *",
+    "docker ps *",
+    "kubectl get *",
+    "gh pr list *",
+    "npm ls *",
+    "aws s3 ls *",
+    "find . -name k*",
+    "ls git *",
+    "echo timeout *",
+    "tar -tf*",
+  ]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
+  // The costs that remain, asserted rather than left to be discovered. Both are
+  // the inverted gate being wrong in the safe direction: `git` and `docker` can
+  // execute their arguments, and nothing here knows that `add` and `ps` do not.
   expect(validateShellPattern("git add k*").ok).toBe(false);
+  expect(validateShellPattern("docker ps k*").ok).toBe(false);
+  // After a wrapper and its flags, a bare glob is the program.
+  expect(validateShellPattern("make -n *").ok).toBe(false);
+});
+
+test("B10: a wrapper nobody listed is still a wrapper", () => {
+  // Round 6. The keryx gate asked "is the preceding word a KNOWN wrapper?", so a
+  // wrapper nobody had written down left the gate shut. A review found all eight
+  // of these in /usr/bin on the first machine it looked at, each executing its
+  // argument. The gate is inverted now: an unlisted word is assumed to execute,
+  // so a missing entry costs one over-refused pattern instead of a bypass.
+  for (const wrapper of [
+    "ionice", "taskset", "setarch", "chrt", "numactl", "eatmydata", "fakeroot",
+    "ssh-agent",
+    // and words nobody has audited, which is the whole point of inverting
+    "whatever-this-is", "some-launcher",
+  ]) {
+    const pattern = `${wrapper} k*`;
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+  }
+  expect(isShellCommandAllowed("ionice keryx ctx run -- rm -rf /tmp/x", ["ionice k*"])).toBe(true);
+  expect(validateShellPattern("taskset -c 0 k*").ok).toBe(false);
+
+  // The eight are ALSO a second, simpler hole in the same place: each was an
+  // offerable BARE grant of arbitrary execution. The inverted gate above does
+  // not cover this — it only fires on a keryx-shaped token — so the words have
+  // to be in the prefix list too, and a mutation run showed that addition was
+  // pinned by nothing until this assertion existed.
+  for (const wrapper of ["ionice", "taskset", "setarch", "chrt", "numactl", "eatmydata", "fakeroot", "ssh-agent"]) {
+    expect(validateShellPattern(`${wrapper} *`).ok, `\`${wrapper} *\` must not be remembered`).toBe(false);
+  }
+  expect(isShellCommandAllowed("ionice /bin/sh /tmp/evil.sh", ["ionice *"])).toBe(true);
+  // The chain continues through a wrapper that names another wrapper: one hop
+  // stopped at `sh`, and `sh` is an interpreter, so the glob was still the
+  // program.
+  expect(validateShellPattern("env sh *").ok).toBe(false);
+  expect(validateShellPattern("env sh -*").ok).toBe(false);
+
+  // THE LIMIT, stated because it is real and is NOT closed by any of this: an
+  // unknown FIRST word still gets a bare grant. `whatever-this-is *` is
+  // offerable exactly as `hostname *` is, and if that program happens to execute
+  // its argument the grant is arbitrary execution. That is the bare-grant gate's
+  // long-standing positive-list design — refusing it would refuse `hostname *`
+  // too — and it is documented as an expedient rather than fixed here.
+  expect(validateShellPattern("whatever-this-is *").ok).toBe(true);
+});
+
+test("B10: an open wildcard behind a wrapper names no program, prefix and all", () => {
+  // The rule looked only at the last token's FIRST character, so one literal
+  // character skipped it while the token still named nothing: `env /b*` reached
+  // `/bin/sh`. It reads the literal PREFIX now. This is also the guard that had
+  // no named test of its own — only the sweep — which is how the class it covers
+  // stayed unnamed for two rounds.
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ["timeout 5 *", "timeout 5 keryx ctx run -- rm -rf /tmp/x"],
+    ["env *x", "env keryx ctx run -- rm -rf /tmp/x"],
+    ["env /b*", "env /bin/sh /tmp/evil.sh"],
+    ["timeout 5 /b*", "timeout 5 /bin/sh /tmp/evil.sh"],
+    ["nice /b*", "nice /bin/sh /tmp/evil.sh"],
+    ["xargs /b*", "xargs /bin/sh"],
+    ["timeout 5 .*", "timeout 5 ./evil.sh"],
+    ["timeout 5 -*", "timeout 5 -k 1 /bin/sh"],
+    ["env ~*", "env ~/evil.sh"],
+  ];
+  for (const [pattern, attack] of cases) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(isShellCommandAllowed(attack, [pattern]), `\`${pattern}\` covers the attack`).toBe(true);
+  }
+  // Named program after the wrapper: kept, and this is the control that stops
+  // the rule from being "refuse anything after a wrapper".
+  for (const pattern of ["bun test*", "timeout 5 bun test*", "env NODE_ENV=x", "tar -tf*"]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
+});
+
+test("B10: a path-shaped run does not spell keryx", () => {
+  // `env /*` was refused for "naming keryx", because a run ending in `/`
+  // normalised to the empty string and `"keryx".startsWith("")` is true. A true
+  // refusal with a false reason, and the only thing refusing that shape — so the
+  // guard that should have caught it was untested.
+  const slash = validateShellPattern("env /*");
+  expect(slash.ok).toBe(false);
+  expect(slash.ok === false && slash.reason).not.toMatch(/keryx/);
+  expect(validateShellPattern("env //*").ok).toBe(false);
+  expect(validateShellPattern("env a/*").ok).toBe(false);
 });
 
 test("B9: a pattern that ends inside a verb is a fixed string, and stays offerable", () => {
