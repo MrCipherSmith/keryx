@@ -219,25 +219,42 @@ const KERYX_EXECUTING_VERBS: ReadonlyArray<readonly string[]> = [
  * `keryx ctx run -- rm -rf /`, because the destructive classifier reads the line
  * it is given rather than the one after the `--`.
  *
- * So the rule is about what the pattern PINS rather than about what it contains:
- * some token in the verb's position must make the executing verb unreachable.
+ * THREE rounds of review got past three versions of this rule, and the third
+ * reviewer named the reason rather than the strings: the check reasoned about
+ * TOKENS while the matcher it defends has none. `matchShellPattern` compiles `*`
+ * to `[\s\S]*` and `?` to `.`, both of which cross whitespace, so a wildcard
+ * anywhere at or before the verb dissolves the positions the check is counting.
  *
- * Two corrections a second review earned, both by running the module rather than
- * reading it:
+ *   round 1  `keryx ctx run*`, `keryx c*`      — token compared as a whole glob
+ *   round 2  `keryx ctx run?*`, `keryx ctx ru*` — compared against the verb word
+ *                                                 in isolation
+ *   round 3  `keryx * rg*`, `k* ctx run*`       — an earlier `*` ate the boundary,
+ *                                                 and a later token then claimed
+ *                                                 the exclusion from a position it
+ *                                                 no longer occupied
  *
- *  1. The first version asked `matchShellPattern(token, verbWord)` — the token as
- *     a glob against the verb word ALONE. But the stored pattern is later matched
- *     against the WHOLE command as one glob, where whitespace is not a token
- *     boundary. `run?*` does not match `run` in isolation, so it looked like it
- *     pinned the verb away; against the whole command the `?*` simply ate
- *     ` -- rm -rf /`. `keryx ctx run?*`, `keryx ctx run??*`, `keryx ctx run*x` and
- *     `keryx c?x run?*` were all offerable and all auto-approved. The comparison
- *     is now on the token's LITERAL PREFIX — the part before its first wildcard —
- *     because that prefix is what the whole-string match must satisfy first.
- *  2. It only looked at token 0, so putting anything in front skipped the rule
- *     entirely while leaving the remainder "narrowing":
- *     `env keryx ctx run*`, `nice keryx ctx run*`, `timeout 5 keryx*`. The check
- *     now runs at whichever token names keryx.
+ * Each round refused exactly the strings the previous reviewer typed. So this
+ * version does not compare globs in a verb position at all:
+ *
+ *  - the verb span is scanned LEFT TO RIGHT, and the scan stops at the first
+ *    token that excludes the verb word literally;
+ *  - a token carrying a wildcard may end the scan only by EXCLUDING — its literal
+ *    prefix must rule the verb word out. `rg*` does (`rg` is not `run`, neither is
+ *    a prefix of the other), `run?*` and `ru*` do not, and `*` never does;
+ *  - so a wildcard reached before the verb is excluded is fatal, which is what
+ *    kills `keryx * rg*`: the `*` cannot exclude `ctx`, and nothing after it is
+ *    trusted, because after a `*` there is no "after" to speak of.
+ *
+ * The keryx token itself is found the same way — by literal runs, not by string
+ * equality — because `k*`, `ker*x`, `ke?yx` and `*keryx` all reach the same CLI
+ * and none of them equals `keryx`. A candidate token that carries a wildcard is
+ * refused outright: a name that is partly a glob names nothing.
+ *
+ * Strictly more conservative than every earlier version, and it would have
+ * refused all seven inputs across the three rounds without anyone enumerating
+ * them. The forms the documentation recommends — `keryx ctx rg*`,
+ * `keryx flow status*`, `keryx health run*` — survive, because their wildcards
+ * fall at or after a token that already excluded the verb.
  */
 function unpinnedKeryxVerb(pattern: string): string | undefined {
   const tokens = pattern.split(/\s+/);
@@ -245,18 +262,18 @@ function unpinnedKeryxVerb(pattern: string): string | undefined {
     "Pin the verb literally instead (`keryx flow status*`, `keryx ctx rg*`), which today means editing " +
     "permissions.json by hand — the approval prompt only offers the exact command or `keryx *`.";
   for (const [position, token] of tokens.entries()) {
-    if (normalizeCommandWord(token) !== "keryx") {
+    if (!couldNameKeryx(token)) {
       continue;
     }
+    if (hasWildcard(token)) {
+      return (
+        `\`${pattern}\` has a wildcard in the token that names keryx (\`${token}\`), so it can match ` +
+        "`keryx ctx run -- <any command>`. A program name that is partly a glob names nothing. " +
+        advice
+      );
+    }
     for (const verb of KERYX_EXECUTING_VERBS) {
-      const pinsAway = verb.some((word, index) => {
-        const candidate = tokens[position + index + 1];
-        if (candidate === undefined) {
-          return false; // the pattern ends before the verb; a trailing * covers it
-        }
-        return literalPrefixExcludes(candidate, word);
-      });
-      if (!pinsAway) {
+      if (!verbSpanExcludes(tokens, position + 1, verb)) {
         return (
           `\`${pattern}\` can match \`keryx ${verb.join(" ")} -- <any command>\`, which runs an arbitrary ` +
           "program; the destructive-command check reads the line it is given, not the one after the `--`. " +
@@ -268,25 +285,63 @@ function unpinnedKeryxVerb(pattern: string): string | undefined {
   return undefined;
 }
 
+/** Whether a pattern token contains a glob wildcard. */
+function hasWildcard(token: string): boolean {
+  return /[*?]/.test(token);
+}
+
 /**
- * Whether `token` in a verb position makes `word` unreachable.
+ * Whether `token` could be the word `keryx` when the pattern is matched.
  *
- * Only the literal prefix — everything before the token's first wildcard — can
- * exclude anything, because the wildcard that follows it is matched against the
- * rest of the COMMAND, not against the rest of the token. So:
- *
- *   `rg*`    prefix `rg`   ─ neither is a prefix of `run` ⇒ excludes  ⇒ offerable
- *   `run?*`  prefix `run`  ─ is `run` itself               ⇒ reachable ⇒ refused
- *   `ru*`    prefix `ru`   ─ is a prefix of `run`          ⇒ reachable ⇒ refused
- *   `wiki`   prefix `wiki` ─ neither is a prefix           ⇒ excludes  ⇒ offerable
+ * Asked of every LITERAL RUN in the token, not of the token as a whole, so
+ * `*keryx` and `ker*x` are candidates while `hostname`'s companion `*` is not —
+ * a token that is only wildcards names nothing in particular and is an argument
+ * position, not a program one.
  */
-function literalPrefixExcludes(token: string, word: string): boolean {
-  const wildcardAt = token.search(/[*?]/);
-  const literal = wildcardAt === -1 ? token : token.slice(0, wildcardAt);
-  if (wildcardAt === -1) {
-    return literal !== word;
+function couldNameKeryx(token: string): boolean {
+  const word = normalizeCommandWord(token);
+  if (word === "keryx") {
+    return true;
   }
-  return !literal.startsWith(word) && !word.startsWith(literal);
+  return token
+    .split(/[*?]+/)
+    .filter((run) => run.length > 0)
+    .some((run) => {
+      const bare = (run.split("/").pop() ?? "").toLowerCase();
+      return bare.length > 0 && (bare.startsWith("keryx") || "keryx".startsWith(bare));
+    });
+}
+
+/**
+ * Whether the tokens starting at `start` rule out `verb` — scanned left to right,
+ * stopping at the first token that excludes.
+ *
+ * Returns true (safe) as soon as a token cannot be the verb word it sits at, and
+ * false the moment a token could be it, including when a wildcard makes the
+ * question unanswerable. Running out of tokens is safe: a wildcard-free pattern
+ * shorter than the verb cannot match a command that continues past it, and a
+ * pattern that DID carry a wildcard was already refused at the token holding it.
+ */
+function verbSpanExcludes(tokens: readonly string[], start: number, verb: readonly string[]): boolean {
+  for (const [index, word] of verb.entries()) {
+    const token = tokens[start + index];
+    if (token === undefined) {
+      return !hasWildcard(tokens[start + index - 1] ?? "");
+    }
+    const wildcardAt = token.search(/[*?]/);
+    const literal = wildcardAt === -1 ? token : token.slice(0, wildcardAt);
+    if (wildcardAt === -1) {
+      if (literal !== word) {
+        return true; // a literal that differs: the verb is unreachable from here
+      }
+      continue; // literally the verb word — keep scanning
+    }
+    // A wildcarded token may only end the scan by excluding. Its literal prefix
+    // has to rule the word out; anything else and the wildcard is free to eat the
+    // token boundary, which is how `keryx * rg*` got through.
+    return !literal.startsWith(word) && !word.startsWith(literal);
+  }
+  return false; // every token matched the verb, literally
 }
 
 /**
@@ -331,8 +386,13 @@ function normalizeCommandWord(firstToken: string): string {
  * `/etc/hostname` through the grant. The suffix is stripped before lookup so one
  * entry covers every spelling, which is narrower than adding a row per release
  * and does not go stale.
+ *
+ * Every name here must also be in {@link PREFIX_BANNED}, or the stripping is
+ * inert and reads as coverage that is not there — a later review found
+ * `gcc|clang|erl|scala|julia` in this list and in no other, so `gcc13 *` was
+ * offerable exactly as `gcc *` was. Pinned by a test.
  */
-const VERSIONED_INTERPRETERS = /^(python|node|ruby|perl|php|lua|gcc|clang|erl|scala|julia)[\d.]+$/;
+const VERSIONED_INTERPRETERS = /^(python|node|ruby|perl|php|lua)[\d.]+$/;
 
 /** Strip a trailing version from an interpreter name (`python3.12` → `python`). */
 function stripVersionSuffix(word: string): string {

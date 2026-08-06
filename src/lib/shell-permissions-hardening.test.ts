@@ -454,8 +454,79 @@ test("B6: the keryx verb rule is not anchored to the first token", () => {
   ]) {
     const result = validateShellPattern(pattern);
     expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
-    expect(result.ok === false && result.reason).toMatch(/arbitrary program/);
+    // Either keryx refusal is correct here — `timeout 5 keryx*` is caught by the
+    // wildcard-in-the-name branch rather than by the verb scan. What must hold is
+    // that the refusal is ABOUT keryx, not an unrelated rule quietly catching it.
+    expect(result.ok === false && result.reason).toMatch(/keryx ctx run/);
   }
+});
+
+test("B7: a wildcard before the verb is fatal, whatever comes after it", () => {
+  // Round 3. The scan used `some`, so an exclusion claimed at ANY verb position
+  // counted — but `*` compiles to `[\s\S]*` and eats the token boundary, so the
+  // token that "excluded" at position 1 only had to appear SOMEWHERE later in the
+  // command, which the attacker writes. `keryx * rg*` was `keryx *` with a
+  // trailing ` rg` toll, and ` rg*` is the very token the docs hold up as safe.
+  const attacks = ["keryx ctx run -- /tmp/evil.sh rg", "keryx ctx run -- cat /etc/shadow rg"];
+  for (const pattern of ["keryx * rg*", "keryx ctx* rg*", "keryx c* rg*", "keryx ?* rg*"]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(isShellCommandAllowed(attacks[0] ?? "", [pattern]), `\`${pattern}\` covers the attack`).toBe(true);
+  }
+  expect(validateShellPattern("keryx harness* rg*").ok).toBe(false);
+  expect(isShellCommandAllowed(attacks[1] ?? "", ["keryx * rg*"])).toBe(true);
+});
+
+test("B7: the token that names keryx is found by its literal runs, not by equality", () => {
+  // Round 3, the same rule skipped from the other end: the check asked whether a
+  // token EQUALLED `keryx`, so one wildcard inside the name meant no token
+  // matched and the whole rule found nothing to do.
+  const attack = "keryx ctx run -- rm -rf /tmp/x";
+  for (const pattern of ["k* ctx run*", "ker*x ctx run*", "ke?yx ctx run*", "*keryx ctx run*"]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(isShellCommandAllowed(attack, [pattern]), `\`${pattern}\` covers the attack`).toBe(true);
+  }
+  // `keryx?` reaches `keryx  ctx run …` (two spaces) rather than the one-space
+  // form, so it is asserted on its own command.
+  expect(validateShellPattern("keryx? ctx run*").ok).toBe(false);
+
+  // The shape where refusing the wildcarded NAME is the only thing standing in
+  // the way: the verb scan looks at `foo`, sees a literal that is not `ctx`, and
+  // says the verb is excluded — while the `*` in `keryx*` quietly swallows the
+  // whole verb plus its payload. Found by a mutation run showing that guard
+  // pinned by nothing, which is the third time on this file that a guard with no
+  // test of its own turned out to be load-bearing for exactly one input shape.
+  expect(validateShellPattern("keryx* foo").ok).toBe(false);
+  expect(isShellCommandAllowed("keryx ctx run -- rm -rf /tmp/x foo", ["keryx* foo"])).toBe(true);
+});
+
+test("B7: a token that is only wildcards is an argument position, not a program name", () => {
+  // The control for the rule above: if every token containing a `*` counted as
+  // possibly-keryx, `hostname *` would have been refused, and refusing everything
+  // is how a rule passes its own tests while helping nobody.
+  expect(validateShellPattern("hostname *").ok).toBe(true);
+  expect(validateShellPattern("bun test*").ok).toBe(true);
+  expect(validateShellPattern("k8s-status *").ok).toBe(true);
+});
+
+test("B7: every versioned name the stripper knows is a name the list bans", () => {
+  // The stripping only does something when the stripped word is refused. Five
+  // entries were in the regex and in no list, so the coverage they implied was
+  // not there. Derived rather than restated: strip a probe and check the result
+  // is actually refused.
+  for (const probe of ["python3.12", "node20", "ruby3.2", "perl5.36", "php8.3", "lua5.4"]) {
+    const result = validateShellPattern(`${probe} *`);
+    expect(result.ok, `\`${probe} *\` must not be remembered`).toBe(false);
+  }
+});
+
+test("B7: the wildcard-in-name guard has a test of its own", () => {
+  // It used to fail only the unconstraining-remainder test, so deleting that one
+  // test unpinned two guards.
+  const glob = validateShellPattern("tim*out *");
+  expect(glob.ok).toBe(false);
+  expect(glob.ok === false && glob.reason).toMatch(/wildcard over program NAMES/);
 });
 
 test("B6: a versioned interpreter is the interpreter", () => {
