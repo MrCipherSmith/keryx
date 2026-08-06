@@ -120,3 +120,5 @@ change this slice needs. Moved to last, with the reason in the source.
 - 2026-08-01T20:58:25.790Z - ac-confirmed: AC2
 - 2026-08-01T20:58:25.880Z - ac-confirmed: AC5
 - 2026-08-01T20:58:25.965Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-06T13:00:58.942Z - completing
+- 2026-08-06T13:00:58.950Z - done: all gates passed
