@@ -3,24 +3,73 @@
   "id": "137",
   "slug": "unattended-posture",
   "title": "Unattended posture: a read-only run that finishes with no operator, contained by something that is not a word list",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-06T09:36:10.929Z",
-  "updatedAt": "2026-08-06T09:45:00.287Z",
+  "updatedAt": "2026-08-06T11:21:04.216Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:85e366a1186db86dd01f7c454c5d05998e389579a7e14b76feec5c3125db7b22",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-06T11:10:19.633Z",
+      "note": "unattended.test.ts 'AC1: a scripted read-only run answers a real project question with human_interventions: 0' — reads 7.3.1 off disk, answers from the tool result, counter 0, stamped into the record. LIMIT, from the review and not hidden: on a host whose global keryx predates 377fc325, search_code returns a skew diagnosis instead of results, so 14 of 15 tools work and this criterion is degraded in exactly the CI case the flow targets. Documented as soft edge 3 in harness.md and cli-reference.md"
+    },
+    "AC2": {
+      "at": "2026-08-06T11:10:19.725Z",
+      "note": "unattended-corpus.test.ts 'AC2/C-1': 16 commands x every profile, real git init, tree hash + graph index + package.json byte-compared, .env marker absent from output/history/stream. Independent reviewer re-ran a 60+ attempt escape harness against the same tree: zero leaks, filesystem unchanged"
+    },
+    "AC3": {
+      "at": "2026-08-06T11:10:19.812Z",
+      "note": "unattended-corpus.test.ts 'AC3/C-2': all 52 grant patterns, verdict recorded per line, every one refused-at-launch. The flag grammar has no slot a grant can bind to"
+    },
+    "AC4": {
+      "at": "2026-08-06T11:10:19.902Z",
+      "note": "unattended-corpus.test.ts 'AC4/C-3' (11 shell-borne escapes) and the read-tool-equivalent pair contained by root confinement. Reviewer re-ran independently: refused"
+    },
+    "AC5": {
+      "at": "2026-08-06T11:10:29.394Z",
+      "note": "unattended-corpus.test.ts 'AC5/C-4' end to end against real ripgrep incl. the symlink; plus search-code-confinement.test.ts, whose vacuous half was found by review and split into MUST_BUILD (15 inputs that produce argv, shape invariants claimed there) and a counted refusal test over the 19 escape inputs. New search-code-real-chain.test.ts exercises search_code -> keryx ctx rg -> rg with no injected runner"
+    },
+    "AC6": {
+      "at": "2026-08-06T11:10:29.494Z",
+      "note": "Four unit/driven tests plus a real-binary CLI spawn. Reviewer ran both surfaces of the actual binary: full stdout diff is three lines (header segment, session id, tool list), and summary.json carries neither posture nor humanInterventions on the supervised path. Byte-identical approval prompt and header pinned by approvalPromptLine/shellHeaderSubtitle"
+    },
+    "AC7": {
+      "at": "2026-08-06T11:10:29.602Z",
+      "note": "unattended.test.ts: an ask with no approver resolves to deny with and without the posture; a deny stays terminal — an approver returning true cannot run a tool the posture denies (real tool smuggled past the array filter, refused at the invocation seam, approver never asked)"
+    },
+    "AC8": {
+      "at": "2026-08-06T11:10:45.495Z",
+      "note": "Ten guards, each reverted and re-run by an INDEPENDENT reviewer, not by the implementer: eligibility risk 7 failures, requiresApprover 4, executeCall seam 1 (right mechanism), installed approver 1, forced --no-follow 4 (shape only, stated as such), --regexp= operand 4 (shape only), confineToRoot realpath 7, makeKeryxRunner env 2, deny-list --follow 4, skew rule 1. Two guards were pinned by NOTHING in the first round (installed approver: 0 failures across all 3173 tests) and one only incidentally (realpath: 2, both search_code, while an SSH key leaked unnoticed); both fixed and re-verified"
+    },
+    "AC9": {
+      "at": "2026-08-06T11:10:45.589Z",
+      "note": "harness.md now carries four soft edges: not a secrecy boundary (read_file/search_code read anything inside the root incl. .env), the two lists surviving in search_code named as lists that will be incomplete, the walk/operand split (--no-follow guards the tree walk; a symlink named AS the operand is followed, and only realpath stops it — measured against rg 14.1.1), and the PATH-version dependency. Reviewer found no sentence asserting a category guarantee the mechanism implements as a list"
+    },
+    "AC10": {
+      "at": "2026-08-06T11:10:45.683Z",
+      "note": "Refusal properties, not table entries: shell_exec was never constructed for the array (no code parsed a command); a tool's own declared risk class, undeclared failing closed; the tool's own requiresApprover; an approver that takes nothing it could weigh; the flag grammar having no slot a grant can occupy; realpath containment for paths; --regexp= inline with exactly one confined operand so no operand meaning can shift. The one surviving list is a PERMIT list on forwarded rg options, which can only be too narrow, and the docs say so"
+    },
+    "AC11": {
+      "at": "2026-08-06T11:10:45.780Z",
+      "note": "unattended.test.ts x3 plus a real-binary run: header shows unattended:read-only, the record carries posture and humanInterventions 0, and it survives being read back on resume. The stamp is written at session open, not after a successful turn — a defect the CLI spawn test found and unit tests would not have"
+    },
+    "AC12": {
+      "at": "2026-08-06T11:10:45.872Z",
+      "note": "Independently re-run by me on the fix commit: bun run check 3168 pass, 14 skip, 0 fail, exit 0 (3182 tests, 312 files); check:doc-links 650 links across 203 files, 0 broken. The 14 skips are pre-existing environment gates (real-subprocess, macOS sandbox, PTY, OpenTUI); none added, none weakened"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/255"
   },
   "tasks": [
     {
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +77,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +92,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +107,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,13 +122,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
       "title": "Posture flag: read-only tool set, no shell registered",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,13 +137,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Approval semantics: deny terminal, ask-without-approver becomes deny",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -98,13 +152,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Evidence: posture in the TUI header and the run record",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -112,13 +167,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Regression corpus C-1..C-5 against a real runner and a real fixture",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -126,13 +182,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Mutation check: name the test each guard is pinned by",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -140,13 +197,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Docs without a category guarantee the mechanism does not enforce",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -154,7 +212,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -200,6 +259,121 @@
     {
       "at": "2026-08-06T09:45:00.287Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-06T11:10:19.633Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: unattended.test.ts 'AC1: a scripted read-only run answers a real project question with human_interventions: 0' — reads 7.3.1 off disk, answers from the tool result, counter 0, stamped into the record. LIMIT, from the review and not hidden: on a host whose global keryx predates 377fc325, search_code returns a skew diagnosis instead of results, so 14 of 15 tools work and this criterion is degraded in exactly the CI case the flow targets. Documented as soft edge 3 in harness.md and cli-reference.md"
+    },
+    {
+      "at": "2026-08-06T11:10:19.725Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: unattended-corpus.test.ts 'AC2/C-1': 16 commands x every profile, real git init, tree hash + graph index + package.json byte-compared, .env marker absent from output/history/stream. Independent reviewer re-ran a 60+ attempt escape harness against the same tree: zero leaks, filesystem unchanged"
+    },
+    {
+      "at": "2026-08-06T11:10:19.812Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: unattended-corpus.test.ts 'AC3/C-2': all 52 grant patterns, verdict recorded per line, every one refused-at-launch. The flag grammar has no slot a grant can bind to"
+    },
+    {
+      "at": "2026-08-06T11:10:19.902Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: unattended-corpus.test.ts 'AC4/C-3' (11 shell-borne escapes) and the read-tool-equivalent pair contained by root confinement. Reviewer re-ran independently: refused"
+    },
+    {
+      "at": "2026-08-06T11:10:29.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: unattended-corpus.test.ts 'AC5/C-4' end to end against real ripgrep incl. the symlink; plus search-code-confinement.test.ts, whose vacuous half was found by review and split into MUST_BUILD (15 inputs that produce argv, shape invariants claimed there) and a counted refusal test over the 19 escape inputs. New search-code-real-chain.test.ts exercises search_code -> keryx ctx rg -> rg with no injected runner"
+    },
+    {
+      "at": "2026-08-06T11:10:29.494Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Four unit/driven tests plus a real-binary CLI spawn. Reviewer ran both surfaces of the actual binary: full stdout diff is three lines (header segment, session id, tool list), and summary.json carries neither posture nor humanInterventions on the supervised path. Byte-identical approval prompt and header pinned by approvalPromptLine/shellHeaderSubtitle"
+    },
+    {
+      "at": "2026-08-06T11:10:29.603Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: unattended.test.ts: an ask with no approver resolves to deny with and without the posture; a deny stays terminal — an approver returning true cannot run a tool the posture denies (real tool smuggled past the array filter, refused at the invocation seam, approver never asked)"
+    },
+    {
+      "at": "2026-08-06T11:10:45.495Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Ten guards, each reverted and re-run by an INDEPENDENT reviewer, not by the implementer: eligibility risk 7 failures, requiresApprover 4, executeCall seam 1 (right mechanism), installed approver 1, forced --no-follow 4 (shape only, stated as such), --regexp= operand 4 (shape only), confineToRoot realpath 7, makeKeryxRunner env 2, deny-list --follow 4, skew rule 1. Two guards were pinned by NOTHING in the first round (installed approver: 0 failures across all 3173 tests) and one only incidentally (realpath: 2, both search_code, while an SSH key leaked unnoticed); both fixed and re-verified"
+    },
+    {
+      "at": "2026-08-06T11:10:45.589Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: harness.md now carries four soft edges: not a secrecy boundary (read_file/search_code read anything inside the root incl. .env), the two lists surviving in search_code named as lists that will be incomplete, the walk/operand split (--no-follow guards the tree walk; a symlink named AS the operand is followed, and only realpath stops it — measured against rg 14.1.1), and the PATH-version dependency. Reviewer found no sentence asserting a category guarantee the mechanism implements as a list"
+    },
+    {
+      "at": "2026-08-06T11:10:45.683Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Refusal properties, not table entries: shell_exec was never constructed for the array (no code parsed a command); a tool's own declared risk class, undeclared failing closed; the tool's own requiresApprover; an approver that takes nothing it could weigh; the flag grammar having no slot a grant can occupy; realpath containment for paths; --regexp= inline with exactly one confined operand so no operand meaning can shift. The one surviving list is a PERMIT list on forwarded rg options, which can only be too narrow, and the docs say so"
+    },
+    {
+      "at": "2026-08-06T11:10:45.780Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: unattended.test.ts x3 plus a real-binary run: header shows unattended:read-only, the record carries posture and humanInterventions 0, and it survives being read back on resume. The stamp is written at session open, not after a successful turn — a defect the CLI spawn test found and unit tests would not have"
+    },
+    {
+      "at": "2026-08-06T11:10:45.872Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Independently re-run by me on the fix commit: bun run check 3168 pass, 14 skip, 0 fail, exit 0 (3182 tests, 312 files); check:doc-links 650 links across 203 files, 0 broken. The 14 skips are pre-existing environment gates (real-subprocess, macOS sandbox, PTY, OpenTUI); none added, none weakened"
+    },
+    {
+      "at": "2026-08-06T11:10:49.564Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-06T11:10:49.663Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-06T11:10:49.757Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-06T11:10:49.845Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-06T11:10:49.933Z",
+      "event": "task-done",
+      "detail": "T5: Posture flag: read-only tool set, no shell registered"
+    },
+    {
+      "at": "2026-08-06T11:10:50.027Z",
+      "event": "task-done",
+      "detail": "T6: Approval semantics: deny terminal, ask-without-approver becomes deny"
+    },
+    {
+      "at": "2026-08-06T11:10:50.123Z",
+      "event": "task-done",
+      "detail": "T7: Evidence: posture in the TUI header and the run record"
+    },
+    {
+      "at": "2026-08-06T11:10:50.214Z",
+      "event": "task-done",
+      "detail": "T8: Regression corpus C-1..C-5 against a real runner and a real fixture"
+    },
+    {
+      "at": "2026-08-06T11:10:50.308Z",
+      "event": "task-done",
+      "detail": "T9: Mutation check: name the test each guard is pinned by"
+    },
+    {
+      "at": "2026-08-06T11:10:50.398Z",
+      "event": "task-done",
+      "detail": "T10: Docs without a category guarantee the mechanism does not enforce"
+    },
+    {
+      "at": "2026-08-06T11:21:04.216Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/255"
     }
   ]
 }

@@ -59,17 +59,55 @@ const MUST_NOT_ESCAPE: ReadonlyArray<Record<string, unknown>> = [
   { pattern: "secret", flags: ["-g", "--pre=/tmp/pwn.sh"] },
 ];
 
-test("no input produces an operand outside the root, or a pattern that is an operand", () => {
-  for (const input of MUST_NOT_ESCAPE) {
+/**
+ * Inputs that DO build an argv — the ones the shape invariants are about.
+ *
+ * This list exists because the test below used to run only over
+ * {@link MUST_NOT_ESCAPE}, guarded by `if (!built.ok) continue`. All nineteen of
+ * those inputs are refused at build time, so the loop body — including the
+ * `--regexp=` shape assertion, the one-operand assertion and the containment
+ * assertion — executed zero times. The claims were never made about anything.
+ *
+ * Every entry here is an ordinary, accepted call, several of them carrying
+ * awkward patterns on purpose: a pattern that looks like a path, one that looks
+ * like an option, and one containing a space. Those are precisely the cases where
+ * "the pattern is never an operand" has to hold and would be easy to get wrong.
+ */
+const MUST_BUILD: ReadonlyArray<Record<string, unknown>> = [
+  { pattern: "needle" },
+  { pattern: "needle", path: "src" },
+  { pattern: "needle", path: "src/commands/agent.ts" },
+  { pattern: "needle", flags: ["-i"] },
+  { pattern: "needle", flags: ["-t", "ts", "-C", "2"] },
+  { pattern: "needle", flags: ["--hidden", "--no-ignore"] },
+  { pattern: "needle", flags: ["--max-depth=3"], path: "src" },
+  { pattern: "needle", flags: ["-g", "*.ts"] },
+  // Patterns that would be dangerous if they ever became an operand.
+  { pattern: "/etc/passwd" },
+  { pattern: "/etc/passwd", path: "src" },
+  { pattern: "../../etc/hostname" },
+  { pattern: "--pre=/tmp/pwn.sh" },
+  { pattern: "-e" },
+  { pattern: "two words" },
+  { pattern: "." },
+];
+
+test("every input that builds an argv has one confined operand, and never the pattern as one", () => {
+  // Nothing is skipped here: an input that fails to build is a failure of this
+  // test's own premise, and is reported as one rather than silently passed over.
+  for (const input of MUST_BUILD) {
+    const pattern = String(input.pattern);
     const built = buildSearchArgv({
       root: ROOT,
-      pattern: String(input.pattern),
+      pattern,
       path: input.path as string | undefined,
       flags: input.flags as string[] | undefined,
     });
+    expect(built.ok, `${JSON.stringify(input)} should build but was refused`).toBe(true);
     if (!built.ok) {
-      continue;
+      continue; // unreachable given the assertion above; keeps the types honest
     }
+
     // There is exactly one operand, it is last, and it is inside the root.
     const operand = built.args[built.args.length - 1] ?? "";
     const absolute = operand === "." ? ROOT : operand;
@@ -77,10 +115,42 @@ test("no input produces an operand outside the root, or a pattern that is an ope
       absolute === ROOT || absolute.startsWith(`${ROOT}/`),
       `${JSON.stringify(input)} produced an operand outside the root: ${operand}`,
     ).toBe(true);
-    // The pattern travels as the value of `--regexp=`, never as an operand.
-    expect(built.args).toContain(`--regexp=${String(input.pattern)}`);
-    expect(built.args.filter((arg) => arg === operand)).toHaveLength(1);
+    // The pattern travels as the value of `--regexp=`, inline in one token, so it
+    // cannot be re-parsed as an option or mistaken for a path.
+    const regexpToken = `--regexp=${pattern}`;
+    expect(built.args).toContain(regexpToken);
+
+    // And it is the second-to-last token — which is the precise statement of
+    // "there is exactly ONE operand". Counting bare tokens instead would be wrong
+    // in both directions: option VALUES are bare (`-t ts`), and a pattern that
+    // happens to equal the default operand (`pattern: "."`) would look like a
+    // leaked pattern when it is simply the root.
+    expect(
+      built.args.indexOf(regexpToken),
+      `${JSON.stringify(input)} has something other than the single operand after the pattern`,
+    ).toBe(built.args.length - 2);
   }
+});
+
+test("every escape input is refused at build time — none of them reaches an argv", () => {
+  // The claim MUST_NOT_ESCAPE actually supports. Counting them is the point: if a
+  // future change makes one of these build instead of being refused, the shape
+  // assertions above are not what catches it, so it has to be caught here.
+  const refused: string[] = [];
+  for (const input of MUST_NOT_ESCAPE) {
+    const built = buildSearchArgv({
+      root: ROOT,
+      pattern: String(input.pattern),
+      path: input.path as string | undefined,
+      flags: input.flags as string[] | undefined,
+    });
+    expect(built.ok, `${JSON.stringify(input)} built an argv instead of being refused`).toBe(false);
+    if (!built.ok) {
+      expect(built.reason.length, `${JSON.stringify(input)} was refused with no reason`).toBeGreaterThan(0);
+      refused.push(built.reason);
+    }
+  }
+  expect(refused).toHaveLength(MUST_NOT_ESCAPE.length);
 });
 
 test("every invocation ends `--no-follow`, `--regexp=<pattern>`, <confined path>", () => {

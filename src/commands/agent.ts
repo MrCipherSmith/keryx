@@ -15,6 +15,11 @@
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { defaultAgentToolNames, groupToolNames, renderToolList } from "./agent-tool-surface";
 import { isDestructiveCommand, touchesAgentCredentials } from "../lib/command-risk";
+import {
+  isUnattendedEligible,
+  unattendedToolRefusal,
+  type UnattendedPosture,
+} from "../harness/posture/unattended";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, NormalizedRequest, NormalizedUsage, ProviderPort } from "../harness/provider/types";
@@ -107,6 +112,12 @@ export interface AgentDeps {
    * {@link MAX_ATTEMPTS_PER_HASH} times and still counts as **one** budget slot.
    */
   maxToolCalls?: number;
+  /**
+   * When set, this turn runs under an unattended posture: no operator is
+   * reachable, and only tools that declare themselves read-risk and
+   * approver-free may be invoked. Absent ⇒ the supervised default, unchanged.
+   */
+  posture?: UnattendedPosture;
 }
 
 /**
@@ -537,7 +548,7 @@ export async function runAgentTurn(
       }
 
       executedAny = true;
-      const result = await executeCall(call, toolByName, io.requestApproval);
+      const result = await executeCall(call, toolByName, io.requestApproval, deps.posture);
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
@@ -710,10 +721,28 @@ async function executeCall(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
+  posture?: UnattendedPosture,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
+    // The FIRST containment property of the unattended posture, and the one that
+    // does the work: a tool the run never registered has no entry here, so a
+    // model that names `shell_exec` gets a miss on a map lookup. Nothing parsed
+    // the command it wanted to run — no classifier, no allowlist, no wrapper
+    // vocabulary — because the command never became a thing this process holds.
     return { output: `unknown tool: ${call.name}`, isError: true };
+  }
+
+  // The SECOND seam, for a caller that registered a mutating tool under the
+  // posture anyway. Redundant with the tool-set restriction today and kept so
+  // that widening the posture later cannot silently turn "was never registered"
+  // into "was registered and ran". The decision is the tool's own declared risk
+  // class; it is not a check on what the call would do.
+  if (posture !== undefined && !isUnattendedEligible(tool)) {
+    return {
+      output: unattendedToolRefusal(call.name, tool.definition.risk),
+      isError: true,
+    };
   }
 
   const input = parseToolInput(call.input);

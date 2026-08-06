@@ -73,13 +73,63 @@ export const SEARCH_CODE_RG_UNAVAILABLE_MESSAGE =
   "inspect files directly instead of retrying search_code.";
 
 /**
- * Rewrite a failed `search_code` result whose error is "ripgrep missing" into the
- * actionable {@link SEARCH_CODE_RG_UNAVAILABLE_MESSAGE}; pass anything else through
- * unchanged. Only error results are inspected, so successful searches are untouched.
+ * The option name in a `keryx ctx rg` refusal, e.g. `--no-follow` out of
+ * "unsupported ripgrep option --no-follow. Only a reviewed set …".
+ */
+const CLI_REJECTED_OPTION = /unsupported ripgrep option\s+(--?[\w-]+)/i;
+
+/**
+ * The model- and operator-facing diagnosis when the `keryx` on PATH is older than
+ * the checkout that built this tool.
+ *
+ * `search_code` runs `keryx ctx rg` as a SUBPROCESS, resolved from PATH — so the
+ * confinement argv it assembles is handed to a binary whose accepted-option table
+ * may be a different vintage. `--no-follow` is only forwarded from `377fc325`
+ * onward, so against an older install EVERY search fails, including a benign
+ * in-root one. Measured: global keryx 0.2.9 refuses it, the 0.2.16 checkout
+ * returns matches for the same call.
+ *
+ * That matters most exactly where this is least likely to be noticed — an
+ * unattended run in CI, where the installed binary and the checkout routinely
+ * differ, `search_code` is one of only two general read tools, and there is no
+ * `shell_exec` to fall back to and no human watching. So the failure is rewritten
+ * into something that says what broke and what to do about it, rather than a
+ * ripgrep-option message that reads like the model passed a bad flag.
+ */
+export function searchCliSkewMessage(option: string): string {
+  return (
+    `search_code cannot run here: the \`keryx\` on PATH refused \`${option}\`, an option this ` +
+    "tool adds to every search to keep it inside the project. The installed `keryx` is older " +
+    "than the one this project expects, so the CLI and the tool no longer agree on what may be " +
+    "forwarded. Fix it by updating the installed keryx to at least the version of this checkout. " +
+    "Until then every search_code call will fail the same way — use read_file and list_dir to " +
+    "inspect files directly instead of retrying it."
+  );
+}
+
+/**
+ * Rewrite a failed `search_code` result into an actionable diagnosis where one
+ * applies; pass anything else through unchanged. Only error results are
+ * inspected, so successful searches are untouched.
+ *
+ * Two conditions are rewritten, and the second is deliberately narrow. A refusal
+ * is treated as version skew ONLY when the option the CLI named is one this tool
+ * FORCED — a fact the tool holds ({@link SEARCH_TOOL_FORCED_OPTIONS}) rather than
+ * a guess about CLI versions. A refusal of a CALLER-supplied option is left
+ * alone: the CLI's own message already names the option the caller passed and is
+ * the right thing to show, and rewriting it would hide a real input error behind
+ * an environment story.
  */
 export function normalizeSearchResult(result: InteractiveToolResult): InteractiveToolResult {
-  if (result.isError && RG_UNAVAILABLE_SIGNATURE.test(result.output)) {
+  if (!result.isError) {
+    return result;
+  }
+  if (RG_UNAVAILABLE_SIGNATURE.test(result.output)) {
     return { output: SEARCH_CODE_RG_UNAVAILABLE_MESSAGE, isError: true };
+  }
+  const option = CLI_REJECTED_OPTION.exec(result.output)?.[1];
+  if (option !== undefined && SEARCH_TOOL_FORCED_OPTIONS.includes(option)) {
+    return { output: searchCliSkewMessage(option), isError: true };
   }
   return result;
 }
@@ -92,7 +142,22 @@ export function normalizeSearchResult(result: InteractiveToolResult): Interactiv
 export function makeKeryxRunner(root: string): KeryxRunner {
   return async (args) => {
     try {
-      const proc = Bun.spawn(["keryx", ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+      // `env` is passed EXPLICITLY, and it is not decoration. Without it
+      // `Bun.spawn` resolves the executable against a snapshot of `PATH` taken
+      // when the process started, so a later change to `process.env.PATH` is
+      // ignored and the binary that runs is whatever was first on PATH at
+      // launch. Measured while writing the real-chain test: with a shim first on
+      // the mutated PATH, the no-`env` form still ran the global install.
+      //
+      // That made the version-skew failure untestable in-process — and a test
+      // that cannot put a known `keryx` on PATH is a test that silently measures
+      // the developer's global install instead of the chain it claims to cover.
+      const proc = Bun.spawn(["keryx", ...args], {
+        cwd: root,
+        env: { ...process.env },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const [stdout, stderr] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),
