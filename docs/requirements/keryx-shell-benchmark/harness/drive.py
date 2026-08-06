@@ -75,6 +75,10 @@ NAKED = {"naked-claude", "naked-grok"}
 # because there is nothing to refuse WITH, and the benchmark would measure
 # nothing. The caller passes --unattended explicitly; it is never inferred.
 STDIN_CAPABLE = {"keryx-deepseek", "keryx-gemma"}
+
+# Printed by the launched shell after the agent exits, so the watcher can stop
+# on a fact instead of on "the pane has been quiet for a while".
+DONE_MARKER = "[harness] run finished"
 # Sentinels the routing block is wrapped in, plus the files that carry it.
 ROUTING_FILES = ("CLAUDE.md", "AGENTS.md")
 
@@ -131,11 +135,29 @@ def make_worktree(case: str, variant: str) -> str:
     # The prepared workspace: graph, health, testing, memory index. Only 9 files
     # under data/ are tracked, so a bare worktree would have no graph at all and
     # keryx would fail group A for a reason unrelated to the capability.
+    #
+    # That is not hypothetical: `harness/base` DID NOT EXIST, so the copy below
+    # was skipped silently and every worktree ran with no graph. Verified after
+    # the fact — `gdgraph affected config.ts` inside a worktree returned "no
+    # dependents" for a file with 24 of them, and the first run's group A was
+    # measuring an empty workspace rather than a capability.
     src = os.path.join(BASE, ".metaproject", "data")
     dst = os.path.join(wt, ".metaproject", "data")
     if os.path.isdir(src):
         shutil.rmtree(dst, ignore_errors=True)
         shutil.copytree(src, dst)
+
+    # Build it here instead of trusting a directory that may not be there. It
+    # costs ~0.2 s for this target (267 nodes, 656 edges) and it is always the
+    # graph OF THE PINNED COMMIT, which a copied one would not be.
+    build = sh(["keryx", "gdgraph", "build"], cwd=wt)
+    if build.returncode != 0:
+        raise SystemExit(f"workspace build failed in {wt}: {build.stderr.strip()[:300]}")
+    # Fail loudly rather than measure an empty workspace. A missing prerequisite
+    # that skips is how this went unnoticed the first time.
+    storage = os.path.join(wt, ".metaproject", "data", "gdgraph", "storage")
+    if not os.path.isdir(storage):
+        raise SystemExit(f"no graph in {wt} after build — refusing to run group A blind")
     # Toolchain, so "run the tests" is answerable. Symlinked: 500MB per run
     # would be absurd, and no case mutates it.
     nm = os.path.join(BASE, "node_modules")
@@ -196,8 +218,20 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
         # to type and nothing to verify landed.
         prompt_path = os.path.join(out_dir, "prompt.txt")
         launch = " ".join(shlex.quote(c) for c in cmd + ["--unattended"])
+        # Two things the first smoke run got wrong, both fixed here.
+        #
+        # `tee` to a file: an unattended run EXITS when stdin closes, tmux
+        # reaps the pane, and `capture-pane` on a dead session returns nothing.
+        # The smoke run therefore "succeeded" in 26 s with an empty transcript,
+        # which is worse than a timeout because it looks like a result.
+        #
+        # `sleep` after it: keeps the pane alive so the frames and screenshots
+        # still exist for a leg that finished quickly.
+        stdout_log = os.path.join(out_dir, "stdout.log")
         sh(["tmux", "new-session", "-d", "-s", session, "-x", "150", "-y", "40",
-            "-c", wt, "bash", "-lc", f"{launch} < {shlex.quote(prompt_path)}"])
+            "-c", wt, "bash", "-lc",
+            f"{launch} < {shlex.quote(prompt_path)} 2>&1 | tee {shlex.quote(stdout_log)}; "
+            f"printf '\\n{DONE_MARKER}\\n'; sleep 600"])
     else:
         sh(["tmux", "new-session", "-d", "-s", session, "-x", "150", "-y", "40",
             "-c", wt] + cmd)
@@ -264,13 +298,20 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
     while time.time() < deadline:
         time.sleep(4)
         cur = sh(["tmux", "capture-pane", "-t", session, "-p", "-e"]).stdout
+        # An unattended run says when it is done, so stop guessing. The
+        # quiet-for-12s heuristic was written for a TUI that repaints; a piped
+        # run goes silent while the model thinks, and the first smoke pass was
+        # therefore cut off at 38 s in the middle of its investigation and
+        # recorded as finished.
+        if unattended and DONE_MARKER in plain(cur):
+            break
         if plain(cur) != plain(last):
             stable_since = None
             last = cur
             if tool_frames < 6:
                 snap(f"step-{tool_frames}")
                 tool_frames += 1
-        else:
+        elif not unattended:
             if stable_since is None:
                 stable_since = time.time()
             elif time.time() - stable_since > 12:
@@ -280,8 +321,27 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
     finished = time.time()
 
     full = sh(["tmux", "capture-pane", "-t", session, "-p", "-e", "-S", "-2000"]).stdout
+    # An unattended run's own stdout is authoritative: the pane is a rendering of
+    # it and can be empty if the process exited before the capture. Prefer the
+    # log, fall back to the pane, and say which was used.
+    stdout_log = os.path.join(out_dir, "stdout.log")
+    transcript_source = "pane"
+    if unattended and os.path.exists(stdout_log):
+        logged = open(stdout_log, encoding="utf-8", errors="replace").read()
+        if len(plain(logged).strip()) > len(plain(full).strip()):
+            full, transcript_source = logged, "stdout.log"
     open(os.path.join(out_dir, "transcript.txt"), "w").write(plain(full))
     open(os.path.join(out_dir, "transcript.ansi"), "w").write(full)
+
+    # A run that produced nothing is a failed run, not a fast one. The first
+    # smoke pass exited 0 in 26 s with an empty transcript, which reads as a
+    # result and is not one.
+    if len(plain(full).strip()) < 40:
+        snap("empty-transcript")
+        raise SystemExit(
+            f"{variant} produced no transcript for {case} — refusing to record an "
+            "empty run as a result"
+        )
 
     sh(["tmux", "kill-session", "-t", session])
 
@@ -313,6 +373,7 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
         "commit": COMMIT[:12],
         "worktree": wt,
         "mode": "unattended-stdin" if unattended else "interactive",
+        "transcriptSource": transcript_source,
         # Which keryx every leg actually saw. The first run could not have said
         # this, and the difference between 0.2.9 and this branch decides whether
         # `search_code` works at all.
