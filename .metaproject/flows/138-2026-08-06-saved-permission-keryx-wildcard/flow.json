@@ -3,9 +3,9 @@
   "id": "138",
   "slug": "saved-permission-keryx-wildcard",
   "title": "Close the keryx * hole in saved shell permissions: a saved prefix grant must not auto-approve an arbitrary command",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-06T09:36:15.584Z",
-  "updatedAt": "2026-08-06T09:46:28.956Z",
+  "updatedAt": "2026-08-06T11:21:08.854Z",
   "source": {
     "type": "description",
     "ref": null
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/254"
   },
   "tasks": [
     {
@@ -267,6 +267,11 @@
       "at": "2026-08-06T09:46:28.956Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-06T11:21:08.854Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/254"
     }
   ]
 }
