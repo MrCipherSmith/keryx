@@ -315,6 +315,13 @@ test("AC2/C-1: every command is refused under every posture, and the project is 
         expect(result?.isError, `${profile}: ${command} was not refused`).toBe(true);
         // The refusal is a name that resolves to nothing — not a verdict about
         // the command. Nothing in the pipeline parsed `${command}` at all.
+        //
+        // DO NOT weaken this to `isError`. The boolean above is satisfied by any
+        // refusal, including the approver default-denying — a review mutated the
+        // eligibility check and watched `isError` stay true while the tool set
+        // restriction was gone entirely. Asserting the MESSAGE is what makes this
+        // test distinguish "the tool was never registered" from "something else
+        // happened to say no", and that distinction is the whole mechanism.
         expect(result?.output ?? "").toContain("unknown tool: shell_exec");
         expect(result?.output ?? "").not.toContain(command);
         // No approver was consulted, because nothing reached a gate.

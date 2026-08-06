@@ -247,7 +247,7 @@ drives its own input loop and would consume the piped stdin a scripted run feeds
 
 ### Where the boundary is soft
 
-Three honest limits, none of which the sections above should be read as covering.
+Four honest limits, none of which the sections above should be read as covering.
 
 **1. It is not a secrecy boundary.** `read_file` and `search_code` can read
 anything *inside the project root*, `.env` included. The posture removes the
@@ -263,13 +263,36 @@ that list is exactly the kind that is always one name behind.
   inherited. It will be behind ripgrep, and that is the safe direction.
 - The rejected options (`-e`, `--regexp`, `--follow`) are a *deny* list, and a
   deny list **will be incomplete**. Do not read "`--follow` is refused" as "the
-  search cannot follow a symlink". The property that actually holds is
-  positional: the tool appends `--no-follow` after everything the caller supplied,
-  and ripgrep resolves the last occurrence of a boolean, so an alias nobody has
-  thought of is still neutralised. The rejection is a courtesy that explains
-  itself; the ordering is the guarantee.
+  search cannot follow a symlink".
 
-**3. It is not the OS sandbox.** Nothing in the posture constrains the kernel.
+  Two different guards cover two different cases, and they do not overlap:
+
+  - *The walk.* The tool appends `--no-follow` after everything the caller
+    supplied, and ripgrep resolves the last occurrence of a boolean, so a
+    following alias nobody has thought of is still neutralised **for the
+    directory walk**. The rejection list is a courtesy that explains itself; the
+    ordering is what holds.
+  - *The operand.* `--no-follow` does **not** protect it. Measured against
+    ripgrep 14.1.1: `rg --no-follow --regexp=X vendor`, where `vendor` is a
+    symlink out of the project, follows it and matches — the same for a file
+    symlink named directly. The only thing standing between the tool and that
+    file is `confineToRoot`, which resolves the *real* path before comparing it
+    to the root. A lexical containment check passes every one of those cases.
+
+  So the operand's containment rests entirely on realpath resolution, not on any
+  flag, and `read_file` and `list_dir` rest on the same function.
+
+**3. `search_code` depends on the `keryx` on your PATH, not on this checkout.**
+It shells out to `keryx ctx rg`, so the confinement argv it builds is handed to a
+binary that may be a different version. An installed keryx older than the
+checkout refuses `--no-follow` — an option the tool adds to every search — and
+then *every* `search_code` call fails, benign in-root ones included, while the
+other fourteen tools work. The failure is rewritten into a diagnosis that names
+the skew and tells the model to use `read_file` and `list_dir` meanwhile, but the
+fix is to update the installed keryx. This bites hardest in CI, where the
+installed binary and the checkout routinely differ.
+
+**4. It is not the OS sandbox.** Nothing in the posture constrains the kernel.
 That is the stronger option and it is already built (see
 [Containment underneath](#containment-underneath)) — but its domain allowlist and
 credential masking refuse to run on Linux, so a posture requiring it would fail

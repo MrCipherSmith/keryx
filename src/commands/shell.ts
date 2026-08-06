@@ -689,6 +689,32 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
 }
 
 /**
+ * Choose the approver a shell run installs.
+ *
+ * Under a posture the answer is {@link unattendedApprover}, which denies; with no
+ * posture it is the caller's interactive prompt. The distinction matters twice
+ * over: the interactive one reads a line from a person who is not there, and it
+ * increments the intervention counter, so installing it under the posture would
+ * both hang a scripted run and corrupt the number the run record reports.
+ *
+ * This is a two-line function with its own test, and it is a function for exactly
+ * that reason. As a ternary inline in `runAgentRepl` — untested TTY wiring — it
+ * was pinned by nothing: a review reverted it so the interactive approver was
+ * installed unconditionally and the whole suite stayed green, because no tool the
+ * posture registers reaches the approval gate to notice. That unreachability is
+ * the guard's whole purpose (it is what must survive a later widening of the tool
+ * set), and it is also what makes an end-to-end test unable to see it. So the
+ * assertion is here, at the choice, rather than downstream of a seam that
+ * short-circuits ahead of it.
+ */
+export function resolveShellApprover(
+  posture: UnattendedPosture | undefined,
+  interactive: NonNullable<AgentIO["requestApproval"]>,
+): NonNullable<AgentIO["requestApproval"]> {
+  return posture === undefined ? interactive : unattendedApprover;
+}
+
+/**
  * The supervised approval prompt, exactly as the readline agent REPL prints it.
  *
  * Lifted out of the REPL closure for one reason: AC6. The cheapest way to make an
@@ -854,14 +880,7 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    // Under the posture the approver is INSTALLED and denies, rather than being
-    // omitted and default-denying. The difference matters for the next person to
-    // touch this: an omission is undone by anyone who wires an approver out of
-    // habit, an explicit denial has to be deleted on purpose. Nothing reaches it
-    // today — the posture registers no tool whose risk requires approval — and
-    // AC7 asserts it anyway, so widening the tool set later cannot quietly change
-    // what an `ask` with no approver means.
-    requestApproval: posture !== undefined ? unattendedApprover : async (_tool, input) => {
+    requestApproval: resolveShellApprover(posture, async (_tool, input) => {
       stopSpinner();
       humanInterventions += 1;
       let command = input;
@@ -884,7 +903,7 @@ async function runAgentRepl(
       const approved = /^y(es)?$/i.test(answer.trim());
       out(approved ? style.green("approved\n") : style.red("denied\n"));
       return approved;
-    },
+    }),
     onToolCall: (name, input) => {
       stopSpinner();
       endBlock(); // defensive: close any live block before the tool line

@@ -127,6 +127,12 @@ afterwards. A supervised run writes neither field and its header is unchanged.
   to change things and to reach outside the root; it does not classify what is
   inside as sensitive, and it deliberately keeps no list of sensitive filenames,
   because such a list would be exactly the kind that is always behind.
+- `search_code` needs the `keryx` on your PATH to be at least as new as this
+  checkout. It shells out to `keryx ctx rg`, and an older install refuses an
+  option the tool forces, which makes every search fail while the other tools keep
+  working. The tool reports that as an actionable diagnosis rather than a flag
+  error, but the fix is to update the install — worth checking in CI, where the
+  two routinely differ.
 - It is not the OS sandbox. Nothing here constrains the kernel; the containment is
   that no tool with a mutating capability was constructed. See
   [the harness page](./harness.md#the-unattended-posture) for the widening path

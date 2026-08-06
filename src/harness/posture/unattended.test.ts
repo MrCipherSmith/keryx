@@ -28,6 +28,7 @@ import {
   approvalPromptLine,
   chooseShellSurface,
   parseShellCliFlags,
+  resolveShellApprover,
   resolveUnattendedLaunch,
   shellHeaderSubtitle,
 } from "../../commands/shell";
@@ -186,6 +187,30 @@ test("the refusal names the risk class that produced it", () => {
 
 test("the posture's approver denies whatever it is handed", async () => {
   await expect(unattendedApprover()).resolves.toBe(false);
+});
+
+test("the shell installs the denying approver under a posture, and the interactive one without", async () => {
+  // The guard this pins is unreachable end-to-end BY DESIGN: no tool the posture
+  // registers reaches the approval gate, and the invocation seam refuses one that
+  // is smuggled in before the approver is consulted. So reverting the choice left
+  // the entire suite green — which is exactly the "a guard nothing pins is not a
+  // guard" case, aimed at the guard whose stated job is to survive a widening.
+  // The assertion therefore sits at the choice itself.
+  let interactiveCalls = 0;
+  const interactive = async (): Promise<boolean> => {
+    interactiveCalls += 1;
+    return true; // an approver that says yes, so a leak is unmistakable
+  };
+
+  const denying = resolveShellApprover(unattendedPosture("read-only"), interactive);
+  await expect(denying("shell_exec", '{"command":"rm -rf ."}')).resolves.toBe(false);
+  expect(interactiveCalls, "the interactive approver was consulted under the posture").toBe(0);
+
+  // And the supervised default still gets the real prompt — a posture guard that
+  // also disabled approvals for everyone would pass the line above.
+  const supervised = resolveShellApprover(undefined, interactive);
+  await expect(supervised("shell_exec", '{"command":"git status"}')).resolves.toBe(true);
+  expect(interactiveCalls).toBe(1);
 });
 
 // ---------------------------------------------------------------------------
