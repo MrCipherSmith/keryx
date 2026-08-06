@@ -31,3 +31,4 @@
 - 2026-08-06T11:10:50.214Z - task-done: T8: Regression corpus C-1..C-5 against a real runner and a real fixture
 - 2026-08-06T11:10:50.308Z - task-done: T9: Mutation check: name the test each guard is pinned by
 - 2026-08-06T11:10:50.398Z - task-done: T10: Docs without a category guarantee the mechanism does not enforce
+- 2026-08-06T11:21:04.216Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/255
