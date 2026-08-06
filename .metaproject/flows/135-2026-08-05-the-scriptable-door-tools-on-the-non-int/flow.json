@@ -3,9 +3,9 @@
   "id": "135",
   "slug": "the-scriptable-door-tools-on-the-non-int",
   "title": "The scriptable door: tools on the non-interactive path, providers from the registry, declared model ids",
-  "status": "implemented",
+  "status": "in-progress",
   "createdAt": "2026-08-05T19:40:27.454Z",
-  "updatedAt": "2026-08-05T20:48:28.896Z",
+  "updatedAt": "2026-08-05T22:23:59.811Z",
   "source": {
     "type": "description",
     "ref": null
@@ -303,6 +303,15 @@
       "at": "2026-08-05T20:48:28.896Z",
       "event": "ac-confirmed",
       "detail": "AC7: bun run check exit 0: 3107 pass, 14 skip, 0 fail. The 14 skips are pre-existing; none added or weakened."
+    },
+    {
+      "at": "2026-08-05T22:23:59.803Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-05T22:23:59.811Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 0c544c2e is not contained in origin/main"
     }
   ]
 }

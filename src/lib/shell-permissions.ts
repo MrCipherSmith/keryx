@@ -53,6 +53,17 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // generic wrappers that execute their argument
   "env", "eval", "exec", "xargs", "nice", "nohup", "time", "watch", "script",
   "sudo", "doas", "su", "pkexec", "runas",
+  // …and the ones this list did not have on 2026-08-05, when a review round ran
+  // `timeout 5 sh -c 'cat ~/.ssh/id_rsa'` against a gate that banned `sh` and
+  // `bash` and had never heard of `timeout`. Same category, same argument: the
+  // first token names the wrapper, not the program.
+  "timeout", "setsid", "stdbuf", "flock", "unshare", "strace", "ltrace",
+  "busybox", "parallel", "command", "chroot", "expect", "pwsh", "powershell",
+  "sshpass", "runuser", "setpriv",
+  // our own CLI: `keryx ctx run -- <anything>` executes an arbitrary program,
+  // and the destructive classifier reads the command line it is given rather
+  // than the one after the `--`. See KERYX_PREFIX_REASON.
+  "keryx",
   // remote execution and transfer
   "ssh", "scp", "rsync", "nc", "ncat", "socat", "telnet",
   // download tools (a fetched script is arbitrary code)
@@ -64,7 +75,27 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // tools whose flags execute arbitrary commands
   "git", "find", "awk", "gawk", "sed", "vim", "vi", "ex", "emacs", "gdb", "lldb",
   "at", "batch", "crontab", "tmux", "screen", "osascript", "open", "tee", "cd",
+  // …same category, found by the same review round through their own escapes:
+  // `psql -c '\! …'`, `sqlite3 '.shell …'`, `tar --to-command`, `cmake -P`,
+  // `pip install -e`, plus the cloud CLIs whose bare grant is a credential read
+  // (`gh auth token`) or an exfiltration channel (`aws s3 cp .env s3://…`).
+  "psql", "mysql", "sqlite3", "mongo", "mongosh", "redis-cli",
+  "gh", "glab", "aws", "gcloud", "az",
+  "pip", "pip3", "pipx", "uv", "gem", "brew", "apt", "apt-get",
+  "tar", "cmake", "bazel", "terraform", "ansible", "ansible-playbook",
 ]);
+
+/**
+ * Why `keryx *` is refused, stated specifically rather than as "an interpreter
+ * or wrapper". It is worth its own sentence: this repository's own `CLAUDE.md`
+ * tells agents to route commands through `keryx ctx run`, so `keryx *` is
+ * exactly the grant a user of this project would save — and with it saved,
+ * `keryx ctx run -- rm -rf /` used to auto-approve with no prompt.
+ */
+const KERYX_PREFIX_REASON =
+  "`keryx *` grants arbitrary execution: `keryx ctx run -- <command>` runs any program, and the " +
+  "destructive-command check reads the line it is given rather than the one after the `--`. Save a " +
+  "narrower pattern (`keryx flow status*`, `keryx ctx rg*`) instead";
 
 /**
  * Broad file readers. A bare `<reader> *` grant auto-approves reading ANY path,
@@ -159,7 +190,10 @@ function bannedPrefixGrant(pattern: string, firstToken: string): { word: string;
   if (PREFIX_BANNED.has(word)) {
     return {
       word,
-      reason: `\`${word} *\` grants arbitrary execution: ${word} is an interpreter or wrapper, so its first token does not constrain what runs`,
+      reason:
+        word === "keryx"
+          ? KERYX_PREFIX_REASON
+          : `\`${word} *\` grants arbitrary execution: ${word} is an interpreter or wrapper, so its first token does not constrain what runs`,
     };
   }
   if (PREFIX_BANNED_READERS.has(word)) {

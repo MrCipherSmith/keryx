@@ -78,6 +78,29 @@ load-bearing layer is the **approval gate**, not the sandbox. The policy engine
 decides *what runs*; the sandbox bounds *what a run can touch*. If you have not
 turned containment on, you are relying on the first of those.
 
+### What that gate will not remember
+
+When you approve a `shell_exec` command the shell offers to remember it, either
+exactly or as a `<word> *` prefix. Some prefixes are never offered and are
+dropped from `permissions.json` on load, with the reason reported: words whose
+first token says nothing about what will actually run. Interpreters (`bash *`,
+`python3 *`), generic wrappers (`env *`, `xargs *`, `timeout *`, `setsid *`),
+remote-exec and download tools, container runtimes, package/build runners, and
+programs with their own escape into a shell (`git *`, `find *`, `psql *`,
+`sqlite3 *`, `tar *`, `gh *`, `aws *`).
+
+That list now includes **`keryx *`**. With it saved,
+`keryx ctx run -- rm -rf /` was auto-approved with no prompt: the
+destructive-command check reads the line it is given, not the one after the
+`--`. If you have that grant saved, the next load drops it and tells you; save a
+narrower pattern (`keryx flow status*`) instead.
+
+**This list is an expedient, not a boundary.** It is a list of words, so it is
+incomplete by construction — a wrapper nobody has thought of is not on it. The
+things that apply to *every* pattern regardless of its first word are the
+metacharacter rule and the destructive classifier. Do not read the list as a
+guarantee about a category.
+
 ## Verify
 
 ```console

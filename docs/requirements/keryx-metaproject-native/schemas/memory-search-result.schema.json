@@ -15,7 +15,11 @@
       "properties": {
         "module": { "type": "string" },
         "entity": { "type": "string" },
-        "status": { "type": "string", "enum": ["active", "superseded", "deprecated"] },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "accepted", "deprecated", "conflict", "superseded"],
+          "description": "MemoryStatus (src/memory/types.ts MEMORY_STATUS_VALUES)."
+        },
         "class": { "type": "string", "enum": ["semantic", "episodic", "procedural"] },
         "asOf": { "type": "string", "description": "YYYY-MM-DD point-in-time filter." }
       }
@@ -31,7 +35,11 @@
           "path": { "type": "string", "description": "Memory entry file path under .metaproject/memory/." },
           "title": { "type": "string" },
           "type": { "type": "string", "description": "Memory type (lesson, decision, constraint, known-mistake, …)." },
-          "status": { "type": "string", "enum": ["active", "superseded", "deprecated"] },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "accepted", "deprecated", "conflict", "superseded"],
+            "description": "MemoryStatus (src/memory/types.ts MEMORY_STATUS_VALUES)."
+          },
           "score": { "type": "number", "description": "Deterministic rank score (higher = more relevant)." },
           "excerpt": { "type": "string", "description": "Bounded snippet of the entry body." }
         }

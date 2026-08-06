@@ -31,6 +31,7 @@ import type {
   WikiPageResult,
 } from "./metaproject-port";
 import { checkSearchToolOption } from "../../lib/rg-options";
+import { MEMORY_STATUS_VALUES } from "../../memory/types";
 import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
@@ -728,7 +729,10 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         query: { type: "string" },
         module: { type: "string" },
         entity: { type: "string" },
-        status: { type: "string" },
+        // Enumerated from the module's own status list rather than left open:
+        // the adapter DROPS an unrecognised status, so a typo used to come back
+        // as an empty result set that reads like "no such memory exists".
+        status: { type: "string", enum: [...MEMORY_STATUS_VALUES] },
         class: { type: "string", enum: ["semantic", "episodic", "procedural"] },
         limit: { type: "integer", minimum: 1 },
         asOf: { type: "string" },

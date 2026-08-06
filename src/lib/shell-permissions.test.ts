@@ -61,7 +61,10 @@ test("matchShellPattern: * matches newlines (heredoc / multiline shell_exec)", (
 });
 
 test("isShellCommandAllowed scans allow list", () => {
-  const allow = ["keryx *", "git status"];
+  // `keryx wiki*` rather than `keryx *`: since flow 138 the bare grant is refused
+  // (`keryx ctx run -- <command>` runs anything), while a narrowing pattern for
+  // the same word stays offerable — which is the behaviour being sampled here.
+  const allow = ["keryx wiki*", "git status"];
   expect(isShellCommandAllowed("keryx wiki index", allow)).toBe(true);
   expect(isShellCommandAllowed("git status", allow)).toBe(true);
   expect(isShellCommandAllowed("rm -rf /", allow)).toBe(false);
@@ -70,11 +73,14 @@ test("isShellCommandAllowed scans allow list", () => {
 
 test("suggestShellPatterns: exact + first-token prefix", () => {
   // Since flow 115 each suggestion also says whether it may be OFFERED.
+  // `keryx *` stopped being offerable in flow 138 — same reason `git *` did, one
+  // step closer to home: `keryx ctx run -- <command>` executes an arbitrary
+  // program. The exact command is still offerable.
   expect(suggestShellPatterns("keryx wiki index")).toEqual({
     exact: "keryx wiki index",
     prefix: "keryx *",
     offerExact: true,
-    offerPrefix: true,
+    offerPrefix: false,
   });
   // `git *` is no longer offerable (git -c/-exec run arbitrary commands), but
   // the exact command still is.
@@ -103,11 +109,11 @@ test("parseShellExecCommand: JSON or raw", () => {
 test("load/save/allowShellPattern round-trip", () => {
   const dir = tempDir();
   expect(loadShellPermissions(dir)).toEqual(emptyShellPermissions());
-  allowShellPattern("keryx *", dir);
-  allowShellPattern("keryx *", dir); // dedupe
+  allowShellPattern("keryx wiki*", dir);
+  allowShellPattern("keryx wiki*", dir); // dedupe
   allowShellPattern("git status", dir);
   const loaded = loadShellPermissions(dir);
-  expect(loaded.allow).toEqual(["keryx *", "git status"]);
+  expect(loaded.allow).toEqual(["keryx wiki*", "git status"]);
   saveShellPermissions({ allow: ["bun test*"] }, dir);
   expect(loadShellPermissions(dir).allow).toEqual(["bun test*"]);
 });
