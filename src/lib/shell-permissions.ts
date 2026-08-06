@@ -302,6 +302,19 @@ const NON_EXECUTING_PREFIXES: ReadonlySet<string> = new Set([
   "ls", "cat", "echo", "printf", "ln", "cp", "mv", "touch", "mkdir", "rmdir",
   "head", "tail", "wc", "stat", "file", "du", "df", "basename", "dirname",
   "realpath", "readlink", "chmod", "chown", "diff", "cmp", "jq", "pwd", "date",
+  // The read-only text family. Absent, these made the chain continue, so
+  // `grep foo k*`, `sort keryx.log*` and `md5sum keryx.log*` were refused — with
+  // a message claiming they name a program to run. In a repository called keryx
+  // those are things people type.
+  "grep", "egrep", "fgrep", "zgrep", "rg", "ag", "sort", "uniq", "cut", "tr",
+  "rev", "nl", "tac", "comm", "join", "fold", "expand", "unexpand", "split",
+  "shuf", "seq", "paste", "column", "fmt", "numfmt", "strings", "xxd", "od",
+  "md5sum", "sha1sum", "sha256sum", "sha512sum", "b2sum", "cksum", "sum",
+  "base64", "yq", "bat", "tree", "hostname", "printenv", "which", "type",
+  "id", "whoami", "uname", "uptime", "free", "ps",
+  // NOT here, deliberately: `less` and `more` have a `!command` shell escape,
+  // and `tee` writes files. A review listed all three as over-refusals; they are
+  // the ones where the over-refusal is earned.
 ]);
 
 /**
@@ -327,11 +340,20 @@ const NON_EXECUTING_PREFIXES: ReadonlySet<string> = new Set([
  */
 function programPositions(tokens: readonly string[], executes: (word: string) => boolean): ReadonlySet<number> {
   const positions = new Set<number>([0]);
-  const first = normalizeCommandWord(tokens[0] ?? "");
+  // Leading `VAR=value` tokens are neither the program nor a flag — they are the
+  // environment the program runs in. Anchoring at token 0 regardless let
+  // `LC_ALL=C bash *` through: `LC_ALL=C` is no known wrapper, so the chain never
+  // started and `bash` at index 1 was never reached.
+  let start = 0;
+  while (start < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[start] ?? "")) {
+    positions.add(start + 1);
+    start += 1;
+  }
+  const first = normalizeCommandWord(tokens[start] ?? "");
   if (first.length === 0 || !executes(first)) {
     return positions;
   }
-  for (let index = 1; index < tokens.length; index += 1) {
+  for (let index = start + 1; index < tokens.length; index += 1) {
     const token = tokens[index] ?? "";
     // A flag is a `-` followed by a NAME. `-tf*` names a flag and is skipped, so
     // `tar -tf*` keeps working; `-*` names nothing and is not skipped, so
@@ -353,12 +375,42 @@ function programPositions(tokens: readonly string[], executes: (word: string) =>
     // `.` and `..` never continue it: at index ≥ 1 they are paths, whatever `.`
     // means to a shell at index 0. Without that, `find . -name k*` was refused.
     const word = normalizeCommandWord(token);
-    if (word === "." || word === ".." || hasWildcard(token) || !executes(word)) {
+    if (word === "." || word === ".." || hasWildcard(token)) {
+      return positions;
+    }
+    // Past the first program word the question flips, and this is the asymmetry
+    // a review found by aiming at SUBCOMMANDS rather than wrappers. Asking "is
+    // this a known wrapper?" here stopped the chain at `run`, so `npm run *`,
+    // `docker run *`, `cargo run *`, `aws s3 cp *` and `git submodule foreach *`
+    // were all offerable — and `npm run *` grants execution of anything in a
+    // package.json the agent can write.
+    //
+    // So a subcommand is assumed to execute unless it is known inert. Being
+    // wrong about an inert word costs one refused pattern; being wrong about an
+    // executing one was the bypass.
+    if (index > start && !INERT_SUBCOMMANDS.has(word)) {
+      continue;
+    }
+    if (!executes(word)) {
       return positions;
     }
   }
   return positions;
 }
+
+/**
+ * Subcommands that report rather than run, so a glob behind one is an argument.
+ *
+ * Small on purpose and inverted like {@link NON_EXECUTING_PREFIXES}: a word
+ * missing from here costs its user one refused pattern, while a word wrongly
+ * added is a bypass. Everything in it is a read/report verb whose own job cannot
+ * be to execute something else.
+ */
+const INERT_SUBCOMMANDS: ReadonlySet<string> = new Set([
+  "ps", "ls", "log", "list", "status", "show", "diff", "version", "help",
+  "get", "describe", "info", "view", "cat", "inspect", "history", "search",
+  "outdated", "audit", "why", "tree", "blame", "branch", "tag", "remote",
+]);
 
 /**
  * A wildcard that OPENS the last token, behind a word that runs what follows it.
@@ -526,9 +578,11 @@ function couldNameKeryx(token: string, index: number, positions: ReadonlySet<num
     // it second let the equality branch refuse `ls keryx*` on its own.
     return false;
   }
-  if (normalizeCommandWord(token) === "keryx") {
-    return true;
-  }
+  // An explicit equality branch used to sit here. A mutation run showed it was
+  // pinned by NOTHING, and it turned out to be fully shadowed: the literal-run
+  // test below already matches an exact `keryx`, because a wildcard-free token is
+  // one run and `"keryx".startsWith("keryx")` is true. Deleted rather than left
+  // to read like a guard — the fourth such branch on this file.
   return token
     .split(/[*?]+/)
     .filter((run) => run.length > 0)

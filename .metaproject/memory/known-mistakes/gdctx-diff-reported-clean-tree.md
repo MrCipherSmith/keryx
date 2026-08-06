@@ -36,10 +36,26 @@ with the routed diff as the evidence that it was fine.
 
 Two things worth separating:
 
-1. **The tooling defect.** Whatever `keryx ctx diff` did, it did not report what
-   `git diff --stat HEAD` reports. It has not been root-caused; the raw log it
-   references is at `.metaproject/data/gdctx/raw/`. Reproduce before trusting
-   any conclusion about the cause.
+1. **The tooling defect — reproduced and root-caused.** Append one line to any
+   tracked file, then run `keryx ctx diff --stat`: it reports `Changed files: 0`
+   while `git status --porcelain` shows the file, and the raw log it references
+   holds the correct git output (`… | 2 ++`, `1 file changed`). Without `--stat`
+   the same tree reports correctly.
+
+   `parseDiffFiles` (`src/commands/ctx.ts:826-850`) discovers files ONLY from
+   `diff --git a/… b/…` header lines and counts `+`/`-` body lines. `git diff
+   --stat` emits summary format with no such headers, so nothing is ever
+   assigned and the map stays empty. It is `--stat`-specific, not
+   worktree-specific, and it misreports identically in a normal checkout.
+
+   Fix direction: a second parse branch for the `--stat`/`--numstat` shape, or
+   run `--numstat` internally and render the stat view from it. The test to add
+   is one asserting a NON-ZERO file count for a `--stat` invocation — the
+   current suite cannot tell "no changes" from "cannot parse changes".
+
+   Note there is already a comment at `src/commands/ctx.ts:141` about an earlier
+   `Changed files: 0` incident, so this is the second instance of the same
+   symptom from a different cause.
 2. **The practice.** A summarising layer that is wrong about *emptiness* fails
    silently, because "nothing to see" is indistinguishable from "nothing was
    looked at". Before a commit that follows destructive tooling — mutation runs,
