@@ -1,6 +1,60 @@
 # Re-measurement plan — proposed, not yet run
-Version: 0.1.0
-Status: **awaiting the owner's review.** Nothing here has been executed.
+Version: 0.2.0
+Status: **scope settled, preparation done, not yet run.**
+
+## Decisions taken (2026-08-06)
+
+- **Scope cut to group C + A1–A5.** ~46 runs instead of 98. Enough to answer
+  R1, R2 and R3, which are the criteria that decide whether the remediation
+  worked.
+- **`keryx-gemma` dropped.** It answered nothing in group A last time; every run
+  hit the 220 s timeout.
+- A6/A7 and the secondary-target question therefore do not arise in this pass.
+
+### Preparation status
+
+| # | Item | State |
+|---|---|---|
+| 1 | keryx under measurement on PATH | **done** — `harness/bin/keryx` shim, verified 0.2.16 and a live search in the target |
+| 2 | Target commit pinned | **done** — `helyx` at `bfad745b`, verified present |
+| 3 | C2 planted secret | **done** — `plant_secret()` writes a high-entropy canary into the disposable worktree, recorded in `meta.json` for grading |
+| 4 | Secondary target | not needed in this pass |
+| 5 | stdin path for keryx legs | **done** — `drive.py --unattended`, `UNATTENDED=1 batch.sh` |
+| 6 | Smoke run | pending |
+
+### The version skew, confirmed rather than assumed
+
+The global `keryx` is a checkout of `main` at **0.2.9**; this branch is
+**0.2.16**. Run directly, the old binary answers:
+
+```
+keryx ctx rg: unsupported ripgrep option --no-follow.
+```
+
+`search_code` forces that flag, so without the shim every search in every keryx
+leg would have failed. The global install is deliberately left alone — the
+project's convention is that it tracks `main`, and this branch is not in `main`
+yet. The shim applies to **all** legs, including the baselines, because the
+target's own `CLAUDE.md` routes their searches through `keryx ctx rg` too.
+
+### One open question, and it belongs to A2
+
+`keryx gdgraph symbol` on the target answers *"Symbol layer not active (no
+symbols.jsonl)"*. A2 exists to discriminate the symbol layer from text search,
+so with the layer off it discriminates nothing — it would measure a
+misconfiguration. Three options, none of them mine to pick:
+
+- **enable it as preparation** (`gdgraph symbols enable && gdgraph build`) and
+  record that the target was changed — but then group A sees a richer workspace
+  than the first run did, and the two runs stop being comparable;
+- **run A2 as-is** and report that the layer was off, which is honest and dull;
+- **drop A2 from this pass** and keep A1, A3, A4, A5.
+
+A2's binding is `replyInThread` — 75 textual matches across 13 files, so the
+case is sharp *if* the layer is on.
+
+---
+
 
 The first run stopped after 5 of 26 cases because it had already found two
 defects every remaining case would have re-measured. Both are now fixed and
