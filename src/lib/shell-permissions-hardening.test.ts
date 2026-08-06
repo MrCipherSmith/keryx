@@ -563,14 +563,23 @@ test("B8: an exhaustive sweep finds no pattern that validates and still executes
   // it is not a list of inputs — it is a property, and it fails loudly when a
   // future change reopens the class rather than when someone guesses the string.
   const ALPHABET = [
-    "*", "?", "?*", "*x", "*yx", "?????", "*ctx", "*run", "k*", "ker*x", "ke?yx",
+    "*", "?", "?*", "*x", "*yx", "?????", "*ctx", "*run", "k*", "ke*", "ker*x", "ke?yx",
     "keryx", "keryx*", "keryx?", "ctx", "ctx*", "c*", "run", "run*", "run?*",
     "harness", "harness*", "exec", "exec*", "--", "rg*",
+    // The wrapper words matter as much as the keryx spellings, and their absence
+    // is why an earlier run of this sweep reported zero while `env k*` was live:
+    // with nothing able to occupy position 0, `k*` could only appear where the
+    // positional rule already killed it. An alphabet that cannot express the
+    // attack cannot find it.
+    "env", "nice", "timeout", "5",
   ];
   const ATTACKS = [
     "keryx ctx run -- rm -rf /tmp/x",
     "keryx harness exec -- /bin/sh",
     "keryx ctx run -- cat /etc/shadow",
+    "env keryx ctx run -- rm -rf /tmp/x",
+    "nice keryx harness exec -- /bin/sh",
+    "timeout 5 keryx ctx run -- rm -rf /tmp/x",
   ];
 
   const bypasses: string[] = [];
@@ -599,6 +608,52 @@ test("B8: an exhaustive sweep finds no pattern that validates and still executes
   expect(bypasses.slice(0, 10)).toEqual([]);
 });
 
+test("B9: a partial keryx name behind a wrapper is still keryx", () => {
+  // Round 5, and a regression I introduced closing an over-refusal: the
+  // positional rule permits a wildcard in the LAST token, and a keryx token can
+  // sit there when a wrapper precedes it. `couldNameKeryx` had been narrowed to
+  // plain equality, so `k*`, `ke*`, `ker*` and `kery*` were not recognised and
+  // the verb scan never ran.
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ["env k*", "env keryx ctx run -- rm -rf /tmp/x"],
+    ["env ke*", "env keryx ctx run -- rm -rf /tmp/x"],
+    ["env ker*", "env keryx ctx run -- cat /etc/shadow"],
+    ["env kery*", "env keryx ctx run -- rm -rf /tmp/x"],
+    ["nice k*", "nice keryx harness exec -- /bin/sh"],
+    ["nohup ker*", "nohup keryx ctx run -- /tmp/evil.sh"],
+    ["timeout 5 k*", "timeout 5 keryx ctx run -- rm -rf /tmp/x"],
+    ["xargs k*", "xargs keryx ctx run -- rm -rf /tmp/x"],
+    ["command k*", "command keryx ctx run -- rm -rf /tmp/x"],
+    ["env /usr/bin/k*", "env /usr/bin/keryx ctx run -- rm -rf /tmp/x"],
+  ];
+  for (const [pattern, attack] of cases) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(isShellCommandAllowed(attack, [pattern]), `\`${pattern}\` covers the attack`).toBe(true);
+  }
+});
+
+test("B9: a partial keryx name with nothing that could execute it is ordinary", () => {
+  // The other half, and it is the reason the wrapper gate exists at all: an
+  // earlier version applied the literal-run test everywhere and refused these,
+  // telling the user that `k*` "names keryx".
+  for (const pattern of ["ls k*", "ls ke*", "ls keryx*", "cat keryx.log*", "echo k*", "ln -s k*"]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
+  // And the cost of the gate, asserted rather than left to be discovered: `git`
+  // can execute its arguments, and nothing here knows that `add` neutralises it.
+  expect(validateShellPattern("git add k*").ok).toBe(false);
+});
+
+test("B9: a pattern that ends inside a verb is a fixed string, and stays offerable", () => {
+  // Pins the run-out branch of the verb scan. A mutation showed both this branch
+  // and the lookback it replaced were provably constant — the reasoning is sound
+  // but nothing asserted it, so the branch could be flipped to refuse these and
+  // no test would notice.
+  for (const pattern of ["keryx", "keryx ctx", "keryx harness"]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
+});
+
 test("B8: the positional rule leaves ordinary grants alone", () => {
   // The control, and it is load-bearing twice over: an earlier version identified
   // the keryx token by literal runs and refused `ls k*` — telling the user that
@@ -606,7 +661,6 @@ test("B8: the positional rule leaves ordinary grants alone", () => {
   for (const pattern of [
     "ls k*",
     "ls kernel*",
-    "git add k*",
     "cat keryx.log*",
     "echo k*",
     "hostname *",

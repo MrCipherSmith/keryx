@@ -191,6 +191,10 @@ export function validateShellPattern(pattern: string): PatternValidation {
   if (banned !== undefined) {
     return { ok: false, reason: banned.reason };
   }
+  const openWildcard = openWildcardBehindWrapper(trimmed);
+  if (openWildcard !== undefined) {
+    return { ok: false, reason: openWildcard };
+  }
   return { ok: true };
 }
 
@@ -269,6 +273,38 @@ function wildcardOutOfPosition(pattern: string, firstToken: string): string | un
 }
 
 /**
+ * A wildcard that OPENS the last token, behind a word that runs what follows it.
+ *
+ * `timeout 5 *` and `env *x` are not bare grants — their remainder holds a
+ * literal, so the bare-grant gate lets them through — and they grant arbitrary
+ * execution anyway, because the wrapper runs whatever the wildcard turns out to
+ * be. Found by widening the sweep alphabet with wrapper words: a class the
+ * previous alphabet could not express, and therefore one it reported zero of.
+ *
+ * The literal PREFIX decides, so `bun test*` and `timeout 5 bun test*` are kept
+ * exactly as they always have been — they pin the program after the wrapper.
+ *
+ * Runs after the shape rule and the word lists, so a pattern that is refused for
+ * what its FIRST token is keeps saying so; this is the diagnosis for the case
+ * where the first token is fine and the last one names nothing.
+ */
+function openWildcardBehindWrapper(pattern: string): string | undefined {
+  const tokens = pattern.split(/\s+/);
+  const last = tokens[tokens.length - 1] ?? "";
+  if (last.search(/[*?]/) !== 0) {
+    return undefined;
+  }
+  if (!tokens.slice(0, -1).some((earlier) => PREFIX_BANNED.has(normalizeCommandWord(earlier)))) {
+    return undefined;
+  }
+  return (
+    `\`${last}\` names no program, and \`${pattern}\` puts it behind a word that runs what follows ` +
+    "it — so the pattern grants whatever the wildcard turns out to be. Pin the first word after the " +
+    "wrapper (`bun test*`, `timeout 5 bun test*`)"
+  );
+}
+
+/**
  * Why a `keryx …` pattern is refused when it does not literally pin a verb that
  * cannot execute a caller-supplied program.
  *
@@ -321,7 +357,7 @@ function unpinnedKeryxVerb(pattern: string): string | undefined {
     "Pin the verb literally instead (`keryx flow status*`, `keryx ctx rg*`), which today means editing " +
     "permissions.json by hand — the approval prompt only offers the exact command or `keryx *`.";
   for (const [position, token] of tokens.entries()) {
-    if (!couldNameKeryx(token)) {
+    if (!couldNameKeryx(token, tokens.slice(0, position))) {
       continue;
     }
     if (hasWildcard(token)) {
@@ -350,18 +386,53 @@ function hasWildcard(token: string): boolean {
 }
 
 /**
- * Whether `token` names keryx.
+ * Whether `token` names keryx, given the literal tokens that precede it.
  *
- * Plain string equality on the normalised word, and that is now enough: the
- * positional rule has already refused every pattern in which a token could BE
- * `keryx` without saying so (`k*`, `ker*x`, `*keryx`, `?????`). An earlier
- * version asked whether any literal run was in a prefix relation with `keryx`,
- * which caught `ker*x` — and also refused `ls k*`, `git add k*` and
- * `cat keryx.log*`, telling the user that `k*` "names keryx". Buying safety by
- * refusing ordinary grants is not buying safety.
+ * Two questions, because a previous round answered only one of them at a time
+ * and each answer reopened the other:
+ *
+ *  - **Does it say `keryx`?** Plain equality on the normalised word. At index 0
+ *    that is enough, because the positional rule has already refused every first
+ *    token carrying a wildcard.
+ *  - **Could it BE `keryx` without saying so?** `env k*` is the case: the
+ *    positional rule permits a wildcard in the LAST token, and a keryx token can
+ *    sit there when something precedes it. So for a token that is not first, the
+ *    literal-run test is applied as well — but only when the tokens before it can
+ *    execute what follows them, which is what makes the position a program
+ *    position at all.
+ *
+ * That gate is {@link PREFIX_BANNED}, reused deliberately: it is already the
+ * list of words whose first token says nothing about what runs, already declared
+ * an expedient, and using it here narrows what may be REMEMBERED rather than
+ * claiming a boundary.
+ *
+ * The cost, stated rather than discovered: `git add k*` is refused, because
+ * `git` can execute its arguments and nothing here knows that `add` neutralises
+ * it. `ls k*`, `echo k*`, `cat keryx.log*` and `ls keryx*` are all offerable —
+ * an earlier version refused those too, and told the user that `k*` "names
+ * keryx", which is buying safety by taking away ordinary grants.
  */
-function couldNameKeryx(token: string): boolean {
-  return normalizeCommandWord(token) === "keryx";
+function couldNameKeryx(token: string, before: readonly string[]): boolean {
+  if (before.length === 0) {
+    // Index 0 is a program position by definition, and the positional rule has
+    // already refused a wildcard here, so equality is the whole question.
+    return normalizeCommandWord(token) === "keryx";
+  }
+  if (!before.some((earlier) => PREFIX_BANNED.has(normalizeCommandWord(earlier)))) {
+    // Nothing ahead of it can execute what follows, so this token is an argument,
+    // not a program. `ls keryx*` lists files; it does not run keryx.
+    return false;
+  }
+  if (normalizeCommandWord(token) === "keryx") {
+    return true;
+  }
+  return token
+    .split(/[*?]+/)
+    .filter((run) => run.length > 0)
+    .some((run) => {
+      const bare = (run.split("/").pop() ?? "").toLowerCase();
+      return bare.startsWith("keryx") || "keryx".startsWith(bare);
+    });
 }
 
 /**

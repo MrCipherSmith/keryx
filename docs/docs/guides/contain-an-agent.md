@@ -105,9 +105,25 @@ may appear only in the **last** part of a pattern, and never in the first token.
 The reason is that `*` matches whitespace: a wildcard in the program position
 *is* a program, whatever letters it contains. `????? ctx run*` — five question
 marks, no letters — matches `keryx ctx run …` purely by length, and no rule that
-reads the letters in a token can ever see that. `bun test*`, `hostname *`,
-`cat package.json*`, `rm build/*.tmp` and `ls k*` all still work; `t*`, `*x` and
-`* ctx run*` do not.
+reads the letters in a token can ever see that.
+
+In practice this means **a wildcard has to be the last thing in the pattern**. If
+you are used to writing a glob in the middle, move it to the end:
+
+| instead of | write |
+|---|---|
+| `cp *.txt backup/` | `cp` — as an exact command, or a pattern ending in the glob |
+| `eslint *.ts --fix` | `eslint --fix *.ts` |
+| `bun test src/*.test.ts --coverage` | `bun test --coverage src/*.test.ts` |
+| `grep foo *.ts src` | `grep foo src/*.ts` |
+
+Flags before the glob, glob last. `ls src/*.ts`, `tar czf out.tgz *.md`,
+`chmod +x scripts/*.sh`, `hostname *` and `ls k*` are all fine as written.
+
+One more, for the same reason: behind a word that runs whatever follows it, the
+part after the wrapper has to name something. `bun test*` and
+`timeout 5 bun test*` are fine; `timeout 5 *` and `env *x` are not, because the
+wrapper would run whatever the wildcard turned out to be.
 
 **A word list, which is an expedient.** On top of the shape rule, some plain
 program names are refused as bare grants: interpreters (`bash *`, `python3 *`),
