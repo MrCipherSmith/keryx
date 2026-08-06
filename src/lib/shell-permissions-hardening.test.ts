@@ -847,6 +847,13 @@ test("B12: a wrapper in front does not launder a broad reader or mutator", () =>
     "env rm *",
     "sudo cat *",
     "xargs cat *",
+    // Round 9: these four were already in PREFIX_BANNED and missing only from
+    // the narrower pass-through subset, which is the kind of gap that reads as
+    // a decision rather than an omission.
+    "busybox cat *",
+    "eval cat *",
+    "chroot / cat *",
+    "systemd-run cat *",
   ]) {
     expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
   }

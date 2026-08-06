@@ -454,6 +454,12 @@ const PASSTHROUGH_WRAPPERS: ReadonlySet<string> = new Set([
   "torsocks", "firejail", "bwrap", "valgrind", "script", "watch", "time",
   "flock", "unshare", "ssh-agent", "dbus-run-session", "systemd-inhibit",
   "xvfb-run", "exec", "strace", "ltrace",
+  // Found by the round-9 review, and the reason they are worth naming: all four
+  // were ALREADY in PREFIX_BANNED — the file has classified them as wrappers
+  // since round 1 — and were simply absent from this narrower subset, which
+  // reads as deliberate to the next person. `busybox cat /etc/hostname` and
+  // `eval cat /etc/hostname` were both run on the review host.
+  "busybox", "eval", "chroot", "systemd-run",
 ]);
 
 /**
@@ -489,7 +495,15 @@ function launderedBroadGrant(pattern: string): string | undefined {
         return true; // an environment assignment passes through by definition
       }
       const word = normalizeCommandWord(earlier);
-      return PASSTHROUGH_WRAPPERS.has(word) || /^-/.test(earlier) || /^\d+$/.test(earlier);
+      // A path or a number in this position is the wrapper's own operand, not
+      // the program: `chroot / cat *` and `timeout 5 cat *` both put the program
+      // one token further along.
+      return (
+        PASSTHROUGH_WRAPPERS.has(word) ||
+        /^-/.test(earlier) ||
+        /^\d+$/.test(earlier) ||
+        /^[./~]/.test(earlier)
+      );
     });
     if (!allPassThrough) {
       return undefined; // a subcommand intervened; this token is not the program
