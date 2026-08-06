@@ -62,6 +62,16 @@ import {
   runAgentTurn,
 } from "./agent";
 import { advertisedToolNames, defaultAgentToolNames } from "./agent-tool-surface";
+import {
+  parseUnattendedProfile,
+  postureHeaderSegment,
+  restrictToUnattendedToolSet,
+  runPostureRecord,
+  unattendedApprover,
+  UNATTENDED_CHAT_CONFLICT,
+  UNATTENDED_NO_SELECTION,
+  type UnattendedPosture,
+} from "../harness/posture/unattended";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
 import {
   compactSession,
@@ -678,6 +688,19 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   return { io, emitSystem, printHeader, printPrompt };
 }
 
+/**
+ * The supervised approval prompt, exactly as the readline agent REPL prints it.
+ *
+ * Lifted out of the REPL closure for one reason: AC6. The cheapest way to make an
+ * unattended posture look safe is to loosen or reword the supervised default that
+ * it is measured against, and a diff that does so is invisible unless the
+ * default's exact bytes are asserted somewhere. Behaviour-preserving extraction —
+ * the caller below writes precisely this and nothing else.
+ */
+export function approvalPromptLine(command: string): string {
+  return `\n${GUTTER}${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`;
+}
+
 /** A dim, terminal-width-agnostic separator between agent turns. */
 function turnSeparator(): string {
   return style.dim("─".repeat(24));
@@ -715,7 +738,14 @@ async function runAgentRepl(
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
+  posture?: UnattendedPosture,
 ): Promise<void> {
+  // Times a PERSON was asked to decide something. Incremented at the one place
+  // that reads a human answer (the approval prompt below); `ask_user` is the only
+  // other route to a person and the posture does not register it. Stamped into
+  // the run record so `human_interventions: 0` is a measured fact about the run
+  // rather than an inference from the flag that launched it.
+  let humanInterventions = 0;
   const out = (s: string): void => {
     process.stdout.write(s);
   };
@@ -824,8 +854,16 @@ async function runAgentRepl(
     onUsage: (usage) => {
       lastUsage = usage;
     },
-    requestApproval: async (_tool, input) => {
+    // Under the posture the approver is INSTALLED and denies, rather than being
+    // omitted and default-denying. The difference matters for the next person to
+    // touch this: an omission is undone by anyone who wires an approver out of
+    // habit, an explicit denial has to be deleted on purpose. Nothing reaches it
+    // today — the posture registers no tool whose risk requires approval — and
+    // AC7 asserts it anyway, so widening the tool set later cannot quietly change
+    // what an `ask` with no approver means.
+    requestApproval: posture !== undefined ? unattendedApprover : async (_tool, input) => {
       stopSpinner();
+      humanInterventions += 1;
       let command = input;
       try {
         const parsed: unknown = JSON.parse(input);
@@ -841,7 +879,7 @@ async function runAgentRepl(
       if (context.length > 0) {
         out(`\n${indentBlock(style.dim(context), GUTTER)}`);
       }
-      out(`\n${GUTTER}${style.yellow(`Run: ${command}`)} ${style.dim("[y/N] ")}`);
+      out(approvalPromptLine(command));
       const answer = (await readLine()) ?? "";
       const approved = /^y(es)?$/i.test(answer.trim());
       out(approved ? style.green("approved\n") : style.red("denied\n"));
@@ -924,11 +962,29 @@ async function runAgentRepl(
         archive,
         provider: deps.providerId,
         model: deps.modelId,
+        // Empty object on the supervised path, so the summary a default run
+        // writes is byte-for-byte the one it wrote before this flow.
+        ...runPostureRecord(posture, humanInterventions),
       });
     } catch {
       // best-effort
     }
   };
+
+  // Stamp the record at OPEN, not only after the first turn.
+  //
+  // `save()` runs after a turn completes, so a run that answered nothing — an
+  // empty prompt, an immediate `/exit`, a provider that failed on the first
+  // request — left a session directory that looked supervised. Observed on the
+  // real binary: `keryx shell --unattended` then `/exit` wrote a summary with no
+  // posture at all. A stamp that is only present when the run went well is not
+  // evidence.
+  //
+  // Guarded on the posture so the supervised default's write sequence is
+  // untouched: with no posture this does nothing at all.
+  if (posture !== undefined) {
+    save();
+  }
 
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
@@ -1111,6 +1167,13 @@ export interface ShellCliFlags {
   resumeId?: string;
   /** `-r` without id → open resume picker (TUI) or latest (non-TUI). */
   resumePick?: boolean;
+  /**
+   * `--unattended[=<profile>]` was given (flow 137). Carries the raw `=<profile>`
+   * text — validation happens in {@link resolveUnattendedLaunch}, so the parser
+   * stays a pure reader of argv and the refusal wording lives in one place.
+   * `null` = the bare flag, `undefined` = the flag was absent.
+   */
+  unattendedArg?: string | null;
 }
 
 /**
@@ -1127,9 +1190,18 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let continueLast: boolean | undefined;
   let resumeId: string | undefined;
   let resumePick: boolean | undefined;
+  let unattendedArg: string | null | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--provider") {
+    if (arg === "--unattended") {
+      // The bare flag. Deliberately NOT `--unattended <value>`: a space-separated
+      // value would make the next argv token's meaning depend on this flag, and
+      // "an operand whose meaning depends on a flag beside it" is the exact shape
+      // that turned `search_code` into an arbitrary file reader. Only `=` binds.
+      unattendedArg = null;
+    } else if (arg !== undefined && arg.startsWith("--unattended=")) {
+      unattendedArg = arg.slice("--unattended=".length);
+    } else if (arg === "--provider") {
       providerArg = args[++i] ?? providerArg;
     } else if (arg === "--model") {
       modelArg = args[++i] ?? modelArg;
@@ -1164,7 +1236,85 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(continueLast === true ? { continueLast: true } : {}),
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
+    ...(unattendedArg !== undefined ? { unattendedArg } : {}),
   };
+}
+
+/** A resolved unattended launch, or the reason the launch is refused. */
+export type UnattendedLaunch =
+  | { ok: true; posture: undefined }
+  | { ok: true; posture: UnattendedPosture; selection: { provider: string; model: string; baseUrl?: string } }
+  | { ok: false; error: string };
+
+/**
+ * Resolve everything `--unattended` decides at LAUNCH, before any provider is
+ * constructed or any tool is built. Pure: `saved` is the persisted shell config
+ * the caller already loaded.
+ *
+ * Three refusals live here, and each is a launch-time property rather than a
+ * run-time judgement:
+ *
+ *  - an unknown profile is an error, never a fallback to the widest one;
+ *  - `--chat` is refused, because chat mode registers no tools at all and none of
+ *    the posture's plumbing reaches it — an unattended chat run would look
+ *    contained while simply being empty;
+ *  - a provider/model that cannot be resolved from flags or the saved config is
+ *    an error, because the alternative is the interactive picker, and a run that
+ *    stops to be chosen for is the stall this flag exists to remove.
+ */
+export function resolveUnattendedLaunch(
+  flags: Pick<ShellCliFlags, "unattendedArg" | "modeFlag" | "providerArg" | "modelArg" | "baseUrl">,
+  saved: { provider?: string | undefined; model?: string | undefined; baseUrl?: string | undefined },
+): UnattendedLaunch {
+  if (flags.unattendedArg === undefined) {
+    return { ok: true, posture: undefined };
+  }
+  const parsed = parseUnattendedProfile(flags.unattendedArg ?? undefined);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error };
+  }
+  if (flags.modeFlag === false) {
+    return { ok: false, error: UNATTENDED_CHAT_CONFLICT };
+  }
+  const provider = flags.providerArg ?? saved.provider;
+  const model = flags.modelArg ?? saved.model;
+  if (provider === undefined || provider.length === 0 || model === undefined || model.length === 0) {
+    return { ok: false, error: UNATTENDED_NO_SELECTION };
+  }
+  // The saved base URL belongs to the saved PROVIDER. Inheriting it for a
+  // provider the operator named on the command line would point `--provider fake`
+  // at whatever endpoint the last interactive session happened to use — the same
+  // shape as `--base-url` with a registry provider, which the harness already
+  // refuses outright. So it travels only when the provider travelled with it.
+  const savedBaseUrl = flags.providerArg === undefined ? saved.baseUrl : undefined;
+  const baseUrl = flags.baseUrl ?? savedBaseUrl;
+  return {
+    ok: true,
+    posture: parsed.posture,
+    selection: { provider, model, ...(baseUrl !== undefined ? { baseUrl } : {}) },
+  };
+}
+
+/**
+ * The one-line shell header subtitle.
+ *
+ * Extracted so both the posture stamp and the UNFLAGGED default can be pinned by
+ * a test rather than eyeballed. AC6 is the reason: the cheap way to make an
+ * unattended run pass is to loosen or reword the supervised default, and a diff
+ * that does it is invisible unless the default's exact bytes are asserted
+ * somewhere.
+ */
+export function shellHeaderSubtitle(parts: {
+  provider: string;
+  model: string;
+  baseUrl?: string | undefined;
+  agentMode: boolean;
+  cwdLabel: string;
+  posture?: UnattendedPosture | undefined;
+}): string {
+  const base = `${parts.provider}/${parts.model}${parts.baseUrl !== undefined ? ` (${parts.baseUrl})` : ""}`;
+  const mode = parts.agentMode ? " · agent" : " · chat";
+  return `${base}${mode}${postureHeaderSegment(parts.posture)} · ${parts.cwdLabel}`;
 }
 
 /**
@@ -1188,6 +1338,21 @@ export function buildAgentTools(opts: {
   ];
 }
 
+/**
+ * Narrow a built tool array to what the launch posture grants.
+ *
+ * A pass-through when there is no posture, so the supervised default registers
+ * exactly the array `buildAgentTools` returned — unchanged, in the same order.
+ * Exported so a test can drive the SHIPPED composition (build, then restrict)
+ * rather than a replica of it.
+ */
+export function restrictToolsForPosture(
+  tools: InteractiveTool[],
+  posture: UnattendedPosture | undefined,
+): InteractiveTool[] {
+  return posture === undefined ? tools : restrictToUnattendedToolSet(tools);
+}
+
 /** Which surface `shellCommand` should run for a given set of flags. */
 export type ShellSurface =
   /** The OpenTUI agent shell (`launchTuiAgentShell`). */
@@ -1208,9 +1373,16 @@ export type ShellSurface =
  * This function can.
  */
 export function chooseShellSurface(
-  flags: Pick<ShellCliFlags, "wantTui" | "modeFlag">,
+  flags: Pick<ShellCliFlags, "wantTui" | "modeFlag" | "unattendedArg">,
   isTty: boolean,
 ): ShellSurface {
+  // An unattended run never launches OpenTUI, even on a TTY. OpenTUI takes over
+  // the terminal and drives its own input loop; there is nobody to drive it, and
+  // it would consume the piped stdin a scripted run feeds. The posture's header
+  // is therefore the readline shell's header — see `shellHeaderSubtitle`.
+  if (flags.unattendedArg !== undefined) {
+    return "readline";
+  }
   if (!flags.wantTui || !isTty) {
     return "readline";
   }
@@ -1233,9 +1405,30 @@ export function chooseShellSurface(
  */
 export async function shellCommand(args: string[]): Promise<void> {
   const flags = parseShellCliFlags(args);
+
+  // Posture first, before a provider is constructed or a tool is built. A refusal
+  // here exits non-zero and starts nothing — the launch never reaches a state
+  // where a wrong decision could be made about a tool call.
+  const launch = resolveUnattendedLaunch(flags, loadShellConfig());
+  if (!launch.ok) {
+    process.stderr.write(`${launch.error}\n`);
+    process.exitCode = 2;
+    return;
+  }
+  const posture = launch.posture;
+
   let providerArg = flags.providerArg;
   let modelArg = flags.modelArg;
   let baseUrl = flags.baseUrl;
+  if (launch.posture !== undefined) {
+    // Resolved from flags or the saved config by `resolveUnattendedLaunch`, which
+    // refused the launch if neither had an answer. Assigning them here is what
+    // keeps the picker branch below unreachable under the posture — a property of
+    // the values, not a second `if (unattended)` guard further down.
+    providerArg = launch.selection.provider;
+    modelArg = launch.selection.model;
+    baseUrl = launch.selection.baseUrl;
+  }
   // Mode precedence: an explicit `--agent`/`--chat` flag wins; otherwise the
   // interactive picker asks (agent-default), and the non-interactive path
   // defaults to agent. `undefined` = "no explicit flag given".
@@ -1425,11 +1618,17 @@ export async function shellCommand(args: string[]): Promise<void> {
 
     // Resolve the mode: explicit flag wins; otherwise default to agent.
     const agentMode = modeFlag ?? true;
-    const modeLabel = agentMode ? " · agent" : " · chat";
     const cwdLabel = collapseHome(process.cwd());
     printHeader(
       "keryx",
-      `${provider}/${model}${baseUrl !== undefined ? ` (${baseUrl})` : ""}${modeLabel} · ${cwdLabel}`,
+      shellHeaderSubtitle({
+        provider,
+        model,
+        baseUrl,
+        agentMode,
+        cwdLabel,
+        ...(posture !== undefined ? { posture } : {}),
+      }),
     );
 
     if (agentMode) {
@@ -1456,7 +1655,15 @@ export async function shellCommand(args: string[]): Promise<void> {
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
         getDetectedProviders: () => [{ name: provider }],
       });
-      const agentTools = buildAgentTools({ cwd: agentCwd, port: metaprojectPort, spawnTool });
+      // The posture selects a TOOL SET, and it does it here — once, at
+      // registration. `shell_exec`, `spawn_subagent` and `ask_user` are absent
+      // from `agentTools` afterwards, so they are not advertised (the system
+      // instruction is derived from this very array), not offered to the
+      // provider, and not resolvable if the model names one anyway.
+      const agentTools = restrictToolsForPosture(
+        buildAgentTools({ cwd: agentCwd, port: metaprojectPort, spawnTool }),
+        posture,
+      );
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
@@ -1469,6 +1676,7 @@ export async function shellCommand(args: string[]): Promise<void> {
         }),
         maxToolCalls: resolveAgentMaxToolCalls(),
         idSeq: () => randomUUID(),
+        ...(posture !== undefined ? { posture } : {}),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
       // created (flow 067), so it never runs here. This is the readline agent
@@ -1478,11 +1686,18 @@ export async function shellCommand(args: string[]): Promise<void> {
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = latestSession(process.cwd())?.id;
       }
-      await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort, {
-        cwd: process.cwd(),
-        ...(flags.continueLast === true ? { continueLast: true } : {}),
-        ...(resumeId !== undefined ? { resumeId } : {}),
-      });
+      await runAgentRepl(
+        sharedLines,
+        { printPrompt },
+        agentDeps,
+        metaprojectPort,
+        {
+          cwd: process.cwd(),
+          ...(flags.continueLast === true ? { continueLast: true } : {}),
+          ...(resumeId !== undefined ? { resumeId } : {}),
+        },
+        posture,
+      );
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

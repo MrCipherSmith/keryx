@@ -76,6 +76,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
             [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
+            [--unattended[=<profile>]]
 ```
 
 | Flag | Description |
@@ -87,9 +88,49 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
 | `--base-url <url>` | Point the provider at a custom endpoint. |
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
+| `--unattended[=<profile>]` | Run with no operator: register only read-risk tools and never prompt. One profile, `read-only`, which is the default when `=<profile>` is omitted. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
+
+### `shell --unattended`
+
+```bash
+keryx shell --unattended --provider anthropic --model claude-x <<< "which files import src/session/store.ts?"
+```
+
+The flag selects a **tool set**, not an approval policy. Under it the shell
+registers only tools that declare themselves `risk: "read"` and declare that they
+need no approver — so `shell_exec`, `spawn_subagent` and `ask_user` are not built,
+not advertised to the model, and not resolvable if the model names one anyway.
+There is no `--unattended-allow`, no grant argument, and no pattern argument; the
+flag's whole grammar is a profile name.
+
+Four things it refuses at launch, before a provider is constructed:
+
+| Situation | Result |
+|---|---|
+| `--unattended=<anything but a known profile>` | Refused. An unrecognised profile is an error, never a fall back to the widest one. |
+| `--unattended --chat` | Refused. Chat mode registers no tools at all, so the combination is an empty run dressed as a contained one. |
+| No `--provider`/`--model` and nothing saved | Refused. The posture never opens a picker — a run that stops to be chosen for is the stall the flag exists to remove. |
+| A TTY | The full-screen renderer is not started. OpenTUI drives its own input loop and would consume the piped stdin a scripted run feeds. |
+
+The run is marked in the header (`… · agent · unattended:read-only · ~/proj`) and
+stamped into the session record as `posture` plus `humanInterventions`, so an
+unattended run is distinguishable from a supervised one in the evidence
+afterwards. A supervised run writes neither field and its header is unchanged.
+
+**What it does not do**, stated here rather than left to be discovered:
+
+- It is not a secrecy boundary. `read_file` and `search_code` can read anything
+  **inside the project root**, including `.env`. The posture removes the ability
+  to change things and to reach outside the root; it does not classify what is
+  inside as sensitive, and it deliberately keeps no list of sensitive filenames,
+  because such a list would be exactly the kind that is always behind.
+- It is not the OS sandbox. Nothing here constrains the kernel; the containment is
+  that no tool with a mutating capability was constructed. See
+  [the harness page](./harness.md#the-unattended-posture) for the widening path
+  and for where the boundary is soft.
 
 ---
 

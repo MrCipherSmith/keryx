@@ -29,6 +29,10 @@ export type AskUserFn = (request: AskUserRequest) => Promise<string>;
  */
 export function createAskUserTool(ask: AskUserFn): InteractiveTool {
   return {
+    // Risk `read` and still not offerable without a person: `invoke` awaits the
+    // host's picker, so in a run with no operator it hangs instead of failing.
+    // Declared here rather than inferred, because no risk class expresses it.
+    requiresApprover: true,
     definition: {
       name: "ask_user",
       description:

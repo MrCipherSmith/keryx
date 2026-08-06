@@ -30,6 +30,7 @@ import {
   sessionDir as sessionDirPath,
 } from "./paths";
 import { compactMessages, type CompactOptions } from "./compact";
+import type { RunPostureRecord } from "../harness/posture/unattended";
 
 export const SESSION_SCHEMA_VERSION = 1 as const;
 
@@ -49,6 +50,19 @@ export interface SessionSummary {
   provider?: string;
   model?: string;
   parentSessionId?: string;
+  /**
+   * The posture this run was launched under, e.g. `unattended:read-only`
+   * (flow 137). ABSENT for a supervised run — the default `keryx shell` summary
+   * is byte-for-byte what it was before the posture existed, which is the point:
+   * an unattended run is distinguishable by carrying the stamp, not by everything
+   * else having changed.
+   */
+  posture?: string;
+  /**
+   * How many times a person was asked to decide something during the run.
+   * Written alongside {@link posture} only.
+   */
+  humanInterventions?: number;
 }
 
 export interface SessionHandle {
@@ -214,6 +228,13 @@ function readSummaryFile(file: string): SessionSummary | undefined {
       ...(typeof o.provider === "string" ? { provider: o.provider } : {}),
       ...(typeof o.model === "string" ? { model: o.model } : {}),
       ...(typeof o.parentSessionId === "string" ? { parentSessionId: o.parentSessionId } : {}),
+      // Read back so a resume does not erase the stamp of the run that wrote it:
+      // dropping it here would make an unattended session look supervised the
+      // moment anyone continued it, which is the opposite of AC11's purpose.
+      ...(typeof o.posture === "string" ? { posture: o.posture } : {}),
+      ...(typeof o.humanInterventions === "number"
+        ? { humanInterventions: o.humanInterventions }
+        : {}),
     };
   } catch {
     return undefined;
@@ -471,7 +492,7 @@ export function loadTranscript(cwd: string, sessionId: string, dataDir?: string)
   return loadContext(cwd, sessionId, dataDir);
 }
 
-export interface PersistMeta {
+export interface PersistMeta extends RunPostureRecord {
   provider?: string;
   model?: string;
   title?: string;
@@ -518,6 +539,12 @@ export function persistHistory(
     archiveMessageCount: archive.length,
     ...(meta?.provider !== undefined ? { provider: meta.provider } : {}),
     ...(meta?.model !== undefined ? { model: meta.model } : {}),
+    // Posture stamp (flow 137). Spread conditionally like everything above it, so
+    // a supervised run writes neither key and its summary is unchanged.
+    ...(meta?.posture !== undefined ? { posture: meta.posture } : {}),
+    ...(meta?.humanInterventions !== undefined
+      ? { humanInterventions: meta.humanInterventions }
+      : {}),
   };
   atomicWriteJson(path.join(handle.dir, "summary.json"), summary);
   return { summary, dir: handle.dir };

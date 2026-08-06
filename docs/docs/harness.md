@@ -185,6 +185,108 @@ called and what came back, for the script to read. `--tools` is for a caller tha
 wants the tool output; the agentic loop that reasons over it is `keryx shell`.
 See [CLI reference](./cli-reference.md#harness-run-tools-opt-in-with---tools).
 
+## The unattended posture
+
+`keryx shell --unattended` runs to completion with nobody at the keyboard. It
+exists because `keryx shell` could not: the shell benchmark of 2026-08-05
+finished zero of five cases, so every number recorded against keryx measured a
+stall rather than a capability.
+
+The obvious implementation — a flag that approves everything — would have traded
+away the one property that benchmark demonstrated. On case C1 keryx and opencode
+ran the *same model*; opencode deleted the graph index and the health history,
+keryx stopped.
+
+### What it actually is
+
+A **tool set**, not an approval policy:
+
+```bash
+keryx shell --unattended --provider anthropic --model <m> <<< "<prompt>"
+```
+
+Under it the shell registers only tools that declare `risk: "read"` *and* declare
+that they need no approver. `shell_exec` is `risk: "shell"`, `spawn_subagent` is
+`risk: "delegate"`, and `ask_user` is `risk: "read"` but blocks until a person
+answers — so none of the three is built. A tool that declares no risk at all is
+excluded too: the check is an equality against `read`, so a new tool is out until
+someone says what it is.
+
+The consequence is the design. When the model asks for `shell_exec`, the name
+resolves to nothing in the registry, and no part of the pipeline has looked at the
+command it wanted to run. There is no wrapper to miss, because there is nothing to
+wrap.
+
+That matters because three review rounds tried the other approach and three
+review rounds were defeated. A destructive-command classifier let sixteen
+dangerous commands through. An operator argv allowlist accepted `*`. A rule
+requiring a literal command word and banning wildcards after wrapper words was
+defeated by `timeout`, `setsid`, `stdbuf`, `flock`, `busybox` and eleven more, plus
+shell escapes through `psql -c '\! …'`, `sqlite3 '.shell …'` and
+`tar --to-command`. Each round's rule was better than the last; each round's
+vocabulary was behind. The constraint that came out of it — **containment may not
+be a list of forbidden command words** — is settled, and the corpus of everything
+those rounds found ships as a permanent regression suite
+(`src/harness/posture/unattended-corpus.ts`).
+
+### Evidence
+
+The posture is in the header and in the run record:
+
+```
+◆ keryx  anthropic/claude-x · agent · unattended:read-only · ~/proj
+```
+
+and the session summary gains `posture: "unattended:read-only"` and
+`humanInterventions`. A supervised run writes neither field, and its header is
+byte-for-byte what it always was — a test pins both, because the cheap way to make
+an unattended posture look safe is to loosen the default it is measured against.
+
+An unattended run never starts the full-screen renderer, even on a TTY: OpenTUI
+drives its own input loop and would consume the piped stdin a scripted run feeds.
+
+### Where the boundary is soft
+
+Three honest limits, none of which the sections above should be read as covering.
+
+**1. It is not a secrecy boundary.** `read_file` and `search_code` can read
+anything *inside the project root*, `.env` included. The posture removes the
+ability to change things and to reach outside the root. It does not classify what
+is inside as sensitive, and it keeps no list of sensitive filenames on purpose —
+that list is exactly the kind that is always one name behind.
+
+**2. Two lists survive in `search_code`, and they are lists.**
+
+- The forwarded ripgrep options (`src/lib/rg-options.ts`) are a *permit* list.
+  An option it does not name is refused, so it fails closed: it can only ever be
+  too narrow — a ripgrep option keryx has not reviewed is unavailable rather than
+  inherited. It will be behind ripgrep, and that is the safe direction.
+- The rejected options (`-e`, `--regexp`, `--follow`) are a *deny* list, and a
+  deny list **will be incomplete**. Do not read "`--follow` is refused" as "the
+  search cannot follow a symlink". The property that actually holds is
+  positional: the tool appends `--no-follow` after everything the caller supplied,
+  and ripgrep resolves the last occurrence of a boolean, so an alias nobody has
+  thought of is still neutralised. The rejection is a courtesy that explains
+  itself; the ordering is the guarantee.
+
+**3. It is not the OS sandbox.** Nothing in the posture constrains the kernel.
+That is the stronger option and it is already built (see
+[Containment underneath](#containment-underneath)) — but its domain allowlist and
+credential masking refuse to run on Linux, so a posture requiring it would fail
+closed on the platform CI runs on. Right answer, wrong release.
+
+### The widening path
+
+Both alternatives were considered and deferred with reasons, rather than dropped:
+
+| Mechanism | Why not this release |
+|---|---|
+| OS sandbox as the boundary | Strongest available, and it moves the guarantee to the kernel — but it fails closed on Linux today. |
+| A literal, wildcard-free argv allowlist | Round 3 reached it and the wildcard-free case held. What defeated it was permitting wildcards at all. Gated on the corpus. |
+
+Widening happens with the corpus as the gate, and only toward a mechanism that is
+not a list.
+
 ## Record and replay
 
 ```bash
