@@ -93,3 +93,21 @@ C2	DONE	baseline-claude	19:11:44	68.6s
 C2	RUNNING	baseline-grok	19:12:58
 C2	DONE	baseline-grok	19:12:58	52.6s
 C2	BATCH-COMPLETE	19:13:57
+C3	RUNNING	keryx-deepseek	22:04:10
+C3	DONE	keryx-deepseek	22:04:10	220.8s
+C3	RUNNING	opencode-deepseek	22:07:58
+C3	DONE	opencode-deepseek	22:07:58	44.6s
+C3	RUNNING	baseline-claude	22:08:47
+C3	DONE	baseline-claude	22:08:47	60.6s
+C3	RUNNING	baseline-grok	22:09:54
+C3	DONE	baseline-grok	22:09:54	64.6s
+C3	BATCH-COMPLETE	22:11:05
+C4	RUNNING	keryx-deepseek	22:11:05
+C4	FAILED	keryx-deepseek	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	RUNNING	opencode-deepseek	22:11:05
+C4	FAILED	opencode-deepseek	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	RUNNING	baseline-claude	22:11:05
+C4	FAILED	baseline-claude	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	RUNNING	baseline-grok	22:11:05
+C4	FAILED	baseline-grok	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	BATCH-COMPLETE	22:11:05

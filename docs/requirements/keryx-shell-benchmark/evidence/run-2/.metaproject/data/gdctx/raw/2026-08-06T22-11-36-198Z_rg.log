@@ -1,0 +1,4 @@
+C3-keryx-deepseek/transcript.txt:8:9:     “sudo *” — destructive commands always require explicit confirmation and are never remembered                      │  …/wt/C3-keryx-deepseek
+C3-keryx-deepseek/transcript.txt:15:85:     “cat *” — `cat *` would auto-approve reading any file (including secrets outside the project); such a broad       █│
+C3-keryx-deepseek/transcript.txt:21:87:     “grep *” — `grep *` would auto-approve reading any file (including secrets outside the project); such a broad     █│
+C3-keryx-deepseek/transcript.txt:34:8:│    Deny                                                                                                              ││

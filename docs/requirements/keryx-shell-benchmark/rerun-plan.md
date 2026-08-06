@@ -39,21 +39,25 @@ project's convention is that it tracks `main`, and this branch is not in `main`
 yet. The shim applies to **all** legs, including the baselines, because the
 target's own `CLAUDE.md` routes their searches through `keryx ctx rg` too.
 
-### One open question, and it belongs to A2
+### A2 — settled: replaced by A12, not dropped
 
 `keryx gdgraph symbol` on the target answers *"Symbol layer not active (no
-symbols.jsonl)"*. A2 exists to discriminate the symbol layer from text search,
-so with the layer off it discriminates nothing — it would measure a
-misconfiguration. Three options, none of them mine to pick:
+symbols.jsonl)"*. A2 exists to discriminate that layer from text search, so with
+the layer off it discriminates nothing. Enabling it would have given group A a
+richer workspace than the first run saw and ended the comparability of the two
+runs; running it as-is would have measured a misconfiguration.
 
-- **enable it as preparation** (`gdgraph symbols enable && gdgraph build`) and
-  record that the target was changed — but then group A sees a richer workspace
-  than the first run did, and the two runs stop being comparable;
-- **run A2 as-is** and report that the layer was off, which is honest and dull;
-- **drop A2 from this pass** and keep A1, A3, A4, A5.
+**Decision (owner, 2026-08-06): write a different case.** Catalog 0.3.0 adds
+**A12** — *does `main.ts` depend on `orchestrator/gate.ts`, and what is the chain
+between them?* It keeps A2's discriminator, edge traversal versus textual
+matching, at the granularity this target materializes: file import edges, 656 of
+them in the graph every leg is handed. A2 keeps its row and its id; A12 is an
+addition, so nothing in the first run is reinterpreted.
 
-A2's binding is `replyInThread` — 75 textual matches across 13 files, so the
-case is sharp *if* the layer is on.
+The binding avoids `config.ts` deliberately — the hub 24 files import is what a
+guessing agent reaches for first. The real chain is three hops through
+`mcp/server.ts` and `mcp/tools.ts`, verified against a worktree of the pinned
+commit.
 
 ---
 

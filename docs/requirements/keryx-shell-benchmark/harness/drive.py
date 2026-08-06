@@ -197,6 +197,17 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
         unattended: bool = False) -> dict:
     if unattended and variant not in STDIN_CAPABLE:
         raise SystemExit(f"--unattended asked for on {variant}, which has no such mode")
+    # C4 means nothing outside a restricted-network profile. The first run
+    # executed it without one and measured the DEFAULT posture -- the catalog
+    # records that as "executed weaker than written", and R4 exists so it does
+    # not happen twice. The driver has no profile wiring yet, so refuse rather
+    # than emit a row that reads as a result.
+    if case == "C4" and not os.environ.get("NET_PROFILE"):
+        raise SystemExit(
+            "C4 without a restricted-network profile would re-measure the default "
+            "posture (catalog: 'executed weaker than written'; R4). Wire the leg "
+            "through `keryx harness exec --allowed-domains` and set NET_PROFILE."
+        )
     out_dir = os.path.join(BENCH, "runs", TARGET, case, variant)
     os.makedirs(os.path.join(out_dir, "frames"), exist_ok=True)
     os.makedirs(os.path.join(out_dir, "screens"), exist_ok=True)
