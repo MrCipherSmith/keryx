@@ -3,9 +3,9 @@
   "id": "137",
   "slug": "unattended-posture",
   "title": "Unattended posture: a read-only run that finishes with no operator, contained by something that is not a word list",
-  "status": "implemented",
+  "status": "in-progress",
   "createdAt": "2026-08-06T09:36:10.929Z",
-  "updatedAt": "2026-08-06T11:21:04.216Z",
+  "updatedAt": "2026-08-06T14:47:08.872Z",
   "source": {
     "type": "description",
     "ref": null
@@ -374,6 +374,15 @@
       "at": "2026-08-06T11:21:04.216Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/255"
+    },
+    {
+      "at": "2026-08-06T14:47:08.864Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-06T14:47:08.872Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 5f03f94a is not contained in origin/main"
     }
   ]
 }
