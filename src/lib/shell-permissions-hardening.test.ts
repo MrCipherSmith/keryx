@@ -419,6 +419,78 @@ test("B5: a keryx pattern must pin a verb that cannot execute what follows", () 
   expect(validateShellPattern("keryx health run*").ok).toBe(true);
 });
 
+// --- B6: what the second review found in the first fix -----------------------
+
+test("B6: a wildcard inside the verb token does not pin the verb away", () => {
+  // The first version compared the token to the verb word ALONE, so `run?*` — no
+  // match against `run` in isolation — looked like it excluded the verb. The
+  // stored pattern is matched against the WHOLE command as one glob, where
+  // whitespace is not a boundary, so the `?*` ate ` -- rm -rf /`. Every pattern
+  // here was offerable and auto-approved the attack.
+  const attack = "keryx ctx run -- rm -rf /tmp/x";
+  for (const pattern of [
+    "keryx ctx run?*",
+    "keryx ctx run??*",
+    "keryx ctx run*x",
+    "keryx c?x run?*",
+    "keryx ctx ru*",
+  ]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    // The half that matters: the pattern really did cover the attack.
+    expect(isShellCommandAllowed(attack, [pattern]), `\`${pattern}\` covers the attack`).toBe(true);
+  }
+  expect(validateShellPattern("keryx harness exec?*").ok).toBe(false);
+});
+
+test("B6: the keryx verb rule is not anchored to the first token", () => {
+  // Putting anything in front skipped the rule, and the remainder was
+  // "narrowing", so `bannedPrefixGrant` passed it too.
+  for (const pattern of [
+    "env keryx ctx run*",
+    "nice keryx ctx run*",
+    "nohup keryx ctx run*",
+    "timeout 5 keryx*",
+  ]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(result.ok === false && result.reason).toMatch(/arbitrary program/);
+  }
+});
+
+test("B6: a versioned interpreter is the interpreter", () => {
+  // `python3 *` was refused and `python3.12 *` was OFFERED, on a host where that
+  // binary exists. The suffix is stripped before lookup, so one entry covers
+  // every release rather than the list going stale once a year.
+  for (const pattern of ["python3.12 *", "python3.13 *", "node20 *", "ruby3.2 *", "php8.3 *"]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+  }
+  // And the shells that were simply missing.
+  for (const shell of ["csh", "tcsh", "mksh", "rbash", "ash", "xonsh"]) {
+    expect(validateShellPattern(`${shell} *`).ok, `\`${shell} *\` must not be remembered`).toBe(false);
+  }
+  // A version-looking suffix on a word that is NOT an interpreter is untouched.
+  expect(validateShellPattern("myapp2 *").ok).toBe(true);
+});
+
+test("B6: the keryx entry in the prefix list is still reachable and still pinned", () => {
+  // A mutation run found the `keryx` WORD had become unpinned: the verb rule runs
+  // first and shadows it for `keryx *`. It still decides these, so it is still a
+  // guard, and now something fails when it is removed.
+  const dash = validateShellPattern("keryx -*");
+  expect(dash.ok).toBe(false);
+  expect(dash.ok === false && dash.reason).toMatch(/keryx ctx run/);
+});
+
+test("B6: an unconstraining remainder is refused on its own, not only via a wildcard name", () => {
+  // Split out so this guard and the wildcard-in-name guard stop sharing a single
+  // test — deleting one test used to unpin two guards.
+  const dashes = validateShellPattern("timeout -- *");
+  expect(dashes.ok).toBe(false);
+  const question = validateShellPattern("timeout ?*");
+  expect(question.ok).toBe(false);
+});
+
 test("B5: the shape rule does not take away an ordinary narrowing grant", () => {
   // The control. A fix that refused everything would pass every assertion above.
   for (const pattern of [

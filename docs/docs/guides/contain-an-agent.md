@@ -82,9 +82,13 @@ turned containment on, you are relying on the first of those.
 
 When you approve a `shell_exec` command the shell offers to remember it, either
 exactly or as a `<word> *` prefix. Some prefixes are never offered, and a stored
-one is **ignored on load** with its reason reported. The file itself is not
-rewritten — a refused pattern stays on disk and is reported again on every load,
-so nothing is deleted behind your back.
+one is **ignored on load** with its reason reported.
+
+Loading does not rewrite the file, so a refused pattern is reported again every
+time — but the next time you answer *always allow* to anything, the file is
+written back **without** it. If you want to keep a record of what you had, copy
+`permissions.json` before the next approval; the refusal is reported at least
+once, and after that only until the next write.
 
 Two different rules decide this, and the difference matters.
 
@@ -118,6 +122,15 @@ and the narrower pattern this page recommends has to be written into
 `permissions.json` by hand. If your project routes work through `keryx` (this one
 does), expect the exact-command grant to be the one you use until free-form entry
 exists.
+
+For `keryx ctx run` and `keryx harness exec` specifically, **neither** grant is
+offered — not the prefix and not the exact command. That is deliberate: those two
+verbs take the program to run on their own command line, so a remembered pattern
+covering them is a remembered grant of arbitrary execution. They prompt every
+time, and there is no pattern you can hand-write that will stop them prompting.
+`keryx health run` and `keryx test run` do stay offerable; they execute the
+repository's own configured command, which comes from the checkout rather than
+from the pattern.
 
 **The word list is an expedient, not a boundary.** It is a list of words, so it
 is incomplete by construction — a wrapper nobody has thought of is not on it. The

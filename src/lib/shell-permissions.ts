@@ -43,13 +43,17 @@ export interface ShellPermissions {
  * A narrower pattern that constrains the arguments (`bun test*`) is still
  * offerable, because it no longer covers arbitrary invocations.
  *
- * This list is an EXPEDIENT, not a boundary: it is inevitably incomplete. The
- * boundaries are the metacharacter rule and the destructive classifier below,
- * both of which apply to every pattern regardless of its first word.
+ * This list is an EXPEDIENT, not a boundary: it is inevitably incomplete. Three
+ * things apply to every pattern regardless of its first word and are the actual
+ * boundaries: the metacharacter rule, the destructive classifier, and the refusal
+ * to remember anything touching the agent's own credential/permission files. The
+ * shape rule below (PLAIN_PROGRAM_NAME) is also not a list.
  */
 const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // interpreters / runtimes
   "sh", "bash", "zsh", "ksh", "dash", "fish",
+  "csh", "tcsh", "mksh", "yash", "posh", "rbash", "ash", "busybox-sh",
+  "xonsh", "nu", "elvish", "osh", "oil",
   "python", "python2", "python3", "node", "bun", "deno", "perl", "ruby", "php", "lua",
   "java", "dotnet", "rscript", "tclsh",
   // generic wrappers that execute their argument
@@ -175,7 +179,7 @@ export function validateShellPattern(pattern: string): PatternValidation {
         "touches the agent's own permission/credential files; remembering it would let one approved command disable the approval gate for every future session",
     };
   }
-  const keryxVerb = unpinnedKeryxVerb(trimmed, firstToken);
+  const keryxVerb = unpinnedKeryxVerb(trimmed);
   if (keryxVerb !== undefined) {
     return { ok: false, reason: keryxVerb };
   }
@@ -187,12 +191,18 @@ export function validateShellPattern(pattern: string): PatternValidation {
 }
 
 /**
- * `keryx` verbs that run a caller-supplied program, and therefore cannot be
- * covered by a remembered pattern at all.
+ * `keryx` verbs that take a program to run ON THE COMMAND LINE, and therefore
+ * cannot be covered by a remembered pattern at all.
  *
  * Unlike the prefix lists this one is CLOSED and knowable: it enumerates keryx's
- * own executing verbs, not a guess about the outside world. A verb that is not
- * here is a verb this binary does not have.
+ * own argv-executing verbs, read off the dispatch table in `cli.ts`, not a guess
+ * about the outside world.
+ *
+ * It is NOT a claim that nothing else in keryx runs a program. `keryx health run`
+ * and `keryx test run` execute the repository's own configured test command, and
+ * both stay offerable — the program there comes from the checkout rather than
+ * from the pattern, which is a different threat and not one a permission pattern
+ * can address.
  */
 const KERYX_EXECUTING_VERBS: ReadonlyArray<readonly string[]> = [
   ["ctx", "run"],
@@ -210,39 +220,73 @@ const KERYX_EXECUTING_VERBS: ReadonlyArray<readonly string[]> = [
  * it is given rather than the one after the `--`.
  *
  * So the rule is about what the pattern PINS rather than about what it contains:
- * every token up to and including the verb must be a literal, and the literal
- * verb must not be one that executes what follows.
+ * some token in the verb's position must make the executing verb unreachable.
+ *
+ * Two corrections a second review earned, both by running the module rather than
+ * reading it:
+ *
+ *  1. The first version asked `matchShellPattern(token, verbWord)` — the token as
+ *     a glob against the verb word ALONE. But the stored pattern is later matched
+ *     against the WHOLE command as one glob, where whitespace is not a token
+ *     boundary. `run?*` does not match `run` in isolation, so it looked like it
+ *     pinned the verb away; against the whole command the `?*` simply ate
+ *     ` -- rm -rf /`. `keryx ctx run?*`, `keryx ctx run??*`, `keryx ctx run*x` and
+ *     `keryx c?x run?*` were all offerable and all auto-approved. The comparison
+ *     is now on the token's LITERAL PREFIX — the part before its first wildcard —
+ *     because that prefix is what the whole-string match must satisfy first.
+ *  2. It only looked at token 0, so putting anything in front skipped the rule
+ *     entirely while leaving the remainder "narrowing":
+ *     `env keryx ctx run*`, `nice keryx ctx run*`, `timeout 5 keryx*`. The check
+ *     now runs at whichever token names keryx.
  */
-function unpinnedKeryxVerb(pattern: string, firstToken: string): string | undefined {
-  if (normalizeCommandWord(firstToken) !== "keryx") {
-    return undefined;
-  }
+function unpinnedKeryxVerb(pattern: string): string | undefined {
   const tokens = pattern.split(/\s+/);
   const advice =
     "Pin the verb literally instead (`keryx flow status*`, `keryx ctx rg*`), which today means editing " +
     "permissions.json by hand — the approval prompt only offers the exact command or `keryx *`.";
-  for (const verb of KERYX_EXECUTING_VERBS) {
-    // A pattern pins the verb only when every token that would have to match it
-    // is a wildcard-free literal. `keryx c*` pins nothing: it matches `ctx`.
-    const pinsAway = verb.some((word, index) => {
-      const token = tokens[index + 1];
-      if (token === undefined) {
-        return false; // the pattern is shorter than the verb; a trailing * covers it
+  for (const [position, token] of tokens.entries()) {
+    if (normalizeCommandWord(token) !== "keryx") {
+      continue;
+    }
+    for (const verb of KERYX_EXECUTING_VERBS) {
+      const pinsAway = verb.some((word, index) => {
+        const candidate = tokens[position + index + 1];
+        if (candidate === undefined) {
+          return false; // the pattern ends before the verb; a trailing * covers it
+        }
+        return literalPrefixExcludes(candidate, word);
+      });
+      if (!pinsAway) {
+        return (
+          `\`${pattern}\` can match \`keryx ${verb.join(" ")} -- <any command>\`, which runs an arbitrary ` +
+          "program; the destructive-command check reads the line it is given, not the one after the `--`. " +
+          advice
+        );
       }
-      // Asked as a GLOB, not as a string: `keryx c*` does not equal `keryx ctx`
-      // but matches it, while `keryx wiki*` and `keryx ctx rg*` cannot. Comparing
-      // strings here would have refused the very patterns the docs recommend.
-      return !matchShellPattern(token, word);
-    });
-    if (!pinsAway) {
-      return (
-        `\`${pattern}\` can match \`keryx ${verb.join(" ")} -- <any command>\`, which runs an arbitrary ` +
-        "program; the destructive-command check reads the line it is given, not the one after the `--`. " +
-        advice
-      );
     }
   }
   return undefined;
+}
+
+/**
+ * Whether `token` in a verb position makes `word` unreachable.
+ *
+ * Only the literal prefix — everything before the token's first wildcard — can
+ * exclude anything, because the wildcard that follows it is matched against the
+ * rest of the COMMAND, not against the rest of the token. So:
+ *
+ *   `rg*`    prefix `rg`   ─ neither is a prefix of `run` ⇒ excludes  ⇒ offerable
+ *   `run?*`  prefix `run`  ─ is `run` itself               ⇒ reachable ⇒ refused
+ *   `ru*`    prefix `ru`   ─ is a prefix of `run`          ⇒ reachable ⇒ refused
+ *   `wiki`   prefix `wiki` ─ neither is a prefix           ⇒ excludes  ⇒ offerable
+ */
+function literalPrefixExcludes(token: string, word: string): boolean {
+  const wildcardAt = token.search(/[*?]/);
+  const literal = wildcardAt === -1 ? token : token.slice(0, wildcardAt);
+  if (wildcardAt === -1) {
+    return literal !== word;
+  }
+  return !literal.startsWith(word) && !word.startsWith(literal);
 }
 
 /**
@@ -276,7 +320,24 @@ function normalizeCommandWord(firstToken: string): string {
   let word = firstToken.replace(/\*+$/, "");
   word = word.replace(/^["']+/, "").replace(/["']+$/, "");
   word = word.replace(/^\\+/, "");
-  return (word.split("/").pop() ?? "").toLowerCase();
+  return stripVersionSuffix((word.split("/").pop() ?? "").toLowerCase());
+}
+
+/**
+ * Interpreters whose real installed name usually carries a version.
+ *
+ * `python3 *` was refused and `python3.12 *` was OFFERED, on a host where
+ * `/usr/bin/python3.12` exists and runs — a review demonstrated it reading
+ * `/etc/hostname` through the grant. The suffix is stripped before lookup so one
+ * entry covers every spelling, which is narrower than adding a row per release
+ * and does not go stale.
+ */
+const VERSIONED_INTERPRETERS = /^(python|node|ruby|perl|php|lua|gcc|clang|erl|scala|julia)[\d.]+$/;
+
+/** Strip a trailing version from an interpreter name (`python3.12` → `python`). */
+function stripVersionSuffix(word: string): string {
+  const match = VERSIONED_INTERPRETERS.exec(word);
+  return match?.[1] ?? word;
 }
 
 /**
