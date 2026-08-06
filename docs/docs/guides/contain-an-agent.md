@@ -81,24 +81,50 @@ turned containment on, you are relying on the first of those.
 ### What that gate will not remember
 
 When you approve a `shell_exec` command the shell offers to remember it, either
-exactly or as a `<word> *` prefix. Some prefixes are never offered and are
-dropped from `permissions.json` on load, with the reason reported: words whose
-first token says nothing about what will actually run. Interpreters (`bash *`,
-`python3 *`), generic wrappers (`env *`, `xargs *`, `timeout *`, `setsid *`),
-remote-exec and download tools, container runtimes, package/build runners, and
-programs with their own escape into a shell (`git *`, `find *`, `psql *`,
-`sqlite3 *`, `tar *`, `gh *`, `aws *`).
+exactly or as a `<word> *` prefix. Some prefixes are never offered, and a stored
+one is **ignored on load** with its reason reported. The file itself is not
+rewritten — a refused pattern stays on disk and is reported again on every load,
+so nothing is deleted behind your back.
 
-That list now includes **`keryx *`**. With it saved,
-`keryx ctx run -- rm -rf /` was auto-approved with no prompt: the
-destructive-command check reads the line it is given, not the one after the
-`--`. If you have that grant saved, the next load drops it and tells you; save a
-narrower pattern (`keryx flow status*`) instead.
+Two different rules decide this, and the difference matters.
 
-**This list is an expedient, not a boundary.** It is a list of words, so it is
-incomplete by construction — a wrapper nobody has thought of is not on it. The
-things that apply to *every* pattern regardless of its first word are the
-metacharacter rule and the destructive classifier. Do not read the list as a
+**A shape rule, which holds for anything.** A `<token> *` grant is offered only
+when the token is recognisably a program name — letters, digits and `. _ + -`,
+optionally with a path. So `\bash *`, `'bash' *`, `LC_ALL=C *` and `t*` are all
+refused without asking what they are. That matters more than it looks: to
+`/bin/sh` a leading backslash is nothing at all, so `\bash -c …` runs exactly as
+`bash -c …` does, and an environment assignment puts caller-chosen *text* where
+the program name should be — no list of program names could ever contain it.
+
+**A word list, which is an expedient.** On top of the shape rule, some plain
+program names are refused as bare grants: interpreters (`bash *`, `python3 *`),
+shell builtins that source a file (`. *`, `source *`), generic wrappers (`env *`,
+`xargs *`, `timeout *`, `setsid *`), remote-exec and download tools, container
+runtimes, package/build runners, and programs with their own escape into a shell
+(`git *`, `find *`, `psql *`, `sqlite3 *`, `tar *`, `gh *`, `aws *`).
+
+**`keryx` gets a rule of its own.** `keryx ctx run -- <anything>` runs an
+arbitrary program, and the destructive-command check reads the line it is given,
+not the one after the `--`. Banning the bare `keryx *` grant was not enough,
+because `keryx ctx run*` and `keryx c*` narrow the arguments and still cover it.
+So a `keryx …` pattern is offered only when it literally pins a verb that cannot
+execute what follows: `keryx flow status*` and `keryx ctx rg*` are fine,
+`keryx ctx*` and `keryx ?*` are not.
+
+**Where this leaves you in practice.** The approval prompt offers exactly two
+grants: the exact command, and `<first token> *`. There is no free-form entry
+yet, so for a keryx command the offered prefix is `keryx *`, which is refused —
+and the narrower pattern this page recommends has to be written into
+`permissions.json` by hand. If your project routes work through `keryx` (this one
+does), expect the exact-command grant to be the one you use until free-form entry
+exists.
+
+**The word list is an expedient, not a boundary.** It is a list of words, so it
+is incomplete by construction — a wrapper nobody has thought of is not on it. The
+shape rule above is not a list and does not have that property. Three things
+apply to *every* pattern regardless of its first word: the metacharacter rule,
+the destructive classifier, and the refusal to remember anything that touches the
+agent's own credential and permission files. Do not read the word list as a
 guarantee about a category.
 
 ## Verify

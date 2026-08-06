@@ -197,7 +197,13 @@ export function createMetaprojectAdapter(
       }
       const appliedFilters = {
         ...(input.module !== undefined ? { module: input.module } : {}),
-        ...(input.status !== undefined ? { status: input.status } : {}),
+        // `filters.status`, not `input.status`. The echo used to pass the raw
+        // input through while the APPLIED filter above was guarded, so a caller
+        // written against the schema's previous (wrong) enum — `status: "active"`
+        // — got a result that failed the schema it was echoing to. An
+        // unrecognised status is dropped from the applied filter, so echoing it
+        // would also have described a filter that was never applied.
+        ...(filters.status !== undefined ? { status: filters.status } : {}),
         ...(input.entity !== undefined ? { entity: input.entity } : {}),
         ...(input.asOf !== undefined ? { asOf: input.asOf } : {}),
         ...(filters.class !== undefined ? { class: filters.class } : {}),

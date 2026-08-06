@@ -283,6 +283,9 @@ test("migration is non-destructive: the file on disk is not rewritten by loading
  */
 const NEWLY_BANNED_PREFIXES = [
   "keryx",
+  // shell builtins that source a file into the current shell — `.` is one
+  // character long and was missed while `sh`, `eval` and `exec` were banned
+  ".", "source", "builtin",
   // wrappers that execute their argument
   "timeout", "setsid", "stdbuf", "flock", "unshare", "strace", "ltrace",
   "busybox", "parallel", "command", "chroot", "expect", "pwsh", "powershell",
@@ -331,4 +334,106 @@ test("B4: a saved `keryx *` no longer auto-approves an arbitrary command", () =>
   expect(audit.rejected.map((r) => r.pattern)).toEqual(["keryx *"]);
   expect(audit.rejected[0]?.reason).toMatch(/keryx ctx run/);
   cleanup();
+});
+
+// --- B5: the shape rule, and the three things the word list could not see ---
+//
+// Every case below was found by a review that RAN the first version of this
+// change: it took the pattern the approval UI would offer, checked `offerPrefix`,
+// stored it, and then asked whether an arbitrary command matched. All of them
+// answered yes. They are grouped here because they share one cause — the lookup
+// normalised a first token by stripping a trailing `*` and a path, and asked a
+// list about the result. The fix is not a longer list; it is refusing a bare
+// grant whose first token is not recognisably a program name.
+
+test("B5: a decorated first token cannot launder a banned word past the lists", () => {
+  // One leading backslash defeated PREFIX_BANNED, the readers and the mutators
+  // at once. Under /bin/sh it only suppresses alias expansion, so `\bash -c …`
+  // runs exactly as `bash -c …` does.
+  for (const word of ["bash", "keryx", "cat", "rm", "timeout"]) {
+    for (const decorated of [`\\${word}`, `'${word}'`, `"${word}"`, `\\\\${word}`]) {
+      const result = validateShellPattern(`${decorated} *`);
+      expect(result.ok, `\`${decorated} *\` must not be remembered`).toBe(false);
+    }
+  }
+  // And the refusal names the shape rather than the word, because the word is
+  // exactly what the check no longer trusts.
+  const backslash = validateShellPattern("\\bash *");
+  expect(backslash.ok === false && backslash.reason).toMatch(/plain program name/);
+});
+
+test("B5: an environment-assignment first token is refused, and no list could cover it", () => {
+  // The finding that settles the argument: the token is caller-chosen TEXT, so
+  // enumerating it is not merely impractical, it is impossible.
+  for (const pattern of ["LC_ALL=C *", "FOO=1 *", "PATH=/tmp *"]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(result.ok === false && result.reason).toMatch(/environment assignment/);
+  }
+});
+
+test("B5: a wildcard that pins nothing is a bare grant however it is spelled", () => {
+  // `timeout ?*` matches `timeout 5 sh -c 'cat ~/.ssh/id_rsa'` exactly as
+  // `timeout *` would; `*` alone auto-approves every non-destructive command.
+  for (const pattern of [
+    "timeout ?*",
+    "timeout *?",
+    "timeout -*",
+    "timeout -- *",
+    "*",
+    "? *",
+    "t*",
+    "ti?eout *",
+  ]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+  }
+  // A wildcard in the PROGRAM NAME gets its own diagnosis rather than the
+  // generic shape one, because "you wrote a glob over program names" is a
+  // different mistake from "that is not a program name". Asserted because a
+  // mutation run found this branch was reachable but pinned by nothing — the
+  // shape rule refused the same inputs, so deleting it changed no test.
+  const glob = validateShellPattern("t*");
+  expect(glob.ok).toBe(false);
+  expect(glob.ok === false && glob.reason).toMatch(/wildcard over program NAMES/);
+});
+
+test("B5: a keryx pattern must pin a verb that cannot execute what follows", () => {
+  // Banning the bare grant was not enough. Each of these NARROWS the arguments,
+  // so each was offerable, and each still covers `keryx ctx run -- rm -rf /`.
+  for (const pattern of [
+    "keryx ctx run*",
+    "keryx ctx run -- *",
+    "keryx ctx*",
+    "keryx c*",
+    "keryx ?*",
+    "keryx harness exec*",
+  ]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    expect(result.ok === false && result.reason).toMatch(/arbitrary program/);
+  }
+  // A literally pinned non-executing verb still works — that is the remediation
+  // the documentation prescribes, so it has to remain true.
+  expect(validateShellPattern("keryx flow status*").ok).toBe(true);
+  expect(validateShellPattern("keryx ctx rg*").ok).toBe(true);
+  expect(validateShellPattern("keryx health run*").ok).toBe(true);
+});
+
+test("B5: the shape rule does not take away an ordinary narrowing grant", () => {
+  // The control. A fix that refused everything would pass every assertion above.
+  for (const pattern of [
+    "tar -tf*",
+    "make build*",
+    "gh pr list*",
+    "aws s3 ls*",
+    "pip list*",
+    "npm run build*",
+    "bun test*",
+    "git status*",
+    "psql -c 'select 1'",
+    "hostname *",
+    "ls -la*",
+  ]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
 });

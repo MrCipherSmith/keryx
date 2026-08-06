@@ -26,7 +26,9 @@ export interface ShellPermissions {
   /**
    * Glob patterns that auto-allow `shell_exec` without prompting.
    * Matching is case-sensitive; `*` / `?` wildcards (OpenCode-style).
-   * Examples: `keryx wiki index`, `keryx *`, `git status*`.
+   * Examples: `keryx wiki index`, `keryx flow status*`, `git status*`.
+   * NOT `keryx *` — see {@link KERYX_PREFIX_REASON}; the example used to say
+   * otherwise, which is how the grant that motivated this rule got saved.
    */
   allow: string[];
 }
@@ -53,6 +55,10 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // generic wrappers that execute their argument
   "env", "eval", "exec", "xargs", "nice", "nohup", "time", "watch", "script",
   "sudo", "doas", "su", "pkexec", "runas",
+  // shell builtins that execute a file's contents in the current shell. `.` is
+  // the POSIX spelling of `source` and was missed while `sh`, `eval` and `exec`
+  // were all banned — the same category, one character long.
+  ".", "source", "builtin",
   // …and the ones this list did not have on 2026-08-05, when a review round ran
   // `timeout 5 sh -c 'cat ~/.ssh/id_rsa'` against a gate that banned `sh` and
   // `bash` and had never heard of `timeout`. Same category, same argument: the
@@ -169,6 +175,10 @@ export function validateShellPattern(pattern: string): PatternValidation {
         "touches the agent's own permission/credential files; remembering it would let one approved command disable the approval gate for every future session",
     };
   }
+  const keryxVerb = unpinnedKeryxVerb(trimmed, firstToken);
+  if (keryxVerb !== undefined) {
+    return { ok: false, reason: keryxVerb };
+  }
   const banned = bannedPrefixGrant(trimmed, firstToken);
   if (banned !== undefined) {
     return { ok: false, reason: banned.reason };
@@ -177,16 +187,165 @@ export function validateShellPattern(pattern: string): PatternValidation {
 }
 
 /**
- * When `pattern` is a bare "everything after this word" grant of a word we refuse
- * to remember, the word and a category-specific reason; else undefined. A pattern
- * that narrows the arguments (`bun test*`, `cat package.json*`) is not a bare
- * grant and is allowed.
+ * `keryx` verbs that run a caller-supplied program, and therefore cannot be
+ * covered by a remembered pattern at all.
+ *
+ * Unlike the prefix lists this one is CLOSED and knowable: it enumerates keryx's
+ * own executing verbs, not a guess about the outside world. A verb that is not
+ * here is a verb this binary does not have.
+ */
+const KERYX_EXECUTING_VERBS: ReadonlyArray<readonly string[]> = [
+  ["ctx", "run"],
+  ["harness", "exec"],
+];
+
+/**
+ * Why a `keryx …` pattern is refused when it does not literally pin a verb that
+ * cannot execute a caller-supplied program.
+ *
+ * Banning the bare `keryx *` grant is not enough, and a review demonstrated it:
+ * `keryx ctx run*`, `keryx ctx*`, `keryx c*` and `keryx ?*` all NARROW the
+ * arguments — so they were offerable — and all still cover
+ * `keryx ctx run -- rm -rf /`, because the destructive classifier reads the line
+ * it is given rather than the one after the `--`.
+ *
+ * So the rule is about what the pattern PINS rather than about what it contains:
+ * every token up to and including the verb must be a literal, and the literal
+ * verb must not be one that executes what follows.
+ */
+function unpinnedKeryxVerb(pattern: string, firstToken: string): string | undefined {
+  if (normalizeCommandWord(firstToken) !== "keryx") {
+    return undefined;
+  }
+  const tokens = pattern.split(/\s+/);
+  const advice =
+    "Pin the verb literally instead (`keryx flow status*`, `keryx ctx rg*`), which today means editing " +
+    "permissions.json by hand — the approval prompt only offers the exact command or `keryx *`.";
+  for (const verb of KERYX_EXECUTING_VERBS) {
+    // A pattern pins the verb only when every token that would have to match it
+    // is a wildcard-free literal. `keryx c*` pins nothing: it matches `ctx`.
+    const pinsAway = verb.some((word, index) => {
+      const token = tokens[index + 1];
+      if (token === undefined) {
+        return false; // the pattern is shorter than the verb; a trailing * covers it
+      }
+      // Asked as a GLOB, not as a string: `keryx c*` does not equal `keryx ctx`
+      // but matches it, while `keryx wiki*` and `keryx ctx rg*` cannot. Comparing
+      // strings here would have refused the very patterns the docs recommend.
+      return !matchShellPattern(token, word);
+    });
+    if (!pinsAway) {
+      return (
+        `\`${pattern}\` can match \`keryx ${verb.join(" ")} -- <any command>\`, which runs an arbitrary ` +
+        "program; the destructive-command check reads the line it is given, not the one after the `--`. " +
+        advice
+      );
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The characters a plain program name is made of.
+ *
+ * This is a SHAPE, and it is the load-bearing half of the prefix rule — the word
+ * lists below it are the expedient. A review of the first version of this change
+ * demonstrated why: `\bash *` normalised to `\bash`, which is in no list, and the
+ * approval UI offered it; under `/bin/sh` a leading backslash only suppresses
+ * alias expansion, so `\bash -c 'cat ~/.ssh/id_rsa'` runs. One character defeated
+ * all three lists at once, including the `keryx` entry this file had just added.
+ * `'bash' *` and `"bash" *` did the same through quoting.
+ *
+ * Normalising harder would have answered those three and lost to the fourth. The
+ * rule is therefore inverted: a bare `<token> *` grant is offerable only when the
+ * token is RECOGNISABLY a program name. Anything else — a quote, a backslash, an
+ * `=`, a wildcard in the middle — is refused without asking what it is.
+ */
+const PLAIN_PROGRAM_NAME = /^[A-Za-z0-9._+-]+$/;
+
+/**
+ * Strip the decorations a first token can carry before it is looked up: a
+ * trailing wildcard, surrounding quotes, leading backslashes, and a directory
+ * path. Lowercased.
+ *
+ * Only used to ASK WHICH word it is. Whether the token was allowed to be a bare
+ * grant at all is decided by {@link PLAIN_PROGRAM_NAME} on the stripped form, so
+ * this function cannot be used to launder a token past the shape check.
+ */
+function normalizeCommandWord(firstToken: string): string {
+  let word = firstToken.replace(/\*+$/, "");
+  word = word.replace(/^["']+/, "").replace(/["']+$/, "");
+  word = word.replace(/^\\+/, "");
+  return (word.split("/").pop() ?? "").toLowerCase();
+}
+
+/**
+ * Whether `rest` (everything after the first token) constrains the arguments.
+ *
+ * `timeout ?*` is a bare grant wearing a different hat: `?` matches one
+ * character and `*` matches the remainder, so it covers
+ * `timeout 5 sh -c 'cat ~/.ssh/id_rsa'` exactly as `timeout *` would. So does
+ * `timeout -- *`, and `timeout -*`. A remainder built only of wildcards,
+ * whitespace and dashes pins nothing.
+ */
+function restIsUnconstraining(rest: string): boolean {
+  return /^[*?\s-]*$/.test(rest);
+}
+
+/**
+ * When `pattern` is a bare "everything after this word" grant we refuse to
+ * remember, the word and a reason; else undefined. A pattern that narrows the
+ * arguments (`bun test*`, `cat package.json*`) is not a bare grant and is allowed.
  */
 function bannedPrefixGrant(pattern: string, firstToken: string): { word: string; reason: string } | undefined {
   const rest = pattern.slice(firstToken.length).trim();
-  const wildcardOnly = /^\*+$/.test(rest) || (rest.length === 0 && /\*+$/.test(firstToken));
+  const wildcardOnly =
+    restIsUnconstraining(rest) && (rest.length > 0 || /\*+$/.test(firstToken));
   if (!wildcardOnly) return undefined;
-  const word = (firstToken.replace(/\*+$/, "").split("/").pop() ?? "").toLowerCase();
+  const word = normalizeCommandWord(firstToken);
+
+  // The shape check, BEFORE any list. An env-assignment first token is the case
+  // that settles the argument: `LC_ALL=C *` auto-approves
+  // `LC_ALL=C bash -c 'cat ~/.ssh/id_rsa'`, and the token is attacker-chosen text
+  // rather than a program name — there is no list that could ever contain it.
+  if (firstToken.includes("=")) {
+    return {
+      word,
+      reason:
+        "an environment assignment does not name a program: `VAR=value *` grants whatever command follows " +
+        "the assignment, and no list of program names can cover it",
+    };
+  }
+  // A wildcard inside the first token makes the PROGRAM NAME a glob: `t*` is a
+  // bare grant over `timeout`, `tar` and everything else beginning with `t`, and
+  // `timeout*` also covers `timeoutfoo`. Refused by shape, before the word is
+  // looked up, because there is no word to look up — there is a pattern.
+  if (/[*?]/.test(firstToken)) {
+    return {
+      word,
+      reason:
+        `\`${firstToken}\` is a wildcard over program NAMES, not a program: it grants whatever command ` +
+        "happens to match it. Name the program exactly and narrow its arguments instead",
+    };
+  }
+  // Tested on the token AS WRITTEN, not on the normalised word. Normalising
+  // first is what let `\bash *` through: the backslash was stripped, `bash` was
+  // looked up, and a word NOT in any list — `\mytool *` — would have sailed past
+  // the shape check too. A path is still allowed, one segment at a time, so
+  // `/usr/bin/timeout *` and `./timeout *` reach the word lists as before.
+  const segments = firstToken.split("/");
+  const shapeOk = segments.every((segment, index) =>
+    segment.length === 0 ? index === 0 : PLAIN_PROGRAM_NAME.test(segment),
+  );
+  if (!shapeOk) {
+    return {
+      word,
+      reason:
+        `\`${firstToken} *\` does not begin with a plain program name (letters, digits, and \`. _ + -\`). ` +
+        "A quoted or escaped first token hides which program runs — `\\bash` is `bash` to the shell and " +
+        "nothing at all to a word list — so it can be approved once, never remembered",
+    };
+  }
   if (PREFIX_BANNED.has(word)) {
     return {
       word,

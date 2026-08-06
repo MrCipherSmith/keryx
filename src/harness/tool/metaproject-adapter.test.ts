@@ -245,6 +245,38 @@ test("the published schema's status enums are the memory module's own statuses",
   expect([...schema.properties.hits.items.properties.status.enum].sort()).toEqual(expected);
 });
 
+test("an unrecognised status is neither applied nor echoed", async () => {
+  // Found by review: the APPLIED filter was guarded and the ECHO was not, so
+  // `status: "active"` — the value the schema's own previous enum advertised as
+  // legal — produced a result that failed the schema it was echoing to. The echo
+  // also described a filter that had never been applied.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  for (const status of ["active", "typo", "ACCEPTED", ""]) {
+    const { deps, calls } = fakeDeps({
+      search: { schemaVersion: 1, query: "q", results: [], markdownPath: "", jsonPath: "" },
+    });
+    const port = createMetaprojectAdapter(CWD, deps);
+    const result = await port.memorySearch({ query: "q", status });
+
+    expect(calls.search[0]?.filters?.status, `"${status}" must not be applied`).toBeUndefined();
+    expect(result.filters?.status, `"${status}" must not be echoed`).toBeUndefined();
+    const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+    expect(validation.errors, `"${status}" must still produce a valid result`).toEqual([]);
+  }
+});
+
 test("a hit carrying any real memory status validates against the published schema", async () => {
   // The half that mattered in practice: `hits[].status` is not echoed input, it
   // is whatever the store read off disk. Under the old enum an `accepted` entry
