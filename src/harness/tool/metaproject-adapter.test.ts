@@ -5,6 +5,7 @@ import { validateAgainstSchemaObject } from "../../contracts/validator";
 import type { AffectedOptions, AffectedResult } from "../../gdgraph/affected";
 import type { GdgraphService } from "../../gdgraph/service";
 import type { GraphData } from "../../gdgraph/types";
+import { MEMORY_STATUS_VALUES } from "../../memory/types";
 import type {
   MemoryEntry,
   MemorySearchInput,
@@ -210,17 +211,18 @@ test("memorySearch echoes only filters the frozen result schema declares", async
   expect(validation.valid).toBe(true);
 });
 
-test("PRE-EXISTING: the frozen schema's status enum omits real memory statuses", () => {
-  // Found while adding the test above, NOT introduced by this flow: the frozen
-  // memory-search-result schema allows only active/superseded/deprecated, while
-  // the memory module's own MemoryStatus also includes `draft`, `accepted` and
-  // `conflict`. So `memorySearch({status: "accepted"})` — an ordinary query —
-  // echoes a filter its own result schema rejects.
+test("the published schema's status enums are the memory module's own statuses", () => {
+  // Was recorded here as a known divergence and is now reconciled the only way
+  // it could honestly go: the schema allowed `active/superseded/deprecated`,
+  // naming an `active` this module has never had while omitting `draft`,
+  // `accepted` and `conflict`, so `memorySearch({status: "accepted"})` — an
+  // ordinary query — echoed a filter its own result schema rejected, and any
+  // hit carrying a real status failed validation too.
   //
-  // Recorded rather than fixed: the schema is frozen, and reconciling it means
-  // deciding whether the schema or the module is wrong, which is a change with
-  // consequences beyond this flow. This test fails the day someone reconciles
-  // them, which is the right moment to delete it.
+  // The expectation is DERIVED from MEMORY_STATUS_VALUES rather than restated,
+  // so adding a status to the module without republishing the schema fails here
+  // instead of at an agent's next structured call. Both enums are checked: the
+  // filter echo and the hit, which drifted together and would drift together.
   const schemaPath = path.join(
     import.meta.dir,
     "..",
@@ -233,11 +235,85 @@ test("PRE-EXISTING: the frozen schema's status enum omits real memory statuses",
     "memory-search-result.schema.json",
   );
   const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as {
-    properties: { filters: { properties: { status: { enum: string[] } } } };
+    properties: {
+      filters: { properties: { status: { enum: string[] } } };
+      hits: { items: { properties: { status: { enum: string[] } } } };
+    };
   };
-  const allowed = schema.properties.filters.properties.status.enum;
-  expect(allowed).toEqual(["active", "superseded", "deprecated"]);
-  expect(allowed).not.toContain("accepted");
+  const expected = [...MEMORY_STATUS_VALUES].sort();
+  expect([...schema.properties.filters.properties.status.enum].sort()).toEqual(expected);
+  expect([...schema.properties.hits.items.properties.status.enum].sort()).toEqual(expected);
+});
+
+test("an unrecognised status is neither applied nor echoed", async () => {
+  // Found by review: the APPLIED filter was guarded and the ECHO was not, so
+  // `status: "active"` — the value the schema's own previous enum advertised as
+  // legal — produced a result that failed the schema it was echoing to. The echo
+  // also described a filter that had never been applied.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  for (const status of ["active", "typo", "ACCEPTED", ""]) {
+    const { deps, calls } = fakeDeps({
+      search: { schemaVersion: 1, query: "q", results: [], markdownPath: "", jsonPath: "" },
+    });
+    const port = createMetaprojectAdapter(CWD, deps);
+    const result = await port.memorySearch({ query: "q", status });
+
+    expect(calls.search[0]?.filters?.status, `"${status}" must not be applied`).toBeUndefined();
+    expect(result.filters?.status, `"${status}" must not be echoed`).toBeUndefined();
+    const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+    expect(validation.errors, `"${status}" must still produce a valid result`).toEqual([]);
+  }
+});
+
+test("a hit carrying any real memory status validates against the published schema", async () => {
+  // The half that mattered in practice: `hits[].status` is not echoed input, it
+  // is whatever the store read off disk. Under the old enum an `accepted` entry
+  // — the ordinary outcome of `keryx memory ingest` — produced a result that
+  // failed its own schema, and nothing was validating, so nothing said so.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  for (const status of MEMORY_STATUS_VALUES) {
+    const scored: ScoredEntry = {
+      entry: { ...entry(), status },
+      score: 0.5,
+      components: { relevance: 1, recency: 0, confidence: 1, status: 1, scope: 0 },
+      reason: "match",
+    };
+    const { deps } = fakeDeps({
+      search: { schemaVersion: 1, query: "q", results: [scored], markdownPath: "", jsonPath: "" },
+    });
+    const port = createMetaprojectAdapter(CWD, deps);
+    const result = await port.memorySearch({ query: "q", status });
+
+    expect(result.filters?.status).toBe(status);
+    expect(result.hits[0]?.status).toBe(status);
+    const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+    expect(validation.errors, `status "${status}" must validate`).toEqual([]);
+    expect(validation.valid).toBe(true);
+  }
 });
 
 test("memorySearch delegates to the injected memory fake and maps ranked hits", async () => {

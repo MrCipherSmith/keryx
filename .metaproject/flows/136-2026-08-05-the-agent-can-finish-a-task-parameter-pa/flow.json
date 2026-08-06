@@ -3,9 +3,9 @@
   "id": "136",
   "slug": "the-agent-can-finish-a-task-parameter-pa",
   "title": "The agent can finish a task: parameter parity, unattended posture, one tool story",
-  "status": "implemented",
+  "status": "in-progress",
   "createdAt": "2026-08-05T19:40:33.840Z",
-  "updatedAt": "2026-08-05T22:17:36.500Z",
+  "updatedAt": "2026-08-05T22:23:59.904Z",
   "source": {
     "type": "description",
     "ref": null
@@ -479,6 +479,15 @@
       "at": "2026-08-05T22:17:36.500Z",
       "event": "ac-confirmed",
       "detail": "AC14: search-code-confinement.test.ts: 19 escape inputs produce no out-of-root operand and never place the pattern as an operand; argv always ends --no-follow, --regexp=<pattern>, <confined path>; refused on all three branches. END TO END against real ripgrep with an in-root symlink out of the project: not readable by default, with --follow (refused), via the symlink as path, or with --hidden/--no-ignore/--max-depth/-g. Dropping --no-follow fails 4 tests."
+    },
+    {
+      "at": "2026-08-05T22:23:59.897Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-05T22:23:59.904Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 377fc325 is not contained in origin/main"
     }
   ]
 }

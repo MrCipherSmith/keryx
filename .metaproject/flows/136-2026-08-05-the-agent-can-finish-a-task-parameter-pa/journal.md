@@ -54,3 +54,5 @@
 - 2026-08-05T22:17:36.326Z - ac-confirmed: AC12: bun run check: 3127 pass, 14 skip (all pre-existing), 0 fail. bun run check:doc-links: 649 links, 0 broken. No test skipped or weakened; the tests for the descoped posture were deleted with the code they covered, not disabled.
 - 2026-08-05T22:17:36.413Z - ac-confirmed: AC13: harness.md and cli-reference.md carry no unattended material; the parity section states what the scanner actually does and names the -e/--follow exceptions and why. Every claim maps to a named test.
 - 2026-08-05T22:17:36.500Z - ac-confirmed: AC14: search-code-confinement.test.ts: 19 escape inputs produce no out-of-root operand and never place the pattern as an operand; argv always ends --no-follow, --regexp=<pattern>, <confined path>; refused on all three branches. END TO END against real ripgrep with an in-root symlink out of the project: not readable by default, with --follow (refused), via the symlink as path, or with --hidden/--no-ignore/--max-depth/-g. Dropping --no-follow fails 4 tests.
+- 2026-08-05T22:23:59.897Z - completing
+- 2026-08-05T22:23:59.904Z - completion-failed: main-merge: 377fc325 is not contained in origin/main

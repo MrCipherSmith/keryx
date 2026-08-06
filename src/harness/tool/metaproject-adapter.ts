@@ -26,7 +26,7 @@ import {
   type RepomapResult as GdgraphRepomapResult,
 } from "../../gdgraph/repomap";
 import { createMemoryService } from "../../memory/service";
-import { MEMORY_CLASS_VALUES } from "../../memory/types";
+import { MEMORY_CLASS_VALUES, MEMORY_STATUS_VALUES } from "../../memory/types";
 import type { MemoryClass, MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
 import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
@@ -96,15 +96,6 @@ const MAX_EXCERPT_BYTES = 400;
  * symbol --impact` CLI default so the tool and the verb answer the same question.
  */
 const SYMBOL_IMPACT_DEFAULT_DEPTH = 3;
-/** The subset of MemoryStatus values exposed as a `status` filter. */
-const MEMORY_STATUS_VALUES: readonly MemoryStatus[] = [
-  "draft",
-  "accepted",
-  "deprecated",
-  "conflict",
-  "superseded",
-];
-
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -206,7 +197,13 @@ export function createMetaprojectAdapter(
       }
       const appliedFilters = {
         ...(input.module !== undefined ? { module: input.module } : {}),
-        ...(input.status !== undefined ? { status: input.status } : {}),
+        // `filters.status`, not `input.status`. The echo used to pass the raw
+        // input through while the APPLIED filter above was guarded, so a caller
+        // written against the schema's previous (wrong) enum — `status: "active"`
+        // — got a result that failed the schema it was echoing to. An
+        // unrecognised status is dropped from the applied filter, so echoing it
+        // would also have described a filter that was never applied.
+        ...(filters.status !== undefined ? { status: filters.status } : {}),
         ...(input.entity !== undefined ? { entity: input.entity } : {}),
         ...(input.asOf !== undefined ? { asOf: input.asOf } : {}),
         ...(filters.class !== undefined ? { class: filters.class } : {}),

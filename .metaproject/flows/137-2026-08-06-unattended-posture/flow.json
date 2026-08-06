@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 2,
+  "id": "137",
+  "slug": "unattended-posture",
+  "title": "Unattended posture: a read-only run that finishes with no operator, contained by something that is not a word list",
+  "status": "in-progress",
+  "createdAt": "2026-08-06T09:36:10.929Z",
+  "updatedAt": "2026-08-06T09:45:00.287Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:85e366a1186db86dd01f7c454c5d05998e389579a7e14b76feec5c3125db7b22",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Posture flag: read-only tool set, no shell registered",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Approval semantics: deny terminal, ask-without-approver becomes deny",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Evidence: posture in the TUI header and the run record",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Regression corpus C-1..C-5 against a real runner and a real fixture",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Mutation check: name the test each guard is pinned by",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Docs without a category guarantee the mechanism does not enforce",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-06T09:36:10.929Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-06T09:39:28.793Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-06T09:44:59.715Z",
+      "event": "task-added",
+      "detail": "T5: Posture flag: read-only tool set, no shell registered"
+    },
+    {
+      "at": "2026-08-06T09:44:59.807Z",
+      "event": "task-added",
+      "detail": "T6: Approval semantics: deny terminal, ask-without-approver becomes deny"
+    },
+    {
+      "at": "2026-08-06T09:44:59.902Z",
+      "event": "task-added",
+      "detail": "T7: Evidence: posture in the TUI header and the run record"
+    },
+    {
+      "at": "2026-08-06T09:45:00.002Z",
+      "event": "task-added",
+      "detail": "T8: Regression corpus C-1..C-5 against a real runner and a real fixture"
+    },
+    {
+      "at": "2026-08-06T09:45:00.097Z",
+      "event": "task-added",
+      "detail": "T9: Mutation check: name the test each guard is pinned by"
+    },
+    {
+      "at": "2026-08-06T09:45:00.190Z",
+      "event": "task-added",
+      "detail": "T10: Docs without a category guarantee the mechanism does not enforce"
+    },
+    {
+      "at": "2026-08-06T09:45:00.287Z",
+      "event": "started"
+    }
+  ]
+}

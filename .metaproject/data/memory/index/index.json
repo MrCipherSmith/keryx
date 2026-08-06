@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-03T15:18:53.206Z",
-  "entryCount": 8,
+  "generatedAt": "2026-08-06T14:23:21.858Z",
+  "entryCount": 9,
   "entries": [
     {
       "path": "constraints/code-blanks-string-literals.md",
@@ -43,6 +43,21 @@
       "scopes": {
         "module": "review, memory",
         "entity": "managed-review-package",
+        "files": [],
+        "skills": []
+      }
+    },
+    {
+      "path": "known-mistakes/gdctx-diff-reported-clean-tree.md",
+      "type": "known-mistake",
+      "status": "draft",
+      "confidence": "high",
+      "title": "keryx ctx diff reported a clean tree while three files were modified",
+      "updated": "2026-08-06",
+      "tags": [],
+      "scopes": {
+        "module": "gdctx",
+        "entity": "ctx diff",
         "files": [],
         "skills": []
       }
