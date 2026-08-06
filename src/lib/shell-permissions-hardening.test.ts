@@ -387,14 +387,12 @@ test("B5: a wildcard that pins nothing is a bare grant however it is spelled", (
   ]) {
     expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
   }
-  // A wildcard in the PROGRAM NAME gets its own diagnosis rather than the
-  // generic shape one, because "you wrote a glob over program names" is a
-  // different mistake from "that is not a program name". Asserted because a
-  // mutation run found this branch was reachable but pinned by nothing — the
-  // shape rule refused the same inputs, so deleting it changed no test.
+  // A wildcard in the program position is refused by the positional rule, which
+  // says why in the terms that actually matter: such a token can match ANY
+  // program, `keryx ctx run` included.
   const glob = validateShellPattern("t*");
   expect(glob.ok).toBe(false);
-  expect(glob.ok === false && glob.reason).toMatch(/wildcard over program NAMES/);
+  expect(glob.ok === false && glob.reason).toMatch(/wildcard in the first token/);
 });
 
 test("B5: a keryx pattern must pin a verb that cannot execute what follows", () => {
@@ -477,10 +475,12 @@ test("B7: a wildcard before the verb is fatal, whatever comes after it", () => {
   expect(isShellCommandAllowed(attacks[1] ?? "", ["keryx * rg*"])).toBe(true);
 });
 
-test("B7: the token that names keryx is found by its literal runs, not by equality", () => {
-  // Round 3, the same rule skipped from the other end: the check asked whether a
-  // token EQUALLED `keryx`, so one wildcard inside the name meant no token
-  // matched and the whole rule found nothing to do.
+test("B7: a wildcard inside the name that would have said keryx is refused", () => {
+  // Round 3: the check asked whether a token EQUALLED `keryx`, so one wildcard
+  // inside the name meant no token matched and the whole rule found nothing to
+  // do. Round 4 answers this by position rather than by letters — these are all
+  // refused now because a wildcard may not sit in the first token or in the
+  // middle of a pattern, not because anything works out what they spell.
   const attack = "keryx ctx run -- rm -rf /tmp/x";
   for (const pattern of ["k* ctx run*", "ker*x ctx run*", "ke?yx ctx run*", "*keryx ctx run*"]) {
     const result = validateShellPattern(pattern);
@@ -521,12 +521,105 @@ test("B7: every versioned name the stripper knows is a name the list bans", () =
   }
 });
 
-test("B7: the wildcard-in-name guard has a test of its own", () => {
-  // It used to fail only the unconstraining-remainder test, so deleting that one
-  // test unpinned two guards.
-  const glob = validateShellPattern("tim*out *");
-  expect(glob.ok).toBe(false);
-  expect(glob.ok === false && glob.reason).toMatch(/wildcard over program NAMES/);
+test("B8: a wildcard may only appear in the last part of a pattern", () => {
+  // Round 4, found by exhaustive search rather than by guessing: 1538 bypasses
+  // out of 551,880 generated patterns. `????? ctx run*` is the one that ends the
+  // lexical argument — five question marks, no letters, matching `keryx` purely
+  // by length. A wildcard in the program position IS a program.
+  const attacks = ["keryx ctx run -- rm -rf /tmp/x", "keryx harness exec -- /bin/sh"];
+  for (const pattern of [
+    "* ctx run*",
+    "?* ctx run*",
+    "*x ctx run*",
+    "*yx ctx run*",
+    "????? ctx run*",
+    "*ctx run -- *",
+    "* harness exec*",
+  ]) {
+    const result = validateShellPattern(pattern);
+    expect(result.ok, `\`${pattern}\` must not be remembered`).toBe(false);
+    const covered = attacks.some((attack) => isShellCommandAllowed(attack, [pattern]));
+    expect(covered, `\`${pattern}\` covers an arbitrary-execution command`).toBe(true);
+  }
+  // The single-token form that slipped past the bare-grant gate entirely,
+  // because its remainder was empty and its token did not end in `*`.
+  for (const pattern of ["*x", "?*x", "*h", "*sh", "tim*out *"]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must not be remembered`).toBe(false);
+  }
+  expect(isShellCommandAllowed("keryx ctx run -- rm -rf /tmp/x", ["*x"])).toBe(true);
+  // A mid-pattern wildcard behind a literal program name: it cannot reach these
+  // particular attack strings (the command would have to start with `env `), but
+  // it can stand in for `keryx` in a command that does, which is why the rule is
+  // about position rather than about what a given probe happens to match.
+  expect(validateShellPattern("env * ctx run*").ok).toBe(false);
+  expect(isShellCommandAllowed("env keryx ctx run -- rm -rf /tmp/x", ["env * ctx run*"])).toBe(true);
+});
+
+test("B8: an exhaustive sweep finds no pattern that validates and still executes", () => {
+  // The fourth review ended a three-round argument with this rather than with
+  // another example: generate every pattern from an alphabet of the shapes that
+  // have ever been tried, keep the ones that BOTH validate AND auto-approve an
+  // arbitrary-execution command, and count them. It found 1538. The point is that
+  // it is not a list of inputs — it is a property, and it fails loudly when a
+  // future change reopens the class rather than when someone guesses the string.
+  const ALPHABET = [
+    "*", "?", "?*", "*x", "*yx", "?????", "*ctx", "*run", "k*", "ker*x", "ke?yx",
+    "keryx", "keryx*", "keryx?", "ctx", "ctx*", "c*", "run", "run*", "run?*",
+    "harness", "harness*", "exec", "exec*", "--", "rg*",
+  ];
+  const ATTACKS = [
+    "keryx ctx run -- rm -rf /tmp/x",
+    "keryx harness exec -- /bin/sh",
+    "keryx ctx run -- cat /etc/shadow",
+  ];
+
+  const bypasses: string[] = [];
+  let checked = 0;
+  const walk = (prefix: string[]): void => {
+    if (prefix.length > 0) {
+      const pattern = prefix.join(" ");
+      checked += 1;
+      if (validateShellPattern(pattern).ok && ATTACKS.some((a) => isShellCommandAllowed(a, [pattern]))) {
+        bypasses.push(pattern);
+      }
+    }
+    if (prefix.length === 3) {
+      return;
+    }
+    for (const token of ALPHABET) {
+      walk([...prefix, token]);
+    }
+  };
+  walk([]);
+
+  // Guards the sweep itself: an alphabet that stopped generating anything, or a
+  // matcher that stopped matching, would otherwise make this pass by doing nothing.
+  expect(checked).toBeGreaterThan(18_000);
+  expect(isShellCommandAllowed(ATTACKS[0] ?? "", ["keryx *"])).toBe(true);
+  expect(bypasses.slice(0, 10)).toEqual([]);
+});
+
+test("B8: the positional rule leaves ordinary grants alone", () => {
+  // The control, and it is load-bearing twice over: an earlier version identified
+  // the keryx token by literal runs and refused `ls k*` — telling the user that
+  // `k*` "names keryx" — which is how a rule buys safety it did not earn.
+  for (const pattern of [
+    "ls k*",
+    "ls kernel*",
+    "git add k*",
+    "cat keryx.log*",
+    "echo k*",
+    "hostname *",
+    "bun test*",
+    "cat package.json*",
+    "rm build/*.tmp",
+    "keryx ctx rg*",
+    "keryx flow status*",
+    "keryx health run*",
+    "keryx wiki index",
+  ]) {
+    expect(validateShellPattern(pattern).ok, `\`${pattern}\` must stay offerable`).toBe(true);
+  }
 });
 
 test("B6: a versioned interpreter is the interpreter", () => {

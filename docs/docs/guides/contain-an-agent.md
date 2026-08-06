@@ -100,6 +100,15 @@ refused without asking what they are. That matters more than it looks: to
 `bash -c …` does, and an environment assignment puts caller-chosen *text* where
 the program name should be — no list of program names could ever contain it.
 
+**A positional rule, which is the one that does the heavy lifting.** A wildcard
+may appear only in the **last** part of a pattern, and never in the first token.
+The reason is that `*` matches whitespace: a wildcard in the program position
+*is* a program, whatever letters it contains. `????? ctx run*` — five question
+marks, no letters — matches `keryx ctx run …` purely by length, and no rule that
+reads the letters in a token can ever see that. `bun test*`, `hostname *`,
+`cat package.json*`, `rm build/*.tmp` and `ls k*` all still work; `t*`, `*x` and
+`* ctx run*` do not.
+
 **A word list, which is an expedient.** On top of the shape rule, some plain
 program names are refused as bare grants: interpreters (`bash *`, `python3 *`),
 shell builtins that source a file (`. *`, `source *`), generic wrappers (`env *`,

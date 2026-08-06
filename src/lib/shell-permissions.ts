@@ -179,6 +179,10 @@ export function validateShellPattern(pattern: string): PatternValidation {
         "touches the agent's own permission/credential files; remembering it would let one approved command disable the approval gate for every future session",
     };
   }
+  const positional = wildcardOutOfPosition(trimmed, firstToken);
+  if (positional !== undefined) {
+    return { ok: false, reason: positional };
+  }
   const keryxVerb = unpinnedKeryxVerb(trimmed);
   if (keryxVerb !== undefined) {
     return { ok: false, reason: keryxVerb };
@@ -208,6 +212,61 @@ const KERYX_EXECUTING_VERBS: ReadonlyArray<readonly string[]> = [
   ["ctx", "run"],
   ["harness", "exec"],
 ];
+
+/**
+ * Where a wildcard may appear in a pattern at all.
+ *
+ * FOUR review rounds got past the keryx verb rule, and the fourth reviewer ended
+ * the argument with an exhaustive search: 1538 bypasses out of 551,880 generated
+ * patterns, across six first-token shapes, none of which any name-based test can
+ * reach. `????? ctx run*` is the one to remember — five question marks, no
+ * letters, matching `keryx` purely by length.
+ *
+ * Rounds 2, 3 and 4 all refined the same idea: look at the letters in the token.
+ * Compare globs to words, then literal prefixes, then literal runs. **The matcher
+ * does not match names.** `*` is `[\s\S]*` and `?` is `.`; a wildcard in the
+ * program position IS a program, whatever letters it does or does not contain.
+ *
+ * So the property enforced here is POSITIONAL, and it is two lines:
+ *
+ *  1. the FIRST token carries no wildcard — the program has to be named;
+ *  2. only the LAST token may carry one — a wildcard in the middle crosses
+ *     whitespace and can supply whole tokens, including `keryx ctx run`.
+ *
+ * Together these make every token but the last a literal, which is what lets the
+ * verb scan below reason about positions at all: after this, a token's index in
+ * the pattern really is its index in any command the pattern matches.
+ *
+ * They also make the earlier lexical tests small. `k*`, `ker*x`, `*keryx`,
+ * `keryx?`, `* ctx run*` and `?* ctx run*` are all refused here, by shape, before
+ * anything asks what they spell.
+ *
+ * Cost, stated: `t*`, `*x` and `git*` stop being offerable. None was safe —
+ * `*x` was `*` with a one-character toll, and it slipped past the bare-grant gate
+ * entirely because its remainder was empty and its token did not end in `*`.
+ * What survives is every documented form: `bun test*`, `hostname *`,
+ * `cat package.json*`, `rm build/*.tmp`, `ls k*`, `keryx ctx rg*`,
+ * `keryx flow status*`, `keryx health run*`.
+ */
+function wildcardOutOfPosition(pattern: string, firstToken: string): string | undefined {
+  if (hasWildcard(firstToken)) {
+    return (
+      `\`${firstToken}\` is not a program name: a wildcard in the first token can match any program, ` +
+      "including `keryx ctx run`, so the pattern grants whatever the model chooses to type. Name the " +
+      "program and put the wildcard after it"
+    );
+  }
+  const tokens = pattern.split(/\s+/);
+  const stray = tokens.findIndex((token, index) => index < tokens.length - 1 && hasWildcard(token));
+  if (stray !== -1) {
+    return (
+      `\`${tokens[stray]}\` is a wildcard in the middle of \`${pattern}\`, and a wildcard matches ` +
+      "whitespace — it can stand in for whole tokens, so the words after it do not constrain what runs. " +
+      "Only the last part of a pattern may be a wildcard"
+    );
+  }
+  return undefined;
+}
 
 /**
  * Why a `keryx …` pattern is refused when it does not literally pin a verb that
@@ -291,25 +350,18 @@ function hasWildcard(token: string): boolean {
 }
 
 /**
- * Whether `token` could be the word `keryx` when the pattern is matched.
+ * Whether `token` names keryx.
  *
- * Asked of every LITERAL RUN in the token, not of the token as a whole, so
- * `*keryx` and `ker*x` are candidates while `hostname`'s companion `*` is not —
- * a token that is only wildcards names nothing in particular and is an argument
- * position, not a program one.
+ * Plain string equality on the normalised word, and that is now enough: the
+ * positional rule has already refused every pattern in which a token could BE
+ * `keryx` without saying so (`k*`, `ker*x`, `*keryx`, `?????`). An earlier
+ * version asked whether any literal run was in a prefix relation with `keryx`,
+ * which caught `ker*x` — and also refused `ls k*`, `git add k*` and
+ * `cat keryx.log*`, telling the user that `k*` "names keryx". Buying safety by
+ * refusing ordinary grants is not buying safety.
  */
 function couldNameKeryx(token: string): boolean {
-  const word = normalizeCommandWord(token);
-  if (word === "keryx") {
-    return true;
-  }
-  return token
-    .split(/[*?]+/)
-    .filter((run) => run.length > 0)
-    .some((run) => {
-      const bare = (run.split("/").pop() ?? "").toLowerCase();
-      return bare.length > 0 && (bare.startsWith("keryx") || "keryx".startsWith(bare));
-    });
+  return normalizeCommandWord(token) === "keryx";
 }
 
 /**
@@ -326,7 +378,15 @@ function verbSpanExcludes(tokens: readonly string[], start: number, verb: readon
   for (const [index, word] of verb.entries()) {
     const token = tokens[start + index];
     if (token === undefined) {
-      return !hasWildcard(tokens[start + index - 1] ?? "");
+      // The pattern ends before the verb does. Everything scanned so far was a
+      // wildcard-free literal (the loop returns at the first wildcard), and the
+      // positional rule guarantees no earlier token carried one, so this pattern
+      // is a fixed string shorter than the command it would have to match.
+      //
+      // A previous version consulted the preceding token here. That branch was
+      // provably constant — a mutation run failed zero tests — which is what a
+      // guard that guards nothing looks like.
+      return true;
     }
     const wildcardAt = token.search(/[*?]/);
     const literal = wildcardAt === -1 ? token : token.slice(0, wildcardAt);
@@ -437,18 +497,12 @@ function bannedPrefixGrant(pattern: string, firstToken: string): { word: string;
         "the assignment, and no list of program names can cover it",
     };
   }
-  // A wildcard inside the first token makes the PROGRAM NAME a glob: `t*` is a
-  // bare grant over `timeout`, `tar` and everything else beginning with `t`, and
-  // `timeout*` also covers `timeoutfoo`. Refused by shape, before the word is
-  // looked up, because there is no word to look up — there is a pattern.
-  if (/[*?]/.test(firstToken)) {
-    return {
-      word,
-      reason:
-        `\`${firstToken}\` is a wildcard over program NAMES, not a program: it grants whatever command ` +
-        "happens to match it. Name the program exactly and narrow its arguments instead",
-    };
-  }
+  // A wildcard in the first token used to be refused here, with its own message.
+  // `wildcardOutOfPosition` now refuses every such pattern earlier and for a
+  // stronger reason, so the branch became unreachable — and an unreachable guard
+  // that still reads like one is exactly what a mutation run keeps finding on
+  // this file. Deleted rather than left to look load-bearing.
+  //
   // Tested on the token AS WRITTEN, not on the normalised word. Normalising
   // first is what let `\bash *` through: the backslash was stripped, `bash` was
   // looked up, and a word NOT in any list — `\mytool *` — would have sailed past
