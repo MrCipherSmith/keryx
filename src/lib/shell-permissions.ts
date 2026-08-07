@@ -1149,7 +1149,16 @@ export function suggestShellPatterns(command: string): ShellPatternSuggestion {
     exact,
     prefix,
     offerExact: !destructive && validateShellPattern(exact).ok,
-    offerPrefix: !destructive && validateShellPattern(prefix).ok,
+    // `prefix` is a DERIVED pattern ("echo *"), not the command — validating it
+    // alone only proves the pattern's own text is clean, and says nothing about
+    // the command on screen, which may carry an unquoted metacharacter, be
+    // destructive, or touch the agent's own credentials. `isShellCommandAllowed`
+    // is the actual predicate a stored grant is later run through, so ask IT
+    // whether a grant of `prefix` would approve `trimmed` — the same one-line
+    // check `offerExact` gets for free because there `exact` IS the command.
+    // Without this, the approval menu can offer an "always" option that a
+    // stored grant could never honour (flow 141 / benchmark finding P2).
+    offerPrefix: validateShellPattern(prefix).ok && isShellCommandAllowed(trimmed, [prefix]),
   };
 }
 

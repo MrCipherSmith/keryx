@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 2,
+  "id": "142",
+  "slug": "sandbox-launcher-visibility",
+  "title": "Linux install has no OS containment and nothing says so — benchmark finding P4",
+  "status": "in-progress",
+  "createdAt": "2026-08-07T09:10:11.077Z",
+  "updatedAt": "2026-08-07T09:35:49.474Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:407a7ad1fc3ce00a8ae6ef11444339b93dfcb86413730422502e910a2400f8bf",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Failing tests for the frozen criteria",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Implement the fix",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Verify: focused tests + keryx health run",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Confirm the matrix in output and in the runbook share one source (AC4)",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-07T09:10:11.077Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-07T09:11:48.514Z",
+      "event": "task-added",
+      "detail": "T5: Failing tests for the frozen criteria"
+    },
+    {
+      "at": "2026-08-07T09:11:48.602Z",
+      "event": "task-added",
+      "detail": "T6: Implement the fix"
+    },
+    {
+      "at": "2026-08-07T09:11:48.690Z",
+      "event": "task-added",
+      "detail": "T7: Verify: focused tests + keryx health run"
+    },
+    {
+      "at": "2026-08-07T09:11:48.872Z",
+      "event": "task-added",
+      "detail": "T8: Confirm the matrix in output and in the runbook share one source (AC4)"
+    },
+    {
+      "at": "2026-08-07T09:11:49.312Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-07T09:11:49.398Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-07T09:35:49.388Z",
+      "event": "task-done",
+      "detail": "T7: Verify: focused tests + keryx health run"
+    },
+    {
+      "at": "2026-08-07T09:35:49.474Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

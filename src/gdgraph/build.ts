@@ -1,7 +1,8 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { GraphData, GraphEdge, GraphNode } from "./types";
+import type { GraphData, GraphEdge, GraphNode, ImportKind, TranspilerImportKind } from "./types";
+import { UNKNOWN_IMPORT_KIND } from "./types";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".java", ".py"];
 const SOURCE_RESOLUTION_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".d.ts", ".java", ".py"];
@@ -111,9 +112,9 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
     // dropped), so the resolution metric is honest. TS/JS keeps the exact
     // original guard (relative + tsconfig alias only) ⇒ byte-identical output.
     const isLanguageAware = language === "java" || language === "python";
-    const specifiers = extractImportSpecifiers(content, language);
+    const records = extractImportRecords(content, language);
 
-    for (const specifier of specifiers) {
+    for (const { specifier, kind: importKind } of records) {
       const resolved = resolveImport(projectRoot, file, specifier, fileSet, resolver);
       const asset = resolved ? null : resolveAssetImport(projectRoot, file, specifier, resolver);
       const shouldTrackUnresolved =
@@ -136,6 +137,7 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
         to: resolved ?? asset ?? specifier,
         kind: resolved ? "imports" : asset ? "asset" : "unresolved",
         specifier,
+        importKind,
       });
     }
   }
@@ -200,14 +202,27 @@ async function collectSourceFiles(projectRoot: string): Promise<SourceCollection
   return { files: result.sort(), skippedDirectories: skippedDirectories.sort() };
 }
 
-function extractImportSpecifiers(content: string, language: string): string[] {
+type ImportRecord = { specifier: string; kind: ImportKind };
+
+// P1 remediation (flow 140): union the transpiler and fallback extractors as
+// before, but keep the transpiler's per-specifier kind alive instead of
+// collapsing everything to a bare specifier string. `build()`'s edge-writing
+// loop reads `record.kind` straight onto the edge, so cycle detection can
+// later tell a load-order `import-statement` from a call-time `dynamic-import`
+// instead of the previous single "imports" bucket.
+function extractImportRecords(content: string, language: string): ImportRecord[] {
   // Java/Python are not TS/JS syntax — the tsx transpiler cannot scan them
   // (it throws today, which is why they already reach the fallback). Route them
   // explicitly to the regex fallback that carries the java/python patterns,
   // rather than depending on the transpiler always throwing. TS/JS keep the
   // exact original transpiler-then-fallback path ⇒ byte-identical output.
+  // The fallback is a plain regex with no notion of import kind, so every
+  // Java/Python edge is marked UNKNOWN_IMPORT_KIND — never guessed (AC4).
   if (language === "java" || language === "python") {
-    return extractImportSpecifiersFallback(content);
+    return extractImportSpecifiersFallback(content).map((specifier) => ({
+      specifier,
+      kind: UNKNOWN_IMPORT_KIND,
+    }));
   }
   // `Bun.Transpiler#scanImports` ERASES type-only imports: `import type {X} from
   // "./m"` and `export type {X} from "./m"` are compiled away, so the transpiler
@@ -219,16 +234,46 @@ function extractImportSpecifiers(content: string, language: string): string[] {
   // odd formatting), the fallback contributes the type-only ones.
   const scanned = scanImportsOrEmpty(content);
   const fallback = extractImportSpecifiersFallback(content);
-  return [...new Set([...scanned, ...fallback])].sort();
+
+  const kindBySpecifier = new Map<string, ImportKind>();
+  for (const { specifier, kind } of scanned) {
+    const existing = kindBySpecifier.get(specifier);
+    // The same specifier can appear more than once in a file (a static import
+    // plus a separate `await import()` of the same path). A real static edge
+    // makes it a load-order dependency regardless of what else also imports
+    // it dynamically elsewhere in the file, so a non-dynamic kind always wins
+    // over a dynamic one already recorded for the same specifier.
+    if (!existing || (existing === "dynamic-import" && kind !== "dynamic-import")) {
+      kindBySpecifier.set(specifier, kind);
+    }
+  }
+  // Fallback-only specifiers (not seen by the transpiler at all — e.g.
+  // type-only imports) get the explicit unknown/static marker, never a
+  // guessed kind (AC4). A specifier the transpiler DID see keeps its real
+  // kind; the fallback never overrides it.
+  for (const specifier of fallback) {
+    if (!kindBySpecifier.has(specifier)) {
+      kindBySpecifier.set(specifier, UNKNOWN_IMPORT_KIND);
+    }
+  }
+
+  return [...kindBySpecifier.entries()]
+    .map(([specifier, kind]) => ({ specifier, kind }))
+    .sort((a, b) => a.specifier.localeCompare(b.specifier));
 }
 
-function scanImportsOrEmpty(content: string): string[] {
+type ScannedImport = { specifier: string; kind: TranspilerImportKind };
+
+function scanImportsOrEmpty(content: string): ScannedImport[] {
   try {
     const scanner = new Bun.Transpiler({ loader: "tsx" });
     return scanner
       .scanImports(content)
-      .map((entry) => entry.path)
-      .filter((specifier): specifier is string => typeof specifier === "string" && specifier.length > 0);
+      .filter(
+        (entry): entry is { path: string; kind: TranspilerImportKind } =>
+          typeof entry.path === "string" && entry.path.length > 0,
+      )
+      .map((entry) => ({ specifier: entry.path, kind: entry.kind }));
   } catch {
     // Unparseable source ⇒ the regex fallback alone still yields the imports.
     return [];

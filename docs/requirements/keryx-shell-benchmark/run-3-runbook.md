@@ -76,6 +76,20 @@ Rules learned the hard way in run 2:
   to refuse *with*, which measures nothing.
 - **Collect after every batch.** `harness/runs/` is gitignored and a worktree
   cleanup takes it with it.
+- **Clean up `harness/wt/` when the batch is done.** `drive.py` passes `--keep`,
+  so every leg leaves its worktree behind forever. After run 2 there were **42
+  of them, 323 MB, inside this repository**. They are gitignored, so
+  `git status` never shows them — but `keryx health run` and `bun test` walk the
+  filesystem, not the index, and **2604 of 2736 health findings came from that
+  directory**. It made the quality gate unreadable and segfaulted `bun test`.
+  Removing them is safe: evidence is copied to `evidence/run-<n>/` and frames
+  live in `harness/runs/`, neither of which is under `wt/`.
+
+  ```bash
+  for d in harness/wt/*/; do git -C /home/altsay/bots/helyx worktree remove --force "$PWD/${d%/}"; done
+  git -C /home/altsay/bots/helyx worktree prune
+  ```
+
 - **A `FAILED` row is data.** Do not delete it and do not retry blindly — read
   `harness/logs/<case>-<leg>.err` and the `frames/*-prompt-never-landed.ansi`
   capture first. Both consent-screen bugs in run 2 were found that way, and the

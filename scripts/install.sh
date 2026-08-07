@@ -54,6 +54,38 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+report_sandbox_status() {
+  echo
+  echo "OS sandbox containment (flow 142 / P4):"
+  case "$(uname -s)" in
+    Linux)
+      if command -v bwrap >/dev/null 2>&1; then
+        echo "  bubblewrap: found ($(command -v bwrap))"
+        echo "  Filesystem containment and network-off are available."
+      else
+        echo "  bubblewrap: NOT FOUND — OS containment is unavailable until it is installed."
+        echo "  Filesystem containment and network-off both require bubblewrap."
+        echo "  Install it: apt install bubblewrap (Debian/Ubuntu) | dnf install bubblewrap (Fedora) | pacman -S bubblewrap (Arch)"
+      fi
+      echo "  Domain allowlist (--allowed-domains) and credential masking (--mask-env) are"
+      echo "  not implemented on Linux regardless — installing bubblewrap will not enable them."
+      ;;
+    Darwin)
+      if [ -x /usr/bin/sandbox-exec ]; then
+        echo "  Seatbelt (sandbox-exec): found."
+        echo "  Filesystem containment, network-off, domain allowlist and credential masking are all available."
+      else
+        echo "  sandbox-exec: NOT FOUND at /usr/bin/sandbox-exec (unusual on macOS)."
+        echo "  OS containment is unavailable until it is present."
+      fi
+      ;;
+    *)
+      echo "  OS sandbox: unsupported on $(uname -s) — every contained run fails closed."
+      ;;
+  esac
+  echo "  Check anytime: keryx sandbox status"
+}
+
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing required command: $1" >&2
@@ -131,6 +163,7 @@ EOF
   echo
   echo "Make sure this directory is in PATH:"
   echo "  export PATH=\"$BIN_DIR:\$PATH\""
+  report_sandbox_status
   exit 0
 fi
 
@@ -142,3 +175,4 @@ clone_or_update "$RUNTIME_DIR"
 
 echo "keryx installed for project:"
 echo "  $RUNTIME_DIR"
+report_sandbox_status

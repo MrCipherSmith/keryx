@@ -306,10 +306,15 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
         "- Optional prep: `keryx wiki collect` then enrich.\n\n"
       : "") +
     "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +
-    "contents, or results. Be economical with output tokens: lead with the conclusion, " +
+    "contents, or results. Be economical with output length: lead with the conclusion, " +
     "give the shortest correct answer, prefer bullet points over prose, and omit preamble. " +
+    "That economy governs prose only — never how many tools you call. " +
     "Do NOT paste large tool/command output back into your reply — the compact tool result " +
-    "is already in context; reference it instead of repeating it.";
+    "is already in context; reference it instead of repeating it. When a tool's result is " +
+    "itself the deliverable you are about to report (e.g. a list of cycles, orphans, or " +
+    "dependents) — not merely an input you go on to reason over — check it against source " +
+    "before presenting it as fact; do not add this check to every call, only where the " +
+    "result is the answer.";
 
   const trimmed = orient?.trim() ?? "";
   if (trimmed.length === 0) {

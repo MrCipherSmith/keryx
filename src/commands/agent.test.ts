@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   buildAgentSystemInstruction,
   DEFAULT_MAX_TOOL_CALLS,
@@ -707,4 +709,134 @@ test("buildAgentSystemInstruction routes wiki enrich intents to keryx wiki enric
   expect(instr).toMatch(/ask_user/);
   expect(instr).toMatch(/recommended/);
   expect(instr).toMatch(/spawn_subagent/);
+});
+
+// --- flow 139 (P3): a regression fixture reproducing the A3 condition — a
+// first-party tool returns cycles that include a dynamic-import edge — and
+// pinning that the agent's answer QUALIFIES that result instead of restating
+// it unchecked. AC4/AC5 (frozen): .metaproject/flows/
+// 139-2026-08-07-shell-prompt-verification-tradeoff/acceptance-criteria.md
+//
+// The fake `graph_query` tool below is DELIBERATELY wrong: it folds all 8
+// cycles into the count, the way the pre-flow-140 gdgraph engine did — a
+// hardcoded stub, not the real gdgraph, so this fixture is decoupled from
+// whatever the real engine reports post-P1 (`src/gdgraph/query.ts:69` already
+// excludes `dynamic-import` edges there). It still forces the unchecked-trust
+// path even though the underlying graph data got better (AC5).
+
+/** True when text qualifies a raw cycle count instead of only repeating it. */
+function qualifiesCycleCount(text: string): boolean {
+  return /dynamic import|await import/i.test(text) && /not\s+(a\s+)?load-order/i.test(text);
+}
+
+test("qualifiesCycleCount sanity: a bare restatement does not qualify, a checked answer does", () => {
+  expect(qualifiesCycleCount("graph_query reports 8 import cycles.")).toBe(false);
+  expect(
+    qualifiesCycleCount(
+      "5 of 8 cycles run through await import() in bot/callbacks.ts and are not load-order cycles; 3 are genuine.",
+    ),
+  ).toBe(true);
+});
+
+test("AC4/AC5: agent qualifies a graph_query cycle count that wrongly folds in dynamic-import edges", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "keryx-p3-a3-"));
+  mkdirSync(path.join(root, "bot"), { recursive: true });
+  writeFileSync(
+    path.join(root, "bot", "callbacks.ts"),
+    'const { handleMenuCallback } = await import("./commands/menu.ts");\n',
+  );
+
+  const graphQueryTool: InteractiveTool = {
+    definition: {
+      name: "graph_query",
+      description: "Query the project's dependency graph (cycles, orphans).",
+      inputSchema: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async () => ({
+      // Deliberately wrong/incomplete: reports all 8 as load-order cycles,
+      // 5 of which actually run through the dynamic import above.
+      output:
+        "8 import cycles found, including 5 through bot/callbacks.ts -> bot/commands/menu.ts " +
+        "and 3 elsewhere.",
+      isError: false,
+    }),
+  };
+  const readFileTool = builtinReadOnlyTools(root)[2] as InteractiveTool; // reuse the real read_file tool
+
+  const { provider, requests } = scriptedProvider([
+    // Round 1: the model asks graph_query for cycles.
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "graph_query" },
+      { kind: "tool_call_end", toolCallId: "c1", input: '{"query":"cycles"}' },
+      { kind: "model_end" },
+    ],
+    // Round 2: the graph result IS the deliverable it is about to report, so
+    // it checks it against source before answering.
+    [
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "read_file" },
+      { kind: "tool_call_end", toolCallId: "c2", input: '{"path":"bot/callbacks.ts"}' },
+      { kind: "model_end" },
+    ],
+    // Round 3: the qualified final answer.
+    [
+      {
+        kind: "text_delta",
+        text:
+          "5 of 8 cycles run through await import() in bot/callbacks.ts and are not load-order " +
+          "cycles; 3 are genuine.",
+      },
+      { kind: "model_end" },
+    ],
+  ]);
+
+  const { io, text } = collectingIo();
+  const systemInstruction = buildAgentSystemInstruction(undefined, {
+    toolNames: ["graph_query", "read_file"],
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [graphQueryTool, readFileTool],
+    systemInstruction,
+    idSeq: fixedIdSeq(),
+  };
+
+  await runAgentTurn(io, deps, [], "how many import cycles does this project have?");
+
+  // The multi-tool verification trajectory completed — economy did not cap
+  // the turn at the FIRST tool call (AC1/X1: brevity governs length, not
+  // tool-call budget).
+  expect(requests.length).toBe(3);
+  // The final answer qualifies the tool's raw count instead of restating it
+  // unchecked.
+  expect(qualifiesCycleCount(text.join(""))).toBe(true);
+
+  // Tied directly to the disposition text: if the "check it against source
+  // when the result IS the deliverable" clause is ever removed from
+  // `buildAgentSystemInstruction`, this assertion breaks independently of the
+  // scripted trajectory above — the fixture forces the unchecked-trust path
+  // rather than passing because the underlying graph data got better (AC5).
+  expect(systemInstruction).toMatch(/deliverable/i);
+  expect(systemInstruction).toMatch(/check it against source/i);
+});
+
+// agent.ts carries its own "be economical" clause (line ~308), independent of
+// `SYSTEM_INSTRUCTION` in shell.ts. It governs the ONLY mode with tools
+// (agent mode; `runShell`'s plain chat mode never registers a `tools` field),
+// so it is in scope for flow 139 even though the frozen ACs name shell.ts —
+// see the journal for the full call. Pinned here so the two instructions
+// cannot drift back into the same conflated clause.
+test("flow 139 (P3, agent.ts scope): the agent instruction also decouples prose economy from tool-call budget", () => {
+  const instr = buildAgentSystemInstruction(undefined);
+  expect(instr).toMatch(/economy governs prose only/i);
+  expect(instr).toMatch(/never\s+how many tools you call/i);
+  expect(instr).toMatch(/check it against source/i);
+  expect(instr).toMatch(/deliverable/i);
 });

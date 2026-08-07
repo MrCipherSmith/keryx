@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "id": "140",
+  "slug": "gdgraph-dynamic-import-edges",
+  "title": "gdgraph counts await import() as an ordinary import edge — benchmark finding P1",
+  "status": "in-progress",
+  "createdAt": "2026-08-07T09:10:10.041Z",
+  "updatedAt": "2026-08-07T09:35:49.124Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e6bcab5e0d7049facbf13db60119148a11ea423fc564dc0d77fc37a09604ff56",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Failing tests for the frozen criteria",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Implement the fix",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Verify: focused tests + keryx health run",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Confirm orphans/affected unchanged on the fixture (AC5)",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-07T09:10:10.041Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-07T09:11:47.977Z",
+      "event": "task-added",
+      "detail": "T5: Failing tests for the frozen criteria"
+    },
+    {
+      "at": "2026-08-07T09:11:48.065Z",
+      "event": "task-added",
+      "detail": "T6: Implement the fix"
+    },
+    {
+      "at": "2026-08-07T09:11:48.156Z",
+      "event": "task-added",
+      "detail": "T7: Verify: focused tests + keryx health run"
+    },
+    {
+      "at": "2026-08-07T09:11:48.779Z",
+      "event": "task-added",
+      "detail": "T8: Confirm orphans/affected unchanged on the fixture (AC5)"
+    },
+    {
+      "at": "2026-08-07T09:11:48.963Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-07T09:11:49.052Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-07T09:24:01.679Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-07T09:24:01.767Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-07T09:24:01.861Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-07T09:24:01.950Z",
+      "event": "task-done",
+      "detail": "T5: Failing tests for the frozen criteria"
+    },
+    {
+      "at": "2026-08-07T09:24:02.045Z",
+      "event": "task-done",
+      "detail": "T6: Implement the fix"
+    },
+    {
+      "at": "2026-08-07T09:24:02.139Z",
+      "event": "task-done",
+      "detail": "T8: Confirm orphans/affected unchanged on the fixture (AC5)"
+    },
+    {
+      "at": "2026-08-07T09:35:49.035Z",
+      "event": "task-done",
+      "detail": "T7: Verify: focused tests + keryx health run"
+    },
+    {
+      "at": "2026-08-07T09:35:49.124Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
