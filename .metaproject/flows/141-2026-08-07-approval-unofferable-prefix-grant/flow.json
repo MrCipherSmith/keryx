@@ -3,17 +3,38 @@
   "id": "141",
   "slug": "approval-unofferable-prefix-grant",
   "title": "Approval menu offers a prefix grant that can never be honoured — benchmark finding P2",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-07T09:10:10.557Z",
-  "updatedAt": "2026-08-07T09:35:49.297Z",
+  "updatedAt": "2026-08-07T09:43:12.329Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:33cb9c23c5644174a6d541a2b6662828f850f9899b798f056434fb058c4521cb",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-07T09:42:11.284Z",
+      "note": "offerPrefix now calls isShellCommandAllowed(trimmed, [prefix]); test asserts false for the literal C3 command. (PR #257)"
+    },
+    "AC2": {
+      "at": "2026-08-07T09:42:11.467Z",
+      "note": "offerPrefix stays true for a clean command; pre-existing 'ordinary command still offers both grants' test still passes. (PR #257)"
+    },
+    "AC3": {
+      "at": "2026-08-07T09:42:11.606Z",
+      "note": "Property-style loop over ~20 commands asserts: if an offer is made, a stored grant of that pattern would auto-approve that command. (PR #257)"
+    },
+    "AC4": {
+      "at": "2026-08-07T09:42:11.697Z",
+      "note": "Destructive and credential-touching commands offer neither grant. The credential case was broken the same way and is fixed by the same line. (PR #257)"
+    },
+    "AC5": {
+      "at": "2026-08-07T09:42:11.787Z",
+      "note": "tui-shell.ts:438 invariant left unedited and now true of the code beneath it. 58 pass / 0 fail. (PR #257)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/257"
   },
   "tasks": [
     {
@@ -185,6 +206,64 @@
       "at": "2026-08-07T09:35:49.297Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-07T09:41:38.594Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:42:11.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: offerPrefix now calls isShellCommandAllowed(trimmed, [prefix]); test asserts false for the literal C3 command. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:11.467Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: offerPrefix stays true for a clean command; pre-existing 'ordinary command still offers both grants' test still passes. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:11.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Property-style loop over ~20 commands asserts: if an offer is made, a stored grant of that pattern would auto-approve that command. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:11.698Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Destructive and credential-touching commands offer neither grant. The credential case was broken the same way and is fixed by the same line. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:11.787Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tui-shell.ts:438 invariant left unedited and now true of the code beneath it. 58 pass / 0 fail. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:19.765Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:42:21.751Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-08-07T09:42:56.527Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:42:56.611Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:42:58.367Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-08-07T09:43:12.329Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
     }
   ]
 }

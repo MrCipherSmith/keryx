@@ -36,3 +36,19 @@ This is a harness defect, not a one-off: `drive.py` passes `--keep`, so every
 leg leaves its worktree behind forever. Recorded in the run-3 runbook.
 - 2026-08-07T09:35:49.388Z - task-done: T7: Verify: focused tests + keryx health run
 - 2026-08-07T09:35:49.474Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-07T09:41:40.716Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257
+- 2026-08-07T09:42:11.880Z - ac-confirmed: AC1: report_sandbox_status() in install.sh names bubblewrap and the install command; tested with a PATH filtered of bwrap, plus a falsifiable counterpart with a fake bwrap shim. (PR #257)
+- 2026-08-07T09:42:11.970Z - ac-confirmed: AC2: sandboxCommand never touches process.exitCode; verified for missing-launcher and unsupported-platform. Smoke-run on this host printed the matrix and exited 0. (PR #257)
+- 2026-08-07T09:42:12.060Z - ac-confirmed: AC3: Named constants LAUNCHER_NOT_INSTALLED / NOT_IMPLEMENTED_ON_PLATFORM; test asserts both exist and are mutually exclusive per row. (PR #257)
+- 2026-08-07T09:42:12.154Z - ac-confirmed: AC4: capability-matrix.doc-sync.test.ts parses the runbook table live and diffs it against SANDBOX_CAPABILITY_MATRIX, with a flipped-row falsifiability check. (PR #257)
+- 2026-08-07T09:42:12.247Z - ac-confirmed: AC5: No edits to shell-exec-tool.ts, sandbox-config.ts or any fail-closed path; detect/adapter/shell-exec suites re-run unchanged. (PR #257)
+- 2026-08-07T09:42:12.342Z - ac-confirmed: AC6: Descriptor registered in command-registry.ts with 9 intent phrases; matchIntent resolves to 'sandbox status'. (PR #257)
+- 2026-08-07T09:42:21.950Z - completing
+- 2026-08-07T09:42:24.086Z - completion-failed: pull-request: PR checks not green
+- 2026-08-07T09:42:45.456Z - task-done: T1: Collect remaining context
+- 2026-08-07T09:42:45.545Z - task-done: T2: Implement per plan
+- 2026-08-07T09:42:45.632Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-07T09:42:45.720Z - task-done: T5: Failing tests for the frozen criteria
+- 2026-08-07T09:42:45.804Z - task-done: T6: Implement the fix
+- 2026-08-07T09:42:45.893Z - task-done: T8: Confirm the matrix in output and in the runbook share one source (AC4)
+- 2026-08-07T09:43:14.628Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257

@@ -119,16 +119,26 @@ describe("renderSandboxReport", () => {
 const SANDBOX_MATRIX_LABELS = ["Filesystem containment", "Network OFF", "Domain allowlist", "Credential masking"];
 
 describe("sandboxCommand — AC2: report, not a gate", () => {
+  // These two assert AC2's actual claim — the command does not change the
+  // exit code at all, in either direction — rather than the identity of the
+  // sentinel `undefined`. That distinction matters under `bun test`'s
+  // full-suite run (what CI runs): every file shares one process, so whatever
+  // `process.exitCode` already is when this test starts is not under this
+  // file's control, and a runtime is free to normalise an `undefined`
+  // assignment to `0` anyway. Snapshotting the value beforehand and asserting
+  // it is unchanged afterward holds regardless of what it started as, and
+  // — because it never assigns to `process.exitCode` itself — there is
+  // nothing here to restore or leak into whatever test file runs next.
   test("never sets process.exitCode, even when the launcher is missing", async () => {
-    process.exitCode = undefined;
+    const before = process.exitCode;
     await sandboxCommand([], { platform: "linux", env: { PATH: "/usr/bin" }, existsSync: () => false });
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode).toBe(before);
   });
 
   test("never sets process.exitCode on an unsupported platform either", async () => {
-    process.exitCode = undefined;
+    const before = process.exitCode;
     await sandboxCommand(["status"], { platform: "win32" });
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode).toBe(before);
   });
 
   test("--json prints valid, parseable JSON with the platform and capabilities", async () => {
@@ -149,13 +159,27 @@ describe("sandboxCommand — AC2: report, not a gate", () => {
   });
 
   test("an unknown subcommand exits non-zero and does not silently run the report", async () => {
-    const lines = await runCaptured(() => sandboxCommand(["frobnicate"]));
-    expect(process.exitCode).toBe(1);
-    expect(lines.join("\n")).not.toContain("Platform:");
-    // Node/Bun quirk: `process.exitCode = undefined` does NOT clear a
-    // previously-set numeric exit code (the setter no-ops on a non-number) —
-    // only assigning an explicit `0` does. Without this, this test's exit
-    // code leaks into the whole `bun test` process's own exit status.
-    process.exitCode = 0;
+    // Unlike the two AC2 tests above, this path (a genuine argument error) IS
+    // supposed to set a nonzero exit code — that is what is under test here,
+    // so the global has to be mutated to observe it. `before` is captured so
+    // the restore below puts back exactly what was there, not a guess.
+    const before = process.exitCode;
+    try {
+      const lines = await runCaptured(() => sandboxCommand(["frobnicate"]));
+      expect(process.exitCode).toBe(1);
+      expect(lines.join("\n")).not.toContain("Platform:");
+    } finally {
+      // Node/Bun quirk: `process.exitCode = undefined` does NOT clear a
+      // previously-set numeric exit code (the setter no-ops on a non-number) —
+      // only assigning an explicit number does. So when `before` was
+      // `undefined`, restoring it verbatim would silently fail to undo the
+      // `1` this test just caused, leaking a failing exit code into whatever
+      // runs after this file in a shared `bun test` process (the same class
+      // of bug the AC2 tests above were rewritten to avoid). `0` is the
+      // faithful restoration of "no exit code was explicitly set" — it is
+      // the value that produces the same (successful) process exit as
+      // `undefined` does.
+      process.exitCode = before ?? 0;
+    }
   });
 });

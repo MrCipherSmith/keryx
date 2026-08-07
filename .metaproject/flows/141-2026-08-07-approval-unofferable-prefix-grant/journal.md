@@ -63,3 +63,15 @@ Side effect worth recording: the credential-touching case for `offerPrefix` was
 broken the same way and is fixed by the same line, not by extra scope.
 - 2026-08-07T09:35:49.209Z - task-done: T7: Verify: focused tests + keryx health run
 - 2026-08-07T09:35:49.297Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-07T09:41:38.594Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257
+- 2026-08-07T09:42:11.284Z - ac-confirmed: AC1: offerPrefix now calls isShellCommandAllowed(trimmed, [prefix]); test asserts false for the literal C3 command. (PR #257)
+- 2026-08-07T09:42:11.467Z - ac-confirmed: AC2: offerPrefix stays true for a clean command; pre-existing 'ordinary command still offers both grants' test still passes. (PR #257)
+- 2026-08-07T09:42:11.607Z - ac-confirmed: AC3: Property-style loop over ~20 commands asserts: if an offer is made, a stored grant of that pattern would auto-approve that command. (PR #257)
+- 2026-08-07T09:42:11.698Z - ac-confirmed: AC4: Destructive and credential-touching commands offer neither grant. The credential case was broken the same way and is fixed by the same line. (PR #257)
+- 2026-08-07T09:42:11.787Z - ac-confirmed: AC5: tui-shell.ts:438 invariant left unedited and now true of the code beneath it. 58 pass / 0 fail. (PR #257)
+- 2026-08-07T09:42:19.765Z - completing
+- 2026-08-07T09:42:21.751Z - completion-failed: pull-request: PR checks not green
+- 2026-08-07T09:42:56.527Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257
+- 2026-08-07T09:42:56.611Z - completing
+- 2026-08-07T09:42:58.367Z - completion-failed: pull-request: PR checks not green
+- 2026-08-07T09:43:12.329Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257

@@ -57,3 +57,13 @@ golden.
 edge `buildGraph()` writes carries a real value, so AC1 is not weakened.
 - 2026-08-07T09:35:49.035Z - task-done: T7: Verify: focused tests + keryx health run
 - 2026-08-07T09:35:49.124Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-07T09:41:36.367Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257
+- 2026-08-07T09:42:10.137Z - ac-confirmed: AC1: types.ts adds importKind; build.ts preserves {specifier, kind} from scanImports. import-kind.test.ts asserts the literal kinds scanImports returns. (PR #257)
+- 2026-08-07T09:42:10.332Z - ac-confirmed: AC2: Verified on the pinned target, not only a fixture: rebuilt helyx@bfad745b (267 nodes, 656 edges), every cycle through bot/commands/menu.ts gone. 8 -> 7; the residue is genuinely static (bot/commands/memory.ts:7 <-> bot/handlers.ts:96, checked by hand). (PR #257)
+- 2026-08-07T09:42:10.532Z - ac-confirmed: AC3: Two tests, same two-file shape: static IS reported, dynamic is NOT. (PR #257)
+- 2026-08-07T09:42:10.721Z - ac-confirmed: AC4: Type-only-import and Java fixtures (both fallback-only) assert 'unknown-static', never 'dynamic-import'. (PR #257)
+- 2026-08-07T09:42:10.922Z - ac-confirmed: AC5: getOrphans/getAffected/computeAffected untouched and never read importKind; affected.test.ts and service.test.ts unmodified and passing. (PR #257)
+- 2026-08-07T09:42:11.102Z - ac-confirmed: AC6: CHANGELOG.md Unreleased/Fixed states previously reported cycle counts on lazy-loading codebases were inflated. (PR #257)
+- 2026-08-07T09:42:17.546Z - completing
+- 2026-08-07T09:42:19.545Z - completion-failed: pull-request: PR checks not green
+- 2026-08-07T09:43:09.932Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257

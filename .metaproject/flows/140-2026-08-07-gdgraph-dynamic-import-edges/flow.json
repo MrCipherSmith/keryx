@@ -3,17 +3,42 @@
   "id": "140",
   "slug": "gdgraph-dynamic-import-edges",
   "title": "gdgraph counts await import() as an ordinary import edge — benchmark finding P1",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-07T09:10:10.041Z",
-  "updatedAt": "2026-08-07T09:35:49.124Z",
+  "updatedAt": "2026-08-07T09:43:09.932Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e6bcab5e0d7049facbf13db60119148a11ea423fc564dc0d77fc37a09604ff56",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-07T09:42:10.137Z",
+      "note": "types.ts adds importKind; build.ts preserves {specifier, kind} from scanImports. import-kind.test.ts asserts the literal kinds scanImports returns. (PR #257)"
+    },
+    "AC2": {
+      "at": "2026-08-07T09:42:10.332Z",
+      "note": "Verified on the pinned target, not only a fixture: rebuilt helyx@bfad745b (267 nodes, 656 edges), every cycle through bot/commands/menu.ts gone. 8 -> 7; the residue is genuinely static (bot/commands/memory.ts:7 <-> bot/handlers.ts:96, checked by hand). (PR #257)"
+    },
+    "AC3": {
+      "at": "2026-08-07T09:42:10.532Z",
+      "note": "Two tests, same two-file shape: static IS reported, dynamic is NOT. (PR #257)"
+    },
+    "AC4": {
+      "at": "2026-08-07T09:42:10.720Z",
+      "note": "Type-only-import and Java fixtures (both fallback-only) assert 'unknown-static', never 'dynamic-import'. (PR #257)"
+    },
+    "AC5": {
+      "at": "2026-08-07T09:42:10.921Z",
+      "note": "getOrphans/getAffected/computeAffected untouched and never read importKind; affected.test.ts and service.test.ts unmodified and passing. (PR #257)"
+    },
+    "AC6": {
+      "at": "2026-08-07T09:42:11.102Z",
+      "note": "CHANGELOG.md Unreleased/Fixed states previously reported cycle counts on lazy-loading codebases were inflated. (PR #257)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/257"
   },
   "tasks": [
     {
@@ -210,6 +235,55 @@
       "at": "2026-08-07T09:35:49.124Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-07T09:41:36.367Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:42:10.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: types.ts adds importKind; build.ts preserves {specifier, kind} from scanImports. import-kind.test.ts asserts the literal kinds scanImports returns. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.332Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified on the pinned target, not only a fixture: rebuilt helyx@bfad745b (267 nodes, 656 edges), every cycle through bot/commands/menu.ts gone. 8 -> 7; the residue is genuinely static (bot/commands/memory.ts:7 <-> bot/handlers.ts:96, checked by hand). (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Two tests, same two-file shape: static IS reported, dynamic is NOT. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.721Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Type-only-import and Java fixtures (both fallback-only) assert 'unknown-static', never 'dynamic-import'. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: getOrphans/getAffected/computeAffected untouched and never read importKind; affected.test.ts and service.test.ts unmodified and passing. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:11.102Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CHANGELOG.md Unreleased/Fixed states previously reported cycle counts on lazy-loading codebases were inflated. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:17.546Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:42:19.545Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-08-07T09:43:09.932Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
     }
   ]
 }

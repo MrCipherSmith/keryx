@@ -114,3 +114,15 @@ Gate after all four flows, on a repository cleaned of the 42 stray benchmark
 worktrees: `keryx health run` **PASS**, score 93. Combined suite across all four
 diffs: **373 pass, 5 skip, 0 fail**.
 - 2026-08-07T09:35:48.952Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-07T09:42:09.173Z - ac-confirmed: AC1: agent.ts + shell.ts: brevity sentence carries no tool token; explicit 'that economy governs prose only — never how many tools you call'. shell.test.ts sentence-split test. (PR #257)
+- 2026-08-07T09:42:09.394Z - ac-confirmed: AC2: 'when a tool's result is itself the deliverable ... check it against source', scoped by 'not merely an input you go on to reason over'. Tested in shell.test.ts. (PR #257)
+- 2026-08-07T09:42:09.571Z - ac-confirmed: AC3: brevity substrings preserved verbatim and asserted; 68 pass / 0 fail across shell.test.ts, agent.test.ts, agent-tool-surface.test.ts. (PR #257)
+- 2026-08-07T09:42:09.757Z - ac-confirmed: AC4: agent.test.ts fixture: stubbed graph_query returns a deliberately wrong 8-cycle answer (A3 shape); trajectory reads a real file before answering; final text asserted to qualify, not restate. Companion test proves the assertion discriminates. (PR #257)
+- 2026-08-07T09:42:09.949Z - ac-confirmed: AC5: Journal records P1 landed first (query.ts excludes dynamic-import; import-kind.test.ts pins it) AND that AC4's fixture uses a hardcoded-wrong fake tool, so it forces the unchecked-trust path independent of P1. (PR #257)
+- 2026-08-07T09:42:44.927Z - frozen: 5 criteria; checksum recorded
+- 2026-08-07T09:42:45.018Z - started
+- 2026-08-07T09:42:45.106Z - task-done: T1: Collect remaining context
+- 2026-08-07T09:42:45.195Z - task-done: T2: Implement per plan
+- 2026-08-07T09:42:45.281Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-07T09:42:45.368Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-07T09:43:07.717Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257

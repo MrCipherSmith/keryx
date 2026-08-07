@@ -3,17 +3,38 @@
   "id": "139",
   "slug": "shell-prompt-verification-tradeoff",
   "title": "Shell system prompt trades verification for brevity — benchmark finding P3",
-  "status": "initializing",
+  "status": "implemented",
   "createdAt": "2026-08-07T07:48:29.800Z",
-  "updatedAt": "2026-08-07T09:35:48.952Z",
+  "updatedAt": "2026-08-07T09:43:07.717Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:d9fa0c734ea307f6c889c022db11f90f841859b610e83e80f5270db924a4a3b1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-07T09:42:09.173Z",
+      "note": "agent.ts + shell.ts: brevity sentence carries no tool token; explicit 'that economy governs prose only — never how many tools you call'. shell.test.ts sentence-split test. (PR #257)"
+    },
+    "AC2": {
+      "at": "2026-08-07T09:42:09.394Z",
+      "note": "'when a tool's result is itself the deliverable ... check it against source', scoped by 'not merely an input you go on to reason over'. Tested in shell.test.ts. (PR #257)"
+    },
+    "AC3": {
+      "at": "2026-08-07T09:42:09.571Z",
+      "note": "brevity substrings preserved verbatim and asserted; 68 pass / 0 fail across shell.test.ts, agent.test.ts, agent-tool-surface.test.ts. (PR #257)"
+    },
+    "AC4": {
+      "at": "2026-08-07T09:42:09.757Z",
+      "note": "agent.test.ts fixture: stubbed graph_query returns a deliberately wrong 8-cycle answer (A3 shape); trajectory reads a real file before answering; final text asserted to qualify, not restate. Companion test proves the assertion discriminates. (PR #257)"
+    },
+    "AC5": {
+      "at": "2026-08-07T09:42:09.949Z",
+      "note": "Journal records P1 landed first (query.ts excludes dynamic-import; import-kind.test.ts pins it) AND that AC4's fixture uses a hardcoded-wrong fake tool, so it forces the unchecked-trust path independent of P1. (PR #257)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/257"
   },
   "tasks": [
     {
@@ -101,6 +122,65 @@
       "at": "2026-08-07T09:35:48.952Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-07T09:42:09.173Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: agent.ts + shell.ts: brevity sentence carries no tool token; explicit 'that economy governs prose only — never how many tools you call'. shell.test.ts sentence-split test. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:09.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: 'when a tool's result is itself the deliverable ... check it against source', scoped by 'not merely an input you go on to reason over'. Tested in shell.test.ts. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:09.571Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: brevity substrings preserved verbatim and asserted; 68 pass / 0 fail across shell.test.ts, agent.test.ts, agent-tool-surface.test.ts. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:09.757Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: agent.test.ts fixture: stubbed graph_query returns a deliberately wrong 8-cycle answer (A3 shape); trajectory reads a real file before answering; final text asserted to qualify, not restate. Companion test proves the assertion discriminates. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:09.949Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Journal records P1 landed first (query.ts excludes dynamic-import; import-kind.test.ts pins it) AND that AC4's fixture uses a hardcoded-wrong fake tool, so it forces the unchecked-trust path independent of P1. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:44.927Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-07T09:42:45.018Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-07T09:42:45.106Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-07T09:42:45.195Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-07T09:42:45.281Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-07T09:42:45.368Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-07T09:43:07.717Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
     }
   ]
 }
