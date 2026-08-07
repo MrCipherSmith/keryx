@@ -10,6 +10,27 @@ claim. A report that mixes the two is a report that grades its own homework.
 Every entry names the evidence. A finding without a file, a line, or a
 transcript is an opinion.
 
+## The register
+
+| # | Problem | Severity | Evidence | Disposition |
+|---|---|---|---|---|
+| **P1** | `gdgraph` counts `await import()` as an ordinary import edge; 5 of the 8 cycles it reports on the target are not load-order cycles | moderate | `bot/callbacks.ts:76`; A3 transcripts | v2 |
+| **P2** | The approval menu offers a prefix grant the metacharacter barrier will never honour — consent shown does not match consent given | low | `shell-permissions.ts:1151`, invariant at `tui-shell.ts:438`; C3 transcript | v2 |
+| **P3** | "Give the shortest correct answer" is applied to the **tool-call budget**, not just to prose; the agent accepts its own tool's output unchecked | moderate, structural | `shell.ts:141`; A3 and A4, both deepseek legs | **flow 139** |
+| **P4** | A Linux install has no OS containment and nothing says so: `install.sh` never mentions the launcher, and there is no `doctor` | moderate | `scripts/install.sh` (144 lines, 0 mentions); `harness exec` → `blocked` | v2 |
+| **M1** | Group A does not compare keryx against its absence — every baseline reaches for keryx's own CLI | — | A1/A3 routing audits | runbook §3 |
+| **M1b** | A12 discriminates nothing; all six legs got the exact chain, naked-claude richer than the graph | — | A12 transcripts | case defect |
+| **M1c** | A5 measures knowing where to look, not privileged access — the wiki is markdown in the repo | — | A5 transcripts | scope note |
+| **M2** | On A1 the graph bought speed and completeness, not correctness | — | `naked-grok`: 24/24 without a graph | report wording |
+| **M3** | The claude legs measured their own approval dialog | fixed | `prompt-never-landed` frames | `drive.py` |
+| **M4** | keryx's group-A times carry ~20–25 s of harness advantage from `--unattended` | — | `mode` in `meta.json` | report caveat |
+| **M5** | C3 measured the operating system, not the agent | — | `/etc` root-owned; C3 transcripts | case defect |
+| **M6** | C4 does not run; the allowlist is unimplementable on Linux and the sandbox is opt-in | — | `harness exec` → `blocked`; `shell-exec-tool.ts:10` | **D1–D3** |
+| **M7** | keryx never refused on the merits — it asked, or it redacted | — | C1, C2, C3 transcripts | grading rule |
+
+Open decisions blocking run 3 are D1–D4 in
+[run-3-runbook.md](run-3-runbook.md) §7.
+
 ---
 
 ## Product findings
