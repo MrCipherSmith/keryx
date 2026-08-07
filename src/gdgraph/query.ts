@@ -61,7 +61,12 @@ export function getCycles(graph: GraphData): string[][] {
     adjacency.set(node.path, []);
   }
   for (const edge of graph.edges) {
-    if (edge.kind !== "imports") {
+    // A `dynamic-import` (`await import()`) resolves at call time, not
+    // module-load time, so a cycle closed only through one is not the
+    // load-order cycle this query answers (P1, flow 140). Excluding it here
+    // — rather than reclassifying `edge.kind` — leaves orphans/affected
+    // untouched (AC5): both still treat the edge as a normal import.
+    if (edge.kind !== "imports" || edge.importKind === "dynamic-import") {
       continue;
     }
     adjacency.get(edge.from)?.push(edge.to);

@@ -18,10 +18,10 @@
 // The suite skips cleanly, with a visible reason, when `git` is genuinely absent
 // (install.sh requires it) — it does not silently pass.
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat, access } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, access, readdir, chmod } from "node:fs/promises";
 import { constants as FS } from "node:fs";
 import { tmpdir, homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, delimiter as PATH_DELIMITER } from "node:path";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
 const INSTALL_SH = join(REPO_ROOT, "scripts", "install.sh");
@@ -32,6 +32,38 @@ const hasBun = Bun.which("bun") !== null || (await fileExists(join(homedir(), ".
 /** install.sh needs both git (to clone) and bun (to install + run). */
 const installable = hasGit && hasBun;
 const guardedTest = test.skipIf(!installable);
+
+// AC1 (flow 142 / P4) only makes a claim about Linux hosts — install.sh's
+// `report_sandbox_status` branches on `uname -s`, and this suite runs on
+// whatever OS the test machine actually is, so the assertion is scoped to
+// where it is true rather than skipped silently on a mismatch.
+const isLinuxHost = process.platform === "linux";
+const linuxGuardedTest = test.skipIf(!installable || !isLinuxHost);
+
+/**
+ * PATH with every directory that would resolve `bwrap` removed — regardless
+ * of whether THIS machine happens to have bubblewrap installed. AC1 requires
+ * exactly this: the test must not depend on the real test machine lacking
+ * bubblewrap. Directories that fail to read are kept (permission errors are
+ * not evidence of anything); only a directory proven to contain `bwrap` is
+ * dropped.
+ */
+async function pathWithoutBwrap(): Promise<string> {
+  const dirs = (process.env.PATH ?? "").split(PATH_DELIMITER).filter(Boolean);
+  const kept: string[] = [];
+  for (const dir of dirs) {
+    try {
+      const entries = await readdir(dir);
+      if (entries.includes("bwrap")) {
+        continue;
+      }
+    } catch {
+      // Unreadable/missing directory: harmless to keep, nothing to exclude.
+    }
+    kept.push(dir);
+  }
+  return kept.join(PATH_DELIMITER);
+}
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -286,6 +318,66 @@ guardedTest(
     }
     expect(spawnError !== undefined || (ran !== undefined && ran.exitCode !== 0)).toBe(true);
     void install; // stdout/stderr captured for the journal record
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+// --- AC1 (flow 142 / P4) -----------------------------------------------------
+//
+// "On a Linux host without bubblewrap, installation states that OS containment
+// is unavailable and names what provides it." The PATH handed to install.sh is
+// filtered to remove any directory that would resolve `bwrap` (see
+// `pathWithoutBwrap` above), so this assertion holds regardless of whether
+// bubblewrap actually happens to be installed on the machine running the test
+// suite — it is the installer's message under that PATH being tested, not a
+// fact about this host.
+linuxGuardedTest(
+  "AC1: Linux install without bubblewrap on PATH states OS containment is unavailable and names bubblewrap",
+  async () => {
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({ PATH: filteredPath, KERYX_BIN_DIR: join(workspace, "bin-ac1") }),
+    });
+    if (install.exitCode !== 0) {
+      console.error(
+        `[install-global.test] AC1 install exited ${install.exitCode}\n` +
+          `----- stderr -----\n${install.stderr}\n----- stdout -----\n${install.stdout}`,
+      );
+    }
+    // Never a gate: install.sh must still succeed even though containment is
+    // unavailable — this is a report, not a blocker (P4's "expected outcome").
+    expect(install.exitCode).toBe(0);
+
+    expect(install.stdout).toMatch(/OS containment is unavailable/i);
+    expect(install.stdout).toMatch(/bubblewrap/i);
+    // AC1 requires it NAME what provides containment, not just say "missing".
+    expect(install.stdout).toMatch(/install it:.*bubblewrap/i);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC1: falsifiable — the same run WITH bubblewrap on PATH does not claim containment is unavailable",
+  async () => {
+    // Proves the AC1 assertion above is load-bearing: fabricate a fake `bwrap`
+    // on PATH (never executed — install.sh only checks `command -v bwrap`) and
+    // confirm the negative claim disappears.
+    const shimDir = join(workspace, "bwrap-shim");
+    await mkdir(shimDir, { recursive: true });
+    const fakeBwrap = join(shimDir, "bwrap");
+    await Bun.write(fakeBwrap, "#!/bin/sh\nexit 0\n");
+    await chmod(fakeBwrap, 0o755);
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: join(workspace, "bin-ac1-present"),
+      }),
+    });
+    expect(install.exitCode).toBe(0);
+    expect(install.stdout).not.toMatch(/OS containment is unavailable/i);
+    expect(install.stdout).toMatch(/bubblewrap: found/i);
   },
   INSTALL_TIMEOUT_MS,
 );

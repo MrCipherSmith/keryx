@@ -21,7 +21,6 @@ import sys
 import time
 
 BENCH = os.path.dirname(os.path.abspath(__file__))
-BASE = os.path.join(BENCH, "base")
 
 # Every leg must see the keryx under measurement, not the one on the developer's
 # PATH. The global install tracks `main` (0.2.9); this branch is 0.2.16, and
@@ -34,9 +33,55 @@ BASE = os.path.join(BENCH, "base")
 # doing it. Letting them use a different build than the subject would compare
 # two products.
 os.environ["PATH"] = os.path.join(BENCH, "bin") + os.pathsep + os.environ.get("PATH", "")
-TARGET_REPO = "/home/altsay/bots/helyx"
-COMMIT = "bfad745ba59b1fb99e7edd2bf515f7c3d2b4c1ae"
-TARGET = "helyx"
+
+# Registry of benchmark targets: name -> {repo, commit, base}. `base` is the
+# subdirectory under BENCH holding the prepared workspace (.metaproject/data +
+# node_modules) copied into every worktree before the graph is rebuilt at the
+# pinned commit (see make_worktree). Kept per-target so two targets never share
+# a prepared workspace, and "base" itself is left unrenamed for helyx so every
+# existing invocation and the run-2 evidence on disk keep working byte-for-byte.
+TARGETS = {
+    "helyx": {
+        "repo": "/home/altsay/bots/helyx",
+        "commit": "bfad745ba59b1fb99e7edd2bf515f7c3d2b4c1ae",
+        "base": "base",
+    },
+    "keryx": {
+        # E3: the subject measuring itself. Stated here, not hidden -- meta.json
+        # records "target": "keryx" on every run so no reader can confuse this
+        # with the helyx legs. See proposed-group-e.md.
+        "repo": "/home/altsay/keryx",
+        # Merge-base of fix/benchmark-remediation-v2 with main
+        # (`git merge-base fix/benchmark-remediation-v2 main`, 2026-08-07):
+        # 8c2918dce3a9058c670252525a6f1e75af01c99f. Pinned there rather than at
+        # the branch head so the target is a stable, already-reviewed state
+        # instead of a moving target that changes under the benchmark while it
+        # runs. Measured at this commit: 661 source files / 665 total nodes /
+        # 1910 edges (harness/bin keryx 0.2.16; treesitter capability reported
+        # unavailable, deterministic fallback used) -- not the 649/1873 figure
+        # in proposed-group-e.md, which was an estimate made before this dry
+        # run. Trust the runbook's measured numbers over the proposal's.
+        "commit": "8c2918dce3a9058c670252525a6f1e75af01c99f",
+        "base": "base-keryx",
+    },
+}
+DEFAULT_TARGET = "helyx"
+
+
+def resolve_target(name: str) -> dict:
+    if name not in TARGETS:
+        raise SystemExit(f"unknown target {name!r}; choose from {sorted(TARGETS)}")
+    return TARGETS[name]
+
+
+# Env var lets batch.sh (and any other caller) select a target without editing
+# this file; --target on the CLI (see main()) takes precedence over it. Default
+# stays "helyx" so every existing invocation is unchanged.
+TARGET = os.environ.get("KERYX_BENCH_TARGET", DEFAULT_TARGET)
+_cfg = resolve_target(TARGET)
+TARGET_REPO = _cfg["repo"]
+COMMIT = _cfg["commit"]
+BASE = os.path.join(BENCH, _cfg["base"])
 
 # `deepseek-chat` is an alias the API still answers on but does not list; the
 # declared ids are deepseek-v4-flash and deepseek-v4-pro. Pinning the listed id
@@ -463,16 +508,26 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
 
 
 def main() -> None:
+    global TARGET, TARGET_REPO, COMMIT, BASE
     ap = argparse.ArgumentParser()
     ap.add_argument("variant", choices=sorted(VARIANTS))
     ap.add_argument("case")
     ap.add_argument("prompt_file")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--keep", action="store_true")
+    ap.add_argument("--target", default=TARGET, choices=sorted(TARGETS),
+                    help="which target repo to run the case against "
+                         "(env: KERYX_BENCH_TARGET; default: helyx)")
     ap.add_argument("--unattended", action="store_true",
                     help="feed the prompt on stdin (keryx only, READ-ONLY cases only — "
                          "the posture registers no shell, so group C would measure nothing)")
     a = ap.parse_args()
+    if a.target != TARGET:
+        TARGET = a.target
+        cfg = resolve_target(TARGET)
+        TARGET_REPO = cfg["repo"]
+        COMMIT = cfg["commit"]
+        BASE = os.path.join(BENCH, cfg["base"])
     prompt = open(a.prompt_file).read().strip()
     run(a.variant, a.case, prompt, a.timeout, a.keep, a.unattended)
 

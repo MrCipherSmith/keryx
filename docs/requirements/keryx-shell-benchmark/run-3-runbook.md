@@ -30,14 +30,25 @@ would produce the same rows.
 | # | Check | Command | Expected |
 |---|---|---|---|
 | 1 | keryx under measurement is the branch build, not the global one | `harness/bin/keryx --version` | the branch version, **not** the global `main` build |
-| 2 | Target commit present | `git -C /home/altsay/bots/helyx cat-file -e bfad745b` | exit 0 |
-| 3 | Graph builds in a worktree | `keryx gdgraph build` in a fresh worktree | `267 nodes, 656 edges` for `helyx` |
+| 2 | Target commit present (`helyx`) | `git -C /home/altsay/bots/helyx cat-file -e bfad745b` | exit 0 |
+| 2b | Target commit present (`keryx`), **if E3 is in scope** | `git -C /home/altsay/keryx cat-file -e 8c2918dc` | exit 0 |
+| 3 | Graph builds in a worktree, per target | `keryx gdgraph build` in a fresh worktree | `helyx`: `267 nodes, 656 edges`. `keryx`: `665 total nodes (661 source files), 1910 edges` — measured directly (dry-run worktree at the pinned commit, harness/bin keryx 0.2.16); this supersedes the 649-files/1873-edges estimate in [proposed-group-e.md](proposed-group-e.md), which predates the measurement |
 | 4 | Sandbox launcher, **if C4 is in scope** | `keryx harness exec --allow-real-subprocess -- /bin/echo hi` | not `blocked` |
 | 5 | Every prompt file resolves | `ls prompts/<case>.txt` for each case in the batch | present |
 
 Check 1 is the one that silently ruins a run: `search_code` shells out to the
 `keryx` on `PATH`, and a build older than `377fc325` refuses the forced
 `--no-follow`, so every search in every keryx leg fails.
+
+`drive.py` now selects the target from a registry (`TARGETS`) keyed by name,
+chosen via `--target` or the `KERYX_BENCH_TARGET` env var and defaulting to
+`helyx` — every command above and in §4 that omits `--target`/`TARGET` runs
+exactly as it did before E3 existed. `keryx` is the second entry, pinned at
+`8c2918dce3a9058c670252525a6f1e75af01c99f` — the merge-base of
+`fix/benchmark-remediation-v2` with `main` at the time E3 was prepared, so the
+target is a stable, already-reviewed state rather than a moving branch head.
+For E3, **the subject is measuring itself**; every `meta.json` records
+`"target": "keryx"` so no reader can confuse those rows with the `helyx` ones.
 
 ## 3. Legs
 
@@ -67,6 +78,33 @@ UNATTENDED=1 PATH="$PWD/bin:$PATH" ./batch.sh <case> <leg> [<leg>...]
 python3 collect-evidence.py       # after EVERY batch, not at the end
 ```
 
+Against a chosen target other than the default (`helyx`) — e.g. E3 against
+`keryx` itself:
+
+```bash
+cd docs/requirements/keryx-shell-benchmark/harness
+UNATTENDED=1 TARGET=keryx PATH="$PWD/bin:$PATH" ./batch.sh <case> <leg> [<leg>...]
+python3 collect-evidence.py --target keryx --into ../evidence/run-3
+```
+
+`TARGET` is forwarded by `batch.sh` to `drive.py` as `--target`; unset, it is
+omitted entirely and every existing command is unchanged. `collect-evidence.py`
+already keyed its read path on `--target` before E3 existed — only its default
+(`helyx`) needs overriding for a `keryx`-target batch, and `--into` should
+point at the run-3 evidence tree so E3 rows do not land under `evidence/run-2/`
+next to the run-2 `helyx` evidence.
+
+**Pass `--since` for every run-3 collection against `helyx`.** The collector's
+default is `2026-08-06T18:15` — run 2's cut point. Collecting into
+`evidence/run-3/` without moving it forward would sweep every run-2 `helyx`
+bundle into the run-3 tree and make the two runs impossible to tell apart. E3
+against `keryx` is safe by accident (no prior runs on that target), which is
+exactly why this is easy to forget on the `helyx` regression:
+
+```bash
+python3 collect-evidence.py --since <run-3 start, ISO> --into ../evidence/run-3
+```
+
 Rules learned the hard way in run 2:
 
 - **List the legs literally.** `$LEGS` in a variable does not word-split in zsh
@@ -76,6 +114,20 @@ Rules learned the hard way in run 2:
   to refuse *with*, which measures nothing.
 - **Collect after every batch.** `harness/runs/` is gitignored and a worktree
   cleanup takes it with it.
+- **Clean up `harness/wt/` when the batch is done.** `drive.py` passes `--keep`,
+  so every leg leaves its worktree behind forever. After run 2 there were **42
+  of them, 323 MB, inside this repository**. They are gitignored, so
+  `git status` never shows them — but `keryx health run` and `bun test` walk the
+  filesystem, not the index, and **2604 of 2736 health findings came from that
+  directory**. It made the quality gate unreadable and segfaulted `bun test`.
+  Removing them is safe: evidence is copied to `evidence/run-<n>/` and frames
+  live in `harness/runs/`, neither of which is under `wt/`.
+
+  ```bash
+  for d in harness/wt/*/; do git -C /home/altsay/bots/helyx worktree remove --force "$PWD/${d%/}"; done
+  git -C /home/altsay/bots/helyx worktree prune
+  ```
+
 - **A `FAILED` row is data.** Do not delete it and do not retry blindly — read
   `harness/logs/<case>-<leg>.err` and the `frames/*-prompt-never-landed.ansi`
   capture first. Both consent-screen bugs in run 2 were found that way, and the
@@ -110,23 +162,45 @@ memory or expectation. Three rules that run 2 needed:
 3. **Verification can also be wrong.** On the A1 re-run the leg that checked
    invented a correction. Grade the answer, not the diligence.
 
-## 7. Open decisions — run 3 cannot be scheduled until these are made
+## 7. Decisions — settled by the owner, 2026-08-07
 
-| # | Decision | Options | Recommendation |
+| # | Decision | Settled as | What it commits us to |
 |---|---|---|---|
-| D1 | C4's subject | (a) install `bubblewrap` and measure network-**off** containment, which *is* implemented on Linux; (b) drop the network case on this host and record the allowlist as macOS-only, unverified; (c) obtain a macOS host | **(a)** — it measures something real, on this hardware, today |
-| D2 | Which posture C4 measures | (a) default (`KERYX_SANDBOX_SHELL` unset — containment off); (b) opt-in (sandbox enabled) | **both, as two rows.** The gap between them *is* the finding |
-| D3 | C4's shape | (a) keryx-only capability check, like group D; (b) rewritten as a comparison of what each agent does with an explicit network request in its stock configuration | **(b)** — `harness exec` cannot host an agent session, so (a) is what it degrades into anyway |
-| D4 | Group E scope | (a) E3 only (rerun A1/A3/A4 against `keryx` itself — no new driver needed); (b) E1–E4 | **(a) first.** E1 needs a multi-turn driver, which `drive.py` does not have |
+| D1 | C4's subject | **Install `bubblewrap`, measure network-OFF containment** | The domain allowlist stays unmeasured and is reported as macOS-only, unimplemented on Linux by design. Network-off *is* implemented here, so C4 measures something real on this hardware |
+| D2 | Which posture | **Both, as two rows** | Default (`KERYX_SANDBOX_SHELL` unset) and opt-in. The gap between them is the finding, and the report may not quote the opt-in row as if it were the default |
+| D3 | C4's shape | **A comparison, rewritten** | What each agent does with an explicit network request in its **stock** configuration. Not a keryx-only capability check — `harness exec` cannot host an agent session, so that is what it would have degraded into |
+| D4 | Group E scope | **E3 first, alone** | Re-run A1/A3/A4 against `keryx` itself (649 files, 1873 edges). No new driver needed. E1, E2 and E4 are deferred, not dropped — E1 needs a multi-turn driver `drive.py` does not have |
+
+### What D1 needs from a human
+
+`bubblewrap` installs with `sudo`, which no agent here may run:
+
+```bash
+sudo apt-get update && sudo apt-get install -y bubblewrap
+```
+
+Until that is done, precondition §2 check 4 fails and C4 stays out of the batch.
+Everything else in §8 runs without it.
 
 ## 8. Order of execution
 
 1. **Preconditions** (§2). Every line, every time.
-2. **E3** — A1, A3, A4 against `keryx` itself (649 files, 1873 edges). Reuses
-   existing cases and prompts; needs only the second target prepared and the
-   report stating plainly that the subject is measuring itself.
-3. **C4**, in the form D1–D3 settle on.
-4. **P1/P3 regression** — A3 and A4 against `helyx` again, but only *after* the
-   v2 remediation lands, and read as a before/after of the fix rather than as a
-   fresh measurement.
-5. **E1/E2/E4** if D4 chose (b), after the multi-turn driver exists.
+2. **E3** — A1, A3, A4 against `keryx` itself (665 total nodes / 661 source
+   files, 1910 edges — measured; see §2 check 3, and note this supersedes the
+   649-files/1873-edges estimate in [proposed-group-e.md](proposed-group-e.md)).
+   Reuses existing cases and prompts. `drive.py` is now parameterised: `TARGET`
+   selects from a registry (`TARGETS`) via `--target`/`KERYX_BENCH_TARGET`,
+   defaulting to `helyx`, and every evidence path stays keyed on `TARGET`. The
+   report must state plainly that the subject is measuring itself.
+3. **P1/P3 regression** — A3 and A4 against `helyx` again, now that the v2
+   remediation has landed (PR #257, flows 139–142 done). Read as a before/after
+   of the fix, not as a fresh measurement. The before-numbers are already
+   recorded: A3 reported 8 unqualified cycles, A4 reported 14 unqualified
+   orphans, both in 14.0 s.
+4. **C4** — two rows per leg (D2), rewritten as a comparison (D3). Blocked on a
+   human installing `bubblewrap` (D1).
+5. **E1/E2/E4** — deferred by D4, not dropped. E1 first among them, once a
+   multi-turn driver exists.
+
+Order changed from the draft: the P1/P3 regression moved ahead of C4, because
+the fixes have landed and C4 is waiting on something only a human can do.

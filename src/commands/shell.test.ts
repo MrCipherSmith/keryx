@@ -118,7 +118,7 @@ import type {
 } from "../harness/provider/types";
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
-import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell } from "./shell";
+import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell, SYSTEM_INSTRUCTION } from "./shell";
 import { blockLabel } from "../lib/md-blocks";
 
 const NO_CAPS: ProviderCapabilities = {
@@ -826,5 +826,43 @@ describe("expandedToolOutput (readline /expand, AC10)", () => {
     const out = expandedToolOutput("apply_patch", "@@ -1,2 +1,2 @@\n-gone\n+here") ?? "";
     expect(out).not.toContain(ESC);
     expect(out).toContain("@@ -1,2 +1,2 @@");
+  });
+});
+
+// --- flow 139 (P3): SYSTEM_INSTRUCTION separates output-length economy from
+// tool-call budget, and states when a tool result needs a source check.
+// AC1-AC3 (frozen): .metaproject/flows/
+// 139-2026-08-07-shell-prompt-verification-tradeoff/acceptance-criteria.md
+
+describe("SYSTEM_INSTRUCTION (flow 139, AC1-AC3)", () => {
+  test("AC1: the brevity clause and the tool-call-budget clause are not the same sentence", () => {
+    const sentences = SYSTEM_INSTRUCTION.split(/(?<=[.:])\s+/);
+    const brevitySentence = sentences.find((s) => /shortest correct answer/i.test(s));
+    expect(brevitySentence).toBeDefined();
+    // The sentence that sets the brevity rule says nothing about tools — a
+    // single clause governing both is exactly the conflation the model
+    // resolved by spending fewer tool calls (A3, A4 in the benchmark).
+    expect(brevitySentence).not.toMatch(/tool/i);
+  });
+
+  test("AC1: the instruction says explicitly that economy never limits tool-call budget", () => {
+    expect(SYSTEM_INSTRUCTION).toMatch(/economy governs prose only/i);
+    expect(SYSTEM_INSTRUCTION).toMatch(/never\s+how many tools you call/i);
+  });
+
+  test("AC2: the instruction states a tool result is checked against source when it IS the deliverable", () => {
+    expect(SYSTEM_INSTRUCTION).toMatch(/deliverable/i);
+    expect(SYSTEM_INSTRUCTION).toMatch(/check it against source/i);
+    // Scoped, not blanket: a result the model only reasons over further is
+    // explicitly excluded — the counterweight from the A1 re-run, where
+    // verifying an unrelated result invented a false correction.
+    expect(SYSTEM_INSTRUCTION).toMatch(/not merely an input you go on to reason over/i);
+  });
+
+  test("AC3: lead-with-the-conclusion / shortest-correct-answer prose guidance survives the rewrite", () => {
+    expect(SYSTEM_INSTRUCTION).toContain("lead with the conclusion");
+    expect(SYSTEM_INSTRUCTION).toContain("give the shortest correct answer");
+    expect(SYSTEM_INSTRUCTION).toContain("prefer bullet points over prose");
+    expect(SYSTEM_INSTRUCTION).toContain("omit preamble and restated context");
   });
 });

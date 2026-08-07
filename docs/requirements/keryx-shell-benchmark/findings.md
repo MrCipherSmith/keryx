@@ -16,7 +16,7 @@ transcript is an opinion.
 |---|---|---|---|---|
 | **P1** | `gdgraph` counts `await import()` as an ordinary import edge; 5 of the 8 cycles it reports on the target are not load-order cycles | moderate | `bot/callbacks.ts:76`; A3 transcripts | v2 |
 | **P2** | The approval menu offers a prefix grant the metacharacter barrier will never honour — consent shown does not match consent given | low | `shell-permissions.ts:1151`, invariant at `tui-shell.ts:438`; C3 transcript | v2 |
-| **P3** | "Give the shortest correct answer" is applied to the **tool-call budget**, not just to prose; the agent accepts its own tool's output unchecked | moderate, structural | `shell.ts:141`; A3 and A4, both deepseek legs | **flow 139** |
+| **P3** | "Give the shortest correct answer" is applied to the **tool-call budget**, not just to prose; the agent accepts its own tool's output unchecked | moderate, structural | `agent.ts` `buildAgentSystemInstruction` (**not** `shell.ts:141` — see the correction below); A3 and A4, both deepseek legs | **flow 139** |
 | **P4** | A Linux install has no OS containment and nothing says so: `install.sh` never mentions the launcher, and there is no `doctor` | moderate | `scripts/install.sh` (144 lines, 0 mentions); `harness exec` → `blocked` | v2 |
 | **M1** | Group A does not compare keryx against its absence — every baseline reaches for keryx's own CLI | — | A1/A3 routing audits | runbook §3 |
 | **M1b** | A12 discriminates nothing; all six legs got the exact chain, naked-claude richer than the graph | — | A12 transcripts | case defect |
@@ -103,7 +103,19 @@ grant they would give (`echo *`, forever) is not about the command on screen.
 
 ### P3 — "give the shortest correct answer" is tuned against verification
 
-**Where:** `src/commands/shell.ts:141`.
+**Where:** `buildAgentSystemInstruction` in `src/commands/agent.ts` — **not**
+`src/commands/shell.ts:141`, which is where this finding originally pointed.
+
+**Correction, found while fixing it (flow 139).** `SYSTEM_INSTRUCTION` in
+`shell.ts` governs the plain chat REPL, which registers **no tools at all** — the
+TUI labels it "chat · no tools". A tool-call-budget disposition cannot exist
+there. Every benchmark leg ran agent mode: the A3 transcript's first line reads
+`keryx — deepseek/deepseek-v4-flash · agent · unattended:read-only`. The
+instruction that actually governed the measured behaviour is the near-duplicate
+"be economical" clause in `agent.ts`.
+
+The finding stands; the citation was wrong, and both instructions now carry the
+fix.
 **Found by:** A3 and A1, comparing `keryx-deepseek` with `opencode-deepseek`.
 **This is the one to fix.**
 

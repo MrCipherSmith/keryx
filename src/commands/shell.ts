@@ -136,11 +136,26 @@ export interface ShellDeps {
   session?: ShellSessionOpts;
 }
 
-/** A short, trusted system instruction assembled by the (trusted) shell itself. */
-const SYSTEM_INSTRUCTION =
-  "You are the keryx interactive shell assistant. Be economical with output tokens: " +
+/**
+ * A short, trusted system instruction assembled by the (trusted) shell itself.
+ *
+ * Exported so a unit test can pin its properties directly (flow 139, P3): a
+ * prior version used one clause for both output brevity and tool-call budget,
+ * and the model resolved that conflation by making fewer tool calls, trusting
+ * its own tool's first answer over checking it against source (A3, A4). The
+ * three sentences below are deliberately independent: economy governs prose
+ * length only; that is said to apply to NOTHING else; and a tool result gets
+ * a source check only when it IS the deliverable, not on every call — over-
+ * verifying is its own failure mode (A1 re-run: a check invented a false
+ * correction against a file that was never involved).
+ */
+export const SYSTEM_INSTRUCTION =
+  "You are the keryx interactive shell assistant. Be economical with output length: " +
   "lead with the conclusion, give the shortest correct answer, prefer bullet points over " +
-  "prose, and omit preamble and restated context.";
+  "prose, and omit preamble and restated context. That economy governs prose only — never " +
+  "how many tools you call. When a tool's result is itself the deliverable you are about to " +
+  "report (not merely an input you go on to reason over), check it against source before " +
+  "presenting it as fact.";
 
 /** Static guidance for `/connect` — never reads/echoes an actual credential. */
 const CONNECT_GUIDANCE = [

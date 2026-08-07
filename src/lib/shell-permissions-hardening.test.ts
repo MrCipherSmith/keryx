@@ -183,6 +183,119 @@ test("B3: an empty or comment-only first token is never a pattern", () => {
   expect(suggestShellPatterns("   ").offerPrefix).toBe(false);
 });
 
+// --- P2 (flow 141): the approval menu offered an unhonourable prefix grant --
+//
+// `offerExact` validates `exact`, which IS the command, so a metacharacter in
+// the command was already caught there. `offerPrefix` validated only the
+// DERIVED pattern ("echo *"), which is clean even when the command that
+// produced it is not — so the menu offered "Always allow `echo *`" for a
+// command `isShellCommandAllowed` would refuse on sight. Benchmark case C3.
+
+test("AC1: offerPrefix is false for the C3 benchmark command (unquoted metacharacters)", () => {
+  const c3 =
+    'echo "keryx benchmark probe $(date -u +%FT%TZ)" > /etc/keryx-benchmark-probe.txt && ' +
+    "cat /etc/keryx-benchmark-probe.txt";
+  const s = suggestShellPatterns(c3);
+  expect(s.prefix).toBe("echo *");
+  expect(s.offerPrefix).toBe(false);
+  // Not an escape (P2 note): the barrier itself is untouched — a stored
+  // `echo *` grant still could not auto-approve this command.
+  expect(isShellCommandAllowed(c3, ["echo *"])).toBe(false);
+});
+
+test("AC2: offerPrefix stays true for a clean command whose prefix is offerable", () => {
+  // The fix narrows the predicate; it must not remove the feature. `hostname`
+  // is not on any banned-prefix list and the command carries no metacharacter,
+  // so `hostname *` is exactly the kind of grant that must keep being offered.
+  const s = suggestShellPatterns("hostname -f");
+  expect(s.offerPrefix).toBe(true);
+  expect(isShellCommandAllowed("hostname -f", [s.prefix])).toBe(true);
+});
+
+test("AC3: any offer implies a stored grant of that pattern would auto-approve THIS command", () => {
+  // Single-spaced, single-line commands only: `exact` collapses internal
+  // whitespace runs, so a command typed with irregular spacing is a known,
+  // pre-existing, unrelated case where the literal string comparison behind
+  // `offerExact` does not round-trip — not what this flow's predicate fix is
+  // about. Every command below is written with normal single spacing, which
+  // is how `suggestShellPatterns` is actually invoked (from the raw
+  // `shell_exec` command string).
+  const commands = [
+    // clean, with an argument — both grants apply and both should match back.
+    "hostname -f",
+    "myapp2 start --now",
+    "date -u",
+    // clean, bare (no argument) — the derived prefix pattern ("hostname *")
+    // cannot match the bare word itself, so offerPrefix must come out false;
+    // exercised here to prove the invariant holds even though the offer does.
+    "hostname",
+    "whoami",
+    // banned first-token prefix, clean syntax — offerExact only.
+    "bash script.sh",
+    "git status",
+    "cat file.txt",
+    "curl https://example.com",
+    // quoted metacharacters do not count — offerable.
+    'git commit -m "fix: a; b"',
+    // destructive, including a first token that is NOT on any banned-prefix
+    // list — neither grant, and that must come from the command, not the word.
+    "rm -rf /",
+    "chmod -R 777 /",
+    "shutdown -h now",
+    "dd if=/dev/zero of=/dev/sda",
+    // credential-touching, non-banned first token — neither grant (AC4).
+    "chmod 600 permissions.json",
+    "touch ~/.config/keryx/auth.json",
+    // unquoted metacharacters, non-banned first token — the P2 shape (AC1),
+    // reproduced through several different operators.
+    "echo hi > /tmp/x.txt",
+    "echo a && echo b",
+    "echo $(whoami)",
+    "printf foo | cat",
+    "myapp2 start && myapp2 stop",
+  ];
+
+  for (const cmd of commands) {
+    const s = suggestShellPatterns(cmd);
+    const trimmed = cmd.trim();
+    if (s.offerExact) {
+      expect(`${cmd} :: offerExact -> isShellCommandAllowed`).toBe(
+        isShellCommandAllowed(trimmed, [s.exact])
+          ? `${cmd} :: offerExact -> isShellCommandAllowed`
+          : `${cmd} :: offerExact -> isShellCommandAllowed (FAILED: grant would not auto-approve)`,
+      );
+    }
+    if (s.offerPrefix) {
+      expect(`${cmd} :: offerPrefix -> isShellCommandAllowed`).toBe(
+        isShellCommandAllowed(trimmed, [s.prefix])
+          ? `${cmd} :: offerPrefix -> isShellCommandAllowed`
+          : `${cmd} :: offerPrefix -> isShellCommandAllowed (FAILED: grant would not auto-approve)`,
+      );
+    }
+  }
+});
+
+test("AC4: destructive and credential-touching commands still offer neither grant", () => {
+  for (const cmd of [
+    // destructive, first token not on any banned-prefix list.
+    "chmod -R 777 /",
+    "shutdown -h now",
+    "dd if=/dev/zero of=/dev/sda",
+    // credential-touching, first token not on any banned-prefix list, and
+    // otherwise perfectly clean (no metacharacter, not destructive) — this is
+    // the case that previously slipped through offerPrefix exactly like the
+    // metacharacter case did, because `validateShellPattern("chmod *")` never
+    // sees the word "permissions.json" at all.
+    "chmod 600 permissions.json",
+    "touch ~/.config/keryx/auth.json",
+  ]) {
+    const s = suggestShellPatterns(cmd);
+    expect(`${cmd}: offerExact=${s.offerExact} offerPrefix=${s.offerPrefix}`).toBe(
+      `${cmd}: offerExact=false offerPrefix=false`,
+    );
+  }
+});
+
 // --- validation + migration -------------------------------------------------
 
 test("validateShellPattern names why a pattern is refused", () => {

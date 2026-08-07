@@ -141,9 +141,22 @@ on screen.
 Carried by **flow 139**, already open. Repeated here so the package is complete;
 the flow's frozen acceptance criteria are authoritative.
 
+### Where — corrected during implementation
+
+This specification originally pinned P3 to `src/commands/shell.ts:141`. That was
+wrong, and flow 139 found it: `SYSTEM_INSTRUCTION` there governs the plain chat
+REPL, which registers **no tools** ("chat · no tools" in the TUI), so a
+tool-call-budget disposition cannot exist in it. Every benchmark leg ran agent
+mode — the A3 transcript opens with
+`keryx — deepseek/deepseek-v4-flash · agent · unattended:read-only` — governed by
+the near-duplicate clause in `buildAgentSystemInstruction`
+(`src/commands/agent.ts`). Both instructions now carry the fix; the one that
+mattered is `agent.ts`.
+
 ### Evidence
 
-`src/commands/shell.ts:141`:
+`src/commands/shell.ts:141` — the wording the finding was read from, and
+duplicated almost verbatim in `agent.ts`, which is where it had effect:
 
 > "You are the keryx interactive shell assistant. Be economical with output
 > tokens: lead with the conclusion, give the shortest correct answer, prefer
