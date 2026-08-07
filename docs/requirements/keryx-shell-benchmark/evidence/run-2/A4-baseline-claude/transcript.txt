@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A4-baseline-claude
+
+ ⚠ Your login expires in 2 days · run /login to renew
+
+❯ Which source files are orphaned — not reachable from any entry point?
+
+● Reading 2 files, running 1 shell command…
+  ⎿  $ keryx gdgraph query orphans 2>&1 | head -100
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+
+   keryx gdgraph query orphans 2>&1 | head -100
+   Query graph for orphan files
+
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don’t ask again for: keryx gdgraph *
+   3. No
+
+ Esc to cancel · Tab to amend · ctrl+e to explain
+
+
+
+
+
+
+
+
+
+
+
+
+
+

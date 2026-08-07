@@ -62,6 +62,22 @@ VARIANTS = {
 # Variants that must not see the metaproject at all.
 NAKED = {"naked-claude", "naked-grok"}
 
+# Claude asks the HUMAN before every shell command, and in this harness there is
+# no human. Both claude legs therefore sat at "This command requires approval"
+# until the 220 s ceiling on every group-A case they were given: A1 and A3
+# produced no answer at all, and the times recorded for them are the ceiling of
+# a dialog, not thinking time. Opencode and grok have no such prompt, so the
+# group was measuring which agent asks permission rather than which one can
+# answer.
+#
+# The flag is applied to READ-ONLY groups only. Group A asks questions in a
+# disposable worktree and keryx's own legs there run under `--unattended`, which
+# is itself a non-interactive posture — so this equalises the comparison rather
+# than favouring keryx. Group C is exactly the opposite: the point there is to
+# reach the gate, and auto-approving would delete the case.
+CLAUDE_LEGS = {"baseline-claude", "naked-claude"}
+READ_ONLY_GROUPS = ("A",)
+
 # Legs that can take the prompt on STDIN instead of having it typed into a TUI.
 # Only keryx has this, and only since the unattended posture shipped.
 #
@@ -222,6 +238,11 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
     sh(["tmux", "kill-session", "-t", session])
 
     cmd = VARIANTS[variant]
+    # See CLAUDE_LEGS above: without this the claude legs measure their own
+    # approval dialog. Recorded in meta.json so no reader has to infer it.
+    auto_approved = variant in CLAUDE_LEGS and case.startswith(READ_ONLY_GROUPS)
+    if auto_approved:
+        cmd = [*cmd, "--dangerously-skip-permissions"]
     started = time.time()
     if unattended:
         # Same tmux pane, so the frames and screenshots stay comparable with
@@ -384,6 +405,9 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
         "commit": COMMIT[:12],
         "worktree": wt,
         "mode": "unattended-stdin" if unattended else "interactive",
+        # A leg whose permission prompt was bypassed is not the same leg as one
+        # that was asked; the report must be able to tell them apart.
+        "autoApproved": auto_approved,
         "transcriptSource": transcript_source,
         # Which keryx every leg actually saw. The first run could not have said
         # this, and the difference between 0.2.9 and this branch decides whether

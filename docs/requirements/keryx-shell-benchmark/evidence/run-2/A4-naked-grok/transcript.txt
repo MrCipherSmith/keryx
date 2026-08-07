@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A4-naked-grok (worktree of ~/bots/helyx)                 72K / 500K
+
+                                                                                                                                                    
+     ❯ Which source files are orphaned — not reachable from any entry point?                                                               7:46 AM  
+                                                                                                                                                    
+                                                                           ▲
+
+     ┌───────────────────────────────┬───────────────────────────────────────────┬─────────────────────────────────────────────────────┐
+     │ File                          │ Role                                      │ Evidence                                            │
+     ├───────────────────────────────┼───────────────────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ utils/stream-json-parser.ts   │ Claude stream-json progress parser (      │ No imports/tests; only mentioned in docs/dev/       │
+     │                               │ commented as an alternative to tmux-      │ modules.md                                          │
+     │                               │ monitor)                                  │                                                     │
+     ├───────────────────────────────┼───────────────────────────────────────────┼─────────────────────────────────────────────────────┤
+     │ dashboard/webapp/src/         │ Telegram Mini App message-history UI      │ Exports MessageHistory but App.tsx never imports    │
+     │ components/MessageHistory.tsx │                                           │ it; only docs (SPEC.md, ROADMAP.md) and tsbuildinfo │
+     └───────────────────────────────┴───────────────────────────────────────────┴─────────────────────────────────────────────────────┘
+
+     Everything else under bot/, channel/, mcp/, services/, sessions/, utils/, adapters/, claude/, orchestrator/, memory/, dashboard
+     pages, etc. is reachable from at least one entry above.
+
+     Notes
+
+     • Not counted as orphans: tests (tests/**), docs, configs, shell scripts, assets.                                                               █
+     • No “test-only” production modules — nothing is imported solely by tests while missing from the production graph.                              █
+     • Caveat: purely dynamic loading via runtime string paths would not show up; none of that pattern was found for local TS modules.               █
+                                                                                                                                                     █
+     Routing audit: graph_used: unavailable, wiki_used: unavailable, ctx_used: unavailable, raw_rg_used: yes (no Metaproject/gdgraph in              █
+     this stripped worktree).                                                                                                                        █
+                                                                                                                                                     █
+     Worked for 2m24s                                                                                                             stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

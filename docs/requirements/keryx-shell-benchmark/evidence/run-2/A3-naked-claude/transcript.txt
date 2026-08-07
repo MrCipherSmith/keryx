@@ -1,0 +1,40 @@
+  ├─────┼─────────────────────────────────────────────────────────────────────────────────┤
+  │ 6   │ bot/handlers.ts ↔ bot/commands/project-add.ts                                   │
+  ├─────┼─────────────────────────────────────────────────────────────────────────────────┤
+  │ 7   │ bot/handlers.ts ↔ bot/commands/session.ts                                       │
+  ├─────┼─────────────────────────────────────────────────────────────────────────────────┤
+  │ 8   │ bot/callbacks.ts → bot/text-handler.ts → bot/handlers.ts → bot/callbacks.ts     │
+  ├─────┼─────────────────────────────────────────────────────────────────────────────────┤
+  │ 9   │ bot/callbacks.ts → bot/commands/session.ts → bot/handlers.ts → bot/callbacks.ts │
+  └─────┴─────────────────────────────────────────────────────────────────────────────────┘
+
+  That's an 8-file strongly connected component: handlers.ts, callbacks.ts, media.ts, text-handler.ts, commands/{add,memory,project-add,session}.ts.
+
+  If you also count lazy await import(), the SCC grows to 11 files (adds commands/menu.ts, commands/providers.ts, commands/codex.ts) and 25 simple
+  cycles — e.g. menu.ts ⇄ session.ts/memory.ts/project-add.ts/codex.ts via the dispatch switch at bot/commands/menu.ts:245-303, and codex.ts:199 →
+  text-handler.ts → handlers.ts → menu.ts → codex.ts.
+
+  Counting type-only imports changes nothing — the set is identical to the static-value set.
+
+  Why it doesn't currently blow up
+
+  Every cyclic binding is either a function declaration (hoisted) or a const Map that's only read inside a function body, never at module top level.
+  ESM handles that fine. It's a structural smell, not a live bug.
+
+  Root cause and fix
+
+  bot/handlers.ts:31-88 mixes two responsibilities: router registration (needs to import all handlers) and ownership of pending-input state (which all
+  handlers need). Extracting the state into e.g. bot/pending-state.ts — the maps, setPendingInput, clearPendingInput, setPendingTool, pendingScope,
+  plus the bot ref — and having both handlers.ts and the leaf modules import that breaks all 7 direct back-edges at once, which collapses cycles 8 and
+  9 too. The lazy-import cycles in menu.ts are a separate, intentional-looking pattern; they'd need a command registry to remove, if you care.
+
+  Routing audit: graph_used: no (metaproject unavailable in this worktree), wiki_used: no (unavailable), ctx_used: no (unavailable), raw_rg_used: yes
+  — reason: .metaproject/index.md and the keryx CLI are not present in this worktree, so a local AST-walking script plus grep verification was the
+  only route.
+
+✻ Cooked for 1m 52s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ extract the pending state into bot/pending-state.ts
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← 1 agent

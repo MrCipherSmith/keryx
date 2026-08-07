@@ -1,0 +1,40 @@
+                                                                                                            
+                                                                                                              Import cycle check in project
+     ┌──────────────────────────────────────────────┬──────────────────────────────────────────────────┐    
+     │File                                          │Back-import from handlers.ts                      │      Context
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤      61,028 tokens
+     │bot/callbacks.ts                              │setPendingTool, setPendingInput                   │      6% used
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤      $0.01 spent
+     │bot/text-handler.ts                           │pendingInput, getBotRef, etc.                     │    
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤      LSP
+     │bot/media.ts                                  │getBotRef, setPendingInput                        │      LSPs are disabled
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤    
+     │bot/commands/add.ts                           │setPendingInput                                   │    
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤    
+     │bot/commands/memory.ts                        │setPendingInput                                   │    
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤    
+     │bot/commands/session.ts                       │setPendingInput                                   │    
+     ├──────────────────────────────────────────────┼──────────────────────────────────────────────────┤    
+     │bot/commands/project-add.ts                   │setPendingInput                                   │    
+     └──────────────────────────────────────────────┴──────────────────────────────────────────────────┘    
+                                                                                                            
+     Every file above is also imported by bot/handlers.ts (bot/handlers.ts:95–123), so each is a 2-node     
+     static cycle through the hub, and callbacks.ts/text-handler.ts/handlers.ts form a 3-node cycle         
+     among themselves. All are runtime (value) imports, not type-only.                                      
+                                                                                                            
+     Note: gdgraph also reported cycles through bot/commands/menu.ts, but those are await import() (        
+     dynamic) edges (bot/commands/menu.ts:245–303) — not module-load-time cycles, so they don't count.      
+                                                                                                            
+     Routing audit: graph_used: keryx gdgraph query cycles (8 candidate cycles); ctx_used: none (no         
+     keryx ctx used — replaced by targeted reads + a purpose-built static parser); raw_rg_used: yes —       
+     to extract static vs dynamic imports per file and verify back-imports, after the graph layer.          
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 1m 8s                                                                ▄  
+                                                                                                            
+  ┃                                                                                                         
+  ┃                                                                                                           ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/A3-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       61.0K (6%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

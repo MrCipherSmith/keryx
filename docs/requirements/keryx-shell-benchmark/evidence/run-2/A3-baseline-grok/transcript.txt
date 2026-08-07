@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A3-baseline-grok (worktree of ~/bots/helyx)              57K / 500K
+
+                                                                                                                                                    
+     ❯ Are there any import cycles in this project? List them.                                                                             7:31 AM  
+                                                                                                                                                    
+
+     4. bot/handlers.ts → bot/callbacks.ts → bot/commands/menu.ts → bot/commands/project-add.ts → bot/handlers.ts
+
+     5. bot/handlers.ts → bot/callbacks.ts → bot/commands/menu.ts → bot/commands/session.ts → bot/handlers.ts
+
+     6. bot/handlers.ts → bot/callbacks.ts → bot/handlers.ts
+
+     7. bot/handlers.ts → bot/commands/add.ts → bot/handlers.ts
+
+     8. bot/handlers.ts → bot/media.ts → bot/handlers.ts
+
+     Pattern
+                                                                                                                                                     █
+     Every cycle includes bot/handlers.ts. The densest hub is:                                                                                       █
+                                                                                                                                                     █
+     • handlers.ts ↔ callbacks.ts / menu.ts / command modules                                                                                        █
+     • Direct mutual imports: handlers ↔ callbacks, handlers ↔ add, handlers ↔ media                                                                 █
+                                                                                                                                                     █
+     No cycles were reported outside bot/.                                                                                                           █
+                                                                                                                                                     █
+     ───                                                                                                                                             █
+                                                                                                                                                     █
+     Routing audit: graph_used: keryx gdgraph query cycles (+ existing summary); wiki_used: not-relevant (structural dependency                      █
+     question); ctx_used: not-relevant (graph answer was complete); raw_rg_used: no                                                                  █
+                                                                                                                                                     █
+     Worked for 36s                                                                                                               stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

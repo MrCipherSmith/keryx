@@ -5,7 +5,9 @@ keryx under measurement: **0.2.16** (via `harness/bin/keryx`)
 
 Written so the run can be picked up in a new session without reconstructing
 anything from memory. Plan and criteria live in [rerun-plan.md](rerun-plan.md);
-this file records only what has actually happened.
+conclusions live in [findings.md](findings.md); the oracle group A is graded
+against lives in [evidence/grading-key.md](evidence/grading-key.md). This file
+records only what has actually happened.
 
 Last updated: **2026-08-06 22:15 UTC.** Nothing is running. C3 finished at
 22:11; C4 refused to run, by design (§7).
