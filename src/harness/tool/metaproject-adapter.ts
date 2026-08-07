@@ -17,7 +17,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
 import { findPath } from "../../gdgraph/path";
-import { querySymbol } from "../../gdgraph/symbol";
+import { querySymbol, transitiveCallers } from "../../gdgraph/symbol";
 import { loadGraph } from "../../gdgraph/query";
 import { loadGdgraphConfig } from "../../gdgraph/config";
 import {
@@ -26,7 +26,8 @@ import {
   type RepomapResult as GdgraphRepomapResult,
 } from "../../gdgraph/repomap";
 import { createMemoryService } from "../../memory/service";
-import type { MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
+import { MEMORY_CLASS_VALUES, MEMORY_STATUS_VALUES } from "../../memory/types";
+import type { MemoryClass, MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
 import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
@@ -44,6 +45,7 @@ import type {
   MetaprojectPort,
   RepomapResult,
   SearchCodeResult,
+  SymbolImpactNode,
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
@@ -89,15 +91,11 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
 
 /** Bounded excerpt/output cap so a structured result stays modest. */
 const MAX_EXCERPT_BYTES = 400;
-/** The subset of MemoryStatus values exposed as a `status` filter. */
-const MEMORY_STATUS_VALUES: readonly MemoryStatus[] = [
-  "draft",
-  "accepted",
-  "deprecated",
-  "conflict",
-  "superseded",
-];
-
+/**
+ * Default hop depth for the symbol `--impact` walk. Matches the `keryx gdgraph
+ * symbol --impact` CLI default so the tool and the verb answer the same question.
+ */
+const SYMBOL_IMPACT_DEFAULT_DEPTH = 3;
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -182,9 +180,39 @@ export function createMetaprojectAdapter(
       if (input.limit !== undefined) {
         filters.limit = input.limit;
       }
+      if (input.entity !== undefined) {
+        filters.entity = input.entity;
+      }
+      if (input.asOf !== undefined) {
+        filters.asOf = input.asOf;
+      }
+      // An unknown class is DROPPED rather than passed through: the service
+      // treats it as a filter that matches nothing, so a typo would silently
+      // return an empty result set that reads like "no such memory exists".
+      if (input.class !== undefined && (MEMORY_CLASS_VALUES as readonly string[]).includes(input.class)) {
+        filters.class = input.class as MemoryClass;
+      }
+      if (input.semantic === true) {
+        filters.semantic = true;
+      }
       const appliedFilters = {
         ...(input.module !== undefined ? { module: input.module } : {}),
-        ...(input.status !== undefined ? { status: input.status } : {}),
+        // `filters.status`, not `input.status`. The echo used to pass the raw
+        // input through while the APPLIED filter above was guarded, so a caller
+        // written against the schema's previous (wrong) enum — `status: "active"`
+        // — got a result that failed the schema it was echoing to. An
+        // unrecognised status is dropped from the applied filter, so echoing it
+        // would also have described a filter that was never applied.
+        ...(filters.status !== undefined ? { status: filters.status } : {}),
+        ...(input.entity !== undefined ? { entity: input.entity } : {}),
+        ...(input.asOf !== undefined ? { asOf: input.asOf } : {}),
+        ...(filters.class !== undefined ? { class: filters.class } : {}),
+        // `semantic` is deliberately NOT echoed: the frozen
+        // memory-search-result schema declares `filters` with
+        // `additionalProperties: false` and no `semantic` key, so echoing it
+        // would make every semantic search emit a result that fails its own
+        // schema. It is a ranking mode rather than a filter on the corpus, which
+        // is presumably why the schema leaves it out.
       };
       try {
         const result = await memory.search({ cwd, query: input.query, filters });
@@ -313,18 +341,34 @@ export function createMetaprojectAdapter(
       try {
         const graph = await gdgraph.loadGraph(cwd);
         const result = querySymbol(graph, input.name);
+        const definitions = result.definitions.map((symbol) => ({
+          id: symbol.id,
+          name: symbol.name,
+          kind: symbol.kind,
+          path: symbol.path,
+          startLine: symbol.startLine,
+          container: symbol.container,
+        }));
+        // `--impact [--depth N]`: the symbol-level transitive-caller walk. Same
+        // default depth as the CLI (3) so the tool and the verb answer alike.
+        let impact: { impact: SymbolImpactNode[]; impactDepth: number } | undefined;
+        if (input.impact === true) {
+          const depth =
+            input.depth !== undefined && Number.isFinite(input.depth) && input.depth > 0
+              ? Math.floor(input.depth)
+              : SYMBOL_IMPACT_DEFAULT_DEPTH;
+          const nodes = transitiveCallers(graph, definitions.map((def) => def.id), depth);
+          impact = {
+            impact: nodes.map((node) => ({ label: node.label, hop: node.hop })),
+            impactDepth: depth,
+          };
+        }
         return {
           name: input.name,
-          definitions: result.definitions.map((symbol) => ({
-            id: symbol.id,
-            name: symbol.name,
-            kind: symbol.kind,
-            path: symbol.path,
-            startLine: symbol.startLine,
-            container: symbol.container,
-          })),
+          definitions,
           callers: result.callers.map((ref) => ref.label),
           callees: result.callees.map((ref) => ref.label),
+          ...(impact ?? {}),
         };
       } catch (cause) {
         return { name: input.name, definitions: [], callers: [], callees: [], error: errorMessage(cause) };
@@ -334,10 +378,10 @@ export function createMetaprojectAdapter(
     async repomap(input): Promise<RepomapResult> {
       try {
         // Read-only: compute the map in-process (never writeRepomap → no artifact).
-        const result = await deps.repomapCompute(
-          cwd,
-          input.budget !== undefined ? { budget: input.budget } : {},
-        );
+        const result = await deps.repomapCompute(cwd, {
+          ...(input.budget !== undefined ? { budget: input.budget } : {}),
+          ...(input.seed !== undefined && input.seed.length > 0 ? { seed: input.seed } : {}),
+        });
         return {
           budget: input.budget ?? result.tokens,
           files: result.entries.map((entry) => ({
@@ -361,7 +405,12 @@ export function createMetaprojectAdapter(
 
     async wikiAsk(input): Promise<WikiAskResult> {
       try {
-        const result = await deps.wikiAsk({ cwd, question: input.question });
+        const result = await deps.wikiAsk({
+          cwd,
+          question: input.question,
+          ...(input.k !== undefined ? { k: input.k } : {}),
+          ...(input.rerank === true ? { rerank: true } : {}),
+        });
         return {
           question: result.question,
           citations: result.citations.map((citation) => ({

@@ -1,0 +1,3 @@
+A3-opencode-deepseek/transcript.txt:21:100:     Every file above is also imported by bot/handlers.ts (bot/handlers.ts:95–123), so each is a 2-node     
+A3-opencode-deepseek/transcript.txt:25:12:     Note: gdgraph also reported cycles through bot/commands/menu.ts, but those are await import() (        
+A3-opencode-deepseek/transcript.txt:28:6:     Routing audit: graph_used: keryx gdgraph query cycles (8 candidate cycles); ctx_used: none (no         

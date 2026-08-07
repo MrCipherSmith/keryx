@@ -1,0 +1,40 @@
+ keryx · New session · 0e3d080f · deepseek/deepseek-v4-flash                                              ↑49.4K ↓12.9K │
+ ▸ tool (1 line) · ctrl+o  ⚙ shell_exec(command=keryx gdgraph affected config.ts --depth 2 2>&1 || (echo "---HELP---";  │  keryx
+ k…)                                                                                                                    │
+ ⚠ 10 saved shell permission(s) are no longer honoured — they granted arbitrary execution:                              │  Model
+     “hostname; *” — contains an unquoted shell metacharacter (; && || | ` $( < > &, or a newline); such a command can  │  deepseek/deepseek-v4-flash
+ only be approved once, never remembered                                                                                │
+     “docker *” — `docker *` grants arbitrary execution: docker is an interpreter or wrapper, so its first token does   │  Directory
+ not constrain what runs                                                                                                │  …/wt/A1-keryx-deepseek
+     “rm -rf /” — destructive commands always require explicit confirmation and are never remembered                    │
+     “sudo *” — destructive commands always require explicit confirmation and are never remembered                      │  Context
+     “bun *” — `bun *` grants arbitrary execution: bun is an interpreter or wrapper, so its first token does not        │  62,311 tokens
+ constrain what runs                                                                                                    │
+     “git *” — `git *` grants arbitrary execution: git is an interpreter or wrapper, so its first token does not        │  Tools
+ constrain what runs                                                                                                    │  18 available
+     “cd *” — `cd *` grants arbitrary execution: cd is an interpreter or wrapper, so its first token does not           │
+ constrain what runs                                                                                                    │  Status
+     “cat *” — `cat *` would auto-approve reading any file (including secrets outside the project); such a broad        │  ⚠ Waiting for you
+ reader can be approved once, never remembered                                                                          │    shell permission
+     “sed *” — `sed *` grants arbitrary execution: sed is an interpreter or wrapper, so its first token does not       █│    ↑ pick menu above input
+ constrain what runs                                                                                                   █│  1 wait
+     “grep *” — `grep *` would auto-approve reading any file (including secrets outside the project); such a broad     █│
+ reader can be approved once, never remembered                                                                         █│
+     They are still in /home/altsay/.local/share/keryx/permissions.json — edit or remove them there.                   █│
+ ⚙ shell_exec needs approval (menu above input)                                                                        █│
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
+│ Allow shell command? ↑/↓ Enter · Esc                                                                                 ││
+│ keryx gdgraph affected config.ts --depth 2 2>&1 || (echo "---HELP---"; keryx gdgraph affected --help 2>&1)           ││
+│ context: config.ts affects 24 file(s) in the code graph                                                              ││
+│ memory: Coverage programme: what is done, what is open, what is next                                                 ││
+│  ▶ (Recommended) Allow once                                                                                          ││
+│    Run only this time                                                                                                ││
+│    Always allow “keryx *”                                                                                            ││
+│    Remember this prefix (permissions.json)                                                                           ││
+│    Deny                                                                                                              ││
+│    Do not run                                                                                                        ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
+│ type a task or / for commands · Enter send · Shift+Enter newline                                                     ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
+ ⠴ waiting for your approval (menu above input) · 208.3s                                     deepseek/deepseek-v4-flash │

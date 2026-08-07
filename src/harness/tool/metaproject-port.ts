@@ -67,10 +67,18 @@ export interface MemorySearchHit {
   excerpt?: string;
 }
 
-/** Applied memory-search filters (all optional) — memory-search-result.schema.json. */
+/**
+ * Applied memory-search filters (all optional) — memory-search-result.schema.json,
+ * widened to the full `keryx memory search` filter set so the tool is never
+ * weaker than the verb it wraps (parameter parity).
+ */
 export interface MemorySearchFilters {
   module?: string;
   status?: string;
+  entity?: string;
+  asOf?: string;
+  class?: string;
+  semantic?: boolean;
 }
 
 /** Structured result of `memorySearch` — memory-search-result.schema.json. */
@@ -172,6 +180,14 @@ export interface SymbolDefinition {
   container: string | null;
 }
 
+/** One transitive-caller impact node — the symbol-level blast radius. */
+export interface SymbolImpactNode {
+  /** Display label ("<name> (<path>:<line>)"). */
+  label: string;
+  /** Distance in call hops from the resolved symbol (>= 1). */
+  hop: number;
+}
+
 /** Structured result of `graphSymbol` — where a symbol is defined + who calls it / what it calls. */
 export interface GraphSymbolResult {
   /** The requested symbol name/token. */
@@ -182,6 +198,14 @@ export interface GraphSymbolResult {
   callers: string[];
   /** Display labels of the symbols the resolved symbol(s) call, sorted. */
   callees: string[];
+  /**
+   * Transitive callers by hop — present ONLY when the caller asked for `impact`
+   * (the CLI's `--impact`). Absent, not empty, when impact was not requested, so
+   * "not asked for" and "asked for, nothing found" stay distinguishable.
+   */
+  impact?: SymbolImpactNode[];
+  /** The hop depth the impact walk used (present with `impact`). */
+  impactDepth?: number;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -265,7 +289,13 @@ export interface ContextSummaryResult {
  * a structured empty/error result (see each result type's `error`/`isError`).
  */
 export interface MetaprojectPort {
-  searchCode(input: { pattern: string; path?: string }): Promise<SearchCodeResult>;
+  /**
+   * `flags` are ripgrep options forwarded verbatim, drawn from the same
+   * allowlist `keryx ctx rg` forwards (`src/lib/rg-options.ts`). Anything the
+   * verb refuses, the tool refuses — the point is that the tool can ask every
+   * question the verb can, not that it can ask more.
+   */
+  searchCode(input: { pattern: string; path?: string; flags?: string[] }): Promise<SearchCodeResult>;
   graphAffected(input: { target: string; depth?: number; ranked?: boolean }): Promise<GraphAffectedResult>;
   graphQuery(input: { query: "cycles" | "orphans" }): Promise<GraphQueryResult>;
   memorySearch(input: {
@@ -273,6 +303,14 @@ export interface MetaprojectPort {
     module?: string;
     status?: string;
     limit?: number;
+    /** `--entity` — restrict to entries scoped to one entity. */
+    entity?: string;
+    /** `--as-of` (YYYY-MM-DD) — validity-interval query. */
+    asOf?: string;
+    /** `--class` — restrict to a single knowledge class. */
+    class?: string;
+    /** `--semantic` — opt into the embedding rerank of the lexical candidates. */
+    semantic?: boolean;
   }): Promise<MemorySearchResult>;
   readWiki(input: { path: string }): Promise<WikiPageResult>;
   describeContext(): Promise<ContextSummaryResult>;
@@ -293,12 +331,22 @@ export interface MetaprojectPort {
   // Same OPTIONAL contract as flow 043: an absent method is an "unavailable"
   // operation (a structured, isError result), never a throw.
 
-  /** Where a symbol is defined + its callers/callees over the symbol layer (gdgraph). */
-  graphSymbol?(input: { name: string }): Promise<GraphSymbolResult>;
-  /** A ranked, token-budgeted repo map over the code graph (gdgraph). */
-  repomap?(input: { budget?: number }): Promise<RepomapResult>;
-  /** Deterministic lexical Q&A over the project's wiki + memory (gdwiki). */
-  wikiAsk?(input: { question: string }): Promise<WikiAskResult>;
+  /**
+   * Where a symbol is defined + its callers/callees over the symbol layer
+   * (gdgraph). `impact`/`depth` mirror `keryx gdgraph symbol --impact --depth N`.
+   */
+  graphSymbol?(input: { name: string; impact?: boolean; depth?: number }): Promise<GraphSymbolResult>;
+  /**
+   * A ranked, token-budgeted repo map over the code graph (gdgraph). `seed`
+   * mirrors the CLI's seed files; the CLI's `--changed` is sugar for seeding
+   * with the git-changed set, which a caller supplies here directly.
+   */
+  repomap?(input: { budget?: number; seed?: string[] }): Promise<RepomapResult>;
+  /**
+   * Deterministic lexical Q&A over the project's wiki + memory (gdwiki).
+   * `k`/`rerank` mirror `keryx wiki ask --k N --rerank`.
+   */
+  wikiAsk?(input: { question: string; k?: number; rerank?: boolean }): Promise<WikiAskResult>;
 
   // --- flow 122: additive OPTIONAL read operation (MP-5a) ---------------------
   // Same OPTIONAL contract as flows 043/044: an absent method is an

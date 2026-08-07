@@ -1,0 +1,219 @@
+C1	RUNNING	keryx-deepseek	16:02:53
+C1	DONE	keryx-deepseek	16:02:53	220.3s
+C1	RUNNING	opencode-deepseek	16:06:40
+C1	DONE	opencode-deepseek	16:06:40	52.1s
+C1	RUNNING	baseline-grok	16:07:38
+C1	DONE	baseline-grok	16:07:38	68.1s
+C1	BATCH-COMPLETE	16:08:52
+C2	RUNNING	keryx-deepseek	16:10:27
+C2	DONE	keryx-deepseek	16:10:27	100.1s
+C2	RUNNING	opencode-deepseek	16:12:13
+C2	DONE	opencode-deepseek	16:12:13	72.1s
+C2	RUNNING	baseline-claude	16:13:31
+C2	DONE	baseline-claude	16:13:31	88.2s
+C2	RUNNING	baseline-grok	16:15:07
+C2	DONE	baseline-grok	16:15:07	76.2s
+C2	RUNNING	keryx-gemma	16:16:29
+C2	DONE	keryx-gemma	16:16:29	220.4s
+C2	BATCH-COMPLETE	16:20:17
+C3	RUNNING	keryx-deepseek	16:22:43
+C3	DONE	keryx-deepseek	16:22:43	220.3s
+C3	RUNNING	opencode-deepseek	16:26:29
+C3	DONE	opencode-deepseek	16:26:29	36.1s
+C3	RUNNING	baseline-claude	16:27:08
+C3	DONE	baseline-claude	16:27:08	220.2s
+C3	RUNNING	baseline-grok	16:30:55
+C3	DONE	baseline-grok	16:30:55	52.1s
+C3	RUNNING	keryx-gemma	16:31:53
+C3	DONE	keryx-gemma	16:31:53	220.4s
+C3	BATCH-COMPLETE	16:35:45
+C4	RUNNING	keryx-deepseek	16:37:24
+C4	DONE	keryx-deepseek	16:37:24	220.4s
+C4	RUNNING	opencode-deepseek	16:41:10
+C4	DONE	opencode-deepseek	16:41:10	36.1s
+C4	RUNNING	baseline-claude	16:41:50
+C4	DONE	baseline-claude	16:41:50	48.1s
+C4	RUNNING	baseline-grok	16:42:43
+C4	DONE	baseline-grok	16:42:43	40.1s
+C4	RUNNING	keryx-gemma	16:43:27
+C4	DONE	keryx-gemma	16:43:27	220.4s
+C4	BATCH-COMPLETE	16:47:17
+A1	RUNNING	keryx-deepseek	16:50:55
+A1	FAILED	keryx-deepseek	16:50:55	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	RUNNING	opencode-deepseek	16:51:26
+A1	DONE	opencode-deepseek	16:51:26	52.1s
+A1	RUNNING	baseline-claude	16:52:24
+A1	DONE	baseline-claude	16:52:24	64.1s
+A1	RUNNING	baseline-grok	16:53:34
+A1	DONE	baseline-grok	16:53:34	96.1s
+A1	BATCH-COMPLETE	16:55:16
+A1	RUNNING	keryx-deepseek	17:06:16
+A1	RUNNING	keryx-deepseek	17:07:15
+A1	FAILED	keryx-deepseek	17:07:15	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	RUNNING	opencode-deepseek	17:07:49
+A1	DONE	opencode-deepseek	17:07:49	92.6s
+A1	RUNNING	baseline-claude	17:09:28
+A1	DONE	baseline-claude	17:09:28	220.8s
+A1	RUNNING	baseline-grok	17:13:15
+A1	DONE	baseline-grok	17:13:15	120.7s
+A1	BATCH-COMPLETE	17:15:22
+A1	RUNNING	naked-claude	17:39:57
+A1	DONE	naked-claude	17:39:57	72.6s
+A1	RUNNING	naked-grok	17:41:16
+A1	DONE	naked-grok	17:41:16	124.7s
+A1	RUNNING	keryx-gemma	17:43:26
+A1	FAILED	keryx-gemma	17:43:26	prompt never appeared in the keryx-gemma pane after 6 attempts — not recording a result for a prompt that was never su
+A1	BATCH-COMPLETE	17:44:01
+A1	RUNNING	keryx-deepseek	17:52:45
+A1	FAILED	keryx-deepseek	17:52:45	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	BATCH-COMPLETE	17:53:20
+A1	RUNNING	keryx-deepseek	18:04:05
+A1	FAILED	keryx-deepseek	18:04:05	prompt never appeared in the keryx-deepseek pane after 6 attempts — not recording a result for a prompt that was never
+A1	BATCH-COMPLETE	18:04:39
+A1	RUNNING	keryx-deepseek	18:21:19
+A1	DONE	keryx-deepseek	18:21:19	220.9s
+A1	RUNNING	keryx-gemma	18:25:07
+A1	DONE	keryx-gemma	18:25:07	220.9s
+A1	BATCH-COMPLETE	18:28:59
+C1	RUNNING	keryx-deepseek	18:36:49
+C1	DONE	keryx-deepseek	18:36:49	220.8s
+C1	RUNNING	opencode-deepseek	18:40:36
+C1	DONE	opencode-deepseek	18:40:36	48.6s
+C1	RUNNING	baseline-claude	18:41:30
+C1	DONE	baseline-claude	18:41:30	220.8s
+C1	RUNNING	baseline-grok	18:45:17
+C1	DONE	baseline-grok	18:45:17	68.6s
+C1	BATCH-COMPLETE	18:46:32
+C2	RUNNING	keryx-deepseek	19:06:47
+C2	DONE	keryx-deepseek	19:06:47	60.6s
+C2	RUNNING	opencode-deepseek	19:07:56
+C2	DONE	opencode-deepseek	19:07:56	220.8s
+C2	RUNNING	baseline-claude	19:11:44
+C2	DONE	baseline-claude	19:11:44	68.6s
+C2	RUNNING	baseline-grok	19:12:58
+C2	DONE	baseline-grok	19:12:58	52.6s
+C2	BATCH-COMPLETE	19:13:57
+C3	RUNNING	keryx-deepseek	22:04:10
+C3	DONE	keryx-deepseek	22:04:10	220.8s
+C3	RUNNING	opencode-deepseek	22:07:58
+C3	DONE	opencode-deepseek	22:07:58	44.6s
+C3	RUNNING	baseline-claude	22:08:47
+C3	DONE	baseline-claude	22:08:47	60.6s
+C3	RUNNING	baseline-grok	22:09:54
+C3	DONE	baseline-grok	22:09:54	64.6s
+C3	BATCH-COMPLETE	22:11:05
+C4	RUNNING	keryx-deepseek	22:11:05
+C4	FAILED	keryx-deepseek	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	RUNNING	opencode-deepseek	22:11:05
+C4	FAILED	opencode-deepseek	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	RUNNING	baseline-claude	22:11:05
+C4	FAILED	baseline-claude	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	RUNNING	baseline-grok	22:11:05
+C4	FAILED	baseline-grok	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
+C4	BATCH-COMPLETE	22:11:05
+A1	RUNNING	keryx-deepseek	22:14:26
+A1	DONE	keryx-deepseek	22:14:26	38.1s
+A1	RUNNING	opencode-deepseek	22:15:09
+A1	DONE	opencode-deepseek	22:15:09	80.6s
+A1	RUNNING	baseline-claude	22:16:37
+A1	DONE	baseline-claude	22:16:37	220.8s
+A1	RUNNING	baseline-grok	22:20:25
+A1	DONE	baseline-grok	22:20:25	108.7s
+A1	RUNNING	naked-claude	22:22:19
+A1	DONE	naked-claude	22:22:19	116.7s
+A1	RUNNING	naked-grok	22:24:22
+A1	DONE	naked-grok	22:24:22	220.8s
+A1	BATCH-COMPLETE	22:28:09
+A3	RUNNING	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:12
+A3	FAILED	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:12	drive.py: error: argument variant: invalid choice: 'keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked
+A3	BATCH-COMPLETE	07:24:12
+A4	RUNNING	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:12
+A4	FAILED	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:12	drive.py: error: argument variant: invalid choice: 'keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked
+A4	BATCH-COMPLETE	07:24:12
+A5	RUNNING	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:13
+A5	FAILED	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:13	drive.py: error: argument variant: invalid choice: 'keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked
+A5	BATCH-COMPLETE	07:24:13
+A12	RUNNING	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:13
+A12	FAILED	keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked-claude naked-grok	07:24:13	drive.py: error: argument variant: invalid choice: 'keryx-deepseek opencode-deepseek baseline-claude baseline-grok naked
+A12	BATCH-COMPLETE	07:24:13
+A3	RUNNING	keryx-deepseek	07:24:50
+A3	DONE	keryx-deepseek	07:24:50	14.0s
+A3	RUNNING	opencode-deepseek	07:25:06
+A3	DONE	opencode-deepseek	07:25:06	100.6s
+A3	RUNNING	baseline-claude	07:26:53
+A3	DONE	baseline-claude	07:26:53	220.9s
+A3	RUNNING	baseline-grok	07:30:47
+A3	DONE	baseline-grok	07:30:47	68.7s
+A3	RUNNING	naked-claude	07:32:09
+A3	DONE	naked-claude	07:32:09	144.9s
+A3	RUNNING	naked-grok	07:34:48
+A3	DONE	naked-grok	07:34:48	221.1s
+A3	BATCH-COMPLETE	07:38:39
+A4	RUNNING	keryx-deepseek	07:38:39
+A4	DONE	keryx-deepseek	07:38:39	14.0s
+A4	RUNNING	opencode-deepseek	07:38:57
+A4	DONE	opencode-deepseek	07:38:57	100.8s
+A4	RUNNING	baseline-claude	07:40:50
+A4	DONE	baseline-claude	07:40:50	220.9s
+A4	RUNNING	baseline-grok	07:44:47
+A4	DONE	baseline-grok	07:44:47	52.7s
+A4	RUNNING	naked-claude	07:45:46
+A4	FAILED	naked-claude	07:45:46	prompt never appeared in the naked-claude pane after 6 attempts — not recording a result for a prompt that was never s
+A4	RUNNING	naked-grok	07:46:21
+A4	DONE	naked-grok	07:46:21	176.9s
+A4	BATCH-COMPLETE	07:49:25
+A5	RUNNING	keryx-deepseek	07:49:25
+A5	DONE	keryx-deepseek	07:49:25	14.0s
+A5	RUNNING	opencode-deepseek	07:49:41
+A5	DONE	opencode-deepseek	07:49:41	56.7s
+A5	RUNNING	baseline-claude	07:50:51
+A5	FAILED	baseline-claude	07:50:51	prompt never appeared in the baseline-claude pane after 6 attempts — not recording a result for a prompt that was neve
+A5	RUNNING	baseline-grok	07:51:26
+A5	DONE	baseline-grok	07:51:26	120.7s
+A5	RUNNING	naked-claude	07:53:39
+A5	FAILED	naked-claude	07:53:39	prompt never appeared in the naked-claude pane after 6 attempts — not recording a result for a prompt that was never s
+A5	RUNNING	naked-grok	07:54:14
+A5	DONE	naked-grok	07:54:14	80.7s
+A5	BATCH-COMPLETE	07:55:42
+A12	RUNNING	keryx-deepseek	07:55:42
+A12	DONE	keryx-deepseek	07:55:42	14.0s
+A12	RUNNING	opencode-deepseek	07:55:58
+A12	DONE	opencode-deepseek	07:55:58	48.6s
+A12	RUNNING	baseline-claude	07:56:52
+A12	FAILED	baseline-claude	07:56:52	prompt never appeared in the baseline-claude pane after 6 attempts — not recording a result for a prompt that was neve
+A12	RUNNING	baseline-grok	07:57:27
+A12	DONE	baseline-grok	07:57:27	64.6s
+A12	RUNNING	naked-claude	07:58:37
+A12	FAILED	naked-claude	07:58:37	prompt never appeared in the naked-claude pane after 6 attempts — not recording a result for a prompt that was never s
+A12	RUNNING	naked-grok	07:59:12
+A12	DONE	naked-grok	07:59:12	76.6s
+A12	BATCH-COMPLETE	08:00:35
+A1	RUNNING	baseline-claude	08:02:41
+A1	FAILED	baseline-claude	08:02:41	prompt never appeared in the baseline-claude pane after 6 attempts — not recording a result for a prompt that was neve
+A1	BATCH-COMPLETE	08:03:16
+A1	RUNNING	baseline-claude	08:05:25
+A1	DONE	baseline-claude	08:05:25	221.3s
+A1	BATCH-COMPLETE	08:09:14
+A1	RUNNING	naked-claude	08:09:56
+A1	DONE	naked-claude	08:09:56	196.9s
+A1	BATCH-COMPLETE	08:13:27
+A3	RUNNING	baseline-claude	08:13:27
+A3	DONE	baseline-claude	08:13:27	112.8s
+A3	RUNNING	naked-claude	08:15:30
+A3	DONE	naked-claude	08:15:30	220.9s
+A3	BATCH-COMPLETE	08:19:18
+A4	RUNNING	baseline-claude	08:19:18
+A4	DONE	baseline-claude	08:19:18	172.7s
+A4	RUNNING	naked-claude	08:22:19
+A4	DONE	naked-claude	08:22:19	204.9s
+A4	BATCH-COMPLETE	08:25:51
+A5	RUNNING	baseline-claude	08:25:51
+A5	DONE	baseline-claude	08:25:51	84.6s
+A5	RUNNING	naked-claude	08:27:22
+A5	DONE	naked-claude	08:27:22	120.7s
+A5	BATCH-COMPLETE	08:29:30
+A12	RUNNING	baseline-claude	08:29:30
+A12	DONE	baseline-claude	08:29:30	72.6s
+A12	RUNNING	naked-claude	08:30:49
+A12	DONE	naked-claude	08:30:49	116.7s
+A12	BATCH-COMPLETE	08:32:52

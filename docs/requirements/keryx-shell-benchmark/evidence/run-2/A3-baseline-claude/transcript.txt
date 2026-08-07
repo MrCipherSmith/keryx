@@ -1,0 +1,40 @@
+
+  Hard cycles (both directions are static top-level import)
+
+  ┌───────────────────────────────────────┬──────────────────────────────────┐
+  │                 Cycle                 │              Edges               │
+  ├───────────────────────────────────────┼──────────────────────────────────┤
+  │ bot/handlers.ts ⇄ bot/callbacks.ts    │ handlers.ts:122 → callbacks.ts:7 │
+  ├───────────────────────────────────────┼──────────────────────────────────┤
+  │ bot/handlers.ts ⇄ bot/commands/add.ts │ handlers.ts:98 → add.ts:4        │
+  ├───────────────────────────────────────┼──────────────────────────────────┤
+  │ bot/handlers.ts ⇄ bot/media.ts        │ handlers.ts:121 → media.ts:13    │
+  └───────────────────────────────────────┴──────────────────────────────────┘
+
+  These are genuine module-init cycles: each partner imports setPendingInput/getBotRef back from handlers.ts.
+
+  Soft cycles (closed only by a lazy await import()) — five longer chains, all fanning out of the menu dispatcher:
+
+  handlers → callbacks → commands/menu → commands/codex → text-handler → handlers
+  handlers → callbacks → commands/menu → commands/memory → handlers
+  handlers → callbacks → commands/menu → commands/project-add → commands/providers → handlers
+  handlers → callbacks → commands/menu → commands/project-add → handlers
+  handlers → callbacks → commands/menu → commands/session → handlers
+
+  Every one of these passes through at least one dynamic import (callbacks.ts:76 → menu.ts, and menu.ts:245/252/264/291 → the command modules). The
+  command modules themselves import handlers.ts statically, but because the inbound hop is deferred to call time, these don't create a load-order
+  hazard — they show up as cycles because gdgraph counts await import() as a dependency edge.
+
+  The practical root cause is the same in all 8: bot/handlers.ts is both the registration entry point and the owner of the shared pending-input state
+  (setPendingInput, setPendingTool, getBotRef, pendingScope). Extracting that state into e.g. bot/pending-state.ts would break all three hard cycles
+  and most of the soft ones at once.
+
+  Routing audit — graph_used: keryx gdgraph query cycles, plus the existing data/gdgraph/artifacts/summary.md (267 files, 653 import edges, 99.8%
+  resolution); ctx_used: keryx ctx rg ×6 to verify each edge is static vs dynamic against source; raw_rg_used: no.
+
+✻ Crunched for 1m 20s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ extract the pending state into bot/pending-state.ts
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

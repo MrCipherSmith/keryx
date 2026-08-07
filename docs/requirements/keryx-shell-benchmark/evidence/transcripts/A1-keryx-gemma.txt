@@ -1,0 +1,40 @@
+ keryx · New session · 0fbba70d · ollama/gemma4-coder:latest                                                      ↑0 ↓0 │
+                                                                                                                        │  keryx
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+ │ ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and  │ │  Model
+ │ transitively.                                                                                                      │ │  ollama/gemma4-coder:latest
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+                                                                                                                        │  Directory
+ ● keryx  6:25 PM                                                                                                       │  …/bench/wt/A1-keryx-gemma
+                                                                                                                        │
+ ⠴ waiting for model · 208.4s                                                                                           │  Context
+                                                                                                                        │  0 tokens
+                                                                                                                        │
+                                                                                                                        │  Tools
+                                                                                                                        │  18 available
+                                                                                                                        │
+                                                                                                                        │  Status
+                                                                                                                        │  ◐ Working…
+                                                                                                                        │    waiting on model…
+                                                                                                                        │  1 busy
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+                                                                                                                        │
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮│
+│ type a task or / for commands · Enter send · Shift+Enter newline                                                     ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯│
+ ⠴ waiting for model · 208.4s                                                                ollama/gemma4-coder:latest │

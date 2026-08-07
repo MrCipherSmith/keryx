@@ -1,0 +1,3 @@
+A1-naked-grok/transcript.txt:5:109:     ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.      10:24 PM  
+A1-naked-grok/transcript.txt:23:68:     ~100 modules total sit on a reverse import path to config.ts (24 direct + ~76 transitive).
+A1-naked-grok/transcript.txt:29:46:     1. Field rename/type change → fix the direct files that read that field first (table above). Most transitive files only break if a              █

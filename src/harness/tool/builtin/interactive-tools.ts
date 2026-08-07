@@ -26,6 +26,17 @@ export interface InteractiveToolResult {
 export interface InteractiveTool {
   definition: NormalizedToolDefinition;
   invoke: (input: Record<string, unknown>) => Promise<InteractiveToolResult>;
+  /**
+   * This tool blocks the turn until a PERSON answers.
+   *
+   * Not derivable from `definition.risk`: `ask_user` is `risk: "read"` — it
+   * mutates nothing — and is still unusable in a run with nobody at the keyboard,
+   * where it would hang rather than fail. The tool declares the requirement about
+   * itself so the unattended posture can exclude it by a property instead of
+   * keeping a second list of names somewhere else
+   * (`src/harness/posture/unattended.ts`).
+   */
+  requiresApprover?: boolean;
 }
 
 /** Read-file output cap so a tool result stays modest. */

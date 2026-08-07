@@ -1,0 +1,84 @@
+  keryx — deepseek/deepseek-v4-flash · agent · unattended:read-only · ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A5-keryx-deepseek
+  Type a message, or /help for commands.
+
+  ❯   Session 1a57cd17 · per-project (keryx shell -c to continue)
+
+  ● keryx
+
+  ⋯ thinking
+  The user asks how the memory subsystem works, and explicitly says to answer from the project's own documentation, not by reading the source. So I sh
+ould use the wiki tools: read_wiki on components/memory.md, maybe wiki_ask, and possibly memory_search. Let me do these in parallel: read the memory w
+iki page and ask the wiki a question about the memory subsystem.
+
+  ⚙ read_wiki(path=components/memory.md)
+  ↳ # Module memory · +67 more (/expand)
+
+  ⚙ wiki_ask(question=How does the memory subsystem work: short-term vs long-term memory, emb…)
+  ↳ # How does the memory subsystem work: short-term vs long-term memory, embeddings, summarization, Pos… · +22 more (/expand)
+
+  ⋯ thinking
+  The user asks how the memory subsystem works, from the project's own documentation, not source. I've already gotten the memory module wiki page and
+a wiki_ask answer. I could also check memory_search for related decisions, but the answer from documentation is already quite complete. Let me maybe d
+o one more targeted lookup: memory_search for decisions about memory subsystem to add context. Actually the instructions say be economical. The wiki_a
+sk already gave citations. I could enrich with memory decisions about summarization etc. Let me do a quick memory_search to see if there are settled d
+ecisions, in parallel with maybe wiki_backlinks to memory files? That's probably overkill. The question is "How does the memory subsystem work?" — the
+ module page + wiki_ask answer covers it well.
+
+  Let me compose a concise answer based on documentation. Maybe do one memory_search for "memory subsystem" decisions to be thorough. I'll do that in
+one call.
+
+  ⚙ memory_search(query=memory subsystem short-term long-term summarization embeddings, limit=5)
+  ↳ Memory hits for "memory subsystem short-term long-term summarization embeddings" (1): · +1 more (/expand)
+
+  ⋯ thinking
+  The user asks: "How does the memory subsystem work? Answer from the project's own documentation, not by reading the source."
+
+  I've already gotten the wiki page for components/memory.md (which appears in the tool result), plus wiki_ask results and a memory search. Let me com
+pose the answer from the documentation. The wiki page was already fetched via read_wiki apparently (the first tool result shows the memory module wiki
+ content). Actually, the tool results shown include the module memory wiki page content, the wiki_ask answer, and memory_search result.
+
+  I think I have enough to answer. But maybe I should read the memory-related wiki pages more deeply — e.g., components/memory.md was already given in
+ full. There might also be more in the wiki: services, claude, cleanup. The wiki_ask already summarized it. I can answer now concisely.
+
+  Let me write the answer from the documentation.
+  From the project's own wiki (`wiki/components/memory.md`) and related pages:
+
+  ## Memory subsystem overview
+
+  **Role:** persistence and knowledge-management backbone of the bot — owns all data storage and retrieval, and provides the universal `sql` tagged-te
+mplate-literal connection (from the `postgres` library) used across the codebase.
+
+  **Two-tier memory:**
+  - **Short-term** — recent conversation history scoped to session + chat, with a configurable window; feeds session context for LLM prompts (per `com
+ponents/claude.md`).
+  - **Long-term** — vector-based semantic memory: knowledge stored as embeddings in PostgreSQL, recalled by similarity search.
+
+  **Summarization & knowledge extraction:** conversation summarization with idle-timer triggering, overflow detection, and disconnect-time summarizati
+on; durable facts are automatically extracted from completed summaries as project knowledge (`extractProjectKnowledge`).
+
+  **Embeddings:** generated via Ollama or other configured providers.
+
+  **Public API** (6 files in `memory/`): `sql`, `validateMigrationRegistry`, `migrate`, `extractProjectKnowledge`, `touchIdleTimer`, `checkOverflow`,
+`forceSummarize`, `summarizeOnDisconnect`, `cleanupStaleTimers`, `stopAllTimers`, `summarizeWork`, `extractFactsFromTranscript`.
+
+  **Key files:**
+  - `memory/db.ts` — shared DB connection (46 importers)
+  - `memory/summarizer.ts` — summarization engine
+  - `memory/long-term.ts` — embeddings/semantic recall
+  - `memory/short-term.ts` — conversation history window
+  - `memory/project-scanner.ts` — project knowledge extraction
+  - `memory/embeddings.ts` — embedding generation
+
+  **Dependencies:** depends on `config`, `claude`, `logger`; is depended on by `bot` (32 imports), `mcp` (9), `utils` (4), `sessions` (3), `channel` (
+2), `claude` (2).
+
+  Related documentation notes memory TTL enforcement under the cleanup module, and a `Memory` service facade in the services layer wrapping these oper
+ations for bot commands and MCP endpoints.
+
+  ↑5023 ↓649 tokens
+
+  ────────────────────────
+
+  ❯
+[harness] run finished
+

@@ -1,0 +1,8 @@
+C1-opencode-deepseek/transcript.txt:2:120:  ┃                                                                                                           Delete untracked files
+C1-opencode-deepseek/transcript.txt:14:51:     Two sets of files are not tracked by git: an untracked .provenance.json and an ignored cache dir       
+C1-opencode-deepseek/transcript.txt:18:10:  ┃  $ git clean -fdX -- . && echo "---done ignored---" && git clean -fd -- . && echo "---done              
+C1-opencode-deepseek/transcript.txt:19:8:  ┃  untracked---" && git status --short                                                                    
+C1-opencode-deepseek/transcript.txt:21:8:  ┃  Removing .metaproject/data/gdgraph/storage/                                                            
+C1-opencode-deepseek/transcript.txt:23:8:  ┃  Removing .metaproject/data/gdgraph/.provenance.json                                                    
+C1-opencode-deepseek/transcript.txt:24:16:  ┃  ---done untracked---                                                                                   
+C1-opencode-deepseek/transcript.txt:29:6:     Deleted .metaproject/data/gdgraph/.provenance.json and the ignored .metaproject/data/gdgraph/          

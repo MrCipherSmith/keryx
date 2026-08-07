@@ -691,7 +691,7 @@ Task kinds: `context`, `implement`, `test`, `review`, and `docs`.
 | `keryx sessions list [--json]` | Sessions for this project, newest first; forks marked `↳`. |
 | `keryx sessions fork <id> [--title "<t>"]` | Branch a conversation into a new session with its ancestry recorded. |
 | `keryx sessions export <id>` | Export a transcript as Markdown. |
-| `keryx harness run --provider <p> --model <m> [--record <path>] "<prompt>"` | One prompt through the run loop, non-interactively. |
+| `keryx harness run --provider <p> --model <m> [--record <path>] [--tools] "<prompt>"` | One prompt through the run loop, non-interactively. `--tools` registers the read-only metaproject tools and reports each result under `tools`; off by default because the loop takes a single provider turn and does not feed results back to the model. |
 | `keryx harness exec [containment flags] -- <path> [args...]` | Run a subprocess under the OS sandbox. |
 | `keryx harness extension --spec <path>` / `wave --spec <path>` | Run a declared extension, or a bounded multi-agent wave. |
 | `keryx harness replay --record <path> [--fixture <path>]` | Validate a replay fixture against a recorded run. |

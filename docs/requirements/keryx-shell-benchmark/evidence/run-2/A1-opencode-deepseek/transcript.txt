@@ -1,0 +1,40 @@
+     │utils/transcribe.ts                                            │CONFIG                           │    
+     ├───────────────────────────────────────────────────────────────┼─────────────────────────────────┤      config.ts export signature impact 
+     │utils/tts.ts                                                   │CONFIG                           │      analysis
+     └───────────────────────────────────────────────────────────────┴─────────────────────────────────┘    
+                                                                                                              Context
+     Transitive dependents (106 files total; ~82 beyond the direct set)                                       52,505 tokens
+                                                                                                              5% used
+     Everything that imports from the files above. Key high-fan-in transitives that amplify the blast         $0.01 spent
+     radius:                                                                                                
+                                                                                                              LSP
+     - memory/db.ts (51 importers) → pulls in memory/embeddings, memory/long-term, memory/short-term,         LSPs are disabled
+       memory/summarizer, and most memory/ tests                                                            
+     - sessions/manager.ts (22) → sessions/router, sessions/delete, and session tests                       
+     - bot/handlers.ts (10) → nearly every bot/command/*                                                    
+     - scripts/supervisor.ts (8) and utils/stats.ts (8)                                                     
+     - services/project-service.ts (6), services/reviewer-service.ts (6)                                    
+     - utils/aux-llm-client.ts (3), utils/curator.ts (3), etc.                                              
+                                                                                                            
+     What actually breaks                                                                                   
+                                                                                                            
+     - config.ts:143-236 — CONFIG is built with as const; the inferred type comes from the key names        
+       and value types. Renaming/removing a key, or changing a value's type (e.g., a string to number),     
+       changes the Config type at config.ts:238, so every consumer accessing that key breaks in the         
+       type checker.                                                                                        
+     - Since Config is derived via typeof CONFIG (config.ts:238), any signature change to CONFIG            
+       cascades into type-only imports wherever Config is referenced.                                       
+                                                                                                            
+     Routing audit: graph_used: gdgraph affected --depth 10 + edges.jsonl inspection; ctx_used: keryx       
+     ctx rg for import verification; raw_rg_used: yes (edges.jsonl parse — raw rg on generated storage,     
+     not project code).                                                                                     
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 51.7s                                                                ▄  
+                                                                                                            
+  ┃                                                                                                         
+  ┃                                                                                                           ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/A1-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       52.5K (5%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

@@ -1,0 +1,12 @@
+A3-naked-claude/transcript.txt:2:19:  │ 6   │ bot/handlers.ts ↔ bot/commands/project-add.ts                                   │
+A3-naked-claude/transcript.txt:4:19:  │ 7   │ bot/handlers.ts ↔ bot/commands/session.ts                                       │
+A3-naked-claude/transcript.txt:6:64:  │ 8   │ bot/callbacks.ts → bot/text-handler.ts → bot/handlers.ts → bot/callbacks.ts     │
+A3-naked-claude/transcript.txt:8:68:  │ 9   │ bot/callbacks.ts → bot/commands/session.ts → bot/handlers.ts → bot/callbacks.ts │
+A3-naked-claude/transcript.txt:11:50:  That's an 8-file strongly connected component: handlers.ts, callbacks.ts, media.ts, text-handler.ts, commands/{add,memory,project-add,session}.ts.
+A3-naked-claude/transcript.txt:13:26:  If you also count lazy await import(), the SCC grows to 11 files (adds commands/menu.ts, commands/providers.ts, commands/codex.ts) and 25 simple
+A3-naked-claude/transcript.txt:14:3:  cycles — e.g. menu.ts ⇄ session.ts/memory.ts/project-add.ts/codex.ts via the dispatch switch at bot/commands/menu.ts:245-303, and codex.ts:199 →
+A3-naked-claude/transcript.txt:15:23:  text-handler.ts → handlers.ts → menu.ts → codex.ts.
+A3-naked-claude/transcript.txt:26:7:  bot/handlers.ts:31-88 mixes two responsibilities: router registration (needs to import all handlers) and ownership of pending-input state (which all
+A3-naked-claude/transcript.txt:27:3:  handlers need). Extracting the state into e.g. bot/pending-state.ts — the maps, setPendingInput, clearPendingInput, setPendingTool, pendingScope,
+A3-naked-claude/transcript.txt:28:40:  plus the bot ref — and having both handlers.ts and the leaf modules import that breaks all 7 direct back-edges at once, which collapses cycles 8 and
+A3-naked-claude/transcript.txt:29:26:  9 too. The lazy-import cycles in menu.ts are a separate, intentional-looking pattern; they'd need a command registry to remove, if you care.

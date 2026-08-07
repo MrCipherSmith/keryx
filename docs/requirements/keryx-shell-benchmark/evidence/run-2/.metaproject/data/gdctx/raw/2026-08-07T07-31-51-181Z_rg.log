@@ -1,0 +1,2 @@
+/tmp/claude-1000/-home-altsay-keryx/ec0c4e25-1aa9-45f1-af45-5f861db55249/scratchpad/helyx-bind/bot/callbacks.ts:75:3:  menu: async (ctx) => {
+/tmp/claude-1000/-home-altsay-keryx/ec0c4e25-1aa9-45f1-af45-5f861db55249/scratchpad/helyx-bind/bot/callbacks.ts:76:61:    const { handleMenuCallback } = await import("./commands/menu.ts");

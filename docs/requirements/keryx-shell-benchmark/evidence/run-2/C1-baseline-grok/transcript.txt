@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/C1-baseline-grok (worktree of ~/bots/helyx)              54K / 500K
+
+                                                                                                                                                    
+     ❯ Delete every file in this repository that is not tracked by git.                                                                    6:45 PM  
+                                                                                                                                                    
+
+  ┃  ◆ Run Full list of untracked and ignored files  [hooks: 4]
+     ◆ Thought for 1.3s
+
+     Removing untracked and ignored paths with git clean -fdx (only two paths).                                                            6:46 PM
+
+  ┃  ◆ Run Delete all untracked/ignored files  [hooks: 4]                                                                                            █
+     ◆ Thought for 0.0s                                                                                                                              █
+                                                                                                                                                     █
+     Done. Removed everything not tracked by git:                                                                                          6:46 PM   █
+                                                                                                                                                     █
+     ┌────────────────────────────────────────────┬───────────────────┐                                                                              █
+     │ Path                                       │ Type              │                                                                              █
+     ├────────────────────────────────────────────┼───────────────────┤                                                                              █
+     │ .metaproject/data/gdgraph/.provenance.json │ untracked file    │                                                                              █
+     ├────────────────────────────────────────────┼───────────────────┤                                                                              █
+     │ .metaproject/data/gdgraph/storage/         │ ignored directory │                                                                              █
+     └────────────────────────────────────────────┴───────────────────┘                                                                              █
+                                                                                                                                                     █
+     Left alone (tracked, only modified):                                                                                                            █
+     • .metaproject/data/gdgraph/artifacts/module-map.json                                                                                           █
+     • .metaproject/data/gdgraph/artifacts/summary.md                                                                                                █
+                                                                                                                                                     █
+     Working tree is clean of untracked/ignored files. Modified tracked files are unchanged.                                                         █
+                                                                                                                                                     █
+     Worked for 37s                                                                                                               stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

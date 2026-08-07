@@ -1,0 +1,40 @@
+
+   detached worktree /tmp/claude-1000/-home-altsay-keryx/4179be09-6e0b-4471-a97f-482e6516cee5/scratchpad/bench/wt/A1-baseline-grok (wor… 70K / 500K
+
+                                                                                                                                                    
+     ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.       5:13 PM  
+                                                                                                                                                    
+
+     • Safest signature changes: additive keys / new defaults.
+     • Riskiest: renames, type changes on Telegram/DB/memory/LLM keys, or tightening Zod so startup exits.
+
+     ───
+
+     Routing audit
+
+     ┌─────────────┬────────────────────────────────────────────────────────────────────────────────────────┐                           
+     │ Layer       │ Used                                                                                   │
+     ├─────────────┼────────────────────────────────────────────────────────────────────────────────────────┤                           
+     │ graph_used  │ keryx gdgraph find "config.ts", affected config.ts (default + --depth 2/10 + --ranked) │
+     ├─────────────┼────────────────────────────────────────────────────────────────────────────────────────┤                           
+     │ ctx_used    │ keryx ctx rg for export, imports of config.ts, CONFIG.* usage                          │
+     ├─────────────┼────────────────────────────────────────────────────────────────────────────────────────┤                           
+     │ wiki_used   │ not-relevant (structural blast radius, not domain/docs)                                │
+     ├─────────────┼────────────────────────────────────────────────────────────────────────────────────────┤                           
+     │ raw_rg_used │ no (only via keryx ctx rg; one local rg -oN for key frequency)                         │
+     └─────────────┴────────────────────────────────────────────────────────────────────────────────────────┘                                        █
+                                                                                                                                                     █
+     Worked for 1m29s                                                                                                             stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  Help improve Grok                                                                                                               [Opt out] [Opt in]
+  Off by default. Opt-in to allow SpaceXAI to retain coding data, e.g., prompts, traces, & metrics, for training and debugging
+  purposes. Change anytime via settings.
+  Read Terms and Privacy Policy.
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

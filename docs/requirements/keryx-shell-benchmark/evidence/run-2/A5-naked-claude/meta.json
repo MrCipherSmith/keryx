@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A5",
+  "target": "helyx",
+  "variantId": "naked-claude",
+  "commit": "bfad745ba59b",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A5-naked-claude",
+  "mode": "interactive",
+  "autoApproved": true,
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-07T08:27:22Z",
+  "finishedAt": "2026-08-07T08:29:23Z",
+  "wallTimeSeconds": 120.7,
+  "prompt": "How does the memory subsystem work? Answer from the project's own documentation, not by reading the source.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/002-step-0.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/003-step-1.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/004-step-2.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/005-step-3.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/006-step-4.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/007-step-5.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A5/naked-claude/screens/008-final.png"
+  ],
+  "dirty": true
+}

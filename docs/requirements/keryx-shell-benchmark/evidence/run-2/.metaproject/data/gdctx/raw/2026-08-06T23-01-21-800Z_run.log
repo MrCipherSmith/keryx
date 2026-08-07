@@ -1,0 +1,6 @@
+A1-baseline-claude/ 220.8 interactive
+A1-baseline-grok/ 108.7 interactive
+A1-keryx-deepseek/ 38.1 unattended-stdin
+A1-naked-claude/ 116.7 interactive
+A1-naked-grok/ 220.8 interactive
+A1-opencode-deepseek/ 80.6 interactive

@@ -1,0 +1,40 @@
+   direct.forEach((f) => depth.set(f, 1));
+   let d = 1;
+   while (frontier.length) {
+     d++;
+     const next: string[] = [];
+     for (const f of frontier) {
+       for (const p of rdeps.get(f) ?? []) {
+         if (!depth.has(p)) { depth.set(p, d); next.push(p); }
+       }
+     }
+     frontier = next;
+   }
+
+   const rel = (p: string) => relative(ROOT, p);
+   console.log("=== DIRECT (" + direct.length + ") ===");
+   for (const f of direct) console.log("  " + rel(f));
+   const byDepth = new Map<number, string[]>();
+   for (const [f, dd] of depth) {
+     if (dd === 1) continue;
+     if (!byDepth.has(dd)) byDepth.set(dd, []);
+     byDepth.get(dd)!.push(rel(f));
+   }
+   for (const dd of [...byDepth.keys()].sort((a, b) => a - b)) {
+     const l = byDepth.get(dd)!.sort();
+     console.log(`\n=== DEPTH ${dd} (${l.length}) ===`);
+     for (const f of l) console.log("  " + f);
+   }
+   console.log("\nTOTAL affected files: " + depth.size + " / " + files.length + " scanned");
+   EOF
+   bun /tmp/claude-1000/-tmp-claude-1000--home-altsay-keryx-4179be09-6e0b-4471-a97f-482e6516cee5-scratchpad-bench-wt-A1-naked-claude/32bc40eb-81a7-
+   4451-9de6-da993ec6150b/scratchpad/dep.ts
+   Build reverse import graph for config.ts
+
+ Contains brace with quote character (expansion obfuscation)
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+
+ Esc to cancel · Tab to amend · ctrl+e to explain

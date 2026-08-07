@@ -1,0 +1,1 @@
+Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.

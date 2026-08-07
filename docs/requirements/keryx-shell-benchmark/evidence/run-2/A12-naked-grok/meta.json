@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A12",
+  "target": "helyx",
+  "variantId": "naked-grok",
+  "commit": "bfad745ba59b",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A12-naked-grok",
+  "mode": "interactive",
+  "autoApproved": false,
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-07T07:59:12Z",
+  "finishedAt": "2026-08-07T08:00:29Z",
+  "wallTimeSeconds": 76.6,
+  "prompt": "Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/002-step-0.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/003-step-1.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/004-step-2.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/005-step-3.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/006-step-4.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/007-step-5.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A12/naked-grok/screens/008-final.png"
+  ],
+  "dirty": true
+}

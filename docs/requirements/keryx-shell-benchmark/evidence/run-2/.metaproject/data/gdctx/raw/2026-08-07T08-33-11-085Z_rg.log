@@ -1,0 +1,2 @@
+A5-baseline-claude/transcript.txt:31:84:  Routing audit: graph_used: no (not-relevant — question was conceptual, and the wiki module pages already carry the graph-derived import counts);
+A5-baseline-claude/transcript.txt:32:3:  wiki_used: yes (index → components/memory.md, architecture/project-map.md, components/claude.md, services.md, mcp.md); ctx_used: no (not-relevant —

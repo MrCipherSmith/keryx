@@ -26,7 +26,12 @@ import { decide } from "../policy/engine";
 import { escalateForBlastRadius, metaprojectBlastRadius } from "../policy/metaproject-escalation";
 import type { PolicyContext, PolicyDecision, PolicyProfile } from "../policy/types";
 import type { MetaprojectPort } from "../tool/metaproject-port";
-import type { NormalizedEvent, NormalizedRequest, ProviderPort } from "../provider/types";
+import type {
+  NormalizedEvent,
+  NormalizedRequest,
+  NormalizedToolDefinition,
+  ProviderPort,
+} from "../provider/types";
 import { AppendOnlySession } from "../session/session";
 import type { ArtifactRef, SessionEntry } from "../session/types";
 import type { ToolRegistry } from "../tool/registry";
@@ -303,11 +308,29 @@ export async function runOffline(
   let executedToolCalls = 0;
   let finalMessageEmitted = false;
 
+  // The registered tools, as the provider is told about them. This loop never
+  // set `request.tools`, so the registry gated execution of calls no model could
+  // know it was allowed to make. (The interactive path in `commands/agent.ts`
+  // has always set it — the adapters read the field fine; it was this loop that
+  // did not fill it.) A registry that is never advertised is a door with no
+  // handle on the outside.
+  //
+  // Guarded on non-empty, so a run with an empty registry produces exactly the
+  // request it produced before (the deterministic fixture floor is unchanged).
+  // `keryx harness run` without `--tools` is exactly that case.
+  const advertisedTools: NormalizedToolDefinition[] = deps.toolRegistry.list().map((definition) => ({
+    name: definition.toolId,
+    ...(definition.description !== undefined ? { description: definition.description } : {}),
+    inputSchema: definition.inputSchema,
+    risk: definition.risk,
+  }));
+
   const request: NormalizedRequest = {
     providerId: provider,
     modelId: model,
     systemInstruction: "Keryx harness offline run (Release 0).",
     messages: [{ role: "user", content: input.request, provenance: "project" }],
+    ...(advertisedTools.length > 0 ? { tools: advertisedTools } : {}),
     budget: { maxOutputTokens: 1000, runReservation: 1000 },
     stream: true,
     requestId: `req-${manifest.contextHash.slice(0, 32)}`,

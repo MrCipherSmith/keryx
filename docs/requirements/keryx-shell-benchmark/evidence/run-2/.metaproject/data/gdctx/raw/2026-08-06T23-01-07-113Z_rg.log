@@ -1,0 +1,7 @@
+A1-baseline-claude/transcript.txt:8:104:❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.
+A1-baseline-claude/transcript.txt:12:25:  Read 1 file, listed 1 directory, ran 1 shell command 
+A1-baseline-claude/transcript.txt:14:81:● Metaproject gate complete. This is a structural "blast radius" question → gdgraph first.
+A1-baseline-claude/transcript.txt:16:32:● Reading 2 files, listing 1 directory, running 1 shell command…
+A1-baseline-claude/transcript.txt:22:10:   keryx gdgraph affected config.ts 2>&1 | head -100
+A1-baseline-claude/transcript.txt:23:4:   gdgraph blast radius for config.ts
+A1-baseline-claude/transcript.txt:29:45:   2. Yes, and don’t ask again for: keryx gdgraph *

@@ -1,0 +1,40 @@
+  ┃                                                                                                         
+                                                                                                              Finding orphaned source files
+     + Thought: 6.3s                                                                                        
+                                                                                                              Context
+     Orphaned source files                                                                                    52,352 tokens
+                                                                                                              5% used
+     Graph (fresh, built today) flagged 14 files as orphaned. After verifying against tooling entry           $0.01 spent
+     points and test runners, only 2 are genuine orphans — the rest are reachable entry points that the     
+     import graph can't see:                                                                                  LSP
+                                                                                                              LSPs are disabled
+     Genuinely orphaned (dead code)                                                                         
+                                                                                                            
+     - utils/stream-json-parser.ts — exported parseStreamEvent/StreamStatusAccumulator imported nowhere;    
+        only mentioned in docs/dev/modules.md and no npm script invokes it. (Its header calls it an         
+       "alternative to tmux-monitor" — a superseded feature.)                                               
+     - tests/e2e/auth.setup.ts — not wired into tests/playwright.config.ts (no project lists it as          
+       setup, and auth.setup.ts isn't matched by Playwright's default *.spec.ts/*.test.ts glob, so the      
+       runner won't discover it). fixtures.ts only mentions running auth setup; nothing imports it.         
+                                                                                                            
+     Not orphans — tooling entry points (flagged only because graph tracks imports)                         
+                                                                                                            
+     - dashboard/eslint.config.js, dashboard/vite.config.ts, dashboard/webapp/vite.config.ts — loaded       
+       by ESLint/Vite                                                                                       
+     - tests/playwright.config.ts + tests/global-setup.ts — wired via test:e2e scripts and globalSetup      
+     - scripts/coverage-summary.ts — invoked by test:coverage                                               
+     - 6× tests/unit/*.test.ts — auto-discovered by bun test tests/unit/                                    
+                                                                                                            
+     Routing audit: graph_used: keryx gdgraph query orphans + summary; ctx_used: keryx ctx rg for           
+     symbol/import verification; raw_rg_used: no (rg used directly only after graph identified              
+     candidates, to verify exact import/script references).                                                 
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 1m 10s                                                               ▄  
+                                                                                                            
+  ┃                                                                                                         
+  ┃                                                                                                           ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/A4-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       52.4K (5%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

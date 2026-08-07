@@ -1,0 +1,13 @@
+A12-opencode-deepseek/transcript.txt:2:48:  ┃  # gdgraph path: main.ts -> orchestrator/gate.ts                                                          Dependency chain: main.ts to gate.ts
+A12-opencode-deepseek/transcript.txt:4:21:  ┃  4 node(s), 3 hop(s):                                                                                     Context
+A12-opencode-deepseek/transcript.txt:6:14:  ┃    ↓ mcp/server.ts                                                                                        5% used
+A12-opencode-deepseek/transcript.txt:7:14:  ┃    ↓ mcp/tools.ts                                                                                         $0.01 spent
+A12-opencode-deepseek/transcript.txt:8:27:  ┃    ↓ orchestrator/gate.ts                                                                               
+A12-opencode-deepseek/transcript.txt:13:29:     Graph says there's a 3-hop chain. Verifying against source before claiming.                            
+A12-opencode-deepseek/transcript.txt:16:27:     ✱ Grep "import" in mcp/server.ts (65 matches)                                                          
+A12-opencode-deepseek/transcript.txt:17:27:     ✱ Grep "import" in mcp/tools.ts (65 matches)                                                           
+A12-opencode-deepseek/transcript.txt:23:18:     main.ts → mcp/server.ts → mcp/tools.ts → orchestrator/gate.ts                                          
+A12-opencode-deepseek/transcript.txt:25:60:     - main.ts:4 → import { startMcpHttpServer } from "./mcp/server.ts"                                     
+A12-opencode-deepseek/transcript.txt:26:8:     - mcp/server.ts:7 → import { executeTool } from "./tools.ts"                                           
+A12-opencode-deepseek/transcript.txt:27:8:     - mcp/tools.ts:14 → import { validateReplyGate } from "../orchestrator/gate.ts"                        
+A12-opencode-deepseek/transcript.txt:29:73:     Routing audit: graph_used: keryx gdgraph path main.ts orchestrator/gate.ts (3 hops); ctx_used:         

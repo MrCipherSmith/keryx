@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Benchmark-only `keryx`, resolving to the BRANCH under measurement.
+#
+# The global install at ~/.local/bin/keryx is a checkout of `main` (0.2.9 at the
+# time of writing) and this branch is 0.2.16. That difference is not cosmetic:
+# `search_code` shells out to whatever `keryx` is on PATH, and a binary older
+# than 377fc325 refuses the forced `--no-follow`, so every search in every keryx
+# leg would fail. The first review of the unattended posture found exactly this.
+#
+# The global install is deliberately NOT changed — the project's convention is
+# that it tracks `main`, and this branch is not in `main` yet. Prepending this
+# directory to PATH for the run keeps the environment intact and is recorded in
+# the run report.
+#
+# It applies to EVERY leg, not only the keryx ones: the baselines shell out to
+# `keryx gdgraph affected` because the target's own CLAUDE.md tells them to, so
+# letting them use 0.2.9 while the subject uses 0.2.16 would compare two
+# different products.
+exec "/home/altsay/.bun/bin/bun" "/home/altsay/keryx/src/cli.ts" "$@"

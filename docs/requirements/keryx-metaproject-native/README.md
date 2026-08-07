@@ -52,14 +52,23 @@ Still pending (Phase 4 + retirement):
 - **Subprocess wrapper retirement** — `metaproject-tools.ts` still ships the
   subprocess fallback path; `searchCode` degrades to it because gdctx has no
   in-process API yet.
-- **Minor schema drift:** `schemas/memory-search-result.schema.json` defines
-  filter keys `module/entity/status/class/asOf`; the TS `MemorySearchFilters`
-  only has `module?/status?` (spec ahead of implementation).
+Closed since:
 
-This package's schemas are complete and consistent
+- **Schema drift, filter keys.** `SearchFilters` now carries
+  `module/entity/status/class/asOf/limit/semantic`, so the schema is no longer
+  ahead of the implementation.
+- **Schema drift, status enum (2026-08-06).** `memory-search-result.schema.json`
+  allowed `active/superseded/deprecated` — naming an `active` this codebase has
+  never had, and omitting `draft`, `accepted` and `conflict`. Both enums (the
+  echoed filter and `hits[].status`) are now the module's own
+  `MEMORY_STATUS_VALUES`, and `metaproject-adapter.test.ts` derives its
+  expectation from that array rather than restating it, so the next status
+  added to the module fails the suite instead of an agent's structured call.
+
+The package's schemas are Draft-07 and consistent with the code
 (`metaproject-operation.schema.json`, `graph-affected-result.schema.json`,
-`memory-search-result.schema.json`, `flow-state.schema.json` v1+v2 additive,
-Draft-07). The D-02 invariant is preserved (no runtime hand-edits `flow.json`).
+`memory-search-result.schema.json`, `flow-state.schema.json` v1+v2 additive).
+The D-02 invariant is preserved (no runtime hand-edits `flow.json`).
 
 ## Purpose
 

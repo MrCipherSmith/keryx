@@ -1,0 +1,4 @@
+A4-baseline-grok/transcript.txt:5:33:     ❯ Which source files are orphaned — not reachable from any entry point?                                                               7:45 AM  
+A4-baseline-grok/transcript.txt:20:45:     │ utils/stream-json-parser  │ Only orphan under app/utils — may be dead code or only used dynamically/via tests not linked in the │
+A4-baseline-grok/transcript.txt:24:6:     14 files total. Most are configs, test harness pieces, or unit tests (normal: test runners load them; they don’t sit on the app                 █
+A4-baseline-grok/transcript.txt:29:53:     Routing audit: graph_used: keryx gdgraph query orphans (+ summary artifact) · wiki_used: not-relevant · ctx_used: not-relevant ·                █

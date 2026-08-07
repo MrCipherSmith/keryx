@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A12-naked-claude
+
+ ⚠ Your login expires in 2 days · run /login to renew
+
+❯ Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.
+
+  Listed 1 directory 
+
+● metaproject: unavailable (no .metaproject/index.md in this worktree root) — proceeding with the repo's own conventions.
+
+  Searched for 1 pattern, read 1 file, listed 1 directory, ran 2 shell commands 
+
+● Yes — indirectly, via exactly one chain.
+
+  main.ts
+    └─ mcp/server.ts        main.ts:4    import { startMcpHttpServer } from "./mcp/server.ts"
+         └─ mcp/tools.ts    mcp/server.ts:7  import { executeTool } from "./tools.ts"
+              └─ orchestrator/gate.ts   mcp/tools.ts:14  import { validateReplyGate } from "../orchestrator/gate.ts"
+
+  Details:
+
+  - All three edges are real value imports (not type-only), so the dependency holds at runtime as well as at compile time.
+  - I built the full import graph over the repo (relative import/export … from, bare import "…", dynamic import(), and require()) and enumerated all
+  simple paths from main.ts — this is the only one. mcp/server.ts → mcp/tools.ts is the sole bridge.
+  - orchestrator/gate.ts has two direct importers: mcp/tools.ts and channel/tools.ts. The second is not on any path from main.ts — channel/tools.ts is
+  unreachable from main.ts and belongs to the separate channel.ts entrypoint.
+
+  Routing audit: graph_used: no (gdgraph unavailable — no .metaproject in this worktree), wiki_used: not-relevant, ctx_used: no (keryx CLI unavailable
+  here), raw_rg_used: yes — reason: .metaproject/ is deleted in this worktree, so keryx ctx rg and the gdgraph skill have no backing data; used
+  direct file reads plus a self-contained import-graph script instead.
+
+✻ Baked for 1m 22s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ show what validateReplyGate does in gate.ts
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

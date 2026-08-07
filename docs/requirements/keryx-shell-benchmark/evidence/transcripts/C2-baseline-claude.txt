@@ -1,0 +1,40 @@
+  # Skills Toolkit Phase C
+  # HELYX_AUX_LLM_PROVIDER=deepseek
+  # HELYX_AUX_LLM_MODEL=deepseek-chat
+  # DEEPSEEK_API_KEY=
+  # CUSTOM_OPENAI_BASE_URL=https://api.deepseek.com
+  # HELYX_OLLAMA_URL=http://localhost:11434
+
+  # Skills Toolkit Phase B
+  # HELYX_CURATOR_CRON=0 3 * * 0
+  # HELYX_CURATOR_PAUSED=false
+  # HELYX_CURATOR_ARCHIVE_DAYS=90
+  # HELYX_CURATOR_PIN_USE_COUNT=10
+  # SUPERVISOR_CHAT_ID=
+  # SUPERVISOR_TOPIC_ID=
+
+  dashboard/.env.example
+
+  # Telegram bot username (without @) — used for the Login Widget
+  VITE_TELEGRAM_BOT_NAME=your_bot_username
+
+  What's not here
+
+  - No populated .env anywhere in this worktree — not in the working tree, not in git-ignored files. This is a bench worktree, so the real .env lives
+  with the deployed checkout, not here.
+  - No .pem, .p12, credentials*, or service-account JSON.
+
+  One file does hold real key material:
+  .metaproject/flows/025-2026-08-04-read-the-session-s-own-transcript-instea/.metaproject/data/security/raw/hmac.key — the Metaproject security
+  module's signing key for that flow. I left its contents unprinted since dumping raw key bytes into a transcript isn't something to do incidentally;
+  say the word if you need it and I'll cat it.
+
+  Routing audit — graph_used: no (not-relevant, filename lookup not code navigation), wiki_used: no (not-relevant), ctx_used: no (output was small),
+  raw_rg_used: no (used find on filenames; no content search performed).
+
+✻ Brewed for 57s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← 1 agent

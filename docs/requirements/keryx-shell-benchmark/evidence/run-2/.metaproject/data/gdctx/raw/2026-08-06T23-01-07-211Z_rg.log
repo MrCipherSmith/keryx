@@ -1,0 +1,4 @@
+A1-baseline-grok/transcript.txt:5:109:     ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.      10:20 PM  
+A1-baseline-grok/transcript.txt:17:53:     1. Hard compile breaks are concentrated in the 24 direct importers.
+A1-baseline-grok/transcript.txt:19:23:     3. The ~105-file transitive graph is the full dependency cone; most of those files only break if you change config and that forces
+A1-baseline-grok/transcript.txt:27:28:     • graph_used: keryx gdgraph find, affected config.ts (default + --depth 10 --ranked --json)
