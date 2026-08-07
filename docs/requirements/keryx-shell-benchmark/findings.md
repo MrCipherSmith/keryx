@@ -152,6 +152,57 @@ degraded the answer exactly as much as an agent that skipped the check.
 
 ---
 
+### P4 — a Linux install has no OS containment, and nothing says so
+
+**Where:** `scripts/install.sh` (144 lines, **zero** mentions of the launcher),
+`docs/verification/linux-sandbox-verification.md`.
+**Found by:** asking why `bubblewrap` was missing when C4 refused to run.
+
+Two separate things, and only one of them is a packaging gap.
+
+**The domain allowlist is not implemented on Linux at all.** Installing
+`bubblewrap` would not have fixed C4. From the project's own verification
+runbook:
+
+| Capability | Linux (bubblewrap) | macOS (Seatbelt) |
+|---|---|---|
+| Filesystem containment | yes | yes |
+| Network OFF | yes | yes |
+| `--allowed-domains` | **not implemented — fails closed** | yes |
+| `--mask-env` | **not implemented — fails closed** | yes |
+
+The reason is concrete: `restricted` network means "deny everything except one
+loopback socket". Seatbelt expresses that; `bwrap --unshare-net` gives the
+process *its own* loopback, not the one the proxy listens on, so it needs a
+network namespace plus a relay — work that is not done. Refusing to start rather
+than silently downgrading "only these domains" to "the whole internet" is the
+right call and it is what happens.
+
+So the earlier doc/code discrepancy resolves: **both statements were true.** The
+allowlist really is macOS-only; the error surfaced the missing launcher first
+only because that check runs earlier.
+
+**The packaging gap is the other two rows.** Filesystem containment and
+network-off *are* implemented on Linux — and both need `bubblewrap`, which the
+installer never mentions, never checks for, and never warns about. There is no
+`doctor`/preflight command in the registry either. The result on a stock Linux
+box: keryx installs, appears healthy, and has **no OS containment whatsoever** —
+discoverable only by running something contained, which a user is unlikely to do
+because `KERYX_SANDBOX_SHELL` is off by default (see M6).
+
+**Severity: moderate.** Nothing is silently unsafe — every contained path fails
+closed. What is wrong is that a user cannot tell the difference between "keryx
+contains my agent" and "keryx would contain my agent if a package it never
+asked for were present".
+
+**Fix direction:** the installer detects the platform and either installs the
+launcher, offers to, or prints exactly which capabilities are unavailable
+without it. A `keryx doctor` that reports launcher availability alongside the
+per-capability matrix above would make this visible at any time, not only at
+install.
+
+---
+
 ## Method findings — what the report may not claim
 
 ### M1 — group A does not compare keryx against its absence
@@ -254,8 +305,37 @@ command at an approval prompt.
 
 The catalog specifies one; `drive.py` had no wiring for it, and R4 exists
 because the first run measured the default posture instead. C4 now refuses
-without `NET_PROFILE` rather than emit rows that read as results. Open question
-for the owner: whether the baselines get wrapped in keryx's sandbox too.
+without `NET_PROFILE` rather than emit rows that read as results.
+
+Four facts established before asking the owner anything, each from a run or from
+the source rather than from the documentation:
+
+1. **`shell_exec` is sandboxed only on opt-in.** `KERYX_SANDBOX_SHELL`,
+   default **off** (`shell-exec-tool.ts:10`), and deliberately so: "the
+   interactive agent already gates every command behind human approval, and
+   default-on would break common tools that write to global caches". So C4 as
+   written measures a **non-default** posture, whichever way it is run.
+2. **The Linux launcher is missing on this host.** `keryx harness exec
+   --allow-real-subprocess --allowed-domains example.com -- /bin/echo hi`
+   returns `blocked`: *"OS sandbox launcher unavailable on linux … failing
+   closed (install bubblewrap …)"*. Failing closed is correct behaviour; it also
+   means nothing contained can run here until `bubblewrap` is installed.
+3. **The provider API is already handled.** That same run reports
+   `allowedDomains: [example.com, openrouter.ai, api.deepseek.com, api.z.ai,
+   api.groq.com]` — keryx adds the provider hosts itself, so the worry that an
+   allowlist would starve the agent of its own API was unfounded.
+4. **`harness exec` cannot host an agent session.** Contained stdout is not
+   returned, shell metacharacters are rejected, the program must be an absolute
+   path (`docs/requirements/keryx-os-sandbox/agent-protocol.md` §4). It contains
+   a *command*, not a TUI. Wrapping the baseline legs in it is therefore not an
+   option, and C4 collapses from a four-way comparison into a keryx-only
+   capability check unless something else is proposed.
+
+**Doc/code discrepancy, unresolved.** The agent protocol's §3 states the
+allowlist is macOS-only and "will be blocked" elsewhere. The actual Linux
+failure was *launcher availability*, not a platform gate — the two claims are
+not the same, and which one is true only becomes visible once `bubblewrap` is
+installed. Worth settling regardless of what happens to C4.
 
 ### M7 — keryx never refused on the merits; it asked
 
