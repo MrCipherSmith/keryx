@@ -124,23 +124,42 @@ memory or expectation. Three rules that run 2 needed:
 3. **Verification can also be wrong.** On the A1 re-run the leg that checked
    invented a correction. Grade the answer, not the diligence.
 
-## 7. Open decisions — run 3 cannot be scheduled until these are made
+## 7. Decisions — settled by the owner, 2026-08-07
 
-| # | Decision | Options | Recommendation |
+| # | Decision | Settled as | What it commits us to |
 |---|---|---|---|
-| D1 | C4's subject | (a) install `bubblewrap` and measure network-**off** containment, which *is* implemented on Linux; (b) drop the network case on this host and record the allowlist as macOS-only, unverified; (c) obtain a macOS host | **(a)** — it measures something real, on this hardware, today |
-| D2 | Which posture C4 measures | (a) default (`KERYX_SANDBOX_SHELL` unset — containment off); (b) opt-in (sandbox enabled) | **both, as two rows.** The gap between them *is* the finding |
-| D3 | C4's shape | (a) keryx-only capability check, like group D; (b) rewritten as a comparison of what each agent does with an explicit network request in its stock configuration | **(b)** — `harness exec` cannot host an agent session, so (a) is what it degrades into anyway |
-| D4 | Group E scope | (a) E3 only (rerun A1/A3/A4 against `keryx` itself — no new driver needed); (b) E1–E4 | **(a) first.** E1 needs a multi-turn driver, which `drive.py` does not have |
+| D1 | C4's subject | **Install `bubblewrap`, measure network-OFF containment** | The domain allowlist stays unmeasured and is reported as macOS-only, unimplemented on Linux by design. Network-off *is* implemented here, so C4 measures something real on this hardware |
+| D2 | Which posture | **Both, as two rows** | Default (`KERYX_SANDBOX_SHELL` unset) and opt-in. The gap between them is the finding, and the report may not quote the opt-in row as if it were the default |
+| D3 | C4's shape | **A comparison, rewritten** | What each agent does with an explicit network request in its **stock** configuration. Not a keryx-only capability check — `harness exec` cannot host an agent session, so that is what it would have degraded into |
+| D4 | Group E scope | **E3 first, alone** | Re-run A1/A3/A4 against `keryx` itself (649 files, 1873 edges). No new driver needed. E1, E2 and E4 are deferred, not dropped — E1 needs a multi-turn driver `drive.py` does not have |
+
+### What D1 needs from a human
+
+`bubblewrap` installs with `sudo`, which no agent here may run:
+
+```bash
+sudo apt-get update && sudo apt-get install -y bubblewrap
+```
+
+Until that is done, precondition §2 check 4 fails and C4 stays out of the batch.
+Everything else in §8 runs without it.
 
 ## 8. Order of execution
 
 1. **Preconditions** (§2). Every line, every time.
 2. **E3** — A1, A3, A4 against `keryx` itself (649 files, 1873 edges). Reuses
-   existing cases and prompts; needs only the second target prepared and the
-   report stating plainly that the subject is measuring itself.
-3. **C4**, in the form D1–D3 settle on.
-4. **P1/P3 regression** — A3 and A4 against `helyx` again, but only *after* the
-   v2 remediation lands, and read as a before/after of the fix rather than as a
-   fresh measurement.
-5. **E1/E2/E4** if D4 chose (b), after the multi-turn driver exists.
+   existing cases and prompts. Needs `drive.py` parameterised: `TARGET_REPO` and
+   `COMMIT` are hardcoded to `helyx` today, and every evidence path is keyed on
+   `TARGET`. The report must state plainly that the subject is measuring itself.
+3. **P1/P3 regression** — A3 and A4 against `helyx` again, now that the v2
+   remediation has landed (PR #257, flows 139–142 done). Read as a before/after
+   of the fix, not as a fresh measurement. The before-numbers are already
+   recorded: A3 reported 8 unqualified cycles, A4 reported 14 unqualified
+   orphans, both in 14.0 s.
+4. **C4** — two rows per leg (D2), rewritten as a comparison (D3). Blocked on a
+   human installing `bubblewrap` (D1).
+5. **E1/E2/E4** — deferred by D4, not dropped. E1 first among them, once a
+   multi-turn driver exists.
+
+Order changed from the draft: the P1/P3 regression moved ahead of C4, because
+the fixes have landed and C4 is waiting on something only a human can do.
