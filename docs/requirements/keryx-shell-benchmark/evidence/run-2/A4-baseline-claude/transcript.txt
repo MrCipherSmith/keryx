@@ -1,40 +1,40 @@
+  utils/stream-json-parser.ts (203 lines)
+  Exports parseStreamEvent, StreamEvent, ProgressUpdate. Nothing imports it anywhere. The only reference in the repo is a table row in
+  docs/dev/modules.md:390. Added in c2e5be1 ("stream-json parser and output-file monitor as tmux fallback") — the parser landed, the wiring never did.
 
- ▐▛███▜▌   Claude Code v2.1.220
-▝▜█████▛▘  Opus 5 (1M context) · Claude Max
-  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A4-baseline-claude
+  dashboard/webapp/src/components/MessageHistory.tsx (156 lines)
+  Added in b3dbc5d ("Messages tab with chat history, pagination and auto-refresh"), but dashboard/webapp/src/App.tsx imports only GitBrowser,
+  PermissionList, SessionMonitor, SessionTimeline, ProcessHealth — the Messages tab is no longer mounted. dashboard/webapp/SPEC.md:136 and
+  docs/ROADMAP.md:382 still document it as live, so the docs are stale too.
 
- ⚠ Your login expires in 2 days · run /login to renew
+  Zero inbound edges, but not orphaned
 
-❯ Which source files are orphaned — not reachable from any entry point?
+  These show up in a naive orphan query; each is reached from outside the import graph:
 
-● Reading 2 files, running 1 shell command…
-  ⎿  $ keryx gdgraph query orphans 2>&1 | head -100
+  ┌────────────────────────────────────────┬─────────────────────────────────────────────────┐
+  │                  File                  │                   Reached via                   │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/admin-daemon.ts                │ Bun.spawn from cli.ts:1392                      │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/tmux-session-logger.ts         │ imported by admin-daemon.ts                     │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/review.ts                      │ bun scripts/review.ts per CLAUDE.md:110         │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/coverage-summary.ts            │ package.json test:coverage                      │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ tests/**, *.config.ts, eslint.config.* │ loaded by bun test / playwright / vite / eslint │
+  └────────────────────────────────────────┴─────────────────────────────────────────────────┘
+
+  Entry set used: package.json scripts, Dockerfile CMD, the claude-bot wrapper, both dashboard index.html <script src> targets, all test files, and
+  all config files. Reachability: 262 of 267 indexed source files; the 5 unreached resolve to the 2 dead files above plus the 3 externally-launched
+  scripts.
+
+  Routing audit — graph_used: gdgraph storage (nodes/edges, fresh at HEAD bfad745) + query orphans; wiki_used: not-relevant (structural question, no
+  domain semantics); ctx_used: keryx ctx rg for reference/entry-point verification; raw_rg_used: no.
+
+✻ Crunched for 2m 19s
 
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- Bash command
-
-   keryx gdgraph query orphans 2>&1 | head -100
-   Query graph for orphan files
-
- This command requires approval
-
- Do you want to proceed?
- ❯ 1. Yes
-   2. Yes, and don’t ask again for: keryx gdgraph *
-   3. No
-
- Esc to cancel · Tab to amend · ctrl+e to explain
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+❯ delete both dead files
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

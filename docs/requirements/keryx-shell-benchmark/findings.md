@@ -125,6 +125,31 @@ default that shapes every answer the product gives. Needs its own flow, and a
 regression case: A3 is now a test with a known-wrong tool output, which makes it
 a good one.
 
+**Reproduced independently on A4.** The graph flagged 14 orphans. keryx reported
+all 14 in 14.0 s without qualification; `opencode` on the same model checked and
+concluded: *"After verifying against tooling entry points and test runners, only
+2 are genuine orphans — the rest are reachable entry points that the graph
+doesn't model."* Same pattern, same model pair, a second case. One instance is a
+coincidence; two independent ones are a disposition.
+
+**And the counterweight, which the report must carry too.** Verification is not
+free and is not always right. On the re-run of A1, `baseline-claude` — the leg
+that *did* check — added this caveat:
+
+> "The gdgraph index lists 24 direct dependents; text search finds 25.
+> `tests/unit/find-duplicate-definitions.test.ts` is missing from the graph."
+
+That is **wrong**. The file does not contain the string `config` at all, let
+alone an import of it; the only test that imports `CONFIG` is
+`tests/unit/summary-normalize.test.ts`, which the graph already lists. The text
+search found 25 because a different file has the literal string `"Reading:
+config.ts"` inside an assertion.
+
+So the honest reading of P3 is narrower than "distrust the tool": **the fix is a
+disposition to check when the tool's answer is the deliverable, not a
+presumption that the tool is wrong.** A verifier that invents a correction has
+degraded the answer exactly as much as an agent that skipped the check.
+
 ---
 
 ## Method findings — what the report may not claim
@@ -139,6 +164,36 @@ tried the same.
 So the baseline legs measure *keryx-as-a-CLI*. Only the `naked-*` legs, which
 have `.metaproject/` and the routing block removed, compare against its absence.
 **Any A-group claim must be stated against the naked legs or not at all.**
+
+### M1b — A12 discriminates nothing, and I wrote it
+
+**All six legs** produced the exact chain
+`main.ts → mcp/server.ts → mcp/tools.ts → orchestrator/gate.ts`, including both
+naked legs. `naked-claude` gave it **richer than the graph does** — with line
+numbers and the imported symbol at each hop:
+
+```
+└─ mcp/server.ts        main.ts:4        import { startMcpHttpServer } from "./mcp/server.ts"
+└─ mcp/tools.ts         mcp/server.ts:7  import { executeTool } from "./tools.ts"
+└─ orchestrator/gate.ts mcp/tools.ts:14  import { validateReplyGate } from "../orchestrator/gate.ts"
+```
+
+A12 was written in this package, on 2026-08-07, as A2's replacement, and it
+inherited exactly the flaw that makes the rest of group A weak: a single
+question, asked once, on a project small enough to read. Recorded as a defect in
+the case, not as a result. See [proposed-group-e.md](proposed-group-e.md).
+
+### M1c — A5 measures knowing where to look, not privileged access
+
+keryx answered A5 with one `read_wiki(path=components/memory.md)` call in 14.0 s
+— the case's required evidence, first try. But the wiki is **markdown tracked in
+the repository**, not a privileged store: `baseline-claude` and `baseline-grok`
+both reached `components/memory.md` by ordinary file reads, and
+`opencode-deepseek`, whose routing audit records `wiki_used: unavailable`,
+answered from `guides/memory.md` instead — different document, same subject.
+
+The advantage keryx demonstrates here is real but narrower than the case claims:
+it is knowing where to look immediately, not being able to look at all.
 
 ### M2 — on A1 the graph bought speed, not correctness
 
@@ -161,6 +216,20 @@ Fixed in `drive.py` (`CLAUDE_LEGS`, `READ_ONLY_GROUPS`): read-only groups now
 pass `--dangerously-skip-permissions`, recorded per run as `autoApproved` in
 `meta.json`. Group C deliberately untouched — auto-approving there would delete
 the case. Every claude leg without `autoApproved: true` must be re-run.
+
+The flag alone was not enough, and the reason is worth recording because it was
+found in evidence rather than guessed. `--dangerously-skip-permissions` puts up
+a consent screen whose **default option is "No, exit"**, and claude also asks
+about folder trust on any directory it has not seen — which is every leg, since
+every leg gets a fresh worktree. Both screens swallow the typed prompt, after
+which the harness's own guard correctly refused to record a run whose prompt was
+never submitted. The first fix attempt handled the trust screen only, read off
+my assumption; the second was read off the saved `prompt-never-landed` frame and
+handles both, matching on the **option text** rather than its position — picking
+the wrong entry there exits the agent.
+
+Verified end to end: A1 `baseline-claude` re-ran with `autoApproved: true` and
+produced a complete answer where it had previously produced none.
 
 ### M4 — keryx's group-A times carry a harness advantage
 

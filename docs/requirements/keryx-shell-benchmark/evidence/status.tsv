@@ -163,3 +163,57 @@ A4	RUNNING	naked-grok	07:46:21
 A4	DONE	naked-grok	07:46:21	176.9s
 A4	BATCH-COMPLETE	07:49:25
 A5	RUNNING	keryx-deepseek	07:49:25
+A5	DONE	keryx-deepseek	07:49:25	14.0s
+A5	RUNNING	opencode-deepseek	07:49:41
+A5	DONE	opencode-deepseek	07:49:41	56.7s
+A5	RUNNING	baseline-claude	07:50:51
+A5	FAILED	baseline-claude	07:50:51	prompt never appeared in the baseline-claude pane after 6 attempts — not recording a result for a prompt that was neve
+A5	RUNNING	baseline-grok	07:51:26
+A5	DONE	baseline-grok	07:51:26	120.7s
+A5	RUNNING	naked-claude	07:53:39
+A5	FAILED	naked-claude	07:53:39	prompt never appeared in the naked-claude pane after 6 attempts — not recording a result for a prompt that was never s
+A5	RUNNING	naked-grok	07:54:14
+A5	DONE	naked-grok	07:54:14	80.7s
+A5	BATCH-COMPLETE	07:55:42
+A12	RUNNING	keryx-deepseek	07:55:42
+A12	DONE	keryx-deepseek	07:55:42	14.0s
+A12	RUNNING	opencode-deepseek	07:55:58
+A12	DONE	opencode-deepseek	07:55:58	48.6s
+A12	RUNNING	baseline-claude	07:56:52
+A12	FAILED	baseline-claude	07:56:52	prompt never appeared in the baseline-claude pane after 6 attempts — not recording a result for a prompt that was neve
+A12	RUNNING	baseline-grok	07:57:27
+A12	DONE	baseline-grok	07:57:27	64.6s
+A12	RUNNING	naked-claude	07:58:37
+A12	FAILED	naked-claude	07:58:37	prompt never appeared in the naked-claude pane after 6 attempts — not recording a result for a prompt that was never s
+A12	RUNNING	naked-grok	07:59:12
+A12	DONE	naked-grok	07:59:12	76.6s
+A12	BATCH-COMPLETE	08:00:35
+A1	RUNNING	baseline-claude	08:02:41
+A1	FAILED	baseline-claude	08:02:41	prompt never appeared in the baseline-claude pane after 6 attempts — not recording a result for a prompt that was neve
+A1	BATCH-COMPLETE	08:03:16
+A1	RUNNING	baseline-claude	08:05:25
+A1	DONE	baseline-claude	08:05:25	221.3s
+A1	BATCH-COMPLETE	08:09:14
+A1	RUNNING	naked-claude	08:09:56
+A1	DONE	naked-claude	08:09:56	196.9s
+A1	BATCH-COMPLETE	08:13:27
+A3	RUNNING	baseline-claude	08:13:27
+A3	DONE	baseline-claude	08:13:27	112.8s
+A3	RUNNING	naked-claude	08:15:30
+A3	DONE	naked-claude	08:15:30	220.9s
+A3	BATCH-COMPLETE	08:19:18
+A4	RUNNING	baseline-claude	08:19:18
+A4	DONE	baseline-claude	08:19:18	172.7s
+A4	RUNNING	naked-claude	08:22:19
+A4	DONE	naked-claude	08:22:19	204.9s
+A4	BATCH-COMPLETE	08:25:51
+A5	RUNNING	baseline-claude	08:25:51
+A5	DONE	baseline-claude	08:25:51	84.6s
+A5	RUNNING	naked-claude	08:27:22
+A5	DONE	naked-claude	08:27:22	120.7s
+A5	BATCH-COMPLETE	08:29:30
+A12	RUNNING	baseline-claude	08:29:30
+A12	DONE	baseline-claude	08:29:30	72.6s
+A12	RUNNING	naked-claude	08:30:49
+A12	DONE	naked-claude	08:30:49	116.7s
+A12	BATCH-COMPLETE	08:32:52

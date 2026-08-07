@@ -1,0 +1,7 @@
+A4-opencode-deepseek/transcript.txt:2:119:                                                                                                              Finding orphaned source files
+A4-opencode-deepseek/transcript.txt:5:6:     Orphaned source files                                                                                    52,352 tokens
+A4-opencode-deepseek/transcript.txt:7:41:     Graph (fresh, built today) flagged 14 files as orphaned. After verifying against tooling entry           $0.01 spent
+A4-opencode-deepseek/transcript.txt:8:50:     points and test runners, only 2 are genuine orphans — the rest are reachable entry points that the     
+A4-opencode-deepseek/transcript.txt:11:16:     Genuinely orphaned (dead code)                                                                         
+A4-opencode-deepseek/transcript.txt:20:10:     Not orphans — tooling entry points (flagged only because graph tracks imports)                         
+A4-opencode-deepseek/transcript.txt:28:53:     Routing audit: graph_used: keryx gdgraph query orphans + summary; ctx_used: keryx ctx rg for           

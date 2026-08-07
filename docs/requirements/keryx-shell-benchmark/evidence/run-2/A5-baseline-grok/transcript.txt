@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A5-baseline-grok (worktree of ~/bots/helyx)              84K / 500K
+
+                                                                                                                                                    
+     ❯ How does the memory subsystem work? Answer from the project's own documentation, not by reading the source.                         7:51 AM  
+                                                                                                                                                    
+                                                                           ▲
+     Architecture decision called out in docs: LLM-driven reconciliation (embed → cosine → Haiku ADD/UPDATE/DELETE/NOOP) instead of
+     exact-string dedup, using a cheap model for internal ops.
+
+     ───
+
+     End-to-end picture
+
+     Messages (session)                                                                                                                           
+       → short-term window (20 msgs)                                                                                                              
+       → idle/overflow/exit → structured summary                                                                                                  
+       → rememberSmart → embeddings + pgvector memories (project-scoped, typed TTLs)                                                              
+                                                                                                                                                  
+     Recall path                                                                                                                                  
+       → embed query → similarity search → ranked project memories                                                                                
+       → fed into CLI tools, Telegram, prompt composer, dashboard                                                                                 
+
+     In short: short-term keeps the live conversation; long-term keeps durable, project-scoped knowledge with embeddings, smart dedup,
+     and automatic summarization so later sessions get a briefing instead of a full replay.
+
+     ───
+
+     Routing audit: graph_used: no (not-relevant — docs-only request) · wiki_used: yes · ctx_used: no (not-relevant — direct doc reads)
+     · raw_rg_used: yes (locate memory-related markdown under docs/guides; no source)                                                                █
+                                                                                                                                                     █
+     Worked for 1m26s                                                                                                             stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

@@ -1,0 +1,40 @@
+  config/global-setup.
+
+  Result — 3 orphaned files
+
+  File: utils/stream-json-parser.ts
+  Lines: 203
+  Why it's unreachable: Zero references anywhere in the codebase. Exports parseStreamEvent, StreamStatusAccumulator, StreamEvent, ProgressUpdate. Its
+  only mention is a row in docs/dev/modules.md:390. Added in c2e5be1 as a tmux fallback; the consumer is gone.
+  ────────────────────────────────────────
+  File: dashboard/webapp/src/components/MessageHistory.tsx
+  Lines: 156
+  Why it's unreachable: Exports MessageHistory, imported by nobody. docs/ROADMAP.md:382 records App.tsx as a consumer, but that import no longer
+  exists. Last touched by f8a2868, an ESLint cleanup — it's being linted but never rendered.
+  ────────────────────────────────────────
+  File: tests/e2e/auth.setup.ts
+  Lines: 63
+  Why it's unreachable: Not reachable from Playwright. tests/playwright.config.ts declares only api and dashboard projects, both with a testDir below
+  ./e2e, so files sitting directly in e2e/ are never collected — and auth.setup.ts doesn't match the default testMatch (*.spec|test.ts) nor is it
+  wired as a setup project dependency. The JWT it writes to .auth/token.txt is never produced.
+
+  Everything else resolves. Notably, no production file is reachable only from tests — the non-test orphan set is identical whether or not test files
+  count as entry points, so this isn't a case of dead code being propped up by its own test.
+
+  Two things I checked and ruled out as false positives: scripts/supervisor.ts and scripts/tmux-session-logger.ts look standalone but are imported by
+  scripts/admin-daemon.ts; and the one variable dynamic import in the repo (tests/fixtures/fake-telegram.ts:19) targets channel/telegram.ts, which is
+  reachable regardless.
+
+  One judgment call worth flagging: the dashboard/ and dashboard/webapp/ trees are reachable only through their own Vite entry points, and the
+  Dockerfile gates both build stages behind WITH_DASHBOARD. If that arg is off in your deployments, that's ~39 more files that ship dead — but they're
+  properly reachable from a real entry point, so I did not count them as orphaned.
+
+  Routing audit: graph_used: no (unavailable), wiki_used: no (unavailable), ctx_used: no (unavailable), raw_rg_used: yes — the keryx CLI and
+  .metaproject/ are stripped from this worktree, so grep was the only option.
+
+✻ Worked for 2m 52s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ delete them
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

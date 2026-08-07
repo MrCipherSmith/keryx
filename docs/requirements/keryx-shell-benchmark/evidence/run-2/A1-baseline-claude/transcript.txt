@@ -1,40 +1,40 @@
+  │ DATABASE_URL, VECTOR_DIMENSIONS                            │ memory/db.ts                                                                     │
+  ├────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ ARCHIVE_TTL_DAYS, MEMORY_TTL_DAYS                          │ cleanup/jobs.ts                                                                  │
+  ├────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ TTS_PROVIDER, KOKORO_*, YANDEX_{VOICE,LANG,FOLDER_ID}      │ utils/tts.ts                                                                     │
+  ├────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ CLAUDE_MODEL, MAX_TOKENS, GOOGLE_AI_*, OLLAMA_CHAT_MODEL,  │ claude/client.ts                                                                 │
+  │ SUMMARIZE_MODEL                                            │                                                                                  │
+  ├────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ everything else                                            │ 1 file each                                                                      │
+  └────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────┘
 
- ▐▛███▜▌   Claude Code v2.1.220
-▝▜█████▛▘  Opus 5 (1M context) · Claude Max
-  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-baseline-claude
+  Two things that break beyond the type checker
 
- ⚠ Your login expires in 2 days · run /login to renew
+  1. Import-time process.exit(1). config.ts:125-141 runs EnvSchema.safeParse(process.env) at module load and hard-exits on failure. So if your change
+  adds a required env var (or narrows a z.enum), it does not fail as a type error in 25 files — it kills the process at startup for all 106 transitive
+  dependents, including the 20+ unit tests that pull config in through memory/db.ts. NODE_ENV=test bypasses only the ALLOWED_USERS/ALLOW_ALL_USERS
+  access-control check on line 137, not the schema parse.
 
-❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.
+  2. as const widening. Fields like TTS_PROVIDER and HELYX_PROFILE are literal-union typed. Removing a variant from a z.enum narrows the type and will
+  break switch/comparison sites in utils/tts.ts and mcp/dashboard-api.ts even if the field name is untouched.
 
-● I'll start with the Metaproject hard gate for this worktree root.
+  Caveats
 
-  Read 1 file, listed 1 directory, ran 1 shell command 
+  - The gdgraph index lists 24 direct dependents; text search finds 25. tests/unit/find-duplicate-definitions.test.ts is missing from the graph — run
+  keryx gdgraph build if you want that reconciled.
+  - The context layer redacts secret-named lines, so for GROQ_API_KEY, JWT_SECRET, YANDEX_API_KEY, OPENAI_API_KEY and GITHUB_TOKEN I have the
+  consuming files but the field-level attribution in the table above is incomplete for those. The file lists are not affected.
+  - The symbol layer is disabled (capability: disabled, 0 symbols), so all of this is file-granularity plus text search — not a true call graph.
 
-● Metaproject gate complete. This is a structural "blast radius" question → gdgraph first.
+  ---
+  Routing audit — graph_used: gdgraph find, gdgraph affected config.ts (depth 1/5/10, ranked, json). wiki_used: no — purely structural question, no
+  architecture/domain semantics needed. ctx_used: keryx ctx read config.ts, 5× keryx ctx rg. raw_rg_used: no.
 
-● Reading 2 files, listing 1 directory, running 1 shell command…
-  ⎿  config.ts
+✻ Crunched for 3m 13s
 
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- Bash command
-
-   keryx gdgraph affected config.ts 2>&1 | head -100
-   gdgraph blast radius for config.ts
-
- This command requires approval
-
- Do you want to proceed?
- ❯ 1. Yes
-   2. Yes, and don’t ask again for: keryx gdgraph *
-   3. No
-
- Esc to cancel · Tab to amend · ctrl+e to explain
-
-
-
-
-
-
-
-
+❯ run keryx gdgraph build to fix the index
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

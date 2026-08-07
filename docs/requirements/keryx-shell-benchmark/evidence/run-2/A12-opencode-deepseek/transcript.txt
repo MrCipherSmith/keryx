@@ -1,0 +1,40 @@
+  ┃                                                                                                         
+  ┃  # gdgraph path: main.ts -> orchestrator/gate.ts                                                          Dependency chain: main.ts to gate.ts
+  ┃                                                                                                         
+  ┃  4 node(s), 3 hop(s):                                                                                     Context
+  ┃  - main.ts                                                                                                45,185 tokens
+  ┃    ↓ mcp/server.ts                                                                                        5% used
+  ┃    ↓ mcp/tools.ts                                                                                         $0.01 spent
+  ┃    ↓ orchestrator/gate.ts                                                                               
+  ┃                                                                                                           LSP
+                                                                                                              LSPs are disabled
+     + Thought: 628ms                                                                                       
+                                                                                                            
+     Graph says there's a 3-hop chain. Verifying against source before claiming.                            
+                                                                                                            
+     ✱ Grep "import" in main.ts (100 matches)                                                               
+     ✱ Grep "import" in mcp/server.ts (65 matches)                                                          
+     ✱ Grep "import" in mcp/tools.ts (65 matches)                                                           
+                                                                                                            
+     + Thought: 903ms                                                                                       
+                                                                                                            
+     Yes. Chain verified in source:                                                                         
+                                                                                                            
+     main.ts → mcp/server.ts → mcp/tools.ts → orchestrator/gate.ts                                          
+                                                                                                            
+     - main.ts:4 → import { startMcpHttpServer } from "./mcp/server.ts"                                     
+     - mcp/server.ts:7 → import { executeTool } from "./tools.ts"                                           
+     - mcp/tools.ts:14 → import { validateReplyGate } from "../orchestrator/gate.ts"                        
+                                                                                                            
+     Routing audit: graph_used: keryx gdgraph path main.ts orchestrator/gate.ts (3 hops); ctx_used:         
+     none (grep tool); raw_rg_used: no.                                                                     
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 19.9s                                                                █  
+                                                                                                            
+  ┃                                                                                                         
+  ┃                                                                                                           ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/A12-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       45.2K (5%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

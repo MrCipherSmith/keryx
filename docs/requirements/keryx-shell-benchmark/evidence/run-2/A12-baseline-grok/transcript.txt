@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A12-baseline-grok (worktree of ~/bots/helyx)             57K / 500K
+
+                                                                                                                                                    
+     ❯ Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.    7:57 AM  
+                                                                                                                                                    
+
+     main.ts                                                                                                                                      
+       → mcp/server.ts                                                                                                                            
+         → mcp/tools.ts                                                                                                                           
+           → orchestrator/gate.ts                                                                                                                 
+
+     What each hop imports
+
+     ┌───────────────┬────────────────────────────────────────────────┐                                                                 
+     │ From          │ Import                                         │
+     ├───────────────┼────────────────────────────────────────────────┤                                                                 
+     │ main.ts       │ startMcpHttpServer from ./mcp/server.ts        │
+     ├───────────────┼────────────────────────────────────────────────┤                                                                              █
+     │ mcp/server.ts │ executeTool from ./tools.ts                    │                                                                              █
+     ├───────────────┼────────────────────────────────────────────────┤                                                                              █
+     │ mcp/tools.ts  │ validateReplyGate from ../orchestrator/gate.ts │                                                                              █
+     └───────────────┴────────────────────────────────────────────────┘                                                                              █
+                                                                                                                                                     █
+     No direct import from main.ts to gate.ts; the link goes through the MCP server → tools path.                                                    █
+                                                                                                                                                     █
+     ───                                                                                                                                             █
+                                                                                                                                                     █
+     Routing audit: graph_used: keryx gdgraph find, keryx gdgraph path · ctx_used: keryx ctx rg · wiki_used: not-relevant · raw_rg_used:             █
+     no                                                                                                                                              █
+                                                                                                                                                     █
+     Worked for 35s                                                                                                               stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

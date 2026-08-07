@@ -295,6 +295,36 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
     # the text that had actually landed.
     squash = lambda s: re.sub(r"\s+", "", s)
     flat = squash(plain(prompt))
+
+    # Two consent screens stand between claude and the prompt, and both swallow
+    # the typed text, after which the guard below correctly refuses to record a
+    # run whose prompt was never submitted — losing the whole case. Read off the
+    # captured `prompt-never-landed` frame rather than guessed:
+    #
+    #  - the folder-trust screen, on any directory claude has not seen (every
+    #    leg gets a fresh worktree, so this is the norm, not an edge case);
+    #  - the Bypass Permissions acceptance screen, which `--dangerously-skip-
+    #    permissions` puts up and whose DEFAULT option is "No, exit".
+    #
+    # Matched on the option text, not the banner: the option is what gets
+    # selected, and picking the wrong one here exits the agent. Answering these
+    # is environment setup — the harness created the folder and chose the
+    # posture — not a capability under measurement.
+    if not unattended:
+        for _ in range(4):
+            pane = plain(sh(["tmux", "capture-pane", "-t", session, "-p"]).stdout)
+            if "Yes, I accept" in pane:
+                snap("bypass-consent")
+                # "No, exit" is option 1 and pre-selected; accept is one below.
+                sh(["tmux", "send-keys", "-t", session, "Down"])
+                time.sleep(0.5)
+                sh(["tmux", "send-keys", "-t", session, "Enter"])
+            elif "I trust this folder" in pane:
+                snap("trust-prompt")  # "Yes, I trust this folder" is option 1
+                sh(["tmux", "send-keys", "-t", session, "Enter"])
+            else:
+                break
+            time.sleep(4)
     if unattended:
         # Nothing was typed, so there is nothing to probe for and no Enter to
         # send. Skip straight to watching the pane settle.

@@ -1,0 +1,40 @@
+
+  Writes are not blind inserts. rememberSmart() embeds the new memory, vector-searches the top MEMORY_RECONCILE_TOP_K (5) similar existing ones within
+  MEMORY_SIMILARITY_THRESHOLD (0.35 cosine distance), then asks Claude Haiku to decide ADD / UPDATE / DELETE / NOOP and executes only that. The docs'
+  rationale: catch semantic duplicates that exact-string matching misses, using a cheap model for internal ops. /remember replies reflect the
+  decision — Saved (#42), Updated #38, Already known (#38).
+
+  Summarization pipeline
+
+  - Idle (15 min, IDLE_TIMEOUT_MS) or disconnect → trySummarize() sends recent messages to Claude (or a local Ollama model if SUMMARIZE_MODEL is set),
+  producing a structured [DECISIONS][FILES][PROBLEMS][PENDING][CONTEXT] summary, embedded and stored as project_context. Raw messages are archived
+  with ARCHIVE_TTL_DAYS (30).
+  - Local session exit → summarizeWork(), the same format but covering the full arc of the session.
+  - On the next session in that project, the latest project_context is loaded as system context — a briefing instead of replaying raw messages.
+  - Also in memory/summarizer.ts: extractProjectKnowledge() and extractFactsFromTranscript(); memory/project-scanner.ts does a one-time project
+  metadata scan seeding facts into long-term memory.
+
+  Interfaces
+
+  - Telegram: /remember, /recall, /memories, /forget, /memory_export [project], /memory_import (file as caption), /summarize, /clear. Import re-runs
+  smart reconciliation, reporting Added / Updated / Skipped.
+  - MCP tools: remember, recall, forget, list_memories, search_project_context (semantic search restricted to work summaries/prior session context),
+  scan_project_knowledge.
+  - Dashboard: MemoriesPage.tsx over /api/memories/*, with type/tag/project filters.
+
+  Layering and degradation
+
+  memory/ is the foundation layer — memory/db.ts owns the sql client and the migration framework (all migrations in one array, run at startup), and
+  nothing in memory/ depends on other modules except summarizer.ts → utils/aux-llm-client.ts. Without Ollama the bot still runs: /recall and semantic
+  search stop working, writes fall back to plain insert with no reconciliation and no data loss, and work summaries are still generated but unembedded
+  (embedSafe() is the graceful-degradation helper).
+
+  Routing audit: graph_used: no (unavailable), wiki_used: no (unavailable), ctx_used: no (unavailable), raw_rg_used: yes — the metaproject tooling
+  isn't present in this stripped worktree, so doc discovery used plain find/grep.
+
+✻ Sautéed for 1m 28s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ now check whether the code actually matches the docs
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

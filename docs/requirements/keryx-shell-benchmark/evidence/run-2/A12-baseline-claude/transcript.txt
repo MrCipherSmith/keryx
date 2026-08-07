@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A12-baseline-claude
+
+ ⚠ Your login expires in 2 days · run /login to renew
+
+❯ Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.
+
+  Read 2 files, listed 1 directory, ran 6 shell commands 
+
+● Yes — main.ts depends on orchestrator/gate.ts indirectly, through a 3-hop static import chain:
+
+  main.ts
+    └─ mcp/server.ts        main.ts:4    import { startMcpHttpServer } from "./mcp/server.ts"
+         └─ mcp/tools.ts    mcp/server.ts:7   import { executeTool } from "./tools.ts"
+              └─ orchestrator/gate.ts   mcp/tools.ts:14   import { validateReplyGate } from "../orchestrator/gate.ts"
+
+  No direct import — main.ts never references gate.ts itself. The dependency arrives via the MCP server's tool dispatcher, which calls
+  validateReplyGate before executing a reply tool.
+
+  For context, gate.ts has only two dependents in the whole graph: mcp/tools.ts (the path above) and channel/tools.ts.
+
+  Routing audit — graph_used: gdgraph find, gdgraph path main.ts orchestrator/gate.ts, gdgraph affected orchestrator/gate.ts; wiki_used: not-relevant
+  (purely structural question); ctx_used: keryx ctx rg ×3 to verify each import edge in source; raw_rg_used: no.
+
+✻ Sautéed for 38s
+
+
+
+
+
+
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ show the chain from channel/tools.ts too
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent
