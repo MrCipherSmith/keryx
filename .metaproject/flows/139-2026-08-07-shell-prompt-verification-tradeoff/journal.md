@@ -126,3 +126,5 @@ diffs: **373 pass, 5 skip, 0 fail**.
 - 2026-08-07T09:42:45.281Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-07T09:42:45.368Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-07T09:43:07.717Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257
+- 2026-08-07T09:51:19.538Z - completing
+- 2026-08-07T09:51:21.387Z - done: all gates passed

@@ -52,3 +52,5 @@ leg leaves its worktree behind forever. Recorded in the run-3 runbook.
 - 2026-08-07T09:42:45.804Z - task-done: T6: Implement the fix
 - 2026-08-07T09:42:45.893Z - task-done: T8: Confirm the matrix in output and in the runbook share one source (AC4)
 - 2026-08-07T09:43:14.628Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/257
+- 2026-08-07T09:51:25.124Z - completing
+- 2026-08-07T09:51:26.795Z - done: all gates passed

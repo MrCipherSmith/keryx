@@ -3,9 +3,9 @@
   "id": "139",
   "slug": "shell-prompt-verification-tradeoff",
   "title": "Shell system prompt trades verification for brevity — benchmark finding P3",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-07T07:48:29.800Z",
-  "updatedAt": "2026-08-07T09:43:07.717Z",
+  "updatedAt": "2026-08-07T09:51:21.387Z",
   "source": {
     "type": "description",
     "ref": null
@@ -181,6 +181,15 @@
       "at": "2026-08-07T09:43:07.717Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:51:19.538Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:51:21.387Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

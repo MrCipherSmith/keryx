@@ -3,9 +3,9 @@
   "id": "140",
   "slug": "gdgraph-dynamic-import-edges",
   "title": "gdgraph counts await import() as an ordinary import edge — benchmark finding P1",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-07T09:10:10.041Z",
-  "updatedAt": "2026-08-07T09:43:09.932Z",
+  "updatedAt": "2026-08-07T09:51:23.213Z",
   "source": {
     "type": "description",
     "ref": null
@@ -284,6 +284,15 @@
       "at": "2026-08-07T09:43:09.932Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:51:21.479Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:51:23.213Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

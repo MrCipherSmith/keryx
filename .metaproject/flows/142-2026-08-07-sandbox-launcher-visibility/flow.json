@@ -3,9 +3,9 @@
   "id": "142",
   "slug": "sandbox-launcher-visibility",
   "title": "Linux install has no OS containment and nothing says so — benchmark finding P4",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-07T09:10:11.077Z",
-  "updatedAt": "2026-08-07T09:43:14.628Z",
+  "updatedAt": "2026-08-07T09:51:26.795Z",
   "source": {
     "type": "description",
     "ref": null
@@ -284,6 +284,15 @@
       "at": "2026-08-07T09:43:14.628Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:51:25.124Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:51:26.795Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

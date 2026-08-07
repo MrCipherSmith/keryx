@@ -3,9 +3,9 @@
   "id": "141",
   "slug": "approval-unofferable-prefix-grant",
   "title": "Approval menu offers a prefix grant that can never be honoured — benchmark finding P2",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-07T09:10:10.557Z",
-  "updatedAt": "2026-08-07T09:43:12.329Z",
+  "updatedAt": "2026-08-07T09:51:25.031Z",
   "source": {
     "type": "description",
     "ref": null
@@ -264,6 +264,15 @@
       "at": "2026-08-07T09:43:12.329Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:51:23.312Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:51:25.031Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
