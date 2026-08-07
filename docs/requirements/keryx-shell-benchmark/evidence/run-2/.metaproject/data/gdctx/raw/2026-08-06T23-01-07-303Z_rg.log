@@ -1,0 +1,5 @@
+A1-naked-claude/transcript.txt:8:104:❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.
+A1-naked-claude/transcript.txt:10:62:● Making 1 scratchpad edit +108, reading 1 file, listing 1 directory, running 9 shell commands…
+A1-naked-claude/transcript.txt:11:134:  ⎿  $ cd /home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-claude/ && echo "=== per-file field list (direct importers) 
+A1-naked-claude/transcript.txt:18:128:   cd /home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-claude/ && echo "=== per-file field list (direct importers)
+A1-naked-claude/transcript.txt:24:28:   Map fields used by each direct importer

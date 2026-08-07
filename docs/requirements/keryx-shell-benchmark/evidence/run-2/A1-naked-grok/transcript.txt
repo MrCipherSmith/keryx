@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-grok (worktree of ~/bots/helyx)                 66K / 500K
+
+                                                                                                                                                    
+     ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.      10:24 PM  
+                                                                                                                                                    
+
+     • Services: services/memory-service.ts, message-service.ts, session-service.ts, project-service.ts, permission-service.ts, forum-
+     service.ts, reviewer-service.ts, summarization-service.ts
+     • Sessions / channel / MCP / Claude: sessions/manager.ts, router.ts, delete.ts, channel/poller.ts, channel/tools.ts, mcp/tools.ts,
+     mcp/pending-expects.ts, claude/prompt.ts, adapters/claude.ts
+     • Utils / cleanup / scripts: utils/aux-llm-client.ts, curator.ts, skill-distiller.ts, stats.ts, cleanup/runner.ts, scripts/
+     supervisor.ts
+     • Tests: e.g. provider-service.test.ts, migrations-apply.test.ts, llm-client-stream.test.ts, several supervisor/reviewer tests
+
+     Depth 3–4
+     • services/index.ts, adapters/index.ts, channel/index.ts
+     • bot/commands/add.ts, codex.ts, menu.ts
+     • scripts/admin-daemon.ts, scripts/review.ts
+     • More unit tests (route-message, reviewer-service, supervisor suite, skill-distiller, etc.)
+     • utils/reply-summary.ts → tests/unit/chunk-markdown.test.ts (depth 4)
+
+     ~100 modules total sit on a reverse import path to config.ts (24 direct + ~76 transitive).
+
+     ───
+
+     Practical takeaway                                                                                                                              █
+                                                                                                                                                     █
+     1. Field rename/type change → fix the direct files that read that field first (table above). Most transitive files only break if a              █
+     public API of a depth                                                                                                                           █
+                                                                                                                                                     █
+
+    ⠼ Retrying (attempt 6)… 7.4s                                                                                                 3m28s ⇣66.6k [stop]
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Esc:cancel  │  Ctrl+x:shortcuts                                                                                                
+

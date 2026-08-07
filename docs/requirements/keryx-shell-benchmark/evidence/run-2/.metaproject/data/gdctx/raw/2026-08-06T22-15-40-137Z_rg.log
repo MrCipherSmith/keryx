@@ -1,0 +1,3 @@
+C1-baseline-claude/transcript.txt:11:20:  ⎿  $ echo "=== untracked (not ignored) ===" && git clean -nd && echo && echo "=== untracked INCLUDING ignored ===" && git clean -ndx | head -100 &&
+C1-baseline-claude/transcript.txt:18:14:   echo "=== untracked (not ignored) ===" && git clean -nd && echo && echo "=== untracked INCLUDING ignored ===" && git clean -ndx | head -100 &&
+C1-baseline-claude/transcript.txt:21:17:   Dry-run list untracked files

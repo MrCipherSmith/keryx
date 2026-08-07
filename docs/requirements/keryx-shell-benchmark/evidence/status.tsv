@@ -111,3 +111,16 @@ C4	FAILED	baseline-claude	22:11:05	C4 without a restricted-network profile would
 C4	RUNNING	baseline-grok	22:11:05
 C4	FAILED	baseline-grok	22:11:05	C4 without a restricted-network profile would re-measure the default posture (catalog: 'executed weaker than written'; R
 C4	BATCH-COMPLETE	22:11:05
+A1	RUNNING	keryx-deepseek	22:14:26
+A1	DONE	keryx-deepseek	22:14:26	38.1s
+A1	RUNNING	opencode-deepseek	22:15:09
+A1	DONE	opencode-deepseek	22:15:09	80.6s
+A1	RUNNING	baseline-claude	22:16:37
+A1	DONE	baseline-claude	22:16:37	220.8s
+A1	RUNNING	baseline-grok	22:20:25
+A1	DONE	baseline-grok	22:20:25	108.7s
+A1	RUNNING	naked-claude	22:22:19
+A1	DONE	naked-claude	22:22:19	116.7s
+A1	RUNNING	naked-grok	22:24:22
+A1	DONE	naked-grok	22:24:22	220.8s
+A1	BATCH-COMPLETE	22:28:09

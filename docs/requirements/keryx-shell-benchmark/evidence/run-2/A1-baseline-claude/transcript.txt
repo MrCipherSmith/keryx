@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-baseline-claude
+
+ ⚠ Your login expires in 2 days · run /login to renew
+
+❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.
+
+● I'll start with the Metaproject hard gate for this worktree root.
+
+  Read 1 file, listed 1 directory, ran 1 shell command 
+
+● Metaproject gate complete. This is a structural "blast radius" question → gdgraph first.
+
+● Reading 2 files, listing 1 directory, running 1 shell command…
+  ⎿  config.ts
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+
+   keryx gdgraph affected config.ts 2>&1 | head -100
+   gdgraph blast radius for config.ts
+
+ This command requires approval
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don’t ask again for: keryx gdgraph *
+   3. No
+
+ Esc to cancel · Tab to amend · ctrl+e to explain
+
+
+
+
+
+
+
+

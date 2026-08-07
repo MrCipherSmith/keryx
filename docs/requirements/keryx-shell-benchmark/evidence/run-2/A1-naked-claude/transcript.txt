@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-claude
+
+ ⚠ Your login expires in 2 days · run /login to renew
+
+❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.
+
+● Making 1 scratchpad edit +108, reading 1 file, listing 1 directory, running 9 shell commands…
+  ⎿  $ cd /home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-claude/ && echo "=== per-file field list (direct importers) 
+     ===" && for f in bot/access.ts bot/bot.ts bot/callbacks.ts bot/commands/admin.ts bot/commands/forum.ts bot/commands/model.ts 
+     bot/commands/project-add.ts bo…
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+
+   cd /home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-claude/ && echo "=== per-file field list (direct importers)
+   ===" && for f in bot/access.ts bot/bot.ts bot/callbacks.ts bot/commands/admin.ts bot/commands/forum.ts bot/commands/model.ts
+   bot/commands/project-add.ts bot/text-handler.ts claude/client.ts cleanup/jobs.ts dashboard/auth.ts main.ts mcp/dashboard-api.ts mcp/server.ts
+   memory/db.ts memory/embeddings.ts memory/long-term.ts memory/short-term.ts memory/summarizer.ts services/provider-service.ts
+   tests/unit/summary-normalize.test.ts utils/files.ts utils/transcribe.ts utils/tts.ts; do printf "%-40s %s\n" "$f" "$(grep -oE
+   'CONFIG\.[A-Za-z_0-9]+' "$f" | sed 's/CONFIG\.//' | sort -u | tr '\n' ' ')"; done
+   Map fields used by each direct importer
+
+ Contains simple_expansion
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+
+ Esc to cancel · Tab to amend · ctrl+e to explain
+
+
+
+
+
+
+
+
