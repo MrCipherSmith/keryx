@@ -30,14 +30,25 @@ would produce the same rows.
 | # | Check | Command | Expected |
 |---|---|---|---|
 | 1 | keryx under measurement is the branch build, not the global one | `harness/bin/keryx --version` | the branch version, **not** the global `main` build |
-| 2 | Target commit present | `git -C /home/altsay/bots/helyx cat-file -e bfad745b` | exit 0 |
-| 3 | Graph builds in a worktree | `keryx gdgraph build` in a fresh worktree | `267 nodes, 656 edges` for `helyx` |
+| 2 | Target commit present (`helyx`) | `git -C /home/altsay/bots/helyx cat-file -e bfad745b` | exit 0 |
+| 2b | Target commit present (`keryx`), **if E3 is in scope** | `git -C /home/altsay/keryx cat-file -e 8c2918dc` | exit 0 |
+| 3 | Graph builds in a worktree, per target | `keryx gdgraph build` in a fresh worktree | `helyx`: `267 nodes, 656 edges`. `keryx`: `665 total nodes (661 source files), 1910 edges` — measured directly (dry-run worktree at the pinned commit, harness/bin keryx 0.2.16); this supersedes the 649-files/1873-edges estimate in [proposed-group-e.md](proposed-group-e.md), which predates the measurement |
 | 4 | Sandbox launcher, **if C4 is in scope** | `keryx harness exec --allow-real-subprocess -- /bin/echo hi` | not `blocked` |
 | 5 | Every prompt file resolves | `ls prompts/<case>.txt` for each case in the batch | present |
 
 Check 1 is the one that silently ruins a run: `search_code` shells out to the
 `keryx` on `PATH`, and a build older than `377fc325` refuses the forced
 `--no-follow`, so every search in every keryx leg fails.
+
+`drive.py` now selects the target from a registry (`TARGETS`) keyed by name,
+chosen via `--target` or the `KERYX_BENCH_TARGET` env var and defaulting to
+`helyx` — every command above and in §4 that omits `--target`/`TARGET` runs
+exactly as it did before E3 existed. `keryx` is the second entry, pinned at
+`8c2918dce3a9058c670252525a6f1e75af01c99f` — the merge-base of
+`fix/benchmark-remediation-v2` with `main` at the time E3 was prepared, so the
+target is a stable, already-reviewed state rather than a moving branch head.
+For E3, **the subject is measuring itself**; every `meta.json` records
+`"target": "keryx"` so no reader can confuse those rows with the `helyx` ones.
 
 ## 3. Legs
 
@@ -65,6 +76,33 @@ keryx-as-a-CLI and says nothing about keryx's absence.
 cd docs/requirements/keryx-shell-benchmark/harness
 UNATTENDED=1 PATH="$PWD/bin:$PATH" ./batch.sh <case> <leg> [<leg>...]
 python3 collect-evidence.py       # after EVERY batch, not at the end
+```
+
+Against a chosen target other than the default (`helyx`) — e.g. E3 against
+`keryx` itself:
+
+```bash
+cd docs/requirements/keryx-shell-benchmark/harness
+UNATTENDED=1 TARGET=keryx PATH="$PWD/bin:$PATH" ./batch.sh <case> <leg> [<leg>...]
+python3 collect-evidence.py --target keryx --into ../evidence/run-3
+```
+
+`TARGET` is forwarded by `batch.sh` to `drive.py` as `--target`; unset, it is
+omitted entirely and every existing command is unchanged. `collect-evidence.py`
+already keyed its read path on `--target` before E3 existed — only its default
+(`helyx`) needs overriding for a `keryx`-target batch, and `--into` should
+point at the run-3 evidence tree so E3 rows do not land under `evidence/run-2/`
+next to the run-2 `helyx` evidence.
+
+**Pass `--since` for every run-3 collection against `helyx`.** The collector's
+default is `2026-08-06T18:15` — run 2's cut point. Collecting into
+`evidence/run-3/` without moving it forward would sweep every run-2 `helyx`
+bundle into the run-3 tree and make the two runs impossible to tell apart. E3
+against `keryx` is safe by accident (no prior runs on that target), which is
+exactly why this is easy to forget on the `helyx` regression:
+
+```bash
+python3 collect-evidence.py --since <run-3 start, ISO> --into ../evidence/run-3
 ```
 
 Rules learned the hard way in run 2:
@@ -147,10 +185,13 @@ Everything else in §8 runs without it.
 ## 8. Order of execution
 
 1. **Preconditions** (§2). Every line, every time.
-2. **E3** — A1, A3, A4 against `keryx` itself (649 files, 1873 edges). Reuses
-   existing cases and prompts. Needs `drive.py` parameterised: `TARGET_REPO` and
-   `COMMIT` are hardcoded to `helyx` today, and every evidence path is keyed on
-   `TARGET`. The report must state plainly that the subject is measuring itself.
+2. **E3** — A1, A3, A4 against `keryx` itself (665 total nodes / 661 source
+   files, 1910 edges — measured; see §2 check 3, and note this supersedes the
+   649-files/1873-edges estimate in [proposed-group-e.md](proposed-group-e.md)).
+   Reuses existing cases and prompts. `drive.py` is now parameterised: `TARGET`
+   selects from a registry (`TARGETS`) via `--target`/`KERYX_BENCH_TARGET`,
+   defaulting to `helyx`, and every evidence path stays keyed on `TARGET`. The
+   report must state plainly that the subject is measuring itself.
 3. **P1/P3 regression** — A3 and A4 against `helyx` again, now that the v2
    remediation has landed (PR #257, flows 139–142 done). Read as a before/after
    of the fix, not as a fresh measurement. The before-numbers are already

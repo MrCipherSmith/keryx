@@ -8,6 +8,11 @@
 # READ-ONLY cases only: the posture registers no shell, so group C under it
 # would measure a refusal with nothing to refuse.
 #
+# Set TARGET=<name> to run against a target other than the default (helyx) --
+# e.g. TARGET=keryx for E3. Forwarded to drive.py as --target, which knows the
+# registry of repo/commit/base per target; an unknown name is drive.py's error,
+# not a silent fallback here.
+#
 # Appends one line per finished run to status.tsv and never stops the batch on a
 # single failure: a variant that dies is recorded and the next one starts.
 set -u
@@ -27,6 +32,11 @@ for V in "$@"; do
   # error in drive.py rather than a silent fallback.
   EXTRA=()
   if [ "${UNATTENDED:-0}" = "1" ] && [[ "$V" == keryx-* ]]; then EXTRA+=(--unattended); fi
+  # TARGET unset means drive.py's own default (helyx) -- omitted entirely so
+  # every existing invocation stays byte-for-byte identical. An unknown TARGET
+  # is drive.py's error (it validates against its registry), not a silent
+  # fallback here.
+  if [ -n "${TARGET:-}" ]; then EXTRA+=(--target "$TARGET"); fi
   if timeout 420 python3 "$BENCH/drive.py" "$V" "$CASE" "$PKG/prompts/$CASE.txt" \
        --timeout 220 --keep "${EXTRA[@]+"${EXTRA[@]}"}" > "$BENCH/logs/$CASE-$V.json" 2> "$BENCH/logs/$CASE-$V.err"; then
     SECS=$(python3 -c "import json;print(json.load(open('$BENCH/logs/$CASE-$V.json'))['wallTimeSeconds'])" 2>/dev/null || echo "?")

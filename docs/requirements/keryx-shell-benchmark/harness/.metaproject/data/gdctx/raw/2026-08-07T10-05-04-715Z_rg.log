@@ -1,0 +1,10 @@
+collect-evidence.py:2:75:"""Copy finished run bundles out of the gitignored harness runs directory into
+collect-evidence.py:8:58:(transcript, meta, post-state, prompt, final screenshot) into
+collect-evidence.py:20:8:import argparse
+collect-evidence.py:32:10:    ap = argparse.ArgumentParser()
+collect-evidence.py:33:8:    ap.add_argument("--since", default=DEFAULT_SINCE,
+collect-evidence.py:35:8:    ap.add_argument("--target", default="helyx")
+collect-evidence.py:36:8:    ap.add_argument("--into", default=os.path.join(PKG, "evidence", "run-2"))
+collect-evidence.py:39:51:    src_root = os.path.join(HARNESS, "runs", args.target)
+collect-evidence.py:47:33:        out = os.path.join(args.into, name)
+collect-evidence.py:60:35:    print("collected %d bundle(s) into %s" % (len(copied), args.into))
