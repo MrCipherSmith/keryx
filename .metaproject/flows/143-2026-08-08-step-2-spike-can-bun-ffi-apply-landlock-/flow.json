@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "id": "143",
+  "slug": "step-2-spike-can-bun-ffi-apply-landlock-",
+  "title": "Step 2 spike: can bun:ffi apply Landlock and does the restriction survive exec?",
+  "status": "in-progress",
+  "createdAt": "2026-08-08T12:07:50.883Z",
+  "updatedAt": "2026-08-08T12:22:35.817Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:4bffd30deef21048322dd879fdea7e6691e2f60648b305ed0c3f1b0667ae5e0f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Measure per-command overhead with ADR-0010 method, all mechanisms in one run",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Cost the compiled-helper alternative by building and measuring it",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Write the committed finding and link it from the package README and Step 2",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-08T12:07:50.883Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-08T12:21:57.646Z",
+      "event": "task-added",
+      "detail": "T5: Measure per-command overhead with ADR-0010 method, all mechanisms in one run"
+    },
+    {
+      "at": "2026-08-08T12:21:57.869Z",
+      "event": "task-added",
+      "detail": "T6: Cost the compiled-helper alternative by building and measuring it"
+    },
+    {
+      "at": "2026-08-08T12:21:58.099Z",
+      "event": "task-added",
+      "detail": "T7: Write the committed finding and link it from the package README and Step 2"
+    },
+    {
+      "at": "2026-08-08T12:22:35.598Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-08T12:22:35.817Z",
+      "event": "started"
+    }
+  ]
+}
