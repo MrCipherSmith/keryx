@@ -1,9 +1,14 @@
 // Sandbox launcher detection + adapter factory (flow 093, T5).
 //
-// The only impure module in the sandbox package — it consults the filesystem to
-// learn whether the platform launcher (sandbox-exec on macOS, bwrap on Linux) is
-// present. Detection is injectable (existsSync/env/platform) so it stays
-// deterministic and offline in tests. It performs NO spawn.
+// Consults the filesystem to learn whether the platform launcher (sandbox-exec
+// on macOS, bwrap on Linux) is present. Detection is injectable
+// (existsSync/env/platform) so it stays deterministic and offline in tests. It
+// performs NO spawn — `probe.ts` is the module that does, and it answers a
+// different question: not "is a launcher present" but "does containment work
+// here". Presence is what this module knows, and presence is all `available`
+// below means. Specification §2 of keryx-linux-containment replaces that
+// boolean with a layer choice in step 3, when there is more than one layer to
+// choose between.
 
 import { existsSync as realExistsSync } from "node:fs";
 import path from "node:path";
@@ -27,6 +32,16 @@ export interface DetectOptions {
   env?: Record<string, string | undefined>;
   existsSync?: (p: string) => boolean;
 }
+
+/**
+ * How to install bubblewrap, in one place.
+ *
+ * `keryx sandbox status` prints this too, and the two wordings had already
+ * drifted — one listed Arch and the other did not, two lines apart in the same
+ * output. One constant, one list.
+ */
+export const BWRAP_INSTALL_HINT =
+  "Install it: apt install bubblewrap (Debian/Ubuntu) | dnf install bubblewrap (Fedora) | pacman -S bubblewrap (Arch)";
 
 /** Detect the platform OS-sandbox launcher. */
 export function detectSandboxLauncher(opts: DetectOptions = {}): SandboxLauncherInfo {
@@ -52,7 +67,7 @@ export function detectSandboxLauncher(opts: DetectOptions = {}): SandboxLauncher
     return {
       available: false,
       platform,
-      reason: "bubblewrap (bwrap) not found on PATH; install it (apt install bubblewrap / dnf install bubblewrap)",
+      reason: `bubblewrap (bwrap) not found on PATH. ${BWRAP_INSTALL_HINT}`,
     };
   }
 

