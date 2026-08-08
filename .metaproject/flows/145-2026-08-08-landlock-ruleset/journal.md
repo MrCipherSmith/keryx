@@ -231,3 +231,5 @@ subtree and can never remove them.** That is why the writable roots work and why
 - `bun scripts/check-doc-links.ts`: 698 links, 0 broken.
 - `keryx health run`: score 93, trend stable, one pre-existing WARN
   ("required source unavailable: typescript") unrelated to this change.
+- 2026-08-08T20:08:16.075Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-08T20:08:16.167Z - task-done: T10: quality gate and review orchestrator until green

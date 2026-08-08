@@ -5,7 +5,7 @@
   "title": "Landlock ruleset builder (pure): SandboxProfile to Landlock ruleset description",
   "status": "in-progress",
   "createdAt": "2026-08-08T13:09:57.926Z",
-  "updatedAt": "2026-08-08T13:20:01.423Z",
+  "updatedAt": "2026-08-08T20:08:16.167Z",
   "source": {
     "type": "description",
     "ref": null
@@ -65,7 +65,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +73,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -154,7 +155,7 @@
       "id": "T10",
       "title": "quality gate and review orchestrator until green",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -162,7 +163,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -273,6 +275,16 @@
       "at": "2026-08-08T13:20:01.423Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-08T20:08:16.075Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-08T20:08:16.167Z",
+      "event": "task-done",
+      "detail": "T10: quality gate and review orchestrator until green"
     }
   ]
 }
