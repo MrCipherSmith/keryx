@@ -2,13 +2,16 @@ import { describe, expect, test } from "bun:test";
 import {
   LANDLOCK_FS_ACCESS_BIT,
   LANDLOCK_FS_ACCESS_MIN_ABI,
-  LANDLOCK_NET_ACCESS_BIT,
-  LANDLOCK_NET_ACCESS_MIN_ABI,
+  LANDLOCK_UNRESTRICTABLE_ACTIONS,
   buildLandlockRuleset,
   landlockFsMask,
-  landlockNetMask,
 } from "./landlock";
-import type { LandlockFsAccess, LandlockInexpressibleCode, LandlockRuleset } from "./landlock";
+import type {
+  LandlockFsAccess,
+  LandlockInexpressible,
+  LandlockInexpressibleCode,
+  LandlockRuleset,
+} from "./landlock";
 import { defaultSandboxProfile } from "./profile";
 import type { SandboxProfile } from "./profile";
 
@@ -25,19 +28,46 @@ const expressible: SandboxProfile = {
   required: true,
 };
 
+/** Every profile shape that can yield a ruleset — the AC3 guards run over all. */
+const expressibleShapes: readonly SandboxProfile[] = [
+  expressible,
+  { ...expressible, writableRoots: [] },
+  { ...expressible, writableRoots: ["/work/repo", "/work/repo"] },
+  { ...expressible, mode: "read-only", writableRoots: [] },
+  { ...expressible, mode: "read-only", writableRoots: ["/work/repo"] },
+  { ...expressible, required: false },
+  { ...expressible, proxy: { host: "127.0.0.1", port: 8080 } },
+];
+
 /** The failure codes of a translation, or `null` when it succeeded. */
 function codes(profile: SandboxProfile, abi = ABI_CURRENT): LandlockInexpressibleCode[] | null {
   const result = buildLandlockRuleset(profile, abi);
   return result.ok ? null : result.failures.map((f) => f.code);
 }
 
+/** The failures of a translation; fails the test if it produced a ruleset. */
+function failuresOf(profile: SandboxProfile, abi = ABI_CURRENT): readonly LandlockInexpressible[] {
+  const result = buildLandlockRuleset(profile, abi);
+  if (result.ok) {
+    throw new Error("expected an inexpressible profile, but a ruleset was returned");
+  }
+  return result.failures;
+}
+
 /** The ruleset of a translation; fails the test if it was inexpressible. */
 function rulesetOf(profile: SandboxProfile, abi = ABI_CURRENT): LandlockRuleset {
   const result = buildLandlockRuleset(profile, abi);
   if (!result.ok) {
-    throw new Error(`expected an expressible profile, got: ${result.failures.map((f) => f.code).join(", ")}`);
+    throw new Error(
+      `expected an expressible profile, got: ${result.failures.map((f) => f.code).join(", ")}`,
+    );
   }
   return result.ruleset;
+}
+
+/** Rules that grant a writable hierarchy, i.e. everything but the device carve-out. */
+function rootRules(ruleset: LandlockRuleset) {
+  return ruleset.pathRules.filter((r) => r.onMissing === "fail");
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +75,37 @@ function rulesetOf(profile: SandboxProfile, abi = ABI_CURRENT): LandlockRuleset 
 // ---------------------------------------------------------------------------
 
 describe("AC1: buildLandlockRuleset is a pure translation", () => {
+  test("the module imports nothing impure", async () => {
+    // AC1's "no syscall, no FFI, no spawn, no filesystem read, no
+    // process.platform branch" is unobservable from outputs: a filesystem read
+    // is perfectly deterministic within a run. The import allowlist is the
+    // load-bearing half — it fails closed on any dependency added later, where
+    // a list of known-bad names only catches what someone thought of.
+    //
+    // The module discusses `bun:ffi` and `process.platform` in prose, so the
+    // scan runs over code with comments removed.
+    const source = await Bun.file(new URL("./landlock.ts", import.meta.url)).text();
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+    const imports = [...code.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+    expect([...new Set(imports)].sort()).toEqual(["./profile", "node:path"]);
+
+    for (const forbidden of [
+      "node:fs",
+      "node:os",
+      "node:child_process",
+      "bun:ffi",
+      "process.platform",
+      "process.env",
+      "Date.now",
+      "Math.random",
+      "spawnSync",
+      "require(",
+    ]) {
+      expect(code).not.toContain(forbidden);
+    }
+  });
+
   test("identical inputs produce deeply equal output", () => {
     expect(buildLandlockRuleset(expressible, ABI_CURRENT)).toEqual(
       buildLandlockRuleset(expressible, ABI_CURRENT),
@@ -53,7 +114,9 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
 
   test("the same profile is translated identically on repeated calls, including failures", () => {
     const offline = { ...expressible, network: "off" as const };
-    expect(buildLandlockRuleset(offline, ABI_CURRENT)).toEqual(buildLandlockRuleset(offline, ABI_CURRENT));
+    expect(buildLandlockRuleset(offline, ABI_CURRENT)).toEqual(
+      buildLandlockRuleset(offline, ABI_CURRENT),
+    );
   });
 
   test("the ABI is an argument, never read from the host", () => {
@@ -70,14 +133,27 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     expect(profile).toEqual(snapshot);
   });
 
-  test("workspace roots become path-beneath rules, deduplicated, in profile order", () => {
-    const ruleset = rulesetOf({ ...expressible, writableRoots: ["/work/repo", "/tmp/s", "/work/repo"] });
-    expect(ruleset.pathRules.map((r) => r.path)).toEqual(["/work/repo", "/tmp/s"]);
+  test("fields the translation must ignore do not change its output", () => {
+    // `required` is a fail-closed directive for the adapter and `proxy` belongs
+    // to the restricted-network path; neither has a Landlock representation.
+    const base = rulesetOf(expressible);
+    expect(rulesetOf({ ...expressible, required: false })).toEqual(base);
+    expect(rulesetOf({ ...expressible, proxy: { host: "127.0.0.1", port: 8080 } })).toEqual(base);
   });
 
-  test("read-only handles the same write rights but grants none of them anywhere", () => {
+  test("workspace roots become path-beneath rules, deduplicated, in profile order", () => {
+    const ruleset = rulesetOf({ ...expressible, writableRoots: ["/work/repo", "/tmp/s", "/work/repo"] });
+    expect(rootRules(ruleset).map((r) => r.path)).toEqual(["/work/repo", "/tmp/s"]);
+  });
+
+  test("a trailing slash is normalised away, so the rule path is the path enforced", () => {
+    const ruleset = rulesetOf({ ...expressible, writableRoots: ["/work/repo/", "/work/repo"] });
+    expect(rootRules(ruleset).map((r) => r.path)).toEqual(["/work/repo"]);
+  });
+
+  test("read-only handles the same write rights but grants no hierarchy", () => {
     const ruleset = rulesetOf({ ...expressible, mode: "read-only", writableRoots: [] });
-    expect(ruleset.pathRules).toEqual([]);
+    expect(rootRules(ruleset)).toEqual([]);
     expect(ruleset.handledFs).toContain("write_file");
   });
 
@@ -85,7 +161,13 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     // `writableRoots` is documented as empty for read-only. Honouring it would
     // silently widen a read-only claim into workspace-write.
     const ruleset = rulesetOf({ ...expressible, mode: "read-only", writableRoots: ["/work/repo"] });
-    expect(ruleset.pathRules).toEqual([]);
+    expect(rootRules(ruleset)).toEqual([]);
+  });
+
+  test("workspace-write with no roots yields a boundary as strict as read-only", () => {
+    expect(rulesetOf({ ...expressible, writableRoots: [] })).toEqual(
+      rulesetOf({ ...expressible, mode: "read-only", writableRoots: [] }),
+    );
   });
 
   test("no read-ish right is handled, which is how the broad read default is expressed", () => {
@@ -102,9 +184,57 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
   });
 
   test("handledFs is never empty — an empty mask is rejected by landlock_create_ruleset", () => {
-    for (const mode of ["read-only", "workspace-write"] as const) {
-      expect(rulesetOf({ ...expressible, mode }).handledFs.length).toBeGreaterThan(0);
+    for (const profile of expressibleShapes) {
+      expect(rulesetOf(profile).handledFs.length).toBeGreaterThan(0);
     }
+  });
+
+  test("the shared access-right arrays are frozen, so a consumer cannot widen a boundary", () => {
+    const ruleset = rulesetOf(expressible);
+    expect(Object.isFrozen(ruleset.handledFs)).toBe(true);
+    for (const rule of ruleset.pathRules) {
+      expect(Object.isFrozen(rule.allow)).toBe(true);
+    }
+    expect(Object.isFrozen(LANDLOCK_FS_ACCESS_BIT)).toBe(true);
+    expect(Object.isFrozen(LANDLOCK_FS_ACCESS_MIN_ABI)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The device carve-out — the compatibility floor both sibling launchers carry
+// ---------------------------------------------------------------------------
+
+describe("stdio devices stay writable, as in seatbelt.ts and bwrap.ts", () => {
+  test.each(["/dev/null", "/dev/zero", "/dev/tty"])("%s is writable in every mode", (device) => {
+    for (const profile of expressibleShapes) {
+      const rule = rulesetOf(profile).pathRules.find((r) => r.path === device);
+      expect(rule?.allow).toEqual(["write_file", "truncate"]);
+    }
+  });
+
+  test("a missing device is skipped, a missing writable root is fatal", () => {
+    // Dropping a device rule can only over-restrict; dropping a workspace root
+    // silently leaves the command with nowhere to write, so it must fail closed.
+    const ruleset = rulesetOf(expressible);
+    for (const rule of ruleset.pathRules) {
+      expect(rule.onMissing).toBe(rule.path.startsWith("/dev/") ? "skip" : "fail");
+    }
+  });
+
+  test("the carve-out never grants ioctl_dev or a read-ish right", () => {
+    for (const rule of rulesetOf(expressible).pathRules) {
+      expect(rule.allow).not.toContain("ioctl_dev");
+      expect(rule.allow).not.toContain("read_file");
+    }
+  });
+
+  test("/dev/stdout is deliberately absent — it is a symlink into /proc/self/fd", () => {
+    // A rule there would resolve to whatever the descriptor points at and grant
+    // write access to it. Inherited stdio needs no rule: Landlock gates `open`.
+    const paths = rulesetOf(expressible).pathRules.map((r) => r.path);
+    expect(paths).not.toContain("/dev/stdout");
+    expect(paths).not.toContain("/dev/stderr");
+    expect(paths).not.toContain("/dev/stdin");
   });
 });
 
@@ -126,6 +256,14 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
   test("an allowlist on an otherwise-open profile is still treated as restricted", () => {
     expect(codes({ ...expressible, network: "on", allowedDomains: ["example.com"] })).toEqual([
       "network-restricted-requires-proxy-layer",
+    ]);
+  });
+
+  test("network-off with a stale allowlist is diagnosed as network-off, the stricter posture", () => {
+    // Both codes refuse, but they route to different deferred layers: seccomp
+    // plus bubblewrap versus the container. The stricter fact must win.
+    expect(codes({ ...expressible, network: "off", allowedDomains: ["example.com"] })).toEqual([
+      "network-off-requires-seccomp",
     ]);
   });
 
@@ -151,13 +289,34 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
     expect(codes({ ...expressible, writableRoots: ["work/repo"] })).toEqual(["path-not-absolute"]);
   });
 
+  test("an empty writable root is refused", () => {
+    expect(codes({ ...expressible, writableRoots: [""] })).toEqual(["path-not-absolute"]);
+  });
+
   test("a writable root containing a NUL byte is refused", () => {
     expect(codes({ ...expressible, writableRoots: ["/work/re\0po"] })).toEqual(["path-contains-nul"]);
   });
 
-  test("ABI 0 is refused as Landlock being unavailable, not as a low ABI", () => {
+  test.each(["/work/repo/../..", "/work/./repo", "/.."])(
+    "the non-canonical root %s is refused rather than resolved",
+    (root) => {
+      // Resolving it would grant a hierarchy other than the one reported.
+      expect(codes({ ...expressible, writableRoots: [root] })).toEqual(["path-not-canonical"]);
+    },
+  );
+
+  test("ABI 0 is refused as Landlock being unavailable", () => {
     expect(codes(expressible, 0)).toEqual(["landlock-unavailable"]);
   });
+
+  test.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "the malformed ABI %p is a reader failure, not a claim about the kernel",
+    (abi) => {
+      const [failure] = failuresOf(expressible, abi);
+      expect(failure?.code).toBe("abi-unreadable");
+      expect(failure?.detail).toContain("says nothing about the kernel");
+    },
+  );
 
   test.each([1, 2])("ABI %i cannot carry the write boundary and is refused", (abi) => {
     expect(codes(expressible, abi)).toEqual(["abi-too-low"]);
@@ -169,42 +328,47 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
   });
 
   test("the ABI failure names the kernel ABI and the missing rights, not the platform", () => {
-    const result = buildLandlockRuleset(expressible, 1);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    const detail = result.failures[0]?.detail ?? "";
-    expect(detail).toContain("ABI 1");
-    expect(detail).toContain("truncate");
-    expect(detail.toLowerCase()).not.toContain("linux");
+    const [failure] = failuresOf(expressible, 1);
+    expect(failure?.detail).toContain("ABI 1");
+    expect(failure?.detail).toContain("truncate");
+    expect(failure?.detail.toLowerCase()).not.toContain("linux");
+  });
+
+  test("the ABI failure does not claim refer is left unrestricted — the kernel denies it", () => {
+    // With `refer` absent or unhandled, cross-directory rename and link are
+    // denied everywhere. Reporting them as unrestricted would be a keryx claim
+    // about the kernel that contradicts the kernel, on the exact host class
+    // (Ubuntu 22.04, ABI 1) the PRD singles out.
+    const [failure] = failuresOf(expressible, 1);
+    expect(failure?.detail).toContain("stricter than the profile asks for");
+    expect(failure?.detail).not.toMatch(/refer, truncate would be left unrestricted/);
   });
 
   test("every failure carries a code, a field and a non-empty detail", () => {
-    const result = buildLandlockRuleset(
+    const failures = failuresOf(
       { ...expressible, network: "off", readDenyList: ["/home/u/.ssh"], writableRoots: ["rel"] },
       1,
     );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failures.length).toBeGreaterThan(1);
-    for (const failure of result.failures) {
+    expect(failures.length).toBeGreaterThan(1);
+    for (const failure of failures) {
       expect(failure.code.length).toBeGreaterThan(0);
       expect(failure.field.length).toBeGreaterThan(0);
       expect(failure.detail.length).toBeGreaterThan(0);
     }
   });
 
-  test("every reason is reported, not just the first, and in a stable order", () => {
+  test("every reason is reported, not just the first, with the field it is about", () => {
     const profile: SandboxProfile = {
       ...expressible,
       network: "off",
       readDenyList: ["/home/u/.ssh"],
       writableRoots: ["rel"],
     };
-    expect(codes(profile, 1)).toEqual([
-      "network-off-requires-seccomp",
-      "read-deny-list-requires-mount-view",
-      "path-not-absolute",
-      "abi-too-low",
+    expect(failuresOf(profile, 1).map((f) => [f.code, f.field])).toEqual([
+      ["network-off-requires-seccomp", "network"],
+      ["read-deny-list-requires-mount-view", "readDenyList"],
+      ["path-not-absolute", "writableRoots"],
+      ["abi-too-low", "abi"],
     ]);
   });
 
@@ -225,37 +389,65 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
 });
 
 // ---------------------------------------------------------------------------
-// AC3 — a returned ruleset enforces the whole profile
+// AC3 — a returned ruleset covers everything Landlock can reach
 // ---------------------------------------------------------------------------
 
 describe("AC3: a returned ruleset is complete by construction", () => {
   test("LandlockRuleset has no field in which a partial boundary could be recorded", () => {
     // The guard against a `notEnforced` / `bestEffort` / `partial` escape hatch
     // being added later: an approximated boundary would be reported as a real
-    // one, which is the defect ADR-0010 exists to remove.
-    expect(Object.keys(rulesetOf(expressible)).sort()).toEqual([
-      "handledFs",
-      "handledNet",
-      "minimumAbi",
-      "netRules",
-      "pathRules",
-    ]);
-  });
-
-  test("every rule's allow set is a non-empty subset of the handled set", () => {
-    const ruleset = rulesetOf(expressible);
-    for (const rule of ruleset.pathRules) {
-      expect(rule.allow.length).toBeGreaterThan(0);
-      for (const access of rule.allow) {
-        expect(ruleset.handledFs).toContain(access);
+    // one. It runs over every shape that yields a ruleset and at every ABI that
+    // can return one, so an optional field populated on some other branch is
+    // caught too — a single-fixture assertion is not a claim about the type.
+    for (const abi of [3, 4, 5, 6]) {
+      for (const profile of expressibleShapes) {
+        expect(Object.keys(rulesetOf(profile, abi)).sort()).toEqual([
+          "handledFs",
+          "handledNet",
+          "minimumAbi",
+          "netRules",
+          "pathRules",
+        ]);
       }
     }
   });
 
-  test("minimumAbi is the maximum first-ABI over the handled rights", () => {
+  test("the type itself is pinned to those five fields", () => {
+    // Runtime keys of one value can never prove a claim about a type. This does:
+    // adding or removing a field on LandlockRuleset fails `tsc --noEmit`, which
+    // the `check` script already runs.
+    type Fields = "handledFs" | "handledNet" | "minimumAbi" | "netRules" | "pathRules";
+    const exhaustive: Record<Fields, true> & Record<keyof LandlockRuleset, true> = {
+      handledFs: true,
+      handledNet: true,
+      minimumAbi: true,
+      netRules: true,
+      pathRules: true,
+    };
+    expect(Object.keys(exhaustive).length).toBe(5);
+  });
+
+  test("every rule's allow set is a non-empty subset of the handled set", () => {
+    for (const profile of expressibleShapes) {
+      const ruleset = rulesetOf(profile);
+      for (const rule of ruleset.pathRules) {
+        expect(rule.allow.length).toBeGreaterThan(0);
+        for (const access of rule.allow) {
+          expect(ruleset.handledFs).toContain(access);
+        }
+      }
+    }
+  });
+
+  test("minimumAbi is 3, and it is the maximum first-ABI over the handled rights", () => {
     const ruleset = rulesetOf(expressible);
-    const expected = Math.max(...ruleset.handledFs.map((a) => LANDLOCK_FS_ACCESS_MIN_ABI[a]));
-    expect(ruleset.minimumAbi).toBe(expected);
+    expect(ruleset.minimumAbi).toBe(3); // truncate is the binding right
+    for (const right of ruleset.handledFs) {
+      expect(LANDLOCK_FS_ACCESS_MIN_ABI[right]).toBeLessThanOrEqual(ruleset.minimumAbi);
+    }
+    expect(
+      ruleset.handledFs.some((r) => LANDLOCK_FS_ACCESS_MIN_ABI[r] === ruleset.minimumAbi),
+    ).toBe(true);
   });
 
   test("a ruleset is never returned below its own minimumAbi", () => {
@@ -266,10 +458,25 @@ describe("AC3: a returned ruleset is complete by construction", () => {
       }
     }
   });
+
+  test("what Landlock cannot reach is named in a value, not only in a comment", () => {
+    // A ruleset covers every access right Landlock HAS that the profile bounds.
+    // Metadata mutation has no such right at any ABI, so bubblewrap's boundary
+    // is strictly stronger and the two must not be reported as equivalent. This
+    // list is the mechanical record of that, for `sandbox status` to read.
+    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).toContain("chmod");
+    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).toContain("chown");
+    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).toContain("setxattr");
+    expect(Object.isFrozen(LANDLOCK_UNRESTRICTABLE_ACTIONS)).toBe(true);
+    // It is a fact about the mechanism, so it must not vary with the profile.
+    for (const right of LANDLOCK_UNRESTRICTABLE_ACTIONS) {
+      expect(rulesetOf(expressible).handledFs).not.toContain(right as LandlockFsAccess);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
-// AC4 — Landlock is never credited with network-off
+// AC4 — Landlock is never credited with network containment
 // ---------------------------------------------------------------------------
 
 describe("AC4: no profile produces a network rule", () => {
@@ -277,21 +484,23 @@ describe("AC4: no profile produces a network rule", () => {
     'network "%s" never yields handledNet or netRules',
     (network) => {
       const result = buildLandlockRuleset({ ...expressible, network }, ABI_CURRENT);
-      if (result.ok) {
-        expect(result.ruleset.handledNet).toEqual([]);
-        expect(result.ruleset.netRules).toEqual([]);
+      if (!result.ok) {
+        // No ruleset at all is the stronger form of "no network rule", but the
+        // reason has to be the network one — otherwise this case proves nothing.
+        expect(result.failures.map((f) => f.code)).toContain(
+          network === "off" ? "network-off-requires-seccomp" : "network-restricted-requires-proxy-layer",
+        );
+        return;
       }
+      expect(result.ruleset.handledNet).toEqual([]);
+      expect(result.ruleset.netRules).toEqual([]);
     },
   );
 
-  test("even at ABI 6, where Landlock's TCP rights exist, none are handled", () => {
-    const ruleset = rulesetOf(expressible, 6);
+  test.each([3, 4, 5, 6])("at ABI %i, where Landlock's TCP rights exist, none are handled", (abi) => {
+    const ruleset = rulesetOf(expressible, abi);
     expect(ruleset.handledNet).toEqual([]);
     expect(ruleset.netRules).toEqual([]);
-  });
-
-  test("the TCP rights are declared as ABI 4 and named TCP-only", () => {
-    expect(LANDLOCK_NET_ACCESS_MIN_ABI).toEqual({ bind_tcp: 4, connect_tcp: 4 });
   });
 });
 
@@ -300,7 +509,7 @@ describe("AC4: no profile produces a network rule", () => {
 // ---------------------------------------------------------------------------
 
 describe("access-right tables match the kernel UAPI", () => {
-  test("filesystem bit positions are the uapi order", () => {
+  test("bit positions are the uapi order", () => {
     expect(LANDLOCK_FS_ACCESS_BIT).toEqual({
       execute: 0,
       write_file: 1,
@@ -321,12 +530,33 @@ describe("access-right tables match the kernel UAPI", () => {
     });
   });
 
-  test("every filesystem right has both a bit and a first-ABI", () => {
-    const rights = Object.keys(LANDLOCK_FS_ACCESS_BIT) as LandlockFsAccess[];
-    for (const right of rights) {
-      expect(LANDLOCK_FS_ACCESS_MIN_ABI[right]).toBeGreaterThanOrEqual(1);
-    }
-    expect(Object.keys(LANDLOCK_FS_ACCESS_MIN_ABI).sort()).toEqual(rights.sort());
+  test("first-ABI values are the uapi ones", () => {
+    // Pinned as a full literal, like the bit table: these are kernel facts, and
+    // the module's whole ABI-floor argument rests on them being exact.
+    expect(LANDLOCK_FS_ACCESS_MIN_ABI).toEqual({
+      execute: 1,
+      write_file: 1,
+      read_file: 1,
+      read_dir: 1,
+      remove_dir: 1,
+      remove_file: 1,
+      make_char: 1,
+      make_dir: 1,
+      make_reg: 1,
+      make_sock: 1,
+      make_fifo: 1,
+      make_block: 1,
+      make_sym: 1,
+      refer: 2,
+      truncate: 3,
+      ioctl_dev: 5,
+    });
+  });
+
+  test("the two tables describe the same set of rights", () => {
+    expect(Object.keys(LANDLOCK_FS_ACCESS_MIN_ABI).sort()).toEqual(
+      Object.keys(LANDLOCK_FS_ACCESS_BIT).sort(),
+    );
   });
 
   test("landlockFsMask folds names into the u64 mask", () => {
@@ -335,15 +565,5 @@ describe("access-right tables match the kernel UAPI", () => {
     expect(landlockFsMask(["write_file", "truncate"])).toBe(0b100000000000010n);
     // Idempotent: a repeated right sets the same bit once.
     expect(landlockFsMask(["truncate", "truncate"])).toBe(landlockFsMask(["truncate"]));
-  });
-
-  test("landlockNetMask folds names into the u64 mask", () => {
-    expect(landlockNetMask([])).toBe(0n);
-    expect(landlockNetMask(["bind_tcp"])).toBe(1n);
-    expect(landlockNetMask(["bind_tcp", "connect_tcp"])).toBe(3n);
-  });
-
-  test("network bit positions are the uapi order", () => {
-    expect(LANDLOCK_NET_ACCESS_BIT).toEqual({ bind_tcp: 0, connect_tcp: 1 });
   });
 });

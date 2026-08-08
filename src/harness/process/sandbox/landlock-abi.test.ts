@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { LANDLOCK_ABI_UNAVAILABLE, cacheLandlockAbi } from "./landlock-abi";
+import { LANDLOCK_ABI_UNAVAILABLE, LandlockAbiReaderError, cacheLandlockAbi } from "./landlock-abi";
 import type { LandlockAbiReader } from "./landlock-abi";
 
 describe("AC5: cacheLandlockAbi is a mechanism-free, single-call seam", () => {
@@ -61,6 +61,49 @@ describe("AC5: cacheLandlockAbi is a mechanism-free, single-call seam", () => {
     // helper is required. Anything here that assumed a mechanism would have to
     // be rewritten when it does, so the seam holds only the interface.
     const module = await import("./landlock-abi");
-    expect(Object.keys(module).sort()).toEqual(["LANDLOCK_ABI_UNAVAILABLE", "cacheLandlockAbi"]);
+    expect(Object.keys(module).sort()).toEqual([
+      "LANDLOCK_ABI_UNAVAILABLE",
+      "LandlockAbiReaderError",
+      "cacheLandlockAbi",
+    ]);
+  });
+
+  test.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "a reader returning %p is rejected rather than passed through",
+    (value) => {
+      const abi = cacheLandlockAbi(() => value);
+      expect(() => abi()).toThrow(LandlockAbiReaderError);
+    },
+  );
+
+  test("a `u32`-declared FFI reader turning -1 into 4294967295 is not caught here", () => {
+    // Recorded, not fixed: 4294967295 is a valid non-negative integer and no
+    // ceiling on a future ABI can be justified. The defence is the reader's own
+    // declaration — `landlock_create_ruleset` returns a SIGNED value, and
+    // `LandlockAbiReader`'s doc says so. Named so the spike's implementer meets
+    // the trap here rather than in a false "Landlock available" report.
+    const abi = cacheLandlockAbi(() => 4294967295);
+    expect(abi()).toBe(4294967295);
+  });
+
+  test("a rejected value is still only read once", () => {
+    let calls = 0;
+    const abi = cacheLandlockAbi(() => {
+      calls += 1;
+      return -1;
+    });
+    expect(() => abi()).toThrow(LandlockAbiReaderError);
+    expect(() => abi()).toThrow(LandlockAbiReaderError);
+    expect(calls).toBe(1);
+  });
+
+  test("the rejection names the value and does not claim the kernel lacks Landlock", () => {
+    const abi = cacheLandlockAbi(() => -1);
+    expect(() => abi()).toThrow("-1");
+    try {
+      abi();
+    } catch (error) {
+      expect((error as Error).message).not.toContain("not available");
+    }
   });
 });

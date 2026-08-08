@@ -49,10 +49,56 @@ reasons it cannot be covered. No third shape.
 - `detect.ts` layer selection, `capability-matrix.ts`, `src/commands/sandbox.ts`,
   `scripts/install.sh` — other agents' lanes in this package.
 
+## 2026-08-08 — review round 1 (PR #260), and what it changed
+
+Six reviewers in four parallel dispatches (logic, security-code, architecture +
+core-boundaries, testing-practices + clean-code). 1 blocker, 8 major, 17
+minor/info. Two structural claims the design rests on were independently
+confirmed correct: Landlock allow-rules are cumulative along the path, and all 18
+UAPI constants match the kernel (checked against `man 7 landlock` on this host).
+
+**The blocker was real and I had missed it.** Landlock has no access right for
+`chmod`, `chown`, `setxattr`, `utime`, `ioctl`, `fcntl` or `flock` at any ABI —
+`landlock(7)` CAVEATS — so a `read-only` ruleset that returned `ok: true` still
+permitted `chmod -R 000 ~` outside the writable roots, which bubblewrap refuses
+with `EROFS`. The type said such a value "enforces the whole profile".
+
+Fixed as a claim correction, not a refusal: refusing would make every
+write-bounded profile inexpressible and delete the Landlock layer. The residue is
+now `LANDLOCK_UNRESTRICTABLE_ACTIONS`, an exported frozen constant, so the
+reporting layer reads it from a value instead of from a comment. The distinction
+that keeps AC2 intact: a *constant fact about the mechanism* is not a
+*per-translation escape hatch*, and the second is still forbidden and now
+enforced at compile time.
+
+Four guards were proved green against deliberately broken code by the reviewers
+and are now real: AC1 purity (an import allowlist; `node:fs` + a
+`process.platform` branch used to pass), AC3's no-partial-boundary field (an
+optional `notEnforced` populated only on `read-only` used to pass — now fails
+both `tsc` and the runtime key assertion, re-verified by repeating the mutation),
+AC4's network cases (two of three were vacuous), and the first-ABI table (`refer:
+1`, `ioctl_dev: 99` used to pass).
+
+Also fixed: an `abi-too-low` message that told an Ubuntu 22.04 operator the
+kernel leaves cross-directory rename unrestricted when the kernel denies it
+outright; the missing stdio device carve-out both sibling launchers carry; the
+speculative network surface (deleted — `handledNet`/`netRules` are now
+`readonly never[]`, so a network rule is a type error); unfrozen shared arrays;
+`abi-unreadable` split from `landlock-unavailable`; `..`-segment paths;
+`onMissing` on `LandlockPathRule`; and a 108-line function split into one
+accumulator per concern.
+
+Two findings recorded and **not** fixed, both out of lane and both documentation:
+PRD S4 / §4 / specification §3 / ADR-0010's layer table promise ABI-1 filesystem
+containment that the truncate floor makes unreachable, and PRD R2 claims the TCP
+restriction "is implemented". Both reviewers warned explicitly that the tempting
+fix — dropping `truncate` below ABI 3 — is the best-effort masking this design
+rejects. Step 4 owns those documents.
+
 ### Gate
 
 - `bunx tsc --noEmit`: clean.
-- `bun test src/harness/process/sandbox`: 193 pass / 5 skip / 0 fail
+- `bun test src/harness/process/sandbox`: 224 pass / 5 skip / 0 fail after round 1
   (baseline on this branch: 147 pass / 5 skip / 0 fail).
 - `bun test src/capability`: 27 pass / 0 fail.
 - `bun scripts/check-doc-links.ts`: 698 links, 0 broken.

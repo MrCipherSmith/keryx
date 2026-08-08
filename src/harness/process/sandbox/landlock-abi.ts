@@ -28,8 +28,25 @@ export const LANDLOCK_ABI_UNAVAILABLE: LandlockAbiVersion = 0;
  * Impure by definition, and the only impure thing the Landlock layer needs
  * before it applies anything. Implementations may throw; see
  * {@link cacheLandlockAbi} for how a throw is treated.
+ *
+ * An implementation **must** declare the underlying call's return type as
+ * signed. `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)`
+ * returns `-1` on failure, and a `u32` declaration — a routine `bun:ffi`
+ * mistake — turns that into `4294967295`, a number no validator downstream can
+ * distinguish from a very new kernel. {@link cacheLandlockAbi} rejects
+ * negatives and non-integers, which is the half a seam can check.
  */
 export type LandlockAbiReader = () => LandlockAbiVersion;
+
+/** Thrown when a reader returns something that is not an ABI version. */
+export class LandlockAbiReaderError extends Error {
+  constructor(readonly value: unknown) {
+    super(
+      `Landlock ABI reader returned ${JSON.stringify(value)}, which is not an ABI version (expected a non-negative integer; 0 means no Landlock).`,
+    );
+    this.name = "LandlockAbiReaderError";
+  }
+}
 
 /**
  * Wrap a reader so the kernel is asked **at most once** per returned function
@@ -40,7 +57,9 @@ export type LandlockAbiReader = () => LandlockAbiVersion;
  * kernel without Landlock are different facts and `sandbox status` has to be
  * able to tell them apart, and swallowing the first into the second is the same
  * class of mistake — reporting an unverified conclusion — that this package
- * exists to remove.
+ * exists to remove. A reader that returns a value which is not an ABI version
+ * is treated the same way: it throws {@link LandlockAbiReaderError}, and that
+ * throw is cached too, so a broken reader is still asked only once.
  *
  * The cache is per call to this function, not module-global, so a test can hold
  * its own and no test can leak a value into another.
@@ -51,7 +70,10 @@ export function cacheLandlockAbi(read: LandlockAbiReader): LandlockAbiReader {
   return () => {
     if (state === undefined) {
       try {
-        state = { kind: "value", value: read() };
+        const value = read();
+        state = Number.isInteger(value) && value >= 0
+          ? { kind: "value", value }
+          : { kind: "error", error: new LandlockAbiReaderError(value) };
       } catch (error) {
         state = { kind: "error", error };
       }
