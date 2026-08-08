@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-baseline-grok (worktree of ~/keryx)                  9.1K / 500K
+
+                                                                                                                                                    
+     ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.       9:31 PM  
+                                                                                                                                                    
+
+     ◆ user_prompt_submit  [hooks: 3]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃                                                                                                                                                 
+  ┃  You hit your weekly limit.                                                                                                                     
+  ┃                                                                                                                                                 
+  ┃                                                                                                                                                 
+  ┃  1 (○) Upgrade tier      Upgrade to a higher tier for more usage                                                                                
+  ┃  2 (○) Buy more credits  Purchase credits to keep using Grok Build                                                                              
+  ┃                                                                                                                                                 
+  ┃  ↑/↓ navigate · y copy                                                                                                          Enter:submit    
+  ┃                                                                                                                                                 
+
+  Tab:next answer  │  Esc:scrollback  │  Shift+x:dismiss                                                                                            
+

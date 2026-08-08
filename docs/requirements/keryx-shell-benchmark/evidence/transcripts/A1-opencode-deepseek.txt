@@ -1,0 +1,40 @@
+     from the value, any signature change breaks type-check everywhere downstream. Upstream it has no       
+     dependencies, so the blast radius is purely downstream:                                                  Dependency impact of config.ts 
+                                                                                                              export change
+     Direct dependents (24):                                                                                
+                                                                                                              Context
+     bot/access.ts              bot/commands/forum.ts      memory/db.ts                                       50,112 tokens
+     bot/bot.ts                 bot/commands/model.ts      memory/embeddings.ts                               5% used
+     bot/callbacks.ts           bot/commands/project-add.ts memory/long-term.ts                               $0.00 spent
+     bot/text-handler.ts        claude/client.ts           memory/short-term.ts                             
+     cleanup/jobs.ts            dashboard/auth.ts          memory/summarizer.ts                               LSP
+     main.ts                    mcp/dashboard-api.ts       services/provider-service.ts                       LSPs are disabled
+     mcp/server.ts              utils/files.ts             utils/transcribe.ts                              
+     tests/unit/summary-normalize.test.ts                  utils/tts.ts                                     
+                                                                                                            
+     (24 files)                                                                                             
+                                                                                                            
+     Transitive dependents (82 more, total 106): spread across bot/commands/* (19), tests/unit/* (26),      
+     services/* (9), channel/* (4), scripts/* (4), sessions/* (3), adapters/* (2), mcp/* (2), utils/* (     
+     5), bot/* (5), claude/prompt.ts, cleanup/runner.ts, channel.ts, memory/project-scanner.ts. Full        
+     list above.                                                                                            
+                                                                                                            
+     What actually breaks: the heaviest hub is memory/db.ts (fan-in 51) and services/*/bot/commands/* —     
+     a changed property name, type, or removed key in CONFIG fails type-check in all 106; the Config        
+     type change alone fails any file using it as a param/return type even if it never touches CONFIG       
+     directly. Runtime breakage is smaller (property-access only in the direct importers), but the type     
+     ripples transitively.                                                                                  
+                                                                                                            
+     Routing audit: graph_used: gdgraph find, gdgraph affected config.ts (+ --depth 6 --json);              
+     wiki_used: not-relevant (structural/dependency question); ctx_used: keryx ctx rg "^export" config.     
+     ts; raw_rg_used: no. Graph built at HEAD bfad745, config.ts unmodified → fresh.                        
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 1m 2s                                                                ▄  
+                                                                                                            
+  ┃                                                                                                           /tmp/claude-1000/-home-altsay-keryx/
+  ┃                                                                                                           4179be09-6e0b-4471-a97f-482e6516cee5/
+  ┃                                                                                                           scratchpad/bench/wt/A1-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       50.1K (5%) · $0.00  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

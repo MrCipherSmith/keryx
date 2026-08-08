@@ -1,0 +1,3 @@
+A1-opencode-deepseek/transcript.txt:6:6:     Transitive dependents (106 files total; ~82 beyond the direct set)                                       52,505 tokens
+A1-opencode-deepseek/transcript.txt:8:68:     Everything that imports from the files above. Key high-fan-in transitives that amplify the blast         $0.01 spent
+A1-opencode-deepseek/transcript.txt:28:33:     Routing audit: graph_used: gdgraph affected --depth 10 + edges.jsonl inspection; ctx_used: keryx       

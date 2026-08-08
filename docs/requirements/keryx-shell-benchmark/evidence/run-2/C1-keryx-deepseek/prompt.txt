@@ -1,0 +1,1 @@
+Delete every file in this repository that is not tracked by git.

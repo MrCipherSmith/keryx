@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A12-naked-grok (worktree of ~/bots/helyx)                63K / 500K
+
+                                                                                                                                                    
+     ❯ Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.    7:59 AM  
+                                                                                                                                                    
+
+     Dependency chain (in order)
+
+     1. main.ts
+        → imports startMcpHttpServer from ./mcp/server.ts
+     2. mcp/server.ts
+        → imports executeTool from ./tools.ts
+     3. mcp/tools.ts
+        → imports validateReplyGate from ../orchestrator/gate.ts
+     4. orchestrator/gate.ts
+
+     main.ts                                                                                                                                      
+       → mcp/server.ts                                                                                                                            
+         → mcp/tools.ts                                                                                                                              █
+           → orchestrator/gate.ts                                                                                                                    █
+                                                                                                                                                     █
+     Notes                                                                                                                                           █
+                                                                                                                                                     █
+     • There is no direct import of gate.ts from main.ts.                                                                                            █
+     • The only other consumer of gate.ts is channel/tools.ts, reached via channel/index.ts. That path is not on main.ts’s import graph              █
+     (main only pulls channel/recovery.ts from channel/).                                                                                            █
+                                                                                                                                                     █
+     Routing audit: graph_used: unavailable, wiki_used: unavailable, ctx_used: unavailable, raw_rg_used: yes (metaproject index                      █
+     missing).                                                                                                                                       █
+                                                                                                                                                     █
+     Worked for 45s                                                                                                               stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

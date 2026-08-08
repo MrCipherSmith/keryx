@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A1",
+  "target": "helyx",
+  "variantId": "keryx-deepseek",
+  "commit": "bfad745ba59b",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-keryx-deepseek",
+  "mode": "unattended-stdin",
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-06T22:14:27Z",
+  "finishedAt": "2026-08-06T22:15:05Z",
+  "wallTimeSeconds": 38.1,
+  "prompt": "What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A1/keryx-deepseek",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A1/keryx-deepseek/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A1/keryx-deepseek/screens/002-step-0.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A1/keryx-deepseek/screens/003-step-1.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A1/keryx-deepseek/screens/004-final.png"
+  ],
+  "dirty": true
+}

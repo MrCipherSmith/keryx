@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "bun:test";
+import { validateAgainstSchemaObject } from "../../contracts/validator";
 import type { AffectedOptions, AffectedResult } from "../../gdgraph/affected";
 import type { GdgraphService } from "../../gdgraph/service";
 import type { GraphData } from "../../gdgraph/types";
+import { MEMORY_STATUS_VALUES } from "../../memory/types";
 import type {
   MemoryEntry,
   MemorySearchInput,
@@ -156,6 +160,160 @@ test("graphQuery delegates to the fake for orphans and cycles", async () => {
     query: "cycles",
     cycles: [["a", "b", "a"]],
   });
+});
+
+test("memorySearch echoes only filters the frozen result schema declares", async () => {
+  // The widened filter set is passed to the SERVICE, but `filters` on the result
+  // is a schema-constrained field: memory-search-result.schema.json declares it
+  // `additionalProperties: false` with no `semantic`. Echoing it made every
+  // semantic search emit a result that fails its own schema — and nothing
+  // noticed, because nothing validated the result against the schema.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  const { deps } = fakeDeps({
+    search: { schemaVersion: 1, query: "q", results: [], markdownPath: "", jsonPath: "" },
+  });
+  const port = createMetaprojectAdapter(CWD, deps);
+  const result = await port.memorySearch({
+    query: "q",
+    module: "harness",
+    entity: "e",
+    status: "superseded",
+    class: "semantic",
+    asOf: "2026-01-01",
+    limit: 3,
+    semantic: true,
+  });
+
+  expect(result.filters).toEqual({
+    module: "harness",
+    entity: "e",
+    status: "superseded",
+    class: "semantic",
+    asOf: "2026-01-01",
+  });
+  expect(Object.keys(result.filters ?? {})).not.toContain("semantic");
+  expect(Object.keys(result.filters ?? {})).not.toContain("limit");
+
+  const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+  expect(validation.errors).toEqual([]);
+  expect(validation.valid).toBe(true);
+});
+
+test("the published schema's status enums are the memory module's own statuses", () => {
+  // Was recorded here as a known divergence and is now reconciled the only way
+  // it could honestly go: the schema allowed `active/superseded/deprecated`,
+  // naming an `active` this module has never had while omitting `draft`,
+  // `accepted` and `conflict`, so `memorySearch({status: "accepted"})` — an
+  // ordinary query — echoed a filter its own result schema rejected, and any
+  // hit carrying a real status failed validation too.
+  //
+  // The expectation is DERIVED from MEMORY_STATUS_VALUES rather than restated,
+  // so adding a status to the module without republishing the schema fails here
+  // instead of at an agent's next structured call. Both enums are checked: the
+  // filter echo and the hit, which drifted together and would drift together.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as {
+    properties: {
+      filters: { properties: { status: { enum: string[] } } };
+      hits: { items: { properties: { status: { enum: string[] } } } };
+    };
+  };
+  const expected = [...MEMORY_STATUS_VALUES].sort();
+  expect([...schema.properties.filters.properties.status.enum].sort()).toEqual(expected);
+  expect([...schema.properties.hits.items.properties.status.enum].sort()).toEqual(expected);
+});
+
+test("an unrecognised status is neither applied nor echoed", async () => {
+  // Found by review: the APPLIED filter was guarded and the ECHO was not, so
+  // `status: "active"` — the value the schema's own previous enum advertised as
+  // legal — produced a result that failed the schema it was echoing to. The echo
+  // also described a filter that had never been applied.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  for (const status of ["active", "typo", "ACCEPTED", ""]) {
+    const { deps, calls } = fakeDeps({
+      search: { schemaVersion: 1, query: "q", results: [], markdownPath: "", jsonPath: "" },
+    });
+    const port = createMetaprojectAdapter(CWD, deps);
+    const result = await port.memorySearch({ query: "q", status });
+
+    expect(calls.search[0]?.filters?.status, `"${status}" must not be applied`).toBeUndefined();
+    expect(result.filters?.status, `"${status}" must not be echoed`).toBeUndefined();
+    const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+    expect(validation.errors, `"${status}" must still produce a valid result`).toEqual([]);
+  }
+});
+
+test("a hit carrying any real memory status validates against the published schema", async () => {
+  // The half that mattered in practice: `hits[].status` is not echoed input, it
+  // is whatever the store read off disk. Under the old enum an `accepted` entry
+  // — the ordinary outcome of `keryx memory ingest` — produced a result that
+  // failed its own schema, and nothing was validating, so nothing said so.
+  const schemaPath = path.join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "docs",
+    "requirements",
+    "keryx-metaproject-native",
+    "schemas",
+    "memory-search-result.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+
+  for (const status of MEMORY_STATUS_VALUES) {
+    const scored: ScoredEntry = {
+      entry: { ...entry(), status },
+      score: 0.5,
+      components: { relevance: 1, recency: 0, confidence: 1, status: 1, scope: 0 },
+      reason: "match",
+    };
+    const { deps } = fakeDeps({
+      search: { schemaVersion: 1, query: "q", results: [scored], markdownPath: "", jsonPath: "" },
+    });
+    const port = createMetaprojectAdapter(CWD, deps);
+    const result = await port.memorySearch({ query: "q", status });
+
+    expect(result.filters?.status).toBe(status);
+    expect(result.hits[0]?.status).toBe(status);
+    const validation = validateAgainstSchemaObject(schema, result as unknown as Record<string, unknown>);
+    expect(validation.errors, `status "${status}" must validate`).toEqual([]);
+    expect(validation.valid).toBe(true);
+  }
 });
 
 test("memorySearch delegates to the injected memory fake and maps ranked hits", async () => {

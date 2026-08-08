@@ -1,0 +1,8 @@
+A3-opencode-deepseek/transcript.txt:2:118:                                                                                                              Import cycle check in project
+A3-opencode-deepseek/transcript.txt:4:75:     │File                                          │Back-import from handlers.ts                      │      Context
+A3-opencode-deepseek/transcript.txt:6:13:     │bot/callbacks.ts                              │setPendingTool, setPendingInput                   │      6% used
+A3-opencode-deepseek/transcript.txt:21:47:     Every file above is also imported by bot/handlers.ts (bot/handlers.ts:95–123), so each is a 2-node     
+A3-opencode-deepseek/transcript.txt:22:13:     static cycle through the hub, and callbacks.ts/text-handler.ts/handlers.ts form a 3-node cycle         
+A3-opencode-deepseek/transcript.txt:25:34:     Note: gdgraph also reported cycles through bot/commands/menu.ts, but those are await import() (        
+A3-opencode-deepseek/transcript.txt:26:79:     dynamic) edges (bot/commands/menu.ts:245–303) — not module-load-time cycles, so they don't count.      
+A3-opencode-deepseek/transcript.txt:28:53:     Routing audit: graph_used: keryx gdgraph query cycles (8 candidate cycles); ctx_used: none (no         

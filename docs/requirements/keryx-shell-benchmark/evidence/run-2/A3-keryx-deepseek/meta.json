@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A3",
+  "target": "helyx",
+  "variantId": "keryx-deepseek",
+  "commit": "bfad745ba59b",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A3-keryx-deepseek",
+  "mode": "unattended-stdin",
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-07T07:24:50Z",
+  "finishedAt": "2026-08-07T07:25:04Z",
+  "wallTimeSeconds": 14.0,
+  "prompt": "Are there any import cycles in this project? List them.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A3/keryx-deepseek",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A3/keryx-deepseek/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A3/keryx-deepseek/screens/002-final.png"
+  ],
+  "dirty": true
+}

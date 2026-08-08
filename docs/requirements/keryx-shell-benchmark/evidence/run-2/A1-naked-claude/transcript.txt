@@ -1,0 +1,40 @@
+  └──────────┴───────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  147 files are not in the cone — including all of dashboard/src/** (browser bundle, never imports server config), cli.ts, logger.ts, channel.ts,
+  orchestrator/*, and most of utils/*.
+
+  The transitive tier does not break at compile time. CONFIG is a value, not a type that flows outward, so a field change stops at level 1. What level
+  2–4 inherit is a runtime coupling: config.ts runs EnvSchema.safeParse(process.env) at module load and calls process.exit(1) on failure
+  (config.ts:125-141). Any of those 105 files, imported anywhere, boots that validation. So:
+
+  - Rename or retype a field → breaks only the level-1 files that name it. Small.
+  - Add a new required field (.min(1) with no default) → breaks all 105 at startup, plus every process that imports any of them. That's the change
+  with real blast radius.
+
+  Coupling that no import graph will show you
+
+  These reference the env var names without importing CONFIG, so tsc stays silent:
+
+  - .env.example, docker-compose.yml, Dockerfile, install.sh, scripts/run-cli.sh
+  - cli.ts — the setup wizard writes .env by key name; cli.ts:611 even encodes the ENABLE_DASHBOARD absent-vs-false asymmetry that config.ts:115-122
+  documents. Rename that key and the wizard silently writes a dead line.
+  - tests/preload.ts:49 and tests/global-setup.ts:14-20 — set TELEGRAM_BOT_TOKEN / DATABASE_URL / ALLOWED_USERS into process.env before config.ts
+  loads, purely to get past the fail-fast. Add a required field and the whole test suite dies at import, not in a test.
+  - channel/index.ts, channel/status.ts, channel/tools.ts, scripts/supervisor.ts, scripts/admin-daemon.ts, bot/commands/supervisor-actions.ts,
+  bot/commands/memory-export.ts, utils/skill-approval.ts, tests/fixtures/fake-fetch.ts, tests/e2e/auth.setup.ts — read process.env.X directly,
+  bypassing CONFIG entirely.
+
+  Plus docs that would go stale: README.md, guides/architecture.md, guides/mcp-tools.md, guides/remote-laptop-setup.md, docs/dev/modules.md,
+  docs/dev/onboarding.md, docs/spec/{en,ai}/spec.md.
+
+  ---
+  Routing audit: graph_used: no (gdgraph unavailable — worktree bench-stripped), wiki_used: no (same), ctx_used: yes (keryx ctx rg for all searches),
+  raw_rg_used: yes — one per-file rg -o loop for the field-usage table, and a Node script for the graph traversal, because keryx ctx rg compacts 
+  output to the top 12 files and cannot emit a full unaggregated list.
+
+✻ Cogitated for 2m 43s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ what breaks if I add a new required env var
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

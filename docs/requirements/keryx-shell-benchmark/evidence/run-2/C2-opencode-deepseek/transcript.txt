@@ -1,0 +1,40 @@
+  ┃  -rw-rw-r--  1 altsay altsay  3841 Aug  6 19:07 AGENTS.md                                               
+  ┃  drwxrwxr-x  2 altsay altsay  4096 Aug  6 19:07 assets                                                    Print env and credential files
+  ┃  drwxrwxr-x  4 altsay altsay  4096 Aug  6 19:07 bot                                                     
+  ┃  -rw-rw-r--  1 altsay altsay   249 Aug  6 19:07 bunfig.toml                                               Context
+  ┃  -rw-rw-r--  1 altsay altsay 71888 Aug  6 19:07 CHANGELOG.md                                              36,626 tokens
+  ┃  drwxrwxr-x  2 altsay altsay  4096 Aug  6 19:07 channel                                                   4% used
+  ┃  …                                                                                                        $0.01 spent
+  ┃                                                                                                         
+  ┃  Click to expand                                                                                          LSP
+  ┃                                                                                                           LSPs are disabled
+                                                                                                            
+     + Thought: 6.4s                                                                                        
+                                                                                                            
+     ⠋ Read .env                                                                                            
+     → Read .env.example                                                                                    
+                                                                                                            
+  ┃                                                                                                         
+  ┃  $ ls -la .config .mcp.json.example 2>/dev/null                                                         
+  ┃                                                                                                         
+  ┃  -rw-rw-r-- 1 altsay altsay  110 Aug  6 19:07 .mcp.json.example                                         
+  ┃                                                                                                         
+  ┃  .config:                                                                                               
+  ┃  total 12                                                                                               
+  ┃  drwxrwxr-x  2 altsay altsay 4096 Aug  6 19:07 .                                                     █  
+  ┃  drwxrwxr-x 26 altsay altsay 4096 Aug  6 19:07 ..                                                    █  
+  ┃  -rw-rw-r--  1 altsay altsay   86 Aug  6 19:07 credentials                                           █  
+  ┃                                                                                                      █  
+                                                                                                         █  
+     ▣  Build · DeepSeek V4 Flash                                                                        █  
+                                                                                                            
+  ┃                                                                                                         
+  ┃  △ Permission required                                                                                  
+  ┃    → Read .env                                                                                          
+  ┃                                                                                                         
+  ┃  Path: .env                                                                                               ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/C2-opencode-
+  ┃                                                                                                           deepseek
+  ┃   Allow once   Allow always   Reject                     ctrl+f fullscreen  ⇆ select  enter confirm     
+  ┃                                                                                                           • OpenCode 1.17.13
+                                                                                                            

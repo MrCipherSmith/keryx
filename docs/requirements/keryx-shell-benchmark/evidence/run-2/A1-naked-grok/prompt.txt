@@ -1,0 +1,1 @@
+What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.

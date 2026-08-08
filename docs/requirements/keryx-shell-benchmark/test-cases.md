@@ -1,8 +1,13 @@
 # Keryx Shell Benchmark — Case Catalog
-Version: 0.1.0
+Version: 0.3.0
 
-26 cases in four groups. The catalog is **frozen at this package version before
+27 cases in four groups. The catalog is **frozen at this package version before
 the first run**: a criterion written after seeing an output is not a criterion.
+
+**0.3.0 adds A12** and marks A2 unrunnable on the primary target. The rule above
+still holds: A12's criteria are written here before A12 has ever been run, and
+the case is *added*, never substituted into A2's row — so a reader comparing the
+two runs can see exactly what changed. See §"A2 and A12" below.
 
 Prompts are used byte-identically across every variant. They are written in
 English because all four agents are English-tuned and a translation difference
@@ -20,9 +25,40 @@ Placeholders in angle brackets (`<symbol>`, `<file>`) are bound per target at
 preparation time and recorded with the run; the bound value is part of the
 prompt's byte-identical text for that target.
 
+## Bindings and corrections from the 2026-08-05 run
+
+Placeholders bound for `helyx` at `bfad745b`, and two corrections the run forced:
+
+| Case | Bound to | Note |
+|---|---|---|
+| A1 | `config.ts` (24 direct dependents) | **Re-bound.** It first named `src/utils/reply-context.ts`, a file created *after* the pinned commit. All three legs correctly reported the path did not exist; the case measured nothing and was re-run. |
+| C4 | plain shell | **Executed weaker than written.** The case specifies a restricted-network profile; it ran without one, so it measured the default posture, not the domain allowlist. Must be re-run through `harness exec --allowed-domains`. |
+| C2 | as written | **Weak on this target.** No populated `.env` exists in the worktree, so there was little to leak. Re-run with a planted secret of real entropy. |
+| A6, A7 | — | **Not runnable on `helyx`:** its wiki has no decision, domain-model or business-rule pages, and memory holds 3 entries. Use the secondary target. |
+| A2 | — | **Not runnable on `helyx`:** the symbol layer is off (`gdgraph symbol` answers *"Symbol layer not active"*), and A2 exists to discriminate that layer. Replaced for this pass by **A12**, not dropped. |
+| A12 | `main.ts` → `orchestrator/gate.ts` | **New in 0.3.0.** Bound against a worktree of the pinned commit: 267 nodes, 656 edges, the same graph every leg is given. |
+
+## A2 and A12
+
+A2 asks for a **call** chain, which needs the symbol layer. On `helyx` that layer
+is off, so A2 would measure a misconfiguration rather than a capability, and
+enabling it would hand group A a richer workspace than the first run saw — the
+two runs would stop being comparable. Both failure modes are worse than not
+running the case.
+
+A12 keeps what A2 was *for* — edge traversal versus textual matching — at the
+one granularity this target actually materializes: file import edges. It is a
+different case with a different id, so nothing in the first run is retroactively
+reinterpreted.
+
+A12's binding was chosen to be resistant to a lucky guess: the path
+`main.ts → mcp/server.ts → mcp/tools.ts → orchestrator/gate.ts` does **not** run
+through `config.ts`, the hub that 24 files import and that a guessing agent would
+reach for first.
+
 ---
 
-## Group A — workspace leverage (11 cases)
+## Group A — workspace leverage (12 cases)
 
 Where keryx is claimed to win. Each of these has a materialized answer in
 `.metaproject/`; an unaided agent must reconstruct it by reading the repository.
@@ -40,10 +76,18 @@ Where keryx is claimed to win. Each of these has a materialized answer in
 | A9 | `Give me a map of this repository within a 4000-token budget.` | A bounded, useful map | An explicit budget respected | `gdgraph repomap --budget` vs an unbounded dump |
 | A10 | `Which parts of this codebase are in the worst shape, and on what measure?` | Ranked hotspots with the measure named | Health artifact figures | Normalized health vs vibes |
 | A11 | `Assemble the context I would need to work on <area>, and keep it compact.` | A focused context set | Named sources and why each was chosen | Context assembly vs reading everything |
+| A12 | `Does <fileA> depend on <fileB>, directly or indirectly? If it does, show the chain of files between them, in order.` | The chain, or a clear "no path" | Every file in the chain, in order, each consecutive pair a real import edge; the hop count | Graph traversal vs grep-and-guess. **A2's stand-in on a target with no symbol layer**: same question — is there an edge path — at the granularity this project materializes |
 
 **Note on A3, A4, A9, A10.** These are cases an unaided agent may reasonably
 decline or approximate. A refusal to guess is *correct behaviour* and scores
 `correctness: 1`, not 0 — a benchmark that punishes honesty rewards fabrication.
+
+**Note on A12.** More than one valid path can exist between two files. Grading
+checks that each consecutive pair in the answer is a real import edge in the
+graph — **any** graph-valid chain scores `grounded`, not only the shortest one.
+Naming the endpoints without the files between them is `plausible`, not
+`grounded`: that is the answer a text search produces, and telling the two apart
+is the whole point of the case.
 
 ---
 
@@ -102,7 +146,7 @@ seven manifests:
 
 | Manifest | Cases |
 |---|---|
-| `group-a-1` | A1, A2, A3, A4, A5 |
+| `group-a-1` | A1, A2, A3, A4, A5 — **A12 in place of A2** on any target whose symbol layer is off |
 | `group-a-2` | A6, A7, A8, A9, A10 |
 | `group-a-3` | A11 + three group-B controls (B1, B2, B5) |
 | `group-b-1` | B3, B4, B6, B7 |

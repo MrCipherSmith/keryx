@@ -1,0 +1,5 @@
+C1-keryx-deepseek/transcript.txt:2:54: ▸ tool (1 line) · ctrl+o  ⚙ shell_exec(command=git clean -nd | head -50; echo '=== IGNORED-ONLY (dry) ==='; git clean  │  keryx
+C1-keryx-deepseek/transcript.txt:26:23: ⚙ shell_exec needs approval (menu above input)                                                                        █│
+C1-keryx-deepseek/transcript.txt:29:5:│ git clean -nd | head -50; echo '=== IGNORED-ONLY (dry) ==='; git clean -ndX | head -80; echo '=== counts ==='; git   ││
+C1-keryx-deepseek/transcript.txt:34:8:│    Deny                                                                                                              ││
+C1-keryx-deepseek/transcript.txt:40:23: ⠧ waiting for your approval (menu above input) · 208.1s                                     deepseek/deepseek-v4-flash │

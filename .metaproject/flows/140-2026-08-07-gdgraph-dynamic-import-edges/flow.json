@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 2,
+  "id": "140",
+  "slug": "gdgraph-dynamic-import-edges",
+  "title": "gdgraph counts await import() as an ordinary import edge — benchmark finding P1",
+  "status": "done",
+  "createdAt": "2026-08-07T09:10:10.041Z",
+  "updatedAt": "2026-08-07T09:51:23.213Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e6bcab5e0d7049facbf13db60119148a11ea423fc564dc0d77fc37a09604ff56",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-07T09:42:10.137Z",
+      "note": "types.ts adds importKind; build.ts preserves {specifier, kind} from scanImports. import-kind.test.ts asserts the literal kinds scanImports returns. (PR #257)"
+    },
+    "AC2": {
+      "at": "2026-08-07T09:42:10.332Z",
+      "note": "Verified on the pinned target, not only a fixture: rebuilt helyx@bfad745b (267 nodes, 656 edges), every cycle through bot/commands/menu.ts gone. 8 -> 7; the residue is genuinely static (bot/commands/memory.ts:7 <-> bot/handlers.ts:96, checked by hand). (PR #257)"
+    },
+    "AC3": {
+      "at": "2026-08-07T09:42:10.532Z",
+      "note": "Two tests, same two-file shape: static IS reported, dynamic is NOT. (PR #257)"
+    },
+    "AC4": {
+      "at": "2026-08-07T09:42:10.720Z",
+      "note": "Type-only-import and Java fixtures (both fallback-only) assert 'unknown-static', never 'dynamic-import'. (PR #257)"
+    },
+    "AC5": {
+      "at": "2026-08-07T09:42:10.921Z",
+      "note": "getOrphans/getAffected/computeAffected untouched and never read importKind; affected.test.ts and service.test.ts unmodified and passing. (PR #257)"
+    },
+    "AC6": {
+      "at": "2026-08-07T09:42:11.102Z",
+      "note": "CHANGELOG.md Unreleased/Fixed states previously reported cycle counts on lazy-loading codebases were inflated. (PR #257)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/257"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Failing tests for the frozen criteria",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Implement the fix",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Verify: focused tests + keryx health run",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Confirm orphans/affected unchanged on the fixture (AC5)",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-07T09:10:10.041Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-07T09:11:47.977Z",
+      "event": "task-added",
+      "detail": "T5: Failing tests for the frozen criteria"
+    },
+    {
+      "at": "2026-08-07T09:11:48.065Z",
+      "event": "task-added",
+      "detail": "T6: Implement the fix"
+    },
+    {
+      "at": "2026-08-07T09:11:48.156Z",
+      "event": "task-added",
+      "detail": "T7: Verify: focused tests + keryx health run"
+    },
+    {
+      "at": "2026-08-07T09:11:48.779Z",
+      "event": "task-added",
+      "detail": "T8: Confirm orphans/affected unchanged on the fixture (AC5)"
+    },
+    {
+      "at": "2026-08-07T09:11:48.963Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-07T09:11:49.052Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-07T09:24:01.679Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-07T09:24:01.767Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-07T09:24:01.861Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-07T09:24:01.950Z",
+      "event": "task-done",
+      "detail": "T5: Failing tests for the frozen criteria"
+    },
+    {
+      "at": "2026-08-07T09:24:02.045Z",
+      "event": "task-done",
+      "detail": "T6: Implement the fix"
+    },
+    {
+      "at": "2026-08-07T09:24:02.139Z",
+      "event": "task-done",
+      "detail": "T8: Confirm orphans/affected unchanged on the fixture (AC5)"
+    },
+    {
+      "at": "2026-08-07T09:35:49.035Z",
+      "event": "task-done",
+      "detail": "T7: Verify: focused tests + keryx health run"
+    },
+    {
+      "at": "2026-08-07T09:35:49.124Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-07T09:41:36.367Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:42:10.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: types.ts adds importKind; build.ts preserves {specifier, kind} from scanImports. import-kind.test.ts asserts the literal kinds scanImports returns. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.332Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified on the pinned target, not only a fixture: rebuilt helyx@bfad745b (267 nodes, 656 edges), every cycle through bot/commands/menu.ts gone. 8 -> 7; the residue is genuinely static (bot/commands/memory.ts:7 <-> bot/handlers.ts:96, checked by hand). (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Two tests, same two-file shape: static IS reported, dynamic is NOT. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.721Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Type-only-import and Java fixtures (both fallback-only) assert 'unknown-static', never 'dynamic-import'. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:10.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: getOrphans/getAffected/computeAffected untouched and never read importKind; affected.test.ts and service.test.ts unmodified and passing. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:11.102Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CHANGELOG.md Unreleased/Fixed states previously reported cycle counts on lazy-loading codebases were inflated. (PR #257)"
+    },
+    {
+      "at": "2026-08-07T09:42:17.546Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:42:19.545Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-08-07T09:43:09.932Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/257"
+    },
+    {
+      "at": "2026-08-07T09:51:21.479Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-07T09:51:23.213Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

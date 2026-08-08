@@ -19,6 +19,7 @@ import { securityCommand } from "./commands/security";
 import { mcpCommand } from "./commands/mcp";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
+import { sandboxCommand } from "./commands/sandbox";
 import { shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { modulesCommand } from "./commands/modules";
@@ -77,6 +78,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   security: securityCommand,
   mcp: mcpCommand,
   harness: harnessCommand,
+  sandbox: sandboxCommand,
   shell: shellCommand,
   sessions: sessionsCommand,
   session: sessionsCommand,
@@ -119,13 +121,17 @@ Usage:
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
                                                List / branch / export sessions for the current project
-  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
+  keryx harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] [--tools] "<prompt>"
+                                               <p> is any provider the registry declares (keryx harness run prints the list);
+                                               --base-url is ollama + loopback only; --tools registers the read-only metaproject tools
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
                      [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]
   keryx harness extension --spec <path>
   keryx harness wave --spec <path>
   keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>] [--json]
                                                Validate a recorded run's log against a fixture (no re-execution)
+  keryx sandbox status [--json]
+                                               OS sandbox launcher availability + per-capability containment matrix (report, not a gate)
   keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   keryx status
   keryx modules [status | enable <name> | disable <name>]
@@ -203,6 +209,7 @@ Commands:
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions
   harness   Run a single provider turn (harness run) and print structured events
+  sandbox   Report OS sandbox launcher availability and the per-capability containment matrix
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status
   modules   View and toggle Metaproject modules (interactive)

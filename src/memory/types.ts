@@ -1,9 +1,19 @@
-export type MemoryStatus =
-  | "draft"
-  | "accepted"
-  | "deprecated"
-  | "conflict"
-  | "superseded";
+/**
+ * The memory lifecycle statuses, as ONE list. The union used to be spelled out
+ * here and re-spelled in `store.ts` and in the metaproject adapter, and the
+ * published `memory-search-result.schema.json` had drifted to a fourth spelling
+ * (`active/superseded/deprecated`) that named a status this module has never
+ * had. A schema-conformance test now derives its expectation from this array.
+ */
+export const MEMORY_STATUS_VALUES = [
+  "draft",
+  "accepted",
+  "deprecated",
+  "conflict",
+  "superseded",
+] as const;
+
+export type MemoryStatus = (typeof MEMORY_STATUS_VALUES)[number];
 
 export type Confidence = "low" | "medium" | "high";
 

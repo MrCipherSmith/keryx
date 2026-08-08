@@ -78,6 +78,120 @@ load-bearing layer is the **approval gate**, not the sandbox. The policy engine
 decides *what runs*; the sandbox bounds *what a run can touch*. If you have not
 turned containment on, you are relying on the first of those.
 
+### What that gate will not remember
+
+When you approve a `shell_exec` command the shell offers to remember it, either
+exactly or as a `<word> *` prefix. Some prefixes are never offered, and a stored
+one is **ignored on load** with its reason reported.
+
+Loading does not rewrite the file, so a refused pattern is reported again every
+time — but the next time you answer *always allow* to anything, the file is
+written back **without** it. If you want to keep a record of what you had, copy
+`permissions.json` before the next approval; the refusal is reported at least
+once, and after that only until the next write.
+
+Two different rules decide this, and the difference matters.
+
+**A shape rule, which holds for anything.** A `<token> *` grant is offered only
+when the token is recognisably a program name — letters, digits and `. _ + -`,
+optionally with a path. So `\bash *`, `'bash' *`, `LC_ALL=C *` and `t*` are all
+refused without asking what they are. That matters more than it looks: to
+`/bin/sh` a leading backslash is nothing at all, so `\bash -c …` runs exactly as
+`bash -c …` does, and an environment assignment puts caller-chosen *text* where
+the program name should be — no list of program names could ever contain it.
+
+**A positional rule, which is the one that does the heavy lifting.** A wildcard
+may appear only in the **last** part of a pattern, and never in the first token.
+The reason is that `*` matches whitespace: a wildcard in the program position
+*is* a program, whatever letters it contains. `????? ctx run*` — five question
+marks, no letters — matches `keryx ctx run …` purely by length, and no rule that
+reads the letters in a token can ever see that.
+
+In practice this means **a wildcard has to be the last thing in the pattern**. If
+you are used to writing a glob in the middle, move it to the end:
+
+| instead of | write |
+|---|---|
+| `cp *.txt backup/` | `cp` — as an exact command, or a pattern ending in the glob |
+| `eslint *.ts --fix` | `eslint --fix *.ts` |
+| `bun test src/*.test.ts --coverage` | `bun test --coverage src/*.test.ts` |
+| `grep foo *.ts src` | `grep foo src/*.ts` |
+
+Flags before the glob, glob last. `ls src/*.ts`, `tar czf out.tgz *.md`,
+`chmod +x scripts/*.sh`, `hostname *` and `ls k*` are all fine as written.
+
+One more, for the same reason: behind a word that runs whatever follows it, the
+part after the wrapper has to name something. `bun test*` and
+`timeout 5 bun test*` are fine; `timeout 5 *`, `env *x`, `env /b*` and
+`timeout 5 .*` are not, because the wrapper would run whatever the wildcard
+turned out to be — and a path with a glob in it (`/b*` → `/bin/sh`) names a
+directory, not a program.
+
+**Where this is a list, and which way it fails.** Deciding whether the word
+before your glob runs what follows it is not something the shape of a pattern can
+answer, so there are two lists. They are wrong in opposite directions on purpose:
+
+- For **`keryx` patterns**, a word is assumed to run what follows it unless it is
+  known not to. A wrapper nobody wrote down therefore costs you one refused
+  pattern, not a bypass. `git add k*` and `docker ps k*` are refused for this
+  reason — `git` and `docker` can execute their arguments and nothing here knows
+  that `add` and `ps` do not.
+- For **everything else**, only a known wrapper triggers the rule, because the
+  other direction would refuse every ordinary grant — `hostname *` included.
+
+That second list is an expedient, and it has the failure you would expect: if
+the first word of your pattern is a program nobody has listed, `<program> *` is
+offered, and if that program happens to run its argument, the grant is arbitrary
+execution. `hostname *` and `whatever-tool *` are the same shape to this code.
+Do not read `<program> *` as safe because it was offered.
+
+**A wrapper in front changes nothing.** `cat *` is refused because it would
+auto-approve reading any file on the machine; so are `env cat *`, `nice cat *`
+and `timeout 5 cat *`, because the file being read is the same either way. That
+applies to a pass-through wrapper — one that runs its argument as a program — and
+not to a subcommand: `git diff *` is git's own diff and its glob is a pathspec
+inside the repository, so it stays offerable.
+
+**A word list, which is an expedient.** On top of the shape rule, some plain
+program names are refused as bare grants: interpreters (`bash *`, `python3 *`),
+shell builtins that source a file (`. *`, `source *`), generic wrappers (`env *`,
+`xargs *`, `timeout *`, `setsid *`), remote-exec and download tools, container
+runtimes, package/build runners, and programs with their own escape into a shell
+(`git *`, `find *`, `psql *`, `sqlite3 *`, `tar *`, `gh *`, `aws *`).
+
+**`keryx` gets a rule of its own.** `keryx ctx run -- <anything>` runs an
+arbitrary program, and the destructive-command check reads the line it is given,
+not the one after the `--`. Banning the bare `keryx *` grant was not enough,
+because `keryx ctx run*` and `keryx c*` narrow the arguments and still cover it.
+So a `keryx …` pattern is offered only when it literally pins a verb that cannot
+execute what follows: `keryx flow status*` and `keryx ctx rg*` are fine,
+`keryx ctx*` and `keryx ?*` are not.
+
+**Where this leaves you in practice.** The approval prompt offers exactly two
+grants: the exact command, and `<first token> *`. There is no free-form entry
+yet, so for a keryx command the offered prefix is `keryx *`, which is refused —
+and the narrower pattern this page recommends has to be written into
+`permissions.json` by hand. If your project routes work through `keryx` (this one
+does), expect the exact-command grant to be the one you use until free-form entry
+exists.
+
+For `keryx ctx run` and `keryx harness exec` specifically, **neither** grant is
+offered — not the prefix and not the exact command. That is deliberate: those two
+verbs take the program to run on their own command line, so a remembered pattern
+covering them is a remembered grant of arbitrary execution. They prompt every
+time, and there is no pattern you can hand-write that will stop them prompting.
+`keryx health run` and `keryx test run` do stay offerable; they execute the
+repository's own configured command, which comes from the checkout rather than
+from the pattern.
+
+**The word list is an expedient, not a boundary.** It is a list of words, so it
+is incomplete by construction — a wrapper nobody has thought of is not on it. The
+shape rule above is not a list and does not have that property. Three things
+apply to *every* pattern regardless of its first word: the metacharacter rule,
+the destructive classifier, and the refusal to remember anything that touches the
+agent's own credential and permission files. Do not read the word list as a
+guarantee about a category.
+
 ## Verify
 
 ```console

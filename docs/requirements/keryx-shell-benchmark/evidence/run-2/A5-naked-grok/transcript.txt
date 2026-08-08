@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A5-naked-grok (worktree of ~/bots/helyx)                 67K / 500K
+
+                                                                                                                                                    
+     ❯ How does the memory subsystem work? Answer from the project's own documentation, not by reading the source.                         7:54 AM  
+                                                                                                                                                    
+                                                                           ▲
+     ───
+
+     Requirements & degradation
+
+     Long-term semantic features need Ollama + nomic-embed-text. Without Ollama:
+
+     • Bot still runs
+     • Embeddings can be null
+     • /recall / semantic search degrade
+     • Reconciliation falls back to plain insert
+     • Summaries may still be generated, but not usefully embedded for search
+
+     ───
+
+     Design notes from docs
+
+     • LLM reconciliation instead of exact-string dedup (Haiku for cost)
+     • Soft deletes + per-type TTLs for cleanup without immediate loss
+     • pgvector HNSW for ANN cosine search
+     • memory/ as foundation — migrations live in memory/db.ts; no separate ORM
+
+     Primary user-facing doc: guides/memory.md. Schema detail: docs/dev/data-models.md (Memory section). Module map: docs/dev/modules.md             █
+     (memory).                                                                                                                                       █
+                                                                                                                                                     █
+     Worked for 48s                                                                                                               stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

@@ -66,6 +66,12 @@ describe("command-registry", () => {
     expect(matches[0]?.command).toBe("wiki enrich");
   });
 
+  test("matchIntent resolves sandbox-status phrases (flow 142 / P4, AC6)", () => {
+    expect(matchIntent("sandbox status")[0]?.command).toBe("sandbox status");
+    expect(matchIntent("is bubblewrap installed")[0]?.command).toBe("sandbox status");
+    expect(matchIntent("проверь sandbox")[0]?.command).toBe("sandbox status");
+  });
+
   test("matchIntent resolves the maintenance phrases to their commands", () => {
     // The maintenance descriptors added ~40 intent phrases. The intent index is
     // the agent-facing contract, so a collision or a ranking regression between

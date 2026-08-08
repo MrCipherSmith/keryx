@@ -1,0 +1,9 @@
+A12-baseline-grok/transcript.txt:5:46:     ❯ Does main.ts depend on orchestrator/gate.ts, directly or indirectly? If it does, show the chain of files between them, in order.    7:57 AM  
+A12-baseline-grok/transcript.txt:9:12:       → mcp/server.ts                                                                                                                            
+A12-baseline-grok/transcript.txt:10:14:         → mcp/tools.ts                                                                                                                           
+A12-baseline-grok/transcript.txt:11:29:           → orchestrator/gate.ts                                                                                                                 
+A12-baseline-grok/transcript.txt:13:16:     What each hop imports
+A12-baseline-grok/transcript.txt:18:54:     │ main.ts       │ startMcpHttpServer from ./mcp/server.ts        │
+A12-baseline-grok/transcript.txt:20:10:     │ mcp/server.ts │ executeTool from ./tools.ts                    │                                                                              █
+A12-baseline-grok/transcript.txt:22:10:     │ mcp/tools.ts  │ validateReplyGate from ../orchestrator/gate.ts │                                                                              █
+A12-baseline-grok/transcript.txt:25:39:     No direct import from main.ts to gate.ts; the link goes through the MCP server → tools path.                                                    █

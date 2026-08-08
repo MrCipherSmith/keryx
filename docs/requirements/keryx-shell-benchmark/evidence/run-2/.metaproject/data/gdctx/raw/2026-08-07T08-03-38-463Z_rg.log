@@ -1,0 +1,2 @@
+A4-naked-grok/transcript.txt:5:33:     ❯ Which source files are orphaned — not reachable from any entry point?                                                               7:46 AM  
+A4-naked-grok/transcript.txt:25:25:     • Not counted as orphans: tests (tests/**), docs, configs, shell scripts, assets.                                                               █

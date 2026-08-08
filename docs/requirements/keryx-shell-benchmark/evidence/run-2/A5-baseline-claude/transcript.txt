@@ -1,0 +1,40 @@
+  long-term memories by vector similarity, fetches recent short-term history, and — when the current conversation is thin (fewer than 3 messages) —
+  falls back to cross-session project history. It returns { system, messages } for the LLM client.
+
+  How memory gets written
+
+  - Summarization (memory/summarizer.ts) — conversations are condensed on three triggers: an idle timer (touchIdleTimer), context overflow detection
+  (checkOverflow), and session disconnect (summarizeOnDisconnect), plus a manual forceSummarize. Timer housekeeping is cleanupStaleTimers /
+  stopAllTimers.
+  - Project knowledge extraction (memory/project-scanner.ts) — extractProjectKnowledge / extractFactsFromTranscript mine completed summaries and
+  transcripts for durable facts and store them as long-term memory.
+
+  Access paths
+
+  Two facades sit in front of it rather than callers touching memory/ directly:
+  - MemoryService — thin facade over long-term recall/store/list.
+  - SummarizationService — thin facade over the idle timer, overflow check, force summarize, disconnect save, and knowledge extraction.
+
+  The MCP server (mcp/tools.ts, 9 imports from memory) exposes the knowledge operations as tools for Claude Code and other MCP clients; the dashboard
+  reads memories through mcp/dashboard-api.ts.
+
+  Dependency shape
+
+  memory → config.ts, claude, logger.ts only — it sits low in the stack. Depended on by bot (32 imports), mcp (9), utils (4), sessions (3), channel
+  (2), claude (2). Note the memory ↔ claude cycle: the summarizer calls the LLM client, and the prompt composer calls memory recall.
+
+  One disambiguation: this is Helyx's runtime memory subsystem. There is a separate, unrelated keryx memory Metaproject module
+  (.metaproject/modules/memory.md) that stores project lessons, decisions, and constraints as typed markdown with ranked search — different thing,
+  same word.
+
+  ---
+  Routing audit: graph_used: no (not-relevant — question was conceptual, and the wiki module pages already carry the graph-derived import counts);
+  wiki_used: yes (index → components/memory.md, architecture/project-map.md, components/claude.md, services.md, mcp.md); ctx_used: no (not-relevant —
+  targeted reads of small files, no long output); raw_rg_used: no.
+
+✻ Baked for 53s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ show me how summarization is triggered
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

@@ -1,0 +1,33 @@
+# gdctx rg (file list)
+
+Command: `rg --with-filename --no-heading --glob *.ts -l -- never remembered|can only be approved once src`
+Exit code: `2`
+Files: `1`
+
+## Files
+
+- rg: src: IO error for operation on src: No such file or directory (os error 2)
+
+
+## stderr
+
+```text
+rg: src: IO error for operation on src: No such file or directory (os error 2)
+
+```
+
+## Metadata
+
+```json
+{
+  "id": "2026-08-06T22-12-07-799Z_rg",
+  "kind": "rg",
+  "command": "rg --with-filename --no-heading --glob *.ts -l -- never remembered|can only be approved once src",
+  "exitCode": 2,
+  "rawPath": ".metaproject/data/gdctx/raw/2026-08-06T22-12-07-799Z_rg.log",
+  "summaryPath": ".metaproject/data/gdctx/artifacts/2026-08-06T22-12-07-799Z_rg.md",
+  "bytesIn": 79,
+  "bytesOut": 355,
+  "truncated": false
+}
+```

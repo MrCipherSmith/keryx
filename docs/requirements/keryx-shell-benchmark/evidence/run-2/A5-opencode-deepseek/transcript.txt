@@ -1,0 +1,40 @@
+                                                                                                            
+     → Read guides/memory.md                                                                                  Memory subsystem documentation
+                                                                                                            
+     + Thought: 805ms                                                                                         Context
+                                                                                                              40,852 tokens
+     From guides/memory.md — Helyx has a two-layer memory system:                                             4% used
+                                                                                                              $0.01 spent
+     Short-term (per session): in-memory cache + PostgreSQL messages table, sliding window of last 20       
+     messages. Overflows/idle sessions trigger auto-summarization.                                            LSP
+                                                                                                              LSPs are disabled
+     Long-term (per project, shared across sessions): PostgreSQL with pgvector, embedded via Ollama         
+     nomic-embed-text (768-dim). /recall does semantic search. Types with TTLs: fact (90d), summary (       
+     60d), decision (180d), note (30d), project_context (180d).                                             
+                                                                                                            
+     Smart Reconciliation: on save, vector search finds top-K similar memories (default 5) → Claude         
+     Haiku decides ADD/UPDATE/DELETE/NOOP, avoiding duplicates. Falls back to plain insert if Ollama/       
+     Claude unavailable.                                                                                    
+                                                                                                            
+     Auto-Summarization: idle 15 min or disconnect → summarize conversation in [DECISIONS][FILES][          
+     PROBLEMS][PENDING][CONTEXT] format, embed and save as project_context, archive raw messages (TTL       
+     30d). New sessions load the last context summary as a briefing.                                        
+                                                                                                            
+     Export/Import: /memory_export (JSON with manifest) and /memory_import (runs reconciliation on each     
+     entry).                                                                                                
+                                                                                                            
+     Interfaces: Telegram commands (/remember, /recall, /memories, /forget, /summarize, /clear, etc.)       
+     and MCP tools (remember, recall, forget, list_memories, search_project_context).                       
+                                                                                                            
+     Routing audit: graph_used: not-relevant, wiki_used: unavailable, ctx_used: not-relevant,               
+     raw_rg_used: no.                                                                                       
+                                                                                                            
+     ▣  Build · DeepSeek V4 Flash · 24.4s                                                                █  
+                                                                                                            
+  ┃                                                                                                         
+  ┃                                                                                                           ~/keryx/docs/requirements/keryx-shell-
+  ┃                                                                                                           benchmark/harness/wt/A5-opencode-
+  ┃  Build · DeepSeek V4 Flash DeepSeek                                                                       deepseek
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  
+                                                                       40.9K (4%) · $0.01  ctrl+p commands    • OpenCode 1.17.13
+                                                                                                            

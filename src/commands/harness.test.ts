@@ -1,12 +1,17 @@
 // RED tests for the `keryx harness run` CLI (flow 020, T5 / AC4).
 //
-// Pins `harnessCommand` (`src/commands/harness.ts`, registered in
-// `src/cli.ts` by T6): `keryx harness run --provider <fake|anthropic|ollama>
-// --model <m> [--base-url <url>] "<prompt>"` assembles `runOffline` with real
-// deps and the selected provider, printing the normalized events / final text
-// / completion / evidence. See `.metaproject/flows/020-2026-07-13-keryx-
-// harness-ollama-cli/{context.md,acceptance-criteria.md}` (AC4) for the
-// frozen scope.
+// Pins `harnessCommand` (`src/commands/harness.ts`, registered in `src/cli.ts`
+// by T6): `keryx harness run --provider <p> --model <m> [--base-url <url>]
+// [--tools] "<prompt>"` assembles `runOffline` with real deps and the selected
+// provider, printing the normalized events / final text / completion /
+// evidence. See `.metaproject/flows/020-2026-07-13-keryx-harness-ollama-cli/
+// {context.md,acceptance-criteria.md}` (AC4) for the frozen scope.
+//
+// `<p>` is any provider the registry declares. This header used to quote a
+// literal `<fake|anthropic|ollama>`, which is the same list-copied-and-drifted
+// defect the benchmark recorded as D4; flow 135 fixed the code and this line.
+// Flag behaviour (`--tools`, the `--base-url` destination rule) is covered in
+// `harness.scriptable-door.test.ts`.
 //
 // `src/commands/harness.ts` does NOT exist yet (T6 implements it to make this
 // suite GREEN); until then the missing-module import is the expected RED

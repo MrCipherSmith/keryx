@@ -1086,7 +1086,7 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 
 | Subcommand | Behavior |
 |---|---|
-| `harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] "<prompt>"` | one prompt through the run loop; prints one structured JSON blob |
+| `harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] [--tools] "<prompt>"` | one prompt through the run loop; prints one structured JSON blob. `--base-url` is ollama-loopback-only; `--tools` registers the read-only metaproject tools (opt-in: the loop is single-turn and does not return their results to the model) |
 | `harness exec [containment flags] -- <path> [args...]` | one contained subprocess under the OS sandbox |
 | `harness extension --spec <path>` | dispatch one declared extension (the only path that reaches `checkApproval`) |
 | `harness wave --spec <path>` | plan and run a declared multi-agent wave |

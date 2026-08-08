@@ -1,16 +1,10 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { MEMORY_CLASS_VALUES, MEMORY_TYPES, classForType } from "./types";
+import { MEMORY_CLASS_VALUES, MEMORY_STATUS_VALUES, MEMORY_TYPES, classForType } from "./types";
 import type { Confidence, MemoryClass, MemoryEntry, MemoryStatus } from "./types";
 
-const STATUSES = new Set<MemoryStatus>([
-  "draft",
-  "accepted",
-  "deprecated",
-  "conflict",
-  "superseded",
-]);
+const STATUSES = new Set<MemoryStatus>(MEMORY_STATUS_VALUES);
 const CONFIDENCES = new Set<Confidence>(["low", "medium", "high"]);
 
 export function memoryRoot(cwd: string): string {

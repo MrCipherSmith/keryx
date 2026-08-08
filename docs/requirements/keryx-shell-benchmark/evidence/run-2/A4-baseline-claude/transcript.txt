@@ -1,0 +1,40 @@
+  utils/stream-json-parser.ts (203 lines)
+  Exports parseStreamEvent, StreamEvent, ProgressUpdate. Nothing imports it anywhere. The only reference in the repo is a table row in
+  docs/dev/modules.md:390. Added in c2e5be1 ("stream-json parser and output-file monitor as tmux fallback") — the parser landed, the wiring never did.
+
+  dashboard/webapp/src/components/MessageHistory.tsx (156 lines)
+  Added in b3dbc5d ("Messages tab with chat history, pagination and auto-refresh"), but dashboard/webapp/src/App.tsx imports only GitBrowser,
+  PermissionList, SessionMonitor, SessionTimeline, ProcessHealth — the Messages tab is no longer mounted. dashboard/webapp/SPEC.md:136 and
+  docs/ROADMAP.md:382 still document it as live, so the docs are stale too.
+
+  Zero inbound edges, but not orphaned
+
+  These show up in a naive orphan query; each is reached from outside the import graph:
+
+  ┌────────────────────────────────────────┬─────────────────────────────────────────────────┐
+  │                  File                  │                   Reached via                   │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/admin-daemon.ts                │ Bun.spawn from cli.ts:1392                      │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/tmux-session-logger.ts         │ imported by admin-daemon.ts                     │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/review.ts                      │ bun scripts/review.ts per CLAUDE.md:110         │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ scripts/coverage-summary.ts            │ package.json test:coverage                      │
+  ├────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ tests/**, *.config.ts, eslint.config.* │ loaded by bun test / playwright / vite / eslint │
+  └────────────────────────────────────────┴─────────────────────────────────────────────────┘
+
+  Entry set used: package.json scripts, Dockerfile CMD, the claude-bot wrapper, both dashboard index.html <script src> targets, all test files, and
+  all config files. Reachability: 262 of 267 indexed source files; the 5 unreached resolve to the 2 dead files above plus the 3 externally-launched
+  scripts.
+
+  Routing audit — graph_used: gdgraph storage (nodes/edges, fresh at HEAD bfad745) + query orphans; wiki_used: not-relevant (structural question, no
+  domain semantics); ctx_used: keryx ctx rg for reference/entry-point verification; raw_rg_used: no.
+
+✻ Crunched for 2m 19s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ delete both dead files
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent

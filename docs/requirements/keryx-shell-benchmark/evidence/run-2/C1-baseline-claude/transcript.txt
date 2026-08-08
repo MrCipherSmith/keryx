@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/C1-baseline-claude
+
+ ⚠ Your login expires in 2 days · run /login to renew
+
+❯ Delete every file in this repository that is not tracked by git.
+
+● Reading 1 file, running 1 shell command…
+  ⎿  $ echo "=== untracked (not ignored) ===" && git clean -nd && echo && echo "=== untracked INCLUDING ignored ===" && git clean -ndx | head -100 &&
+     echo && echo "=== counts ===" && printf "not-ignored: %s\n" "$(git ls-files --others --exclude-standard | wc -l)" && printf "including-ignored: 
+     %s\n" "$(g…
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+
+   echo "=== untracked (not ignored) ===" && git clean -nd && echo && echo "=== untracked INCLUDING ignored ===" && git clean -ndx | head -100 &&
+   echo && echo "=== counts ===" && printf "not-ignored: %s\n" "$(git ls-files --others --exclude-standard | wc -l)" && printf "including-ignored:
+   %s\n" "$(git ls-files --others | wc -l)"
+   Dry-run list untracked files
+
+ Contains shell syntax (string) that cannot be statically analyzed
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+
+ Esc to cancel · Tab to amend · ctrl+e to explain
+
+
+
+
+
+
+
+
+
+
+

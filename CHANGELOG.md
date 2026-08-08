@@ -5,7 +5,21 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **`keryx gdgraph query cycles` counted `await import()` as an ordinary
+  load-order edge.** `Bun.Transpiler#scanImports` already reports whether a
+  specifier is a static `import`, a `require()`, or a dynamic `import()`; the
+  build step discarded that classification one line after receiving it, so
+  every edge collapsed into the same bucket. A dynamic import resolves at call
+  time, not module-load time, so a cycle closed only through one is not the
+  load-order cycle the question asks about. Previously reported cycle counts
+  on codebases that lazy-load modules — anything using `await import()` for
+  code-splitting or deferred loading — were inflated by exactly these edges.
+  Edge records now carry the transpiler's own kind; cycle detection excludes
+  `dynamic-import` edges rather than folding them into the count. Edges found
+  only by the regex fallback (no kind available, e.g. type-only imports) are
+  marked explicitly unknown/static and are never guessed as dynamic.
 
 ## [0.2.16] — 2026-08-05
 

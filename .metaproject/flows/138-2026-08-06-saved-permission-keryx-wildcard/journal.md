@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-08-06T09:36:15.584Z - flow created
+- 2026-08-06T09:39:28.949Z - frozen: 9 criteria; checksum recorded
+- 2026-08-06T09:40:00.815Z - task-added: T5: Add keryx and the round-3 execution wrappers to PREFIX_BANNED
+- 2026-08-06T09:40:00.901Z - task-added: T6: Invert the two frozen assertions and cover every added word
+- 2026-08-06T09:40:00.988Z - task-added: T7: Docs + full gate
+- 2026-08-06T09:40:01.076Z - started
+- 2026-08-06T09:46:02.963Z - ac-confirmed: AC1: shell-permissions-hardening.test.ts 'validateShellPattern names why a pattern is refused': keryx * is now refused and the reason matches /keryx ctx run/, not the generic interpreter wording (KERYX_PREFIX_REASON in src/lib/shell-permissions.ts)
+- 2026-08-06T09:46:03.122Z - ac-confirmed: AC2: shell-permissions-hardening.test.ts 'B4: a saved keryx * no longer auto-approves an arbitrary command': file written with skipValidation (older keryx), then isShellCommandAllowed('keryx ctx run -- rm -rf /') is false after load and the audit reports the pattern with the keryx-ctx-run reason
+- 2026-08-06T09:46:03.270Z - ac-confirmed: AC3: shell-permissions-hardening.test.ts 'B4: every newly banned wrapper is refused as a bare prefix grant' iterates NEWLY_BANNED_PREFIXES and asserts three spellings each (word *, word*, /usr/bin/word *). Covers keryx plus timeout setsid stdbuf flock unshare strace ltrace busybox parallel command chroot expect pwsh powershell sshpass runuser setpriv, and beyond the minimum the C-3 escape programs (psql mysql sqlite3 mongo mongosh redis-cli gh glab aws gcloud az pip pip3 pipx uv gem brew apt apt-get tar cmake bazel terraform ansible ansible-playbook)
+- 2026-08-06T09:46:12.197Z - ac-confirmed: AC4: shell-permissions-hardening.test.ts 'B4: a NARROWING pattern for the same word is still offerable': keryx flow status*, keryx ctx rg foo*, timeout 5 bun test* all validate ok. shell-permissions.test.ts round-trip and allow-list tests were rewritten onto keryx wiki* for the same reason
+- 2026-08-06T09:46:12.282Z - ac-confirmed: AC5: Both inverted with an explanation at the assertion: :185 (now the ownCli block) asserted validateShellPattern('keryx *').ok === true and now asserts false plus the reason; :233 kept 'keryx *' in the SURVIVING allowlist and now expects it in rejected. A third site, 'migration is non-destructive', moved from ['rm -rf /'] to ['keryx *','rm -rf /'] with the same note
+- 2026-08-06T09:46:12.371Z - ac-confirmed: AC6: Mutation, run rather than reasoned. Removing 'keryx' from PREFIX_BANNED fails 6: validateShellPattern names why a pattern is refused / migration: loading drops unsafe patterns and reports every one / migration is non-destructive / B4: every newly banned wrapper is refused / B4: a saved keryx * no longer auto-approves / suggestShellPatterns: exact + first-token prefix. Removing 'timeout' fails 1: B4: every newly banned wrapper is refused as a bare prefix grant. Both restored and the suite re-run green
+- 2026-08-06T09:46:21.387Z - ac-confirmed: AC7: Reviewed, no additions implied to either. PREFIX_BANNED_READERS already covers every reader in corpus C-1 (cat .env, cat ~/.ssh/id_rsa, cat ~/.aws/credentials); PREFIX_BANNED_MUTATORS already covers truncate -s 0 package.json, and the rest of C-1's destructive lines are reached through words that belong in PREFIX_BANNED (find . -delete, git clean -fdx, docker system prune, npm publish, git push) or are refused by the metacharacter rule (> src/commands/agent.ts). The additions therefore all went to PREFIX_BANNED
+- 2026-08-06T09:46:21.476Z - ac-confirmed: AC8: docs/docs/guides/contain-an-agent.md gains 'What that gate will not remember': the categories, the keryx * change and the drop-on-load behaviour, and a closing paragraph stating the list is an expedient and incomplete by construction, with the metacharacter rule and the destructive classifier named as what applies to every pattern. The module header's 'EXPEDIENT, not a boundary' wording is unchanged
+- 2026-08-06T09:46:21.566Z - ac-confirmed: AC9: bun run check: 3131 pass, 14 skip (all pre-existing), 0 fail, exit 0. bun run check:doc-links: 649 links across 203 files, 0 broken. No test skipped or weakened; the three tests that changed were inverted with stated reasons, not disabled
+- 2026-08-06T09:46:25.030Z - task-done: T5: Add keryx and the round-3 execution wrappers to PREFIX_BANNED
+- 2026-08-06T09:46:25.118Z - task-done: T6: Invert the two frozen assertions and cover every added word
+- 2026-08-06T09:46:25.206Z - task-done: T7: Docs + full gate
+- 2026-08-06T09:46:28.686Z - task-done: T1: Collect remaining context
+- 2026-08-06T09:46:28.776Z - task-done: T2: Implement per plan
+- 2026-08-06T09:46:28.866Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-06T09:46:28.956Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-06T11:21:08.854Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/254
+- 2026-08-06T14:47:08.751Z - completing
+- 2026-08-06T14:47:08.764Z - completion-failed: main-merge: 3c2d0f23 is not contained in origin/main

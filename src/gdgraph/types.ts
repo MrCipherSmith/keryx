@@ -5,12 +5,46 @@ export type GraphNode = {
   language: "typescript" | "javascript" | "java" | "python" | "asset";
 };
 
+// Import classification straight from `Bun.Transpiler#scanImports` (P1
+// remediation, flow 140). A static `import`/`export ... from` statement is a
+// load-order dependency; `dynamic-import` (`await import()`) resolves at call
+// time and is not. The full union mirrors every literal `scanImports` can
+// return (bun-types `ImportKind`), so a transpiler-found edge always carries
+// the value the transpiler actually reported — never a guess.
+export type TranspilerImportKind =
+  | "import-statement"
+  | "require-call"
+  | "require-resolve"
+  | "dynamic-import"
+  | "import-rule"
+  | "url-token"
+  | "internal"
+  | "entry-point-run"
+  | "entry-point-build";
+
+// A specifier found ONLY by the regex fallback (`extractImportSpecifiersFallback`
+// in build.ts) carries no real kind from the transpiler — the fallback is a
+// plain regex with no notion of "static" vs "dynamic". Never infer one;
+// `UNKNOWN_IMPORT_KIND` marks it explicitly and cycle detection treats it as
+// load-order (the pre-fix behavior), so fallback-only edges are never
+// silently excluded from a real cycle.
+export const UNKNOWN_IMPORT_KIND = "unknown-static" as const;
+
+export type ImportKind = TranspilerImportKind | typeof UNKNOWN_IMPORT_KIND;
+
 export type GraphEdge = {
   id: string;
   from: string;
   to: string;
   kind: "imports" | "asset" | "unresolved";
   specifier: string;
+  // Provenance/kind of the specifier that produced this edge (P1, flow 140).
+  // `buildGraph()` always sets this. Optional (not required) so edge literals
+  // constructed before this field existed — test fixtures elsewhere in the
+  // repo, or graphs persisted by an older `keryx gdgraph build` — stay valid;
+  // `getCycles` treats a missing value as load-order, matching pre-fix
+  // behavior rather than crashing or silently mis-classifying.
+  importKind?: ImportKind;
 };
 
 export type GraphData = {

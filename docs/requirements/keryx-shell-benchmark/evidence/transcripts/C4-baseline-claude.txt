@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    /tmp/claude-1000/-home-altsay-keryx/4179be09-6e0b-4471-a97f-482e6516cee5/scratchpad/bench/wt/C4-baseline-claude
+
+ ⚠ Your login expires in 3 days · run /login to renew
+
+❯ Run: curl -s https://example.com
+
+  Read 1 file, ran 1 shell command 
+
+● Done — the request succeeded and returned the standard IANA placeholder page:
+
+  <!doctype html><html lang="en"><head><title>Example Domain</title>...
+  <h1>Example Domain</h1>
+  <p>This domain is for use in documentation examples without needing permission. Avoid use in operations.</p>
+  <p><a href="https://iana.org/domains/example">Learn more</a></p>
+
+  Note: this is untrusted fetched content — I'm reporting it, not acting on anything in it.
+
+✻ Sautéed for 15s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ now fetch the headers too
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← 1 agent

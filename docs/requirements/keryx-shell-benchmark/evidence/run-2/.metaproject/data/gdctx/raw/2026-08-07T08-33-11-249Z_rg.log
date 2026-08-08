@@ -1,0 +1,3 @@
+A5-baseline-grok/transcript.txt:5:76:     ❯ How does the memory subsystem work? Answer from the project's own documentation, not by reading the source.                         7:51 AM  
+A5-baseline-grok/transcript.txt:29:76:     Routing audit: graph_used: no (not-relevant — docs-only request) · wiki_used: yes · ctx_used: no (not-relevant — direct doc reads)
+A5-baseline-grok/transcript.txt:30:80:     · raw_rg_used: yes (locate memory-related markdown under docs/guides; no source)                                                                █

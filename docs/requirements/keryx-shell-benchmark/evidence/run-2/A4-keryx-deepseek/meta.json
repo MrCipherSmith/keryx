@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A4",
+  "target": "helyx",
+  "variantId": "keryx-deepseek",
+  "commit": "bfad745ba59b",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A4-keryx-deepseek",
+  "mode": "unattended-stdin",
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-07T07:38:39Z",
+  "finishedAt": "2026-08-07T07:38:53Z",
+  "wallTimeSeconds": 14.0,
+  "prompt": "Which source files are orphaned \u2014 not reachable from any entry point?",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A4/keryx-deepseek",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A4/keryx-deepseek/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/A4/keryx-deepseek/screens/002-final.png"
+  ],
+  "dirty": true
+}

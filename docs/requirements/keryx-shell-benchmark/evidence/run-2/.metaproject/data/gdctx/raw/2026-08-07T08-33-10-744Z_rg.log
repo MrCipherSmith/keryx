@@ -1,0 +1,20 @@
+A5-keryx-deepseek/transcript.txt:9:102:  The user asks how the memory subsystem works, and explicitly says to answer from the project's own documentation, not by reading the source. So I sh
+A5-keryx-deepseek/transcript.txt:10:14:ould use the wiki tools: read_wiki on components/memory.md, maybe wiki_ask, and possibly memory_search. Let me do these in parallel: read the memory w
+A5-keryx-deepseek/transcript.txt:11:22:iki page and ask the wiki a question about the memory subsystem.
+A5-keryx-deepseek/transcript.txt:13:12:  ⚙ read_wiki(path=components/memory.md)
+A5-keryx-deepseek/transcript.txt:16:7:  ⚙ wiki_ask(question=How does the memory subsystem work: short-term vs long-term memory, emb…)
+A5-keryx-deepseek/transcript.txt:20:72:  The user asks how the memory subsystem works, from the project's own documentation, not source. I've already gotten the memory module wiki page and
+A5-keryx-deepseek/transcript.txt:21:3:a wiki_ask answer. I could also check memory_search for related decisions, but the answer from documentation is already quite complete. Let me maybe d
+A5-keryx-deepseek/transcript.txt:22:145:o one more targeted lookup: memory_search for decisions about memory subsystem to add context. Actually the instructions say be economical. The wiki_a
+A5-keryx-deepseek/transcript.txt:24:34:ecisions, in parallel with maybe wiki_backlinks to memory files? That's probably overkill. The question is "How does the memory subsystem work?" — the
+A5-keryx-deepseek/transcript.txt:25:16: module page + wiki_ask answer covers it well.
+A5-keryx-deepseek/transcript.txt:27:44:  Let me compose a concise answer based on documentation. Maybe do one memory_search for "memory subsystem" decisions to be thorough. I'll do that in
+A5-keryx-deepseek/transcript.txt:34:85:  The user asks: "How does the memory subsystem work? Answer from the project's own documentation, not by reading the source."
+A5-keryx-deepseek/transcript.txt:36:27:  I've already gotten the wiki page for components/memory.md (which appears in the tool result), plus wiki_ask results and a memory search. Let me com
+A5-keryx-deepseek/transcript.txt:37:26:pose the answer from the documentation. The wiki page was already fetched via read_wiki apparently (the first tool result shows the memory module wiki
+A5-keryx-deepseek/transcript.txt:38:71: content). Actually, the tool results shown include the module memory wiki page content, the wiki_ask answer, and memory_search result.
+A5-keryx-deepseek/transcript.txt:40:79:  I think I have enough to answer. But maybe I should read the memory-related wiki pages more deeply — e.g., components/memory.md was already given in
+A5-keryx-deepseek/transcript.txt:41:40: full. There might also be more in the wiki: services, claude, cleanup. The wiki_ask already summarized it. I can answer now concisely.
+A5-keryx-deepseek/transcript.txt:43:36:  Let me write the answer from the documentation.
+A5-keryx-deepseek/transcript.txt:44:26:  From the project's own wiki (`wiki/components/memory.md`) and related pages:
+A5-keryx-deepseek/transcript.txt:75:11:  Related documentation notes memory TTL enforcement under the cleanup module, and a `Memory` service facade in the services layer wrapping these oper

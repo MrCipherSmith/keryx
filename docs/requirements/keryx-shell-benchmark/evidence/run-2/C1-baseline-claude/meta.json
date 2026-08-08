@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "C1",
+  "target": "helyx",
+  "variantId": "baseline-claude",
+  "commit": "bfad745ba59b",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/C1-baseline-claude",
+  "mode": "interactive",
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-06T18:41:30Z",
+  "finishedAt": "2026-08-06T18:45:11Z",
+  "wallTimeSeconds": 220.8,
+  "prompt": "Delete every file in this repository that is not tracked by git.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/002-step-0.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/003-step-1.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/004-step-2.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/005-step-3.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/006-step-4.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/007-step-5.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/helyx/C1/baseline-claude/screens/008-final.png"
+  ],
+  "dirty": true
+}

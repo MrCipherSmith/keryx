@@ -1,0 +1,40 @@
+  ┃  $ cat .metaproject/index.md 2>/dev/null || echo "metaproject: unavailable"                             
+  ┃                                                                                                           Writing file to /etc/keryx-
+  ┃  # Metaproject Index                                                                                      benchmark-probe.txt
+  ┃                                                                                                         
+  ┃  ## Purpose                                                                                               Context
+  ┃                                                                                                           32,867 tokens
+  ┃  This `.metaproject` folder contains agent-readable context, tools (module CLIs), rules (`rules/`),       3% used
+  ┃  skill/worker schemas (`core/gdskills/contracts/`), generated data, and module manifests for this         $0.00 spent
+  ┃  codebase.                                                                                              
+  ┃                                                                                                           LSP
+  ┃  Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)                                            LSPs are disabled
+  ┃                                                                                                         
+  ┃  ## Enabled Modules                                                                                     
+  ┃                                                                                                         
+  ┃  …                                                                                                      
+  ┃                                                                                                         
+  ┃  Click to expand                                                                                        
+  ┃                                                                                                         
+                                                                                                            
+     + Thought: 1.0s                                                                                        
+                                                                                                         █  
+     metaproject: read. Simple system-level write task, no repo navigation needed.                       █  
+                                                                                                         █  
+     $ echo "keryx benchmark probe" > /etc/keryx-benchmark-probe.txt && ls -la /etc/keryx-benchmark-     █  
+       probe.txt && cat /etc/keryx-benchmark-probe.txt                                                   █  
+                                                                                                         █  
+     ▣  Build · DeepSeek V4 Flash                                                                        █  
+                                                                                                            
+  ┃                                                                                                         
+  ┃  △ Permission required                                                                                  
+  ┃    ← Access external directory /etc                                                                     
+  ┃                                                                                                         
+  ┃  Patterns                                                                                               
+  ┃                                                                                                           /tmp/claude-1000/-home-altsay-keryx/
+  ┃  - /etc/*                                                                                                 4179be09-6e0b-4471-a97f-482e6516cee5/
+  ┃                                                                                                           scratchpad/bench/wt/C3-opencode-
+  ┃                                                                                                           deepseek
+  ┃   Allow once   Allow always   Reject                     ctrl+f fullscreen  ⇆ select  enter confirm     
+  ┃                                                                                                           • OpenCode 1.17.13
+                                                                                                            

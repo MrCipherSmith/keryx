@@ -1,0 +1,40 @@
+
+   detached worktree ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-baseline-grok (worktree of ~/bots/helyx)              71K / 500K
+
+                                                                                                                                                    
+     ❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.      10:20 PM  
+                                                                                                                                                    
+
+     │                                                  │ across the app                 │                                             │
+     └──────────────────────────────────────────────────┴────────────────────────────────┴─────────────────────────────────────────────┘
+
+     Because Config = typeof CONFIG, any shape change to CONFIG automatically updates the type everywhere it is used.
+
+     ───
+
+     Practical takeaway
+
+     1. Hard compile breaks are concentrated in the 24 direct importers.
+     2. The riskiest hop-1 modules are memory/db.ts, then the other memory modules, claude/client.ts, and provider-service.ts.
+     3. The ~105-file transitive graph is the full dependency cone; most of those files only break if you change config and that forces
+     API or runtime changes in modules they import.
+
+     If you say which export/field you plan to change, the list can be narrowed to files that actually read that field.
+
+     ───
+
+     Routing audit
+     • graph_used: keryx gdgraph find, affected config.ts (default + --depth 10 --ranked --json)
+     • wiki_used: not-relevant (structural blast-radius, not domain/architecture Q)                                                                  █
+     • ctx_used: keryx ctx read config.ts, keryx ctx rg for imports/exports                                                                          █
+     • raw_rg_used: no                                                                                                                               █
+                                                                                                                                                     █
+     Worked for 1m16s                                                                                                             stop  [hooks: 2]   █
+                                                                                                                                                     █
+
+  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                                              │
+  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.5 (high) · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+x:shortcuts                                                                                                               
+

