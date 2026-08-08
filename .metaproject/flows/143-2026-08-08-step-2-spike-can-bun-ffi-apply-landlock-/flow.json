@@ -3,17 +3,50 @@
   "id": "143",
   "slug": "step-2-spike-can-bun-ffi-apply-landlock-",
   "title": "Step 2 spike: can bun:ffi apply Landlock and does the restriction survive exec?",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-08T12:07:50.883Z",
-  "updatedAt": "2026-08-08T12:26:10.946Z",
+  "updatedAt": "2026-08-08T13:22:09.395Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:4bffd30deef21048322dd879fdea7e6691e2f60648b305ed0c3f1b0667ae5e0f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-08T13:20:37.252Z",
+      "note": "verify.sh section 1: landlock_create_ruleset(NULL,0,VERSION) via bun:ffi returns ABI 4, matching ADR-0010's independently measured value."
+    },
+    "AC2": {
+      "at": "2026-08-08T13:20:37.344Z",
+      "note": "verify.sh section 2: create_ruleset + add_rule + prctl(PR_SET_NO_NEW_PRIVS) + restrict_self all succeed from Bun; section 5 reads NoNewPrivs=1 back from the contained child with an uncontained control showing 0."
+    },
+    "AC3": {
+      "at": "2026-08-08T13:20:37.435Z",
+      "note": "verify.sh section 3: read+write inside succeed, read+write outside denied EACCES, outside contents proven not to leak. Both dirs are mktemp -d siblings under /tmp with identical owner and mode, so DAC cannot explain the difference."
+    },
+    "AC4": {
+      "at": "2026-08-08T13:20:45.955Z",
+      "note": "verify.sh section 4: grandchild AND great-grandchild writes outside are denied EACCES, each paired with a same-depth positive control proving the nesting runs at all. The great-grandchild control was added after review found the assertion passed on file-absence alone."
+    },
+    "AC5": {
+      "at": "2026-08-08T13:20:46.048Z",
+      "note": "bench.sh, ADR-0010's method (wall clock over N runs of /bin/echo), N=30, all mechanisms in one run: none 2.1ms, bwrap 10.9ms, landlock bun:ffi 40.2ms, compiled C helper 2.3ms. Per-iteration timing with median and min-max; a row whose command did not succeed exits the script non-zero."
+    },
+    "AC6": {
+      "at": "2026-08-08T13:20:46.138Z",
+      "note": "verify.sh section 7: three-case TCP bind test with negative control (unhandled=BOUND, handled+no-rule=DENIED:EACCES, handled+allow-rule=BOUND). Reported as TCP-only throughout; spec 4.3 explicitly reaffirmed, flag named --handle-tcp not --net."
+    },
+    "AC7": {
+      "at": "2026-08-08T13:20:55.810Z",
+      "note": "docs/requirements/keryx-linux-containment/spike/README.md: verdict stated plainly (yes), measured overhead with caveats, five 'what surprised us' items including the four false greens the spike itself produced, explicit 'what Step 3 must know', and the compiled-helper alternative costed with a real measurement (2.3ms, 16472 bytes) plus its distribution cost."
+    },
+    "AC8": {
+      "at": "2026-08-08T13:20:55.899Z",
+      "note": "All files under docs/requirements/keryx-linux-containment/spike/; nothing under src/ or scripts/ changed on this branch. bun run typecheck clean; spike carries its own tsconfig and typechecks clean separately; check:doc-links 702 links 0 broken. bun test: 3234 pass, 2 pre-existing failures in scripts/install-global.test.ts diagnosed as unrelated (pathWithoutBwrap strips /usr/bin, hiding bash) and recorded in the flow journal."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/258"
   },
   "tasks": [
     {
@@ -65,7 +98,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +106,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -179,6 +213,79 @@
       "at": "2026-08-08T12:26:10.946Z",
       "event": "task-done",
       "detail": "T7: Write the committed finding and link it from the package README and Step 2"
+    },
+    {
+      "at": "2026-08-08T13:19:35.507Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-08T13:20:29.369Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/258"
+    },
+    {
+      "at": "2026-08-08T13:20:37.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verify.sh section 1: landlock_create_ruleset(NULL,0,VERSION) via bun:ffi returns ABI 4, matching ADR-0010's independently measured value."
+    },
+    {
+      "at": "2026-08-08T13:20:37.344Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verify.sh section 2: create_ruleset + add_rule + prctl(PR_SET_NO_NEW_PRIVS) + restrict_self all succeed from Bun; section 5 reads NoNewPrivs=1 back from the contained child with an uncontained control showing 0."
+    },
+    {
+      "at": "2026-08-08T13:20:37.436Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verify.sh section 3: read+write inside succeed, read+write outside denied EACCES, outside contents proven not to leak. Both dirs are mktemp -d siblings under /tmp with identical owner and mode, so DAC cannot explain the difference."
+    },
+    {
+      "at": "2026-08-08T13:20:45.956Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verify.sh section 4: grandchild AND great-grandchild writes outside are denied EACCES, each paired with a same-depth positive control proving the nesting runs at all. The great-grandchild control was added after review found the assertion passed on file-absence alone."
+    },
+    {
+      "at": "2026-08-08T13:20:46.048Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bench.sh, ADR-0010's method (wall clock over N runs of /bin/echo), N=30, all mechanisms in one run: none 2.1ms, bwrap 10.9ms, landlock bun:ffi 40.2ms, compiled C helper 2.3ms. Per-iteration timing with median and min-max; a row whose command did not succeed exits the script non-zero."
+    },
+    {
+      "at": "2026-08-08T13:20:46.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verify.sh section 7: three-case TCP bind test with negative control (unhandled=BOUND, handled+no-rule=DENIED:EACCES, handled+allow-rule=BOUND). Reported as TCP-only throughout; spec 4.3 explicitly reaffirmed, flag named --handle-tcp not --net."
+    },
+    {
+      "at": "2026-08-08T13:20:55.810Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: docs/requirements/keryx-linux-containment/spike/README.md: verdict stated plainly (yes), measured overhead with caveats, five 'what surprised us' items including the four false greens the spike itself produced, explicit 'what Step 3 must know', and the compiled-helper alternative costed with a real measurement (2.3ms, 16472 bytes) plus its distribution cost."
+    },
+    {
+      "at": "2026-08-08T13:20:55.899Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: All files under docs/requirements/keryx-linux-containment/spike/; nothing under src/ or scripts/ changed on this branch. bun run typecheck clean; spike carries its own tsconfig and typechecks clean separately; check:doc-links 702 links 0 broken. bun test: 3234 pass, 2 pre-existing failures in scripts/install-global.test.ts diagnosed as unrelated (pathWithoutBwrap strips /usr/bin, hiding bash) and recorded in the flow journal."
+    },
+    {
+      "at": "2026-08-08T13:21:50.355Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-08T13:21:52.066Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-08T13:22:07.592Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/258"
+    },
+    {
+      "at": "2026-08-08T13:22:07.681Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-08T13:22:09.395Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

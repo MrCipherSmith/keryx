@@ -49,3 +49,18 @@ Not this flow's code (that file belongs to flow 142 / Step 1 territory) and this
 branch touches no file under `src/` or `scripts/`. The likely fix is to shadow
 `bwrap` with a shim directory prepended to `PATH` rather than to subtract
 directories from `PATH`. Handed to the owner of Step 1.
+- 2026-08-08T13:19:35.507Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-08T13:20:29.369Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/258
+- 2026-08-08T13:20:37.252Z - ac-confirmed: AC1: verify.sh section 1: landlock_create_ruleset(NULL,0,VERSION) via bun:ffi returns ABI 4, matching ADR-0010's independently measured value.
+- 2026-08-08T13:20:37.344Z - ac-confirmed: AC2: verify.sh section 2: create_ruleset + add_rule + prctl(PR_SET_NO_NEW_PRIVS) + restrict_self all succeed from Bun; section 5 reads NoNewPrivs=1 back from the contained child with an uncontained control showing 0.
+- 2026-08-08T13:20:37.436Z - ac-confirmed: AC3: verify.sh section 3: read+write inside succeed, read+write outside denied EACCES, outside contents proven not to leak. Both dirs are mktemp -d siblings under /tmp with identical owner and mode, so DAC cannot explain the difference.
+- 2026-08-08T13:20:45.956Z - ac-confirmed: AC4: verify.sh section 4: grandchild AND great-grandchild writes outside are denied EACCES, each paired with a same-depth positive control proving the nesting runs at all. The great-grandchild control was added after review found the assertion passed on file-absence alone.
+- 2026-08-08T13:20:46.048Z - ac-confirmed: AC5: bench.sh, ADR-0010's method (wall clock over N runs of /bin/echo), N=30, all mechanisms in one run: none 2.1ms, bwrap 10.9ms, landlock bun:ffi 40.2ms, compiled C helper 2.3ms. Per-iteration timing with median and min-max; a row whose command did not succeed exits the script non-zero.
+- 2026-08-08T13:20:46.138Z - ac-confirmed: AC6: verify.sh section 7: three-case TCP bind test with negative control (unhandled=BOUND, handled+no-rule=DENIED:EACCES, handled+allow-rule=BOUND). Reported as TCP-only throughout; spec 4.3 explicitly reaffirmed, flag named --handle-tcp not --net.
+- 2026-08-08T13:20:55.810Z - ac-confirmed: AC7: docs/requirements/keryx-linux-containment/spike/README.md: verdict stated plainly (yes), measured overhead with caveats, five 'what surprised us' items including the four false greens the spike itself produced, explicit 'what Step 3 must know', and the compiled-helper alternative costed with a real measurement (2.3ms, 16472 bytes) plus its distribution cost.
+- 2026-08-08T13:20:55.899Z - ac-confirmed: AC8: All files under docs/requirements/keryx-linux-containment/spike/; nothing under src/ or scripts/ changed on this branch. bun run typecheck clean; spike carries its own tsconfig and typechecks clean separately; check:doc-links 702 links 0 broken. bun test: 3234 pass, 2 pre-existing failures in scripts/install-global.test.ts diagnosed as unrelated (pathWithoutBwrap strips /usr/bin, hiding bash) and recorded in the flow journal.
+- 2026-08-08T13:21:50.355Z - completing
+- 2026-08-08T13:21:52.066Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-08-08T13:22:07.592Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/258
+- 2026-08-08T13:22:07.681Z - completing
+- 2026-08-08T13:22:09.395Z - done: all gates passed
