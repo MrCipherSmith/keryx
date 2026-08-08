@@ -21,13 +21,13 @@ BUN_DIR="$(dirname "$(readlink -f "$BUN")")"
 RUNS="${RUNS:-30}"
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
 
 BASE=()
 for dir in /usr /bin /lib /lib64 /etc /proc /sys; do
   [[ -d "$dir" ]] && BASE+=(--ro "$dir")
 done
 BASE+=(--dev /dev --ro "$BUN_DIR" --rw "$WORK")
+[[ -d /dev/shm ]] && BASE+=(--rw /dev/shm)
 
 # Times each iteration separately and prints "median  (min-max)".
 #
@@ -38,11 +38,17 @@ BASE+=(--dev /dev --ro "$BUN_DIR" --rw "$WORK")
 # produced was printed as the headline cost of the compiled-helper alternative.
 # A benchmark that does not check exit status measures whatever happens, then
 # calls it the thing you asked for.
+BROKEN_ROWS="$(mktemp)"
+trap 'rm -rf "$WORK" "$BROKEN_ROWS"' EXIT
+
 measure() {
   local samples=() start end rc
   "$@" >/dev/null 2>&1
   rc=$?
   if [[ "$rc" -ne 0 ]]; then
+    # Record it as well as printing it: a warning nobody reads is how the
+    # fabricated row shipped in the first place, so the script exits non-zero.
+    printf '%s (rc=%s)\n' "$1" "$rc" >> "$BROKEN_ROWS"
     printf 'BROKEN (rc=%s)' "$rc"
     return
   fi
@@ -144,3 +150,9 @@ if [[ -f "$WORK/alt-helper" ]]; then
   echo "compiled helper size: $(stat -c %s "$WORK/alt-helper") bytes"
 fi
 echo
+
+if [[ -s "$BROKEN_ROWS" ]]; then
+  echo "ERROR: rows whose command did not succeed — these numbers are not measurements:"
+  cat "$BROKEN_ROWS"
+  exit 1
+fi

@@ -25,7 +25,7 @@ BUN_DIR="$(dirname "$(readlink -f "$BUN")")"
 
 # Every `ok` below is counted; the total is asserted at the end so a section
 # that silently stops running cannot leave the script exiting 0.
-EXPECTED_ASSERTIONS=28
+EXPECTED_ASSERTIONS=29
 
 PASS=0
 FAIL=0
@@ -53,6 +53,9 @@ for dir in /usr /bin /lib /lib64 /etc /proc /sys; do
   [[ -d "$dir" ]] && BASE+=(--ro "$dir")
 done
 BASE+=(--dev /dev --ro "$BUN_DIR")
+# /dev/shm is a tmpfs beneath /dev where POSIX shm creates regular files. It
+# gets its own nested rule rather than widening the whole /dev grant.
+[[ -d /dev/shm ]] && BASE+=(--rw /dev/shm)
 
 run_contained() {
   "$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" -- "$@"
@@ -295,6 +298,17 @@ if [[ "$U_E" -eq 138 && "$U_S" -eq 138 ]]; then
   ok "SIGUSR1 reports 138 in both modes (execve=$U_E spawn=$U_S)"
 else
   bad "signal mapping diverges (execve=$U_E spawn=$U_S, expected 138 both)"
+fi
+
+# A real-time signal has no name node:os knows, and Bun reports signalCode as a
+# NUMBER for it. A name-only lookup misses and would return the launcher's
+# reserved 125 — reporting a command that ran and died as one that never started.
+run_contained /bin/sh -c 'kill -34 $$' >/dev/null 2>&1; RT_E=$?
+"$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" --spawn -- /bin/sh -c 'kill -34 $$' >/dev/null 2>&1; RT_S=$?
+if [[ "$RT_E" -eq 162 && "$RT_S" -eq 162 ]]; then
+  ok "a real-time signal reports 162 in both modes, never the reserved 125 (execve=$RT_E spawn=$RT_S)"
+else
+  bad "real-time signal misreported (execve=$RT_E spawn=$RT_S, expected 162 both)"
 fi
 
 # A malformed port must be refused rather than coerced: Number("") is 0, which

@@ -52,16 +52,19 @@ static long ll_restrict_self(int fd, __u32 flags) {
    LANDLOCK_ACCESS_FS_MAKE_BLOCK | LANDLOCK_ACCESS_FS_MAKE_SYM |               \
    LANDLOCK_ACCESS_FS_REFER | LANDLOCK_ACCESS_FS_TRUNCATE)
 
-/* Mirrors DEVICE_ACCESS in landlock-ffi.ts. Must exist here too: bench.sh
-   hands the SAME argv to both implementations, so a flag this helper does not
-   understand makes it exit 125 at parse time — and a benchmark that times a
-   process which never applied a ruleset or ran a command reports a number for
-   work that did not happen. That is exactly how the first published
-   compiled-helper figure came to be fabricated. */
+/* Mirrors DEVICE_ACCESS in landlock-ffi.ts, minus IOCTL_DEV — this helper pins
+   handled_access_fs to the ABI-3 bits (see main), so bit 15 would be masked off
+   anyway and naming it here would claim a parity that does not hold.
+
+   It must exist at all because bench.sh hands the SAME argv to both
+   implementations: a flag this helper does not understand makes it exit 125 at
+   parse time, and a benchmark that times a process which never applied a
+   ruleset nor ran a command reports a number for work that did not happen.
+   That is exactly how the first published compiled-helper figure came to be
+   fabricated. */
 #define DEV_ACCESS                                                             \
   (LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_WRITE_FILE |              \
-   LANDLOCK_ACCESS_FS_READ_DIR | LANDLOCK_ACCESS_FS_MAKE_REG |                 \
-   LANDLOCK_ACCESS_FS_REMOVE_FILE | LANDLOCK_ACCESS_FS_TRUNCATE)
+   LANDLOCK_ACCESS_FS_READ_DIR)
 
 static int add_path(int ruleset_fd, const char *path, __u64 allowed) {
   struct landlock_path_beneath_attr attr;

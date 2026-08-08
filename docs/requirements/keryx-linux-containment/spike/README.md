@@ -7,7 +7,7 @@ unproven assumption in [specification.md](../specification.md) §4.2.
 - **Landlock ABI:** 4 (reached through `bun:ffi`, matching the number ADR-0010
   measured by other means)
 - **Date:** 2026-08-08
-- **Reproduce:** `./verify.sh` (28 assertions) and `./bench.sh`
+- **Reproduce:** `./verify.sh` (29 assertions) and `./bench.sh`
 
 ## Verdict
 
@@ -25,13 +25,13 @@ runtime dependency:
 **But the delivery shape in §4.2 costs ~40 ms per command, roughly 4× the
 bubblewrap it is meant to replace.** The Landlock syscalls are ~1 ms of that.
 The rest is a second Bun cold start (~23 ms) plus transpiling the launcher
-(~11 ms), both paid because §4.2 spawns a *second* Bun to apply the ruleset.
+(~13 ms), both paid because §4.2 spawns a *second* Bun to apply the ruleset.
 This does not invalidate the approach, but it is a real number that Step 3 must
 decide about rather than discover.
 
 ## Evidence
 
-`./verify.sh`, 28/28 passing. Every assertion that something was **denied** is
+`./verify.sh`, 29/29 passing. Every assertion that something was **denied** is
 paired with a control that differs only in the ruleset, and asserts the *reason*
 for the denial rather than its symptom — an assertion that also passes when the
 command never ran is not evidence.
@@ -60,6 +60,7 @@ command never ran is not evidence.
 | 6b | a program absent from PATH is refused, **not taken from the cwd** |
 | 6b | a missing program exits 125 in both modes, not 1 |
 | 6b | `SIGUSR1` reports 138 in both modes (not flattened to 128) |
+| 6b | a real-time signal reports 162 in both modes, **never the reserved 125** |
 | 6b | malformed port arguments fail closed |
 | 6c | `/dev/null` is writable under the narrowed device grant |
 | 6c | `/dev/shm` supports file creation, so POSIX shm still works |
@@ -87,34 +88,35 @@ contaminates and "stable" should be visible in the output rather than asserted.
 `measure()` also **runs each command once and checks it succeeded** before
 timing it — see "what surprised us" #5 for why that is not defensive padding.
 
-Load average ~1.9:
+A `BROKEN` row makes the script exit non-zero, so a table containing a
+non-measurement cannot be quietly committed. Load average ~3.1:
 
 | Mechanism | Axes | Median (min–max) |
 |---|---|---|
-| none (`/bin/echo`) | — | 2.0 ms (1.5–2.8) |
-| bubblewrap, ADR-0010's invocation | fs + netns | 10.5 ms (9.6–12.5) |
-| bubblewrap, no `--unshare-net` | fs | 10.2 ms (8.7–11.1) |
-| **landlock via `bun:ffi` (§4.2 shape)** | fs | **38.9 ms (36.9–42.5)** |
-| landlock via `bun:ffi`, TCP axis handled | fs + tcp | 39.4 ms (37.6–41.7) |
-| landlock via `bun:ffi`, prebundled to one `.js` | fs | 37.3 ms (35.1–41.2) |
-| landlock via a compiled C helper | fs | 2.5 ms (2.0–3.1) |
+| none (`/bin/echo`) | — | 2.1 ms (1.5–2.8) |
+| bubblewrap, ADR-0010's invocation | fs + netns | 10.9 ms (9.6–11.9) |
+| bubblewrap, no `--unshare-net` | fs | 10.0 ms (9.1–12.0) |
+| **landlock via `bun:ffi` (§4.2 shape)** | fs | **40.2 ms (37.5–49.2)** |
+| landlock via `bun:ffi`, TCP axis handled | fs + tcp | 44.3 ms (40.8–48.6) |
+| landlock via `bun:ffi`, prebundled to one `.js` | fs | 38.2 ms (36.3–44.8) |
+| landlock via a compiled C helper | fs | 2.3 ms (1.9–3.1) |
 
 Decomposition:
 
 | Component | Cost |
 |---|---|
-| Bun runtime cold start (`bun -e '0'`) | 23.7 ms (21.7–26.4) |
-| import + transpile `landlock-ffi.ts` | ~11.3 ms (n=1) |
+| Bun runtime cold start (`bun -e '0'`) | 24.1 ms (22.5–25.5) |
+| import + transpile `landlock-ffi.ts` | ~12.8 ms (n=1) |
 | ABI query (syscall 444) | ~0.16 ms (n=1) |
-| create ruleset + path rules + `no_new_privs` + `restrict_self` | ~0.83 ms (n=1) |
-| **all Landlock syscalls together** | **~0.99 ms (n=1)** |
+| create ruleset + path rules + `no_new_privs` + `restrict_self` | ~0.87 ms (n=1) |
+| **all Landlock syscalls together** | **~1.03 ms (n=1)** |
 
 Compiled helper: **16472 bytes**.
 
 Caveats, so these figures are not read for more than they are:
 
 - **Not comparable to ADR-0010's.** It recorded bubblewrap at ~17 ms and bare at
-  ~1.8 ms; this run measures ~10.5 ms and ~2.0 ms for the same commands, in a
+  ~1.8 ms; this run measures ~10.9 ms and ~2.1 ms for the same commands, in a
   different session. Compare **within** a table, never across the two. For the
   same reason the ~409 ms `docker run` figure is deliberately **not** in the
   table above — it belongs to ADR-0010's session, and putting it in this one
@@ -236,11 +238,12 @@ uninitialised stack slot. This is silent when it goes wrong.
   device control on any device node beneath any writable path. (The ABI-5
   behaviour itself is inferred from the headers; this host is ABI 4 and masks
   the bit off, so no assertion here exercises it.)
-- Grant sets are not free-form. `/dev` needs `MAKE_REG`, `REMOVE_FILE` and
-  `TRUNCATE` even though it is "just devices", because `/dev/shm` is a tmpfs
-  where `shm_open`/`sem_open` create regular files — Chromium, Python
-  multiprocessing and libpq all break with `EACCES` without them. Measured, not
-  assumed; `verify.sh` §6c asserts it.
+- Grant sets are not free-form, and the fix for a too-narrow grant is usually a
+  **nested rule, not a wider one**. `/dev/shm` is a tmpfs where
+  `shm_open`/`sem_open` create regular files, so Chromium, Python
+  multiprocessing and libpq break with `EACCES` under a device-only `/dev`
+  grant. The answer is `--rw /dev/shm` beneath `--dev /dev`, not `MAKE_REG` on
+  all of `/dev`. Measured, not assumed; `verify.sh` §6c asserts both.
 - `struct landlock_path_beneath_attr` is `__attribute__((packed))`: **12 bytes**,
   not 16. Getting this wrong yields `EINVAL` that looks like a permissions
   problem.
@@ -286,8 +289,14 @@ uninitialised stack slot. This is silent when it goes wrong.
 - `/proc/<pid>/root` and `/proc/self/root` re-entry into an ungranted directory
   are both denied — no traversal escape through the `/proc` grant.
 - `/dev` uses a narrow `DEVICE_ACCESS` (read, write, list, ioctl) rather than
-  the full read-write set. `/dev/null` and `/dev/tty` need no node creation, no
-  removal and no cross-hierarchy `REFER`.
+  the full read-write set: no node creation, no removal, no truncation, no
+  cross-hierarchy `REFER`, so a contained process cannot unlink or truncate
+  `/dev/null`. `/dev/shm` gets its **own nested `--rw` rule** instead, because
+  it is a tmpfs where `shm_open`/`sem_open` create regular files. An earlier
+  revision solved that by widening all of `/dev`, which bought POSIX shared
+  memory at the price of letting a contained process delete device nodes —
+  Landlock evaluates the most specific matching hierarchy, so the nested rule
+  is both narrower and sufficient.
 
 **Boundaries this spike did not move**
 
@@ -333,7 +342,7 @@ helper as the known optimisation if per-command latency becomes a complaint.
 | `landlock-ffi.ts` | the `bun:ffi` binding — syscalls, structs, ABI clamping, `execve` |
 | `landlock-exec.ts` | the §4.2 child shape: restrict self, then become the command |
 | `net-probe.ts` | TCP bind probe used by `verify.sh` §7 |
-| `verify.sh` | the 28 assertions above |
+| `verify.sh` | the 29 assertions above |
 | `bench.sh` | the overhead table |
 | `alternative-helper.c` | the compiled-helper alternative, for the cost comparison only |
 | `tsconfig.json` | lets the spike be typechecked without entering the repo's `src/**` project |

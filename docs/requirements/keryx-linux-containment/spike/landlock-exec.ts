@@ -19,6 +19,7 @@ import {
   ACCESS_NET,
   DEVICE_ACCESS,
   execIntoCommand,
+  NEWEST_KNOWN_ABI,
   READ_ONLY_ACCESS,
   READ_WRITE_ACCESS,
   restrictSelfWith,
@@ -34,8 +35,13 @@ const APPLY_FAILED_EXIT_CODE = 125;
  * is a plausible-looking status that names neither success nor the signal.
  * `node:os` knows all 30-odd of them.
  */
-function signalNumber(name: string): number | undefined {
-  const known = (osConstants.signals as Record<string, number | undefined>)[name];
+function signalNumber(signal: string | number): number | undefined {
+  // Bun reports signalCode as the NUMBER for signals it cannot name — real-time
+  // signals (SIGRTMIN+n, 34..64) arrive as 34, not "SIGRT...". Looking that up
+  // by name misses, and returning the fail-closed code for it would report a
+  // command that ran and died as one that never started.
+  if (typeof signal === "number") return signal;
+  const known = (osConstants.signals as Record<string, number | undefined>)[signal];
   return typeof known === "number" ? known : undefined;
 }
 
@@ -150,7 +156,18 @@ function main(): number {
       process.stderr.write(
         `landlock-exec: abi=${outcome.abi} handled_fs=0x${outcome.handledFs.toString(16)} ` +
           `handled_net=0x${outcome.handledNet.toString(16)} ` +
-          `path_rules=${outcome.pathRules} net_rules=${outcome.netRules}\n`,
+          `path_rules=${outcome.pathRules} net_rules=${outcome.netRules}` +
+          `${outcome.abiClamped ? " abi_clamped=yes" : ""}\n`,
+      );
+    }
+    if (outcome.abiClamped) {
+      // Always warn, not just under --verbose: the kernel is newer than this
+      // code, so access classes it added are unhandled and therefore
+      // unrestricted. Reported rather than fatal because the spike's job is to
+      // measure, but Step 3 should decide whether to refuse outright.
+      process.stderr.write(
+        `landlock-exec: warning: kernel Landlock ABI ${outcome.abi} is newer than this build ` +
+          `knows (${NEWEST_KNOWN_ABI}); newer access classes are UNRESTRICTED\n`,
       );
     }
   } catch (error) {
@@ -192,7 +209,7 @@ function main(): number {
   // signal — and process.exit(null) exits 0, i.e. a SIGKILLed command would be
   // reported as success. Follow the shell convention instead.
   if (child.exitCode === null) {
-    const signal = child.signalCode ?? undefined;
+    const signal = (child.signalCode ?? undefined) as string | number | undefined;
     const number = signal === undefined ? undefined : signalNumber(signal);
     process.stderr.write(`landlock-exec: command terminated by ${signal ?? "unknown signal"}\n`);
     // An unmappable signal must not be rendered as a plausible exit status.

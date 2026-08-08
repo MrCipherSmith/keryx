@@ -509,25 +509,21 @@ export const READ_WRITE_ACCESS =
   ACCESS_FS.TRUNCATE;
 
 /**
- * What a device directory actually needs. Much narrower than
- * `READ_WRITE_ACCESS`: no node creation (`MAKE_CHAR`/`MAKE_BLOCK`/`MAKE_SOCK`/
- * `MAKE_FIFO`/`MAKE_SYM`/`MAKE_DIR`), no directory removal, no cross-hierarchy
- * `REFER`.
- *
- * `MAKE_REG`, `REMOVE_FILE` and `TRUNCATE` are included, and that is not
- * padding: `/dev/shm` is a tmpfs beneath this hierarchy, and POSIX shared
- * memory and named semaphores (`shm_open`, `sem_open` — used by Chromium,
- * Python multiprocessing, libpq) create and unlink regular files there.
- * Omitting them denies those with EACCES, which was measured, not assumed.
+ * What a device directory actually needs: open, read, write, list, and device
+ * ioctls. Much narrower than `READ_WRITE_ACCESS` — no node creation
+ * (`MAKE_CHAR`/`MAKE_BLOCK`/`MAKE_SOCK`/`MAKE_FIFO`/`MAKE_SYM`/`MAKE_DIR`), no
+ * removal, no truncation, no cross-hierarchy `REFER`. A contained process
+ * cannot unlink or truncate `/dev/null`.
  *
  * `IOCTL_DEV` belongs here rather than in the general read-write set, so device
- * control is granted only where the caller said "this is a device directory".
+ * control follows the flag that names device semantics.
+ *
+ * `/dev/shm` needs more than this — it is a tmpfs where `shm_open`/`sem_open`
+ * create and unlink regular files — but the answer is a **nested** `--rw
+ * /dev/shm` rule, not a wider `/dev`. Landlock evaluates the most specific
+ * matching hierarchy, so the narrow grant here and the wider one beneath it
+ * coexist. An earlier revision widened all of `/dev` instead; that let a
+ * contained process unlink device nodes to solve a `/dev/shm` problem.
  */
 export const DEVICE_ACCESS =
-  ACCESS_FS.READ_FILE |
-  ACCESS_FS.WRITE_FILE |
-  ACCESS_FS.READ_DIR |
-  ACCESS_FS.MAKE_REG |
-  ACCESS_FS.REMOVE_FILE |
-  ACCESS_FS.TRUNCATE |
-  ACCESS_FS.IOCTL_DEV;
+  ACCESS_FS.READ_FILE | ACCESS_FS.WRITE_FILE | ACCESS_FS.READ_DIR | ACCESS_FS.IOCTL_DEV;
