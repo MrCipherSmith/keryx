@@ -33,7 +33,7 @@ import {
   SANDBOX_CAPABILITY_MATRIX,
   capabilityStatusFor,
   isKnownSandboxPlatform,
-  linuxKernelFacilityClause,
+  linuxKernelFacilityPhrase,
   type ProbeOptions,
   type ProbeResult,
   type SandboxCapabilityRow,
@@ -131,8 +131,16 @@ export const NOT_COVERED_BY_PROBE = "implemented, and NOT covered by this probe"
 /** The installer's headline for "no containment here". `install-global.test.ts` pins it. */
 export const CONTAINMENT_UNAVAILABLE_HEADLINE = "OS containment is unavailable";
 
-/** Drop keys whose value is undefined — `exactOptionalPropertyTypes` treats those as present. */
-function definedOnly<T extends object>(value: T): T {
+/**
+ * Drop keys whose value is `undefined`.
+ *
+ * Under `exactOptionalPropertyTypes` a present key holding `undefined` is not
+ * the same as an absent key, so every optional field otherwise needs its own
+ * `...(x !== undefined ? { x } : {})` spread. That idiom appeared a dozen times
+ * across this module, and twice on the same two values in a row. One helper,
+ * checked once.
+ */
+function definedOnly<T extends object>(value: { [K in keyof T]: T[K] | undefined }): T {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T;
 }
 
@@ -140,7 +148,7 @@ function makeRow(
   row: SandboxCapabilityRow,
   kind: SandboxCapabilityKind,
   status: string,
-  extra: { reason?: string; detail?: string; remediation?: string } = {},
+  extra: { reason?: string | undefined; detail?: string | undefined; remediation?: string | undefined } = {},
 ): SandboxCapabilityReportRow {
   return definedOnly({
     capability: row.capability,
@@ -234,7 +242,8 @@ function unavailableReason(
 ): string {
   const measured = "a trial contained command was run on this host and it did not contain";
   if (ctx.platform === "linux" && probe?.cause === "unprivileged-userns-denied") {
-    return `${measured}: ${linuxKernelFacilityClause(row.linuxKernelFacility, ctx.kernelRelease)} were refused`;
+    const release = ctx.kernelRelease.length > 0 ? ctx.kernelRelease : "unknown release";
+    return `${measured} — this kernel (${release}) refused ${linuxKernelFacilityPhrase(row.linuxKernelFacility)}`;
   }
   return measured;
 }

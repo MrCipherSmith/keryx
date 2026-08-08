@@ -176,24 +176,18 @@ export function isKnownSandboxPlatform(platform: string): platform is SandboxPla
 }
 
 /**
- * Name the kernel and the facility a Linux row's containment rests on (R6).
+ * Name the kernel facility a Linux row's containment rests on (R6).
  *
  * "Filesystem containment is unavailable on linux" is both wrong and useless:
  * it is not unavailable on Linux — it is unavailable on kernels configured to
- * withhold the facility it rests on, and the user can act on that. The kernel
- * release is included because it is the thing that differs between the host
- * where this works and the host where it does not.
+ * withhold the facility it rests on, and the user can act on that.
  *
- * Deliberately a NOUN PHRASE and not a claim. This module records what is
- * implemented; it must not assert that a probe ran or what a probe found. The
- * caller (`src/commands/sandbox.ts`) owns the verb, because the caller is the
- * one holding the measurement. Pure: the release string is supplied by the
- * caller (`os.release()`, injected), never read here.
+ * Deliberately a NOUN PHRASE and not a claim, and deliberately without the
+ * kernel release. This module records what is *implemented*; it must not assert
+ * that a probe ran, what a probe found, or anything about the machine asking.
+ * `src/commands/sandbox.ts` owns the verb and the release, because it is the
+ * one holding the measurement.
  */
-export function linuxKernelFacilityClause(
-  facility: LinuxKernelFacility,
-  kernelRelease: string | undefined,
-): string {
-  const release = kernelRelease !== undefined && kernelRelease.length > 0 ? kernelRelease : "unknown release";
-  return `this kernel (${release}) and the ${LINUX_KERNEL_FACILITY_LABEL[facility]} the launcher builds its boundary from`;
+export function linuxKernelFacilityPhrase(facility: LinuxKernelFacility): string {
+  return `the ${LINUX_KERNEL_FACILITY_LABEL[facility]} the launcher builds its boundary from`;
 }

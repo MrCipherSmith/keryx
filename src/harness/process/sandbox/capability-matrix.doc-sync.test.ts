@@ -107,6 +107,7 @@ describe("sandbox capability matrix — doc sync (AC4)", () => {
       linux: "not-implemented",
       darwin: "supported",
       linuxKernelFacility: "unprivileged-user-namespaces",
+      coveredByProbe: true,
     };
     const docRow = docRows.find((r) => r.label.includes("Filesystem containment"));
     expect(docRow).toBeDefined();

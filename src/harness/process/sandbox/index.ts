@@ -68,7 +68,7 @@ export {
   LINUX_KERNEL_FACILITY_LABEL,
   capabilityStatusFor,
   isKnownSandboxPlatform,
-  linuxKernelFacilityClause,
+  linuxKernelFacilityPhrase,
   statusCellText,
   type CapabilityStatus,
   type LinuxKernelFacility,
