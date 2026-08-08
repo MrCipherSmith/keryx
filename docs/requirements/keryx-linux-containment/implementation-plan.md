@@ -62,6 +62,26 @@ proceeds as specified — or it does not, and step 3 gains a compiled helper plu
 the per-architecture distribution cost that Codex accepted and this package
 hoped to avoid. Timebox it; a spike that has not concluded is itself the answer.
 
+### Done — result: `bun:ffi` carries it
+
+Full finding and executable evidence: **[spike/README.md](spike/README.md)**
+(17 assertions, `spike/verify.sh`). Summary:
+
+- The whole sequence works from Bun, and the restriction is inherited by a
+  grandchild and a great-grandchild. Step 3 proceeds as specified; **no compiled
+  helper, no per-architecture binary.**
+- **Cost: ~30 ms per command**, of which only ~1.1 ms is Landlock. The rest is a
+  second Bun cold start, which §4.2's shape requires. That is ~3× bubblewrap on
+  the same host and must go into Step 4's runbook figures (**S6**) as measured,
+  not estimated.
+- Two design corrections for Step 3, both free: use **`execve` via FFI** rather
+  than `Bun.spawnSync` (otherwise a Bun process stays resident as the parent of
+  every contained command), and **prebundle** the child to one `.js`.
+- The ABI-4 TCP axis is reachable and enforcing. §4.3 is unchanged: it is
+  TCP-only, so `network: "off"` still selects bubblewrap.
+- Untested and inherited by Step 3 as risk: **ABI 1** (kernel 5.15 / Ubuntu
+  22.04) is inferred from headers, never run.
+
 ## Step 3 — the Landlock launcher
 
 **Delivers:** R1, R2, R3 · **AC1, AC2, AC3, AC8, AC9, AC10**.

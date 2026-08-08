@@ -43,6 +43,7 @@ for (2) is to probe rather than infer, and it is worth landing even alone.
 | [prd.md](prd.md) | You want the problem, what was measured, the users affected, and why Landlock over the alternatives. |
 | [specification.md](specification.md) | You are implementing: the three layers, the probe contract, the inventory of what exists / changes / is added, module boundaries and acceptance criteria. |
 | [implementation-plan.md](implementation-plan.md) | You are sequencing the work into flows and want the order, the dependencies and what each flow must prove. |
+| [spike/README.md](spike/README.md) | You are implementing Step 3 (the Landlock launcher). The Step 2 spike result: `bun:ffi` **does** carry Landlock, with 17 executable assertions, the measured per-command overhead, and the syscall/struct details that fail silently if you get them wrong. |
 
 Related, outside this package:
 

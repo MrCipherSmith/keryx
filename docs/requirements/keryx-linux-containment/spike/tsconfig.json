@@ -1,0 +1,16 @@
+{
+  "//": "SPIKE ONLY. The repo tsconfig includes src/**/*.ts only, so these files are deliberately outside the project typecheck. This config exists so the spike can still be checked on its own: bunx tsc --noEmit -p docs/requirements/keryx-linux-containment/spike",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "types": ["bun-types"]
+  },
+  "include": ["./*.ts"]
+}
