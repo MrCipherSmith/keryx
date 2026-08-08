@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { moduleSpecifiers, parse, walk } from "../../../lib/config-dir.ast";
@@ -294,12 +294,42 @@ function rootRules(ruleset: LandlockRuleset) {
 // AC1 — deterministic, offline, no syscall
 // ---------------------------------------------------------------------------
 
+/**
+ * Every source module this flow ships, with what each may load.
+ *
+ * The guard covers the pair, not one file. It was written for `landlock.ts`
+ * alone, and `landlock-abi.ts` — the module its own test calls "most likely to
+ * acquire a mechanism", now that `bun:ffi` is the confirmed route — had only a
+ * specifier allowlist. A default reader calling `globalThis.Bun.spawnSync` on a
+ * compiled helper, which is verbatim what AC5 forbids, changes no export and
+ * names no specifier: it passed everything.
+ */
+const LANDLOCK_MODULES = [
+  { file: "landlock.ts", allowed: ["./profile", "node:path"] },
+  { file: "landlock-abi.ts", allowed: [] as string[] },
+];
+
 describe("AC1: buildLandlockRuleset is a pure translation", () => {
-  test("the module loads nothing impure and reaches for no impure global", async () => {
+  test("the guard covers every source module in the flow", async () => {
+    // The closure that makes the list above a class rather than two examples:
+    // a third module cannot be added without either listing it here or turning
+    // this red. Applying a fix where the finding pointed instead of everywhere
+    // the class lives is the failure this repository keeps recording.
+    const directory = fileURLToPath(new URL(".", import.meta.url));
+    const present = (await readdir(directory))
+      .filter((f) => f.startsWith("landlock") && f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .sort();
+    expect(present).toEqual(LANDLOCK_MODULES.map((m) => m.file).sort());
+  });
+
+  test.each(LANDLOCK_MODULES)("$file loads nothing impure and reaches for no impure global", async ({
+    file,
+    allowed,
+  }) => {
     // AC1's "no syscall, no FFI, no spawn, no filesystem read, no
-    // process.platform branch" is unobservable from outputs: a filesystem read
-    // is perfectly deterministic within a run, so only a source guard can hold
-    // it.
+    // process.platform branch" — and AC5's "assumes no mechanism" for the ABI
+    // seam — are unobservable from outputs: a filesystem read is perfectly
+    // deterministic within a run, so only a source guard can hold either.
     //
     // This is the guard's fourth form. Twice it was written over text and twice
     // respelling beat it; the third asked the parser and was beaten again — by a
@@ -335,14 +365,18 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     //     `declare const` and `import type` bind nothing and are not shadows —
     //     they were, and `declare const process` walked through tsc-clean and
     //     suite-green.
-    //   · `var` hoisted out of a nested block, and an unbraced `case` clause:
-    //     both are missed by the scope walk, in the false-positive direction.
-    //   · anything `./profile` or `node:path` might do. Both are in-repo or
-    //     stdlib and pure, and `./profile` is itself spawn-free by spec §2.
-    //   · what the BUNDLER ships. This reads one file from disk; the oracle for
+    //   · four binders the scope walk does not resolve, all in the
+    //     false-positive direction, none of them a hole: `var` hoisted out of a
+    //     nested block, an unbraced `case` clause, a class EXPRESSION's own
+    //     name, and `import x = require(…)`. Named in full because an
+    //     exhaustive-sounding list that is missing entries is the artifact this
+    //     repository keeps writing constraints about.
+    //   · anything an allowed specifier might itself do. `./profile` is in-repo
+    //     and spawn-free by spec §2; `node:path` is stdlib.
+    //   · what the BUNDLER ships. This reads a file from disk; the oracle for
     //     the shipped graph is `src/lib/production-graph.test.ts`, which
     //     resolves specifiers instead of matching them.
-    const path = fileURLToPath(new URL("./landlock.ts", import.meta.url));
+    const path = fileURLToPath(new URL(`./${file}`, import.meta.url));
     const sourceFile = parse(path, await readFile(path, "utf8"));
 
     const reached: string[] = [];
@@ -355,8 +389,9 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     // the record of what the module may depend on at all, and `./profile` is on
     // it precisely because it is imported (for `SandboxProfile`, type-only). A
     // closed list costs one line to update when a dependency is genuinely added
-    // and catches one that was not meant to be.
-    expect([...new Set(moduleSpecifiers(sourceFile))].sort()).toEqual(["./profile", "node:path"]);
+    // and catches one that was not meant to be. `landlock-abi.ts` loads nothing,
+    // so its list is empty and exact.
+    expect([...new Set(moduleSpecifiers(sourceFile))].sort()).toEqual([...allowed].sort());
 
     // `moduleSpecifiers` reports literals. A specifier that is not a literal is
     // therefore invisible to the assertion above — so it is a failure here.
@@ -387,7 +422,10 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
           ts.isLiteralTypeNode(argument) && ts.isStringLiteralLike(argument.literal)
             ? argument.literal.text
             : undefined;
-        if (specifier === undefined || !["./profile", "node:path"].includes(specifier)) {
+        // Same allowlist as the assertion above, not a second copy of it: two
+        // independent lists drift, and the one nobody edits rejects a
+        // dependency the other has already accepted.
+        if (specifier === undefined || !allowed.includes(specifier)) {
           reached.push(`import type node: ${node.getText(sourceFile)}`);
         }
       }
@@ -570,10 +608,6 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     expect(Object.isFrozen(LANDLOCK_FS_ACCESS_MIN_ABI)).toBe(true);
   });
 });
-
-// ---------------------------------------------------------------------------
-// The device carve-out — the compatibility floor both sibling launchers carry
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Nested rules — the shape the step-2 spike proved is mandatory

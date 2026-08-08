@@ -1,7 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { moduleSpecifiers, parse } from "../../../lib/config-dir.ast";
 import { LANDLOCK_ABI_UNAVAILABLE, LandlockAbiReaderError, cacheLandlockAbi } from "./landlock-abi";
 import type { LandlockAbiReader } from "./landlock-abi";
 
@@ -59,22 +56,16 @@ describe("AC5: cacheLandlockAbi is a mechanism-free, single-call seam", () => {
     expect(one()).toBe(1);
   });
 
-  test("the module loads nothing at all — the mechanism cannot arrive by import", async () => {
-    // The export-list assertion below checks the envelope, not the capability:
-    // `import { dlopen } from "bun:ffi"` used inside `cacheLandlockAbi` changes
-    // no export and passes it. `bun:ffi` is now the CONFIRMED route for the
-    // reader (§4.2), so this is the module most likely to acquire a mechanism,
-    // and it currently imports nothing — an empty allowlist is exact.
-    const path = fileURLToPath(new URL("./landlock-abi.ts", import.meta.url));
-    const sourceFile = parse(path, await readFile(path, "utf8"));
-    expect([...new Set(moduleSpecifiers(sourceFile))]).toEqual([]);
-  });
-
   test("the module exposes no mechanism of its own", async () => {
     // The step-2 spike (§4.2) has concluded that `bun:ffi` carries Landlock, so
     // the compiled-helper fallback is not needed — and this module did not have
     // to change when that landed, which is the property it was written for. The
     // seam still holds only the interface: the mechanism belongs to the reader.
+    //
+    // This checks the envelope. The capability — that no mechanism is reached by
+    // import OR through a global such as `Bun.spawnSync` — is held by the source
+    // guard in `landlock.test.ts`, which covers both modules of the pair and
+    // fails if a third appears unlisted.
     const module = await import("./landlock-abi");
     expect(Object.keys(module).sort()).toEqual([
       "LANDLOCK_ABI_UNAVAILABLE",
