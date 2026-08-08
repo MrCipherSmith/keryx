@@ -41,8 +41,13 @@ export type LandlockAbiReader = () => LandlockAbiVersion;
 /** Thrown when a reader returns something that is not an ABI version. */
 export class LandlockAbiReaderError extends Error {
   constructor(readonly value: unknown) {
+    // `String`, not `JSON.stringify`: the latter renders `NaN` and `Infinity` as
+    // `null`, naming a value the reader never returned — in the one message
+    // whose whole purpose is to say something true about the reader. `NaN` is
+    // exactly what a misdeclared FFI return type produces.
+    const rendered = typeof value === "number" ? String(value) : JSON.stringify(value);
     super(
-      `Landlock ABI reader returned ${JSON.stringify(value)}, which is not an ABI version (expected a non-negative integer; 0 means no Landlock).`,
+      `Landlock ABI reader returned ${rendered}, which is not an ABI version (expected a non-negative integer; 0 means no Landlock).`,
     );
     this.name = "LandlockAbiReaderError";
   }

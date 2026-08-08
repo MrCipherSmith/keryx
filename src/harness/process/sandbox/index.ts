@@ -55,8 +55,10 @@ export { createRunCa, type RunCa, type LeafCertificate, type CreateRunCaOptions 
 // same reason.
 export {
   buildLandlockRuleset,
+  LANDLOCK_UNHANDLED_ACTIONS,
   LANDLOCK_UNRESTRICTABLE_ACTIONS,
   type LandlockFsAccess,
+  type LandlockUnhandledAction,
   type LandlockMissingPathDisposition,
   type LandlockPathRule,
   type LandlockRuleset,

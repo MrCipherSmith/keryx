@@ -38,22 +38,24 @@
 // ## What this ruleset does not reach, stated rather than hidden
 //
 // - **Metadata mutation, at every ABI.** Landlock has no access right for
-//   `chmod`, `chown`, `setxattr`, `utimensat`, `ioctl`, `fcntl` or `flock`, so
-//   they stay permitted wherever DAC already permits them — including outside
-//   the writable roots. bubblewrap's `--ro-bind / /` refuses all of them with
-//   `EROFS`, so **layer 1's filesystem boundary is data-only and layer 2's is
-//   not**, and the two are not interchangeable. This is not expressible as a
-//   translation failure without making every write-bounded profile
-//   inexpressible and deleting the Landlock layer outright, so it is named
-//   instead — mechanically, in {@link LANDLOCK_UNRESTRICTABLE_ACTIONS}, so a
-//   reporting layer cannot omit it by forgetting a comment.
-// - **`LANDLOCK_ACCESS_FS_IOCTL_DEV` (ABI 5) is not handled.** At ABI 4 and
-//   below `ioctl` is unrestrictable outright (above). At ABI 5 it becomes
-//   closeable, and closing it is deliberately deferred: the handled set would
-//   then have to grant it back on the controlling terminal, or ordinary
-//   `TIOCGWINSZ`-class calls would fail, and `SandboxProfile` carries nothing
-//   that says which terminal that is. bubblewrap covers the sharp edge here
-//   (tty injection) with `--new-session`, which Landlock has no equivalent of.
+//   `chmod`, `chown`, `setxattr`, `utime`, `fcntl` or `flock`, so they stay
+//   permitted wherever DAC already permits them — including outside the writable
+//   roots. bubblewrap's `--ro-bind / /` refuses all of them with `EROFS`, so
+//   **layer 1's filesystem boundary is data-only and layer 2's is not**, and the
+//   two are not interchangeable. This is not expressible as a translation
+//   failure without making every write-bounded profile inexpressible and
+//   deleting the Landlock layer outright, so it is named instead —
+//   mechanically, in {@link LANDLOCK_UNRESTRICTABLE_ACTIONS}, so a reporting
+//   layer cannot omit it by forgetting a comment.
+// - **`ioctl` on a device, which is a different case and is kept separate.** It
+//   is unrestrictable below ABI 5 and *restrictable* from ABI 5 through
+//   `LANDLOCK_ACCESS_FS_IOCTL_DEV`, so calling it a kernel limitation would be
+//   false on a 6.10 kernel. Not handling it there is a keryx deferral, recorded
+//   as one in {@link LANDLOCK_UNHANDLED_ACTIONS}: the handled set would have to
+//   grant it back on the controlling terminal or ordinary `TIOCGWINSZ`-class
+//   calls would fail, and `SandboxProfile` carries nothing that says which
+//   terminal that is. bubblewrap covers the sharp edge (tty injection) with
+//   `--new-session`, which Landlock has no equivalent of.
 // - **A minimal `/dev`.** bubblewrap's `--dev /dev` narrows the visible device
 //   set. That is a different mechanism, and `SandboxProfile` has no field for it.
 // - **PID / IPC / session isolation.** bubblewrap's `--unshare-pid`,
@@ -135,14 +137,18 @@ export const LANDLOCK_FS_ACCESS_MIN_ABI: Readonly<Record<LandlockFsAccess, numbe
 });
 
 /**
- * Filesystem-mutating actions Landlock has **no access right for at any ABI**,
- * verbatim from the kernel's `landlock(7)` CAVEATS section.
+ * Filesystem-mutating actions Landlock has **no access right for at any ABI**.
  *
- * They therefore remain permitted wherever DAC permits them, including outside
- * a profile's writable roots, under every ruleset this module produces.
- * bubblewrap denies all of them with `EROFS` on the read-only bind, so the two
- * layers do not offer the same filesystem boundary and must not be reported as
- * if they did.
+ * The mutating subset of the kernel's `landlock(7)` CAVEATS list. That list also
+ * names `chdir`, `stat` and `access`, which observe rather than mutate and so do
+ * not weaken a write boundary; and it names `ioctl`, which is *not* here because
+ * ABI 5 can restrict it — see {@link LANDLOCK_UNHANDLED_ACTIONS}.
+ *
+ * These remain permitted wherever DAC permits them, including outside a
+ * profile's writable roots, under every ruleset this module produces at every
+ * ABI. bubblewrap denies all of them with `EROFS` on the read-only bind, so the
+ * two layers do not offer the same filesystem boundary and must not be reported
+ * as if they did.
  *
  * Exported so `sandbox status` and the capability matrix can state the residue
  * from a value rather than from a comment someone has to remember to read. It is
@@ -154,9 +160,33 @@ export const LANDLOCK_UNRESTRICTABLE_ACTIONS: readonly string[] = Object.freeze(
   "chown",
   "setxattr",
   "utime",
-  "ioctl",
   "fcntl",
   "flock",
+]);
+
+/** An action Landlock can restrict from some ABI, which this ruleset does not. */
+export interface LandlockUnhandledAction {
+  readonly action: string;
+  /** The Landlock ABI from which the kernel could restrict it. */
+  readonly restrictableFromAbi: number;
+  /** Why it is not handled. */
+  readonly reason: string;
+}
+
+/**
+ * Actions the kernel *can* restrict from some ABI and this ruleset deliberately
+ * does not handle. Kept separate from {@link LANDLOCK_UNRESTRICTABLE_ACTIONS}
+ * because the two are different claims: one is a kernel limitation, the other is
+ * a keryx decision, and reporting a decision as a limitation is the same class
+ * of untrue statement this package exists to remove.
+ */
+export const LANDLOCK_UNHANDLED_ACTIONS: readonly LandlockUnhandledAction[] = Object.freeze([
+  Object.freeze({
+    action: "ioctl",
+    restrictableFromAbi: 5,
+    reason:
+      "handling LANDLOCK_ACCESS_FS_IOCTL_DEV would require granting it back on the controlling terminal, or ordinary TIOCGWINSZ-class calls fail, and SandboxProfile does not say which terminal that is.",
+  }),
 ]);
 
 /**
@@ -194,8 +224,10 @@ const WRITE_ACCESS_RIGHTS: readonly LandlockFsAccess[] = Object.freeze([
  * `seatbelt.ts`'s `DEVICE_WRITE_LITERALS`. `2>/dev/null` has to keep working
  * under a write-deny or containment is unusable rather than strict.
  *
- * Two deliberate omissions relative to the macOS list:
+ * Three deliberate omissions relative to the nine-entry macOS list — count them
+ * against `seatbelt.ts` when auditing, because that is what this list is for:
  *
+ * - `/dev/dtracehelper`, which does not exist on Linux.
  * - `/dev/stdin`, `/dev/stdout`, `/dev/stderr`. Landlock checks `open`, not
  *   `write`, so **inherited** stdio needs no rule at all. Opening those paths
  *   explicitly does need one — but on Linux they are symlinks into
@@ -243,16 +275,19 @@ export interface LandlockPathRule {
  * A complete Landlock ruleset, as data.
  *
  * There is deliberately no `notEnforced`, `partial` or `bestEffort` field. A
- * value of this type handles **every access right Landlock has** that the
- * profile bounds; anything less is a {@link LandlockInexpressible}, not a weaker
- * ruleset. A per-translation field for recording "and this part is not covered"
- * is exactly where an approximated boundary would hide, and the boundary would
- * then be reported as real — the defect ADR-0010 exists to remove.
+ * value of this type handles every access right Landlock has that the profile
+ * bounds, except the ones in {@link LANDLOCK_UNHANDLED_ACTIONS}; anything less
+ * is a {@link LandlockInexpressible}, not a weaker ruleset. A per-translation
+ * field for recording "and this part is not covered" is exactly where an
+ * approximated boundary would hide, and the boundary would then be reported as
+ * real — the defect ADR-0010 exists to remove.
  *
- * What the mechanism itself cannot reach is a different kind of fact: constant,
- * profile-independent, and stated once in
- * {@link LANDLOCK_UNRESTRICTABLE_ACTIONS} rather than per ruleset. Read it
- * before describing this boundary as equivalent to bubblewrap's.
+ * The two exceptions are a different kind of fact: constant, profile-independent
+ * and stated once — {@link LANDLOCK_UNRESTRICTABLE_ACTIONS} for what the kernel
+ * cannot restrict at any ABI, {@link LANDLOCK_UNHANDLED_ACTIONS} for what it
+ * could and this ruleset does not. Neither varies with a profile, so neither can
+ * record an approximation of one. Read both before describing this boundary as
+ * equivalent to bubblewrap's.
  */
 export interface LandlockRuleset {
   /**
@@ -356,29 +391,36 @@ export function buildLandlockRuleset(profile: SandboxProfile, abi: number): Land
   // `writableRoots` is documented as "empty for read-only", so the mode is the
   // authority. Honouring roots on a `read-only` profile would quietly widen a
   // read-only claim into workspace-write; ignoring them can only over-restrict.
-  const effectiveRoots = profile.mode === "workspace-write" ? dedupe(profile.writableRoots) : [];
+  // Duplicates are dropped by exact string so one bad root is reported once, but
+  // nothing is rewritten before validation: a failure `detail` must quote the
+  // value the caller actually supplied, or the operator cannot map it back.
+  const rawRoots = profile.mode === "workspace-write" ? [...new Set(profile.writableRoots)] : [];
   const handledFs = WRITE_ACCESS_RIGHTS;
   const minimumAbi = requiredAbi(handledFs);
 
   const failures = [
     ...networkFailures(profile),
     ...readDenyFailures(profile),
-    ...rootPathFailures(effectiveRoots),
+    ...rootPathFailures(rawRoots),
     ...abiFailures(abi, handledFs, minimumAbi),
   ];
   if (failures.length > 0) {
     return { ok: false, failures };
   }
 
+  // Every root is valid here, so the only rewrite left is dropping a trailing
+  // slash — after which `/work/repo` and `/work/repo/` are one rule, not two.
+  const roots = [...new Set(rawRoots.map(stripTrailingSlash))];
+
   return {
     ok: true,
-    ruleset: {
+    ruleset: Object.freeze({
       minimumAbi,
       handledFs,
-      handledNet: [],
-      pathRules: pathRules(effectiveRoots, handledFs),
-      netRules: [],
-    },
+      handledNet: Object.freeze([]) as readonly never[],
+      pathRules: pathRules(roots, handledFs),
+      netRules: Object.freeze([]) as readonly never[],
+    }),
   };
 }
 
@@ -448,6 +490,15 @@ function rootPathFailures(roots: readonly string[]): LandlockInexpressible[] {
         field: "writableRoots",
         detail: `writable root ${JSON.stringify(root)} is not absolute; a Landlock rule path is opened directly and a relative path has no fixed meaning in the applying process.`,
       });
+    } else if (/\/{2,}/.test(root)) {
+      // `/work//repo` and `/work/repo` are the same hierarchy but two distinct
+      // strings, so one would be deduplicated into two rules and reported as a
+      // path nobody would recognise. Refused rather than silently collapsed.
+      failures.push({
+        code: "path-not-canonical",
+        field: "writableRoots",
+        detail: `writable root ${JSON.stringify(root)} contains a repeated "/"; the kernel collapses it when the rule path is opened, so the path reported would not be the string given.`,
+      });
     } else if (root.split("/").some((segment) => segment === "." || segment === "..")) {
       failures.push({
         code: "path-not-canonical",
@@ -473,7 +524,7 @@ function abiFailures(
       {
         code: "abi-unreadable",
         field: "abi",
-        detail: `the Landlock ABI reader returned ${JSON.stringify(abi)}, which is not an ABI version; this is a probe failure and says nothing about the kernel.`,
+        detail: `the Landlock ABI reader returned ${formatAbi(abi)}, which is not an ABI version; this is a probe failure and says nothing about the kernel.`,
       },
     ];
   }
@@ -489,24 +540,50 @@ function abiFailures(
   if (abi >= minimumAbi) {
     return [];
   }
-
-  const missing = handledFs.filter((a) => LANDLOCK_FS_ACCESS_MIN_ABI[a] > abi);
-  // `refer` is the one right whose absence makes the kernel STRICTER: with it
-  // unavailable or unhandled, cross-directory rename and link are denied
-  // everywhere. Every other missing right leaves its operation unrestricted.
-  // Saying "unrestricted" of `refer` would be a keryx claim about the kernel
-  // that contradicts the kernel, printed to an operator on Ubuntu 22.04.
-  const unrestricted = missing.filter((a) => a !== "refer");
-  const refer = missing.includes("refer")
-    ? ", and cross-directory rename and link would instead be denied everywhere, which is stricter than the profile asks for"
-    : "";
   return [
-    {
-      code: "abi-too-low",
-      field: "abi",
-      detail: `this profile's write boundary needs Landlock ABI ${minimumAbi}, and the kernel reports ABI ${abi}; ${missing.join(", ")} do not exist there. ${unrestricted.join(", ")} would be left unrestricted outside the writable roots${refer}.`,
-    },
+    { code: "abi-too-low", field: "abi", detail: abiTooLowDetail(abi, handledFs, minimumAbi) },
   ];
+}
+
+/**
+ * Name each missing right once, beside what its absence actually does.
+ *
+ * `refer` is the one right whose absence makes the kernel STRICTER: without it,
+ * cross-directory rename and link are denied everywhere. Every other missing
+ * right leaves its operation unrestricted. Saying "unrestricted" of `refer`
+ * would be a keryx claim about the kernel that contradicts the kernel, printed
+ * to an operator on Ubuntu 22.04 — which is exactly what this text used to do.
+ */
+function abiTooLowDetail(
+  abi: number,
+  handledFs: readonly LandlockFsAccess[],
+  minimumAbi: number,
+): string {
+  const missing = handledFs.filter((a) => LANDLOCK_FS_ACCESS_MIN_ABI[a] > abi);
+  const unrestricted = missing.filter((a) => a !== "refer");
+  const sentences = [
+    `this profile's write boundary needs Landlock ABI ${minimumAbi}, and the kernel reports ABI ${abi}`,
+  ];
+  if (unrestricted.length > 0) {
+    sentences.push(
+      `without ${unrestricted.join(", ")}, the matching operations would be left unrestricted outside the writable roots`,
+    );
+  }
+  if (missing.includes("refer")) {
+    sentences.push(
+      "without refer, cross-directory rename and link would instead be denied everywhere, which is stricter than the profile asks for",
+    );
+  }
+  return `${sentences.join(". ")}.`;
+}
+
+/**
+ * `JSON.stringify` renders `NaN` and `Infinity` as `null`, which would name a
+ * value the reader never returned — in the one message whose whole purpose is to
+ * say something true about the reader.
+ */
+function formatAbi(value: unknown): string {
+  return typeof value === "number" ? String(value) : JSON.stringify(value);
 }
 
 /** The lowest ABI that knows every handled right. */
@@ -522,24 +599,26 @@ function requiredAbi(handledFs: readonly LandlockFsAccess[]): number {
 function pathRules(
   roots: readonly string[],
   handledFs: readonly LandlockFsAccess[],
-): LandlockPathRule[] {
-  const rules: LandlockPathRule[] = roots.map((path) => ({
-    path,
-    allow: handledFs,
-    onMissing: "fail",
-  }));
+): readonly LandlockPathRule[] {
+  const rules: LandlockPathRule[] = roots.map((path) =>
+    Object.freeze({ path, allow: handledFs, onMissing: "fail" as const }),
+  );
   for (const path of DEVICE_WRITE_PATHS) {
-    rules.push({ path, allow: DEVICE_WRITE_RIGHTS, onMissing: "skip" });
+    rules.push(Object.freeze({ path, allow: DEVICE_WRITE_RIGHTS, onMissing: "skip" as const }));
   }
-  return rules;
+  // Frozen because `readonly` is erased at run time: a consumer that pushed a
+  // rule here would widen a security boundary, and the JS caller the barrel
+  // publishes to has no type checker stopping it.
+  return Object.freeze(rules);
 }
 
 /**
- * Drop a trailing slash and duplicates, so the path a rule reports is the path
- * it enforces and `/work/repo` and `/work/repo/` do not become two rules.
+ * Drop a single trailing slash, so `/work/repo` and `/work/repo/` do not become
+ * two rules. Only reachable after validation, which refuses repeated slashes, so
+ * this can never produce the empty string — `/` has no trailing slash to drop.
  * Nothing else is rewritten: `.` and `..` are refused rather than resolved,
  * because resolving them would change which hierarchy is granted.
  */
-function dedupe(values: readonly string[]): string[] {
-  return [...new Set(values.map((v) => (v.length > 1 ? v.replace(/\/+$/, "") : v)))];
+function stripTrailingSlash(value: string): string {
+  return value.length > 1 && value.endsWith("/") ? value.slice(0, -1) : value;
 }

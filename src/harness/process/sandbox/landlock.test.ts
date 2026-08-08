@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import {
   LANDLOCK_FS_ACCESS_BIT,
   LANDLOCK_FS_ACCESS_MIN_ABI,
+  LANDLOCK_UNHANDLED_ACTIONS,
   LANDLOCK_UNRESTRICTABLE_ACTIONS,
   buildLandlockRuleset,
   landlockFsMask,
 } from "./landlock";
 import type {
-  LandlockFsAccess,
   LandlockInexpressible,
   LandlockInexpressibleCode,
   LandlockRuleset,
@@ -75,34 +77,50 @@ function rootRules(ruleset: LandlockRuleset) {
 // ---------------------------------------------------------------------------
 
 describe("AC1: buildLandlockRuleset is a pure translation", () => {
-  test("the module imports nothing impure", async () => {
+  test("the module loads nothing impure and reaches for no impure global", async () => {
     // AC1's "no syscall, no FFI, no spawn, no filesystem read, no
     // process.platform branch" is unobservable from outputs: a filesystem read
-    // is perfectly deterministic within a run. The import allowlist is the
-    // load-bearing half — it fails closed on any dependency added later, where
-    // a list of known-bad names only catches what someone thought of.
-    //
-    // The module discusses `bun:ffi` and `process.platform` in prose, so the
-    // scan runs over code with comments removed.
-    const source = await Bun.file(new URL("./landlock.ts", import.meta.url)).text();
-    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    // is perfectly deterministic within a run. So the criterion is enforced
+    // structurally, and the guard has to match the SHAPE of the offence rather
+    // than a list of the names it has worn. An earlier version matched only
+    // `from "…"` with double quotes, and `import { readFileSync } from 'fs'`
+    // walked straight through it.
+    const source = await readFile(fileURLToPath(new URL("./landlock.ts", import.meta.url)), "utf8");
 
-    const imports = [...code.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
-    expect([...new Set(imports)].sort()).toEqual(["./profile", "node:path"]);
+    // The module discusses `bun:ffi` and `process.platform` in prose, so
+    // comments go first — including trailing ones, without eating `https://`.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:'"`])\/\/.*$/gm, "$1");
 
+    // Every module-specifier form, both quote styles: `from`, dynamic `import()`,
+    // `require()`, and a bare side-effect `import "x"`.
+    const specifiers = [
+      ...code.matchAll(/\bfrom\s*(['"])([^'"]+)\1/g),
+      ...code.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g),
+      ...code.matchAll(/\brequire\s*\(\s*(['"])([^'"]+)\1/g),
+      ...code.matchAll(/^\s*import\s+(['"])([^'"]+)\1/gm),
+    ].map((m) => m[2]);
+    expect([...new Set(specifiers)].sort()).toEqual(["./profile", "node:path"]);
+
+    // An allowlist cannot see a global, so the impure globals are named. String
+    // literals are blanked first: the module's operator-facing `detail` prose
+    // must not be able to turn this guard red, or its next maintainer weakens it.
+    const withoutStrings = code
+      .replace(/(['"])(?:\\.|(?!\1)[^\\])*\1/g, '""')
+      .replace(/`(?:\\.|[^\\`])*`/g, "``");
     for (const forbidden of [
-      "node:fs",
-      "node:os",
-      "node:child_process",
-      "bun:ffi",
-      "process.platform",
-      "process.env",
+      "process.",
+      "Bun.",
+      "globalThis",
+      "eval(",
+      "new Function",
+      "fetch(",
       "Date.now",
       "Math.random",
-      "spawnSync",
-      "require(",
+      "performance.",
     ]) {
-      expect(code).not.toContain(forbidden);
+      expect(withoutStrings).not.toContain(forbidden);
     }
   });
 
@@ -189,11 +207,20 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     }
   });
 
-  test("the shared access-right arrays are frozen, so a consumer cannot widen a boundary", () => {
-    const ruleset = rulesetOf(expressible);
-    expect(Object.isFrozen(ruleset.handledFs)).toBe(true);
-    for (const rule of ruleset.pathRules) {
-      expect(Object.isFrozen(rule.allow)).toBe(true);
+  test("nothing a ruleset exposes is mutable, so a consumer cannot widen a boundary", () => {
+    // `readonly` is erased at run time and the barrel publishes to JS callers
+    // with no type checker. Enumerated over every shape rather than named
+    // member by member: a per-site freeze that leaves a sibling mutable is how
+    // these reviews reach round seven.
+    for (const profile of expressibleShapes) {
+      const ruleset = rulesetOf(profile);
+      for (const value of [ruleset, ruleset.handledFs, ruleset.pathRules, ruleset.handledNet, ruleset.netRules]) {
+        expect(Object.isFrozen(value)).toBe(true);
+      }
+      for (const rule of ruleset.pathRules) {
+        expect(Object.isFrozen(rule)).toBe(true);
+        expect(Object.isFrozen(rule.allow)).toBe(true);
+      }
     }
     expect(Object.isFrozen(LANDLOCK_FS_ACCESS_BIT)).toBe(true);
     expect(Object.isFrozen(LANDLOCK_FS_ACCESS_MIN_ABI)).toBe(true);
@@ -297,13 +324,34 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
     expect(codes({ ...expressible, writableRoots: ["/work/re\0po"] })).toEqual(["path-contains-nul"]);
   });
 
-  test.each(["/work/repo/../..", "/work/./repo", "/.."])(
+  test.each(["/work/repo/../..", "/work/./repo", "/..", "/work//repo", "//", "/work/repo//"])(
     "the non-canonical root %s is refused rather than resolved",
     (root) => {
-      // Resolving it would grant a hierarchy other than the one reported.
+      // Resolving it would grant a hierarchy other than the one reported, and
+      // collapsing it silently would report a path the caller never supplied.
       expect(codes({ ...expressible, writableRoots: [root] })).toEqual(["path-not-canonical"]);
     },
   );
+
+  test.each(["/", "/work/..foo", "/work/.hidden", "/work/a..b"])(
+    "the legitimate root %s is accepted",
+    (root) => {
+      // `path-not-canonical` matches whole segments, so a name that merely
+      // starts with dots is not a `.` or `..` segment.
+      expect(rootRules(rulesetOf({ ...expressible, writableRoots: [root] })).map((r) => r.path)).toEqual([root]);
+    },
+  );
+
+  test("a failure quotes the root the caller supplied, not a normalised rewrite", () => {
+    // Normalisation runs after validation for exactly this reason: an operator
+    // reading `writable root ""` cannot map it back to what they configured.
+    const [failure] = failuresOf({ ...expressible, writableRoots: ["work/repo/"] });
+    expect(failure?.detail).toContain('"work/repo/"');
+  });
+
+  test("a duplicated invalid root is reported once", () => {
+    expect(codes({ ...expressible, writableRoots: ["rel", "rel"] })).toEqual(["path-not-absolute"]);
+  });
 
   test("ABI 0 is refused as Landlock being unavailable", () => {
     expect(codes(expressible, 0)).toEqual(["landlock-unavailable"]);
@@ -315,6 +363,10 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
       const [failure] = failuresOf(expressible, abi);
       expect(failure?.code).toBe("abi-unreadable");
       expect(failure?.detail).toContain("says nothing about the kernel");
+      // The message must name the value the reader returned. `JSON.stringify`
+      // renders NaN and Infinity as `null`, which named a value nobody returned
+      // — in the one message whose purpose is to be true about the reader.
+      expect(failure?.detail).toContain(String(abi));
     },
   );
 
@@ -340,8 +392,18 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
     // about the kernel that contradicts the kernel, on the exact host class
     // (Ubuntu 22.04, ABI 1) the PRD singles out.
     const [failure] = failuresOf(expressible, 1);
+    expect(failure?.detail).toContain("without refer, cross-directory rename and link");
     expect(failure?.detail).toContain("stricter than the profile asks for");
-    expect(failure?.detail).not.toMatch(/refer, truncate would be left unrestricted/);
+    expect(failure?.detail).toContain("without truncate");
+  });
+
+  test("each missing right is named once, beside what its absence actually does", () => {
+    // At ABI 2 only `truncate` is missing, so `refer` must not be mentioned and
+    // nothing may be listed twice.
+    const [failure] = failuresOf(expressible, 2);
+    expect(failure?.detail).toContain("without truncate");
+    expect(failure?.detail).not.toContain("refer");
+    expect(failure?.detail.match(/truncate/g)).toHaveLength(1);
   });
 
   test("every failure carries a code, a field and a non-empty detail", () => {
@@ -459,18 +521,47 @@ describe("AC3: a returned ruleset is complete by construction", () => {
     }
   });
 
-  test("what Landlock cannot reach is named in a value, not only in a comment", () => {
+  test("what Landlock cannot reach at any ABI is named in a value, not only in a comment", () => {
     // A ruleset covers every access right Landlock HAS that the profile bounds.
     // Metadata mutation has no such right at any ABI, so bubblewrap's boundary
     // is strictly stronger and the two must not be reported as equivalent. This
-    // list is the mechanical record of that, for `sandbox status` to read.
-    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).toContain("chmod");
-    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).toContain("chown");
-    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).toContain("setxattr");
+    // list is the mechanical record of that, for `sandbox status` to read — so
+    // it is pinned as a full literal like the two UAPI tables. Asserting that
+    // `handledFs` merely excludes these would be a tautology: none of them is a
+    // `LandlockFsAccess` value, so no implementation change could make it fail.
+    expect([...LANDLOCK_UNRESTRICTABLE_ACTIONS]).toEqual([
+      "chmod",
+      "chown",
+      "setxattr",
+      "utime",
+      "fcntl",
+      "flock",
+    ]);
     expect(Object.isFrozen(LANDLOCK_UNRESTRICTABLE_ACTIONS)).toBe(true);
-    // It is a fact about the mechanism, so it must not vary with the profile.
-    for (const right of LANDLOCK_UNRESTRICTABLE_ACTIONS) {
-      expect(rulesetOf(expressible).handledFs).not.toContain(right as LandlockFsAccess);
+  });
+
+  test("ioctl is recorded as a keryx deferral, not as a kernel limitation", () => {
+    // It is unrestrictable below ABI 5 and restrictable from ABI 5 through
+    // LANDLOCK_ACCESS_FS_IOCTL_DEV, so listing it as a kernel caveat would be
+    // false on a 6.10 kernel — the same shape of untrue statement as reporting
+    // a present binary as a working boundary.
+    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).not.toContain("ioctl");
+    expect(LANDLOCK_UNHANDLED_ACTIONS.map((a) => [a.action, a.restrictableFromAbi])).toEqual([
+      ["ioctl", 5],
+    ]);
+    expect(LANDLOCK_UNHANDLED_ACTIONS[0]?.reason.length).toBeGreaterThan(0);
+    expect(Object.isFrozen(LANDLOCK_UNHANDLED_ACTIONS)).toBe(true);
+    // The deferral has to agree with the table it is a deferral from.
+    const ioctl = LANDLOCK_UNHANDLED_ACTIONS.find((a) => a.action === "ioctl");
+    expect(LANDLOCK_FS_ACCESS_MIN_ABI.ioctl_dev).toBe(ioctl?.restrictableFromAbi ?? -1);
+  });
+
+  test("neither residue list varies with the profile — they are mechanism facts", () => {
+    for (const profile of expressibleShapes) {
+      const ruleset = rulesetOf(profile);
+      expect(ruleset.handledFs).not.toContain("ioctl_dev");
+      expect([...LANDLOCK_UNRESTRICTABLE_ACTIONS]).toHaveLength(6);
+      expect([...LANDLOCK_UNHANDLED_ACTIONS]).toHaveLength(1);
     }
   });
 });
@@ -497,10 +588,17 @@ describe("AC4: no profile produces a network rule", () => {
     },
   );
 
-  test.each([3, 4, 5, 6])("at ABI %i, where Landlock's TCP rights exist, none are handled", (abi) => {
-    const ruleset = rulesetOf(expressible, abi);
-    expect(ruleset.handledNet).toEqual([]);
-    expect(ruleset.netRules).toEqual([]);
+  test("no profile shape at any usable ABI carries a network rule", () => {
+    // Enumerated like AC3's guard rather than run on one fixture: a network
+    // field populated on some other shape is exactly what a per-fixture
+    // assertion misses, and this is the guard against the second false green.
+    for (const abi of [3, 4, 5, 6]) {
+      for (const profile of expressibleShapes) {
+        const ruleset = rulesetOf(profile, abi);
+        expect(ruleset.handledNet).toEqual([]);
+        expect(ruleset.netRules).toEqual([]);
+      }
+    }
   });
 });
 
