@@ -697,8 +697,8 @@ linuxGuardedTest(
     // … stripped of everything that could move the cursor. Asserted on the
     // BYTES, because the whole point is what is in the stream, not what it
     // renders as.
-    // C0 and DEL, plus the C1 SEQUENCE INTRODUCERS (NEL, CSI, OSC) — every
-    // control that can move a cursor over the four-space indent.
+    // C0 and DEL, plus the C1 SEQUENCE INTRODUCERS — every control that can
+    // move a cursor over the four-space indent.
     for (const control of ["\r", "\u001B", "\u0007", "\u0008", "\u007F", "\u0085", "\u009B", "\u009D"]) {
       expect(install.stdout.includes(control)).toBe(false);
     }
@@ -707,17 +707,24 @@ linuxGuardedTest(
     expect(install.stdout).toContain("XYZ");
 
     // …and the other direction, which matters just as much: the strip must
-    // not eat the operator's evidence. An attempt to also remove the C1 range
-    // did exactly that — bash bracket RANGES use locale collation, not code
-    // points, and install.sh runs in the C locale, where that range deleted
-    // ": ; [ ] < > = ? @ &" from the diagnostic. Caught by this line.
+    // not eat the operator's evidence. An attempt to also remove C1 as a
+    // bracket range did exactly that. Not because of collation — in the C
+    // locale collation order IS code-point order — but because a \u escape
+    // there is not a character at all: it degenerates to the six literal
+    // bytes of the text \u0080, poisoning the class with a backslash, a
+    // letter u and the digits 0-9. Measured, the class then deleted
+    // "0-9 : ; < = > ? @ A-Z [ \" and the letter u from the diagnostic.
+    // (`]` and `&` survive it — which is why this assertion pins the
+    // characters that do not.) See scripts/install.sh for the full working.
     expect(install.stdout).toContain("clean-marker: a;b[c]d<e>f=g?h@i&j");
 
     // NON-ASCII MUST SURVIVE. This is the assertion that stops the next
     // attempt at C1: a byte range [\x80-\x9f] is ASCII-safe and looks
-    // correct, and it guts every multi-byte character in the operator's
-    // evidence, because 0x80-0x9F are legal UTF-8 continuation bytes.
-    // Measured: `err — café путь` became `err ? caf? ????`.
+    // correct, and it corrupts any character whose UTF-8 encoding contains a
+    // byte in 0x80-0x9F — legal continuation bytes. Measured, `— café путь`
+    // became `? café п???`: the em dash and three of the four Cyrillic
+    // letters were destroyed, while é (c3 a9) and п (d0 bf) survived because
+    // a9 and bf are above 0x9F. Hence the em dash in the expected string.
     expect(install.stdout).toContain("— café путь");
     // … and bounded, in both directions.
     expect(install.stdout).toContain("(line truncated)");

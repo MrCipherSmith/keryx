@@ -82,9 +82,10 @@ print_bounded_output() {
     line="${line//[$'\x01'-$'\x08'$'\x0b'-$'\x1f'$'\x7f']/}"
 
     # C1 sequence introducers, as their UTF-8 encodings, one exact
-    # substitution each. NEL, DCS, CSI, ST, OSC, PM, APC -- the seven that
-    # begin or end a control sequence. The rest of C1 is inert.
-    for intro in $'\xc2\x85' $'\xc2\x90' $'\xc2\x9b' $'\xc2\x9c' $'\xc2\x9d' $'\xc2\x9e' $'\xc2\x9f'; do
+    # substitution each: NEL, DCS, SOS, CSI, ST, OSC, PM, APC. The rest of
+    # C1 cannot erase the four-space indent -- which is the property being
+    # defended here, and a narrower claim than calling the rest inert.
+    for intro in $'\xc2\x85' $'\xc2\x90' $'\xc2\x98' $'\xc2\x9b' $'\xc2\x9c' $'\xc2\x9d' $'\xc2\x9e' $'\xc2\x9f'; do
       line="${line//$intro/}"
     done
 
@@ -105,11 +106,14 @@ print_bounded_output() {
     #     it would survive a careless review on a developer's machine.
     #
     #   [$'\x80'-$'\x9f']  is byte-accurate and ASCII-safe in BOTH locales --
-    #     and mangles every non-ASCII character in the operator's evidence,
-    #     because 0x80-0x9F are legal UTF-8 CONTINUATION bytes. Measured, it
-    #     turned `err <em-dash> caf<e-acute> <cyrillic>` into `err ? caf? ????`
-    #     in both locales. A sanitizer that eats the diagnostic is not a
-    #     sanitizer.
+    #     and corrupts any character whose UTF-8 encoding contains a byte in
+    #     0x80-0x9F, because those are legal CONTINUATION bytes. That is most
+    #     non-ASCII text but not all of it: measured, an em dash (e2 80 94)
+    #     and CJK (e6 97 a5) were gutted while e-acute (c3 a9) and Cyrillic
+    #     п (d0 bf) came through intact, since a9 and bf are above 0x9F.
+    #     `<em-dash> caf<e-acute> <cyrillic-put> <CJK>` became
+    #     `<?> caf<e-acute> <cyrillic-p><?><?><?> <?>` in both locales. A
+    #     sanitizer that eats the diagnostic is not a sanitizer.
     #
     # The exact two-byte substitutions above have neither problem: measured
     # identical in both locales, with all text -- ASCII and non-ASCII alike --

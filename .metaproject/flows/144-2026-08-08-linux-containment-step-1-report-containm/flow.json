@@ -5,7 +5,7 @@
   "title": "Linux containment step 1: report containment from a probe, not a PATH lookup",
   "status": "in-progress",
   "createdAt": "2026-08-08T12:09:38.996Z",
-  "updatedAt": "2026-08-08T12:27:44.824Z",
+  "updatedAt": "2026-08-08T18:25:50.614Z",
   "source": {
     "type": "description",
     "ref": null
@@ -65,7 +65,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +73,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -323,6 +324,11 @@
       "at": "2026-08-08T12:27:44.824Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-08T18:25:50.614Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

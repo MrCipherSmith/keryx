@@ -236,7 +236,7 @@ Findings fixed:
 ### F-001 — the fix that was worse than the defect, and the reasoning that was wrong about why
 
 Round 4 declined to strip C1 and wrote down a reason. Round 5 found the
-reason was **factually wrong in two of its three claims**, and — worse — that
+reason **wrong about the mechanism**, and — worse — found that
 it pointed the next maintainer straight at a form that corrupts the
 operator's evidence. A wrong rationale committed beside correct code is the
 exact defect class this package exists to remove: an artefact stating
@@ -259,18 +259,24 @@ something nobody verified. So it was measured, and then rewritten to match.
    machine. Measured, the C-locale class turned
    `clean-marker: a;b[c]d<e>f=g?h@i&j and Remediation curl` into
    `clean-marker abc]defghi&j and emediation crl`.
-2. **The `\u0085`-is-byte-0x85 claim was wrong too**, and in the direction
-   that matters: the round-4 comment called the explicit-character variant a
-   harmless no-op, when in the C locale it puts `\`, `u` and digits into the
-   class and deletes them from the evidence.
+2. **Round 4's conclusion here was right; only its reason was wrong.** The
+   comment said `$'\u0085'` is the single byte 0x85 — it is not, it is the
+   six literal bytes of the text. But used as an explicit substitution rather
+   than a bracket range it really is a harmless no-op: measured, it left the
+   ASCII evidence byte-identical and still failed to remove a real `c2 9b`.
+   Only the RANGE form lets the literal text poison the class. Round 5's
+   report called this "wrong in two of three claims"; that overstated it by
+   half a claim, and is corrected here rather than repeated.
 3. **The byte range is the trap the old comment pointed at.**
    `[$'\x80'-$'\x9f']` is byte-accurate and ASCII-safe in *both* locales —
-   and mangles every multi-byte character, because 0x80-0x9F are legal UTF-8
-   continuation bytes. Measured: `err <em-dash> caf<e-acute> <cyrillic>`
-   became `err ? caf? ????` in both locales.
+   and corrupts any character whose UTF-8 encoding contains a byte in
+   0x80-0x9F, those being legal continuation bytes. Most non-ASCII text, but
+   not all: measured, the em dash (`e2 80 94`) and CJK (`e6 97 a5`) were
+   gutted while e-acute (`c3 a9`) and Cyrillic п (`d0 bf`) survived, because
+   `a9` and `bf` are above 0x9F.
 
 **So the gap got closed, not just re-declined.** Exact two-byte substitutions
-for the seven C1 sequence introducers (NEL, DCS, CSI, ST, OSC, PM, APC) are
+for the eight C1 sequence introducers (NEL, DCS, SOS, CSI, ST, OSC, PM, APC) are
 measured correct in both locales: all text survives, ASCII and non-ASCII
 alike, and only the introducer is removed. `install.sh` now does that.
 
@@ -284,8 +290,9 @@ and is not acted on.
 
 The test now pins the direction that catches all of this: **non-ASCII must
 survive**. Falsified by swapping the surgical loop for the byte range — the
-suite went to 11 pass / 1 fail, with `caf<e-acute> <cyrillic>` reduced to
-mojibake and the introducers only half-removed, leaving dangling lead bytes.
+suite went to 11 pass / 1 fail, with the em dash and most of the Cyrillic
+reduced to mojibake and the introducers only half-removed, leaving dangling
+lead bytes.
 ### Falsification runs
 
 | Reverted change | Result |
@@ -412,3 +419,4 @@ Note: `keryx health run` initially reported WARN (`required source unavailable:
 typescript`) because this worktree had no `node_modules`. After `bun install
 --frozen-lockfile` the gate is PASS. The WARN was environmental, not a
 regression.
+- 2026-08-08T18:25:50.614Z - task-done: T4: Self-review and prepare draft PR
