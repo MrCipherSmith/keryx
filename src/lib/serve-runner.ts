@@ -94,6 +94,23 @@ export function assembleSubmitTurn(
     // restart, and the detection is a handful of `existsSync` calls over PATH
     // with no spawn. It is also the honest direction to fail in — a launcher
     // REMOVED while the listener is up must start refusing immediately.
+    //
+    // KNOWN GAP (keryx-linux-containment step 1). This asks whether a launcher
+    // is PRESENT, not whether containment WORKS. On Ubuntu 23.10+ those differ:
+    // bubblewrap is present and every contained run dies, so `keryx sandbox
+    // status` now reports containment as broken while this gate still admits
+    // required-fail-closed turns. Closing it means probing — one spawn per turn,
+    // which the per-turn evaluation above exists to avoid, or a cached probe
+    // with an invalidation policy that would break the "picked up without a
+    // restart" property. Both are design work beyond step 1's "report the
+    // truth" scope, so the gap is recorded rather than half-closed.
+    //
+    // The gap is a diagnostic one, not a containment one: a broken launcher
+    // still never yields an unsandboxed run. The turn is admitted, then
+    // `SandboxedProcessAdapter` wraps the command and the launcher itself exits
+    // nonzero, so the command never executes. What is wrong is only that the
+    // operator learns this as an opaque per-command failure instead of an
+    // up-front refusal naming the cause.
     containmentAvailable: seams.containmentAvailable ?? (() => detectSandboxLauncher().available),
   });
 }

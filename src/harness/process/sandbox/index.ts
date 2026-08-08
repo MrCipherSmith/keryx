@@ -38,8 +38,40 @@ export { SandboxedProcessAdapter, type SandboxedProcessAdapterOptions } from "./
 export {
   detectSandboxLauncher,
   resolveSandboxAdapter,
+  BWRAP_INSTALL_HINT,
   type SandboxLauncherInfo,
   type DetectOptions,
   type ResolveSandboxOptions,
 } from "./detect";
 export { createRunCa, type RunCa, type LeafCertificate, type CreateRunCaOptions } from "./tls-ca";
+// Capability reporting (keryx-linux-containment step 1). `probe.ts` is the only
+// module here that spawns; it answers "does containment work on THIS host",
+// which is a different question from detect.ts's "is a launcher present".
+// `resetContainmentProbeCacheForTests` is deliberately NOT re-exported — it is
+// a test affordance, not part of the package's surface.
+export {
+  probeContainment,
+  runContainmentProbe,
+  BWRAP_APPARMOR_REMEDIATION,
+  PROBE_TIMEOUT_MS,
+  type ProbeResult,
+  type ProbeOptions,
+  type ProbeSpawn,
+  type ProbeSpawnOptions,
+  type ProbeSpawnResult,
+  type ProbeFailureCause,
+  type SandboxLayer,
+} from "./probe";
+export {
+  SANDBOX_CAPABILITY_MATRIX,
+  CAPABILITY_STATUSES,
+  LINUX_KERNEL_FACILITY_LABEL,
+  capabilityStatusFor,
+  isKnownSandboxPlatform,
+  linuxKernelFacilityPhrase,
+  statusCellText,
+  type CapabilityStatus,
+  type LinuxKernelFacility,
+  type SandboxCapabilityRow,
+  type SandboxPlatform,
+} from "./capability-matrix";
