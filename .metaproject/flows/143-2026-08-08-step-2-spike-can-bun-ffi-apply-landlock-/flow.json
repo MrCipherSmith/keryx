@@ -5,7 +5,7 @@
   "title": "Step 2 spike: can bun:ffi apply Landlock and does the restriction survive exec?",
   "status": "in-progress",
   "createdAt": "2026-08-08T12:07:50.883Z",
-  "updatedAt": "2026-08-08T12:22:35.817Z",
+  "updatedAt": "2026-08-08T12:26:10.946Z",
   "source": {
     "type": "description",
     "ref": null
@@ -20,7 +20,7 @@
       "id": "T1",
       "title": "Collect remaining context",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -28,13 +28,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,13 +43,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,7 +58,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -76,7 +79,7 @@
       "id": "T5",
       "title": "Measure per-command overhead with ADR-0010 method, all mechanisms in one run",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,13 +87,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Cost the compiled-helper alternative by building and measuring it",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -98,13 +102,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Write the committed finding and link it from the package README and Step 2",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -112,7 +117,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -143,6 +149,36 @@
     {
       "at": "2026-08-08T12:22:35.817Z",
       "event": "started"
+    },
+    {
+      "at": "2026-08-08T12:26:10.496Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-08T12:26:10.585Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-08T12:26:10.677Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-08T12:26:10.766Z",
+      "event": "task-done",
+      "detail": "T5: Measure per-command overhead with ADR-0010 method, all mechanisms in one run"
+    },
+    {
+      "at": "2026-08-08T12:26:10.858Z",
+      "event": "task-done",
+      "detail": "T6: Cost the compiled-helper alternative by building and measuring it"
+    },
+    {
+      "at": "2026-08-08T12:26:10.946Z",
+      "event": "task-done",
+      "detail": "T7: Write the committed finding and link it from the package README and Step 2"
     }
   ]
 }

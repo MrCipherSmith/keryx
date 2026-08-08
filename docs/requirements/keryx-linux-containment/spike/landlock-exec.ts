@@ -4,7 +4,8 @@
  * `sandbox/landlock-exec.ts`, reduced to the minimum that answers the spike
  * question. Applies a Landlock ruleset to ITSELF, then runs the real command.
  *
- *   bun landlock-exec.ts [--ro PATH]... [--rw PATH]... [--net] \
+ *   bun landlock-exec.ts [--ro PATH]... [--rw PATH]... [--dev PATH]... \
+ *                        [--handle-tcp] \
  *                        [--allow-tcp-connect PORT]... [--allow-tcp-bind PORT]... \
  *                        -- <command> [args...]
  *
@@ -14,6 +15,7 @@
 
 import {
   ACCESS_NET,
+  DEVICE_ACCESS,
   execIntoCommand,
   READ_ONLY_ACCESS,
   READ_WRITE_ACCESS,
@@ -23,6 +25,26 @@ import {
 } from "./landlock-ffi.ts";
 
 const APPLY_FAILED_EXIT_CODE = 125;
+
+/** Signal name -> number, for the shell's 128+N exit convention. */
+const SIGNAL_NUMBERS: Readonly<Record<string, number>> = {
+  SIGHUP: 1,
+  SIGINT: 2,
+  SIGQUIT: 3,
+  SIGILL: 4,
+  SIGABRT: 6,
+  SIGFPE: 8,
+  SIGKILL: 9,
+  SIGSEGV: 11,
+  SIGPIPE: 13,
+  SIGALRM: 14,
+  SIGTERM: 15,
+  SIGSYS: 31,
+};
+
+function signalNumber(name: string): number {
+  return SIGNAL_NUMBERS[name] ?? 0;
+}
 
 interface Invocation {
   readonly paths: readonly PathRule[];
@@ -62,7 +84,13 @@ function parse(argv: readonly string[]): Invocation {
       case "--rw":
         paths.push({ path: value("--rw"), allowed: READ_WRITE_ACCESS });
         break;
-      case "--net":
+      case "--dev":
+        paths.push({ path: value("--dev"), allowed: DEVICE_ACCESS });
+        break;
+      // Named --handle-tcp, not --net: the axis covers TCP bind/connect ONLY.
+      // UDP, DNS, raw and unix sockets are outside it, so a flag called --net
+      // would invite exactly the "network is off" misreading spec §4.3 forbids.
+      case "--handle-tcp":
         handleNet = true;
         index += 1;
         break;
@@ -125,9 +153,16 @@ function main(): number {
   }
 
   if (invocation.mode === "execve") {
-    // Replaces this process: the contained command inherits the ruleset the
-    // way any exec'd program does, and no Bun process stays resident.
-    execIntoCommand(invocation.command, process.env);
+    try {
+      // Replaces this process: the contained command inherits the ruleset the
+      // way any exec'd program does, and no Bun process stays resident.
+      execIntoCommand(invocation.command, process.env);
+    } catch (error) {
+      // A failed exec must not be reported as the command exiting 1 — the
+      // caller would conclude it ran and failed when it never started.
+      process.stderr.write(`landlock-exec: ${(error as Error).message}\n`);
+      return APPLY_FAILED_EXIT_CODE;
+    }
   }
 
   const [program, ...args] = invocation.command as [string, ...string[]];
@@ -136,6 +171,14 @@ function main(): number {
     stdout: "inherit",
     stderr: "inherit",
   });
+  // Bun types exitCode as number, but it is null when the child died by a
+  // signal — and process.exit(null) exits 0, i.e. a SIGKILLed command would be
+  // reported as success. Follow the shell convention instead.
+  if (child.exitCode === null) {
+    const signal = child.signalCode;
+    process.stderr.write(`landlock-exec: command terminated by ${signal ?? "unknown signal"}\n`);
+    return signal === null || signal === undefined ? APPLY_FAILED_EXIT_CODE : 128 + signalNumber(signal);
+  }
   return child.exitCode;
 }
 

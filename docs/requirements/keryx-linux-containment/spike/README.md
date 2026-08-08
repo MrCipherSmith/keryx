@@ -7,7 +7,7 @@ unproven assumption in [specification.md](../specification.md) §4.2.
 - **Landlock ABI:** 4 (reached through `bun:ffi`, matching the number ADR-0010
   measured by other means)
 - **Date:** 2026-08-08
-- **Reproduce:** `./verify.sh` (17 assertions) and `./bench.sh`
+- **Reproduce:** `./verify.sh` (21 assertions) and `./bench.sh`
 
 ## Verdict
 
@@ -22,15 +22,19 @@ runtime dependency:
    allowed hierarchy succeed, and both are denied with `EACCES` outside it.
 4. It is inherited by a grandchild **and** a great-grandchild.
 
-**But the delivery shape in §4.2 costs ~30 ms per command, which is ~3× the
-bubblewrap it is meant to replace.** The Landlock syscalls are ~1.1 ms of that.
-The other ~23 ms is Bun's cold start, paid because §4.2 spawns a *second* Bun to
-apply the ruleset. This does not invalidate the approach, but it is a real
-number that Step 3 must decide about rather than discover.
+**But the delivery shape in §4.2 costs ~40 ms per command, roughly 4× the
+bubblewrap it is meant to replace.** The Landlock syscalls are ~1 ms of that.
+The rest is a second Bun cold start (~23 ms) plus transpiling the launcher
+(~12 ms), both paid because §4.2 spawns a *second* Bun to apply the ruleset.
+This does not invalidate the approach, but it is a real number that Step 3 must
+decide about rather than discover.
 
 ## Evidence
 
-`./verify.sh`, 17/17 passing:
+`./verify.sh`, 21/21 passing. Every assertion that something was **denied** is
+paired with a control that differs only in the ruleset, and asserts the *reason*
+for the denial rather than its symptom — an assertion that also passes when the
+command never ran is not evidence.
 
 | # | Assertion |
 |---|---|
@@ -39,59 +43,87 @@ number that Step 3 must decide about rather than discover.
 | 3 | read inside the allowed hierarchy succeeds |
 | 3 | write inside the allowed hierarchy succeeds |
 | 3 | write outside is denied — `Permission denied` |
-| 3 | read outside is denied — `Permission denied` |
+| 3 | read outside is denied **and the contents did not leak** |
 | 4 | grandchild write inside succeeds |
 | 4 | **grandchild write outside is denied — the restriction is inherited** |
-| 4 | great-grandchild write outside is denied too |
-| 5 | `NoNewPrivs: 1` in the contained child |
-| 5b | `execve` mode: the command's parent is `bash`, not a resident `bun` |
+| 4 | great-grandchild write inside succeeds (control: three-deep nesting runs) |
+| 4 | great-grandchild write outside is denied with `EACCES` |
+| 5 | control: `NoNewPrivs` is 0 outside the launcher |
+| 5 | `NoNewPrivs` is 1 inside the contained child |
+| 5b | `execve` mode: the command's parent is this script, not a resident `bun` |
 | 5b | control: `--spawn` mode does leave `bun` resident as the parent |
 | 5b | exit code 42 propagates in both modes |
-| 6 | an inapplicable ruleset exits 125 and never runs the command |
+| 5b | `SIGKILL` reports 137 in both modes, not 0 |
+| 6 | an inapplicable ruleset exits 125, names the path, never runs the command |
+| 6 | the TCP axis is refused below ABI 4 rather than silently dropped |
 | 7 | control: TCP bind succeeds when the net axis is not handled |
-| 7 | `handled_access_net` with no allow-rule denies TCP bind — `EACCES` |
+| 7 | `handled_access_net` with no allow-rule denies TCP bind with `EACCES` |
 | 7 | an explicit `net_port` allow-rule restores the bind |
 
 The inside/outside pairs matter more than the denials alone: both directories
 are `mktemp -d` under `/tmp`, owned by the same user with the same mode, so DAC
 cannot explain the difference. Only the ruleset can.
 
+The script asserts its own assertion count, so a section that silently stops
+running cannot leave it exiting 0, and it skips (rather than fails) section 7
+on a kernel below ABI 4.
+
 ## Measured overhead
 
-Same method as ADR-0010 — wall clock around N runs of `/bin/echo`, mean per
-command — but N=30 rather than 5, and every mechanism measured in the same run
-so the figures are comparable to each other. Stable across three runs; one
-outlier at 41.6 ms was observed under load and is not representative.
+ADR-0010's method — wall clock around N runs of `/bin/echo` — with three
+changes, each because the original could not support a claim made from it:
+N=30 rather than 5; every mechanism measured in the **same run** so rows are
+comparable to each other; and **each iteration timed individually**, reported as
+median with (min–max), because a mean is the statistic a single load spike
+contaminates and "stable" should be visible in the output rather than asserted.
 
-| Mechanism | Per command |
-|---|---|
-| none (`/bin/echo`) | ~1.0 ms |
-| bubblewrap (`--ro-bind / / --dev /dev --unshare-net`) | ~9.7 ms |
-| **landlock via `bun:ffi` (§4.2 shape)** | **~30 ms** |
-| landlock via a compiled C helper (the Codex shape) | ~1.5 ms |
-| `docker run --rm --network none alpine:3` (ADR-0010) | ~409 ms |
+Two consecutive runs at load average ~1.1:
 
-Decomposition of the ~30 ms:
+| Mechanism | Axes | Median (min–max) |
+|---|---|---|
+| none (`/bin/echo`) | — | 2.1 ms (1.5–2.8) |
+| bubblewrap, ADR-0010's invocation | fs + netns | 10.9 ms (9.2–12.4) |
+| bubblewrap, no `--unshare-net` | fs | 10.1 ms (8.6–11.1) |
+| **landlock via `bun:ffi` (§4.2 shape)** | fs | **39.8 ms (37.3–42.7)** |
+| landlock via `bun:ffi`, TCP axis handled | fs + tcp | 40.1 ms (37.8–42.9) |
+| landlock via `bun:ffi`, prebundled to one `.js` | fs | 36.8 ms (35.1–39.1) |
+| landlock via a compiled C helper | fs | 2.3 ms (1.4–2.7) |
+
+Decomposition:
 
 | Component | Cost |
 |---|---|
-| Bun runtime cold start (`bun -e '0'`) | ~22.3 ms |
-| loading + transpiling the two spike `.ts` files | ~5 ms (~2.7 ms recovered by prebundling to one `.js`) |
-| ABI query (syscall 444) | ~0.20 ms |
-| create ruleset + 9 path rules + `no_new_privs` + `restrict_self` | ~1.0 ms |
-| **all Landlock syscalls together** | **~1.1 ms** |
+| Bun runtime cold start (`bun -e '0'`) | 23.8 ms (22.6–26.2) |
+| import + transpile `landlock-ffi.ts` | ~12.9 ms (n=1) |
+| ABI query (syscall 444) | ~0.15 ms (n=1) |
+| create ruleset + path rules + `no_new_privs` + `restrict_self` | ~0.83 ms (n=1) |
+| **all Landlock syscalls together** | **~0.97 ms (n=1)** |
 
-> ADR-0010 recorded bubblewrap at ~17 ms and bare at ~1.8 ms. This run measures
-> ~9.7 ms and ~1.0 ms for the same commands. The difference is session
-> conditions, not a correction — do not read it as bubblewrap having got faster.
-> Compare figures **within** a table, never across the two.
+Compiled helper: **16472 bytes**.
+
+Caveats, so these figures are not read for more than they are:
+
+- **Not comparable to ADR-0010's.** It recorded bubblewrap at ~17 ms and bare at
+  ~1.8 ms; this run measures ~10.9 ms and ~2.1 ms for the same commands, in a
+  different session. Compare **within** a table, never across the two. For the
+  same reason the ~409 ms `docker run` figure is deliberately **not** in the
+  table above — it belongs to ADR-0010's session, and putting it in this one
+  would invite exactly the cross-session comparison this paragraph forbids.
+- **Load-dependent.** An earlier, quieter session on this host measured the
+  §4.2 shape at ~30 ms rather than ~40 ms, with the same ratios. The absolute
+  number moves with system load; the ordering and the ~4× relationship did not.
+- **bwrap is not quite like-for-like.** ADR-0010's invocation includes
+  `--unshare-net`, which the Landlock filesystem rows do not do. The fs-only
+  bwrap row is included so the comparison can be made on equal axes; it changes
+  the ratio by under a millisecond.
+- The decomposition rows are **single samples**, marked `n=1`, not medians.
 
 ## What surprised us
 
-**1. The mechanism is cheap; the delivery is not.** Landlock costs ~1.1 ms. The
+**1. The mechanism is cheap; the delivery is not.** Landlock costs ~1 ms. The
 specification's own §4.2 sentence — "Bun is already a hard runtime requirement,
 so this adds **no** new dependency and **no** per-architecture binary" — is
-true, and it is exactly what makes the approach cost 20× what the thing it
+true, and it is exactly what makes the approach cost ~17× what the thing it
 avoids would cost. The avoided distribution cost is paid back as latency on
 every single contained command, forever. That trade is defensible; it should be
 made explicitly.
@@ -100,10 +132,10 @@ made explicitly.
 stays alive as the parent of the contained command for its whole lifetime —
 tens of MB of RSS per concurrently contained command, and an extra node in the
 process tree that the harness would have to reason about for signals and exit
-codes. Calling `execve` through the same FFI seam fixes this completely: the Bun
-process is *replaced* by the command. `verify.sh` §5b proves both the fix and
-the control. **Step 3 should use `execve`, not `spawn`.** It costs nothing and
-it makes the contained process tree identical to bubblewrap's.
+codes. Calling `execve` through the same FFI seam fixes this: the Bun process is
+*replaced* by the command, one fewer node than even bubblewrap's tree (`bwrap`
+itself stays resident as the parent of what it contains). `verify.sh` §5b proves
+both the fix and the control. **Step 3 should use `execve`, not `spawn`.**
 
 **3. A nested Bun dies if its cwd is outside the ruleset**, with
 `CouldntReadCurrentDirectory` — before any user code runs, so it cannot be
@@ -111,15 +143,18 @@ caught or reported nicely. Not a problem for the normal case (the workspace is
 both the cwd and writable) but it will bite anyone running a Bun-based command
 whose cwd was not granted.
 
-**4. The first TCP test was a false green, and it is worth recording why.** The
-obvious probe — connect to a port and see if it fails — returns `ECONNREFUSED`
-whether or not Landlock is involved, because nothing was listening. It "passed"
-before proving anything. The fix was a three-case bind test where the middle
-case is the only one that changes: unhandled → `BOUND`, handled with no rule →
-`DENIED:EACCES`, handled with an allow-rule → `BOUND`. This is the same shape of
-mistake ADR-0010 exists to correct, reproduced inside the spike verifying it.
-**Any probe in Step 1's `probe.ts` needs a negative control or it is not
-evidence.**
+**4. The spike reproduced the bug it was verifying — twice.** The first TCP
+probe connected to a dead port and checked that it failed. It "passed" on
+`ECONNREFUSED`, which an absent listener returns whether or not Landlock is
+involved: green, and proving nothing. Replaced with a three-case bind test where
+only the middle case changes. Then review found the same shape again in the
+great-grandchild assertion, which checked only that the output file was absent —
+satisfied equally by a denial and by the command never starting.
+
+**Both are the exact defect ADR-0010 exists to correct, committed by the spike
+sent to verify it.** The generalisation for Step 1: **a probe without a negative
+control is not evidence**, and asserting the *symptom* of a denial is not the
+same as asserting its *cause*.
 
 **5. `glibc` has no Landlock wrappers**, so everything goes through `syscall(2)`.
 Declaring that variadic function to `bun:ffi` with a fixed arity works, but the
@@ -131,58 +166,88 @@ uninitialised stack slot. This is silent when it goes wrong.
 
 **Design**
 
-- Use **`execve` via FFI**, not `Bun.spawnSync`, in `landlock-exec.ts`. See
-  `execIntoCommand` in `landlock-ffi.ts`. Exit codes propagate correctly in both
-  modes (proven), but only `execve` keeps the process tree clean.
-- **Prebundle** `landlock-exec.ts` to a single `.js` in the build step. Worth
-  ~2.7 ms of the ~5 ms transpile cost, for free — the build script already
-  bundles `proxy-worker.ts` the same way, so there is a pattern to copy.
-- ~22 ms of Bun cold start is **irreducible** for any Bun-hosted helper.
-  `bun build --compile` does not help: it embeds the same runtime. If ~30 ms per
+- Use **`execve` via FFI**, not `Bun.spawnSync`, in `landlock-exec.ts`. Note
+  that raw `execve` does **no PATH search** — `execIntoCommand` resolves the
+  program itself, or the two modes would differ in which commands they can
+  start, not merely in process residency.
+- **Prebundle** the child to a single `.js` in the build step: measured at
+  ~3 ms of the ~13 ms transpile cost. The build script already bundles
+  `proxy-worker.ts` the same way.
+- ~23 ms of Bun cold start is **irreducible** for any Bun-hosted helper.
+  `bun build --compile` does not help: it embeds the same runtime. If ~40 ms per
   command is not acceptable, the only way down is the compiled helper, and that
   decision belongs to a human, not to Step 3's implementer.
+- Exit codes: `Bun.spawnSync` returns `exitCode: null` for a signalled child and
+  `process.exit(null)` exits **0**, so a SIGKILLed command reports success
+  unless you map `signalCode` to 128+N yourself.
 
 **Correctness**
 
-- Clamp `handled_access_fs` to the **measured ABI**, not to the header you wrote
-  against — an unknown bit yields `EINVAL`. See `fsMaskForAbi`.
+- Clamp `handled_access_fs` to the **measured ABI** — an unknown bit yields
+  `EINVAL`. See `fsMaskForAbi`.
+- Keep the handled mask and the granted sets **in lockstep**. A bit that is
+  handled but never granted by any rule is denied everywhere: `IOCTL_DEV` (ABI
+  5) is the live example, and omitting it makes `TCGETS` on `/dev/tty` fail with
+  `EACCES` inside an explicitly writable `/dev`, which reads as a program bug
+  rather than a policy decision.
 - `struct landlock_path_beneath_attr` is `__attribute__((packed))`: **12 bytes**,
   not 16. Getting this wrong yields `EINVAL` that looks like a permissions
   problem.
-- `struct landlock_ruleset_attr` is 8 bytes below ABI 4 and 16 from ABI 4 —
-  passing the larger size to an older kernel is rejected.
+- `struct landlock_ruleset_attr` is 8 bytes below ABI 4 and 16 from ABI 4. This
+  spike sends the 8-byte form below ABI 4 out of caution; whether the larger
+  form is actually rejected by an ABI 1–3 kernel was **not tested**.
 - Open rule paths with `O_PATH | O_CLOEXEC`.
 - `PR_SET_NO_NEW_PRIVS` **must** precede `restrict_self`, or it returns `EPERM`.
+  Be precise about what it does: it stops a set-uid or file-capability binary
+  from *gaining* privileges across `execve` inside the domain. It is **not**
+  what keeps the ruleset attached — a Landlock domain cannot be shed by
+  anything, with or without the flag.
 - A rule may not grant more than the ruleset handles; mask every rule with the
   handled set.
 - Rule paths must be **directories** in practice — file targets accept only the
   file-applicable subset of access bits.
+- **Fail closed when an axis is unavailable, do not degrade.** The first draft
+  of this spike silently dropped a requested TCP restriction on a kernel below
+  ABI 4 and ran the command at exit 0 with an unrestricted network. Review
+  caught it. `assertNetSupported` is exported pure so the behaviour can be
+  asserted on a host whose kernel cannot reach the branch.
+
+**Boundary breadth — do not copy this spike's grants blindly**
+
 - The minimum read-only set for a command to merely *start* on this host is
   `/usr /bin /lib /lib64 /etc /proc /sys` plus the Bun install directory, with
-  `/dev` writable. Deriving this from the profile rather than hardcoding it is
-  Step 3's problem, and getting it wrong fails as "command not found"-shaped
-  errors, not as permission errors.
+  `/dev` accessible. Derive it from the profile rather than hardcoding it; note
+  `/lib64` does not exist on aarch64, and an unopenable rule path fails closed.
+- **A whole-`/proc` read grant lets the contained command read
+  `/proc/<pid>/environ` of every same-uid process, including the keryx parent.**
+  ADR-0010 records that `--mask-env` is unimplemented on Linux, so those
+  credentials are in that environment today. Narrow it, or accept it knowingly.
+- The launcher forwards the **entire parent environment** into the contained
+  process unfiltered. Consistent with ADR-0010, not a regression, but it
+  compounds the point above.
+- `/dev` uses a narrow `DEVICE_ACCESS` (read, write, list, ioctl) rather than
+  the full read-write set. `/dev/null` and `/dev/tty` need no node creation, no
+  removal and no cross-hierarchy `REFER`.
 
 **Boundaries this spike did not move**
 
-- The ABI-4 TCP axis is **reachable and enforcing** (proven). It remains
-  **TCP-only**, so specification §4.3 stands unchanged: `network: "off"` still
-  selects bubblewrap until a seccomp filter covers UDP, raw and unix sockets.
-  Nothing here contradicts that, and nothing here should be read as making
-  Landlock a network-off mechanism.
-- Fail-closed behaviour was verified for the launcher only (exit 125, command
-  never runs). The adapter-level fail-closed path (spec N1, AC8) is untouched
-  and unverified by this spike.
-- Only ABI 4 on one kernel was exercised. ABI 1 (Ubuntu 22.04 / kernel 5.15)
-  behaviour is **inferred from the headers, not measured** — the size-8
+- The ABI-4 TCP axis is **reachable and enforcing** (proven, with a control). It
+  remains **TCP-only**, so specification §4.3 stands unchanged: `network: "off"`
+  still selects bubblewrap until a seccomp filter covers UDP, raw and unix
+  sockets. The CLI flag is deliberately named `--handle-tcp` and not `--net`,
+  because the flag name is the part most likely to be copied and misread.
+- Fail-closed was verified for the launcher only (exit 125, command never runs).
+  The adapter-level path (spec N1, AC8) is untouched and unverified here.
+- **Only ABI 4 on one kernel was exercised.** ABI 1 (Ubuntu 22.04 / kernel 5.15)
+  behaviour is inferred from the headers, not measured — the size-8
   `ruleset_attr` path and the ABI-1 FS mask have never run.
 
 ## If the answer had been no
 
 Recorded because the plan asked for it, and because the numbers make it a live
 option rather than a hypothetical. The compiled helper — `alternative-helper.c`
-here, `codex-linux-sandbox` in Codex — is **16 KB**, ~120 lines, and costs
-~1.5 ms per command instead of ~30 ms. What it would cost keryx:
+here, `codex-linux-sandbox` in Codex — is **16 KB**, ~140 lines, and costs
+~2.3 ms per command instead of ~40 ms. What it would cost keryx:
 
 - a per-architecture binary (at minimum `x86_64` and `aarch64`) built and
   published with every release;
@@ -194,12 +259,12 @@ here, `codex-linux-sandbox` in Codex — is **16 KB**, ~120 lines, and costs
 - a second implementation of the ruleset logic to keep in sync with the pure
   `landlock.ts`.
 
-That is a real cost, and ~28 ms per contained command is a real cost too. This
+That is a real cost, and ~38 ms per contained command is a real cost too. This
 spike's job was to make both measurable rather than to pick. **The recommendation
 is to proceed with `bun:ffi` as specified** — it works, it ships with what keryx
-already has, and 30 ms sits far below the 409 ms container the ADR already
-accepted as a profile — while recording the compiled helper as the known
-optimisation if per-command latency becomes a complaint.
+already has, and the alternative reintroduces exactly the per-architecture
+distribution problem ADR-0005 exists to avoid — while recording the compiled
+helper as the known optimisation if per-command latency becomes a complaint.
 
 ## Files
 
@@ -208,7 +273,7 @@ optimisation if per-command latency becomes a complaint.
 | `landlock-ffi.ts` | the `bun:ffi` binding — syscalls, structs, ABI clamping, `execve` |
 | `landlock-exec.ts` | the §4.2 child shape: restrict self, then become the command |
 | `net-probe.ts` | TCP bind probe used by `verify.sh` §7 |
-| `verify.sh` | the 17 assertions above |
+| `verify.sh` | the 21 assertions above |
 | `bench.sh` | the overhead table |
 | `alternative-helper.c` | the compiled-helper alternative, for the cost comparison only |
 | `tsconfig.json` | lets the spike be typechecked without entering the repo's `src/**` project |

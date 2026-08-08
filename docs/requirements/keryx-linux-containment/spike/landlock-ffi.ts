@@ -9,6 +9,8 @@
  * See ../specification.md §4 and README.md.
  */
 
+import { accessSync, constants } from "node:fs";
+
 import { dlopen, FFIType, ptr, read, suffix } from "bun:ffi";
 
 // ---------------------------------------------------------------------------
@@ -37,8 +39,9 @@ const libc = dlopen(`libc.${suffix}.6`, {
 });
 
 function errno(): number {
+  // Bun reports a NULL pointer return as 0, not null, so test both.
   const location = libc.symbols.__errno_location();
-  if (location === null) return 0;
+  if (!location) return 0;
   return read.i32(location, 0);
 }
 
@@ -64,6 +67,7 @@ interface SyscallNumbers {
   readonly openat: bigint;
   readonly close: bigint;
   readonly prctl: bigint;
+  readonly execve: bigint;
   readonly landlockCreateRuleset: bigint;
   readonly landlockAddRule: bigint;
   readonly landlockRestrictSelf: bigint;
@@ -74,6 +78,7 @@ const NUMBERS: Readonly<Record<string, SyscallNumbers>> = {
     openat: 257n,
     close: 3n,
     prctl: 157n,
+    execve: 59n,
     // The landlock numbers are identical on every architecture that has them:
     // they were added after the syscall table was unified.
     landlockCreateRuleset: 444n,
@@ -84,6 +89,7 @@ const NUMBERS: Readonly<Record<string, SyscallNumbers>> = {
     openat: 56n,
     close: 57n,
     prctl: 167n,
+    execve: 221n,
     landlockCreateRuleset: 444n,
     landlockAddRule: 445n,
     landlockRestrictSelf: 446n,
@@ -299,6 +305,26 @@ export interface RestrictOutcome {
 }
 
 /**
+ * Fail closed rather than degrade when the TCP axis is unavailable.
+ *
+ * Silently reducing a requested TCP axis to "unhandled" on an older kernel
+ * would let the command run with an unrestricted network at exit 0 — a caller
+ * who asked for the axis and got no error would believe a boundary exists
+ * where none does. That is the exact defect ADR-0010 was written to remove,
+ * one layer down.
+ *
+ * Exported and pure so the behaviour can be asserted on a host whose kernel
+ * cannot reach the branch (this one reports ABI 4).
+ */
+export function assertNetSupported(abi: number, wantsNet: boolean): void {
+  if (wantsNet && abi < 4) {
+    throw new Error(
+      `landlock spike: TCP restriction requires Landlock ABI >= 4, kernel reports ${abi}`,
+    );
+  }
+}
+
+/**
  * Applies the ruleset to the CURRENT process. Irreversible — see
  * specification.md §4.1. Never call this in a long-lived keryx process.
  */
@@ -308,9 +334,12 @@ export function restrictSelfWith(request: RestrictRequest): RestrictOutcome {
 
   const handledFs = fsMaskForAbi(abi);
   const wantsNet = request.handleNet === true || (request.net?.length ?? 0) > 0;
-  const handledNet =
-    abi >= 4 && wantsNet ? ACCESS_NET.BIND_TCP | ACCESS_NET.CONNECT_TCP : 0n;
 
+  assertNetSupported(abi, wantsNet);
+
+  const handledNet = wantsNet ? ACCESS_NET.BIND_TCP | ACCESS_NET.CONNECT_TCP : 0n;
+
+  let netRulesAdded = 0;
   const rulesetFd = createRuleset(handledFs, handledNet, abi);
   try {
     for (const rule of request.paths) {
@@ -318,11 +347,14 @@ export function restrictSelfWith(request: RestrictRequest): RestrictOutcome {
       addPathRule(rulesetFd, rule.path, rule.allowed & handledFs);
     }
     for (const rule of request.net ?? []) {
-      if (handledNet === 0n) break;
       addNetRule(rulesetFd, rule.port, rule.allowed & handledNet);
+      netRulesAdded += 1;
     }
-    // NO_NEW_PRIVS must be set before restrict_self, or restrict_self returns
-    // EPERM. It is also what stops a set-uid binary from shedding the ruleset.
+    // PR_SET_NO_NEW_PRIVS must be set before restrict_self, or restrict_self
+    // returns EPERM. Note what it does and does not do: it prevents a set-uid
+    // or file-capability binary from GAINING privileges across execve inside
+    // the domain. It is not what keeps the ruleset attached — a Landlock
+    // domain cannot be shed by anything, with or without this flag.
     setNoNewPrivs();
     restrictSelf(rulesetFd);
   } finally {
@@ -334,13 +366,42 @@ export function restrictSelfWith(request: RestrictRequest): RestrictOutcome {
     handledFs,
     handledNet,
     pathRules: request.paths.length,
-    netRules: request.net?.length ?? 0,
+    // Rules actually added, not rules requested — so --verbose cannot report a
+    // restriction that was never installed.
+    netRules: netRulesAdded,
   };
 }
 
 /**
- * Replaces the current process image with `command`, the way a C helper's
- * `execvp` would. Only returns on failure.
+ * Resolves a bare program name against PATH, the way `execvp` does.
+ *
+ * `execve` takes a path and performs no search, so without this the two run
+ * modes would diverge: `Bun.spawnSync` resolves PATH, so `-- echo hi` would
+ * work under `--spawn` and fail under `--execve`. Two modes that the finding
+ * describes as differing only in process residency must not also differ in
+ * which commands they can start.
+ */
+function resolveProgram(program: string, env: NodeJS.ProcessEnv): string {
+  if (program.includes("/")) return program;
+  const search = env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
+  for (const dir of search.split(":")) {
+    if (dir === "") continue;
+    const candidate = `${dir}/${program}`;
+    try {
+      // accessSync with X_OK is the same test execvp makes.
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Not here; keep searching, exactly as execvp does.
+    }
+  }
+  // Let execve produce the authoritative ENOENT rather than inventing one.
+  return program;
+}
+
+/**
+ * Replaces the current process image with `command`. Only returns on failure,
+ * and on failure it throws.
  *
  * Why this matters for the spike: `Bun.spawnSync` leaves the Bun process
  * resident as the parent of the contained command for its whole lifetime —
@@ -349,11 +410,14 @@ export function restrictSelfWith(request: RestrictRequest): RestrictOutcome {
  */
 export function execIntoCommand(command: readonly string[], env: NodeJS.ProcessEnv): never {
   const [program] = command as [string, ...string[]];
+  const resolved = resolveProgram(program, env);
 
   // argv and envp are NULL-terminated arrays of pointers to NUL-terminated
-  // strings. The Buffers must stay reachable until execve returns/replaces us,
-  // so they are held in `pinned`.
-  const pinned: Buffer[] = [];
+  // strings. Every Buffer AND both pointer tables must stay reachable until
+  // execve replaces us, so all of them go in `pinned` — a table whose only
+  // reachability was the JS engine's conservative stack scan would be relying
+  // on an implementation detail, not a guarantee.
+  const pinned: (Buffer | ArrayBuffer)[] = [];
   const toArray = (values: readonly string[]): ArrayBuffer => {
     const table = new ArrayBuffer((values.length + 1) * 8);
     const view = new DataView(table);
@@ -363,6 +427,7 @@ export function execIntoCommand(command: readonly string[], env: NodeJS.ProcessE
       view.setBigUint64(index * 8, BigInt(ptr(buffer)), true);
     });
     view.setBigUint64(values.length * 8, 0n, true);
+    pinned.push(table);
     return table;
   };
 
@@ -372,29 +437,36 @@ export function execIntoCommand(command: readonly string[], env: NodeJS.ProcessE
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => `${key}=${value}`),
   );
-  const programBuffer = Buffer.from(`${program}\0`, "utf8");
+  const programBuffer = Buffer.from(`${resolved}\0`, "utf8");
   pinned.push(programBuffer);
 
   const nr = syscallNumbers();
-  // x86_64 execve = 59, arm64 execve = 221.
-  const execveNr = process.arch === "arm64" ? 221n : 59n;
   sys(
-    execveNr,
+    nr.execve,
     BigInt(ptr(programBuffer)),
     BigInt(ptr(argvTable)),
     BigInt(ptr(envpTable)),
   );
-  // Only reachable if execve failed.
-  void nr;
+  // Only reachable if execve failed. Keeping the tables referenced here is what
+  // holds them alive across the call above.
   void pinned;
-  throw new LandlockSyscallError(`execve(${program})`, errno());
+  throw new LandlockSyscallError(`execve(${resolved})`, errno());
 }
 
 /** Read + traverse + execute, no mutation. */
 export const READ_ONLY_ACCESS =
   ACCESS_FS.EXECUTE | ACCESS_FS.READ_FILE | ACCESS_FS.READ_DIR;
 
-/** Everything the FS axis can express, i.e. a fully writable hierarchy. */
+/**
+ * Everything the FS axis can express, i.e. a fully writable hierarchy.
+ *
+ * This must stay in lockstep with `FS_MASK_BY_ABI`: any bit the ruleset
+ * *handles* but no rule ever *grants* is denied everywhere. IOCTL_DEV is the
+ * live example — handled from ABI 5, and if it were omitted here a `TCGETS` on
+ * `/dev/tty` inside an explicitly read-write `/dev` would fail with EACCES,
+ * which reads as a program bug rather than a policy decision. The per-rule
+ * `& handledFs` mask makes the bit a no-op on kernels that predate it.
+ */
 export const READ_WRITE_ACCESS =
   READ_ONLY_ACCESS |
   ACCESS_FS.WRITE_FILE |
@@ -408,4 +480,14 @@ export const READ_WRITE_ACCESS =
   ACCESS_FS.MAKE_BLOCK |
   ACCESS_FS.MAKE_SYM |
   ACCESS_FS.REFER |
-  ACCESS_FS.TRUNCATE;
+  ACCESS_FS.TRUNCATE |
+  ACCESS_FS.IOCTL_DEV;
+
+/**
+ * What a device directory actually needs: open, read, write, list. Deliberately
+ * NOT `READ_WRITE_ACCESS` — `/dev/null` and `/dev/tty` need no node creation,
+ * no removal and no cross-hierarchy REFER, and granting thirteen mutating
+ * rights where four suffice widens the boundary for nothing.
+ */
+export const DEVICE_ACCESS =
+  ACCESS_FS.READ_FILE | ACCESS_FS.WRITE_FILE | ACCESS_FS.READ_DIR | ACCESS_FS.IOCTL_DEV;
