@@ -214,7 +214,124 @@ Both restored; `bash -n` clean, suite back to 10 pass.
 Nothing outstanding. The two `info` findings (dead markers, an indentation slip
 in `defaultSpawn`) were folded in rather than deferred.
 
-## Final gate (after round 3)
+## Round 4 review — 0 blockers, 0 majors, 3 minors, 5 info
+
+The first clean round: round 3 did not introduce a fourth regression. The
+reviewer ran the adversarial cases rather than reasoning about bash, and
+confirmed something the previous round had understated — **the pre-round-3
+eager trap was a live command-injection sink**, not merely a quoting slip:
+`TMPDIR=".../x'$(touch /tmp/kx-PWNED)'y"` executed the payload in the
+installer's own shell. The deferred form is immune.
+
+Findings fixed:
+
+| # | Finding | Fix |
+|---|---|---|
+| F-002 | `$status_error` in the trap had no `:-` default, so a RETURN trap firing where the local is out of scope aborts under `set -u` | `${status_error:-}` |
+| F-003 | The "hostile TMPDIR" test covered only the apostrophe; the unwritable case (round 2's regression) was asserted nowhere despite the comment and this journal claiming it | three cases now, table-driven, one per regression |
+| F-004 | The util-linux marker phrases were invented — util-linux prints `unshare failed` / `write failed /proc/self/uid_map`, not what was listed | corrected against util-linux 2.39.3 |
+| F-006 | `export { USERNS_DENIAL_MARKERS }` was inserted between a JSDoc block and the constant it documents | export moved onto the declaration |
+| F-008 | the indenting loop's `line` was not `local` | declared |
+
+### F-001 — and the fix that was worse than the defect
+
+The reviewer was right that the bash strip missed the C1 range while
+`sanitizeDetail` removes it, so the comment claiming parity was false. The
+obvious fix — a second pass over `[$''-$'']` — **was catastrophic,
+and the new tests caught it immediately.**
+
+Bash bracket *ranges* use the locale's collation order, not code points, and
+`install.sh` runs with no `LANG`/`LC_ALL` (the C locale). Measured there, that
+range deleted `:` `;` `[` `]` `<` `>` `=` `?` `@` `&` *and letters* from a
+diagnostic line — `Remediation` became `emediation`, `curl` became `crl`. It
+corrupted the operator's evidence far worse than the thing it was meant to
+prevent. The explicit-character alternative is a no-op in the same locale,
+because `, which never matches the
+two-byte UTF-8 sequence C2 85 that actually appears.
+
+So C1 is deliberately **not** stripped on the shell side, the divergence from
+the TypeScript sanitizer is documented with the measurement, and the reasoning
+is recorded in `install.sh` rather than left to be rediscovered. Every control
+that can actually erase the indent — CR, ESC, BEL, BACKSPACE, VT, FF, DEL — is
+C0 or DEL and is covered; a UTF-8 terminal renders C2 9B as a character, not as
+CSI.
+
+The test now pins **both** directions: controls removed, and punctuation
+preserved. That second assertion is the one that caught this.
+
+### Falsification runs
+
+| Reverted change | Result |
+|---|---|
+| C1 range re-added | **10 pass / 2 fail** — punctuation and letters destroyed in the transcript |
+
+Restored; suite back to 12 pass.
+
+### Round 4 — accepted and NOT fixed
+
+- **F-005** (`importsSpawn` false positives on template literals, string
+  constants and `import type`). Every one fails *closed* — an over-strict purity
+  test shouts rather than goes quiet — and the `withoutComments` block-comment
+  hole needs deliberately adversarial source. Left as documented "good enough".
+- **F-007** — AC13's frozen wording says no *comment* may name the sysctl, and
+  three comments introduced by this flow do, each while explaining the
+  rejection. R8's actual requirement (nothing may *recommend* it) is met and
+  enforced by four negative assertions. Recorded here and in the AC confirmation
+  note rather than silently confirmed.
+
+## Final gate (after round 4)
+
+| Gate | Result |
+|---|---|
+| `keryx health run` | PASS — score 93, trend stable, 0 P0 / 0 P1 |
+| `bun test` (full) | 3316 pass / 14 skip / 0 fail across 317 files |
+| sandbox + commands suites | 231 pass / 5 skip / 0 fail (baseline 158 pass) |
+| `scripts/install-global.test.ts` | 12 pass / 0 fail (baseline 3 pass / 2 fail on this host) |
+| `bunx tsc --noEmit` | clean |
+| `bash -n scripts/install.sh` | clean |
+| `bun scripts/check-doc-links.ts` | 698 links / 0 broken |
+
+The 14 skipped tests are pre-existing env-gated live smoke suites
+(`KERYX_DUAL_AXIS_LIVE` and friends), untouched by this flow.
+
+Note: `keryx health run` initially reported WARN (`required source unavailable:
+typescript`) because this worktree had no `node_modules`. After `bun install
+--frozen-lockfile` the gate is PASS. The WARN was environmental, not a
+regression.
+\u0085'` there is the single byte 0x85, which never matches the
+two-byte UTF-8 sequence C2 85 that actually appears.
+
+So C1 is deliberately **not** stripped on the shell side, the divergence from
+the TypeScript sanitizer is documented with the measurement, and the reasoning
+is recorded in `install.sh` rather than left to be rediscovered. Every control
+that can actually erase the indent — CR, ESC, BEL, BACKSPACE, VT, FF, DEL — is
+C0 or DEL and is covered; a UTF-8 terminal renders C2 9B as a character, not as
+CSI.
+
+The test now pins **both** directions: controls removed, and punctuation
+preserved. That second assertion is the one that caught this.
+
+### Falsification runs
+
+| Reverted change | Result |
+|---|---|
+| C1 range re-added | **10 pass / 2 fail** — punctuation and letters destroyed in the transcript |
+
+Restored; suite back to 12 pass.
+
+### Round 4 — accepted and NOT fixed
+
+- **F-005** (`importsSpawn` false positives on template literals, string
+  constants and `import type`). Every one fails *closed* — an over-strict purity
+  test shouts rather than goes quiet — and the `withoutComments` block-comment
+  hole needs deliberately adversarial source. Left as documented "good enough".
+- **F-007** — AC13's frozen wording says no *comment* may name the sysctl, and
+  three comments introduced by this flow do, each while explaining the
+  rejection. R8's actual requirement (nothing may *recommend* it) is met and
+  enforced by four negative assertions. Recorded here and in the AC confirmation
+  note rather than silently confirmed.
+
+## Final gate (after round 4)
 
 | Gate | Result |
 |---|---|

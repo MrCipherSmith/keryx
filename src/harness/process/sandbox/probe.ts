@@ -135,8 +135,6 @@ export const MAX_DETAIL_CHARS = 4_000;
  * The profile below is the same shape Ubuntu ships for Chrome, Brave and ~40
  * other applications: the namespace is granted to `/usr/bin/bwrap` alone.
  */
-export { USERNS_DENIAL_MARKERS };
-
 export const BWRAP_APPARMOR_REMEDIATION =
   "grant the user namespace to /usr/bin/bwrap alone with an AppArmor profile at " +
   "/etc/apparmor.d/bwrap (the same shape Ubuntu ships for Chrome, Brave and ~40 other " +
@@ -160,9 +158,9 @@ export const BWRAP_APPARMOR_REMEDIATION =
  */
 // No entry may contain another: `includes` is used per marker, so a longer
 // phrase whose prefix is already listed can never fire independently and only
-// makes the list read as broader than it is. `purity`-style discipline for a
-// list whose specificity IS the safety property.
-const USERNS_DENIAL_MARKERS = [
+// makes the list read as broader than it is. Asserted by a test, because a list
+// whose specificity IS the safety property should not decay quietly.
+export const USERNS_DENIAL_MARKERS = [
   // The measured Ubuntu 23.10+ failure, and its gid twin.
   "setting up uid map",
   "setting up gid map",
@@ -172,10 +170,14 @@ const USERNS_DENIAL_MARKERS = [
   "creating new namespace",
   "create new namespace",
   "user namespace",
-  // util-linux's unshare(1), which some wrappers shell out to.
-  "unshare: operation not permitted",
-  "unshare: permission denied",
-  "clone: operation not permitted",
+  // util-linux's unshare(1), verified against 2.39.3 rather than guessed — an
+  // earlier revision listed "unshare: operation not permitted", which util-linux
+  // never prints. Nothing in this package invokes unshare(1) today; these are
+  // here so a future wrapper that does is not classified `unknown` and quietly
+  // denied the remediation.
+  "unshare failed",
+  "write failed /proc/self/uid_map",
+  "cannot change root filesystem propagation",
 ];
 
 /**
