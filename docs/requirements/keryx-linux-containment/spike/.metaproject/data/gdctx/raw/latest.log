@@ -1,0 +1,47 @@
+
+== host ==
+  kernel        6.8.0-136-generic
+  arch          x86_64
+  bun           1.3.11
+  landlock abi  4
+
+== 1. ABI query through bun:ffi ==
+  PASS  landlock_create_ruleset(NULL,0,VERSION) returned ABI 4
+
+== 2. ruleset + rules + no_new_privs + restrict_self ==
+  PASS  a full apply sequence completed and the command ran
+
+== 3. enforcement in the exec'd child ==
+  PASS  read INSIDE the allowed hierarchy succeeds
+  PASS  write INSIDE the allowed hierarchy succeeds
+  PASS  write OUTSIDE is denied (EACCES): Permission denied
+  PASS  read OUTSIDE is denied (EACCES) and the contents did not leak
+
+== 4. inheritance by a grandchild and a great-grandchild ==
+  PASS  grandchild write inside the allowed hierarchy succeeds
+  PASS  grandchild write OUTSIDE is denied — the restriction is inherited
+  PASS  great-grandchild write inside the allowed hierarchy succeeds (three-deep nesting runs)
+  PASS  great-grandchild write OUTSIDE is denied (EACCES) — inherited two levels down
+
+== 5. no_new_privs ==
+  PASS  control: NoNewPrivs is 0 outside the launcher
+  PASS  NoNewPrivs is 1 inside the contained child
+
+== 5b. execve mode leaves no resident Bun in the process tree ==
+  PASS  execve: contained command's parent is 'bash' (this script), not a resident bun
+  PASS  control: --spawn does leave bun resident as the parent ('bun')
+  PASS  exit code 42 propagates in both modes (execve=42 spawn=42)
+  PASS  SIGKILL reports 137 in both modes, not 0 (execve=137 spawn=137)
+
+== 6. fail-closed ==
+  PASS  an inapplicable ruleset exits 125, names the path, and never runs the command
+  PASS  the TCP axis is refused below ABI 4, allowed at 4, and irrelevant when unrequested
+
+== 7. ABI-4 TCP axis (mechanism reachability only) ==
+     NOTE: spec §4.3 — TCP-only, therefore NOT equivalent to network-off.
+  PASS  control: TCP bind on 44033 succeeds when the net axis is not handled
+  PASS  handled_access_net with no allow-rule denies TCP bind with EACCES
+  PASS  an explicit net_port allow-rule restores the bind (BOUND)
+
+== summary ==
+  passed 21, failed 0, skipped 0 (expected 21 assertions)
