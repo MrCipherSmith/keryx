@@ -43,3 +43,29 @@ export {
   type ResolveSandboxOptions,
 } from "./detect";
 export { createRunCa, type RunCa, type LeafCertificate, type CreateRunCaOptions } from "./tls-ca";
+// Linux Landlock, layer 1 of ADR-0010. The ruleset builder only: applying a
+// ruleset to a process is a separate module gated on the specification's §4.2
+// spike, and nothing here spawns, opens a file or touches the kernel.
+export {
+  buildLandlockRuleset,
+  landlockFsMask,
+  landlockNetMask,
+  LANDLOCK_FS_ACCESS_BIT,
+  LANDLOCK_FS_ACCESS_MIN_ABI,
+  LANDLOCK_NET_ACCESS_BIT,
+  LANDLOCK_NET_ACCESS_MIN_ABI,
+  type LandlockFsAccess,
+  type LandlockNetAccess,
+  type LandlockPathRule,
+  type LandlockNetPortRule,
+  type LandlockRuleset,
+  type LandlockInexpressible,
+  type LandlockInexpressibleCode,
+  type LandlockTranslation,
+} from "./landlock";
+export {
+  cacheLandlockAbi,
+  LANDLOCK_ABI_UNAVAILABLE,
+  type LandlockAbiReader,
+  type LandlockAbiVersion,
+} from "./landlock-abi";

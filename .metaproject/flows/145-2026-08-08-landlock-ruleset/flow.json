@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 2,
+  "id": "145",
+  "slug": "landlock-ruleset",
+  "title": "Landlock ruleset builder (pure): SandboxProfile to Landlock ruleset description",
+  "status": "in-progress",
+  "createdAt": "2026-08-08T13:09:57.926Z",
+  "updatedAt": "2026-08-08T13:20:01.423Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b45bf028a52d1fb2e81ea2de01e22ad90fc3d73487eb1d363fb867130bd9d457",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "read the requirements package and fix the lane boundary",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "write landlock.test.ts and landlock-abi.test.ts for AC1-AC5",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "implement landlock.ts (access tables, ruleset and failure types, buildLandlockRuleset)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "implement landlock-abi.ts (injectable reader interface plus per-process cache)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "re-export the new public surface from sandbox/index.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "quality gate and review orchestrator until green",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "verify the diff touches nothing in the other agents lanes (AC7)",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-08T13:09:57.926Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-08T13:14:27.313Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-08T13:14:27.402Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-08T13:14:36.039Z",
+      "event": "task-added",
+      "detail": "T5: read the requirements package and fix the lane boundary"
+    },
+    {
+      "at": "2026-08-08T13:14:37.444Z",
+      "event": "task-added",
+      "detail": "T6: write landlock.test.ts and landlock-abi.test.ts for AC1-AC5"
+    },
+    {
+      "at": "2026-08-08T13:14:38.189Z",
+      "event": "task-added",
+      "detail": "T7: implement landlock.ts (access tables, ruleset and failure types, buildLandlockRuleset)"
+    },
+    {
+      "at": "2026-08-08T13:14:38.558Z",
+      "event": "task-added",
+      "detail": "T8: implement landlock-abi.ts (injectable reader interface plus per-process cache)"
+    },
+    {
+      "at": "2026-08-08T13:14:42.350Z",
+      "event": "task-added",
+      "detail": "T9: re-export the new public surface from sandbox/index.ts"
+    },
+    {
+      "at": "2026-08-08T13:14:43.014Z",
+      "event": "task-added",
+      "detail": "T10: quality gate and review orchestrator until green"
+    },
+    {
+      "at": "2026-08-08T13:14:44.339Z",
+      "event": "task-added",
+      "detail": "T11: verify the diff touches nothing in the other agents lanes (AC7)"
+    },
+    {
+      "at": "2026-08-08T13:14:55.280Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-08T13:20:00.779Z",
+      "event": "task-done",
+      "detail": "T5: read the requirements package and fix the lane boundary"
+    },
+    {
+      "at": "2026-08-08T13:20:00.872Z",
+      "event": "task-done",
+      "detail": "T6: write landlock.test.ts and landlock-abi.test.ts for AC1-AC5"
+    },
+    {
+      "at": "2026-08-08T13:20:00.963Z",
+      "event": "task-done",
+      "detail": "T7: implement landlock.ts (access tables, ruleset and failure types, buildLandlockRuleset)"
+    },
+    {
+      "at": "2026-08-08T13:20:01.054Z",
+      "event": "task-done",
+      "detail": "T8: implement landlock-abi.ts (injectable reader interface plus per-process cache)"
+    },
+    {
+      "at": "2026-08-08T13:20:01.145Z",
+      "event": "task-done",
+      "detail": "T9: re-export the new public surface from sandbox/index.ts"
+    },
+    {
+      "at": "2026-08-08T13:20:01.239Z",
+      "event": "task-done",
+      "detail": "T11: verify the diff touches nothing in the other agents lanes (AC7)"
+    },
+    {
+      "at": "2026-08-08T13:20:01.329Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-08T13:20:01.423Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}
