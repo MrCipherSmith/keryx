@@ -233,32 +233,59 @@ Findings fixed:
 | F-006 | `export { USERNS_DENIAL_MARKERS }` was inserted between a JSDoc block and the constant it documents | export moved onto the declaration |
 | F-008 | the indenting loop's `line` was not `local` | declared |
 
-### F-001 — and the fix that was worse than the defect
+### F-001 — the fix that was worse than the defect, and the reasoning that was wrong about why
 
-The reviewer was right that the bash strip missed the C1 range while
-`sanitizeDetail` removes it, so the comment claiming parity was false. The
-obvious fix — a second pass over `[$''-$'']` — **was catastrophic,
-and the new tests caught it immediately.**
+Round 4 declined to strip C1 and wrote down a reason. Round 5 found the
+reason was **factually wrong in two of its three claims**, and — worse — that
+it pointed the next maintainer straight at a form that corrupts the
+operator's evidence. A wrong rationale committed beside correct code is the
+exact defect class this package exists to remove: an artefact stating
+something nobody verified. So it was measured, and then rewritten to match.
 
-Bash bracket *ranges* use the locale's collation order, not code points, and
-`install.sh` runs with no `LANG`/`LC_ALL` (the C locale). Measured there, that
-range deleted `:` `;` `[` `]` `<` `>` `=` `?` `@` `&` *and letters* from a
-diagnostic line — `Remediation` became `emediation`, `curl` became `crl`. It
-corrupted the operator's evidence far worse than the thing it was meant to
-prevent. The explicit-character alternative is a no-op in the same locale,
-because `, which never matches the
-two-byte UTF-8 sequence C2 85 that actually appears.
+**What was actually measured** (bash 5.2.21, both the C locale that
+`install.sh` really runs under and en_US.UTF-8):
 
-So C1 is deliberately **not** stripped on the shell side, the divergence from
-the TypeScript sanitizer is documented with the measurement, and the reasoning
-is recorded in `install.sh` rather than left to be rediscovered. Every control
-that can actually erase the indent — CR, ESC, BEL, BACKSPACE, VT, FF, DEL — is
-C0 or DEL and is covered; a UTF-8 terminal renders C2 9B as a character, not as
-CSI.
+| Form | C locale | UTF-8 locale | Verdict |
+|---|---|---|---|
+| `[$'\u0080'-$'\u009f']` | destroys the diagnostic | harmless | unusable |
+| `[$'\x80'-$'\x9f']` | ASCII-safe, non-ASCII gutted | same | unusable |
+| exact two-byte substitutions | correct | correct | **adopted** |
 
-The test now pins **both** directions: controls removed, and punctuation
-preserved. That second assertion is the one that caught this.
+1. **It is not collation.** `$'\u0080'` in the C locale is not a character at
+   all: it degenerates to the six literal bytes `5c 75 30 30 38 30` — the text
+   `\u0080` — which poisons the bracket class with a backslash, `u`, and the
+   digits 0-9. In en_US.UTF-8 the same expression yields `c2 80` and is
+   harmless, which is precisely why it would survive review on a developer's
+   machine. Measured, the C-locale class turned
+   `clean-marker: a;b[c]d<e>f=g?h@i&j and Remediation curl` into
+   `clean-marker abc]defghi&j and emediation crl`.
+2. **The `\u0085`-is-byte-0x85 claim was wrong too**, and in the direction
+   that matters: the round-4 comment called the explicit-character variant a
+   harmless no-op, when in the C locale it puts `\`, `u` and digits into the
+   class and deletes them from the evidence.
+3. **The byte range is the trap the old comment pointed at.**
+   `[$'\x80'-$'\x9f']` is byte-accurate and ASCII-safe in *both* locales —
+   and mangles every multi-byte character, because 0x80-0x9F are legal UTF-8
+   continuation bytes. Measured: `err <em-dash> caf<e-acute> <cyrillic>`
+   became `err ? caf? ????` in both locales.
 
+**So the gap got closed, not just re-declined.** Exact two-byte substitutions
+for the seven C1 sequence introducers (NEL, DCS, CSI, ST, OSC, PM, APC) are
+measured correct in both locales: all text survives, ASCII and non-ASCII
+alike, and only the introducer is removed. `install.sh` now does that.
+
+**Accepted residual, stated rather than glossed:** a RAW `0x9b` byte (as
+opposed to its UTF-8 encoding `c2 9b`) still passes through, and on a terminal
+in an 8-bit or latin-1 mode that byte IS the control introducer. It is not
+removable — `0x9b` is a legal UTF-8 continuation byte (U+06DB is `db 9b`), so
+stripping it raw would corrupt real characters, the larger harm. On a UTF-8
+terminal, the default everywhere this installs, a lone `0x9b` is invalid UTF-8
+and is not acted on.
+
+The test now pins the direction that catches all of this: **non-ASCII must
+survive**. Falsified by swapping the surgical loop for the byte range — the
+suite went to 11 pass / 1 fail, with `caf<e-acute> <cyrillic>` reduced to
+mojibake and the introducers only half-removed, leaving dangling lead bytes.
 ### Falsification runs
 
 | Reverted change | Result |
@@ -279,7 +306,42 @@ Restored; suite back to 12 pass.
   enforced by four negative assertions. Recorded here and in the AC confirmation
   note rather than silently confirmed.
 
-## Final gate (after round 4)
+## Round 5 review — 0 blockers, 0 majors, verdict READY
+
+Two minors, both about the same thing: the C1 decision was right and the
+reasoning recorded for it was not. Corrected above, by measurement, and the
+closable half of the gap closed.
+
+Also fixed from this round:
+
+- The `chmod 0500` hostile-TMPDIR case would silently stop reproducing round
+  2's regression under a root CI runner, because root bypasses directory write
+  permission. It now skips as root rather than passing for the wrong reason;
+  the non-existent-path case reaches the same `mktemp` failure and is
+  root-proof, so the mechanism stays covered either way.
+- The `regression` field was destructured and then referenced only inside a
+  `//` comment, where it is inert text. It is in the test title now, so a
+  failure names which of the three mechanisms came back.
+
+Accepted and not fixed: `importsSpawn`'s false positives on template literals
+and `import type` (all fail *closed* — an over-strict purity test shouts
+rather than goes quiet); `"unshare failed"` also matching util-linux's EINVAL
+wording (a false positive, and unreachable — nothing here invokes unshare(1));
+bubblewrap's setuid-only `unshare user ns` strings (that path needs a setuid
+bwrap, which keryx never spawns); and AC13's literal "or comment" wording,
+which three explaining comments breach while R8's actual requirement holds.
+
+### The pre-existing installer failure, re-confirmed independently
+
+The coordinator flagged `scripts/install-global.test.ts` at 3 pass / 2 fail.
+Confirmed as the base-branch state and as the defect this flow already fixed
+in round 1: `/usr/bin` holds **both** `bwrap` and `bash` on this host (checked
+directly), so the old `pathWithoutBwrap` dropped `/usr/bin` to hide bubblewrap
+and took the shell with it — `Executable not found in $PATH: "bash"`. The
+shipped helper mirrors such a directory as symlinks minus `bwrap` instead of
+subtracting it, which is the shadow-rather-than-subtract approach. On this
+branch the suite is **12 pass / 0 fail**.
+## Final gate (after round 5)
 
 | Gate | Result |
 |---|---|

