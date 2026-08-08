@@ -1,0 +1,40 @@
+
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Opus 5 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-baseline-claude
+
+
+❯ What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.
+
+  Read 2 files, ran 2 shell commands 
+
+● Six files are named exactly config.ts in this repo, with very different blast radii. Let me confirm which one you mean.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Which file 
+
+Which config.ts do you mean?
+
+❯ 1. src/harness/config.ts
+     17 direct dependents — benchmark harness config
+  2. src/security/config.ts
+     17 direct dependents — security module config
+  3. src/memory/config.ts
+     15 direct dependents — memory module config
+  4. src/health/config.ts
+     11 direct dependents — health module config
+  5. Type something.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  6. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+

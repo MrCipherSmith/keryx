@@ -217,3 +217,19 @@ A12	DONE	baseline-claude	08:29:30	72.6s
 A12	RUNNING	naked-claude	08:30:49
 A12	DONE	naked-claude	08:30:49	116.7s
 A12	BATCH-COMPLETE	08:32:52
+A3	RUNNING	keryx-deepseek	21:28:26
+A3	DONE	keryx-deepseek	21:28:26	14.0s
+A3	BATCH-COMPLETE	21:28:43
+A1	RUNNING	baseline-claude	21:29:43
+A1	DONE	baseline-claude	21:29:43	60.6s
+A1	RUNNING	baseline-grok	21:30:55
+A1	DONE	baseline-grok	21:30:55	32.6s
+A1	RUNNING	naked-claude	21:31:31
+A1	DONE	naked-claude	21:31:31	132.7s
+A1	RUNNING	naked-grok	21:33:55
+A1	DONE	naked-grok	21:33:55	32.6s
+A1	BATCH-COMPLETE	21:34:33
+A3	RUNNING	baseline-claude	21:34:33
+A1	RUNNING	baseline-grok	21:41:15
+A1	FAILED	baseline-grok	21:41:15	baseline-grok hit a provider wall on A1 ('You hit your weekly limit') — refusing to record a run the provider refused 
+A1	BATCH-COMPLETE	21:41:48

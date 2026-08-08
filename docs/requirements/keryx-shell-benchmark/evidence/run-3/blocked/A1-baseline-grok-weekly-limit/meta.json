@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A1",
+  "target": "keryx",
+  "variantId": "baseline-grok",
+  "commit": "8c2918dce3a9",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-baseline-grok",
+  "mode": "interactive",
+  "autoApproved": false,
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-07T21:30:56Z",
+  "finishedAt": "2026-08-07T21:31:29Z",
+  "wallTimeSeconds": 32.6,
+  "prompt": "What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/baseline-grok",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/baseline-grok/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/baseline-grok/screens/002-step-0.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/baseline-grok/screens/003-final.png"
+  ],
+  "dirty": true
+}

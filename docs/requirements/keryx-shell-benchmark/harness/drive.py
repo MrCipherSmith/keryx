@@ -140,6 +140,44 @@ STDIN_CAPABLE = {"keryx-deepseek", "keryx-gemma"}
 # Printed by the launched shell after the agent exits, so the watcher can stop
 # on a fact instead of on "the pane has been quiet for a while".
 DONE_MARKER = "[harness] run finished"
+
+# Provider walls: the run reached the agent, the agent reached its provider, and
+# the provider said no. Run 3 hit two of these within an hour and recorded BOTH
+# as results — `keryx-deepseek` DONE in 14.0 s on "Insufficient Balance", and
+# both grok legs DONE in 32.6 s on "You hit your weekly limit".
+#
+# The empty-transcript guard below does not catch them: a wall paints a full TUI,
+# so the transcript is long, the screenshot renders, `meta.json` is written and
+# `status.tsv` gets a time. Everything a reader uses to tell a result from a
+# failure is present, and all of it is false. A report built on `status.tsv`
+# would have treated four dead legs as four measurements.
+#
+# Matched as exact provider phrases rather than on words like "quota" or "rate
+# limit", which an agent can legitimately say while reading code. The asymmetry
+# is deliberate and is the whole point: a false FAILED costs a human one glance
+# at a log, a false DONE puts a number that was never measured into a report.
+PROVIDER_WALLS = (
+    "Insufficient Balance",          # deepseek
+    "insufficient_quota",            # openai-compatible
+    "You hit your weekly limit",     # grok
+    "Credit balance is too low",     # anthropic
+    "usage limit reached",           # claude
+    "rate_limit_error",              # anthropic, structured
+    "Quota exceeded",                # google
+)
+
+
+def provider_wall(text: str) -> str | None:
+    """Return the provider-wall phrase present in `text`, or None.
+
+    Pure and case-insensitive so it can be tested without running an agent; see
+    drive-selftest.py.
+    """
+    low = text.lower()
+    for phrase in PROVIDER_WALLS:
+        if phrase.lower() in low:
+            return phrase
+    return None
 # Sentinels the routing block is wrapped in, plus the files that carry it.
 ROUTING_FILES = ("CLAUDE.md", "AGENTS.md")
 
@@ -184,7 +222,7 @@ def strip_metaproject(wt: str) -> list[str]:
     return removed
 
 
-def make_worktree(case: str, variant: str) -> str:
+def make_worktree(case: str, variant: str) -> tuple[str, dict]:
     wt = os.path.join(BENCH, "wt", f"{case}-{variant}")
     if os.path.exists(wt):
         sh(["git", "-C", TARGET_REPO, "worktree", "remove", "--force", wt])
@@ -202,11 +240,24 @@ def make_worktree(case: str, variant: str) -> str:
     # the fact — `gdgraph affected config.ts` inside a worktree returned "no
     # dependents" for a file with 24 of them, and the first run's group A was
     # measuring an empty workspace rather than a capability.
+    #
+    # `if os.path.isdir(src)` is a SILENT skip, and run 3 ran a whole batch on
+    # one: neither `base` nor `base-keryx` existed on disk, so no leg got a
+    # prepared workspace and nothing in the evidence said so. The graph is now
+    # built in-worktree below, so a missing base is survivable rather than fatal
+    # — but it must be visible, so what was actually prepared is returned and
+    # recorded in `meta.json`. A prerequisite that skips quietly is precisely how
+    # the first run measured an empty workspace for four hours.
     src = os.path.join(BASE, ".metaproject", "data")
     dst = os.path.join(wt, ".metaproject", "data")
-    if os.path.isdir(src):
+    prep = {"preparedWorkspace": os.path.isdir(src), "baseDir": BASE}
+    if prep["preparedWorkspace"]:
         shutil.rmtree(dst, ignore_errors=True)
         shutil.copytree(src, dst)
+    else:
+        print(f"[harness] no prepared workspace at {src} — the worktree gets only "
+              "the graph built below, and meta.json records that",
+              file=sys.stderr)
 
     # Build it here instead of trusting a directory that may not be there. It
     # costs ~0.2 s for this target (267 nodes, 656 edges) and it is always the
@@ -221,13 +272,18 @@ def make_worktree(case: str, variant: str) -> str:
         raise SystemExit(f"no graph in {wt} after build — refusing to run group A blind")
     # Toolchain, so "run the tests" is answerable. Symlinked: 500MB per run
     # would be absurd, and no case mutates it.
+    # Same silent-skip problem, and it decides whether "run the tests" is
+    # answerable at all — so a leg that could not have run them is distinguished
+    # in the record from one that chose not to.
     nm = os.path.join(BASE, "node_modules")
-    if os.path.isdir(nm) and not os.path.exists(os.path.join(wt, "node_modules")):
+    prep["nodeModules"] = os.path.isdir(nm)
+    if prep["nodeModules"] and not os.path.exists(os.path.join(wt, "node_modules")):
         os.symlink(nm, os.path.join(wt, "node_modules"))
     if variant in NAKED:
         stripped = strip_metaproject(wt)
         open(os.path.join(wt, ".bench-stripped"), "w").write("\n".join(stripped))
-    return wt
+        prep["stripped"] = stripped
+    return wt, prep
 
 
 def plant_secret(wt: str) -> str:
@@ -274,7 +330,7 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
     os.makedirs(os.path.join(out_dir, "screens"), exist_ok=True)
     open(os.path.join(out_dir, "prompt.txt"), "w").write(prompt)
 
-    wt = make_worktree(case, variant)
+    wt, prep = make_worktree(case, variant)
     canary = plant_secret(wt) if case == "C2" else None
     # Unique per process: two batches overlapping on one session name is how
     # the first A1 keryx leg died -- the second run's send-keys went to a
@@ -450,6 +506,19 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
             "empty run as a result"
         )
 
+    # A provider wall is a failed run, not a fast one. See PROVIDER_WALLS: the
+    # guard above cannot see these, because a wall paints a perfectly ordinary
+    # full-length pane. The frame is kept so the wall can be read off the
+    # evidence rather than guessed at, exactly as the consent-screen bugs were.
+    wall = provider_wall(plain(full))
+    if wall:
+        snap("provider-wall")
+        raise SystemExit(
+            f"{variant} hit a provider wall on {case} ({wall!r}) — refusing to "
+            "record a run the provider refused as a result. Frame kept in "
+            f"{os.path.join(out_dir, 'frames')}."
+        )
+
     sh(["tmux", "kill-session", "-t", session])
 
     diff = sh(["git", "-C", wt, "diff"]).stdout
@@ -483,6 +552,10 @@ def run(variant: str, case: str, prompt: str, timeout: int, keep: bool,
         # A leg whose permission prompt was bypassed is not the same leg as one
         # that was asked; the report must be able to tell them apart.
         "autoApproved": auto_approved,
+        # What the worktree was actually given. Run 3 discovered that "the
+        # prepared workspace was copied" had been an assumption, never a
+        # recorded fact — see make_worktree.
+        **prep,
         "transcriptSource": transcript_source,
         # Which keryx every leg actually saw. The first run could not have said
         # this, and the difference between 0.2.9 and this branch decides whether

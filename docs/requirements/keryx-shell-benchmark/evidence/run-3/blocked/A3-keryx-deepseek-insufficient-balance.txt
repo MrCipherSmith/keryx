@@ -1,0 +1,40 @@
+  keryx — deepseek/deepseek-v4-flash · agent · unattended:read-only · ~/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A3-keryx-deepseek
+  Type a message, or /help for commands.
+
+  ❯   Session fca69e7c · per-project (keryx shell -c to continue)
+
+  ● keryx
+
+  [error] Insufficient Balance
+
+  ────────────────────────
+
+  ❯
+[harness] run finished
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

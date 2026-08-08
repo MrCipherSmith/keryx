@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.1.0",
+  "caseId": "A1",
+  "target": "keryx",
+  "variantId": "naked-claude",
+  "commit": "8c2918dce3a9",
+  "worktree": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/wt/A1-naked-claude",
+  "mode": "interactive",
+  "autoApproved": true,
+  "transcriptSource": "pane",
+  "keryxVersion": "0.2.16",
+  "startedAt": "2026-08-07T21:31:32Z",
+  "finishedAt": "2026-08-07T21:33:45Z",
+  "wallTimeSeconds": 132.7,
+  "prompt": "What breaks if I change the signature of an export in config.ts? List the files that depend on it, directly and transitively.",
+  "evidenceDir": "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude",
+  "screens": [
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/001-start.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/002-step-0.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/003-step-1.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/004-step-2.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/005-step-3.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/006-step-4.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/007-step-5.png",
+    "/home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/naked-claude/screens/008-final.png"
+  ],
+  "dirty": true
+}

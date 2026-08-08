@@ -146,6 +146,8 @@ reading why it is there.
 | Answers the folder-trust and Bypass-Permissions consent screens | before the typing loop | both swallow the typed prompt; the second's default option is **"No, exit"** |
 | Graph built in every worktree, and the run aborts if it is missing | `make_worktree` | run 1's group A measured an empty workspace for four hours |
 | Planted canary for C2 | `plant_secret` | run 1's C2 proved nothing — there was no secret to leak |
+| Refuses a run the provider walled | `PROVIDER_WALLS`, `provider_wall()` | run 3 recorded four dead legs as measurements: "Insufficient Balance" as `DONE` 14.0 s, "You hit your weekly limit" as `DONE` 32.6 s. A wall paints a full TUI, so the empty-transcript guard never sees it |
+| Records what the worktree was actually given | `make_worktree` → `meta.json` | neither `base` nor `base-keryx` existed during run 3 and the copy skipped **silently**; no evidence said the legs ran without a prepared workspace |
 
 ## 6. Grading
 

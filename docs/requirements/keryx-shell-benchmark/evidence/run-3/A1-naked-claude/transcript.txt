@@ -1,0 +1,40 @@
+  The transitive number is what breaks compilation; the direct list is what breaks at the call site and actually needs editing. Which matters depends
+  on which export — so here are the direct dependents keyed by export:
+
+  src/security/config.ts (largest radius)
+  - loadSecurityConfig → commands/security.ts, security/{guard,harness-scan,service}.ts, security/eval/harness.ts — guard.ts is the hot path, this is
+  the one that hurts
+  - securityDataRoot → security/{incidents,redact,report}.ts
+  - mergeSecurityConfig → 5 files, all tests
+  - verifyConfigChecksum → commands/security.ts, security/self-protect.ts
+  - renderSecurityConfig → commands/{init,update}.ts + test
+  - configPath, validateSecurityConfig, computeConfigChecksum, DEFAULT_SECURITY_CONFIG → 1–2 sites each
+
+  src/harness/config.ts — pure types (HarnessConfig, HarnessLimits, HarnessNetworkPolicy). All 17 dependents import HarnessConfig as import type:
+  commands/harness.ts, harness/{startup,rpc}.ts, harness/run/{run,cli}.ts, harness/resume/resume.ts, lib/serve-turn.ts + 10 tests. Zero runtime
+  breakage, but every consumer is type-checked against it — an interface change fails the build broadly and silently at runtime.
+
+  src/memory/config.ts — loadMemoryConfig → commands/memory.ts, flow/context.ts, memory/{inject,service}.ts, wiki/ask.ts (crosses into flow and wiki,
+  the widest non-test spread). DEFAULT_MEMORY_CONFIG → 8 tests only. renderMemoryConfig → commands/{init,update}.ts.
+
+  src/health/config.ts — loadHealthConfig → health/{run,service}.ts + test; renderHealthConfig → commands/{init,update}.ts; DEFAULT_HEALTH_CONFIG → 6
+  tests only.
+
+  src/gdgraph/config.ts — loadGdgraphConfig → commands/gdgraph.ts, gdgraph/{enrich,service}.ts, harness/tool/metaproject-adapter.ts (the only
+  cross-module leak); GdgraphConfig → gdgraph/repomap.ts.
+
+  src/mcp/config.ts — smallest: MCP_CONFIG_DEFAULTS → mcp/client-config.ts; loadMcpConfig/McpConfig → mcp/dispatch.ts.
+
+  Two things the graph won't catch, worth checking by hand for whichever you pick: renderSecurityConfig/renderHealthConfig/renderMemoryConfig emit
+  config files consumed by keryx init/keryx update, so a signature change there can break on-disk configs in existing installs, not just callers. And
+  security/config.ts has a checksum pair (computeConfigChecksum/verifyConfigChecksum) — changing the shape it hashes invalidates checksums already
+  written to disk.
+
+  Tell me which file and which export and I'll give you the exact edit list, including the tests that need updating.
+
+✻ Crunched for 1m 39s
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ src/security/config.ts, loadSecurityConfig
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 1 agent
