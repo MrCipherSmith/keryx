@@ -109,12 +109,21 @@ Bun is already a hard runtime requirement, so this adds **no** new dependency an
 **no** per-architecture binary to distribute — deliberately unlike Codex, which
 ships a compiled `codex-linux-sandbox` helper.
 
-> **Spike required before the implementing flow is planned.** Issuing
-> `landlock_create_ruleset` / `landlock_add_rule` / `landlock_restrict_self` and
-> `prctl` from `bun:ffi`, and confirming the restriction survives into the
-> exec'd child, is the one unproven assumption in this specification. If it does
-> not hold, the fallback is a compiled helper and the distribution cost that
-> comes with it. Nothing else in this package depends on the answer.
+> **Spike resolved, 2026-08-08 (flow 143).** `bun:ffi` carries it: the syscalls
+> reach the kernel, the restriction survives `execve`, and it is inherited by a
+> grandchild and a great-grandchild. No compiled helper, no per-architecture
+> binary. The delivery shape costs ~40 ms per contained command against
+> bubblewrap's ~10.9 ms, of which only ~1 ms is Landlock — the rest is a second
+> Bun cold start, which is structural because rules may never be applied in the
+> keryx process itself. Accepted, with a numeric revisit trigger (>5% of a real
+> `harness exec` run) recorded in
+> [ADR-0010](../../decisions/keryx-harness/ADR-0010-linux-containment-without-privilege.md#delivery-shape).
+>
+> Two things the implementer must carry from it: use `execve` via FFI rather
+> than `Bun.spawnSync`, and **resolve the program through `PATH` explicitly —
+> raw `execve` performs no `PATH` search, and falling back to the bare name
+> would run a file from the workspace.** Only ABI 4 was exercised; the ABI 1
+> path has never run.
 
 ### 4.3 Where Landlock is weaker than bubblewrap
 
