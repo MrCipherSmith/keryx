@@ -151,10 +151,41 @@ function bindsName(binding: ts.BindingName, name: string): boolean {
   );
 }
 
-/** Does an import declaration bind `name` — default, namespace or named? */
+/**
+ * True when a declaration emits nothing, so it cannot shadow anything at run
+ * time.
+ *
+ * `declare const process: NodeJS.Process` is the ordinary way to reach an
+ * ambient global while satisfying the type checker, and treating it as a binding
+ * let `process.platform` through with `tsc` clean and the suite green. This is
+ * the mirror of the `ExpressionWithTypeArguments` case: there a type node
+ * carried a live expression, here a live-looking declaration carries no binding.
+ */
+function isErasedDeclaration(statement: ts.Statement): boolean {
+  // The `declare` modifier itself, or an enclosing `declare module`/`namespace`,
+  // whose members are ambient without carrying the modifier of their own.
+  for (let node: ts.Node | undefined = statement; node !== undefined; node = node.parent) {
+    if (ts.isSourceFile(node)) {
+      return false;
+    }
+    const declared =
+      ts.canHaveModifiers(node) &&
+      ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword) === true;
+    if (declared) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Does an import declaration bind `name` at run time — default, namespace or
+ * named? A type-only import binds nothing, whether the whole clause is
+ * `import type` or the single specifier is `{ type X as process }`.
+ */
 function importBinds(statement: ts.ImportDeclaration, name: string): boolean {
   const clause = statement.importClause;
-  if (clause === undefined) {
+  if (clause === undefined || clause.isTypeOnly) {
     return false;
   }
   if (clause.name?.text === name) {
@@ -166,13 +197,46 @@ function importBinds(statement: ts.ImportDeclaration, name: string): boolean {
   }
   return ts.isNamespaceImport(bindings)
     ? bindings.name.text === name
-    : bindings.elements.some((element) => element.name.text === name);
+    : bindings.elements.some((element) => !element.isTypeOnly && element.name.text === name);
 }
 
-/** Does this one scope — not its ancestors — declare `name`? */
+/** The statements a scope holds directly, for the scope kinds that hold any. */
+function scopeStatements(scope: ts.Node): readonly ts.Statement[] {
+  if (
+    ts.isSourceFile(scope) ||
+    ts.isBlock(scope) ||
+    ts.isModuleBlock(scope) ||
+    ts.isCaseClause(scope) ||
+    ts.isDefaultClause(scope)
+  ) {
+    return scope.statements;
+  }
+  return [];
+}
+
+/** Does a `for`/`for-of`/`for-in` initialiser or a `catch` clause bind `name`? */
+function scopeBinderDeclares(scope: ts.Node, name: string): boolean {
+  const list =
+    (ts.isForStatement(scope) || ts.isForInStatement(scope) || ts.isForOfStatement(scope)) &&
+    scope.initializer !== undefined &&
+    ts.isVariableDeclarationList(scope.initializer)
+      ? scope.initializer
+      : undefined;
+  if (list?.declarations.some((d) => bindsName(d.name, name)) === true) {
+    return true;
+  }
+  if (ts.isCatchClause(scope) && scope.variableDeclaration !== undefined) {
+    return bindsName(scope.variableDeclaration.name, name);
+  }
+  return false;
+}
+
+/** Does this one scope — not its ancestors — bind `name` at run time? */
 function scopeDeclares(scope: ts.Node, name: string): boolean {
-  const statements = ts.isSourceFile(scope) || ts.isBlock(scope) ? scope.statements : undefined;
-  for (const statement of statements ?? []) {
+  for (const statement of scopeStatements(scope)) {
+    if (isErasedDeclaration(statement)) {
+      continue;
+    }
     if (ts.isVariableStatement(statement)) {
       if (statement.declarationList.declarations.some((d) => bindsName(d.name, name))) {
         return true;
@@ -188,15 +252,29 @@ function scopeDeclares(scope: ts.Node, name: string): boolean {
       return true;
     }
   }
-  return ts.isFunctionLike(scope) && scope.parameters.some((p) => bindsName(p.name, name));
+  if (scopeBinderDeclares(scope, name)) {
+    return true;
+  }
+  if (!ts.isFunctionLike(scope)) {
+    return false;
+  }
+  // A function expression's own name is in scope inside its body.
+  const selfName = ts.isFunctionExpression(scope) && scope.name?.text === name;
+  return selfName || scope.parameters.some((p) => bindsName(p.name, name));
 }
 
 /**
- * True when a declaration of `node`'s name is in scope AT `node`.
+ * True when a run-time declaration of `node`'s name is in scope AT `node`.
  *
- * Per position, not per file. A file-wide set was scope-blind: one
+ * Per position, not per file: a file-wide set was scope-blind, and one
  * `function f(process: string)` anywhere disarmed the check for a module-scope
- * `process.platform` on the next line, which is the exact impurity AC1 names.
+ * `process.platform` on the next line — the exact impurity AC1 names.
+ *
+ * Binders it resolves: source-file, block, module-block and case-clause
+ * statements; `for`/`for-in`/`for-of` initialisers; `catch` clauses; function
+ * parameters; and a function expression's own name. Not resolved, and therefore
+ * a possible false positive rather than a hole: `var` hoisting out of a nested
+ * block, and a `case` clause without braces sharing its `CaseBlock` scope.
  */
 function isShadowedAt(node: ts.Identifier): boolean {
   for (let scope = node.parent; scope !== undefined; scope = scope.parent) {
@@ -250,10 +328,15 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     //     `Reflect`, `structuredClone` and `queueMicrotask` are examples.
     //   · a global reached through no name at all: `({}).constructor.constructor`
     //     is the `Function` constructor, and naming `Function` does not see it.
-    //   · a shadow. An identifier is skipped when a declaration of that name is
-    //     in scope AT it, so a module-scope `const process = …` disarms the name
-    //     for the file. Its initialiser is still checked, so laundering a real
-    //     global through one has to pass every other check first.
+    //   · a shadow. An identifier is skipped when a RUN-TIME declaration of that
+    //     name is in scope at it, so a module-scope `const process = …` disarms
+    //     the name for the file. Its initialiser is still checked, so laundering
+    //     a real global through one has to pass every other check first.
+    //     `declare const` and `import type` bind nothing and are not shadows —
+    //     they were, and `declare const process` walked through tsc-clean and
+    //     suite-green.
+    //   · `var` hoisted out of a nested block, and an unbraced `case` clause:
+    //     both are missed by the scope walk, in the false-positive direction.
     //   · anything `./profile` or `node:path` might do. Both are in-repo or
     //     stdlib and pure, and `./profile` is itself spawn-free by spec §2.
     //   · what the BUNDLER ships. This reads one file from disk; the oracle for
@@ -294,6 +377,19 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
       // named a construct the module does not contain.
       if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) {
         reached.push("import.meta");
+      }
+      // `type T = import("node:fs").Stats` is a load position `moduleSpecifiers`
+      // does not walk. It has no run-time effect, but the allowlist is also the
+      // record of what this module may depend on, so it belongs in it.
+      if (ts.isImportTypeNode(node)) {
+        const argument = node.argument;
+        const specifier =
+          ts.isLiteralTypeNode(argument) && ts.isStringLiteralLike(argument.literal)
+            ? argument.literal.text
+            : undefined;
+        if (specifier === undefined || !["./profile", "node:path"].includes(specifier)) {
+          reached.push(`import type node: ${node.getText(sourceFile)}`);
+        }
       }
     }
 
@@ -423,6 +519,32 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     expect(ruleset.handledFs).toContain("refer");
   });
 
+  test("the handled set is exactly the twelve write rights", () => {
+    // Pinned as a literal, like the two UAPI tables, because this IS the
+    // boundary: a right absent from `handled_access_fs` is not narrowed, it is
+    // completely unrestricted. Membership assertions left four of them free —
+    // dropping `remove_file`, `remove_dir`, `make_reg` or `make_sym` left the
+    // whole suite green while `unlink`, `rmdir`, `creat` and `symlink` went
+    // unbounded anywhere on the filesystem, with the ruleset still reporting
+    // itself complete.
+    for (const profile of expressibleShapes) {
+      expect([...rulesetOf(profile).handledFs]).toEqual([
+        "write_file",
+        "remove_dir",
+        "remove_file",
+        "make_char",
+        "make_dir",
+        "make_reg",
+        "make_sock",
+        "make_fifo",
+        "make_block",
+        "make_sym",
+        "refer",
+        "truncate",
+      ]);
+    }
+  });
+
   test("handledFs is never empty — an empty mask is rejected by landlock_create_ruleset", () => {
     for (const profile of expressibleShapes) {
       expect(rulesetOf(profile).handledFs.length).toBeGreaterThan(0);
@@ -510,6 +632,18 @@ describe("stdio devices stay writable, as in seatbelt.ts and bwrap.ts", () => {
     for (const profile of expressibleShapes) {
       const rule = rulesetOf(profile).pathRules.find((r) => r.path === device);
       expect(rule?.allow).toEqual(["write_file", "truncate"]);
+    }
+  });
+
+  test("the carve-out is exactly three devices, and nothing else is granted back", () => {
+    // Exclusivity, not membership, and keyed on the disposition rather than on
+    // the path prefix: `/dev/sda` added to the list was `write_file` +
+    // `truncate` on a raw block device and left the suite green, because every
+    // assertion about the carve-out either named a path or tested
+    // `startsWith("/dev/")`.
+    for (const profile of expressibleShapes) {
+      const carveOut = rulesetOf(profile).pathRules.filter((r) => r.onMissing === "skip");
+      expect(carveOut.map((r) => r.path)).toEqual(["/dev/null", "/dev/zero", "/dev/tty"]);
     }
   });
 
