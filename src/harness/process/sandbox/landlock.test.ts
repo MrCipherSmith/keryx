@@ -1,17 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
+import { moduleSpecifiers, parse, walk } from "../../../lib/config-dir.ast";
 import {
   LANDLOCK_FS_ACCESS_BIT,
   LANDLOCK_FS_ACCESS_MIN_ABI,
-  LANDLOCK_UNHANDLED_ACTIONS,
-  LANDLOCK_UNRESTRICTABLE_ACTIONS,
+  LANDLOCK_RESIDUAL_ACTIONS,
   buildLandlockRuleset,
   landlockFsMask,
 } from "./landlock";
 import type {
   LandlockInexpressible,
   LandlockInexpressibleCode,
+  LandlockPathRule,
   LandlockRuleset,
 } from "./landlock";
 import { defaultSandboxProfile } from "./profile";
@@ -80,48 +82,73 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
   test("the module loads nothing impure and reaches for no impure global", async () => {
     // AC1's "no syscall, no FFI, no spawn, no filesystem read, no
     // process.platform branch" is unobservable from outputs: a filesystem read
-    // is perfectly deterministic within a run. So the criterion is enforced
-    // structurally, and the guard has to match the SHAPE of the offence rather
-    // than a list of the names it has worn. An earlier version matched only
-    // `from "…"` with double quotes, and `import { readFileSync } from 'fs'`
-    // walked straight through it.
-    const source = await readFile(fileURLToPath(new URL("./landlock.ts", import.meta.url)), "utf8");
+    // is perfectly deterministic within a run, so only a source guard can hold
+    // it.
+    //
+    // This is the guard's third form. Twice it was written over text and twice
+    // it was defeated by respelling — `from 'fs'` with single quotes, then
+    // `process["platform"]`, a destructured `const { platform } = process`, an
+    // interpolated `${process.platform}`, and a regex literal containing `//`
+    // that ate the line-comment stripper. It now asks the parser, reusing
+    // `config-dir.ast.ts`, whose header is this repository's written record of
+    // the same lesson.
+    //
+    // KNOWN GAPS, kept honest rather than claimed closed (that header's point
+    // is that structure has spellings too):
+    //   · a specifier that is not a string literal — `"./prof" + "ile"`, or a
+    //     template with a substitution
+    //   · an impure global reached through an alias created elsewhere and
+    //     imported, which module-level parsing cannot resolve
+    //   · `import.meta.require`, and `createRequire` bound to another name
+    // The allowlist below closes the first-order version of all three: no
+    // specifier other than the two expected ones may appear in any load
+    // position, so an alias has to come from a module that is itself forbidden.
+    const path = fileURLToPath(new URL("./landlock.ts", import.meta.url));
+    const sourceFile = parse(path, await readFile(path, "utf8"));
 
-    // The module discusses `bun:ffi` and `process.platform` in prose, so
-    // comments go first — including trailing ones, without eating `https://`.
-    const code = source
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/(^|[^:'"`])\/\/.*$/gm, "$1");
+    // An allowlist, so it fails closed on a dependency added later rather than
+    // on a name someone thought to forbid.
+    expect([...new Set(moduleSpecifiers(sourceFile))].sort()).toEqual(["./profile", "node:path"]);
 
-    // Every module-specifier form, both quote styles: `from`, dynamic `import()`,
-    // `require()`, and a bare side-effect `import "x"`.
-    const specifiers = [
-      ...code.matchAll(/\bfrom\s*(['"])([^'"]+)\1/g),
-      ...code.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g),
-      ...code.matchAll(/\brequire\s*\(\s*(['"])([^'"]+)\1/g),
-      ...code.matchAll(/^\s*import\s+(['"])([^'"]+)\1/gm),
-    ].map((m) => m[2]);
-    expect([...new Set(specifiers)].sort()).toEqual(["./profile", "node:path"]);
-
-    // An allowlist cannot see a global, so the impure globals are named. String
-    // literals are blanked first: the module's operator-facing `detail` prose
-    // must not be able to turn this guard red, or its next maintainer weakens it.
-    const withoutStrings = code
-      .replace(/(['"])(?:\\.|(?!\1)[^\\])*\1/g, '""')
-      .replace(/`(?:\\.|[^\\`])*`/g, "``");
-    for (const forbidden of [
-      "process.",
-      "Bun.",
+    // A global has no specifier to allowlist, so these are named. Matching
+    // identifiers rather than text means `process`, `process.platform`,
+    // `process["platform"]`, `const { x } = process` and `${process.platform}`
+    // are one check, and the word appearing inside operator-facing prose is not
+    // a match at all — which is what kept turning the text version red.
+    const forbiddenGlobals = new Set([
+      "process",
+      "Bun",
       "globalThis",
-      "eval(",
-      "new Function",
-      "fetch(",
-      "Date.now",
-      "Math.random",
-      "performance.",
-    ]) {
-      expect(withoutStrings).not.toContain(forbidden);
+      "Date",
+      "performance",
+      "eval",
+      "require",
+      "fetch",
+      "XMLHttpRequest",
+      "WebAssembly",
+    ]);
+    const reached: string[] = [];
+    for (const node of walk(sourceFile)) {
+      if (ts.isIdentifier(node) && forbiddenGlobals.has(node.text)) {
+        // A property NAME is not a reach for the global: `{ process: 1 }` and
+        // `x.process` are ordinary. A property VALUE, an element access, a
+        // destructuring source and a bare reference all are.
+        const parent = node.parent;
+        const isPropertyName =
+          (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+          (ts.isPropertyAssignment(parent) && parent.name === node);
+        if (!isPropertyName) {
+          reached.push(node.text);
+        }
+      }
+      // `Math.max` is pure and used; `Math.random` is not.
+      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+        if (node.expression.text === "Math" && node.name.text === "random") {
+          reached.push("Math.random");
+        }
+      }
     }
+    expect(reached).toEqual([]);
   });
 
   test("identical inputs produce deeply equal output", () => {
@@ -264,12 +291,21 @@ describe("a narrower rule can nest inside a broader hierarchy", () => {
 
   test("rule order carries no precedence, so it cannot encode a narrowing", () => {
     // Landlock accumulates: whatever order these are added in, the grant is the
-    // union. A test that depended on order would be encoding a deny that does
-    // not exist.
+    // union. So reordering the input must change the rule ORDER and nothing
+    // else — same paths, same rights, same dispositions.
+    //
+    // Comparing two sets of the same two path strings would have been true by
+    // construction; this compares whole rules, `allow` included, which is where
+    // a narrowing would actually live.
+    const byPath = (rules: readonly LandlockPathRule[]) =>
+      [...rules].sort((a, b) => a.path.localeCompare(b.path));
     const forward = rulesetOf({ ...expressible, writableRoots: ["/a", "/a/b"] });
     const reverse = rulesetOf({ ...expressible, writableRoots: ["/a/b", "/a"] });
-    expect(new Set(rootRules(forward).map((r) => r.path))).toEqual(
-      new Set(rootRules(reverse).map((r) => r.path)),
+
+    expect(byPath(forward.pathRules)).toEqual(byPath(reverse.pathRules));
+    // …and the order really did differ, or the assertion above proved nothing.
+    expect(rootRules(forward).map((r) => r.path)).not.toEqual(
+      rootRules(reverse).map((r) => r.path),
     );
   });
 });
@@ -564,47 +600,89 @@ describe("AC3: a returned ruleset is complete by construction", () => {
     }
   });
 
-  test("what Landlock cannot reach at any ABI is named in a value, not only in a comment", () => {
-    // A ruleset covers every access right Landlock HAS that the profile bounds.
-    // Metadata mutation has no such right at any ABI, so bubblewrap's boundary
-    // is strictly stronger and the two must not be reported as equivalent. This
-    // list is the mechanical record of that, for `sandbox status` to read — so
-    // it is pinned as a full literal like the two UAPI tables. Asserting that
-    // `handledFs` merely excludes these would be a tautology: none of them is a
-    // `LandlockFsAccess` value, so no implementation change could make it fail.
-    expect([...LANDLOCK_UNRESTRICTABLE_ACTIONS]).toEqual([
+  test("what a ruleset does not restrict is named in a value, not only in a comment", () => {
+    // Pinned as a full literal like the two UAPI tables, because this is what a
+    // reporting layer will state. Asserting only that `handledFs` excludes these
+    // would be a tautology: none is a `LandlockFsAccess` value, so no
+    // implementation change could make it fail.
+    expect(
+      LANDLOCK_RESIDUAL_ACTIONS.map((a) => [
+        a.action,
+        a.restrictableFromAbi,
+        a.refusedByBubblewrap,
+      ]),
+    ).toEqual([
+      ["chmod", null, true],
+      ["chown", null, true],
+      ["setxattr", null, true],
+      ["utime", null, true],
+      ["ioctl on a regular file or directory", null, true],
+      ["ioctl on a character or block device", 5, false],
+      ["fcntl", null, false],
+      ["flock", null, false],
+    ]);
+    expect(Object.isFrozen(LANDLOCK_RESIDUAL_ACTIONS)).toBe(true);
+    for (const entry of LANDLOCK_RESIDUAL_ACTIONS) {
+      expect(Object.isFrozen(entry)).toBe(true);
+      expect(entry.note.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("ioctl is split, because one entry cannot be true of both halves", () => {
+    // LANDLOCK_ACCESS_FS_IOCTL_DEV covers an opened character or block device
+    // and nothing else. Recording a single `ioctl` as restrictable from ABI 5
+    // over-claims for regular files; recording it as never restrictable
+    // under-claims for devices on a 6.10 kernel. Round 2 fixed the second by
+    // introducing the first, which is why both halves are pinned here.
+    const ioctls = LANDLOCK_RESIDUAL_ACTIONS.filter((a) => a.action.startsWith("ioctl"));
+    expect(ioctls).toHaveLength(2);
+    expect(ioctls.map((a) => a.restrictableFromAbi).sort()).toEqual([5, null]);
+    // The device half has to agree with the table it is a deferral from.
+    const device = ioctls.find((a) => a.action.includes("device"));
+    expect(LANDLOCK_FS_ACCESS_MIN_ABI.ioctl_dev).toBe(device?.restrictableFromAbi ?? -1);
+    // A bare "ioctl" entry would be the ambiguity this split exists to remove.
+    expect(LANDLOCK_RESIDUAL_ACTIONS.map((a) => a.action)).not.toContain("ioctl");
+  });
+
+  test("only the entries bubblewrap actually refuses claim a layer-2 advantage", () => {
+    // `fcntl` and `flock` are kernel state, not filesystem content: they succeed
+    // on a read-only bind too. Claiming EROFS for them would overstate layer 2
+    // and make the asymmetry argument rest on two entries that do not support it.
+    const refused = LANDLOCK_RESIDUAL_ACTIONS.filter((a) => a.refusedByBubblewrap);
+    expect(refused.map((a) => a.action)).toEqual([
       "chmod",
       "chown",
       "setxattr",
       "utime",
-      "fcntl",
-      "flock",
+      "ioctl on a regular file or directory",
     ]);
-    expect(Object.isFrozen(LANDLOCK_UNRESTRICTABLE_ACTIONS)).toBe(true);
+    for (const action of ["fcntl", "flock"]) {
+      expect(LANDLOCK_RESIDUAL_ACTIONS.find((a) => a.action === action)?.refusedByBubblewrap).toBe(
+        false,
+      );
+    }
   });
 
-  test("ioctl is recorded as a keryx deferral, not as a kernel limitation", () => {
-    // It is unrestrictable below ABI 5 and restrictable from ABI 5 through
-    // LANDLOCK_ACCESS_FS_IOCTL_DEV, so listing it as a kernel caveat would be
-    // false on a 6.10 kernel — the same shape of untrue statement as reporting
-    // a present binary as a working boundary.
-    expect(LANDLOCK_UNRESTRICTABLE_ACTIONS).not.toContain("ioctl");
-    expect(LANDLOCK_UNHANDLED_ACTIONS.map((a) => [a.action, a.restrictableFromAbi])).toEqual([
-      ["ioctl", 5],
-    ]);
-    expect(LANDLOCK_UNHANDLED_ACTIONS[0]?.reason.length).toBeGreaterThan(0);
-    expect(Object.isFrozen(LANDLOCK_UNHANDLED_ACTIONS)).toBe(true);
-    // The deferral has to agree with the table it is a deferral from.
-    const ioctl = LANDLOCK_UNHANDLED_ACTIONS.find((a) => a.action === "ioctl");
-    expect(LANDLOCK_FS_ACCESS_MIN_ABI.ioctl_dev).toBe(ioctl?.restrictableFromAbi ?? -1);
+  test("the residue does not vary with the profile — it is a mechanism fact", () => {
+    const before = LANDLOCK_RESIDUAL_ACTIONS;
+    for (const profile of expressibleShapes) {
+      expect(rulesetOf(profile).handledFs).not.toContain("ioctl_dev");
+      // Identity, not length: a list rebuilt per call would be a different fact
+      // per profile, which is exactly what this must not become.
+      expect(LANDLOCK_RESIDUAL_ACTIONS).toBe(before);
+    }
   });
 
-  test("neither residue list varies with the profile — they are mechanism facts", () => {
+  test("a writable root is granted the whole handled set, not a narrower slice", () => {
+    // Round 3's guarantee is about what a nested rule GRANTS; the tests it
+    // shipped checked only paths and order. A root granted less than `handledFs`
+    // is inert beneath an ancestor and over-restrictive without one, and nothing
+    // observed it.
     for (const profile of expressibleShapes) {
       const ruleset = rulesetOf(profile);
-      expect(ruleset.handledFs).not.toContain("ioctl_dev");
-      expect([...LANDLOCK_UNRESTRICTABLE_ACTIONS]).toHaveLength(6);
-      expect([...LANDLOCK_UNHANDLED_ACTIONS]).toHaveLength(1);
+      for (const rule of rootRules(ruleset)) {
+        expect(rule.allow).toEqual(ruleset.handledFs);
+      }
     }
   });
 });

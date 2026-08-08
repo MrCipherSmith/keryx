@@ -54,10 +54,9 @@ export { createRunCa, type RunCa, type LeafCertificate, type CreateRunCaOptions 
 // `bwrap.ts`'s `inspectMaskTarget` is withheld here for the same reason.
 export {
   buildLandlockRuleset,
-  LANDLOCK_UNHANDLED_ACTIONS,
-  LANDLOCK_UNRESTRICTABLE_ACTIONS,
+  LANDLOCK_RESIDUAL_ACTIONS,
   type LandlockFsAccess,
-  type LandlockUnhandledAction,
+  type LandlockResidualAction,
   type LandlockMissingPathDisposition,
   type LandlockPathRule,
   type LandlockRuleset,

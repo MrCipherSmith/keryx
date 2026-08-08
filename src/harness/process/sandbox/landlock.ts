@@ -49,25 +49,34 @@
 //
 // ## What this ruleset does not reach, stated rather than hidden
 //
-// - **Metadata mutation, at every ABI.** Landlock has no access right for
-//   `chmod`, `chown`, `setxattr`, `utime`, `fcntl` or `flock`, so they stay
-//   permitted wherever DAC already permits them — including outside the writable
-//   roots. bubblewrap's `--ro-bind / /` refuses all of them with `EROFS`, so
+// - **Metadata mutation.** Landlock has no access right for `chmod`, `chown`,
+//   `setxattr` or `utime` at any ABI, nor for `ioctl` on a regular file, so they
+//   stay permitted wherever DAC already permits them — including outside the
+//   writable roots. bubblewrap's `--ro-bind / /` refuses those with `EROFS`, so
 //   **layer 1's filesystem boundary is data-only and layer 2's is not**, and the
 //   two are not interchangeable. This is not expressible as a translation
 //   failure without making every write-bounded profile inexpressible and
 //   deleting the Landlock layer outright, so it is named instead —
-//   mechanically, in {@link LANDLOCK_UNRESTRICTABLE_ACTIONS}, so a reporting
-//   layer cannot omit it by forgetting a comment.
-// - **`ioctl` on a device, which is a different case and is kept separate.** It
-//   is unrestrictable below ABI 5 and *restrictable* from ABI 5 through
-//   `LANDLOCK_ACCESS_FS_IOCTL_DEV`, so calling it a kernel limitation would be
-//   false on a 6.10 kernel. Not handling it there is a keryx deferral, recorded
-//   as one in {@link LANDLOCK_UNHANDLED_ACTIONS}: the handled set would have to
-//   grant it back on the controlling terminal or ordinary `TIOCGWINSZ`-class
-//   calls would fail, and `SandboxProfile` carries nothing that says which
-//   terminal that is. bubblewrap covers the sharp edge (tty injection) with
-//   `--new-session`, which Landlock has no equivalent of.
+//   mechanically, in {@link LANDLOCK_RESIDUAL_ACTIONS}, so a reporting layer
+//   cannot omit it by forgetting a comment. That list also carries `fcntl` and
+//   `flock`, which neither layer restricts and which do not cross a write
+//   boundary at all; it says so per entry rather than averaging the claim.
+// - **`ioctl` on a device, which is the same syscall at a different
+//   granularity.** `LANDLOCK_ACCESS_FS_IOCTL_DEV` (ABI 5) covers an opened
+//   character or block device and nothing else, so "the kernel cannot restrict
+//   ioctl" is false from ABI 5 for devices and true at every ABI for regular
+//   files. Both halves are recorded, separately. Not handling the device half is
+//   a keryx deferral: the handled set would have to grant it back on the
+//   controlling terminal or ordinary `TIOCGWINSZ`-class calls would fail, and
+//   `SandboxProfile` carries nothing that says which terminal that is.
+//   bubblewrap covers the sharp edge (tty injection) with `--new-session`, which
+//   Landlock has no equivalent of.
+// - **Descriptors opened before the ruleset was applied.** Landlock evaluates at
+//   `open`, not at `write` — the same fact that makes inherited stdio work
+//   without a rule (see `DEVICE_WRITE_PATHS`). A descriptor the process already
+//   holds when it calls `landlock_restrict_self` stays usable whatever the
+//   ruleset says. It is a property of the mechanism rather than of a syscall, so
+//   it is stated here and not in the residue list.
 // - **A minimal `/dev`.** bubblewrap's `--dev /dev` narrows the visible device
 //   set. That is a different mechanism, and `SandboxProfile` has no field for it.
 // - **PID / IPC / session isolation.** bubblewrap's `--unshare-pid`,
@@ -148,56 +157,98 @@ export const LANDLOCK_FS_ACCESS_MIN_ABI: Readonly<Record<LandlockFsAccess, numbe
   ioctl_dev: 5,
 });
 
+/** One action a ruleset from this module leaves unrestricted, and why. */
+export interface LandlockResidualAction {
+  /** The action, at the granularity Landlock's access rights distinguish. */
+  readonly action: string;
+  /**
+   * The Landlock ABI from which the kernel *could* restrict it, or `null` when
+   * no ABI can.
+   *
+   * The distinction is the point of this field: `null` is a kernel limitation,
+   * a number is a keryx decision, and reporting a decision as a limitation is
+   * the same class of untrue statement this package exists to remove. An
+   * earlier version of this data collapsed the two on `ioctl` and said the
+   * kernel could not restrict it at any ABI, which is false from ABI 5.
+   */
+  readonly restrictableFromAbi: number | null;
+  /**
+   * Whether bubblewrap's `--ro-bind / /` refuses it with `EROFS`. Where this is
+   * true, layer 2's boundary is genuinely stronger than layer 1's and the two
+   * must not be reported as equivalent. Where it is false, neither layer stops
+   * it and the action is simply outside what either expresses.
+   */
+  readonly refusedByBubblewrap: boolean;
+  readonly note: string;
+}
+
 /**
- * Filesystem-mutating actions Landlock has **no access right for at any ABI**.
+ * Everything a ruleset from this module does not restrict, as data.
  *
- * The mutating subset of the kernel's `landlock(7)` CAVEATS list. That list also
- * names `chdir`, `stat` and `access`, which observe rather than mutate and so do
- * not weaken a write boundary; and it names `ioctl`, which is *not* here because
- * ABI 5 can restrict it — see {@link LANDLOCK_UNHANDLED_ACTIONS}.
+ * The mutating entries of the kernel's `landlock(7)` CAVEATS list. That list
+ * also names `chdir`, `stat` and `access`, which observe rather than mutate and
+ * so cannot weaken a write boundary; they are deliberately absent.
  *
- * These remain permitted wherever DAC permits them, including outside a
- * profile's writable roots, under every ruleset this module produces at every
- * ABI. bubblewrap denies all of them with `EROFS` on the read-only bind, so the
- * two layers do not offer the same filesystem boundary and must not be reported
- * as if they did.
+ * `ioctl` appears **twice, at different granularity**, because Landlock splits
+ * it and a single entry cannot be true of both halves:
+ * `LANDLOCK_ACCESS_FS_IOCTL_DEV` (ABI 5) covers ioctls on an opened character or
+ * block device and nothing else, so an ioctl on a regular file or directory —
+ * `FS_IOC_SETFLAGS` through an `O_RDONLY` descriptor, for instance — is
+ * restrictable at no ABI at all.
  *
  * Exported so `sandbox status` and the capability matrix can state the residue
  * from a value rather than from a comment someone has to remember to read. It is
  * a constant fact about the mechanism, not a per-profile escape hatch — see
  * {@link LandlockRuleset} for why the distinction matters.
  */
-export const LANDLOCK_UNRESTRICTABLE_ACTIONS: readonly string[] = Object.freeze([
-  "chmod",
-  "chown",
-  "setxattr",
-  "utime",
-  "fcntl",
-  "flock",
-]);
-
-/** An action Landlock can restrict from some ABI, which this ruleset does not. */
-export interface LandlockUnhandledAction {
-  readonly action: string;
-  /** The Landlock ABI from which the kernel could restrict it. */
-  readonly restrictableFromAbi: number;
-  /** Why it is not handled. */
-  readonly reason: string;
-}
-
-/**
- * Actions the kernel *can* restrict from some ABI and this ruleset deliberately
- * does not handle. Kept separate from {@link LANDLOCK_UNRESTRICTABLE_ACTIONS}
- * because the two are different claims: one is a kernel limitation, the other is
- * a keryx decision, and reporting a decision as a limitation is the same class
- * of untrue statement this package exists to remove.
- */
-export const LANDLOCK_UNHANDLED_ACTIONS: readonly LandlockUnhandledAction[] = Object.freeze([
+export const LANDLOCK_RESIDUAL_ACTIONS: readonly LandlockResidualAction[] = Object.freeze([
   Object.freeze({
-    action: "ioctl",
+    action: "chmod",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: true,
+    note: "no Landlock access right covers mode changes at any ABI.",
+  }),
+  Object.freeze({
+    action: "chown",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: true,
+    note: "no Landlock access right covers ownership changes at any ABI.",
+  }),
+  Object.freeze({
+    action: "setxattr",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: true,
+    note: "no Landlock access right covers extended attributes at any ABI.",
+  }),
+  Object.freeze({
+    action: "utime",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: true,
+    note: "the utime/utimensat family; no Landlock access right covers timestamps at any ABI.",
+  }),
+  Object.freeze({
+    action: "ioctl on a regular file or directory",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: true,
+    note: "LANDLOCK_ACCESS_FS_IOCTL_DEV covers devices only, so commands such as FS_IOC_SETFLAGS through an O_RDONLY descriptor are restrictable at no ABI.",
+  }),
+  Object.freeze({
+    action: "ioctl on a character or block device",
     restrictableFromAbi: 5,
-    reason:
-      "handling LANDLOCK_ACCESS_FS_IOCTL_DEV would require granting it back on the controlling terminal, or ordinary TIOCGWINSZ-class calls fail, and SandboxProfile does not say which terminal that is.",
+    refusedByBubblewrap: false,
+    note: "LANDLOCK_ACCESS_FS_IOCTL_DEV. Not handled: the ruleset would have to grant it back on the controlling terminal or ordinary TIOCGWINSZ-class calls fail, and SandboxProfile does not say which terminal that is.",
+  }),
+  Object.freeze({
+    action: "fcntl",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: false,
+    note: "descriptor flags and advisory locks are kernel state, not filesystem content, so a read-only bind does not refuse them either; it does not cross the write boundary.",
+  }),
+  Object.freeze({
+    action: "flock",
+    restrictableFromAbi: null,
+    refusedByBubblewrap: false,
+    note: "an advisory lock succeeds on a read-only mount, so bubblewrap does not refuse it either; it does not cross the write boundary.",
   }),
 ]);
 
@@ -297,18 +348,17 @@ export interface LandlockPathRule {
  *
  * There is deliberately no `notEnforced`, `partial` or `bestEffort` field. A
  * value of this type handles every access right Landlock has that the profile
- * bounds, except the ones in {@link LANDLOCK_UNHANDLED_ACTIONS}; anything less
+ * bounds, except the ones in {@link LANDLOCK_RESIDUAL_ACTIONS}; anything less
  * is a {@link LandlockInexpressible}, not a weaker ruleset. A per-translation
  * field for recording "and this part is not covered" is exactly where an
  * approximated boundary would hide, and the boundary would then be reported as
  * real — the defect ADR-0010 exists to remove.
  *
- * The two exceptions are a different kind of fact: constant, profile-independent
- * and stated once — {@link LANDLOCK_UNRESTRICTABLE_ACTIONS} for what the kernel
- * cannot restrict at any ABI, {@link LANDLOCK_UNHANDLED_ACTIONS} for what it
- * could and this ruleset does not. Neither varies with a profile, so neither can
- * record an approximation of one. Read both before describing this boundary as
- * equivalent to bubblewrap's.
+ * Those exceptions are a different kind of fact: constant, profile-independent
+ * and stated once in {@link LANDLOCK_RESIDUAL_ACTIONS}, which records per entry
+ * whether the kernel could restrict it and whether bubblewrap refuses it. It
+ * does not vary with a profile, so it cannot record an approximation of one.
+ * Read it before describing this boundary as equivalent to bubblewrap's.
  */
 export interface LandlockRuleset {
   /**
