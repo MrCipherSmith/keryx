@@ -8,40 +8,50 @@
 // sandbox-exec, or anything else — the same discipline `detect.test.ts` keeps
 // by injecting `existsSync`.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   BWRAP_APPARMOR_REMEDIATION,
+  PROBE_TIMEOUT_MS,
   probeContainment,
   resetContainmentProbeCacheForTests,
   runContainmentProbe,
   type ProbeSpawn,
+  type ProbeSpawnOptions,
   type ProbeSpawnResult,
 } from "./probe";
 
 /** The exact failure measured on Ubuntu 24.04 with no AppArmor profile for bwrap. */
 const UID_MAP_FAILURE = "bwrap: setting up uid map: Permission denied";
 
+interface RecordedCall {
+  path: string;
+  argv: string[];
+  options: ProbeSpawnOptions;
+}
+
 interface RecordingSpawn {
   spawn: ProbeSpawn;
-  calls: { path: string; argv: string[] }[];
+  calls: RecordedCall[];
 }
 
 function recordingSpawn(result: ProbeSpawnResult): RecordingSpawn {
-  const calls: { path: string; argv: string[] }[] = [];
+  const calls: RecordedCall[] = [];
   return {
     calls,
-    spawn: (path, argv) => {
-      calls.push({ path, argv });
+    spawn: (path, argv, options) => {
+      calls.push({ path, argv, options });
       return result;
     },
   };
 }
 
-afterEach(() => {
-  // The cache is process-global by design (N4). Every test that touches it
-  // clears it afterwards so ordering between files cannot decide an outcome.
-  resetContainmentProbeCacheForTests();
-});
+// The cache is process-global by design (N4). Cleared on BOTH sides: `afterEach`
+// so this file cannot leak into another, and `beforeEach` so this file does not
+// merely *assume* an empty slot on entry. Under `bun test` every file shares one
+// process, so a one-sided reset makes these assertions order-dependent, and an
+// order-dependent failure surfaces in whichever unrelated file ran next.
+beforeEach(resetContainmentProbeCacheForTests);
+afterEach(resetContainmentProbeCacheForTests);
 
 describe("runContainmentProbe — AC4: the launcher's own words are the evidence", () => {
   test("linux failure: reports not-ok, layer bwrap, and the stderr VERBATIM", () => {
@@ -55,12 +65,42 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     expect(result.detail).toBe(UID_MAP_FAILURE);
   });
 
-  test("linux failure: names the AppArmor profile as the remediation", () => {
+  test("a uid-map denial is classified as a userns denial and gets the AppArmor remediation", () => {
     const { spawn } = recordingSpawn({ status: 1, stderr: UID_MAP_FAILURE });
     const result = runContainmentProbe({ platform: "linux", spawn, cwd: "/tmp" });
 
+    expect(result.cause).toBe("unprivileged-userns-denied");
     expect(result.remediation).toBe(BWRAP_APPARMOR_REMEDIATION);
     expect(result.remediation).toContain("/etc/apparmor.d/bwrap");
+  });
+
+  test("a failure that is NOT a userns denial gets no remediation and no invented cause", () => {
+    // The defect this guards against: attaching the AppArmor remediation to
+    // every bwrap failure would send a user with a read-only-filesystem problem
+    // to author a security policy that cannot possibly help them — a diagnosis
+    // the probe never made, which is this package's own defect in miniature.
+    const { spawn } = recordingSpawn({
+      status: 1,
+      stderr: "bwrap: Can't mkdir /run/user/1000: Read-only file system",
+    });
+    const result = runContainmentProbe({ platform: "linux", spawn });
+
+    expect(result.ok).toBe(false);
+    expect(result.cause).toBe("unknown");
+    expect(result.remediation).toBeUndefined();
+    // The launcher's words still come through — that is the whole finding.
+    expect(result.detail).toContain("Read-only file system");
+  });
+
+  test("other phrasings of the same withdrawal are still recognised", () => {
+    for (const stderr of [
+      "bwrap: No permissions to creating new namespace, likely because the kernel does not allow non-privileged user namespaces",
+      "bwrap: setting up uid map: Permission denied",
+      "unshare: Operation not permitted",
+    ]) {
+      const { spawn } = recordingSpawn({ status: 1, stderr });
+      expect(runContainmentProbe({ platform: "linux", spawn }).cause).toBe("unprivileged-userns-denied");
+    }
   });
 
   test("R8 / AC13: the remediation never names the machine-wide sysctl", () => {
@@ -76,13 +116,11 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     expect(emitted).not.toContain("sysctl");
   });
 
-  test("linux success: ok, and NO detail — there is no evidence to quote", () => {
+  test("linux success: ok, and NO detail, cause or remediation — there is no evidence to quote", () => {
     const { spawn } = recordingSpawn({ status: 0, stderr: "" });
     const result = runContainmentProbe({ platform: "linux", spawn });
 
     expect(result).toEqual({ layer: "bwrap", ok: true });
-    expect(result.detail).toBeUndefined();
-    expect(result.remediation).toBeUndefined();
   });
 
   test("a launcher that cannot be executed at all reports the spawn error as the detail", () => {
@@ -91,6 +129,8 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
 
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("ENOENT");
+    // ENOENT is not a user-namespace denial, so no AppArmor advice.
+    expect(result.remediation).toBeUndefined();
   });
 
   test("a nonzero exit with silent stderr still fails, and says so rather than inventing a cause", () => {
@@ -99,11 +139,32 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
 
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("exited 3");
+    expect(result.cause).toBe("unknown");
   });
 
-  test("the trial runs through the REAL bwrap wrapper, not a hand-written argv", () => {
+  test("control characters are stripped from the quoted output, and long output is capped", () => {
+    // "Verbatim" is a promise about the launcher's WORDS, not about its ability
+    // to write ANSI escapes into an operator's terminal or to flood a CI log.
+    const noisy = `\u001B[31mbwrap: boom\u001B[0m\u0000${"x".repeat(9000)}`;
+    const { spawn } = recordingSpawn({ status: 1, stderr: noisy });
+    const detail = runContainmentProbe({ platform: "linux", spawn }).detail ?? "";
+
+    expect(detail).toContain("bwrap: boom");
+    expect(detail).not.toContain("\u001B");
+    expect(detail).not.toContain("\u0000");
+    expect(detail).toContain("(truncated)");
+    expect(detail.length).toBeLessThan(4_200);
+  });
+
+  test("newlines survive, so a multi-line launcher error is not flattened", () => {
+    const { spawn } = recordingSpawn({ status: 1, stderr: "bwrap: line one\nbwrap: line two\n" });
+    expect(runContainmentProbe({ platform: "linux", spawn }).detail).toBe("bwrap: line one\nbwrap: line two");
+  });
+
+  test("the trial runs through the REAL platform dispatcher, not a hand-written argv", () => {
     // A probe that tests a different boundary from the one being reported on is
-    // the original defect in a new place. These flags come from `wrapBwrap`.
+    // the original defect in a new place. These flags come from `wrapBwrap` via
+    // `wrapWithSandbox` — the same dispatcher `SandboxedProcessAdapter` uses.
     const { spawn, calls } = recordingSpawn({ status: 0, stderr: "" });
     runContainmentProbe({ platform: "linux", launcherPath: "/usr/bin/bwrap", spawn, cwd: "/tmp" });
 
@@ -115,6 +176,20 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     // …and it ends by exec'ing the trivial trial command (spec §6).
     expect(calls[0]!.argv.at(-1)).toBe("/bin/true");
     expect(calls[0]!.argv.at(-2)).toBe("--");
+  });
+
+  test("the spawn is bounded and runs where it was told to, under the profile's empty environment", () => {
+    // The timeout is what stops a hung launcher hanging `sandbox status` and,
+    // through it, `scripts/install.sh`. Without this assertion a regression that
+    // dropped it would be invisible to the whole suite.
+    const { spawn, calls } = recordingSpawn({ status: 0, stderr: "" });
+    runContainmentProbe({ platform: "linux", spawn, cwd: "/tmp/somewhere" });
+
+    expect(calls[0]!.options.timeoutMs).toBe(PROBE_TIMEOUT_MS);
+    expect(calls[0]!.options.cwd).toBe("/tmp/somewhere");
+    // The trial profile describes an empty environment; running it under the
+    // parent's would make the probe less faithful than the thing it reports on.
+    expect(calls[0]!.options.env).toEqual({});
   });
 
   test("darwin: probes through sandbox-exec and reports the seatbelt layer", () => {
@@ -143,6 +218,9 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     expect(result.layer).toBe("none");
     expect(result.ok).toBe(false);
     expect(calls.length).toBe(0);
+    // The dispatcher's own fail-closed reason is carried through rather than
+    // replaced with a sentence of the probe's own.
+    expect(result.detail).toContain("win32");
   });
 
   test("falsifiable: a spawn that succeeds and one that fails do not produce the same result", () => {

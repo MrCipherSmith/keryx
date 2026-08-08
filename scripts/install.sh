@@ -72,9 +72,17 @@ report_sandbox_status() {
   echo "OS sandbox containment:"
 
   # Captured rather than piped so a half-written report is never printed, and
-  # so the exit status observed is keryx's own.
+  # so the exit status observed is keryx's own. stderr is captured too: on the
+  # one path where the installer admits it does not know, the reason why is the
+  # only useful thing it has to say.
+  #
+  # `local` is declared on its own line deliberately — `local x="$(cmd)"` makes
+  # the exit status `local`'s, not the command's, which would make the failure
+  # branch below unreachable.
   local status_output
-  if ! status_output="$("$@" sandbox status 2>/dev/null)"; then
+  local status_error
+  status_error="$(mktemp)"
+  if ! status_output="$("$@" sandbox status 2>"$status_error")"; then
     # A report, never a gate: if the probe cannot be run at all, say exactly
     # that and carry on. The one thing this must never do is guess
     # optimistically — an unknown result reported as "available" is the defect
@@ -82,10 +90,29 @@ report_sandbox_status() {
     echo "  Could not determine containment status — 'keryx sandbox status' did not run here."
     echo "  Nothing is claimed either way. Run it yourself once keryx is on PATH:"
     echo "    keryx sandbox status"
+    if [ -s "$status_error" ]; then
+      echo "  It said:"
+      while IFS= read -r line; do
+        echo "    $line"
+      done < "$status_error"
+    fi
+    rm -f "$status_error"
     return 0
   fi
+  rm -f "$status_error"
 
-  printf '%s\n' "$status_output" | sed 's/^/  /'
+  # Indented in-shell rather than through `sed`: this script runs under
+  # `set -o pipefail`, so a missing or failing `sed` would abort the installer
+  # after it had already reported success.
+  while IFS= read -r line; do
+    if [ -n "$line" ]; then
+      echo "  $line"
+    else
+      echo
+    fi
+  done <<EOF
+$status_output
+EOF
   echo "  Check anytime: keryx sandbox status"
 }
 

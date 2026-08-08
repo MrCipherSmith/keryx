@@ -13,3 +13,13 @@
 - 2026-08-08T12:12:39.512Z - frozen: 8 criteria; checksum recorded
 - 2026-08-08T12:12:41.641Z - started
 - 2026-08-08T12:12:43.623Z - task-done: T1: Collect remaining context
+- 2026-08-08T12:27:39.582Z - task-done: T5: probe.ts: injectable cached trial containment (AC4, AC5)
+- 2026-08-08T12:27:44.070Z - task-done: T6: capability-matrix.ts: third state + Linux kernel-facility axis
+- 2026-08-08T12:27:44.162Z - task-done: T7: src/commands/sandbox.ts: compose the probe into the report (AC6)
+- 2026-08-08T12:27:44.256Z - task-done: T8: scripts/install.sh: report from the probe, not command -v bwrap
+- 2026-08-08T12:27:44.345Z - task-done: T9: Extend the doc-sync test to the third state and update the runbook (AC7)
+- 2026-08-08T12:27:44.438Z - task-done: T10: Assert no output path names the machine-wide sysctl (AC13)
+- 2026-08-08T12:27:44.531Z - task-done: T11: Verify AC8/AC14 by diff: launchers, profile and adapter unchanged
+- 2026-08-08T12:27:44.628Z - task-done: T12: Quality gate: health run, bun test on affected paths, doc-link check
+- 2026-08-08T12:27:44.726Z - task-done: T2: Implement per plan
+- 2026-08-08T12:27:44.824Z - task-done: T3: Add/adjust tests and make them pass

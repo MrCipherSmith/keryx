@@ -13,57 +13,67 @@
 // stop keryx claiming untested capability was making exactly that claim.
 //
 // So availability is now a MEASUREMENT. `probe.ts` runs one trivial contained
-// command through the real launcher wrapper and this command reports its
+// command through the real platform dispatcher and this command reports its
 // outcome. No row reads `available` unless a probe confirmed it here, now.
 //
 // AC2 — a REPORT, not a gate: this command never sets `process.exitCode`.
-// AC3 — the subtle part: "launcher not installed" (installing it would help)
-// and "not implemented on this platform" (installing it would NOT help) are
-// different findings and must read as different sentences. The probe adds a
-// third: "installed, and it does not work here" — which is neither of the
-// above, and which conflating with either would put the original defect back.
+// AC3 — the subtle part: four findings that must never be worded the same way,
+// because installing something helps in exactly one of them:
+//   available          a probe confirmed it here
+//   unprobed           implemented, launcher works, this trial did not cover it
+//   unavailable        implemented, launcher installed, and it did not contain
+//   launcher-missing   implemented, nothing installed to run it
+//   not-implemented    no code path on this platform, ever
+// Conflating any two of these puts the original defect back in a new place.
 
+import { release as realKernelRelease } from "node:os";
 import {
   detectSandboxLauncher,
-  type SandboxLauncherInfo,
-} from "../harness/process/sandbox/detect";
-import {
+  probeContainment,
   SANDBOX_CAPABILITY_MATRIX,
   capabilityStatusFor,
   isKnownSandboxPlatform,
-  linuxKernelUnavailableReason,
-  type SandboxPlatform,
-} from "../harness/process/sandbox/capability-matrix";
-import {
-  probeContainment,
-  runContainmentProbe,
+  linuxKernelFacilityClause,
+  type ProbeOptions,
   type ProbeResult,
-  type ProbeSpawn,
-} from "../harness/process/sandbox/probe";
-import { release as realKernelRelease } from "node:os";
+  type SandboxCapabilityRow,
+  type SandboxLauncherInfo,
+  type SandboxPlatform,
+} from "../harness/process/sandbox";
+
+/** Runs the trial containment. Injected so tests never spawn a launcher. */
+export type ProbeRunner = (opts: ProbeOptions) => ProbeResult;
+
+/**
+ * The runner production uses: the cached, once-per-process probe (N4).
+ *
+ * Exported so a test can pin the production wiring by identity. AC5 itself is
+ * proven against `probeContainment` in `probe.test.ts`; what this constant lets
+ * a test assert is that `sandbox status` is wired to the CACHED entry point and
+ * not the uncached one — the composition step that a `cacheProbe: boolean` flag
+ * previously hid, and that no test could reach.
+ */
+export const DEFAULT_PROBE_RUNNER: ProbeRunner = probeContainment;
 
 export interface SandboxCommandDeps {
   env?: Record<string, string | undefined>;
   platform?: string;
   existsSync?: (p: string) => boolean;
   /**
-   * Injected trial-containment spawn. Every unit test supplies one, so the test
-   * suite never spawns a launcher — the same seam `existsSync` gives detection.
+   * Injected trial containment. Every unit test supplies one — the same seam
+   * `existsSync` gives detection, and the same shape as `kernelRelease`.
    */
-  spawn?: ProbeSpawn;
+  probe?: ProbeRunner;
   /** Injected `os.release()`; the Linux `unavailable` reason names it (R6). */
   kernelRelease?: () => string;
-  /**
-   * Use the process-global probe cache (N4: at most one probe per process).
-   * Tests pass `false` so several outcomes can be exercised in one process.
-   */
-  cacheProbe?: boolean;
 }
 
 export type SandboxCapabilityKind =
   /** A probe confirmed it, on this host, in this process. */
   | "available"
-  /** Implemented and the launcher is installed — and the trial run did not contain. */
+  /** Implemented and the launcher works — but this trial did not exercise it. */
+  | "unprobed"
+  /** Implemented and the launcher is installed — and the trial did not contain. */
   | "unavailable"
   /** Implemented, but the launcher is absent. Installing it may help. */
   | "launcher-missing"
@@ -74,25 +84,25 @@ export interface SandboxCapabilityReportRow {
   capability: string;
   flag?: string;
   kind: SandboxCapabilityKind;
-  /** Human-readable status sentence. See AC3 comment above for why this is not one string for both kinds. */
+  /** Human-readable status sentence. See AC3 comment above for why this is not one string for several kinds. */
   status: string;
   /** For `unavailable`: why, phrased with the kernel as the subject on Linux (R6). */
   reason?: string;
   /** For `unavailable`: the launcher's own stderr, verbatim. */
   detail?: string;
-  /** For `unavailable`: what the user can do about it, where anything can be. */
+  /** For `unavailable`: what the user can do about it, when the probe identified a cause. */
   remediation?: string;
 }
 
 export interface SandboxReport {
   platform: string;
   /** `os.release()`. On Linux it is the kernel, not the platform, that decides (R6). */
-  kernelRelease?: string;
+  kernelRelease: string;
   launcher: SandboxLauncherInfo;
   launcherName: string | undefined;
   /**
-   * The trial containment run, or `undefined` when there was nothing to trial —
-   * no launcher, or no launcher on this platform at all. N4: the probe is never
+   * The trial containment run, or absent when there was nothing to trial — no
+   * launcher, or no launcher on this platform at all. N4: the probe is never
    * invoked on a path that is not reporting capability.
    */
   probe?: ProbeResult;
@@ -104,23 +114,130 @@ const LAUNCHER_NAME: Record<SandboxPlatform, string> = {
   darwin: "Seatbelt (sandbox-exec)",
 };
 
-/** The literal sentence fragment AC3's test pins for "launcher absent, would help". */
+// The pinned sentence fragments. All are bare fragments without terminal
+// punctuation, so every composition site supplies its own — a constant that
+// carried its own full stop meant callers had to remember which ones did.
+
+/** AC3's fragment for "launcher absent, installing it would help". */
 export const LAUNCHER_NOT_INSTALLED = "launcher not installed";
-/** The literal sentence fragment AC3's test pins for "absent by design, installing would not help". */
+/** AC3's fragment for "absent by design, installing would not help". */
 export const NOT_IMPLEMENTED_ON_PLATFORM = "not implemented on this platform";
-/**
- * The literal sentence fragment for the third finding: installed, probed, did
- * not contain. Pinned as its own constant because the whole point is that it is
- * neither of the two above.
- */
+/** The fragment for "installed, probed, did not contain" — neither of the two above. */
 export const PROBED_AND_NOT_WORKING = "installed but NOT working on this host";
-/**
- * The sentence a capability gets only after a trial run confirmed it. The word
- * "available" appears in exactly one place in this module, and this is it.
- */
-export const PROBE_CONFIRMED = "available — confirmed by a trial contained command on this host.";
+/** The fragment a capability gets only after a trial run confirmed it. */
+export const PROBE_CONFIRMED = "available — confirmed by a trial contained command on this host";
+/** The fragment for "the launcher works, but this trial proved nothing about THIS capability". */
+export const NOT_COVERED_BY_PROBE = "implemented, and NOT covered by this probe";
 /** The installer's headline for "no containment here". `install-global.test.ts` pins it. */
 export const CONTAINMENT_UNAVAILABLE_HEADLINE = "OS containment is unavailable";
+
+/** Drop keys whose value is undefined — `exactOptionalPropertyTypes` treats those as present. */
+function definedOnly<T extends object>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T;
+}
+
+function makeRow(
+  row: SandboxCapabilityRow,
+  kind: SandboxCapabilityKind,
+  status: string,
+  extra: { reason?: string; detail?: string; remediation?: string } = {},
+): SandboxCapabilityReportRow {
+  return definedOnly({
+    capability: row.capability,
+    kind,
+    status,
+    flag: row.flag,
+    reason: extra.reason,
+    detail: extra.detail,
+    remediation: extra.remediation,
+  });
+}
+
+/** Everything the per-row decision needs, gathered once. */
+interface CapabilityContext {
+  platform: string;
+  known: boolean;
+  launcherInstalled: boolean;
+  kernelRelease: string;
+  probe: ProbeResult | undefined;
+}
+
+/**
+ * Decide one row's finding. The order is the whole contract: a question that is
+ * already settled by the platform is never re-asked of the launcher, and a
+ * question already settled by the launcher is never re-asked of the probe.
+ */
+function describeCapability(row: SandboxCapabilityRow, ctx: CapabilityContext): SandboxCapabilityReportRow {
+  if (!ctx.known) {
+    return makeRow(
+      row,
+      "not-implemented",
+      `${NOT_IMPLEMENTED_ON_PLATFORM} ("${ctx.platform}") — the OS sandbox has no support for this platform at all.`,
+    );
+  }
+
+  if (capabilityStatusFor(row, ctx.platform as SandboxPlatform) === "not-implemented") {
+    return makeRow(
+      row,
+      "not-implemented",
+      `${NOT_IMPLEMENTED_ON_PLATFORM} — installing the OS sandbox launcher would not change this.`,
+    );
+  }
+
+  if (!ctx.launcherInstalled) {
+    return makeRow(
+      row,
+      "launcher-missing",
+      `requires ${LAUNCHER_NAME[ctx.platform as SandboxPlatform]}; ${LAUNCHER_NOT_INSTALLED}.`,
+    );
+  }
+
+  // The launcher is installed. That used to end the question; it is now where
+  // the question starts. `probe` is always defined here — the caller only
+  // probes on this path — and the type says so, so an unevidenced failure claim
+  // cannot be expressed.
+  const probe = ctx.probe;
+  if (probe === undefined || !probe.ok) {
+    const reason = unavailableReason(row, ctx, probe);
+    return makeRow(row, "unavailable", `${PROBED_AND_NOT_WORKING} — ${reason}.`, {
+      reason,
+      detail: probe?.detail,
+      remediation: probe?.remediation,
+    });
+  }
+
+  // The trial contained. That is evidence about what the trial exercised, and
+  // about nothing else.
+  if (!row.coveredByProbe) {
+    return makeRow(
+      row,
+      "unprobed",
+      `${NOT_COVERED_BY_PROBE} — the trial run confirmed the launcher, not this capability.`,
+    );
+  }
+
+  return makeRow(row, "available", `${PROBE_CONFIRMED}.`);
+}
+
+/**
+ * Why an implemented capability is `unavailable` here.
+ *
+ * On Linux the kernel is the subject (R6) — but only when the probe actually
+ * identified a kernel cause. A mount error or a missing binary is not a
+ * user-namespace denial, and naming one as the reason would be a diagnosis
+ * nobody made, which is the defect this package removes.
+ */
+function unavailableReason(
+  row: SandboxCapabilityRow,
+  ctx: CapabilityContext,
+  probe: ProbeResult | undefined,
+): string {
+  const measured = "a trial contained command was run on this host and it did not contain";
+  if (ctx.platform === "linux" && probe?.cause === "unprivileged-userns-denied") {
+    return `${measured}: ${linuxKernelFacilityClause(row.linuxKernelFacility, ctx.kernelRelease)} were refused`;
+  }
+  return measured;
+}
 
 /**
  * Build the report.
@@ -138,87 +255,29 @@ export function buildSandboxReport(deps: SandboxCommandDeps = {}): SandboxReport
 
   // N4 — nothing to trial: no launcher to run, or no launcher exists for this
   // platform at all. Probing here would spawn to learn something already known.
-  const probe: ProbeResult | undefined =
-    known && info.available
-      ? runProbe(deps, platform, info.path)
-      : undefined;
+  const probe = known && info.available ? runProbe(deps, platform, info.path) : undefined;
 
-  const makeRow = (
-    row: (typeof SANDBOX_CAPABILITY_MATRIX)[number],
-    kind: SandboxCapabilityKind,
-    status: string,
-    extra: { reason?: string; detail?: string; remediation?: string } = {},
-  ): SandboxCapabilityReportRow => ({
-    capability: row.capability,
-    kind,
-    status,
-    // `exactOptionalPropertyTypes` treats `flag: undefined` as distinct from
-    // the key being absent — spread conditionally rather than always setting it.
-    ...(row.flag !== undefined ? { flag: row.flag } : {}),
-    ...(extra.reason !== undefined ? { reason: extra.reason } : {}),
-    ...(extra.detail !== undefined ? { detail: extra.detail } : {}),
-    ...(extra.remediation !== undefined ? { remediation: extra.remediation } : {}),
-  });
+  const ctx: CapabilityContext = {
+    platform,
+    known,
+    launcherInstalled: info.available,
+    kernelRelease,
+    probe,
+  };
 
-  const capabilities: SandboxCapabilityReportRow[] = SANDBOX_CAPABILITY_MATRIX.map((row) => {
-    if (!known) {
-      return makeRow(
-        row,
-        "not-implemented",
-        `${NOT_IMPLEMENTED_ON_PLATFORM} ("${platform}") — the OS sandbox has no support for this platform at all.`,
-      );
-    }
-
-    const status = capabilityStatusFor(row, platform);
-    if (status === "not-implemented") {
-      return makeRow(
-        row,
-        "not-implemented",
-        `${NOT_IMPLEMENTED_ON_PLATFORM} — installing the OS sandbox launcher would not change this.`,
-      );
-    }
-
-    if (!info.available) {
-      return makeRow(row, "launcher-missing", `requires ${LAUNCHER_NAME[platform]}; ${LAUNCHER_NOT_INSTALLED}.`);
-    }
-
-    // The launcher is installed. That used to end the question; it is now where
-    // the question starts.
-    if (probe === undefined || !probe.ok) {
-      const reason =
-        platform === "linux"
-          ? linuxKernelUnavailableReason(row.linuxKernelFacility, kernelRelease)
-          : "a trial contained command was run on this host and it did not contain";
-      return makeRow(row, "unavailable", `${PROBED_AND_NOT_WORKING} — ${reason}.`, {
-        reason,
-        ...(probe?.detail !== undefined ? { detail: probe.detail } : {}),
-        ...(probe?.remediation !== undefined ? { remediation: probe.remediation } : {}),
-      });
-    }
-
-    return makeRow(row, "available", PROBE_CONFIRMED);
-  });
-
-  return {
+  return definedOnly({
     platform,
     kernelRelease,
     launcher: info,
     launcherName: known ? LAUNCHER_NAME[platform] : undefined,
-    ...(probe !== undefined ? { probe } : {}),
-    capabilities,
-  };
+    probe,
+    capabilities: SANDBOX_CAPABILITY_MATRIX.map((row) => describeCapability(row, ctx)),
+  });
 }
 
 function runProbe(deps: SandboxCommandDeps, platform: string, launcherPath: string | undefined): ProbeResult {
-  const opts = {
-    platform,
-    ...(launcherPath !== undefined ? { launcherPath } : {}),
-    ...(deps.spawn !== undefined ? { spawn: deps.spawn } : {}),
-  };
-  // Default: the cached, once-per-process probe (N4). Only tests opt out, so
-  // that one process can exercise several outcomes; no production caller sets
-  // `cacheProbe`.
-  return deps.cacheProbe === false ? runContainmentProbe(opts) : probeContainment(opts);
+  const run = deps.probe ?? DEFAULT_PROBE_RUNNER;
+  return run(definedOnly({ platform, launcherPath }));
 }
 
 /** Human-readable rendering for `keryx sandbox status` (no `--json`). */
@@ -235,9 +294,13 @@ export function renderSandboxReport(report: SandboxReport): string {
   );
 
   if (report.launcher.available) {
-    lines.push(`Launcher: installed (${report.launcherName ?? "unknown"}${report.launcher.path ? ` at ${report.launcher.path}` : ""})`);
+    lines.push(
+      `Launcher: installed (${report.launcherName ?? "unknown"}${report.launcher.path ? ` at ${report.launcher.path}` : ""})`,
+    );
   } else {
-    lines.push(`Launcher: not found${report.launcherName ? ` (${report.launcherName})` : ""} — ${report.launcher.reason ?? "unavailable"}`);
+    lines.push(
+      `Launcher: not found${report.launcherName ? ` (${report.launcherName})` : ""} — ${report.launcher.reason ?? "unavailable"}`,
+    );
   }
 
   lines.push(...renderProbe(report));
@@ -260,14 +323,11 @@ function renderProbe(report: SandboxReport): string[] {
   const lines: string[] = [];
 
   if (report.probe === undefined) {
-    // No launcher to trial. Say what is missing and how to get it — and say
-    // that containment is unavailable, because it is.
+    // No launcher to trial. Say that containment is unavailable, because it is.
+    // How to install the launcher is already on the `Launcher:` line above —
+    // `detectSandboxLauncher`'s reason carries BWRAP_INSTALL_HINT, and printing
+    // it twice was how the two wordings drifted apart in the first place.
     lines.push(`Containment probe: not run — ${CONTAINMENT_UNAVAILABLE_HEADLINE} on this host.`);
-    if (report.platform === "linux") {
-      lines.push(
-        "  Install it: apt install bubblewrap (Debian/Ubuntu) | dnf install bubblewrap (Fedora) | pacman -S bubblewrap (Arch)",
-      );
-    }
     return lines;
   }
 
@@ -278,7 +338,7 @@ function renderProbe(report: SandboxReport): string[] {
 
   lines.push(
     `Containment probe: FAILED — ${CONTAINMENT_UNAVAILABLE_HEADLINE} on this host. ` +
-      `The launcher is installed and a trial contained command did not contain.`,
+      "The launcher is installed and a trial contained command did not contain.",
   );
   if (report.probe.detail) {
     // Verbatim, and labelled as the launcher's words rather than keryx's. This
@@ -292,6 +352,11 @@ function renderProbe(report: SandboxReport): string[] {
   }
   if (report.probe.remediation) {
     lines.push(`  Remediation: ${report.probe.remediation}`);
+  } else {
+    // No remediation means the probe did not identify a cause it knows a fix
+    // for. Saying nothing here is deliberate: a generic suggestion would be a
+    // guess wearing the clothes of a diagnosis.
+    lines.push("  keryx has no remediation keyed to that error — the launcher's own message above is the finding.");
   }
   return lines;
 }
@@ -309,10 +374,12 @@ existing on PATH — on Ubuntu 23.10+ bubblewrap installs cleanly and contains
 nothing, which is the defect this command was corrected for.
 
 Each capability reads as exactly one of: available (a probe confirmed it here),
-installed but not working on this host (with the launcher's own error and the
-remediation), launcher not installed (installing it may help), or not
-implemented on this platform (installing anything would not help). Those are
-different findings and are never worded the same way.
+not covered by this probe (the launcher works, the trial did not exercise this
+capability), installed but not working on this host (with the launcher's own
+error and, where the cause is known, the remediation), launcher not installed
+(installing it may help), or not implemented on this platform (installing
+anything would not help). Those are different findings and are never worded the
+same way.
 
 This command always exits 0: it is a report, not a gate. Installation prints
 the same report once, up front, from this same source.

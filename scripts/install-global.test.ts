@@ -377,14 +377,35 @@ guardedTest(
 // running the suite — it is the installer's message under a controlled PATH
 // being tested, not a fact about this host.
 
-/** Write an executable `bwrap` shim into a fresh directory and return that directory. */
-async function bwrapShim(name: string, script: string): Promise<string> {
-  const shimDir = join(workspace, name);
-  await mkdir(shimDir, { recursive: true });
-  const shim = join(shimDir, "bwrap");
+/** Write an executable shim into a fresh directory and return that directory. */
+async function shimDirWith(name: string, program: string, script: string): Promise<string> {
+  const dir = join(workspace, name);
+  await mkdir(dir, { recursive: true });
+  const shim = join(dir, program);
   await Bun.write(shim, script);
   await chmod(shim, 0o755);
-  return shimDir;
+  return dir;
+}
+
+/** A `bwrap` shim directory. */
+function bwrapShim(name: string, script: string): Promise<string> {
+  return shimDirWith(name, "bwrap", script);
+}
+
+/**
+ * Surface WHY install.sh failed in the CI log before asserting on the exit
+ * code. A bare `Expected 0` hides the installer's own stderr, which is exactly
+ * what made the original CI-only failure (git exit 128) undiagnosable from the
+ * run log — see the AC4 test above. Every installer assertion goes through this.
+ */
+function expectInstallSucceeded(label: string, install: Ran): void {
+  if (install.exitCode !== 0) {
+    console.error(
+      `[install-global.test] ${label} install exited ${install.exitCode}\n` +
+        `----- stderr -----\n${install.stderr}\n----- stdout -----\n${install.stdout}`,
+    );
+  }
+  expect(install.exitCode).toBe(0);
 }
 
 linuxGuardedTest(
@@ -394,15 +415,9 @@ linuxGuardedTest(
     const install = await run(["bash", INSTALL_SH, "--global"], {
       env: installEnv({ PATH: filteredPath, KERYX_BIN_DIR: join(workspace, "bin-ac1") }),
     });
-    if (install.exitCode !== 0) {
-      console.error(
-        `[install-global.test] AC1 install exited ${install.exitCode}\n` +
-          `----- stderr -----\n${install.stderr}\n----- stdout -----\n${install.stdout}`,
-      );
-    }
     // Never a gate: install.sh must still succeed even though containment is
     // unavailable — this is a report, not a blocker (P4's "expected outcome").
-    expect(install.exitCode).toBe(0);
+    expectInstallSucceeded("AC1", install);
 
     expect(install.stdout).toMatch(/OS containment is unavailable/i);
     expect(install.stdout).toMatch(/bubblewrap/i);
@@ -432,7 +447,7 @@ linuxGuardedTest(
         KERYX_BIN_DIR: join(workspace, "bin-ac12-broken"),
       }),
     });
-    expect(install.exitCode).toBe(0);
+    expectInstallSucceeded("AC12 broken-shim", install);
 
     // The launcher IS found — and that is explicitly not the same as working.
     expect(install.stdout).toMatch(/containment probe: FAILED/i);
@@ -469,10 +484,91 @@ linuxGuardedTest(
         KERYX_BIN_DIR: join(workspace, "bin-ac12-working"),
       }),
     });
-    expect(install.exitCode).toBe(0);
+    expectInstallSucceeded("AC12 working-shim", install);
     expect(install.stdout).toMatch(/containment probe: OK/i);
     expect(install.stdout).not.toMatch(/OS containment is unavailable/i);
     expect(install.stdout).toMatch(/confirmed by a trial contained command/i);
+    // The trial exercised filesystem containment and network-off. It exercised
+    // nothing about the allowlist or masking, and those rows are unimplemented
+    // on Linux anyway — so no row may read as confirmed except the two.
+    expect(install.stdout.match(/confirmed by a trial contained command/gi)?.length).toBe(2);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: when `keryx sandbox status` cannot run at all, the installer claims NOTHING and still exits 0",
+  async () => {
+    // The one branch left where the installer could regress into an optimistic
+    // guess. A keryx that cannot start must produce "nothing is claimed either
+    // way" — never a containment claim, and never a failed install, because
+    // this is a report and not a gate.
+    //
+    // The failure is injected by pre-seeding KERYX_BIN_DIR with a `keryx`
+    // wrapper that exits non-zero; install.sh overwrites it with the real
+    // wrapper, so instead the wrapper's TARGET is broken: KERYX_HOME points at
+    // a directory whose src/cli.ts will not exist because the clone is sent
+    // somewhere else. Simpler and more direct: shadow `bun` with a shim that
+    // fails only for `sandbox status`.
+    const binDirForRun = join(workspace, "bin-ac12-unknown");
+    const shimDir = await shimDirWith(
+      "keryx-status-broken",
+      "bun",
+      [
+        "#!/bin/sh",
+        "# Fail only the containment report; every other bun invocation (install,",
+        "# --version, the CLI itself) passes through to the real bun.",
+        'for arg in "$@"; do',
+        '  if [ "$arg" = "sandbox" ]; then',
+        '    echo "keryx: exploded while reporting containment" >&2',
+        "    exit 3",
+        "  fi",
+        "done",
+        `exec ${JSON.stringify(Bun.which("bun") ?? "bun")} "$@"`,
+      ].join("\n"),
+    );
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: binDirForRun,
+      }),
+    });
+    expectInstallSucceeded("AC12 unknown-status", install);
+
+    expect(install.stdout).toMatch(/could not determine containment status/i);
+    expect(install.stdout).toMatch(/nothing is claimed either way/i);
+    // The reason is surfaced rather than swallowed — this is the one path where
+    // the installer admits it does not know, so the why is all it has to offer.
+    expect(install.stdout).toContain("keryx: exploded while reporting containment");
+    // And above all: no claim, in either direction.
+    expect(install.stdout).not.toMatch(/containment probe: (OK|FAILED)/i);
+    expect(install.stdout).not.toMatch(/are available/i);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: the PROJECT install reports the probe too — the two-argument delegation form works",
+  async () => {
+    // `report_sandbox_status` is invoked in two shapes: `"$BIN_DIR/keryx"` for
+    // --global and `"$BUN_BIN" "$RUNTIME_DIR/src/cli.ts"` for --project. Only
+    // the first was covered, so a quoting or argument-order regression in the
+    // second would ship silently.
+    const projectDir = join(workspace, "project-install");
+    await mkdir(projectDir, { recursive: true });
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--project", "--yes", "--no-gdgraph", "--no-gdctx"], {
+      env: installEnv({ PATH: filteredPath }),
+      cwd: projectDir,
+    });
+    expectInstallSucceeded("AC12 project-install", install);
+
+    expect(install.stdout).toMatch(/OS sandbox containment:/i);
+    expect(install.stdout).toMatch(/containment probe: not run/i);
+    expect(install.stdout).toMatch(/OS containment is unavailable/i);
   },
   INSTALL_TIMEOUT_MS,
 );

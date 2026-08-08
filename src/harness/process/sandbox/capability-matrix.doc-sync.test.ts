@@ -174,17 +174,39 @@ describe("sandbox capability matrix — the third state is documented (AC7)", ()
     expect(states).not.toContain("apparmor_restrict_unprivileged_userns");
   });
 
-  test("falsifiable: cell text that the module does not produce is NOT found in the runbook", () => {
-    // Proves the assertions above read the document rather than passing
-    // vacuously: a plausible-but-wrong wording must be absent.
-    const notProduced = "implemented, but broken on this machine";
-    expect(CAPABILITY_STATUSES.map(statusCellText)).not.toContain(notProduced);
-    expect(states).not.toContain(notProduced);
+  test("falsifiable: the same check run against a runbook missing the third state REPORTS it missing", () => {
+    // The previous two tests here asserted that a string nobody produces is
+    // absent from the runbook — true under every implementation, including a
+    // totally broken one. A mutation run proved it: changing
+    // `statusCellText("unavailable")` to a wrong string failed only the
+    // positive test above, while both tests *named* "falsifiable" stayed green.
+    //
+    // So falsify the real thing instead: remove the third state's cell text
+    // from the parsed section and assert the identical filter that returns `[]`
+    // above now returns `["unavailable"]`.
+    //
+    // The doctoring is applied to the PARSED section rather than to the raw
+    // markdown deliberately — the runbook wraps that phrase across two lines,
+    // so the exact string exists only after whitespace collapsing, and a
+    // `markdown.split(...)` here would silently remove nothing and pass for the
+    // wrong reason. (It did, on the first attempt.)
+    const doctored = states.split(statusCellText("unavailable")).join("REMOVED");
+    const undocumented = CAPABILITY_STATUSES.filter((status) => !doctored.includes(statusCellText(status)));
+    expect(undocumented).toEqual(["unavailable"]);
   });
 
-  test("falsifiable: a status whose cell text is mutated no longer matches the runbook", () => {
-    const mutated = `${statusCellText("unavailable")} (mutated)`;
-    expect(states).not.toContain(mutated);
+  test("falsifiable: the parse produces real content, so `includes` is not passing on an empty haystack", () => {
+    // Every assertion in this block is a substring test against `states`. A
+    // parse that silently returned "" would make the negative ones vacuous and
+    // the positive ones fail loudly — this pins the half that would go quiet.
+    expect(states.length).toBeGreaterThan(200);
+    expect(states).toContain("The three capability states");
+  });
+
+  test("falsifiable: a heading rename is caught rather than silently skipping the section", () => {
+    expect(() => parseStatesSection(markdown.replace("## The three capability states", "## Renamed"))).toThrow(
+      /three capability states/,
+    );
   });
 });
 

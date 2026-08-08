@@ -79,6 +79,22 @@ export interface SandboxCapabilityRow {
    * because there is no code path to run.
    */
   linuxKernelFacility: LinuxKernelFacility;
+  /**
+   * Does the probe's trial run actually exercise this capability?
+   *
+   * The trial (`probe.ts`, `trialProfile`) is a read-only, network-off run with
+   * no deny-list and no allowlist. It therefore demonstrates filesystem
+   * containment and network-off, and demonstrates NOTHING about the domain
+   * allowlist (which needs `network: "restricted"` plus a live loopback proxy)
+   * or credential masking (which needs a populated read-deny list).
+   *
+   * Without this flag `sandbox status` reported all four macOS rows as
+   * "confirmed by a trial contained command" off one seatbelt trial — an
+   * over-claim of exactly the kind this package exists to remove, relocated to
+   * macOS. A capability the probe did not exercise must not be described as
+   * confirmed by it.
+   */
+  coveredByProbe: boolean;
 }
 
 /**
@@ -95,12 +111,16 @@ export const SANDBOX_CAPABILITY_MATRIX: readonly SandboxCapabilityRow[] = [
     linux: "supported",
     darwin: "supported",
     linuxKernelFacility: "unprivileged-user-namespaces",
+    coveredByProbe: true,
   },
   {
     capability: "Network OFF",
     linux: "supported",
     darwin: "supported",
     linuxKernelFacility: "unprivileged-user-namespaces",
+    // The trial profile sets `network: "off"`, so on Linux this exercises
+    // `--unshare-net` and on macOS the seatbelt `(deny network*)` rule.
+    coveredByProbe: true,
   },
   {
     capability: "Domain allowlist",
@@ -108,6 +128,9 @@ export const SANDBOX_CAPABILITY_MATRIX: readonly SandboxCapabilityRow[] = [
     linux: "not-implemented",
     darwin: "supported",
     linuxKernelFacility: "none",
+    // Needs `network: "restricted"` and a live loopback proxy; the trial has
+    // neither, so no trial outcome is evidence about this row.
+    coveredByProbe: false,
   },
   {
     capability: "Credential masking",
@@ -115,6 +138,8 @@ export const SANDBOX_CAPABILITY_MATRIX: readonly SandboxCapabilityRow[] = [
     linux: "not-implemented",
     darwin: "supported",
     linuxKernelFacility: "none",
+    // Needs a populated read-deny list; the trial's is empty.
+    coveredByProbe: false,
   },
 ];
 
@@ -151,8 +176,7 @@ export function isKnownSandboxPlatform(platform: string): platform is SandboxPla
 }
 
 /**
- * Why an implemented Linux capability is `unavailable` on this host, phrased so
- * the KERNEL is the subject (R6, AC6).
+ * Name the kernel and the facility a Linux row's containment rests on (R6).
  *
  * "Filesystem containment is unavailable on linux" is both wrong and useless:
  * it is not unavailable on Linux — it is unavailable on kernels configured to
@@ -160,16 +184,16 @@ export function isKnownSandboxPlatform(platform: string): platform is SandboxPla
  * release is included because it is the thing that differs between the host
  * where this works and the host where it does not.
  *
- * Pure: the release string is supplied by the caller (`os.release()`, injected),
- * never read here.
+ * Deliberately a NOUN PHRASE and not a claim. This module records what is
+ * implemented; it must not assert that a probe ran or what a probe found. The
+ * caller (`src/commands/sandbox.ts`) owns the verb, because the caller is the
+ * one holding the measurement. Pure: the release string is supplied by the
+ * caller (`os.release()`, injected), never read here.
  */
-export function linuxKernelUnavailableReason(
+export function linuxKernelFacilityClause(
   facility: LinuxKernelFacility,
   kernelRelease: string | undefined,
 ): string {
   const release = kernelRelease !== undefined && kernelRelease.length > 0 ? kernelRelease : "unknown release";
-  return (
-    `this kernel (${release}) did not permit ${LINUX_KERNEL_FACILITY_LABEL[facility]}, ` +
-    "which is what the launcher builds its boundary from — a trial contained command was run on this host and it did not contain"
-  );
+  return `this kernel (${release}) and the ${LINUX_KERNEL_FACILITY_LABEL[facility]} the launcher builds its boundary from`;
 }
