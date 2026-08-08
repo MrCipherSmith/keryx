@@ -348,7 +348,56 @@ and took the shell with it — `Executable not found in $PATH: "bash"`. The
 shipped helper mirrors such a directory as symlinks minus `bwrap` instead of
 subtracting it, which is the shadow-rather-than-subtract approach. On this
 branch the suite is **12 pass / 0 fail**.
-## Final gate (after round 5)
+## AC13 was amended, and every criterion re-confirmed
+
+AC13 was confirmed PARTIAL rather than green, because its frozen wording
+forbade any *comment or test fixture* from naming
+`kernel.apparmor_restrict_unprivileged_userns` while also requiring
+enforcement "by a test, not by inspection". Those two clauses cannot both
+hold: a test that asserts a string never reaches output must contain that
+string in order to look for it, so the four `not.toContain` assertions that
+*enforce* the ban were themselves breaches of it. The criterion also
+over-reached the requirement it implements — specification R8 constrains what
+a **user is shown**, not source comments — and the practical effect of
+obeying it would have been to strip the name from the comments beside those
+assertions, leaving the ban unexplained and inviting its reintroduction.
+
+The owner authorised an amendment (`e676f4e0`). AC13 now covers rendering
+paths and output strings, requires the AppArmor remediation, requires test
+enforcement, and explicitly permits the name in tests asserting its absence
+and in comments explaining why ADR-0010 rejected it. Intent unchanged: the
+sysctl is never offered to a user as a remedy.
+
+**The amendment cleared all eight confirmations**, which is the right
+behaviour — the contract changed, so the evidence had to be re-taken against
+the new one. Every criterion was re-verified by running the thing, not by
+re-reading the previous note:
+
+| AC | Re-verified by | Result |
+|---|---|---|
+| AC4 | `probe.test.ts` run fresh | 29 pass / 0 fail |
+| AC5 | same run — 3 calls, 1 spawn; falsifiable counterpart spawns twice | green |
+| AC6 | `sandbox.test.ts` + both live states on this host | green |
+| AC7 | `capability-matrix.doc-sync.test.ts` | green |
+| AC8 | fail-closed tests **run**, not just diffed | 26 pass / 0 fail, files unmodified |
+| AC12 | `install-global.test.ts` | 12 pass / 0 fail |
+| AC13 | 136 lines of real rendered output, 5 invocations | **full**, no longer partial |
+| AC14 | `purity.test.ts` + diff of `package.json`/`bun.lock` | green |
+
+AC13's re-verification was deliberately empirical rather than a re-reading of
+the amendment: the narrowed wording still forbids any rendering path or output
+string from naming the sysctl, so the check captured five live invocations
+(containment working and containment broken through the probe's seam, each
+plain and `--json`, plus `--help`) and grepped the result. Neither the sysctl
+name nor the word `sysctl` appears anywhere in it, and the failing state names
+`/etc/apparmor.d/bwrap` as the remediation. A source audit found exactly seven
+occurrences under `src/` and `scripts/`: four are the enforcing assertions,
+three are comments explaining ADR-0010's rejection. None is a rendering path.
+
+One thing worth recording about the shape of this: the criterion was wrong and
+the code was right. Confirming it silently would have hidden that, and
+confirming it as PARTIAL is what surfaced it.
+## Final gate (after re-confirmation)
 
 | Gate | Result |
 |---|---|
@@ -432,3 +481,11 @@ regression.
 - 2026-08-08T18:41:03.302Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/259
 - 2026-08-08T18:55:26.009Z - ac-updated: AC13 as frozen is unsatisfiable: it forbids any comment or test fixture from naming kernel.apparmor_restrict_unprivileged_userns while also requiring enforcement 'by a test, not by inspection' -- and such a test must contain the literal string to assert its absence. It also over-reaches the requirement it implements: specification R8 constrains OUTPUT (what a user is shown), not source comments. The three comments that name the sysctl sit beside the assertions that ban it and state why ADR-0010 rejected it; removing the name would leave the ban unexplained and invite its reintroduction. Narrowing AC13 to rendering paths and output strings, and explicitly permitting the name in tests and comments that enforce or explain the ban. Intent is unchanged: the sysctl is never offered to a user as a remedy. Authorised by the repository owner, 2026-08-08.
 - 2026-08-08T18:55:58.015Z - ac-updated: Re-freeze after editing the AC13 text itself; the previous ac update recorded the rationale but snapshotted the pre-edit wording.
+- 2026-08-08T19:00:19.008Z - ac-confirmed: AC4: Re-verified 2026-08-08 after the AC13 amendment cleared all confirmations. Ran probe.test.ts fresh: 29 pass / 0 fail, 111 expect() calls. Failure path returns the launcher's stderr in detail with only the trailing newline trimmed (asserted with toBe against the literal 'bwrap: setting up uid map: Permission denied'); success returns exactly {layer,ok} — asserted with toEqual, so an added detail would fail. Spawn is injected in every case; the file launches no launcher.
+- 2026-08-08T19:00:25.492Z - ac-confirmed: AC5: Re-verified 2026-08-08 in the same probe.test.ts run (29 pass). Three probeContainment calls produce one fake-spawn invocation and return the identical object; the cache holds even when a later caller passes different platform/spawn options, so it is a bound on spawns rather than a per-argument memo. Falsifiable counterpart asserts runContainmentProbe spawns on every call (2 calls, 2 spawns), so the count above cannot be one because the fake is unreachable.
+- 2026-08-08T19:00:35.340Z - ac-confirmed: AC6: Re-verified 2026-08-08. sandbox.test.ts ran clean within a 60 pass / 0 fail batch. Nothing reads available unless a probe confirmed it AND the trial exercised it; a clean darwin trial leaves allowlist/masking as 'unprobed' rather than confirmed. The Linux unavailable reason names the kernel release and the withheld facility and asserts not.toContain('linux'); a different injected release changes the sentence, so it is a fact about the host and not a constant. Also re-checked live on this host in both states via the probe's seam: working prints 'Containment probe: OK', shimmed prints FAILED with the kernel-named reason.
+- 2026-08-08T19:00:41.491Z - ac-confirmed: AC7: Re-verified 2026-08-08. capability-matrix.doc-sync.test.ts ran clean in the 60 pass batch. It iterates the exported CAPABILITY_STATUSES rather than a hand-written list, so all three values are covered and a fourth added to the type fails rather than being skipped. Falsifiability was itself repaired earlier in this flow after a reviewer's mutation showed the original 'falsifiable' cases were tautologies: the current one doctors the parsed section and asserts the same filter now reports 'unavailable' missing, plus checks the parse is non-empty and that a heading rename throws.
+- 2026-08-08T19:00:53.628Z - ac-confirmed: AC8: Re-verified 2026-08-08 by running the fail-closed tests rather than only diffing: adapter.restricted-fail-closed.test.ts, wrap.test.ts and detect.test.ts together are 26 pass / 0 fail, and all three files are absent from the branch diff — unmodified, as the criterion requires. adapter.ts, wrap.ts, bwrap.ts, seatbelt.ts and profile.ts are also absent from the diff. detect.ts IS modified (+20/-5: a corrected header comment, an exported BWRAP_INSTALL_HINT, and its reason string using it) but its own test passes unmodified, so behaviour is unchanged. Escape hatches live in harness.ts and shell-exec-tool.ts, neither touched.
+- 2026-08-08T19:01:02.749Z - ac-confirmed: AC12: Re-verified 2026-08-08: install-global.test.ts 12 pass / 0 fail, 125 expect() calls. install.sh runs 'keryx sandbox status' from the keryx it just installed — no 'command -v bwrap' remains in the file. The broken-shim case emits the uid-map error and the installer prints 'Containment probe: FAILED', quotes the launcher verbatim, names the AppArmor profile, and never says containment is available; the working shim (which execs past the --) yields 'Containment probe: OK' and exactly two 'confirmed by a trial' rows. Also covered: absent launcher, the fail-safe branch, project-install delegation, three hostile TMPDIRs and a noisy failing keryx asserted on bytes.
+- 2026-08-08T19:01:15.666Z - ac-confirmed: AC13: Re-verified 2026-08-08 against the amended wording, and now confirmable IN FULL — checked rather than assumed. Empirical output check: 136 lines of real rendered output captured across five live invocations (containment working and containment broken via the probe's seam, each plain and --json, plus --help) contain neither 'apparmor_restrict_unprivileged_userns' nor even the word 'sysctl'. The failing state names the AppArmor profile: 'Remediation: grant the user namespace to /usr/bin/bwrap alone with an AppArmor profile at /etc/apparmor.d/bwrap...'. Enforced by test, not inspection: four not.toContain assertions in probe.test.ts, sandbox.test.ts, capability-matrix.doc-sync.test.ts and install-global.test.ts, all green. Source audit: exactly 7 occurrences under src/ and scripts/ — 4 are those assertions, 3 are comments explaining ADR-0010's rejection (probe.test.ts, sandbox.test.ts, probe.ts). Zero are rendering paths or output strings. Every occurrence falls inside the amendment's explicit allowance.
+- 2026-08-08T19:01:23.660Z - ac-confirmed: AC14: Re-verified 2026-08-08. purity.test.ts ran clean in the 60 pass batch: the pure modules cannot spawn directly (import-statement matching, not substring, so a doc comment can neither trip nor satisfy it) nor transitively (fixed-point closure over relative imports, which covers the barrel route index.ts opened). Direct-spawner set pinned to probe.ts + tls-ca.ts; probe.ts confirmed to import node:child_process and to expose 'spawn?: ProbeSpawn'. package.json and bun.lock are absent from the branch diff, so no new dependency; wrap.ts, bwrap.ts, seatbelt.ts, profile.ts and adapter.ts are absent too, as the criterion names.
