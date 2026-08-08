@@ -5,46 +5,13 @@
   "title": "Linux containment step 1: report containment from a probe, not a PATH lookup",
   "status": "implemented",
   "createdAt": "2026-08-08T12:09:38.996Z",
-  "updatedAt": "2026-08-08T18:41:03.302Z",
+  "updatedAt": "2026-08-08T18:55:58.015Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:9a7ed588275bffbae7aa63db47d33e5d2630799409785fdd782562c48a5d3abf",
-  "acConfirmed": {
-    "AC4": {
-      "at": "2026-08-08T18:40:06.046Z",
-      "note": "probe.test.ts: 29 tests over an injected spawn. Failure reports the launcher stderr verbatim (bwrap: setting up uid map: Permission denied, only the trailing newline trimmed); success returns {layer,ok} with no detail, cause or remediation. Control characters stripped and output capped, asserted on bytes."
-    },
-    "AC5": {
-      "at": "2026-08-08T18:40:11.589Z",
-      "note": "probeContainment caches process-globally: 3 calls, 1 spawn; cache holds across differing options. Falsifiable counterpart proves runContainmentProbe spawns every time. Wiring proven separately in sandbox.test.ts by priming the cache and asserting buildSandboxReport reuses it (spawns stays 1) — the composition a cacheProbe boolean had made untestable."
-    },
-    "AC6": {
-      "at": "2026-08-08T18:40:18.269Z",
-      "note": "sandbox.test.ts: 29 tests, platform/launcher/probe/kernel injected. No row reads available unless the probe confirmed it AND the trial exercised it (coveredByProbe -> the unprobed finding). Linux unavailable reason names the kernel release and the withheld facility, never the string linux, and only when the probe identified a userns cause. Live-verified both ways on Ubuntu 24.04 kernel 6.8.0-136-generic via the injectable seam."
-    },
-    "AC7": {
-      "at": "2026-08-08T18:40:24.930Z",
-      "note": "capability-matrix.doc-sync.test.ts: 13 tests iterating CAPABILITY_STATUSES, so a fourth state cannot be added and left undocumented. Falsifiability was fixed after a reviewer mutation proved the original 'falsifiable' cases were tautologies: the replacement doctors the parsed section and asserts the same filter now reports the state missing. A separate runbook-sync test in sandbox.test.ts covers the fifth user-visible finding (unprobed), which the matrix-only test could not see."
-    },
-    "AC8": {
-      "at": "2026-08-08T18:40:33.112Z",
-      "note": "adapter.ts, wrap.ts, bwrap.ts, seatbelt.ts and profile.ts are absent from the full branch diff (git diff --name-only, empty). Escape hatches untouched: KERYX_DANGEROUSLY_DISABLE_SANDBOX and KERYX_SANDBOX_ALLOW_UNSANDBOXED live in harness.ts and shell-exec-tool.ts, neither in the diff. Fail-closed tests unmodified and green. Verified independently in review rounds 2-6."
-    },
-    "AC12": {
-      "at": "2026-08-08T18:40:40.792Z",
-      "note": "install.sh delegates to the keryx it just installed. install-global.test.ts: 12 pass. Shims cover absent bwrap, a bwrap that fails with the uid-map error (verbatim quote + AppArmor remediation, no sysctl), and one that contains. Plus the fail-safe branch (a keryx that cannot start claims nothing, either way, and still exits 0), the project-install delegation shape, three hostile TMPDIRs, and a noisy failing keryx asserted on bytes. Both bash tests falsified by hand."
-    },
-    "AC13": {
-      "at": "2026-08-08T18:40:48.769Z",
-      "note": "PARTIAL, deliberately, and recorded rather than silently confirmed. R8's substance holds: no rendering path, output string or test fixture names the sysctl as a remedy, enforced by four not.toContain assertions (probe.test.ts, sandbox.test.ts, capability-matrix.doc-sync.test.ts, install-global.test.ts). All 15 repo mentions are rejections, statements of the kernel default, or negative assertions. The frozen wording also forbids COMMENTS from naming it; three comments introduced here do, each while explaining why ADR-0010 rejected it. Flagged by review rounds 4-6; the AC's letter is unmet, its intent is met and enforced."
-    },
-    "AC14": {
-      "at": "2026-08-08T18:40:56.076Z",
-      "note": "No new npm dependency (package.json absent from the diff). purity.test.ts enforces N3 by test rather than by diff inspection: the pure modules cannot spawn directly or transitively (fixed-point closure over relative imports, so the barrel route is covered), matching import statements rather than substrings so a doc comment cannot trip it and cannot satisfy it. probe.ts performs no spawn when its seam is injected. Writing the guard found a real fact: tls-ca.ts also spawns, so the spawning set is computed from source rather than hand-maintained."
-    }
-  },
+  "acChecksum": "sha256:3fea41ffb75db15923fe1ec91a985afe1819502d871cafdef8596f753edaa9b2",
+  "acConfirmed": {},
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/259"
   },
@@ -413,6 +380,16 @@
       "at": "2026-08-08T18:41:03.302Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/259"
+    },
+    {
+      "at": "2026-08-08T18:55:26.009Z",
+      "event": "ac-updated",
+      "detail": "AC13 as frozen is unsatisfiable: it forbids any comment or test fixture from naming kernel.apparmor_restrict_unprivileged_userns while also requiring enforcement 'by a test, not by inspection' -- and such a test must contain the literal string to assert its absence. It also over-reaches the requirement it implements: specification R8 constrains OUTPUT (what a user is shown), not source comments. The three comments that name the sysctl sit beside the assertions that ban it and state why ADR-0010 rejected it; removing the name would leave the ban unexplained and invite its reintroduction. Narrowing AC13 to rendering paths and output strings, and explicitly permitting the name in tests and comments that enforce or explain the ban. Intent is unchanged: the sysctl is never offered to a user as a remedy. Authorised by the repository owner, 2026-08-08."
+    },
+    {
+      "at": "2026-08-08T18:55:58.015Z",
+      "event": "ac-updated",
+      "detail": "Re-freeze after editing the AC13 text itself; the previous ac update recorded the rationale but snapshotted the pre-edit wording."
     }
   ]
 }
