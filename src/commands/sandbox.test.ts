@@ -17,6 +17,8 @@
 // probe.test.ts where several outcomes per process are possible.
 
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   buildSandboxReport,
   renderSandboxReport,
@@ -31,7 +33,11 @@ import {
   type SandboxCapabilityReportRow,
   type SandboxCommandDeps,
 } from "./sandbox";
-import { probeContainment, runContainmentProbe } from "../harness/process/sandbox";
+import {
+  probeContainment,
+  resetContainmentProbeCacheForTests,
+  runContainmentProbe,
+} from "../harness/process/sandbox/probe";
 
 /** The exact failure measured on Ubuntu 24.04 with no AppArmor profile for bwrap. */
 const UID_MAP_FAILURE = "bwrap: setting up uid map: Permission denied";
@@ -280,13 +286,44 @@ describe("buildSandboxReport", () => {
   });
 
   test("AC5 wiring: the default probe runner is the CACHED entry point", () => {
-    // AC5 itself is proven in probe.test.ts, which can exercise several
-    // outcomes per process. What could not be proven there is the composition:
-    // that `sandbox status` reaches for the cached probe rather than the
-    // uncached one. Asserting the identity of the default pins exactly that,
-    // and it is the assertion a `cacheProbe: boolean` flag made unreachable.
+    // A necessary but weak assertion on its own — it pins the constant, not the
+    // use of it. The test below pins the use.
     expect(DEFAULT_PROBE_RUNNER).toBe(probeContainment);
     expect(DEFAULT_PROBE_RUNNER).not.toBe(runContainmentProbe);
+  });
+
+  test("AC5 wiring: with no injected probe, the report uses the process-global CACHE", () => {
+    // The line that matters is `deps.probe ?? DEFAULT_PROBE_RUNNER` — and every
+    // other test in this file injects `probe`, so that fallback was never
+    // executed. A regression to `?? runContainmentProbe` would defeat N4's
+    // once-per-process bound and keep the whole suite green.
+    //
+    // Exercised without spawning by priming the cache first: if the report
+    // reaches the cached probe, it gets the primed result and the fake spawn is
+    // never called a second time. If it reached the UNCACHED probe, it would
+    // spawn again and the count would be 2.
+    resetContainmentProbeCacheForTests();
+    try {
+      let spawns = 0;
+      const primed = probeContainment({
+        platform: "linux",
+        spawn: () => {
+          spawns += 1;
+          return { status: 1, stderr: UID_MAP_FAILURE };
+        },
+      });
+      expect(spawns).toBe(1);
+
+      const report = buildSandboxReport({ ...linuxWithBwrap, kernelRelease: () => TEST_KERNEL });
+
+      expect(spawns).toBe(1);
+      expect(report.probe).toBe(primed);
+      expect(report.capabilities.some((c) => c.kind === "available")).toBe(false);
+    } finally {
+      // The cache is process-global; leaving it primed would decide outcomes in
+      // whatever file `bun test` runs next.
+      resetContainmentProbeCacheForTests();
+    }
   });
 });
 
@@ -362,6 +399,38 @@ describe("renderSandboxReport", () => {
     // One hint, not two. Two copies is how the wordings drifted apart before —
     // one listed Arch and the other did not, two lines apart in this output.
     expect(text.match(/Install it:/gi)?.length).toBe(1);
+  });
+
+  test("AC7: every user-visible finding this command can print is described in the runbook", () => {
+    // The doc-sync test next door pins the three CapabilityStatus values, but
+    // the report has FIVE findings — the two extra ones (`unprobed` and the
+    // launcher-missing sentence) are composed here, not stored in the matrix,
+    // so that test cannot see them. `unprobed` shipped undescribed because of
+    // exactly that gap: a macOS operator would read a sentence about
+    // `--allowed-domains` that the runbook this PR calls the source of truth
+    // did not mention.
+    const runbook = readFileSync(
+      path.join(import.meta.dir, "..", "..", "docs", "verification", "linux-sandbox-verification.md"),
+      "utf8",
+    ).replace(/\*+/g, "").replace(/\s+/g, " ");
+
+    // Pinned verbatim, because this one is quoted verbatim in the runbook — it
+    // is the finding that was introduced with no documentation at all. The
+    // other four findings are described there in prose rather than as literal
+    // strings, and coupling those to the exact wording here would make every
+    // editorial improvement to the runbook a test failure.
+    expect(runbook).toContain(NOT_COVERED_BY_PROBE);
+    // The runbook must also say what the trial does NOT cover, which is the
+    // substance of the finding rather than its label.
+    expect(runbook).toContain("--allowed-domains");
+    expect(runbook).toContain("--mask-env");
+
+    // Falsifiable: the parse produced real content, so the assertion above is
+    // reading the document rather than passing on an empty haystack, and a
+    // near-miss wording is absent.
+    expect(runbook.length).toBeGreaterThan(1000);
+    expect(runbook).toContain("The three capability states");
+    expect(runbook).not.toContain(`${NOT_COVERED_BY_PROBE} (mutated)`);
   });
 
   test("AC13: no rendering path names the machine-wide sysctl, in any state", () => {

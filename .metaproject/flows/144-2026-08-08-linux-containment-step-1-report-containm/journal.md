@@ -89,6 +89,79 @@ installer fail-safe branch, installer project-install delegation shape.
   and this implements exactly that; a containment *assertion* is strictly
   stronger and is recorded as follow-up rather than smuggled in here.
 
+## Round 2 review — 0 blockers, 1 major, 12 minors, 7 info
+
+Two reviewers over the fix delta (`c0fc950d..HEAD`), because a fix round is
+where regressions come from: logic + security, and testing + architecture. Both
+verified the seven round-1 fixes are correct rather than merely present, and
+both independently found the same major.
+
+**The major.** The round-1 fix moved the trial *argv* onto `wrapWithSandbox` but
+left the layer *label* derived from the platform string — a second, independent
+platform-to-layer decision. The label is what `sandbox status` prints, what
+`--json` publishes, and what the bubblewrap AppArmor remediation is keyed on, so
+at step 3 a Landlock trial would be labelled `bwrap` and its failure handed a
+remediation for a launcher that never ran. The fix's own stated rationale
+applied verbatim to the thing it had not fixed.
+
+Resolved by reading the layer off the dispatcher's output (`argv[0]`, the
+launcher name by convention) instead of re-deriving it. An unrecognised launcher
+is a probe **failure**, not a guess — so when step 3 adds a branch and forgets
+this function, the probe says "cannot identify the layer" instead of quietly
+mislabelling. `wrap.ts` is untouched: the alternative fix (adding a `layer`
+field to `WrapResult`) would modify a launcher, which the implementation plan
+puts out of scope for step 1 and which frozen AC14 asserts is unmodified.
+
+**Regressions the fix round introduced, all fixed.**
+
+| Finding | Fix |
+|---|---|
+| `mktemp` under `set -e` — an unwritable TMPDIR aborted the installer *after* it printed "keryx installed", turning the report into the gate it must not be | `mktemp \|\| true`, empty means no capture |
+| `sanitizeDetail`'s control-character class skipped U+000D, letting **CR** through — enough to redraw the line and impersonate keryx's own `Remediation:` output from launcher stderr | class widened to cover U+000B through U+001F |
+| Bare `unshare` / `userns` markers matched `Unknown option --unshare-pid` and `spawnSync /usr/bin/unshare ENOENT` — round-1's misdiagnosis returning through the classifier that fixed it | whole diagnostic phrases only; `classifyFailure` gated on `layer === "bwrap"` |
+| `definedOnly` dropped `launcherName`, which the interface declared required | declared optional |
+| The `probe === undefined` branch asserted "a trial contained command was run" where none had | its own sentence |
+
+**Other fixes:** installer output bounded and stripped in shell too (the TS
+sanitizer is not on that path — the process producing it has already failed);
+`linuxKernelFacilityPhrase("none")` no longer renders "refused the no kernel
+facility…"; `defaultSpawn` exported with an injectable `spawnSync` and tested,
+having been the one production code path that starts a process and was covered
+nowhere; `PROBE_TIMEOUT_MS` asserted to be a bound, not just forwarded (it was
+compared against itself); the `unprobed` finding documented in the runbook, which
+had shipped a user-visible sentence no document described; the installer's `bun`
+shim pinned to an absolute path (a relative `exec bun` would re-resolve through
+the shimmed PATH and re-enter itself forever — a 240s timeout, not a failure).
+
+`purity.test.ts` was rewritten twice: it now matches *import statements* rather
+than substrings (a doc comment mentioning `node:child_process` would have failed
+it, and the positive case would have passed on a comment alone), and checks
+transitive reach — the route the barrel opened. Writing it also produced a
+finding of its own: the first version asserted `probe.ts` was the only module in
+the package that spawns, and the test immediately failed because `tls-ca.ts`
+shells out to openssl. The spawning set is now computed from source rather than
+hand-maintained.
+
+### Verified by execution, not by reading
+
+- **`report_sandbox_status` against three fakes**: `mktemp` failing (no abort,
+  report still runs), a noisy failing keryx (CR and ESC stripped, line capped at
+  500 chars, output capped at 50 lines), and success (indented). Zero leaked
+  temp files on every path.
+- The round-1 doc-sync mutation, re-run by the reviewer: **12 pass / 1 fail** —
+  now caught.
+
+### Round 2 — accepted and NOT fixed
+
+- **`WrapResult` gaining a `layer` field** (the reviewers' preferred fix for the
+  major). It modifies `wrap.ts`, which step 1 is scoped out of and AC14 asserts
+  is unmodified. The chosen fix removes the same risk from inside `probe.ts`.
+- **The `wrapped === false` branch being unreachable** — now reachable and
+  tested via the injected dispatcher seam, so this resolved itself.
+- Coverage gaps listed as remaining: `printHelp`, the darwin installer path
+  (`linuxGuardedTest` skips it everywhere), and install.sh's "keryx exits 0 but
+  prints nothing" branch. All low value; recorded, not closed.
+
 ## Gate after round 1 fixes
 
 | Gate | Result |

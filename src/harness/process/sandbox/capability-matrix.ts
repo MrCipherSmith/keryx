@@ -189,5 +189,13 @@ export function isKnownSandboxPlatform(platform: string): platform is SandboxPla
  * one holding the measurement.
  */
 export function linuxKernelFacilityPhrase(facility: LinuxKernelFacility): string {
+  // `none` marks a row with no Linux code path at all, so there is no facility
+  // to name. It cannot be reached from the report today (such rows settle as
+  // `not-implemented` before any kernel reason is composed), but the naive
+  // interpolation read "refused the no kernel facility the launcher builds its
+  // boundary from" — nonsense one row-status change away from being printed.
+  if (facility === "none") {
+    return "a kernel facility, but no Linux code path exists for this capability";
+  }
   return `the ${LINUX_KERNEL_FACILITY_LABEL[facility]} the launcher builds its boundary from`;
 }

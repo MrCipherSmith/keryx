@@ -53,6 +53,26 @@ not about the code.
 - `not-implemented` — **not implemented — fails closed**: no code path exists on
   this platform at all, so installing anything would not change it.
 
+### What the probe does and does not cover
+
+`sandbox status` reports one further finding that is not a capability *state*
+at all — it is what the report says when the launcher works but the trial did
+not exercise the capability in question:
+
+> *implemented, and NOT covered by this probe* — the trial run confirmed the
+> launcher, not this capability.
+
+The trial is a single read-only, network-off run with no read-deny list and no
+domain allowlist. It therefore demonstrates **filesystem containment** and
+**network-off**, and demonstrates nothing whatsoever about `--allowed-domains`
+(which needs `network: restricted` and a live loopback proxy) or `--mask-env`
+(which needs a populated deny list). On macOS, where both of those *are*
+implemented, they report as not covered rather than as confirmed.
+
+This distinction exists because the alternative is the exact defect this whole
+runbook section documents: one successful trial being read as evidence for four
+capabilities.
+
 `unavailable` is the state §1 below warns about: on a stock Ubuntu 24.04
 bubblewrap installs cleanly and every contained run then dies. `sandbox status`
 prints the launcher's own error verbatim and — for bubblewrap — names the

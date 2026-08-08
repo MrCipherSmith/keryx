@@ -99,7 +99,13 @@ export interface SandboxReport {
   /** `os.release()`. On Linux it is the kernel, not the platform, that decides (R6). */
   kernelRelease: string;
   launcher: SandboxLauncherInfo;
-  launcherName: string | undefined;
+  /**
+   * Optional, not `string | undefined`: `definedOnly` drops the key entirely on
+   * an unsupported platform, so a required declaration would be a lie the type
+   * system could not catch — `"launcherName" in report` would be false where
+   * the interface said the key is always there.
+   */
+  launcherName?: string;
   /**
    * The trial containment run, or absent when there was nothing to trial — no
    * launcher, or no launcher on this platform at all. N4: the probe is never
@@ -201,16 +207,30 @@ function describeCapability(row: SandboxCapabilityRow, ctx: CapabilityContext): 
   }
 
   // The launcher is installed. That used to end the question; it is now where
-  // the question starts. `probe` is always defined here — the caller only
-  // probes on this path — and the type says so, so an unevidenced failure claim
-  // cannot be expressed.
+  // the question starts.
   const probe = ctx.probe;
-  if (probe === undefined || !probe.ok) {
+
+  if (probe === undefined) {
+    // Unreachable today — the caller probes on exactly this path — but the
+    // branch has to exist, and what it must NOT do is borrow the sentence
+    // below. "A trial contained command was run on this host and it did not
+    // contain" asserts a measurement; saying that where no trial ran would be
+    // the exact defect this flow removes, planted in defensive code where
+    // nobody would look for it.
+    return makeRow(
+      row,
+      "unavailable",
+      `${PROBED_AND_NOT_WORKING} — no trial contained command was run, so containment could not be confirmed.`,
+      { reason: "no trial contained command was run, so containment could not be confirmed" },
+    );
+  }
+
+  if (!probe.ok) {
     const reason = unavailableReason(row, ctx, probe);
     return makeRow(row, "unavailable", `${PROBED_AND_NOT_WORKING} — ${reason}.`, {
       reason,
-      detail: probe?.detail,
-      remediation: probe?.remediation,
+      detail: probe.detail,
+      remediation: probe.remediation,
     });
   }
 
@@ -238,10 +258,10 @@ function describeCapability(row: SandboxCapabilityRow, ctx: CapabilityContext): 
 function unavailableReason(
   row: SandboxCapabilityRow,
   ctx: CapabilityContext,
-  probe: ProbeResult | undefined,
+  probe: ProbeResult,
 ): string {
   const measured = "a trial contained command was run on this host and it did not contain";
-  if (ctx.platform === "linux" && probe?.cause === "unprivileged-userns-denied") {
+  if (ctx.platform === "linux" && probe.cause === "unprivileged-userns-denied") {
     const release = ctx.kernelRelease.length > 0 ? ctx.kernelRelease : "unknown release";
     return `${measured} — this kernel (${release}) refused ${linuxKernelFacilityPhrase(row.linuxKernelFacility)}`;
   }

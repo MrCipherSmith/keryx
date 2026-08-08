@@ -511,6 +511,16 @@ linuxGuardedTest(
     // somewhere else. Simpler and more direct: shadow `bun` with a shim that
     // fails only for `sandbox status`.
     const binDirForRun = join(workspace, "bin-ac12-unknown");
+
+    // The shim shadows `bun` on PATH and passes everything else through to the
+    // REAL bun by absolute path. Resolved here, and asserted, because a
+    // relative `exec bun` would re-resolve through the shimmed PATH and find
+    // the shim again — an infinite re-exec that presents as a silent 240s
+    // timeout rather than a failure. `hasBun` (above) admits a host where bun
+    // exists only under $HOME, so the fallback is a real path, not a guess.
+    const realBun = Bun.which("bun") ?? join(homedir(), ".bun", "bin", "bun");
+    expect(await fileExists(realBun)).toBe(true);
+
     const shimDir = await shimDirWith(
       "keryx-status-broken",
       "bun",
@@ -524,7 +534,7 @@ linuxGuardedTest(
         "    exit 3",
         "  fi",
         "done",
-        `exec ${JSON.stringify(Bun.which("bun") ?? "bun")} "$@"`,
+        `exec ${JSON.stringify(realBun)} "$@"`,
       ].join("\n"),
     );
 

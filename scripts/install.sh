@@ -54,6 +54,41 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+# Print a file indented, with control characters removed and both the line
+# count and each line's length bounded.
+#
+# `probe.ts` sanitizes and caps the launcher output it quotes, but that code is
+# not on this path: here the keryx process has already FAILED, so whatever it
+# wrote is unfiltered and unbounded. Left raw it can drive an operator's
+# terminal with escape sequences or flood the install transcript.
+#
+# Pure bash on purpose — no `tr`/`head` pipeline, because this script runs under
+# `set -o pipefail` and a failing pipe stage here would abort an install that
+# has already succeeded.
+print_bounded_output() {
+  local file="$1"
+  local max_lines=50
+  local max_chars=500
+  local shown=0
+  local line
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Strip CR (would redraw the line and escape the indent that marks this as
+    # the failed process's words) and ESC (ANSI control sequences).
+    line="${line//$'\r'/}"
+    line="${line//$'\033'/}"
+    if [ "${#line}" -gt "$max_chars" ]; then
+      line="${line:0:$max_chars}... (line truncated)"
+    fi
+    echo "    $line"
+    shown=$((shown + 1))
+    if [ "$shown" -ge "$max_lines" ]; then
+      echo "    ... (output truncated)"
+      break
+    fi
+  done < "$file"
+}
+
 # Report OS-sandbox containment by asking the keryx that was just installed.
 #
 # This used to be `command -v bwrap`, and it was wrong in the way that matters:
@@ -81,8 +116,17 @@ report_sandbox_status() {
   # branch below unreachable.
   local status_output
   local status_error
-  status_error="$(mktemp)"
-  if ! status_output="$("$@" sandbox status 2>"$status_error")"; then
+  # `|| true` because this whole function is a report and must never gate the
+  # install. Under `set -e` a bare `mktemp` failure (unwritable or full TMPDIR)
+  # would abort the installer AFTER it had already printed "keryx installed" —
+  # turning the containment report into exactly the gate it must not be. An
+  # empty value simply means "no stderr capture"; the report still runs.
+  status_error="$(mktemp 2>/dev/null || true)"
+  # Clean up even if the probe is interrupted mid-run (it may take seconds).
+  # shellcheck disable=SC2064 -- expand $status_error now, not at trap time
+  trap "rm -f '${status_error}'" RETURN
+
+  if ! status_output="$("$@" sandbox status 2>"${status_error:-/dev/null}")"; then
     # A report, never a gate: if the probe cannot be run at all, say exactly
     # that and carry on. The one thing this must never do is guess
     # optimistically — an unknown result reported as "available" is the defect
@@ -90,16 +134,12 @@ report_sandbox_status() {
     echo "  Could not determine containment status — 'keryx sandbox status' did not run here."
     echo "  Nothing is claimed either way. Run it yourself once keryx is on PATH:"
     echo "    keryx sandbox status"
-    if [ -s "$status_error" ]; then
+    if [ -n "$status_error" ] && [ -s "$status_error" ]; then
       echo "  It said:"
-      while IFS= read -r line; do
-        echo "    $line"
-      done < "$status_error"
+      print_bounded_output "$status_error"
     fi
-    rm -f "$status_error"
     return 0
   fi
-  rm -f "$status_error"
 
   # Indented in-shell rather than through `sed`: this script runs under
   # `set -o pipefail`, so a missing or failing `sed` would abort the installer
