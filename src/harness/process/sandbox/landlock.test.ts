@@ -121,6 +121,11 @@ function isClassExtendsExpression(node: ts.Node): boolean {
  * names, namespace imports and labels — eight shapes of ordinary code reported
  * as impurity, which is how a guard gets switched off. `{ process }` shorthand
  * is deliberately NOT a name: it reads the value.
+ *
+ * It also matches a member name in a property access — the `Bun` in
+ * `globalThis.Bun`, which is a read of `globalThis`, not of the `Bun` global.
+ * The root of every member chain is still checked, so a real reach is still
+ * reported; suppressing `foo.process` is what stops the guard crying wolf.
  */
 function isDeclarationName(node: ts.Identifier): boolean {
   const parent = node.parent;
@@ -316,8 +321,11 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     // this red. Applying a fix where the finding pointed instead of everywhere
     // the class lives is the failure this repository keeps recording.
     const directory = fileURLToPath(new URL(".", import.meta.url));
+    // `.mts`/`.cts` too: `landlock-exec.mts` escaped an `endsWith(".ts")`
+    // filter, measurably. The repo has no `.mts` today, which is exactly when a
+    // filter like this is cheap to widen.
     const present = (await readdir(directory))
-      .filter((f) => f.startsWith("landlock") && f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .filter((f) => /^landlock.*\.[cm]?ts$/.test(f) && !/\.test\./.test(f))
       .sort();
     expect(present).toEqual(LANDLOCK_MODULES.map((m) => m.file).sort());
   });

@@ -154,11 +154,79 @@ AC3's had been widened; the ruleset and its `pathRules` were not frozen; and
    than bubblewrap.** The metadata-mutation residue is the fourth and is absent.
    Documentation, owned by step 4.
 
+## 2026-08-08 — rounds 3-8, and where the defects actually lived
+
+Eight review rounds. **Not one found a defect in the translation.** Every finding
+after round 1 was in a *claim* or a *guard* — and rounds 1 through 6 each found
+that the previous round's fix had carried a new one. Round 7 was the first that
+introduced nothing; round 8 confirmed it and returned `STATUS: DONE`, no blocker,
+no major, four nits.
+
+The recurring shapes, recorded because they are the transferable part:
+
+- **A claim one step past the measurement.** "Closes the first-order version of
+  all three gaps" (closed one). "Verbatim from CAVEATS" (it was a subset).
+  "The mutating entries" (two entries cross no write boundary). Each was written
+  in good faith and each was read by the next round instead of being re-derived.
+- **A guard that enumerates names where it means shapes.** The purity guard was
+  written four times: twice over text, twice over the AST. Text lost to
+  single quotes, then to `process["platform"]`, a destructured shadow, an
+  interpolation and a regex literal. The AST version lost to a concatenated
+  specifier (which produces *no* entry, so an allowlist is satisfied rather
+  than violated), `import.meta.require`, `Function` beside an unnamed `eval`,
+  and `Math.random` matched by shape inside an identifier-matching guard.
+- **A fix applied where the finding pointed, not across the class.** `ioctl`
+  moved wholesale between two lists, losing the half that fits neither. The
+  guard covered `landlock.ts` and not `landlock-abi.ts`, so a `defaultReader`
+  calling `globalThis.Bun.spawnSync` on a compiled helper — verbatim what AC5
+  forbids — passed every check. Both are now closed by enumeration: the residue
+  is one structured list with per-entry facts, and the guard reads the directory
+  and fails if a `landlock*.{ts,mts,cts}` module is not on its list.
+- **The one finding that was not about a guard, and mattered most.**
+  `WRITE_ACCESS_RIGHTS` and `DEVICE_WRITE_PATHS` decide what the ruleset
+  restricts and what it grants back, and nothing pinned their contents. Dropping
+  `remove_file`, `remove_dir`, `make_reg` or `make_sym` left the suite fully
+  green while `unlink`, `rmdir`, `creat` and `symlink` went unrestricted
+  anywhere on the filesystem — a right absent from `handled_access_fs` is not
+  narrowed, it is unbounded — and the ruleset still reported itself complete.
+  Adding `/dev/sda` to the carve-out was green too. Both are pinned as literals
+  now, in the same shape as the UAPI tables.
+
+Every fix in rounds 3-8 was verified by mutation before and after, in an
+isolated worktree. The final matrices: 21 evasions red / 14 pure shapes green
+for the purity guard, plus the content pins, the nesting guarantees and the
+cross-module closure.
+
+## 2026-08-08 — the step-2 spike landed, and one thing it found reaches this lane
+
+Flow 143 / PR #258 settled §4.2: `bun:ffi` carries Landlock, the restriction
+survives `execve` and is inherited by descendants, and the measured ABI on this
+host is 4. The compiled-helper fallback is not needed. `landlock-abi.ts` did not
+have to change — the property it was written for — so only its comments moved.
+
+The finding that did reach this module: a too-narrow grant must be fixed with a
+**nested** rule, never a wider ancestor. The spike hit it on `/dev`, where
+widening the directory to make `/dev/shm` writable also bought the ability to
+unlink device nodes. Rights accumulate downwards, so a builder that merged,
+sorted or dropped nested paths would leave the applier no way to express the
+correct shape. Nothing here did merge them — but nothing said so and nothing
+tested it, which is the same thing one refactor later. `pathRules` now documents
+it and four tests pin it; folding a nested root, widening `/dev`, and sorting by
+path are all red.
+
+The asymmetry is the whole model in one line: **nesting can add rights to a
+subtree and can never remove them.** That is why the writable roots work and why
+`readDenyList` remains inexpressible.
+
 ### Gate
 
 - `bunx tsc --noEmit`: clean.
-- `bun test src/harness/process/sandbox`: 233 pass / 5 skip / 0 fail after round 2
+- `bun test src/harness/process/sandbox`: 243 pass / 5 skip / 0 fail after round 8
   (baseline on this branch: 147 pass / 5 skip / 0 fail).
+- `bun run test:guards`: 257 pass / 0 fail.
+- `bun test` (whole repo): 3330 pass / 14 skip / 2 fail — both failures are
+  `scripts/install-global.test.ts` ("AC1: … bubblewrap … PATH"), pre-existing on
+  this host, owned by the parallel probe flow and untouched by this branch.
 - `bun test src/capability`: 27 pass / 0 fail.
 - `bun scripts/check-doc-links.ts`: 698 links, 0 broken.
 - `keryx health run`: score 93, trend stable, one pre-existing WARN
