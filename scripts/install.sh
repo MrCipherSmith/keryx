@@ -54,35 +54,38 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+# Report OS-sandbox containment by asking the keryx that was just installed.
+#
+# This used to be `command -v bwrap`, and it was wrong in the way that matters:
+# on Ubuntu 23.10+ bubblewrap installs cleanly, `command -v` finds it, and every
+# contained run then dies with `bwrap: setting up uid map: Permission denied` —
+# so the installer told users "Filesystem containment and network-off are
+# available" on hosts where nothing was contained.
+#
+# `keryx sandbox status` now runs one trivial contained command and reports its
+# actual outcome, so the installer delegates rather than re-deriving. One source
+# of truth, and no wording here that can drift from the CLI's.
+#
+# $@ — the command that runs keryx (a wrapper path, or `bun /path/to/cli.ts`).
 report_sandbox_status() {
   echo
-  echo "OS sandbox containment (flow 142 / P4):"
-  case "$(uname -s)" in
-    Linux)
-      if command -v bwrap >/dev/null 2>&1; then
-        echo "  bubblewrap: found ($(command -v bwrap))"
-        echo "  Filesystem containment and network-off are available."
-      else
-        echo "  bubblewrap: NOT FOUND — OS containment is unavailable until it is installed."
-        echo "  Filesystem containment and network-off both require bubblewrap."
-        echo "  Install it: apt install bubblewrap (Debian/Ubuntu) | dnf install bubblewrap (Fedora) | pacman -S bubblewrap (Arch)"
-      fi
-      echo "  Domain allowlist (--allowed-domains) and credential masking (--mask-env) are"
-      echo "  not implemented on Linux regardless — installing bubblewrap will not enable them."
-      ;;
-    Darwin)
-      if [ -x /usr/bin/sandbox-exec ]; then
-        echo "  Seatbelt (sandbox-exec): found."
-        echo "  Filesystem containment, network-off, domain allowlist and credential masking are all available."
-      else
-        echo "  sandbox-exec: NOT FOUND at /usr/bin/sandbox-exec (unusual on macOS)."
-        echo "  OS containment is unavailable until it is present."
-      fi
-      ;;
-    *)
-      echo "  OS sandbox: unsupported on $(uname -s) — every contained run fails closed."
-      ;;
-  esac
+  echo "OS sandbox containment:"
+
+  # Captured rather than piped so a half-written report is never printed, and
+  # so the exit status observed is keryx's own.
+  local status_output
+  if ! status_output="$("$@" sandbox status 2>/dev/null)"; then
+    # A report, never a gate: if the probe cannot be run at all, say exactly
+    # that and carry on. The one thing this must never do is guess
+    # optimistically — an unknown result reported as "available" is the defect
+    # this function was rewritten to remove.
+    echo "  Could not determine containment status — 'keryx sandbox status' did not run here."
+    echo "  Nothing is claimed either way. Run it yourself once keryx is on PATH:"
+    echo "    keryx sandbox status"
+    return 0
+  fi
+
+  printf '%s\n' "$status_output" | sed 's/^/  /'
   echo "  Check anytime: keryx sandbox status"
 }
 
@@ -163,7 +166,9 @@ EOF
   echo
   echo "Make sure this directory is in PATH:"
   echo "  export PATH=\"$BIN_DIR:\$PATH\""
-  report_sandbox_status
+  # The wrapper that was just written — so the probe runs through exactly the
+  # keryx this install produced, not some other one already on PATH.
+  report_sandbox_status "$BIN_DIR/keryx"
   exit 0
 fi
 
@@ -175,4 +180,4 @@ clone_or_update "$RUNTIME_DIR"
 
 echo "keryx installed for project:"
 echo "  $RUNTIME_DIR"
-report_sandbox_status
+report_sandbox_status "$BUN_BIN" "$RUNTIME_DIR/src/cli.ts"

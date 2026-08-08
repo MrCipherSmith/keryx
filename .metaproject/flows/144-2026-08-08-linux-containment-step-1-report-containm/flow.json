@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 2,
+  "id": "144",
+  "slug": "linux-containment-step-1-report-containm",
+  "title": "Linux containment step 1: report containment from a probe, not a PATH lookup",
+  "status": "in-progress",
+  "createdAt": "2026-08-08T12:09:38.996Z",
+  "updatedAt": "2026-08-08T12:12:43.623Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9a7ed588275bffbae7aa63db47d33e5d2630799409785fdd782562c48a5d3abf",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "probe.ts: injectable cached trial containment (AC4, AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "capability-matrix.ts: third state + Linux kernel-facility axis",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "src/commands/sandbox.ts: compose the probe into the report (AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "scripts/install.sh: report from the probe, not command -v bwrap",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Extend the doc-sync test to the third state and update the runbook (AC7)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Assert no output path names the machine-wide sysctl (AC13)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verify AC8/AC14 by diff: launchers, profile and adapter unchanged",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Quality gate: health run, bun test on affected paths, doc-link check",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Draft PR against feat/linux-containment-landlock + review rounds until green",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-08T12:09:38.996Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-08T12:11:54.729Z",
+      "event": "task-added",
+      "detail": "T5: probe.ts: injectable cached trial containment (AC4, AC5)"
+    },
+    {
+      "at": "2026-08-08T12:11:58.668Z",
+      "event": "task-added",
+      "detail": "T6: capability-matrix.ts: third state + Linux kernel-facility axis"
+    },
+    {
+      "at": "2026-08-08T12:12:01.779Z",
+      "event": "task-added",
+      "detail": "T7: src/commands/sandbox.ts: compose the probe into the report (AC6)"
+    },
+    {
+      "at": "2026-08-08T12:12:04.123Z",
+      "event": "task-added",
+      "detail": "T8: scripts/install.sh: report from the probe, not command -v bwrap"
+    },
+    {
+      "at": "2026-08-08T12:12:06.591Z",
+      "event": "task-added",
+      "detail": "T9: Extend the doc-sync test to the third state and update the runbook (AC7)"
+    },
+    {
+      "at": "2026-08-08T12:12:08.943Z",
+      "event": "task-added",
+      "detail": "T10: Assert no output path names the machine-wide sysctl (AC13)"
+    },
+    {
+      "at": "2026-08-08T12:12:11.630Z",
+      "event": "task-added",
+      "detail": "T11: Verify AC8/AC14 by diff: launchers, profile and adapter unchanged"
+    },
+    {
+      "at": "2026-08-08T12:12:14.023Z",
+      "event": "task-added",
+      "detail": "T12: Quality gate: health run, bun test on affected paths, doc-link check"
+    },
+    {
+      "at": "2026-08-08T12:12:16.780Z",
+      "event": "task-added",
+      "detail": "T13: Draft PR against feat/linux-containment-landlock + review rounds until green"
+    },
+    {
+      "at": "2026-08-08T12:12:39.512Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-08T12:12:41.641Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-08T12:12:43.623Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    }
+  ]
+}

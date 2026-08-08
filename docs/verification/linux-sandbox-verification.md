@@ -38,6 +38,35 @@ their full functionality is verifiable on macOS only.
 
 ---
 
+## The three capability states
+
+The table above is a statement about the **codebase**: what is implemented, and
+where. It is not a statement about your machine. `keryx sandbox status` reports
+a third state that no cell above can hold, because it is a fact about a host and
+not about the code.
+
+- `supported` — the cell reads **yes**: implemented, and a trial contained
+  command confirmed it on this host.
+- `unavailable` — **implemented, but not functional on this host — fails
+  closed**: implemented, the launcher is installed, and a trial contained
+  command did *not* contain.
+- `not-implemented` — **not implemented — fails closed**: no code path exists on
+  this platform at all, so installing anything would not change it.
+
+`unavailable` is the state §1 below warns about: on a stock Ubuntu 24.04
+bubblewrap installs cleanly and every contained run then dies. `sandbox status`
+prints the launcher's own error verbatim and — for bubblewrap — names the
+AppArmor profile in §1 as the remediation.
+
+On Linux the reason names the **kernel release and the kernel facility**, not
+the operating system, because it is the kernel that decides: the same keryx on
+the same distribution contains on 22.04 and does not on a stock 24.04.
+
+`capability-matrix.ts` is the single source for all three states, and
+`capability-matrix.doc-sync.test.ts` asserts this section still agrees with it.
+
+---
+
 ## 0. The rule that makes this worth doing
 
 Every check below has a **PASS** and a **FALSE PASS**.

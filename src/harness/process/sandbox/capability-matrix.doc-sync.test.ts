@@ -4,14 +4,23 @@
 // this test is the enforcement — it parses the runbook's own Markdown table
 // and asserts every row matches SANDBOX_CAPABILITY_MATRIX. A hand-edit to
 // either side that stops agreeing with the other fails here.
+//
+// AC7 (keryx-linux-containment step 1) extends that to the THIRD state. No
+// table cell ever holds `unavailable` — it is a fact about a host, not about
+// the codebase — so it lives in the runbook's own "three capability states"
+// section, and the second describe block below pins that section against
+// `statusCellText`. A state added to the type and left undescribed for a
+// reader following the runbook now fails a test.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
+  CAPABILITY_STATUSES,
   SANDBOX_CAPABILITY_MATRIX,
   capabilityStatusFor,
   statusCellText,
+  type CapabilityStatus,
   type SandboxCapabilityRow,
 } from "./capability-matrix";
 
@@ -93,9 +102,96 @@ describe("sandbox capability matrix — doc sync (AC4)", () => {
   test("falsifiable: a row deliberately mismatched against the parsed doc is caught", () => {
     // Proves the equality assertions above are load-bearing, not vacuous: flip
     // one status and the same comparison must fail.
-    const flipped: SandboxCapabilityRow = { capability: "Filesystem containment", linux: "not-implemented", darwin: "supported" };
+    const flipped: SandboxCapabilityRow = {
+      capability: "Filesystem containment",
+      linux: "not-implemented",
+      darwin: "supported",
+      linuxKernelFacility: "unprivileged-user-namespaces",
+    };
     const docRow = docRows.find((r) => r.label.includes("Filesystem containment"));
     expect(docRow).toBeDefined();
     expect(docRow!.linuxCell).not.toBe(statusCellText(capabilityStatusFor(flipped, "linux")));
   });
+
+  test("the scope table never claims the third state — it is a host fact, not a codebase fact", () => {
+    // If `unavailable` ever appears in that table, someone has recorded a
+    // measurement of one machine as a permanent property of the product. That
+    // is the failure mode this whole package exists to remove.
+    for (const row of SANDBOX_CAPABILITY_MATRIX) {
+      expect(row.linux).not.toBe("unavailable");
+      expect(row.darwin).not.toBe("unavailable");
+    }
+    for (const docRow of docRows) {
+      expect(docRow.linuxCell).not.toBe(statusCellText("unavailable"));
+      expect(docRow.macosCell).not.toBe(statusCellText("unavailable"));
+    }
+  });
 });
+
+/**
+ * The runbook's prose for the three states, whitespace-collapsed so a Markdown
+ * line wrap is not treated as a difference in wording, and `**bold**`/`*em*`
+ * markers stripped so presentation is not content — the same rule the table
+ * parser above follows.
+ */
+function parseStatesSection(markdown: string): string {
+  const headingIndex = markdown.indexOf("## The three capability states");
+  if (headingIndex === -1) {
+    throw new Error(
+      "docs/verification/linux-sandbox-verification.md: '## The three capability states' heading not found — " +
+        "the third capability state must stay documented where a reader following the runbook will meet it",
+    );
+  }
+  const dividerIndex = markdown.indexOf("\n---", headingIndex);
+  const section = dividerIndex === -1 ? markdown.slice(headingIndex) : markdown.slice(headingIndex, dividerIndex);
+  return section.replace(/\*+/g, "").replace(/\s+/g, " ");
+}
+
+describe("sandbox capability matrix — the third state is documented (AC7)", () => {
+  const markdown = readFileSync(DOC_PATH, "utf8");
+  const states = parseStatesSection(markdown);
+
+  test("every CapabilityStatus the type defines has its cell text in the runbook", () => {
+    // Iterates the exported values rather than a hand-written list, so a fourth
+    // state cannot be added to the type and silently skipped here.
+    const undocumented = CAPABILITY_STATUSES.filter((status) => !states.includes(statusCellText(status)));
+    expect(undocumented).toEqual([]);
+  });
+
+  test("every CapabilityStatus is named by its identifier too, not only by its prose", () => {
+    const unnamed = CAPABILITY_STATUSES.filter((status) => !states.includes(`\`${status}\``));
+    expect(unnamed).toEqual([]);
+  });
+
+  test("the runbook says the third state is measured on a host, and names the kernel as the Linux reason", () => {
+    // The two claims that make `unavailable` different from the other two, and
+    // that a future edit could quietly drop while leaving the word in place.
+    expect(states).toContain("trial contained command");
+    expect(states).toContain("kernel release and the kernel facility");
+  });
+
+  test("R8: the runbook's states section never offers the machine-wide sysctl", () => {
+    expect(states).not.toContain("apparmor_restrict_unprivileged_userns");
+  });
+
+  test("falsifiable: cell text that the module does not produce is NOT found in the runbook", () => {
+    // Proves the assertions above read the document rather than passing
+    // vacuously: a plausible-but-wrong wording must be absent.
+    const notProduced = "implemented, but broken on this machine";
+    expect(CAPABILITY_STATUSES.map(statusCellText)).not.toContain(notProduced);
+    expect(states).not.toContain(notProduced);
+  });
+
+  test("falsifiable: a status whose cell text is mutated no longer matches the runbook", () => {
+    const mutated = `${statusCellText("unavailable")} (mutated)`;
+    expect(states).not.toContain(mutated);
+  });
+});
+
+/** Compile-time exhaustiveness: CAPABILITY_STATUSES must list every member of the union. */
+const _everyStatusListed: Record<CapabilityStatus, true> = {
+  supported: true,
+  "not-implemented": true,
+  unavailable: true,
+};
+void _everyStatusListed;

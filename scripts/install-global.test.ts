@@ -18,7 +18,7 @@
 // The suite skips cleanly, with a visible reason, when `git` is genuinely absent
 // (install.sh requires it) — it does not silently pass.
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat, access, readdir, chmod } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, access, readdir, chmod, symlink } from "node:fs/promises";
 import { constants as FS } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join, resolve, delimiter as PATH_DELIMITER } from "node:path";
@@ -41,28 +41,64 @@ const isLinuxHost = process.platform === "linux";
 const linuxGuardedTest = test.skipIf(!installable || !isLinuxHost);
 
 /**
- * PATH with every directory that would resolve `bwrap` removed — regardless
- * of whether THIS machine happens to have bubblewrap installed. AC1 requires
- * exactly this: the test must not depend on the real test machine lacking
- * bubblewrap. Directories that fail to read are kept (permission errors are
- * not evidence of anything); only a directory proven to contain `bwrap` is
- * dropped.
+ * PATH on which `bwrap` cannot be resolved — regardless of whether THIS
+ * machine happens to have bubblewrap installed. AC1 requires exactly this: the
+ * test must not depend on the real test machine lacking bubblewrap.
+ *
+ * The obvious implementation — drop every PATH directory containing `bwrap` —
+ * is wrong, and was silently broken on any host where bubblewrap is installed
+ * in `/usr/bin`: dropping that directory takes `bash`, `git`, `sed` and `uname`
+ * with it, so `install.sh` could not be spawned at all and these tests failed
+ * with `Executable not found in $PATH: "bash"`. It passed on CI only because
+ * `ubuntu-latest` has no bubblewrap, which is precisely the host dependency the
+ * helper exists to remove.
+ *
+ * So instead: for each directory that does contain `bwrap`, mirror its contents
+ * into a temp directory as symlinks, minus `bwrap`, and substitute the mirror
+ * in place of the original. Every other tool stays reachable; only bubblewrap
+ * disappears. Directories that fail to read are kept as they are — a permission
+ * error is not evidence of anything.
+ *
+ * Built once per suite; `mirrorRoot` must be inside the workspace so `afterAll`
+ * removes it.
  */
+let cachedPathWithoutBwrap: string | undefined;
+
 async function pathWithoutBwrap(): Promise<string> {
-  const dirs = (process.env.PATH ?? "").split(PATH_DELIMITER).filter(Boolean);
-  const kept: string[] = [];
-  for (const dir of dirs) {
-    try {
-      const entries = await readdir(dir);
-      if (entries.includes("bwrap")) {
-        continue;
-      }
-    } catch {
-      // Unreadable/missing directory: harmless to keep, nothing to exclude.
-    }
-    kept.push(dir);
+  if (cachedPathWithoutBwrap !== undefined) {
+    return cachedPathWithoutBwrap;
   }
-  return kept.join(PATH_DELIMITER);
+  const dirs = (process.env.PATH ?? "").split(PATH_DELIMITER).filter(Boolean);
+  const resolved: string[] = [];
+  let mirrorIndex = 0;
+
+  for (const dir of dirs) {
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      resolved.push(dir);
+      continue;
+    }
+    if (!entries.includes("bwrap")) {
+      resolved.push(dir);
+      continue;
+    }
+
+    const mirror = join(workspace, `path-mirror-${mirrorIndex++}`);
+    await mkdir(mirror, { recursive: true });
+    await Promise.all(
+      entries
+        .filter((entry) => entry !== "bwrap")
+        // A broken symlink (a dangling entry in the source dir) is harmless
+        // here: it resolves to nothing, exactly as it did before.
+        .map((entry) => symlink(join(dir, entry), join(mirror, entry)).catch(() => undefined)),
+    );
+    resolved.push(mirror);
+  }
+
+  cachedPathWithoutBwrap = resolved.join(PATH_DELIMITER);
+  return cachedPathWithoutBwrap;
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -322,15 +358,35 @@ guardedTest(
   INSTALL_TIMEOUT_MS,
 );
 
-// --- AC1 (flow 142 / P4) -----------------------------------------------------
+// --- AC1 (flow 142 / P4), AC12 (keryx-linux-containment step 1) --------------
 //
-// "On a Linux host without bubblewrap, installation states that OS containment
-// is unavailable and names what provides it." The PATH handed to install.sh is
-// filtered to remove any directory that would resolve `bwrap` (see
-// `pathWithoutBwrap` above), so this assertion holds regardless of whether
-// bubblewrap actually happens to be installed on the machine running the test
-// suite — it is the installer's message under that PATH being tested, not a
-// fact about this host.
+// AC1: "On a Linux host without bubblewrap, installation states that OS
+// containment is unavailable and names what provides it."
+//
+// AC12 is the correction. The installer used to decide this from `command -v
+// bwrap`, and on Ubuntu 23.10+ that answer is "found" while every contained run
+// dies — so it printed "Filesystem containment and network-off are available"
+// on hosts where nothing was contained. It now delegates to `keryx sandbox
+// status`, which runs one trial contained command. The three tests below cover
+// the three outcomes: no launcher, a launcher that contains, and a launcher
+// that is present and does not contain (the shipped defect).
+//
+// The PATH handed to install.sh is filtered to remove any directory that would
+// resolve `bwrap` (see `pathWithoutBwrap` above), so each assertion holds
+// regardless of whether bubblewrap happens to be installed on the machine
+// running the suite — it is the installer's message under a controlled PATH
+// being tested, not a fact about this host.
+
+/** Write an executable `bwrap` shim into a fresh directory and return that directory. */
+async function bwrapShim(name: string, script: string): Promise<string> {
+  const shimDir = join(workspace, name);
+  await mkdir(shimDir, { recursive: true });
+  const shim = join(shimDir, "bwrap");
+  await Bun.write(shim, script);
+  await chmod(shim, 0o755);
+  return shimDir;
+}
+
 linuxGuardedTest(
   "AC1: Linux install without bubblewrap on PATH states OS containment is unavailable and names bubblewrap",
   async () => {
@@ -352,32 +408,71 @@ linuxGuardedTest(
     expect(install.stdout).toMatch(/bubblewrap/i);
     // AC1 requires it NAME what provides containment, not just say "missing".
     expect(install.stdout).toMatch(/install it:.*bubblewrap/i);
+    // Nothing was probed, because there was nothing to probe.
+    expect(install.stdout).toMatch(/containment probe: not run/i);
   },
   INSTALL_TIMEOUT_MS,
 );
 
 linuxGuardedTest(
-  "AC1: falsifiable — the same run WITH bubblewrap on PATH does not claim containment is unavailable",
+  "AC12: THE DEFECT — a bwrap that is present and fails to contain is reported as NOT working, verbatim",
   async () => {
-    // Proves the AC1 assertion above is load-bearing: fabricate a fake `bwrap`
-    // on PATH (never executed — install.sh only checks `command -v bwrap`) and
-    // confirm the negative claim disappears.
-    const shimDir = join(workspace, "bwrap-shim");
-    await mkdir(shimDir, { recursive: true });
-    const fakeBwrap = join(shimDir, "bwrap");
-    await Bun.write(fakeBwrap, "#!/bin/sh\nexit 0\n");
-    await chmod(fakeBwrap, 0o755);
-
+    // This shim reproduces the exact failure measured on a stock Ubuntu 24.04:
+    // the binary is on PATH, `command -v` finds it, and it cannot build its
+    // boundary. Before the probe, install.sh printed "Filesystem containment
+    // and network-off are available" in precisely this situation.
+    const shimDir = await bwrapShim(
+      "bwrap-shim-broken",
+      "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n",
+    );
     const filteredPath = await pathWithoutBwrap();
     const install = await run(["bash", INSTALL_SH, "--global"], {
       env: installEnv({
         PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
-        KERYX_BIN_DIR: join(workspace, "bin-ac1-present"),
+        KERYX_BIN_DIR: join(workspace, "bin-ac12-broken"),
       }),
     });
     expect(install.exitCode).toBe(0);
+
+    // The launcher IS found — and that is explicitly not the same as working.
+    expect(install.stdout).toMatch(/containment probe: FAILED/i);
+    expect(install.stdout).toMatch(/OS containment is unavailable/i);
+    // The launcher's own words, quoted rather than paraphrased.
+    expect(install.stdout).toContain("bwrap: setting up uid map: Permission denied");
+    // The remediation names the AppArmor profile…
+    expect(install.stdout).toContain("/etc/apparmor.d/bwrap");
+    // …and never the machine-wide sysctl, which ADR-0010 rejected outright.
+    expect(install.stdout).not.toContain("apparmor_restrict_unprivileged_userns");
+    // The sentence that was the defect.
+    expect(install.stdout).not.toMatch(/containment and network-off are available/i);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: falsifiable — a bwrap that DOES contain the trial run is reported as working",
+  async () => {
+    // Proves the two assertions above are load-bearing rather than a
+    // permanently-negative report: the only difference from the previous case
+    // is that this shim execs the wrapped command instead of failing.
+    //
+    // `wrapBwrap` produces `bwrap <flags…> -- <cmd> [args…]`, so the shim
+    // discards everything up to and including the `--` and runs the rest.
+    const shimDir = await bwrapShim(
+      "bwrap-shim-working",
+      '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "--" ]; then shift; break; fi\n  shift\ndone\nexec "$@"\n',
+    );
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: join(workspace, "bin-ac12-working"),
+      }),
+    });
+    expect(install.exitCode).toBe(0);
+    expect(install.stdout).toMatch(/containment probe: OK/i);
     expect(install.stdout).not.toMatch(/OS containment is unavailable/i);
-    expect(install.stdout).toMatch(/bubblewrap: found/i);
+    expect(install.stdout).toMatch(/confirmed by a trial contained command/i);
   },
   INSTALL_TIMEOUT_MS,
 );
