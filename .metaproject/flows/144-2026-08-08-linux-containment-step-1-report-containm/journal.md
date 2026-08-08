@@ -162,16 +162,72 @@ hand-maintained.
   (`linuxGuardedTest` skips it everywhere), and install.sh's "keryx exits 0 but
   prints nothing" branch. All low value; recorded, not closed.
 
-## Gate after round 1 fixes
+## Round 3 review — 1 major, 4 minors, 2 info
+
+Run over the round-2 fix delta (`9f28a2b2..HEAD`), on the same reasoning as
+round 2 and for the same reason: round 1's fixes introduced four defects, so
+round 2's fixes were not to be trusted either.
+
+**The major, and it is in the bash again.** The RETURN trap was installed as
+`trap "rm -f '${status_error}'" RETURN` — eager expansion, pasting the path
+into a single-quoted trap body. A `TMPDIR` containing an apostrophe therefore
+made that body a syntax error, and **a failing RETURN trap is fatal under
+`set -e`**, so the installer aborted with exit 2 *after* printing "keryx
+installed globally". The report becoming a gate — the third distinct time this
+function has done that, and the third distinct mechanism. The `shellcheck
+disable=SC2064` comment justifying the eager form was simply wrong: a RETURN
+trap fires while the function's locals are still in scope, so deferred
+expansion is both safe and correct.
+
+Reproduced and then falsified: reverting the quoting makes the new test fail
+with `return trap: line 109: unexpected EOF while looking for matching '` and
+exit 2, exactly as the reviewer described.
+
+**The other findings.**
+
+| Finding | Fix |
+|---|---|
+| `print_bounded_output` stripped only CR and ESC while claiming "control characters removed" — BEL, BACKSPACE, VT and FF passed through, and backspace erases the indent exactly as CR does | one class strip, matching `sanitizeDetail`'s |
+| `importsSpawn` anchored on a line starting with `import`, so a wrapped multi-line import and `await import()` both evaded the AC14 purity guard | anchored on the specifier; six import forms pinned |
+| "transitive" was one hop over direct spawners only, so a module reaching `probe.ts` through the barrel was not detected — the route the comment itself names | fixed point over relative imports; `index.ts` now in the closure, asserted |
+| Two `USERNS_DENIAL_MARKERS` entries were dead by subsumption | removed, plus a test that no marker contains another |
+| The round-2 bash had no regression coverage at all | two installer tests, both falsified by hand |
+
+**The gap that mattered most was the last one.** Three bash regressions in three
+rounds, each found by a human reading the diff and then fixed with nothing to
+stop the next. `scripts/install-global.test.ts` now drives the real script
+against a hostile `TMPDIR` (apostrophe + unwritable) and against a keryx that
+dies emitting CR, ESC, BEL, backspace and 120 long lines — asserting on the
+BYTES in the transcript, not on how they render.
+
+### Falsification runs
+
+| Reverted change | Result |
+|---|---|
+| trap quoting back to eager | **9 pass / 1 fail** — exit 2, `unexpected EOF` |
+| control class back to CR+ESC only | **9 pass / 1 fail** — control bytes in the transcript |
+
+Both restored; `bash -n` clean, suite back to 10 pass.
+
+### Round 3 — accepted and NOT fixed
+
+Nothing outstanding. The two `info` findings (dead markers, an indentation slip
+in `defaultSpawn`) were folded in rather than deferred.
+
+## Final gate (after round 3)
 
 | Gate | Result |
 |---|---|
 | `keryx health run` | PASS — score 93, trend stable, 0 P0 / 0 P1 |
-| `bun test` (full) | 3291 pass / 14 skip / 0 fail across 317 files |
-| sandbox + commands suites | 210 pass / 5 skip / 0 fail |
-| `scripts/install-global.test.ts` | 8 pass / 0 fail |
+| `bun test` (full) | 3314 pass / 14 skip / 0 fail across 317 files |
+| sandbox + commands suites | 229 pass / 5 skip / 0 fail (baseline 158 pass) |
+| `scripts/install-global.test.ts` | 10 pass / 0 fail (baseline 3 pass / 2 fail on this host) |
 | `bunx tsc --noEmit` | clean |
+| `bash -n scripts/install.sh` | clean |
 | `bun scripts/check-doc-links.ts` | 698 links / 0 broken |
+
+The 14 skipped tests are pre-existing env-gated live smoke suites
+(`KERYX_DUAL_AXIS_LIVE` and friends), untouched by this flow.
 
 Note: `keryx health run` initially reported WARN (`required source unavailable:
 typescript`) because this worktree had no `node_modules`. After `bun install

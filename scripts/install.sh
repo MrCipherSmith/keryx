@@ -73,10 +73,14 @@ print_bounded_output() {
   local line
 
   while IFS= read -r line || [ -n "$line" ]; do
-    # Strip CR (would redraw the line and escape the indent that marks this as
-    # the failed process's words) and ESC (ANSI control sequences).
-    line="${line//$'\r'/}"
-    line="${line//$'\033'/}"
+    # Strip control characters, keeping only tab. CR would redraw the line and
+    # ESC would start an ANSI sequence -- either lets the failed process's
+    # output erase the four-space indent that marks it as ITS words and
+    # impersonate the installer's own. BEL, BACKSPACE, VT and FF do the same
+    # thing to a lesser degree, so the whole class goes rather than the two
+    # characters that were noticed first; this now matches the class
+    # `sanitizeDetail` applies to the same data on the TypeScript side.
+    line="${line//[$'\x01'-$'\x08'$'\x0b'-$'\x1f'$'\x7f']/}"
     if [ "${#line}" -gt "$max_chars" ]; then
       line="${line:0:$max_chars}... (line truncated)"
     fi
@@ -123,8 +127,17 @@ report_sandbox_status() {
   # empty value simply means "no stderr capture"; the report still runs.
   status_error="$(mktemp 2>/dev/null || true)"
   # Clean up even if the probe is interrupted mid-run (it may take seconds).
-  # shellcheck disable=SC2064 -- expand $status_error now, not at trap time
-  trap "rm -f '${status_error}'" RETURN
+  #
+  # SINGLE-quoted, so `$status_error` is expanded when the trap FIRES, not when
+  # it is installed. The eager form — `trap "rm -f '${status_error}'" RETURN` —
+  # pastes the path into the trap body, so a TMPDIR containing an apostrophe
+  # makes that body a syntax error. A failing RETURN trap is fatal under
+  # `set -e`, so the installer would abort with exit 2 *after* printing "keryx
+  # installed": the report becoming a gate, which is the one thing this function
+  # must never do. Deferred expansion is also correct here because a RETURN trap
+  # fires while the function's locals are still in scope.
+  # shellcheck disable=SC2064 -- deferred expansion is deliberate; see above
+  trap 'rm -f "$status_error"' RETURN
 
   if ! status_output="$("$@" sandbox status 2>"${status_error:-/dev/null}")"; then
     # A report, never a gate: if the probe cannot be run at all, say exactly

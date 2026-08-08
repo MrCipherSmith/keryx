@@ -135,6 +135,8 @@ export const MAX_DETAIL_CHARS = 4_000;
  * The profile below is the same shape Ubuntu ships for Chrome, Brave and ~40
  * other applications: the namespace is granted to `/usr/bin/bwrap` alone.
  */
+export { USERNS_DENIAL_MARKERS };
+
 export const BWRAP_APPARMOR_REMEDIATION =
   "grant the user namespace to /usr/bin/bwrap alone with an AppArmor profile at " +
   "/etc/apparmor.d/bwrap (the same shape Ubuntu ships for Chrome, Brave and ~40 other " +
@@ -156,17 +158,21 @@ export const BWRAP_APPARMOR_REMEDIATION =
  * misdiagnosis this classifier was added to prevent, so the markers have to be
  * at least as specific as the conclusion they license.
  */
+// No entry may contain another: `includes` is used per marker, so a longer
+// phrase whose prefix is already listed can never fire independently and only
+// makes the list read as broader than it is. `purity`-style discipline for a
+// list whose specificity IS the safety property.
 const USERNS_DENIAL_MARKERS = [
-  // The measured Ubuntu 23.10+ failure.
+  // The measured Ubuntu 23.10+ failure, and its gid twin.
   "setting up uid map",
   "setting up gid map",
-  // bwrap's other phrasings for the same withdrawal.
+  // bwrap's phrasings for the same withdrawal. "creating new namespace" covers
+  // "No permissions to creating new namespace…" and "Creating new namespace
+  // failed: …"; "user namespace" covers "unprivileged user namespaces".
   "creating new namespace",
   "create new namespace",
-  "no permissions to creating new namespace",
-  "unprivileged user namespace",
-  "user namespaces",
   "user namespace",
+  // util-linux's unshare(1), which some wrappers shell out to.
   "unshare: operation not permitted",
   "unshare: permission denied",
   "clone: operation not permitted",
@@ -386,17 +392,17 @@ function classifyFailure(detail: string): ProbeFailureCause {
 export function defaultSpawn(spawnSync: typeof realSpawnSync = realSpawnSync): ProbeSpawn {
   return (path, argv, options) => {
     const result = spawnSync(path, argv, {
-    cwd: options.cwd,
-    // The profile the trial claims to run under says the environment is empty;
-    // running it under the parent's environment instead would make the probe
-    // less faithful than the thing it reports on.
-    env: options.env,
-    timeout: options.timeoutMs,
-    encoding: "utf8",
-    // The trial writes nothing on success and its stderr IS the finding on
-    // failure, so both streams are captured rather than inherited.
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+      cwd: options.cwd,
+      // The profile the trial claims to run under says the environment is
+      // empty; running it under the parent's environment instead would make the
+      // probe less faithful than the thing it reports on.
+      env: options.env,
+      timeout: options.timeoutMs,
+      encoding: "utf8",
+      // The trial writes nothing on success and its stderr IS the finding on
+      // failure, so both streams are captured rather than inherited.
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     return {
       status: result.status,
       stderr: result.stderr ?? "",

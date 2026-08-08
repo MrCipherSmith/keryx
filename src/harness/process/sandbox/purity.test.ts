@@ -51,13 +51,25 @@ const SPAWN_IMPORTS = ["node:child_process", "child_process", "Bun.spawn", "Bun.
  * already matched import statements; this makes the spawn check do the same.
  */
 function importsSpawn(source: string, needle: string): boolean {
+  const code = withoutComments(source);
   if (needle.startsWith("Bun.")) {
-    // Not an import — a global call. Strip line comments before looking, so
-    // prose about `Bun.spawn` does not read as a use of it.
-    return withoutComments(source).includes(needle);
+    // Not an import — a global call.
+    return code.includes(needle);
   }
-  const pattern = new RegExp(`^\\s*(?:import|export)[^;\\n]*["']${needle}["']`, "m");
-  return pattern.test(source) || new RegExp(`require\\(\\s*["']${needle}["']`).test(source);
+  // Anchored on the SPECIFIER, not on a line that starts with `import`. An
+  // earlier version required `^\s*(?:import|export)` on the same line, which
+  // any formatter defeats the moment the named-import list wraps:
+  //
+  //   import {
+  //     spawnSync,
+  //   } from "node:child_process";
+  //
+  // — the `from` line starts with `}`, so the guard read the module as pure.
+  // `import()` and `require()` were missed for the same reason. Matching
+  // `from`/`import(`/`require(` immediately before the quoted specifier catches
+  // every form and still cannot fire on prose, because comments are stripped.
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:from|import|require)\\s*\\(?\\s*["']${escaped}["']`).test(code);
 }
 
 /** Strip `//` line comments and block comments. Good enough for this check. */
@@ -65,11 +77,45 @@ function withoutComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** Every non-test module in this package that reaches a process, computed from source. */
+/** Every non-test module in this package. */
+function packageModules(): string[] {
+  return readdirSync(HERE).filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"));
+}
+
+/** Modules that spawn directly — they name a spawn API themselves. */
+function directSpawningModules(): string[] {
+  return packageModules().filter((file) => SPAWN_IMPORTS.some((needle) => importsSpawn(sourceOf(file), needle)));
+}
+
+/**
+ * Every module from which a process is reachable: the direct spawners, plus
+ * anything that imports one, to a fixed point.
+ *
+ * The fixed point is the point. A single hop would miss the route the barrel
+ * actually opened — `index.ts` re-exports `probeContainment`, so a module
+ * importing `./index` reaches a spawn through a file that does not itself
+ * spawn, and a one-hop check calls that pure.
+ */
 function spawningModules(): string[] {
-  return readdirSync(HERE)
-    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
-    .filter((file) => SPAWN_IMPORTS.some((needle) => importsSpawn(sourceOf(file), needle)));
+  const modules = packageModules();
+  const sources = new Map(modules.map((file) => [file, withoutComments(sourceOf(file))]));
+  const reaching = new Set(directSpawningModules());
+
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const file of modules) {
+      if (reaching.has(file)) continue;
+      const source = sources.get(file) ?? "";
+      const importsAReacher = [...reaching].some((spawner) =>
+        new RegExp(`from\\s+["']\\./${spawner.replace(/\.ts$/, "")}["']`).test(source),
+      );
+      if (importsAReacher) {
+        reaching.add(file);
+        changed = true;
+      }
+    }
+  }
+  return [...reaching];
 }
 
 /**
@@ -114,13 +160,29 @@ describe("sandbox module purity (N3 / AC14)", () => {
     expect(source).toContain("spawn?: ProbeSpawn");
   });
 
-  test("the set of spawning modules is exactly the two that are meant to spawn", () => {
+  test("the set of DIRECT spawners is exactly the two that are meant to spawn", () => {
     // Pinned so that a third one cannot appear unremarked. `probe.ts` runs the
     // trial containment; `tls-ca.ts` shells out to openssl for the restricted-
     // network CA and predates this flow. Both are deliberate; anything else
     // showing up here is a purity regression and should fail loudly rather than
     // widen the transitive check by accident.
-    expect(spawningModules().sort()).toEqual(["probe.ts", "tls-ca.ts"]);
+    expect(directSpawningModules().sort()).toEqual(["probe.ts", "tls-ca.ts"]);
+  });
+
+  test("the transitive closure is a superset, and includes the barrel", () => {
+    // Two things at once. That the closure is genuinely computed (it must be
+    // strictly larger than the direct set, because `index.ts` re-exports both
+    // spawners), and that `index.ts` is in it — which is what makes the
+    // per-module transitive check above able to catch a pure module that
+    // reaches a spawn through the barrel rather than directly.
+    const direct = directSpawningModules().sort();
+    const closure = spawningModules().sort();
+
+    expect(closure).toContain("index.ts");
+    for (const file of direct) {
+      expect(closure).toContain(file);
+    }
+    expect(closure.length).toBeGreaterThan(direct.length);
   });
 
   test("falsifiable: the same check finds the spawn import in the module that has one", () => {
@@ -131,12 +193,30 @@ describe("sandbox module purity (N3 / AC14)", () => {
     expect(offenders).toContain("node:child_process");
   });
 
-  test("falsifiable: a mention in a comment is not read as an import", () => {
-    // The instrument's own weak point, pinned. Without this, tightening the
-    // matcher could silently regress to substring matching and nothing would
-    // notice until a pure module's doc comment failed the suite.
-    expect(importsSpawn('// this module must never import node:child_process\n', "node:child_process")).toBe(false);
-    expect(importsSpawn('import { spawnSync } from "node:child_process";\n', "node:child_process")).toBe(true);
+  test("falsifiable: the matcher sees every import form, and no comment", () => {
+    // The instrument's own weak points, pinned — a guard meant to hold for
+    // years is only as good as the shapes it recognises, and the first version
+    // of this one recognised exactly one.
+    const spawnModule = "node:child_process";
+
+    // Prose is not a use.
+    expect(importsSpawn(`// this module must never import ${spawnModule}\n`, spawnModule)).toBe(false);
+    expect(importsSpawn(`/**\n * See ${spawnModule} for why.\n */\n`, spawnModule)).toBe(false);
+
+    // …and every real form is.
+    for (const form of [
+      `import { spawnSync } from "${spawnModule}";`,
+      // The wrapped form any formatter produces once the list grows. The
+      // earlier matcher required the specifier's line to START with `import`,
+      // so this one read as pure.
+      `import {\n  spawnSync,\n  spawn,\n} from "${spawnModule}";`,
+      `import * as cp from "${spawnModule}";`,
+      `export { spawnSync } from "${spawnModule}";`,
+      `const cp = require("${spawnModule}");`,
+      `const cp = await import("${spawnModule}");`,
+    ]) {
+      expect(importsSpawn(form, spawnModule)).toBe(true);
+    }
   });
 
   test("N2: the sandbox package pulls in no npm dependency", () => {

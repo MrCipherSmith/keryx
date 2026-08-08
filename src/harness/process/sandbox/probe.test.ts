@@ -13,6 +13,7 @@ import {
   BWRAP_APPARMOR_REMEDIATION,
   MAX_DETAIL_CHARS,
   PROBE_TIMEOUT_MS,
+  USERNS_DENIAL_MARKERS,
   defaultSpawn,
   probeContainment,
   resetContainmentProbeCacheForTests,
@@ -122,6 +123,16 @@ describe("runContainmentProbe — AC4: the launcher's own words are the evidence
       const result = runContainmentProbe({ platform: "linux", spawn });
       expect(result.cause).toBe("unknown");
       expect(result.remediation).toBeUndefined();
+    }
+  });
+
+  test("no marker subsumes another, so every entry can actually fire", () => {
+    // `classifyFailure` runs `includes` per marker, so a phrase containing
+    // another is dead code that makes the list read as broader than it is —
+    // and this list's specificity is the safety property it exists for.
+    for (const marker of USERNS_DENIAL_MARKERS) {
+      const others = USERNS_DENIAL_MARKERS.filter((m) => m !== marker);
+      expect(others.filter((m) => marker.includes(m))).toEqual([]);
     }
   });
 

