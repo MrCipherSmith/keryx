@@ -62,6 +62,38 @@ proceeds as specified — or it does not, and step 3 gains a compiled helper plu
 the per-architecture distribution cost that Codex accepted and this package
 hoped to avoid. Timebox it; a spike that has not concluded is itself the answer.
 
+### Done — result: `bun:ffi` carries it
+
+Full finding and executable evidence: **[spike/README.md](spike/README.md)**
+(29 assertions, `spike/verify.sh`). Summary:
+
+- The whole sequence works from Bun, and the restriction is inherited by a
+  grandchild and a great-grandchild. Step 3 proceeds as specified; **no compiled
+  helper, no per-architecture binary.**
+- **Cost: ~40 ms per command** (median, load-dependent), of which only ~1 ms is
+  Landlock. The rest is a second Bun cold start (~23 ms) plus transpiling the
+  launcher (~13 ms), both required by §4.2's shape. That is roughly **4×
+  bubblewrap** on the same host and must go into Step 4's runbook figures
+  (**S6**) as measured, not estimated.
+- Three design corrections for Step 3, all cheap: use **`execve` via FFI** rather
+  than `Bun.spawnSync` (otherwise a Bun process stays resident as the parent of
+  every contained command, and note raw `execve` does no PATH search);
+  **prebundle** the child to one `.js` (~3 ms); and map `signalCode` to 128+N,
+  because `Bun.spawnSync` returns `exitCode: null` for a signalled child and
+  `process.exit(null)` exits 0.
+- The ABI-4 TCP axis is reachable and enforcing. §4.3 is unchanged: it is
+  TCP-only, so `network: "off"` still selects bubblewrap. The spike's flag is
+  named `--handle-tcp`, not `--net`, so the surface cannot be misread.
+- **Fail closed when an axis is unavailable, never degrade.** The spike's first
+  draft silently dropped a requested TCP restriction below ABI 4 and ran the
+  command at exit 0 with an unrestricted network; review caught it.
+- **For Step 1:** the spike twice wrote assertions that passed without proving
+  anything (a TCP probe green on `ECONNREFUSED`; a denial asserted only by an
+  absent output file). A probe without a negative control is not evidence, and
+  asserting the symptom of a denial is not asserting its cause.
+- Untested and inherited by Step 3 as risk: **ABI 1** (kernel 5.15 / Ubuntu
+  22.04) is inferred from headers, never run.
+
 ## Step 3 — the Landlock launcher
 
 **Delivers:** R1, R2, R3 · **AC1, AC2, AC3, AC8, AC9, AC10**.
