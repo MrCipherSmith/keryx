@@ -69,19 +69,139 @@ function rulesetOf(profile: SandboxProfile, abi = ABI_CURRENT): LandlockRuleset 
   return result.ruleset;
 }
 
+// --- source-guard helpers, used by the AC1 purity test -----------------------
+//
+// Extracted so each predicate can be reasoned about — and mutated against — on
+// its own. The single 155-line body they came from shared one findings array,
+// so a failure could not say which of its four checks had fired.
+
 /**
- * True when an identifier sits anywhere inside a type. `readonly at: Date` and
- * `function f(d: Date)` are erased at compile time and reach nothing at run
- * time; reporting them would be a false positive, and a guard that cries wolf on
- * ordinary code is one someone deletes.
+ * True when an identifier sits in a position the compiler erases.
+ *
+ * `readonly at: Date` and `function f(d: Date)` reach nothing at run time, and a
+ * guard that cries wolf on them is one someone deletes. But `class X extends
+ * expr` RUNS, and its `expr` is an `ExpressionWithTypeArguments` — the one node
+ * `ts.isTypeNode` calls a type while it still carries a live expression. A
+ * previous version skipped it, and `class B extends globalThis.Object` went
+ * green. `implements`, and `interface X extends Y`, really are erased and stay
+ * skipped.
  */
-function isTypePosition(node: ts.Node): boolean {
+function isErasedTypePosition(node: ts.Node): boolean {
   for (let current = node.parent; current !== undefined; current = current.parent) {
+    if (isClassExtendsExpression(current)) {
+      return false;
+    }
     if (ts.isTypeNode(current) || ts.isTypeAliasDeclaration(current) || ts.isInterfaceDeclaration(current)) {
       return true;
     }
     if (ts.isSourceFile(current)) {
       return false;
+    }
+  }
+  return false;
+}
+
+function isClassExtendsExpression(node: ts.Node): boolean {
+  return (
+    ts.isExpressionWithTypeArguments(node) &&
+    node.parent !== undefined &&
+    ts.isHeritageClause(node.parent) &&
+    node.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+    node.parent.parent !== undefined &&
+    ts.isClassLike(node.parent.parent)
+  );
+}
+
+/**
+ * True when an identifier is the NAME of whatever declares it, rather than a
+ * read of a value by that name.
+ *
+ * One shape rather than a list of node kinds. The list version missed object
+ * literal methods, class members and accessors, enum members, class declaration
+ * names, namespace imports and labels — eight shapes of ordinary code reported
+ * as impurity, which is how a guard gets switched off. `{ process }` shorthand
+ * is deliberately NOT a name: it reads the value.
+ */
+function isDeclarationName(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (parent === undefined || ts.isShorthandPropertyAssignment(parent)) {
+    return false;
+  }
+  if ((parent as { name?: ts.Node }).name === node) {
+    return true;
+  }
+  return (
+    ts.isNamespaceImport(parent) ||
+    ts.isImportSpecifier(parent) ||
+    ts.isExportSpecifier(parent) ||
+    ts.isImportClause(parent) ||
+    ts.isLabeledStatement(parent) ||
+    ts.isBreakStatement(parent) ||
+    ts.isContinueStatement(parent)
+  );
+}
+
+/** Does a binding — plain, destructured or nested — bind `name`? */
+function bindsName(binding: ts.BindingName, name: string): boolean {
+  if (ts.isIdentifier(binding)) {
+    return binding.text === name;
+  }
+  return binding.elements.some(
+    (element) => ts.isBindingElement(element) && bindsName(element.name, name),
+  );
+}
+
+/** Does an import declaration bind `name` — default, namespace or named? */
+function importBinds(statement: ts.ImportDeclaration, name: string): boolean {
+  const clause = statement.importClause;
+  if (clause === undefined) {
+    return false;
+  }
+  if (clause.name?.text === name) {
+    return true;
+  }
+  const bindings = clause.namedBindings;
+  if (bindings === undefined) {
+    return false;
+  }
+  return ts.isNamespaceImport(bindings)
+    ? bindings.name.text === name
+    : bindings.elements.some((element) => element.name.text === name);
+}
+
+/** Does this one scope — not its ancestors — declare `name`? */
+function scopeDeclares(scope: ts.Node, name: string): boolean {
+  const statements = ts.isSourceFile(scope) || ts.isBlock(scope) ? scope.statements : undefined;
+  for (const statement of statements ?? []) {
+    if (ts.isVariableStatement(statement)) {
+      if (statement.declarationList.declarations.some((d) => bindsName(d.name, name))) {
+        return true;
+      }
+    } else if (
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+      statement.name?.text === name
+    ) {
+      return true;
+    } else if (ts.isImportDeclaration(statement) && importBinds(statement, name)) {
+      // An import binding shadows the global for the whole module, and what may
+      // be imported is already an allowlist of two pure modules.
+      return true;
+    }
+  }
+  return ts.isFunctionLike(scope) && scope.parameters.some((p) => bindsName(p.name, name));
+}
+
+/**
+ * True when a declaration of `node`'s name is in scope AT `node`.
+ *
+ * Per position, not per file. A file-wide set was scope-blind: one
+ * `function f(process: string)` anywhere disarmed the check for a module-scope
+ * `process.platform` on the next line, which is the exact impurity AC1 names.
+ */
+function isShadowedAt(node: ts.Identifier): boolean {
+  for (let scope = node.parent; scope !== undefined; scope = scope.parent) {
+    if (scopeDeclares(scope, node.text)) {
+      return true;
     }
   }
   return false;
@@ -118,7 +238,7 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     //   · `import.meta` in any form, which removes `import.meta.require`.
     //   · `createRequire` under another name, since importing `node:module` is
     //     already forbidden by the allowlist.
-    //   · the indirect-call family, by naming `Function` beside `eval`.
+    //   · `eval` and `Function` by name.
     //   · `Math` by identifier with a member allowlist, so `Math["random"]`,
     //     `const { random } = Math` and `const M = Math` are one check — the
     //     principle the guard already applied to `process`.
@@ -127,9 +247,13 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     // repository's record that structure has spellings too:
     //   · a global reached through a name not in the set below — there is no
     //     enumeration of "every impure global", only of the ones worth naming.
-    //   · a forbidden name the module also declares locally is skipped, because
-    //     a shadow is not the global. Reaching the real one through such a
-    //     shadow needs an initialiser that every check here already sees.
+    //     `Reflect`, `structuredClone` and `queueMicrotask` are examples.
+    //   · a global reached through no name at all: `({}).constructor.constructor`
+    //     is the `Function` constructor, and naming `Function` does not see it.
+    //   · a shadow. An identifier is skipped when a declaration of that name is
+    //     in scope AT it, so a module-scope `const process = …` disarms the name
+    //     for the file. Its initialiser is still checked, so laundering a real
+    //     global through one has to pass every other check first.
     //   · anything `./profile` or `node:path` might do. Both are in-repo or
     //     stdlib and pure, and `./profile` is itself spawn-free by spec §2.
     //   · what the BUNDLER ships. This reads one file from disk; the oracle for
@@ -166,7 +290,9 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
           reached.push(`load with a non-literal specifier: ${node.getText(sourceFile)}`);
         }
       }
-      if (node.kind === ts.SyntaxKind.MetaProperty) {
+      // `new.target` is a MetaProperty too, and reporting it as `import.meta`
+      // named a construct the module does not contain.
+      if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) {
         reached.push("import.meta");
       }
     }
@@ -193,45 +319,12 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     /** `Math` members this module legitimately uses; everything else is a reach. */
     const pureMathMembers = new Set(["max"]);
 
-    // A name the module declares itself is not the global of that name: `const
-    // performance = 1` shadows it. Reaching a global THROUGH such a shadow would
-    // need an initialiser that reaches it, which every check here already sees.
-    const declaredLocally = new Set<string>();
-    for (const node of walk(sourceFile)) {
-      const name =
-        ts.isVariableDeclaration(node) ||
-        ts.isParameter(node) ||
-        ts.isBindingElement(node) ||
-        ts.isFunctionDeclaration(node)
-          ? node.name
-          : undefined;
-      if (name !== undefined && ts.isIdentifier(name)) {
-        declaredLocally.add(name.text);
-      }
-    }
-
     for (const node of walk(sourceFile)) {
       if (!ts.isIdentifier(node) || !forbiddenGlobals.has(node.text)) {
         continue;
       }
       const parent = node.parent;
-
-      // A NAME is not a reach for the global. `{ process: 1 }`, `x.process`,
-      // `interface X { process: 1 }`, `const Date = …` and an import binding are
-      // all ordinary code, and a guard that reddens on them gets switched off by
-      // whoever trips on it — which protects nothing at all.
-      const isName =
-        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-        (ts.isPropertyAssignment(parent) && parent.name === node) ||
-        (ts.isPropertySignature(parent) && parent.name === node) ||
-        (ts.isMethodSignature(parent) && parent.name === node) ||
-        (ts.isVariableDeclaration(parent) && parent.name === node) ||
-        (ts.isParameter(parent) && parent.name === node) ||
-        (ts.isBindingElement(parent) && parent.name === node) ||
-        ts.isImportSpecifier(parent) ||
-        ts.isExportSpecifier(parent) ||
-        ts.isImportClause(parent);
-      if (isName || isTypePosition(node) || declaredLocally.has(node.text)) {
+      if (isDeclarationName(node) || isErasedTypePosition(node) || isShadowedAt(node)) {
         continue;
       }
 

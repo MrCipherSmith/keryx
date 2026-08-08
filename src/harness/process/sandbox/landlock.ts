@@ -185,9 +185,16 @@ export interface LandlockResidualAction {
 /**
  * Everything a ruleset from this module does not restrict, as data.
  *
- * The mutating entries of the kernel's `landlock(7)` CAVEATS list. That list
- * also names `chdir`, `stat` and `access`, which observe rather than mutate and
- * so cannot weaken a write boundary; they are deliberately absent.
+ * Every entry of the kernel's `landlock(7)` CAVEATS list that acts on a file.
+ * That list also names `chdir`, `stat` and `access`, which act on the process or
+ * merely answer a question, so there is nothing for a ruleset to have missed;
+ * they are deliberately absent.
+ *
+ * Whether an entry crosses a write boundary is `refusedByBubblewrap`, not a
+ * criterion for being here — `fcntl` and `flock` are listed precisely so a
+ * reporting layer can say that neither layer restricts them and neither needs
+ * to. An earlier version of this paragraph said the list held "the mutating
+ * entries", which those two contradict.
  *
  * `ioctl` appears **twice, at different granularity**, because Landlock splits
  * it and a single entry cannot be true of both halves:

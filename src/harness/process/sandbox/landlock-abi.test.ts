@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { moduleSpecifiers, parse } from "../../../lib/config-dir.ast";
 import { LANDLOCK_ABI_UNAVAILABLE, LandlockAbiReaderError, cacheLandlockAbi } from "./landlock-abi";
 import type { LandlockAbiReader } from "./landlock-abi";
 
@@ -54,6 +57,17 @@ describe("AC5: cacheLandlockAbi is a mechanism-free, single-call seam", () => {
     expect(one()).toBe(1);
     expect(four()).toBe(4);
     expect(one()).toBe(1);
+  });
+
+  test("the module loads nothing at all — the mechanism cannot arrive by import", async () => {
+    // The export-list assertion below checks the envelope, not the capability:
+    // `import { dlopen } from "bun:ffi"` used inside `cacheLandlockAbi` changes
+    // no export and passes it. `bun:ffi` is now the CONFIRMED route for the
+    // reader (§4.2), so this is the module most likely to acquire a mechanism,
+    // and it currently imports nothing — an empty allowlist is exact.
+    const path = fileURLToPath(new URL("./landlock-abi.ts", import.meta.url));
+    const sourceFile = parse(path, await readFile(path, "utf8"));
+    expect([...new Set(moduleSpecifiers(sourceFile))]).toEqual([]);
   });
 
   test("the module exposes no mechanism of its own", async () => {
