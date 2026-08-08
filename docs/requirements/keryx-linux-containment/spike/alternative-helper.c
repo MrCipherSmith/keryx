@@ -52,6 +52,17 @@ static long ll_restrict_self(int fd, __u32 flags) {
    LANDLOCK_ACCESS_FS_MAKE_BLOCK | LANDLOCK_ACCESS_FS_MAKE_SYM |               \
    LANDLOCK_ACCESS_FS_REFER | LANDLOCK_ACCESS_FS_TRUNCATE)
 
+/* Mirrors DEVICE_ACCESS in landlock-ffi.ts. Must exist here too: bench.sh
+   hands the SAME argv to both implementations, so a flag this helper does not
+   understand makes it exit 125 at parse time — and a benchmark that times a
+   process which never applied a ruleset or ran a command reports a number for
+   work that did not happen. That is exactly how the first published
+   compiled-helper figure came to be fabricated. */
+#define DEV_ACCESS                                                             \
+  (LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_WRITE_FILE |              \
+   LANDLOCK_ACCESS_FS_READ_DIR | LANDLOCK_ACCESS_FS_MAKE_REG |                 \
+   LANDLOCK_ACCESS_FS_REMOVE_FILE | LANDLOCK_ACCESS_FS_TRUNCATE)
+
 static int add_path(int ruleset_fd, const char *path, __u64 allowed) {
   struct landlock_path_beneath_attr attr;
   memset(&attr, 0, sizeof(attr));
@@ -108,6 +119,8 @@ int main(int argc, char **argv) {
       access = RO_ACCESS;
     } else if (strcmp(argv[i], "--rw") == 0) {
       access = RW_ACCESS;
+    } else if (strcmp(argv[i], "--dev") == 0) {
+      access = DEV_ACCESS;
     } else {
       fprintf(stderr, "alternative-helper: unknown flag %s\n", argv[i]);
       return APPLY_FAILED_EXIT_CODE;

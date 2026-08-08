@@ -7,7 +7,7 @@ unproven assumption in [specification.md](../specification.md) §4.2.
 - **Landlock ABI:** 4 (reached through `bun:ffi`, matching the number ADR-0010
   measured by other means)
 - **Date:** 2026-08-08
-- **Reproduce:** `./verify.sh` (21 assertions) and `./bench.sh`
+- **Reproduce:** `./verify.sh` (28 assertions) and `./bench.sh`
 
 ## Verdict
 
@@ -25,13 +25,13 @@ runtime dependency:
 **But the delivery shape in §4.2 costs ~40 ms per command, roughly 4× the
 bubblewrap it is meant to replace.** The Landlock syscalls are ~1 ms of that.
 The rest is a second Bun cold start (~23 ms) plus transpiling the launcher
-(~12 ms), both paid because §4.2 spawns a *second* Bun to apply the ruleset.
+(~11 ms), both paid because §4.2 spawns a *second* Bun to apply the ruleset.
 This does not invalidate the approach, but it is a real number that Step 3 must
 decide about rather than discover.
 
 ## Evidence
 
-`./verify.sh`, 21/21 passing. Every assertion that something was **denied** is
+`./verify.sh`, 28/28 passing. Every assertion that something was **denied** is
 paired with a control that differs only in the ruleset, and asserts the *reason*
 for the denial rather than its symptom — an assertion that also passes when the
 command never ran is not evidence.
@@ -56,6 +56,13 @@ command never ran is not evidence.
 | 5b | `SIGKILL` reports 137 in both modes, not 0 |
 | 6 | an inapplicable ruleset exits 125, names the path, never runs the command |
 | 6 | the TCP axis is refused below ABI 4 rather than silently dropped |
+| 6b | a bare program name resolves via PATH in both modes |
+| 6b | a program absent from PATH is refused, **not taken from the cwd** |
+| 6b | a missing program exits 125 in both modes, not 1 |
+| 6b | `SIGUSR1` reports 138 in both modes (not flattened to 128) |
+| 6b | malformed port arguments fail closed |
+| 6c | `/dev/null` is writable under the narrowed device grant |
+| 6c | `/dev/shm` supports file creation, so POSIX shm still works |
 | 7 | control: TCP bind succeeds when the net axis is not handled |
 | 7 | `handled_access_net` with no allow-rule denies TCP bind with `EACCES` |
 | 7 | an explicit `net_port` allow-rule restores the bind |
@@ -77,34 +84,37 @@ comparable to each other; and **each iteration timed individually**, reported as
 median with (min–max), because a mean is the statistic a single load spike
 contaminates and "stable" should be visible in the output rather than asserted.
 
-Two consecutive runs at load average ~1.1:
+`measure()` also **runs each command once and checks it succeeded** before
+timing it — see "what surprised us" #5 for why that is not defensive padding.
+
+Load average ~1.9:
 
 | Mechanism | Axes | Median (min–max) |
 |---|---|---|
-| none (`/bin/echo`) | — | 2.1 ms (1.5–2.8) |
-| bubblewrap, ADR-0010's invocation | fs + netns | 10.9 ms (9.2–12.4) |
-| bubblewrap, no `--unshare-net` | fs | 10.1 ms (8.6–11.1) |
-| **landlock via `bun:ffi` (§4.2 shape)** | fs | **39.8 ms (37.3–42.7)** |
-| landlock via `bun:ffi`, TCP axis handled | fs + tcp | 40.1 ms (37.8–42.9) |
-| landlock via `bun:ffi`, prebundled to one `.js` | fs | 36.8 ms (35.1–39.1) |
-| landlock via a compiled C helper | fs | 2.3 ms (1.4–2.7) |
+| none (`/bin/echo`) | — | 2.0 ms (1.5–2.8) |
+| bubblewrap, ADR-0010's invocation | fs + netns | 10.5 ms (9.6–12.5) |
+| bubblewrap, no `--unshare-net` | fs | 10.2 ms (8.7–11.1) |
+| **landlock via `bun:ffi` (§4.2 shape)** | fs | **38.9 ms (36.9–42.5)** |
+| landlock via `bun:ffi`, TCP axis handled | fs + tcp | 39.4 ms (37.6–41.7) |
+| landlock via `bun:ffi`, prebundled to one `.js` | fs | 37.3 ms (35.1–41.2) |
+| landlock via a compiled C helper | fs | 2.5 ms (2.0–3.1) |
 
 Decomposition:
 
 | Component | Cost |
 |---|---|
-| Bun runtime cold start (`bun -e '0'`) | 23.8 ms (22.6–26.2) |
-| import + transpile `landlock-ffi.ts` | ~12.9 ms (n=1) |
-| ABI query (syscall 444) | ~0.15 ms (n=1) |
+| Bun runtime cold start (`bun -e '0'`) | 23.7 ms (21.7–26.4) |
+| import + transpile `landlock-ffi.ts` | ~11.3 ms (n=1) |
+| ABI query (syscall 444) | ~0.16 ms (n=1) |
 | create ruleset + path rules + `no_new_privs` + `restrict_self` | ~0.83 ms (n=1) |
-| **all Landlock syscalls together** | **~0.97 ms (n=1)** |
+| **all Landlock syscalls together** | **~0.99 ms (n=1)** |
 
 Compiled helper: **16472 bytes**.
 
 Caveats, so these figures are not read for more than they are:
 
 - **Not comparable to ADR-0010's.** It recorded bubblewrap at ~17 ms and bare at
-  ~1.8 ms; this run measures ~10.9 ms and ~2.1 ms for the same commands, in a
+  ~1.8 ms; this run measures ~10.5 ms and ~2.0 ms for the same commands, in a
   different session. Compare **within** a table, never across the two. For the
   same reason the ~409 ms `docker run` figure is deliberately **not** in the
   table above — it belongs to ADR-0010's session, and putting it in this one
@@ -156,7 +166,23 @@ sent to verify it.** The generalisation for Step 1: **a probe without a negative
 control is not evidence**, and asserting the *symptom* of a denial is not the
 same as asserting its *cause*.
 
-**5. `glibc` has no Landlock wrappers**, so everything goes through `syscall(2)`.
+**5. A benchmark that does not check exit status measures whatever happens.**
+The first published version of the table above timed the compiled C helper
+invoked with a flag it did not understand — the shared argv array had gained
+`--dev`, and only the TypeScript side learned it. The helper exited 125 at argv
+parsing without ever applying a ruleset or running `/bin/echo`, and the ~2.3 ms
+that produced was printed as the headline cost of the compiled-helper
+alternative, carrying the whole "~17×" comparison. `measure()` now runs each
+command once and refuses to time it unless it succeeded. The corrected figure
+is 2.5 ms — nearly the same number, which is exactly why nobody would have
+caught it by reading the table.
+
+That is the **third** time this spike published a green that proved nothing.
+The pattern across all three is one thing: **an assertion or a measurement was
+trusted because it produced a plausible-looking number, without checking that
+the thing being measured had happened at all.**
+
+**6. `glibc` has no Landlock wrappers**, so everything goes through `syscall(2)`.
 Declaring that variadic function to `bun:ffi` with a fixed arity works, but the
 arity must be 7 (number + 6 args): glibc's x86_64 implementation unconditionally
 loads arg6 from `8(%rsp)`, so a shorter declaration hands the kernel an
@@ -179,17 +205,42 @@ uninitialised stack slot. This is silent when it goes wrong.
   decision belongs to a human, not to Step 3's implementer.
 - Exit codes: `Bun.spawnSync` returns `exitCode: null` for a signalled child and
   `process.exit(null)` exits **0**, so a SIGKILLed command reports success
-  unless you map `signalCode` to 128+N yourself.
+  unless you map `signalCode` to 128+N yourself. Take the signal numbers from
+  `node:os` `constants.signals`, not a hand-written table — a partial table maps
+  every signal it forgot to exit 128, a plausible status that names neither
+  success nor the signal.
+- **PATH resolution must refuse, not fall back.** Raw `execve` resolves a
+  slash-free name against the *current directory*, which for a contained command
+  is attacker-influenced workspace. Returning the unresolved name on a PATH miss
+  therefore runs a planted file where `execvp` would report ENOENT. Also require
+  the candidate to be a regular file: `access(X_OK)` is satisfied by a directory
+  (`/usr/bin/X11` is real), and `execvp` keeps searching on such a hit.
+- **The exit code is a shared channel.** 125 (apply failed) and 128+N (signal)
+  are indistinguishable from a contained command that chose those statuses
+  itself, so a caller cannot read the exit code alone as a boundary outcome.
+  Step 3 should report the boundary result on a channel the child cannot
+  write — the run receipt already exists for this.
 
 **Correctness**
 
 - Clamp `handled_access_fs` to the **measured ABI** — an unknown bit yields
-  `EINVAL`. See `fsMaskForAbi`.
-- Keep the handled mask and the granted sets **in lockstep**. A bit that is
-  handled but never granted by any rule is denied everywhere: `IOCTL_DEV` (ABI
-  5) is the live example, and omitting it makes `TCGETS` on `/dev/tty` fail with
-  `EACCES` inside an explicitly writable `/dev`, which reads as a program bug
-  rather than a policy decision.
+  `EINVAL`. See `fsMaskForAbi`. Note the clamp is asymmetric and one direction
+  is dangerous: too-old is handled by refusing (see the TCP rule below), but a
+  kernel **newer** than the code silently leaves its new access classes
+  unhandled and therefore *unrestricted*. `RestrictOutcome.abiClamped` surfaces
+  that so a caller can refuse rather than under-restrict quietly.
+- Every handled bit must be granted **somewhere**, but not necessarily
+  everywhere: a bit that is handled and granted by no rule in a hierarchy is a
+  deliberate deny. `IOCTL_DEV` (ABI 5) belongs in the **device** grant, not in
+  the general read-write grant — folding it into every `--rw` would confer
+  device control on any device node beneath any writable path. (The ABI-5
+  behaviour itself is inferred from the headers; this host is ABI 4 and masks
+  the bit off, so no assertion here exercises it.)
+- Grant sets are not free-form. `/dev` needs `MAKE_REG`, `REMOVE_FILE` and
+  `TRUNCATE` even though it is "just devices", because `/dev/shm` is a tmpfs
+  where `shm_open`/`sem_open` create regular files — Chromium, Python
+  multiprocessing and libpq all break with `EACCES` without them. Measured, not
+  assumed; `verify.sh` §6c asserts it.
 - `struct landlock_path_beneath_attr` is `__attribute__((packed))`: **12 bytes**,
   not 16. Getting this wrong yields `EINVAL` that looks like a permissions
   problem.
@@ -218,13 +269,22 @@ uninitialised stack slot. This is silent when it goes wrong.
   `/usr /bin /lib /lib64 /etc /proc /sys` plus the Bun install directory, with
   `/dev` accessible. Derive it from the profile rather than hardcoding it; note
   `/lib64` does not exist on aarch64, and an unopenable rule path fails closed.
-- **A whole-`/proc` read grant lets the contained command read
-  `/proc/<pid>/environ` of every same-uid process, including the keryx parent.**
-  ADR-0010 records that `--mask-env` is unimplemented on Linux, so those
-  credentials are in that environment today. Narrow it, or accept it knowingly.
-- The launcher forwards the **entire parent environment** into the contained
-  process unfiltered. Consistent with ADR-0010, not a regression, but it
-  compounds the point above.
+- **The launcher forwards the entire parent environment into the contained
+  process, unfiltered.** This is the real credential-exposure path, measured:
+  a parent variable arrives in the contained command verbatim. ADR-0010 records
+  that `--mask-env` is unimplemented on Linux, so API keys are in that
+  environment today. Step 3 owns this decision.
+- A whole-`/proc` read grant exposes `/proc/<pid>/cmdline` and
+  `/proc/<pid>/status` of other same-uid processes. It does **not** expose
+  `/proc/<pid>/environ`: that read requires `PTRACE_MODE_READ`, and Landlock's
+  ptrace hook refuses a sandboxed process access to a process outside its
+  domain. Measured both ways with one victim process — readable uncontained,
+  `EACCES` contained. An earlier draft of this document claimed the opposite;
+  it was wrong, and the correction is recorded rather than quietly edited,
+  because a decision record that asserts unverified attacks is the same defect
+  as one that asserts unverified boundaries.
+- `/proc/<pid>/root` and `/proc/self/root` re-entry into an ungranted directory
+  are both denied — no traversal escape through the `/proc` grant.
 - `/dev` uses a narrow `DEVICE_ACCESS` (read, write, list, ioctl) rather than
   the full read-write set. `/dev/null` and `/dev/tty` need no node creation, no
   removal and no cross-hierarchy `REFER`.
@@ -273,7 +333,7 @@ helper as the known optimisation if per-command latency becomes a complaint.
 | `landlock-ffi.ts` | the `bun:ffi` binding — syscalls, structs, ABI clamping, `execve` |
 | `landlock-exec.ts` | the §4.2 child shape: restrict self, then become the command |
 | `net-probe.ts` | TCP bind probe used by `verify.sh` §7 |
-| `verify.sh` | the 21 assertions above |
+| `verify.sh` | the 28 assertions above |
 | `bench.sh` | the overhead table |
 | `alternative-helper.c` | the compiled-helper alternative, for the cost comparison only |
 | `tsconfig.json` | lets the spike be typechecked without entering the repo's `src/**` project |

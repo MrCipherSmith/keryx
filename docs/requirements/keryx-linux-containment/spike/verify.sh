@@ -25,7 +25,7 @@ BUN_DIR="$(dirname "$(readlink -f "$BUN")")"
 
 # Every `ok` below is counted; the total is asserted at the end so a section
 # that silently stops running cannot leave the script exiting 0.
-EXPECTED_ASSERTIONS=21
+EXPECTED_ASSERTIONS=28
 
 PASS=0
 FAIL=0
@@ -248,6 +248,81 @@ if [[ "$GUARD" == "ABI1-REFUSED,ABI4-ALLOWED,NONET-ALLOWED" ]]; then
   ok "the TCP axis is refused below ABI 4, allowed at 4, and irrelevant when unrequested"
 else
   bad "TCP axis ABI gate misbehaves: $GUARD"
+fi
+
+echo
+echo "== 6b. program resolution parity between the two modes =="
+
+# Round-2 review found these; each assertion below exists because the behaviour
+# it checks was once wrong and shipped.
+
+# A bare name on PATH must work in BOTH modes: raw execve does no PATH search,
+# so without explicit resolution the modes differ in which commands they start.
+R_EXECVE="$(run_contained echo bare-name-ok 2>&1)"
+R_SPAWN="$("$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" --spawn -- echo bare-name-ok 2>&1)"
+if [[ "$R_EXECVE" == "bare-name-ok" && "$R_SPAWN" == "bare-name-ok" ]]; then
+  ok "a bare program name resolves via PATH in both modes"
+else
+  bad "PATH parity broken (execve='$R_EXECVE' spawn='$R_SPAWN')"
+fi
+
+# A name NOT on PATH must not fall back to the current directory. execve
+# resolves a slash-free name against the cwd, which here is attacker-writable
+# workspace, so a missing tool would silently run a planted file.
+printf '#!/bin/sh\necho PLANTED_RAN\n' > "$WORK/plantedtool"
+chmod +x "$WORK/plantedtool"
+PLANT="$( cd "$WORK" && "$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" -- plantedtool 2>&1 )"
+PLANT_RC=$?
+if [[ "$PLANT" != *PLANTED_RAN* && "$PLANT_RC" -ne 0 ]]; then
+  ok "a program absent from PATH is refused, not taken from the cwd (rc=$PLANT_RC)"
+else
+  bad "cwd fallback executed a planted file (rc=$PLANT_RC, out=$PLANT)"
+fi
+
+# A missing program must be a launcher failure (125), not the command's own 1.
+"$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" -- no_such_program_xyz >/dev/null 2>&1; MISS_E=$?
+"$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" --spawn -- no_such_program_xyz >/dev/null 2>&1; MISS_S=$?
+if [[ "$MISS_E" -eq 125 && "$MISS_S" -eq 125 ]]; then
+  ok "a missing program exits 125 in both modes, not 1 (execve=$MISS_E spawn=$MISS_S)"
+else
+  bad "missing program misreported (execve=$MISS_E spawn=$MISS_S, expected 125 both)"
+fi
+
+# A signal outside a hand-written table must not collapse to a plausible status.
+run_contained /bin/sh -c 'kill -USR1 $$' >/dev/null 2>&1; U_E=$?
+"$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" --spawn -- /bin/sh -c 'kill -USR1 $$' >/dev/null 2>&1; U_S=$?
+if [[ "$U_E" -eq 138 && "$U_S" -eq 138 ]]; then
+  ok "SIGUSR1 reports 138 in both modes (execve=$U_E spawn=$U_S)"
+else
+  bad "signal mapping diverges (execve=$U_E spawn=$U_S, expected 138 both)"
+fi
+
+# A malformed port must be refused rather than coerced: Number("") is 0, which
+# would turn the whole TCP axis on with one meaningless rule at exit 0.
+"$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" --allow-tcp-bind "" -- /bin/true >/dev/null 2>&1; P_EMPTY=$?
+"$BUN" "$EXEC" "${BASE[@]}" --rw "$WORK" --allow-tcp-bind 0x50 -- /bin/true >/dev/null 2>&1; P_HEX=$?
+if [[ "$P_EMPTY" -eq 125 && "$P_HEX" -eq 125 ]]; then
+  ok "malformed port arguments fail closed (empty=$P_EMPTY hex=$P_HEX)"
+else
+  bad "malformed port accepted (empty=$P_EMPTY hex=$P_HEX, expected 125 both)"
+fi
+
+echo
+echo "== 6c. the /dev grant covers what real commands need =="
+
+if run_contained /bin/sh -c 'echo x > /dev/null' >/dev/null 2>&1; then
+  ok "/dev/null is writable under the narrowed device grant"
+else
+  bad "/dev/null write failed under --dev"
+fi
+
+# /dev/shm is a tmpfs beneath /dev where POSIX shared memory creates regular
+# files. A device grant without MAKE_REG denies shm_open/sem_open with EACCES,
+# which breaks Chromium, Python multiprocessing and libpq.
+if run_contained /bin/sh -c 'echo x > /dev/shm/lspike.$$ && rm -f /dev/shm/lspike.$$' >/dev/null 2>&1; then
+  ok "/dev/shm supports file creation (POSIX shm and named semaphores work)"
+else
+  bad "/dev/shm file creation denied — shm_open/sem_open would fail with EACCES"
 fi
 
 echo

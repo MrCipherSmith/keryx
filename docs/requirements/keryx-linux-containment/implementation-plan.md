@@ -65,7 +65,7 @@ hoped to avoid. Timebox it; a spike that has not concluded is itself the answer.
 ### Done — result: `bun:ffi` carries it
 
 Full finding and executable evidence: **[spike/README.md](spike/README.md)**
-(21 assertions, `spike/verify.sh`). Summary:
+(28 assertions, `spike/verify.sh`). Summary:
 
 - The whole sequence works from Bun, and the restriction is inherited by a
   grandchild and a great-grandchild. Step 3 proceeds as specified; **no compiled

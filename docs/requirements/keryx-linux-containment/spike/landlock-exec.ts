@@ -13,6 +13,8 @@
  * applied — never runs the command unrestricted (fail-closed, spec N1).
  */
 
+import { constants as osConstants } from "node:os";
+
 import {
   ACCESS_NET,
   DEVICE_ACCESS,
@@ -26,24 +28,23 @@ import {
 
 const APPLY_FAILED_EXIT_CODE = 125;
 
-/** Signal name -> number, for the shell's 128+N exit convention. */
-const SIGNAL_NUMBERS: Readonly<Record<string, number>> = {
-  SIGHUP: 1,
-  SIGINT: 2,
-  SIGQUIT: 3,
-  SIGILL: 4,
-  SIGABRT: 6,
-  SIGFPE: 8,
-  SIGKILL: 9,
-  SIGSEGV: 11,
-  SIGPIPE: 13,
-  SIGALRM: 14,
-  SIGTERM: 15,
-  SIGSYS: 31,
-};
+/**
+ * Signal name -> number, from the runtime rather than a hand-written table: a
+ * partial table silently maps every signal it forgot to exit code 128, which
+ * is a plausible-looking status that names neither success nor the signal.
+ * `node:os` knows all 30-odd of them.
+ */
+function signalNumber(name: string): number | undefined {
+  const known = (osConstants.signals as Record<string, number | undefined>)[name];
+  return typeof known === "number" ? known : undefined;
+}
 
-function signalNumber(name: string): number {
-  return SIGNAL_NUMBERS[name] ?? 0;
+/** Port arguments must be real ports; `Number("")` is 0 and would install a rule. */
+function parsePort(raw: string, flag: string): number {
+  if (!/^\d+$/.test(raw)) throw new Error(`${flag}: ${raw || "(empty)"} is not a port number`);
+  const port = Number(raw);
+  if (port < 1 || port > 65535) throw new Error(`${flag}: ${port} is out of range 1-65535`);
+  return port;
 }
 
 interface Invocation {
@@ -95,11 +96,17 @@ function parse(argv: readonly string[]): Invocation {
         index += 1;
         break;
       case "--allow-tcp-connect":
-        net.push({ port: Number(value("--allow-tcp-connect")), allowed: ACCESS_NET.CONNECT_TCP });
+        net.push({
+          port: parsePort(value("--allow-tcp-connect"), "--allow-tcp-connect"),
+          allowed: ACCESS_NET.CONNECT_TCP,
+        });
         handleNet = true;
         break;
       case "--allow-tcp-bind":
-        net.push({ port: Number(value("--allow-tcp-bind")), allowed: ACCESS_NET.BIND_TCP });
+        net.push({
+          port: parsePort(value("--allow-tcp-bind"), "--allow-tcp-bind"),
+          allowed: ACCESS_NET.BIND_TCP,
+        });
         handleNet = true;
         break;
       case "--verbose":
@@ -166,18 +173,30 @@ function main(): number {
   }
 
   const [program, ...args] = invocation.command as [string, ...string[]];
-  const child = Bun.spawnSync([program, ...args], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  let child: Bun.SyncSubprocess;
+  try {
+    child = Bun.spawnSync([program, ...args], {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+  } catch (error) {
+    // spawnSync throws ENOENT for a missing program. Without this the launcher
+    // would exit 1 with a stack trace — indistinguishable from the command
+    // itself exiting 1, which is the whole reason 125 is reserved.
+    process.stderr.write(`landlock-exec: ${(error as Error).message}\n`);
+    return APPLY_FAILED_EXIT_CODE;
+  }
+
   // Bun types exitCode as number, but it is null when the child died by a
   // signal — and process.exit(null) exits 0, i.e. a SIGKILLed command would be
   // reported as success. Follow the shell convention instead.
   if (child.exitCode === null) {
-    const signal = child.signalCode;
+    const signal = child.signalCode ?? undefined;
+    const number = signal === undefined ? undefined : signalNumber(signal);
     process.stderr.write(`landlock-exec: command terminated by ${signal ?? "unknown signal"}\n`);
-    return signal === null || signal === undefined ? APPLY_FAILED_EXIT_CODE : 128 + signalNumber(signal);
+    // An unmappable signal must not be rendered as a plausible exit status.
+    return number === undefined ? APPLY_FAILED_EXIT_CODE : 128 + number;
   }
   return child.exitCode;
 }

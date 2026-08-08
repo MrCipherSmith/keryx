@@ -9,7 +9,7 @@
  * See ../specification.md §4 and README.md.
  */
 
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 
 import { dlopen, FFIType, ptr, read, suffix } from "bun:ffi";
 
@@ -158,12 +158,19 @@ const FS_MASK_BY_ABI: Readonly<Record<number, bigint>> = {
   5: (1n << 16n) - 1n, // + IOCTL_DEV
 };
 
+export const NEWEST_KNOWN_ABI = 5;
+
 export function fsMaskForAbi(abi: number): bigint {
   if (abi <= 0) return 0n;
   const known = FS_MASK_BY_ABI[abi];
   if (known !== undefined) return known;
-  // Newer than we know about: clamp to the newest mask we can name.
-  return FS_MASK_BY_ABI[5] as bigint;
+  // Newer than we know about: clamp to the newest mask we can name. This is a
+  // silent UNDER-restriction — any filesystem access class a future kernel adds
+  // goes unhandled and therefore unrestricted. It is the same fail-open shape
+  // as the ABI<4 network bug with the sign reversed, so the outcome reports it
+  // (`abiClamped`) rather than leaving the caller unable to tell "complete"
+  // from "clamped".
+  return FS_MASK_BY_ABI[NEWEST_KNOWN_ABI] as bigint;
 }
 
 // ---------------------------------------------------------------------------
@@ -302,6 +309,12 @@ export interface RestrictOutcome {
   readonly handledNet: bigint;
   readonly pathRules: number;
   readonly netRules: number;
+  /**
+   * True when the kernel's ABI is newer than this code knows, so the handled
+   * FS mask was clamped and any newer access class is UNRESTRICTED. Surfaced
+   * so a caller can refuse rather than silently under-restrict.
+   */
+  readonly abiClamped: boolean;
 }
 
 /**
@@ -369,6 +382,7 @@ export function restrictSelfWith(request: RestrictRequest): RestrictOutcome {
     // Rules actually added, not rules requested — so --verbose cannot report a
     // restriction that was never installed.
     netRules: netRulesAdded,
+    abiClamped: abi > NEWEST_KNOWN_ABI,
   };
 }
 
@@ -385,18 +399,30 @@ function resolveProgram(program: string, env: NodeJS.ProcessEnv): string {
   if (program.includes("/")) return program;
   const search = env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
   for (const dir of search.split(":")) {
+    // An empty PATH element means "the current directory" to execvp. This
+    // deliberately does NOT honour that: the cwd of a contained command is
+    // attacker-influenced workspace, and silently prepending it to the search
+    // path is the classic implicit-CWD hole. Documented as an intentional
+    // divergence from execvp rather than replicated.
     if (dir === "") continue;
     const candidate = `${dir}/${program}`;
     try {
-      // accessSync with X_OK is the same test execvp makes.
+      // Must be a regular file AND executable. accessSync(X_OK) alone is
+      // satisfied by a directory — /usr/bin/X11 is a real example — and
+      // returning one would hand execve an EACCES that looks like a policy
+      // denial. execvp keeps searching on such a hit, so this does too.
+      if (!statSync(candidate).isFile()) continue;
       accessSync(candidate, constants.X_OK);
       return candidate;
     } catch {
-      // Not here; keep searching, exactly as execvp does.
+      // Not here, or not executable; keep searching, exactly as execvp does.
     }
   }
-  // Let execve produce the authoritative ENOENT rather than inventing one.
-  return program;
+  // Never return the bare name: raw execve resolves a name with no slash
+  // against the CURRENT DIRECTORY, so falling through would execute a file
+  // planted in the writable workspace whenever the real tool is missing.
+  // execvp reports ENOENT here, and so does this.
+  throw new Error(`landlock spike: ${program}: not found on PATH`);
 }
 
 /**
@@ -458,14 +484,14 @@ export const READ_ONLY_ACCESS =
   ACCESS_FS.EXECUTE | ACCESS_FS.READ_FILE | ACCESS_FS.READ_DIR;
 
 /**
- * Everything the FS axis can express, i.e. a fully writable hierarchy.
+ * A fully writable hierarchy.
  *
- * This must stay in lockstep with `FS_MASK_BY_ABI`: any bit the ruleset
- * *handles* but no rule ever *grants* is denied everywhere. IOCTL_DEV is the
- * live example — handled from ABI 5, and if it were omitted here a `TCGETS` on
- * `/dev/tty` inside an explicitly read-write `/dev` would fail with EACCES,
- * which reads as a program bug rather than a policy decision. The per-rule
- * `& handledFs` mask makes the bit a no-op on kernels that predate it.
+ * Deliberately does NOT include `IOCTL_DEV` (ABI 5). That bit exists precisely
+ * to gate device ioctls, and folding it into the general read-write set would
+ * mean every `--rw` grant silently confers device control on any device node
+ * beneath it. A bit that is handled but granted by no rule in a given hierarchy
+ * is a deliberate deny, not an oversight — device rights follow the `--dev`
+ * flag that names device semantics. See `DEVICE_ACCESS`.
  */
 export const READ_WRITE_ACCESS =
   READ_ONLY_ACCESS |
@@ -480,14 +506,28 @@ export const READ_WRITE_ACCESS =
   ACCESS_FS.MAKE_BLOCK |
   ACCESS_FS.MAKE_SYM |
   ACCESS_FS.REFER |
-  ACCESS_FS.TRUNCATE |
-  ACCESS_FS.IOCTL_DEV;
+  ACCESS_FS.TRUNCATE;
 
 /**
- * What a device directory actually needs: open, read, write, list. Deliberately
- * NOT `READ_WRITE_ACCESS` — `/dev/null` and `/dev/tty` need no node creation,
- * no removal and no cross-hierarchy REFER, and granting thirteen mutating
- * rights where four suffice widens the boundary for nothing.
+ * What a device directory actually needs. Much narrower than
+ * `READ_WRITE_ACCESS`: no node creation (`MAKE_CHAR`/`MAKE_BLOCK`/`MAKE_SOCK`/
+ * `MAKE_FIFO`/`MAKE_SYM`/`MAKE_DIR`), no directory removal, no cross-hierarchy
+ * `REFER`.
+ *
+ * `MAKE_REG`, `REMOVE_FILE` and `TRUNCATE` are included, and that is not
+ * padding: `/dev/shm` is a tmpfs beneath this hierarchy, and POSIX shared
+ * memory and named semaphores (`shm_open`, `sem_open` — used by Chromium,
+ * Python multiprocessing, libpq) create and unlink regular files there.
+ * Omitting them denies those with EACCES, which was measured, not assumed.
+ *
+ * `IOCTL_DEV` belongs here rather than in the general read-write set, so device
+ * control is granted only where the caller said "this is a device directory".
  */
 export const DEVICE_ACCESS =
-  ACCESS_FS.READ_FILE | ACCESS_FS.WRITE_FILE | ACCESS_FS.READ_DIR | ACCESS_FS.IOCTL_DEV;
+  ACCESS_FS.READ_FILE |
+  ACCESS_FS.WRITE_FILE |
+  ACCESS_FS.READ_DIR |
+  ACCESS_FS.MAKE_REG |
+  ACCESS_FS.REMOVE_FILE |
+  ACCESS_FS.TRUNCATE |
+  ACCESS_FS.IOCTL_DEV;

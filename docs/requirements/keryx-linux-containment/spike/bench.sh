@@ -29,9 +29,23 @@ for dir in /usr /bin /lib /lib64 /etc /proc /sys; do
 done
 BASE+=(--dev /dev --ro "$BUN_DIR" --rw "$WORK")
 
-# Times each iteration separately and prints "median  min-max".
+# Times each iteration separately and prints "median  (min-max)".
+#
+# Verifies the command actually SUCCEEDS before timing it. This is not defensive
+# padding: the first published version of this table timed the compiled C helper
+# invoked with a flag it did not understand, so it exited 125 at argv parsing
+# without ever applying a ruleset or running /bin/echo — and the ~2.3 ms that
+# produced was printed as the headline cost of the compiled-helper alternative.
+# A benchmark that does not check exit status measures whatever happens, then
+# calls it the thing you asked for.
 measure() {
-  local samples=() start end
+  local samples=() start end rc
+  "$@" >/dev/null 2>&1
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    printf 'BROKEN (rc=%s)' "$rc"
+    return
+  fi
   for ((i = 0; i < RUNS; i++)); do
     start="$(date +%s%N)"
     "$@" >/dev/null 2>&1
