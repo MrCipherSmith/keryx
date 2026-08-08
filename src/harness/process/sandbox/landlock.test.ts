@@ -11,6 +11,7 @@ import {
   landlockFsMask,
 } from "./landlock";
 import type {
+  BuildLandlockRulesetOptions,
   LandlockInexpressible,
   LandlockInexpressibleCode,
   LandlockPathRule,
@@ -44,14 +45,22 @@ const expressibleShapes: readonly SandboxProfile[] = [
 ];
 
 /** The failure codes of a translation, or `null` when it succeeded. */
-function codes(profile: SandboxProfile, abi = ABI_CURRENT): LandlockInexpressibleCode[] | null {
-  const result = buildLandlockRuleset(profile, abi);
+function codes(
+  profile: SandboxProfile,
+  abi = ABI_CURRENT,
+  options: BuildLandlockRulesetOptions = {},
+): LandlockInexpressibleCode[] | null {
+  const result = buildLandlockRuleset(profile, abi, options);
   return result.ok ? null : result.failures.map((f) => f.code);
 }
 
 /** The failures of a translation; fails the test if it produced a ruleset. */
-function failuresOf(profile: SandboxProfile, abi = ABI_CURRENT): readonly LandlockInexpressible[] {
-  const result = buildLandlockRuleset(profile, abi);
+function failuresOf(
+  profile: SandboxProfile,
+  abi = ABI_CURRENT,
+  options: BuildLandlockRulesetOptions = {},
+): readonly LandlockInexpressible[] {
+  const result = buildLandlockRuleset(profile, abi, options);
   if (result.ok) {
     throw new Error("expected an inexpressible profile, but a ruleset was returned");
   }
@@ -59,8 +68,12 @@ function failuresOf(profile: SandboxProfile, abi = ABI_CURRENT): readonly Landlo
 }
 
 /** The ruleset of a translation; fails the test if it was inexpressible. */
-function rulesetOf(profile: SandboxProfile, abi = ABI_CURRENT): LandlockRuleset {
-  const result = buildLandlockRuleset(profile, abi);
+function rulesetOf(
+  profile: SandboxProfile,
+  abi = ABI_CURRENT,
+  options: BuildLandlockRulesetOptions = {},
+): LandlockRuleset {
+  const result = buildLandlockRuleset(profile, abi, options);
   if (!result.ok) {
     throw new Error(
       `expected an expressible profile, got: ${result.failures.map((f) => f.code).join(", ")}`,
@@ -552,11 +565,14 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     );
   });
 
-  test("no read-ish right is handled, which is how the broad read default is expressed", () => {
+  test("read-ish rights are handled too — the grant model restricts reads (§4.4)", () => {
+    // The inverse of what flow 145 shipped, and the reason the layer serves any
+    // profile at all: reads are bounded by what is granted, not by a deny list
+    // Landlock cannot express.
     const ruleset = rulesetOf(expressible);
-    expect(ruleset.handledFs).not.toContain("read_file");
-    expect(ruleset.handledFs).not.toContain("read_dir");
-    expect(ruleset.handledFs).not.toContain("execute");
+    expect(ruleset.handledFs).toContain("read_file");
+    expect(ruleset.handledFs).toContain("read_dir");
+    expect(ruleset.handledFs).toContain("execute");
   });
 
   test("truncate and refer are handled, so the write boundary has no truncate hole", () => {
@@ -565,7 +581,7 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     expect(ruleset.handledFs).toContain("refer");
   });
 
-  test("the handled set is exactly the twelve write rights", () => {
+  test("the handled set is exactly the fifteen read and write rights", () => {
     // Pinned as a literal, like the two UAPI tables, because this IS the
     // boundary: a right absent from `handled_access_fs` is not narrowed, it is
     // completely unrestricted. Membership assertions left four of them free —
@@ -575,6 +591,9 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     // itself complete.
     for (const profile of expressibleShapes) {
       expect([...rulesetOf(profile).handledFs]).toEqual([
+        "execute",
+        "read_file",
+        "read_dir",
         "write_file",
         "remove_dir",
         "remove_file",
@@ -677,32 +696,64 @@ describe("stdio devices stay writable, as in seatbelt.ts and bwrap.ts", () => {
     }
   });
 
-  test("the carve-out is exactly three devices, and nothing else is granted back", () => {
-    // Exclusivity, not membership, and keyed on the disposition rather than on
-    // the path prefix: `/dev/sda` added to the list was `write_file` +
-    // `truncate` on a raw block device and left the suite green, because every
+  test("the write carve-out is exactly three devices, and nothing else is granted write", () => {
+    // Exclusivity, not membership: `/dev/sda` added to the list was `write_file`
+    // + `truncate` on a raw block device and left the suite green, because every
     // assertion about the carve-out either named a path or tested
     // `startsWith("/dev/")`.
+    //
+    // Keyed now on the RIGHTS rather than on the disposition, because the grant
+    // model gave every read root `skip` too — a disposition filter would quietly
+    // start matching `/usr` and stop proving anything about devices.
     for (const profile of expressibleShapes) {
-      const carveOut = rulesetOf(profile).pathRules.filter((r) => r.onMissing === "skip");
-      expect(carveOut.map((r) => r.path)).toEqual(["/dev/null", "/dev/zero", "/dev/tty"]);
+      const writableDevices = rulesetOf(profile)
+        .pathRules.filter((r) => r.path.startsWith("/dev") && r.allow.includes("write_file"))
+        .map((r) => r.path);
+      expect(writableDevices).toEqual(["/dev/shm", "/dev/null", "/dev/zero", "/dev/tty"]);
     }
   });
 
-  test("a missing device is skipped, a missing writable root is fatal", () => {
-    // Dropping a device rule can only over-restrict; dropping a workspace root
-    // silently leaves the command with nowhere to write, so it must fail closed.
+  test("only a writable root is fatal when missing; every granted-back path is skipped", () => {
+    // Dropping a read or device rule can only over-restrict; dropping a
+    // workspace root silently leaves the command with nowhere to write, so it
+    // must fail closed. `/lib64` is why the read roots are `skip`: it does not
+    // exist on aarch64 and an unopenable rule path would fail the run.
     const ruleset = rulesetOf(expressible);
+    const writable = new Set(["/work/repo", "/tmp/session"]);
     for (const rule of ruleset.pathRules) {
-      expect(rule.onMissing).toBe(rule.path.startsWith("/dev/") ? "skip" : "fail");
+      expect(rule.onMissing).toBe(writable.has(rule.path) ? "fail" : "skip");
     }
   });
 
-  test("the carve-out never grants ioctl_dev or a read-ish right", () => {
+  test("no rule grants ioctl_dev, and the device write carve-out grants no read", () => {
     for (const rule of rulesetOf(expressible).pathRules) {
       expect(rule.allow).not.toContain("ioctl_dev");
-      expect(rule.allow).not.toContain("read_file");
     }
+    for (const rule of rulesetOf(expressible).pathRules.filter((r) =>
+      ["/dev/null", "/dev/zero", "/dev/tty"].includes(r.path),
+    )) {
+      // Reads of these devices come from the `/dev` grant above them; the
+      // carve-out adds write and nothing else, so widening it cannot widen reads.
+      expect(rule.allow).toEqual(["write_file", "truncate"]);
+    }
+  });
+
+  test("/dev is granted read and list, and nothing else", () => {
+    // Under the grant model an ungranted `/dev` stops `/dev/urandom` dead, and a
+    // `/dev` granted the full set would let a contained process unlink device
+    // nodes — the mistake the step-2 spike made and had to undo.
+    const dev = rulesetOf(expressible).pathRules.find((r) => r.path === "/dev");
+    expect(dev?.allow).toEqual(["read_file", "read_dir"]);
+  });
+
+  test("/dev/shm is a nested read-write rule, never a widened /dev", () => {
+    // A tmpfs where shm_open/sem_open create regular files: Chromium, Python
+    // multiprocessing and libpq fail with EACCES without it. Landlock evaluates
+    // the most specific hierarchy, so this grants exactly /dev/shm.
+    const ruleset = rulesetOf(expressible);
+    const shm = ruleset.pathRules.find((r) => r.path === "/dev/shm");
+    expect(shm?.allow).toEqual(ruleset.handledFs);
+    expect(ruleset.pathRules.find((r) => r.path === "/dev")?.allow).not.toContain("write_file");
   });
 
   test("/dev/stdout is deliberately absent — it is a symlink into /proc/self/fd", () => {
@@ -712,6 +763,112 @@ describe("stdio devices stay writable, as in seatbelt.ts and bwrap.ts", () => {
     expect(paths).not.toContain("/dev/stdout");
     expect(paths).not.toContain("/dev/stderr");
     expect(paths).not.toContain("/dev/stdin");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The grant list — specification §4.4, the model this module was rewritten to
+// ---------------------------------------------------------------------------
+
+describe("the grant list is what bounds reads", () => {
+  /** The rights a hierarchy is granted, or `undefined` when nothing grants it. */
+  function grantFor(ruleset: LandlockRuleset, path: string): readonly string[] | undefined {
+    return ruleset.pathRules.find((r) => r.path === path)?.allow;
+  }
+
+  test("the system roots are granted read, list and execute — and no write", () => {
+    // `execute` is the one that is easy to leave out and impossible to notice
+    // later: without it nothing under /usr/bin can be run at all.
+    const ruleset = rulesetOf(expressible);
+    for (const root of ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/proc", "/sys"]) {
+      expect(grantFor(ruleset, root)).toEqual(["execute", "read_file", "read_dir"]);
+    }
+  });
+
+  test("$HOME is granted by nothing, which is what makes the deny list unnecessary", () => {
+    const home = "/home/u";
+    const profile = {
+      ...defaultSandboxProfile("/home/u/work", "/tmp/session", home),
+      network: "on" as const,
+    };
+    const ruleset = rulesetOf(profile, ABI_CURRENT, { home });
+    // Nothing beneath `$HOME` is granted except the workspace the operator
+    // pointed at, which is where this run's writes are supposed to go. Stated as
+    // the exception it is, so adding a second one has to be written down.
+    const insideHome = ruleset.pathRules
+      .map((r) => r.path)
+      .filter((path) => path === home || path.startsWith(`${home}/`));
+    expect(insideHome).toEqual(["/home/u/work"]);
+  });
+
+  test("every path the default deny list names is beneath nothing that is granted", () => {
+    // The property the grant model claims, asserted per entry rather than in
+    // aggregate — fifteen paths, and one of them slipping inside a granted root
+    // is exactly the failure AC2 exists to catch.
+    const home = "/home/u";
+    const profile = {
+      ...defaultSandboxProfile("/home/u/work", "/tmp/session", home),
+      network: "on" as const,
+    };
+    const ruleset = rulesetOf(profile, ABI_CURRENT, { home });
+    expect(profile.readDenyList.length).toBeGreaterThan(10);
+    for (const denied of profile.readDenyList) {
+      for (const rule of ruleset.pathRules) {
+        const beneath = denied === rule.path || denied.startsWith(`${rule.path}/`);
+        expect({ denied, grant: rule.path, beneath }).toEqual({
+          denied,
+          grant: rule.path,
+          beneath: false,
+        });
+      }
+    }
+  });
+
+  test("a read-only profile still reads its workspace, which no writable root would give it", () => {
+    // `writableRoots` is empty there, so without the injected workspace the
+    // command could not read the tree it was pointed at.
+    const ruleset = rulesetOf({ ...expressible, mode: "read-only", writableRoots: [] }, ABI_CURRENT, {
+      workspace: "/work/repo",
+    });
+    expect(grantFor(ruleset, "/work/repo")).toEqual(["execute", "read_file", "read_dir"]);
+    expect(rootRules(ruleset)).toEqual([]);
+  });
+
+  test("a workspace that is already writable gets no second, narrower rule", () => {
+    const ruleset = rulesetOf(expressible, ABI_CURRENT, { workspace: "/work/repo" });
+    expect(ruleset.pathRules.filter((r) => r.path === "/work/repo")).toHaveLength(1);
+    expect(grantFor(ruleset, "/work/repo")).toEqual(ruleset.handledFs);
+  });
+
+  test("extra read roots are granted read-only, in the order the caller gave them", () => {
+    // The Bun install directory arrives this way, and so does every measured
+    // $HOME entry — each one a reviewed widening of the boundary (§4.4).
+    const ruleset = rulesetOf(expressible, ABI_CURRENT, {
+      extraReadRoots: ["/opt/bun", "/home/u/.cache/bun"],
+    });
+    expect(grantFor(ruleset, "/opt/bun")).toEqual(["execute", "read_file", "read_dir"]);
+    expect(grantFor(ruleset, "/home/u/.cache/bun")).toEqual(["execute", "read_file", "read_dir"]);
+  });
+
+  test("the caller can replace the system roots entirely, and nothing else is added", () => {
+    const ruleset = rulesetOf(expressible, ABI_CURRENT, { systemReadRoots: ["/usr"] });
+    const readOnly = ruleset.pathRules
+      .filter((r) => r.allow.length === 3 && r.allow.includes("read_file"))
+      .map((r) => r.path);
+    expect(readOnly).toEqual(["/usr"]);
+  });
+
+  test("no read root is ever granted a write right", () => {
+    // The boundary in one assertion: a read root that acquired `write_file`
+    // would make the whole system writable while every other test stayed green.
+    const ruleset = rulesetOf(expressible, ABI_CURRENT, { extraReadRoots: ["/opt/bun"] });
+    const writable = new Set(["/work/repo", "/tmp/session", "/dev/shm", "/dev/null", "/dev/zero", "/dev/tty"]);
+    for (const rule of ruleset.pathRules) {
+      if (writable.has(rule.path)) continue;
+      for (const right of rule.allow) {
+        expect(["execute", "read_file", "read_dir"]).toContain(right);
+      }
+    }
   });
 });
 
@@ -744,10 +901,47 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
     ]);
   });
 
-  test("a non-empty read-deny list is refused — Landlock has no deny rules", () => {
-    expect(codes({ ...expressible, readDenyList: ["/home/u/.ssh"] })).toEqual([
+  test("a denied path that nothing grants is expressible — it was never handed out", () => {
+    // §4.4, and the whole reason this layer serves a real profile: `$HOME` is
+    // granted by no rule, so a secret beneath it needs no deny rule to be
+    // unreachable. Flow 145 refused this profile, which is why the layer as
+    // merged served nothing.
+    expect(codes({ ...expressible, readDenyList: ["/home/u/.ssh"] })).toBeNull();
+  });
+
+  test("a denied path inside a granted hierarchy is refused, not quietly readable", () => {
+    // The one case the grant argument does not cover: `/etc` is a read root, so
+    // a secret under it would be handed back by that grant and no deeper rule
+    // could take it away.
+    const failures = failuresOf({ ...expressible, readDenyList: ["/etc/keryx/auth.json"] });
+    expect(failures.map((f) => f.code)).toEqual(["read-deny-list-requires-mount-view"]);
+    expect(failures[0]?.detail).toContain("/etc");
+  });
+
+  test("a denied path is matched by hierarchy, not by string prefix", () => {
+    // `/etcfoo` starts with `/etc` and is a different tree; refusing it would
+    // send an expressible profile to the bubblewrap fallback for nothing.
+    expect(codes({ ...expressible, readDenyList: ["/etcfoo/secret"] })).toBeNull();
+  });
+
+  test("a granted hierarchy inside a denied path is refused too", () => {
+    // The overlap the other way round: the grant reaches into a tree the profile
+    // asked to be unreadable. Narrower than the first case, still a hole.
+    expect(codes({ ...expressible, readDenyList: ["/work"] })).toEqual([
       "read-deny-list-requires-mount-view",
     ]);
+  });
+
+  test("a denied path equal to a granted root is refused", () => {
+    expect(codes({ ...expressible, readDenyList: ["/work/repo"] })).toEqual([
+      "read-deny-list-requires-mount-view",
+    ]);
+  });
+
+  test("every overlapping denied path is reported, not just the first", () => {
+    expect(
+      codes({ ...expressible, readDenyList: ["/etc/a", "/home/u/.ssh", "/proc/b"] }),
+    ).toEqual(["read-deny-list-requires-mount-view", "read-deny-list-requires-mount-view"]);
   });
 
   test("danger-full-access is refused as a single terminal reason", () => {
@@ -878,10 +1072,29 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
     };
     expect(failuresOf(profile, 1).map((f) => [f.code, f.field])).toEqual([
       ["network-off-requires-seccomp", "network"],
-      ["read-deny-list-requires-mount-view", "readDenyList"],
       ["path-not-absolute", "writableRoots"],
       ["abi-too-low", "abi"],
     ]);
+  });
+
+  test("the deny-list check is suppressed while a rule path is malformed", () => {
+    // It reads the grant list, so on a malformed root it would name a hierarchy
+    // that is not the one the kernel would enforce — `"/work/../work"` in a
+    // message whose only job is to say which grant conflicts.
+    const failures = failuresOf({
+      ...expressible,
+      writableRoots: ["/work/../repo"],
+      readDenyList: ["/etc/a"],
+    });
+    expect(failures.map((f) => f.code)).toEqual(["path-not-canonical"]);
+  });
+
+  test("a malformed read root is reported against the caller, not the profile", () => {
+    // Different owners: a bad `writableRoots` entry is a policy an operator can
+    // fix, a bad read root is a keryx bug, and an operator sent to the wrong one
+    // looks in the wrong place.
+    const failures = failuresOf(expressible, ABI_CURRENT, { systemReadRoots: ["usr"] });
+    expect(failures.map((f) => [f.code, f.field])).toEqual([["path-not-absolute", "readRoots"]]);
   });
 
   test("a failed translation carries no ruleset at all", () => {
@@ -890,13 +1103,24 @@ describe("AC2: an inexpressible profile fails, and never yields a ruleset", () =
     expect(result).not.toHaveProperty("ruleset");
   });
 
-  test("the default policy-derived profile is inexpressible once a home directory is known", () => {
-    // Recorded because it decides how often the bubblewrap fallback is taken:
-    // `defaultReadDenyList(home)` is non-empty, and network-off compounds it.
+  test("the default policy-derived profile fails only on network-off now, not on its deny list", () => {
+    // Recorded because it decides how often the bubblewrap fallback is taken.
+    // Before §4.4 this profile carried two reasons and the second one — its
+    // fifteen-path `defaultReadDenyList(home)` — applied to every profile the
+    // product builds. Now the deny list is satisfied by construction, and
+    // network-off is the only thing left sending this profile to layer 2.
     expect(codes(defaultSandboxProfile("/work/repo", "/tmp/session", "/home/u"))).toEqual([
       "network-off-requires-seccomp",
-      "read-deny-list-requires-mount-view",
     ]);
+  });
+
+  test("the same profile with the network on is expressible, deny list and all", () => {
+    const profile = {
+      ...defaultSandboxProfile("/work/repo", "/tmp/session", "/home/u"),
+      network: "on" as const,
+    };
+    expect(profile.readDenyList.length).toBeGreaterThan(0);
+    expect(codes(profile, ABI_CURRENT, { home: "/home/u" })).toBeNull();
   });
 });
 

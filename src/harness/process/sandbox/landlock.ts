@@ -20,20 +20,38 @@
 //
 // Four consequences, and each is load-bearing:
 //
-// 1. **Handle only what the profile restricts.** The profile's read default is
-//    broad (bubblewrap expresses it as `--ro-bind / /`), so no read-ish access
-//    right is handled and no synthetic `/` rule is needed. Writes are what the
-//    profile bounds, so every write-ish right is handled and allowed back only
-//    beneath the writable roots.
+// 1. **Grant, do not deny — including for reads.** Read and write rights are
+//    both handled, and both are allowed back only beneath the hierarchies this
+//    module grants: the writable roots read-write, the workspace and the system
+//    roots read-only, `$HOME` nowhere at all.
+//
+//    This is specification §4.4, and it replaces the shape flow 145 shipped.
+//    That version handled write rights only, leaving reads unhandled to express
+//    the profile's broad read default, and therefore refused every profile
+//    carrying a `readDenyList`. Since `defaultSandboxProfile` and
+//    `sandboxProfileFromPolicy` populate that list on every path but
+//    `danger-full-access`, the layer served no profile the product builds. The
+//    deny list has no Landlock representation (consequence 3) — but it does not
+//    need one: a path that was never granted is already unreachable, and
+//    withholding `$HOME` also covers the credential file nobody listed.
+//
+//    What this does NOT cover, and what {@link buildLandlockRuleset} therefore
+//    checks rather than assumes, is a denied path that lies inside a hierarchy
+//    this module grants. `/etc/…` is the shape to picture: the deny list asks
+//    for it to be unreadable and the system read grant would hand it back. That
+//    is an inexpressible profile (AC2), not a rounding error.
 // 2. **The ABI floor is derived, not chosen.** `landlock_create_ruleset` fails
 //    with `EINVAL` on a mask containing bits the running kernel does not know.
 //    The common workaround is to mask the request down to the kernel's ABI —
 //    best-effort, which is another word for approximate. Instead the required
 //    rights produce a `minimumAbi`, and a kernel below it is an explicit
 //    failure that names the ABI (PRD R6), never a downgraded ruleset.
-// 3. **A deny-exception under a broad allow has no representation.** That is
-//    what `readDenyList` is, and it is specification §4.3's "no mount view"
-//    paragraph. See {@link LandlockInexpressibleCode} for the disposition.
+// 3. **A deny-exception under a broad allow has no representation.** Rules are
+//    allow-only and cumulative, so nothing deeper can narrow something
+//    shallower — specification §4.3's "no mount view" paragraph. Consequence (1)
+//    is how this module lives with that: it never establishes the broad allow in
+//    the first place. Where a grant and a denied path do overlap, the profile is
+//    inexpressible; see {@link LandlockInexpressibleCode}.
 // 4. **A subtree that needs more rights gets its own nested rule — never a
 //    wider ancestor.** Rights accumulate downwards, so widening an ancestor to
 //    reach one descendant grants the widened set to *every* descendant. The
@@ -270,8 +288,9 @@ export const LANDLOCK_RESIDUAL_ACTIONS: readonly LandlockResidualAction[] = Obje
  * because without it a contained command can empty a file outside the writable
  * roots, which is a hole in the boundary rather than a convenience.
  *
- * Read-ish rights (`read_file`, `read_dir`, `execute`) are absent: the profile's
- * read default is broad, so leaving them unhandled *is* the expression of it.
+ * Read-ish rights live in {@link READ_ACCESS_RIGHTS} rather than here, because
+ * the two are granted to different hierarchies: a system root gets the read set
+ * and nothing else. Both are handled — see module header consequence (1).
  * `ioctl_dev` is absent for the reason given in the module header.
  */
 const WRITE_ACCESS_RIGHTS: readonly LandlockFsAccess[] = Object.freeze([
@@ -290,6 +309,85 @@ const WRITE_ACCESS_RIGHTS: readonly LandlockFsAccess[] = Object.freeze([
 ]);
 
 /**
+ * Reading, listing and executing — what a hierarchy needs to be *usable* without
+ * being modifiable.
+ *
+ * `execute` is here rather than in the write set for a reason that is easy to
+ * get backwards: it gates `execve` on a file, which is a read-shaped operation.
+ * Without it in a granted system root, no binary under `/usr/bin` can be run at
+ * all, and the boundary stops being a boundary by making every command fail.
+ */
+const READ_ACCESS_RIGHTS: readonly LandlockFsAccess[] = Object.freeze([
+  "execute",
+  "read_file",
+  "read_dir",
+]);
+
+/**
+ * Everything this module handles: a hierarchy granted this set is fully usable,
+ * and one granted nothing is unreachable.
+ *
+ * Read first, then write, so the order is stable for reporting and matches the
+ * two tables above being read in kernel-bit order at a glance.
+ */
+const READ_WRITE_ACCESS_RIGHTS: readonly LandlockFsAccess[] = Object.freeze([
+  ...READ_ACCESS_RIGHTS,
+  ...WRITE_ACCESS_RIGHTS,
+]);
+
+/**
+ * The hierarchies a command needs to *start* on a Linux host, granted read-only.
+ *
+ * Measured by the step-2 spike (flow 143) rather than reasoned about: this is
+ * the minimum set under which a dynamically linked binary resolves its loader
+ * and libraries, finds its locale and CA bundle, and can read `/proc/self`.
+ * Anything absent here is not "probably fine" — it is a command that fails with
+ * `EACCES` before `main`.
+ *
+ * `onMissing: "skip"`, because `/lib64` does not exist on aarch64 and an
+ * unopenable rule path would otherwise fail the whole run closed. Skipping a
+ * read grant can only over-restrict.
+ *
+ * `$HOME` is deliberately not here and must never be added: withholding it is
+ * the entire mechanism by which `readDenyList` is satisfied (§4.4). Individual
+ * benign paths beneath it belong in the caller's `extraReadRoots`, one measured
+ * entry at a time, each a reviewed widening of the boundary.
+ */
+export const LANDLOCK_SYSTEM_READ_ROOTS: readonly string[] = Object.freeze([
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/lib",
+  "/lib64",
+  "/etc",
+  "/proc",
+  "/sys",
+]);
+
+/**
+ * `/dev` is granted read and list — and nothing more.
+ *
+ * Under the grant model reads are handled, so an ungranted `/dev` would stop
+ * `/dev/urandom` and `/dev/fd` dead. The three writable devices below stay a
+ * separate, narrower, nested rule; widening this one to reach them would confer
+ * write access on every device node, which is the exact mistake the step-2 spike
+ * made on `/dev/shm` and had to undo.
+ */
+const DEVICE_READ_PATH = "/dev";
+const DEVICE_READ_RIGHTS: readonly LandlockFsAccess[] = Object.freeze(["read_file", "read_dir"]);
+
+/**
+ * POSIX shared memory. A tmpfs where `shm_open`/`sem_open` create and unlink
+ * *regular* files, so Chromium, Python multiprocessing and libpq fail with
+ * `EACCES` under the device grant alone.
+ *
+ * A nested read-write rule, never a wider `/dev`: Landlock evaluates the most
+ * specific matching hierarchy, so this grants exactly `/dev/shm` and leaves the
+ * device nodes beside it read-only.
+ */
+const DEVICE_SHM_PATH = "/dev/shm";
+
+/**
  * Character devices that stay writable regardless of mode, mirroring
  * `seatbelt.ts`'s `DEVICE_WRITE_LITERALS`. `2>/dev/null` has to keep working
  * under a write-deny or containment is unusable rather than strict.
@@ -304,7 +402,8 @@ const WRITE_ACCESS_RIGHTS: readonly LandlockFsAccess[] = Object.freeze([
  *   `/proc/self/fd`, and a rule path is resolved when the applier opens it, so
  *   the rule would land on whatever the descriptor currently points at and grant
  *   write there. That is a hole, not a carve-out.
- * - `/dev/random`, `/dev/urandom`. Tools read them; reads are unrestricted.
+ * - `/dev/random`, `/dev/urandom`. Tools read them, and the `/dev` read grant
+ *   above already covers that; they need no write.
  */
 const DEVICE_WRITE_PATHS: readonly string[] = Object.freeze(["/dev/null", "/dev/zero", "/dev/tty"]);
 
@@ -406,8 +505,13 @@ export interface LandlockRuleset {
  *   the bubblewrap layer.
  * - `network-restricted-requires-proxy-layer` — ADR-0010 defers a domain
  *   allowlist to the container layer.
- * - `read-deny-list-requires-mount-view` — specification §4.3. Falls back to the
- *   bubblewrap layer.
+ * - `read-deny-list-requires-mount-view` — a denied path overlaps a hierarchy
+ *   this module grants, so the grant would hand back what the profile denies and
+ *   no deeper rule can narrow it (specification §4.3). Falls back to the
+ *   bubblewrap layer, which expresses it by mounting over the path. Note the
+ *   scope: a denied path that overlaps *nothing granted* is not a failure at
+ *   all — it is satisfied by never having been granted, which is the whole of
+ *   §4.4.
  * - `path-not-absolute`, `path-contains-nul`, `path-not-canonical` — the applier
  *   resolves a rule path by opening it; none of these forms can be opened
  *   predictably, and a non-canonical one would print differently from what it
@@ -433,8 +537,13 @@ export type LandlockInexpressibleCode =
 /** One reason a profile cannot be expressed as a Landlock ruleset. */
 export interface LandlockInexpressible {
   readonly code: LandlockInexpressibleCode;
-  /** The input the failure is about. `"abi"` is the kernel, not the profile. */
-  readonly field: keyof SandboxProfile | "abi";
+  /**
+   * The input the failure is about. `"abi"` is the kernel rather than the
+   * profile, and `"readRoots"` is the caller's injected grant set rather than
+   * either — an operator told a writable root is malformed when the malformed
+   * path came from keryx itself would look in the wrong place.
+   */
+  readonly field: keyof SandboxProfile | "abi" | "readRoots";
   /** Operator-readable; safe to surface verbatim in `sandbox status`. */
   readonly detail: string;
 }
@@ -454,17 +563,58 @@ export function landlockFsMask(access: readonly LandlockFsAccess[]): bigint {
 }
 
 /**
+ * What the module cannot learn for itself, because it may not touch the host.
+ *
+ * A grant list is made of host paths, and this module is forbidden from reading
+ * `process.env`, `os.homedir()` or the filesystem — a source guard in the test
+ * suite holds that, and it is what keeps the translation deterministic and
+ * offline. So the paths arrive as arguments. `wrap.ts` fills them in from the
+ * `ContainedCommand` and its own injected options.
+ */
+export interface BuildLandlockRulesetOptions {
+  /**
+   * Absolute path of the workspace the command runs in.
+   *
+   * Needed because `writableRoots` is empty for a `read-only` profile, which
+   * would otherwise leave the command unable to read the very tree it was
+   * pointed at. Ignored when it is already a writable root — the read set is a
+   * subset of what that rule grants, so a second rule would only add noise.
+   */
+  readonly workspace?: string;
+  /**
+   * Absolute `$HOME`. Never granted; supplied so a failure can say *why* a
+   * denied path is unreachable, and so a caller cannot quietly pass it as a
+   * read root — see {@link LANDLOCK_SYSTEM_READ_ROOTS}.
+   */
+  readonly home?: string;
+  /** Read-only hierarchies. Defaults to {@link LANDLOCK_SYSTEM_READ_ROOTS}. */
+  readonly systemReadRoots?: readonly string[];
+  /**
+   * Additional read-only hierarchies: the Bun install directory, and whatever
+   * else was *measured* to be needed. Every entry is a reviewed widening of the
+   * boundary (§4.4, consequence 2) and none is a guess.
+   */
+  readonly extraReadRoots?: readonly string[];
+}
+
+/**
  * Translate a `SandboxProfile` into a Landlock ruleset description.
  *
- * Deterministic and offline: `abi` is injected rather than probed, so the same
- * inputs always produce the same output and the tests need no kernel. Failures
- * are accumulated in a fixed order so the output is stable, and a profile that
- * cannot be expressed returns every reason it cannot rather than the first.
+ * Deterministic and offline: `abi` and every host path are injected rather than
+ * probed, so the same inputs always produce the same output and the tests need
+ * no kernel. Failures are accumulated in a fixed order so the output is stable,
+ * and a profile that cannot be expressed returns every reason it cannot rather
+ * than the first.
  *
  * @param profile the resolved OS-sandbox profile, unchanged from `profile.ts`
  * @param abi the kernel's Landlock ABI version; `0` means Landlock is absent
+ * @param options the host paths the grant list is built from
  */
-export function buildLandlockRuleset(profile: SandboxProfile, abi: number): LandlockTranslation {
+export function buildLandlockRuleset(
+  profile: SandboxProfile,
+  abi: number,
+  options: BuildLandlockRulesetOptions = {},
+): LandlockTranslation {
   // Terminal on its own: the escape hatch is not a containment profile, so every
   // remaining check would be describing a ruleset that must never exist.
   if (profile.mode === "danger-full-access") {
@@ -478,13 +628,30 @@ export function buildLandlockRuleset(profile: SandboxProfile, abi: number): Land
   // nothing is rewritten before validation: a failure `detail` must quote the
   // value the caller actually supplied, or the operator cannot map it back.
   const rawRoots = profile.mode === "workspace-write" ? [...new Set(profile.writableRoots)] : [];
-  const handledFs = WRITE_ACCESS_RIGHTS;
+  const rawReadRoots = [
+    ...new Set([
+      ...(options.workspace !== undefined ? [options.workspace] : []),
+      ...(options.systemReadRoots ?? LANDLOCK_SYSTEM_READ_ROOTS),
+      ...(options.extraReadRoots ?? []),
+    ]),
+  ];
+  const handledFs = READ_WRITE_ACCESS_RIGHTS;
   const minimumAbi = requiredAbi(handledFs);
 
+  const pathFailures = [
+    ...rootPathFailures(rawRoots, "writableRoots"),
+    ...rootPathFailures(rawReadRoots, "readRoots"),
+  ];
+  // The deny-list check reads the grant list, so it can only run on paths that
+  // are known well-formed. Reporting "denied path X is inside granted root Y"
+  // where Y is `/work/../work` would name a hierarchy that is not the one the
+  // kernel would enforce.
   const failures = [
     ...networkFailures(profile),
-    ...readDenyFailures(profile),
-    ...rootPathFailures(rawRoots),
+    ...pathFailures,
+    ...(pathFailures.length === 0
+      ? readDenyFailures(profile, rawRoots, rawReadRoots, options.home)
+      : []),
     ...abiFailures(abi, handledFs, minimumAbi),
   ];
   if (failures.length > 0) {
@@ -494,6 +661,9 @@ export function buildLandlockRuleset(profile: SandboxProfile, abi: number): Land
   // Every root is valid here, so the only rewrite left is dropping a trailing
   // slash — after which `/work/repo` and `/work/repo/` are one rule, not two.
   const roots = [...new Set(rawRoots.map(stripTrailingSlash))];
+  const readRoots = [...new Set(rawReadRoots.map(stripTrailingSlash))].filter(
+    (root) => !roots.includes(root),
+  );
 
   return {
     ok: true,
@@ -501,7 +671,7 @@ export function buildLandlockRuleset(profile: SandboxProfile, abi: number): Land
       minimumAbi,
       handledFs,
       handledNet: Object.freeze([]) as readonly never[],
-      pathRules: pathRules(roots, handledFs),
+      pathRules: pathRules(roots, readRoots, handledFs),
       netRules: Object.freeze([]) as readonly never[],
     }),
   };
@@ -545,33 +715,89 @@ function networkFailures(profile: SandboxProfile): LandlockInexpressible[] {
   return [];
 }
 
-function readDenyFailures(profile: SandboxProfile): LandlockInexpressible[] {
-  if (profile.readDenyList.length === 0) {
-    return [];
-  }
-  return [
-    {
+/**
+ * A denied path is satisfied when nothing grants it — and refused when something
+ * does.
+ *
+ * The grant model (§4.4) makes most of `readDenyList` a non-event: the entries
+ * are under `$HOME`, `$HOME` is granted by nothing, and a path that was never
+ * granted is unreachable. This function exists for the remainder, and it checks
+ * **overlap in both directions**:
+ *
+ * - a denied path *inside* a granted hierarchy would be handed back by that
+ *   grant, and no deeper rule can take it away;
+ * - a granted hierarchy *inside* a denied path is a grant reaching into a tree
+ *   the profile asked to be unreadable. It is narrower than the first case, and
+ *   it is still a hole the profile did not authorise, so it is refused too
+ *   rather than argued about at review time.
+ *
+ * Equality is caught by either direction.
+ */
+function readDenyFailures(
+  profile: SandboxProfile,
+  writableRoots: readonly string[],
+  readRoots: readonly string[],
+  home: string | undefined,
+): LandlockInexpressible[] {
+  const granted = [...writableRoots, ...readRoots].map(stripTrailingSlash);
+  const failures: LandlockInexpressible[] = [];
+  for (const denied of profile.readDenyList) {
+    const normalised = stripTrailingSlash(denied);
+    const clash = granted.find(
+      (root) => isAtOrBeneath(normalised, root) || isAtOrBeneath(root, normalised),
+    );
+    if (clash === undefined) {
+      continue;
+    }
+    failures.push({
       code: "read-deny-list-requires-mount-view",
       field: "readDenyList",
-      detail: `a read-deny list (${profile.readDenyList.length} path(s)) is an exception under a broad read default, and Landlock rules are allow-only and cumulative along the path, so no deeper rule can narrow a shallower one. bubblewrap expresses this by mounting over each secret; Landlock filters the real filesystem and cannot (specification §4.3).`,
-    },
-  ];
+      detail: `read-denied path ${JSON.stringify(denied)} overlaps the granted hierarchy ${JSON.stringify(clash)}; Landlock rules are allow-only and cumulative along the path, so no deeper rule can take back what that grant confers${home !== undefined ? ` (paths under ${JSON.stringify(home)} need no rule, because ${JSON.stringify(home)} is granted by nothing)` : ""}. bubblewrap expresses this by mounting over the path; Landlock filters the real filesystem and cannot (specification §4.3).`,
+    });
+  }
+  return failures;
 }
 
-function rootPathFailures(roots: readonly string[]): LandlockInexpressible[] {
+/**
+ * True when `candidate` is `root` itself or lies beneath it.
+ *
+ * Segment-wise, not `startsWith`: `/etc/keryxfoo` starts with `/etc/keryx` and
+ * is a different hierarchy, and a check that conflated them would refuse
+ * profiles that are perfectly expressible — or, with the arguments the other way
+ * round, accept one that is not.
+ */
+function isAtOrBeneath(candidate: string, root: string): boolean {
+  if (candidate === root) {
+    return true;
+  }
+  return candidate.startsWith(root === "/" ? "/" : `${root}/`);
+}
+
+/**
+ * Validate rule paths, whether they came from the profile or from the caller.
+ *
+ * `field` names which, because the two have different owners: a malformed
+ * `writableRoots` entry is a policy the operator can fix, and a malformed read
+ * root is a keryx bug. Both are refused identically; only the report differs.
+ */
+function rootPathFailures(
+  roots: readonly string[],
+  field: "writableRoots" | "readRoots",
+): LandlockInexpressible[] {
+  const label = field === "writableRoots" ? "writable root" : "read root";
   const failures: LandlockInexpressible[] = [];
   for (const root of roots) {
     if (root.includes("\0")) {
       failures.push({
         code: "path-contains-nul",
-        field: "writableRoots",
-        detail: `writable root ${JSON.stringify(root)} contains a NUL byte and cannot be opened as a rule path.`,
+        field,
+        detail: `${label} ${JSON.stringify(root)} contains a NUL byte and cannot be opened as a rule path.`,
       });
     } else if (!posixPath.isAbsolute(root)) {
       failures.push({
         code: "path-not-absolute",
-        field: "writableRoots",
-        detail: `writable root ${JSON.stringify(root)} is not absolute; a Landlock rule path is opened directly and a relative path has no fixed meaning in the applying process.`,
+        field,
+        detail: `${label} ${JSON.stringify(root)} is not absolute; a Landlock rule path is opened directly and a relative path has no fixed meaning in the applying process.`,
       });
     } else if (/\/{2,}/.test(root)) {
       // `/work//repo` and `/work/repo` are the same hierarchy but two distinct
@@ -675,16 +901,38 @@ function requiredAbi(handledFs: readonly LandlockFsAccess[]): number {
 }
 
 /**
- * Reads stay unrestricted by handling no read-ish right, so the only rules are
- * the writable roots plus the device carve-out. Root order follows the profile,
- * which keeps the output deterministic.
+ * The grant list, in a fixed order: writable roots, read roots, then the device
+ * rules from broadest to narrowest.
+ *
+ * Order carries no precedence — Landlock accumulates — but it is stable, so a
+ * diff of two rulesets reads as a change in the boundary rather than as a
+ * reshuffle.
+ *
+ * The dispositions differ on purpose. A missing **writable** root means the
+ * workspace is not there, and running anyway would leave the command with
+ * nowhere to write: fatal. A missing **read** root (`/lib64` on aarch64, `/dev`
+ * inside a minimal container) can only over-restrict: skipped.
  */
 function pathRules(
   roots: readonly string[],
+  readRoots: readonly string[],
   handledFs: readonly LandlockFsAccess[],
 ): readonly LandlockPathRule[] {
   const rules: LandlockPathRule[] = roots.map((path) =>
     Object.freeze({ path, allow: handledFs, onMissing: "fail" as const }),
+  );
+  for (const path of readRoots) {
+    rules.push(Object.freeze({ path, allow: READ_ACCESS_RIGHTS, onMissing: "skip" as const }));
+  }
+  rules.push(
+    Object.freeze({
+      path: DEVICE_READ_PATH,
+      allow: DEVICE_READ_RIGHTS,
+      onMissing: "skip" as const,
+    }),
+  );
+  rules.push(
+    Object.freeze({ path: DEVICE_SHM_PATH, allow: handledFs, onMissing: "skip" as const }),
   );
   for (const path of DEVICE_WRITE_PATHS) {
     rules.push(Object.freeze({ path, allow: DEVICE_WRITE_RIGHTS, onMissing: "skip" as const }));

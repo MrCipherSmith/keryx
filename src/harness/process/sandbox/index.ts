@@ -87,6 +87,8 @@ export {
 export {
   buildLandlockRuleset,
   LANDLOCK_RESIDUAL_ACTIONS,
+  LANDLOCK_SYSTEM_READ_ROOTS,
+  type BuildLandlockRulesetOptions,
   type LandlockFsAccess,
   type LandlockResidualAction,
   type LandlockMissingPathDisposition,

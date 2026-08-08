@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 2,
+  "id": "147",
+  "slug": "linux-containment-step-3-the-landlock-la",
+  "title": "Linux containment step 3: the Landlock launcher — apply the ruleset in a child and exec the real command",
+  "status": "in-progress",
+  "createdAt": "2026-08-08T23:45:13.769Z",
+  "updatedAt": "2026-08-08T23:58:46.378Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fc582deca234f2a563c4ec996b7c223f90d0b52be77180748da2e5db99e4df2e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "read the spike FFI reference, ADR-0010 and specification §4.4; produce the porting notes and the proposed grant set",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "tests for the grant model: AC1 profiles, AC2 refusals, deny-list-under-a-granted-root",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "rework landlock.ts to the grant model (handle read rights, grant roots, check the deny list)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "tests for layer selection in wrap.ts and the resolved layer in detect.ts (AC3, AC8)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "implement landlock-exec.ts: FFI applier, PATH resolution that refuses, execve, exit-status mapping",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "wire the Linux branch: wrap.ts layer choice, detect.ts layer field, adapter and callers unchanged",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "prebundle landlock-exec to a single .js in the build step and resolve its path for dev and installed runs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "record the layer that ran in the run receipt and in sandbox status, from the parent (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "measure the benign $HOME grant set against real commands; record each granted entry as a reviewed widening",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "decide and record the newer-kernel ABI-clamp position and the environment-forwarding position",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "correct every document this flow's own changes falsify (os-sandbox surface docs, wiki, guide)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "quality gate and review-orchestrator until green (AC11)",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-08T23:45:13.769Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-08T23:49:17.705Z",
+      "event": "task-added",
+      "detail": "T5: read the spike FFI reference, ADR-0010 and specification §4.4; produce the porting notes and the proposed grant set"
+    },
+    {
+      "at": "2026-08-08T23:49:17.794Z",
+      "event": "task-added",
+      "detail": "T6: tests for the grant model: AC1 profiles, AC2 refusals, deny-list-under-a-granted-root"
+    },
+    {
+      "at": "2026-08-08T23:49:17.885Z",
+      "event": "task-added",
+      "detail": "T7: rework landlock.ts to the grant model (handle read rights, grant roots, check the deny list)"
+    },
+    {
+      "at": "2026-08-08T23:49:17.978Z",
+      "event": "task-added",
+      "detail": "T8: tests for layer selection in wrap.ts and the resolved layer in detect.ts (AC3, AC8)"
+    },
+    {
+      "at": "2026-08-08T23:49:18.071Z",
+      "event": "task-added",
+      "detail": "T9: implement landlock-exec.ts: FFI applier, PATH resolution that refuses, execve, exit-status mapping"
+    },
+    {
+      "at": "2026-08-08T23:49:18.161Z",
+      "event": "task-added",
+      "detail": "T10: live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3"
+    },
+    {
+      "at": "2026-08-08T23:49:18.250Z",
+      "event": "task-added",
+      "detail": "T11: wire the Linux branch: wrap.ts layer choice, detect.ts layer field, adapter and callers unchanged"
+    },
+    {
+      "at": "2026-08-08T23:49:18.342Z",
+      "event": "task-added",
+      "detail": "T12: prebundle landlock-exec to a single .js in the build step and resolve its path for dev and installed runs"
+    },
+    {
+      "at": "2026-08-08T23:49:18.433Z",
+      "event": "task-added",
+      "detail": "T13: record the layer that ran in the run receipt and in sandbox status, from the parent (AC10)"
+    },
+    {
+      "at": "2026-08-08T23:49:26.331Z",
+      "event": "task-added",
+      "detail": "T14: measure the benign $HOME grant set against real commands; record each granted entry as a reviewed widening"
+    },
+    {
+      "at": "2026-08-08T23:49:26.424Z",
+      "event": "task-added",
+      "detail": "T15: decide and record the newer-kernel ABI-clamp position and the environment-forwarding position"
+    },
+    {
+      "at": "2026-08-08T23:49:26.516Z",
+      "event": "task-added",
+      "detail": "T16: correct every document this flow's own changes falsify (os-sandbox surface docs, wiki, guide)"
+    },
+    {
+      "at": "2026-08-08T23:49:26.613Z",
+      "event": "task-added",
+      "detail": "T17: quality gate and review-orchestrator until green (AC11)"
+    },
+    {
+      "at": "2026-08-08T23:49:42.045Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-08T23:49:42.218Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-08T23:51:22.013Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-08T23:51:22.176Z",
+      "event": "task-done",
+      "detail": "T5: read the spike FFI reference, ADR-0010 and specification §4.4; produce the porting notes and the proposed grant set"
+    },
+    {
+      "at": "2026-08-08T23:58:46.288Z",
+      "event": "task-done",
+      "detail": "T6: tests for the grant model: AC1 profiles, AC2 refusals, deny-list-under-a-granted-root"
+    },
+    {
+      "at": "2026-08-08T23:58:46.378Z",
+      "event": "task-done",
+      "detail": "T7: rework landlock.ts to the grant model (handle read rights, grant roots, check the deny list)"
+    }
+  ]
+}
