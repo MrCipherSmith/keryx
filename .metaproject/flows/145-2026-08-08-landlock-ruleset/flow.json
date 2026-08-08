@@ -3,17 +3,46 @@
   "id": "145",
   "slug": "landlock-ruleset",
   "title": "Landlock ruleset builder (pure): SandboxProfile to Landlock ruleset description",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-08T13:09:57.926Z",
-  "updatedAt": "2026-08-08T20:08:16.167Z",
+  "updatedAt": "2026-08-08T20:09:22.726Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:b45bf028a52d1fb2e81ea2de01e22ad90fc3d73487eb1d363fb867130bd9d457",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-08T20:08:58.459Z",
+      "note": "buildLandlockRuleset(profile, abi) is pure: ABI injected, no syscall/FFI/spawn/fs/process.platform. Held structurally by an AST source guard over both modules (import allowlist + forbidden-global identifier scan), mutation-verified: 21 evasions red incl. concatenated specifier + live readFile, import.meta.require, Function(), Math[\"random\"], declare const process, class extends globalThis.Object; 14 pure shapes green."
+    },
+    "AC2": {
+      "at": "2026-08-08T20:08:59.941Z",
+      "note": "An inexpressible profile returns {ok:false, failures} and never a ruleset. Ten machine-readable codes; unit tests cover network off, network restricted, non-empty readDenyList, danger-full-access, non-absolute/NUL/non-canonical paths, ABI 0, malformed ABI and ABI below the floor. Failures accumulate in a fixed order; a failed translation has no ruleset property."
+    },
+    "AC3": {
+      "at": "2026-08-08T20:09:05.781Z",
+      "note": "Every rule's allow is a non-empty subset of handledFs; minimumAbi is the max first-ABI over handled rights (pinned at 3); LandlockRuleset has exactly five fields, held by a runtime key assertion over seven shapes x four ABIs AND a compile-time Record<keyof LandlockRuleset,true> guard. Mutation-verified: adding or removing a field fails tsc. What the mechanism cannot reach is a constant (LANDLOCK_RESIDUAL_ACTIONS), not a per-translation field."
+    },
+    "AC4": {
+      "at": "2026-08-08T20:09:07.184Z",
+      "note": "handledNet and netRules are typed readonly never[] and always frozen empties; a network rule is a tsc error, not a convention. Asserted over every profile shape at ABI 3-6, and for network on/off/restricted with the specific refusal code required in the failure branch."
+    },
+    "AC5": {
+      "at": "2026-08-08T20:09:12.673Z",
+      "note": "landlock-abi.ts exposes an injected LandlockAbiReader, a per-call cache and LandlockAbiReaderError, and nothing else; it imports nothing (empty specifier allowlist, exact). Cache proven to call the reader exactly once including for cached throws and cached rejections. The no-mechanism property is now held by the shared source guard: a defaultReader using globalThis.Bun.spawnSync on a compiled helper is red."
+    },
+    "AC6": {
+      "at": "2026-08-08T20:09:15.126Z",
+      "note": "tsc --noEmit clean; bun test src/harness/process/sandbox 243 pass/5 skip/0 fail (branch baseline 147/5/0); bun run test:guards 257 pass/0 fail; bun scripts/check-doc-links.ts 698 links 0 broken; keryx health run score 93 trend stable with one pre-existing WARN. Whole-repo bun test 3330/14/2, both failures pre-existing in scripts/install-global.test.ts and owned by the parallel probe flow."
+    },
+    "AC7": {
+      "at": "2026-08-08T20:09:22.726Z",
+      "note": "git diff --stat over the whole range touches in src/ only landlock.ts, landlock.test.ts, landlock-abi.ts, landlock-abi.test.ts and the appended export block of sandbox/index.ts. Outside src/: one line in package.json (test:guards) and the flow package. detect.ts, capability-matrix.ts, src/commands/sandbox.ts, scripts/install.sh, wrap.ts, seatbelt.ts, profile.ts, bwrap.ts, adapter.ts and proxy/TLS are untouched."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/260"
   },
   "tasks": [
     {
@@ -285,6 +314,46 @@
       "at": "2026-08-08T20:08:16.167Z",
       "event": "task-done",
       "detail": "T10: quality gate and review orchestrator until green"
+    },
+    {
+      "at": "2026-08-08T20:08:50.821Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/260"
+    },
+    {
+      "at": "2026-08-08T20:08:58.460Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: buildLandlockRuleset(profile, abi) is pure: ABI injected, no syscall/FFI/spawn/fs/process.platform. Held structurally by an AST source guard over both modules (import allowlist + forbidden-global identifier scan), mutation-verified: 21 evasions red incl. concatenated specifier + live readFile, import.meta.require, Function(), Math[\"random\"], declare const process, class extends globalThis.Object; 14 pure shapes green."
+    },
+    {
+      "at": "2026-08-08T20:08:59.941Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: An inexpressible profile returns {ok:false, failures} and never a ruleset. Ten machine-readable codes; unit tests cover network off, network restricted, non-empty readDenyList, danger-full-access, non-absolute/NUL/non-canonical paths, ABI 0, malformed ABI and ABI below the floor. Failures accumulate in a fixed order; a failed translation has no ruleset property."
+    },
+    {
+      "at": "2026-08-08T20:09:05.781Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Every rule's allow is a non-empty subset of handledFs; minimumAbi is the max first-ABI over handled rights (pinned at 3); LandlockRuleset has exactly five fields, held by a runtime key assertion over seven shapes x four ABIs AND a compile-time Record<keyof LandlockRuleset,true> guard. Mutation-verified: adding or removing a field fails tsc. What the mechanism cannot reach is a constant (LANDLOCK_RESIDUAL_ACTIONS), not a per-translation field."
+    },
+    {
+      "at": "2026-08-08T20:09:07.184Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: handledNet and netRules are typed readonly never[] and always frozen empties; a network rule is a tsc error, not a convention. Asserted over every profile shape at ABI 3-6, and for network on/off/restricted with the specific refusal code required in the failure branch."
+    },
+    {
+      "at": "2026-08-08T20:09:12.674Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: landlock-abi.ts exposes an injected LandlockAbiReader, a per-call cache and LandlockAbiReaderError, and nothing else; it imports nothing (empty specifier allowlist, exact). Cache proven to call the reader exactly once including for cached throws and cached rejections. The no-mechanism property is now held by the shared source guard: a defaultReader using globalThis.Bun.spawnSync on a compiled helper is red."
+    },
+    {
+      "at": "2026-08-08T20:09:15.126Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: tsc --noEmit clean; bun test src/harness/process/sandbox 243 pass/5 skip/0 fail (branch baseline 147/5/0); bun run test:guards 257 pass/0 fail; bun scripts/check-doc-links.ts 698 links 0 broken; keryx health run score 93 trend stable with one pre-existing WARN. Whole-repo bun test 3330/14/2, both failures pre-existing in scripts/install-global.test.ts and owned by the parallel probe flow."
+    },
+    {
+      "at": "2026-08-08T20:09:22.726Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: git diff --stat over the whole range touches in src/ only landlock.ts, landlock.test.ts, landlock-abi.ts, landlock-abi.test.ts and the appended export block of sandbox/index.ts. Outside src/: one line in package.json (test:guards) and the flow package. detect.ts, capability-matrix.ts, src/commands/sandbox.ts, scripts/install.sh, wrap.ts, seatbelt.ts, profile.ts, bwrap.ts, adapter.ts and proxy/TLS are untouched."
     }
   ]
 }
