@@ -60,7 +60,7 @@ Three layers, in this order, instead of one launcher:
 
 | # | Layer | When | Gives |
 |---|---|---|---|
-| 1 | **Landlock (+ seccomp)** | default on Linux when ABI ≥ 1 | filesystem containment; network-off from ABI ≥ 4. No privilege, no namespace, no profile — works on a stock Ubuntu 24.04 |
+| 1 | **Landlock (+ seccomp)** | default on Linux when the ABI can carry the profile — **≥ 3 for a write boundary**, ≥ 1 for read-only (see *What the ABI actually costs*) | filesystem containment. No privilege, no namespace, no profile — works on a stock Ubuntu 24.04 |
 | 2 | **bubblewrap** | fallback: Landlock ABI 0, or FS-only ABI where network-off is required | today's behaviour, unchanged. Needs unprivileged userns (see remediation below) |
 | 3 | **Container profile** | opt-in, never default | strongest isolation, reproducible toolchain, and the **only** layer on which a domain allowlist is implementable (network namespace + proxy) |
 
@@ -154,6 +154,63 @@ path (Ubuntu 22.04 / kernel 5.15) — the size-8 `ruleset_attr` and the ABI-1
 filesystem mask — is inferred from headers and has never run. The TCP axis was
 proven reachable and enforcing, and remains TCP-only: §4.3 of the package
 specification stands.
+
+## Grant list, not deny list
+
+Settled 2026-08-08, after flow 145 built the translator and found that the
+layer as first specified would serve **no real profile at all**.
+
+Two facts, both verified in the code rather than reasoned about:
+
+1. **`SandboxProfile.readDenyList` is never empty in practice.** Both
+   `sandboxProfileFromPolicy` and `defaultSandboxProfile` populate it from
+   `defaultReadDenyList(home)` — SSH and GPG keys, cloud credentials, registry
+   tokens, and keryx's own `auth.json` and `permissions.json`. Only
+   `danger-full-access`, which is by definition uncontained, has an empty one.
+2. **Landlock cannot deny.** A nested rule can add rights to a subtree; it can
+   never remove them. So a "read everything except these fifteen paths" profile
+   is not expressible, and the first specification's Landlock layer would have
+   refused every profile the product actually builds.
+
+**Decision: for the Landlock layer, invert the model.** Do not translate the
+deny list. Grant read to what a contained command needs — the workspace, the
+session temp dir, the system roots — and do not grant `$HOME` at all. The secret
+paths are then unreachable because they were never granted, not because they
+were denied.
+
+This is not a workaround; it is the posture Landlock is built for. The deny list
+exists because bubblewrap starts from `--ro-bind / /`, where everything is
+readable and holes must be punched. Landlock starts from nothing.
+
+**It is also strictly stronger.** The deny list enumerates fifteen known secret
+paths. Withholding `$HOME` covers those *and* every credential file nobody
+thought to list. The cost is the mirror image: tools that read benign config
+from `$HOME` — git config, caches — must be granted explicitly, and until they
+are, they fail. That failure is a visible "cannot read this file", not a silent
+hole in a boundary, and this ADR prefers it in that direction.
+
+Which benign paths need granting is an empirical question, to be **measured**
+rather than guessed, in the flow that builds the launcher.
+
+### What the ABI actually costs
+
+Also from flow 145, and it corrects this ADR's own layer table: a sound **write**
+boundary needs **ABI 3**, not ABI 1. Handling write access without also handling
+`truncate` (ABI 3) leaves truncation unrestricted everywhere, and `refer` is ABI
+2. Review twice rejected the tempting fix — dropping `truncate` from the handled
+set — because that is exactly the best-effort masking this package refuses.
+
+So the honest per-kernel picture:
+
+| Kernel | Landlock | Result |
+|---|---|---|
+| ≥ 6.2 (Ubuntu 24.04, kernel 6.8 here) | ABI 3–4 | full filesystem containment, **zero setup** |
+| 5.13–6.1 (Ubuntu 22.04, kernel 5.15) | ABI 1–2 | read-only containment only; a write profile falls back to bubblewrap |
+
+The fallback is clean rather than another wall: the AppArmor userns restriction
+that makes bubblewrap fail is an Ubuntu 23.10+ default, and those older
+distributions do not have it. Where Landlock cannot serve, bubblewrap works with
+an `apt install` and no security policy to author.
 
 ## Alternatives considered
 

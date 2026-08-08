@@ -1,5 +1,5 @@
 # Keryx Linux Containment — Specification
-Version: 1.0.0
+Version: 1.1.0
 
 Implements [ADR-0010](../../decisions/keryx-harness/ADR-0010-linux-containment-without-privilege.md).
 Read [prd.md](prd.md) first for the problem and the measurements.
@@ -66,7 +66,7 @@ a *claim*, not a file.
 
 | Layer | Selected when | Gives | Does not give |
 |---|---|---|---|
-| **1. Landlock** | Linux, ABI ≥ 1, and the profile's demands are expressible | filesystem containment; TCP network restriction at ABI ≥ 4 | anything requiring a re-rooted mount view; non-TCP network (§4.3) |
+| **1. Landlock** | Linux, and the ABI can carry the profile — **≥ 3 for a write boundary** (`truncate` is ABI 3, `refer` ABI 2), ≥ 1 for `read-only` | filesystem containment, as a **grant list** (§4.4) | anything requiring a re-rooted mount view; non-TCP network (§4.3) |
 | **2. bubblewrap** | Landlock cannot satisfy the profile, and `bwrap` is present **and probes clean** | today's behaviour, unchanged | `network: "restricted"` (already fails closed) |
 | **3. container** | never automatically | *deferred whole* — recorded in ADR-0010, not specified here | — |
 
@@ -142,6 +142,45 @@ Stated, not hidden:
   path *not existing* rather than *not being readable* cannot be expressed.
   Translation failure is fail-closed, never approximate.
 - **Irrevocable and process-wide.** See §4.1.
+
+### 4.4 The grant list
+
+Added 2026-08-08, after flow 145 built the translator and proved the layer as
+first written would serve **no profile the product actually builds**.
+
+`SandboxProfile.readDenyList` is populated on every real path —
+`sandboxProfileFromPolicy` and `defaultSandboxProfile` both call
+`defaultReadDenyList(home)`, and only `danger-full-access` (uncontained by
+definition) leaves it empty. Landlock cannot express it: nesting adds rights to
+a subtree and never removes them.
+
+**So the Landlock layer does not translate the deny list. It inverts it.**
+
+| | bubblewrap | Landlock |
+|---|---|---|
+| Starting point | `--ro-bind / /` — everything readable | nothing readable |
+| Secrets handled by | punching holes (`--tmpfs` over each path) | never granting `$HOME` |
+
+Grant read to the workspace, the session temp directory and the system roots.
+Do **not** grant `$HOME`. The paths in `readDenyList` are then unreachable
+because they were never granted.
+
+Three consequences, all of which belong in review:
+
+1. **Strictly stronger than the deny list.** The list names fifteen known secret
+   paths; withholding `$HOME` also covers the credential file nobody listed.
+2. **Benign `$HOME` reads break until granted.** Git config, tool caches. The
+   grant set for these must be **measured against real commands**, not guessed,
+   in the flow that builds the launcher — and every addition to it is a
+   deliberate widening of the boundary, reviewed as such.
+3. **The failure mode is visible.** A tool reporting "cannot read this file" is
+   a bug report; a silently unenforced boundary is not. This specification
+   prefers the first, which is the same preference AC2 encodes.
+
+A profile whose `readDenyList` contains a path **outside** `$HOME` is not
+automatically satisfied by this construction, and must be checked rather than
+assumed — if such a path would otherwise fall inside a granted root, the
+translation fails under AC2 rather than quietly leaving it readable.
 
 ## 5. Capability matrix — the third state
 

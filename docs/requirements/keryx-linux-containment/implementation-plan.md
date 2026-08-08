@@ -1,5 +1,5 @@
 # Keryx Linux Containment — Implementation Plan
-Version: 1.0.0
+Version: 1.1.0
 
 Sequencing for [specification.md](specification.md). One flow per step; every
 flow merges into `feat/linux-containment-landlock`, not into `main`.
@@ -106,11 +106,27 @@ Full finding and executable evidence: **[spike/README.md](spike/README.md)**
 
 Constraints that are not negotiable in review:
 
+- **Satisfy `readDenyList` by granting, not by denying** (spec §4.4). Grant the
+  workspace, the session temp dir and the system roots; do not grant `$HOME`.
+  Translating the deny list is impossible — nesting adds rights and never
+  removes them — and the layer would otherwise serve no profile the product
+  builds.
+- **Measure the benign-`$HOME` grant set** against real commands. Do not guess
+  it, and do not widen it to make a test pass; each entry is a reviewed
+  widening of the boundary.
+- **A write boundary requires ABI 3.** `truncate` is ABI 3 and `refer` is ABI 2;
+  handling write without `truncate` leaves truncation unrestricted everywhere.
+  Dropping `truncate` to reach older kernels was rejected twice in flow 145's
+  review and is rejected here.
 - `network: "off"` may **not** be served by Landlock alone (spec §4.3 — UDP, raw
   and unix sockets are outside its access types). Until a seccomp filter exists,
   that profile selects bubblewrap.
 - An inexpressible profile fails closed. Never approximate a boundary.
 - Rules are never applied in the keryx process.
+- Use `execve` via FFI, resolving the program through `PATH` explicitly — raw
+  `execve` performs no `PATH` search, and a bare-name fallback would run a file
+  from the workspace. The FFI ABI reader must declare a **signed** return type,
+  or `-1` arrives as 4294967295 and reads as a new kernel.
 
 ## Step 4 — make the rest of the documentation true
 

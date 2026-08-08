@@ -1,5 +1,5 @@
 # Keryx Linux Containment — PRD
-Version: 1.0.0
+Version: 1.1.0
 
 ## 1. Problem
 
@@ -67,7 +67,7 @@ same wall. Codex does not, because it never depended on user namespaces.
 | User | What changes for them |
 |---|---|
 | **A new Linux user** | Containment works out of the box instead of silently not working. This is the whole point. |
-| **An operator on Ubuntu 22.04** (kernel 5.15) | Landlock gives filesystem containment but not network-off. They are told exactly that, and told bubblewrap plus an AppArmor profile is the way to get the rest. Today they are told everything works. |
+| **An operator on Ubuntu 22.04** (kernel 5.15, Landlock ABI 1) | Landlock gives a read-only boundary; a write profile needs ABI 3 and so falls back to bubblewrap. They are told exactly that, with the kernel named as the reason — and on 22.04 bubblewrap works with an `apt install` and no AppArmor profile, because the userns restriction is a 23.10+ default. Today they are told everything works. |
 | **An agent** deciding whether to run something contained | `sandbox status` and the run result become trustworthy inputs. An agent that reads "available" today may be reasoning from a false premise. |
 | **A macOS user** | Nothing changes. |
 
@@ -77,7 +77,7 @@ same wall. Codex does not, because it never depended on user namespaces.
 
 | # | Requirement |
 |---|---|
-| R1 | A Landlock launcher enforces filesystem containment for a spawned command, using the same `SandboxProfile` the other launchers consume. |
+| R1 | A Landlock launcher enforces filesystem containment for a spawned command, using the same `SandboxProfile` the other launchers consume. It satisfies `readDenyList` by **granting** rather than denying — the workspace, the session temp dir and the system roots are granted, `$HOME` is not (see [specification §4.4](specification.md#44-the-grant-list)). A write boundary requires Landlock **ABI 3**; below that a write profile falls back to bubblewrap. |
 | R2 | Landlock's TCP restriction (ABI ≥ 4) is implemented, but **`network: "off"` is not served by Landlock alone** — its access types do not cover UDP, raw or unix sockets, so that profile keeps selecting bubblewrap until a seccomp filter closes the gap. See [specification §4.3](specification.md#43-where-landlock-is-weaker-than-bubblewrap). |
 | R3 | Layer selection at run time: Landlock when usable; otherwise bubblewrap; otherwise fail closed. The selected layer is named in the run result. |
 | R4 | Capability reporting is a **probe**: one trivial contained command is run and its outcome reported. No capability is reported as available on the strength of a binary existing. |
@@ -103,7 +103,7 @@ same wall. Codex does not, because it never depended on user namespaces.
 | S1 | On a stock Ubuntu 24.04 with no `sudo` and no `bubblewrap`, a contained command runs and is contained. | Live check on such a host; a write outside the workspace is refused. |
 | S2 | On the same host, `keryx sandbox status` reports containment as working, and says which layer. | Command output. |
 | S3 | On a host where **no** layer works, `sandbox status` says so, and a contained run is `blocked` rather than unsandboxed. | Forced-unavailable test plus the existing fail-closed tests. |
-| S4 | On kernel 5.15 with no working bubblewrap, filesystem containment reports available (Landlock ABI 1) and network-off reports unavailable **with the kernel as the reason**, not the operating system. | Probe on a 5.15 host, or an ABI-injected test with the bubblewrap layer forced absent. |
+| S4 | On kernel 5.15 (Landlock ABI 1) with no working bubblewrap, a `read-only` profile reports containment available, a `workspace-write` profile reports it unavailable, and both name the **kernel and its Landlock ABI** as the reason rather than the operating system. | Probe on a 5.15 host, or an ABI-injected test with the bubblewrap layer forced absent. Corrected 2026-08-08: the original wording claimed ABI 1 gives filesystem containment outright, which is false for a write boundary — `truncate` is ABI 3. |
 | S5 | No output anywhere claims a capability that a probe did not confirm. | Grep the reporting paths; the doc-sync test extended to the third state. |
 | S6 | The measured overhead of the Landlock layer is recorded, as bubblewrap's ~17 ms was. | Benchmark in the verification runbook. |
 
@@ -114,6 +114,8 @@ same wall. Codex does not, because it never depended on user namespaces.
 | Landlock's filesystem model is a *restriction* of the calling process, not a re-rooted view like bwrap's `--ro-bind`. The two boundaries are not expressible in exactly the same terms. | **high** — it is the core implementation risk | Keep `SandboxProfile` as the shared input, and treat translation into Landlock rules as this package's real work. Where a profile cannot be expressed, fail closed rather than approximate. |
 | Landlock cannot be undone but also cannot be *narrowed per exec* the way a wrapper program can — rules apply to the calling process and its children. | medium | The launcher applies rules in a forked child immediately before `exec`, never in the keryx process. Any design that would restrict keryx itself is rejected. |
 | Landlock's network restriction is TCP-only, so a naive "network off" through it would be a second false green. | **high** | R2: `network: "off"` selects bubblewrap until a seccomp filter covers the remaining socket families. Stated in the spec as non-negotiable in review, not left to the implementer. |
+| The grant list breaks tools that read benign config from `$HOME`. | medium — it is the price of §4.4, paid deliberately | Measure the grant set against real commands in the launcher flow rather than guessing it; treat every addition as a reviewed widening of the boundary. The failure is a visible "cannot read this file", never a silent hole. |
+| A `readDenyList` entry outside `$HOME` falls inside a granted root and stays readable. | medium | The translation must check for this and fail under AC2, not assume the construction covers it. Stated in §4.4. |
 | The probe adds a spawn to a previously spawn-free path. | low | N3/N4: injectable seam, one cached probe per process. |
 | Users on 22.04 read "filesystem only" as "broken". | low | R8: the message names the remediation. |
 | This package cannot land before the unmerged remediation-v2 work. | medium | Stated in the README and in the plan's step 0; the first flow rebases or waits. |
