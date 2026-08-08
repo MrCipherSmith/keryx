@@ -66,12 +66,44 @@ bwrap --version
 ```
 
 Bubblewrap needs unprivileged user namespaces. Ubuntu 23.10+ restricts them via
-AppArmor:
+AppArmor, so on a stock 24.04 step 2 fails with:
+
+```
+bwrap: setting up uid map: Permission denied
+```
+
+Grant the namespace **to `bwrap` alone**, with a profile of the same shape
+Ubuntu ships for Chrome, Brave and ~40 other applications:
 
 ```bash
-# Only if step 2 fails with a user-namespace error
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+sudo tee /etc/apparmor.d/bwrap >/dev/null <<'EOF'
+# This profile allows everything and only exists to give the
+# application a name instead of having the label "unconfined"
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/bwrap>
+}
+EOF
+sudo apparmor_parser -r /etc/apparmor.d/bwrap
+bwrap --ro-bind / / --dev /dev /bin/echo hi   # expect: hi
 ```
+
+The file lives in `/etc/apparmor.d/`, so it is reloaded at boot and survives a
+reboot.
+
+> **Do not** use `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
+> Earlier revisions of this runbook recommended it. It removes the restriction
+> for **every process on the machine** in order to fix one program, and the
+> profile above achieves the same result without weakening anything else. See
+> [ADR-0010](../decisions/keryx-harness/ADR-0010-linux-containment-without-privilege.md),
+> which also records why this remediation should not be needed at all on a
+> Landlock-capable kernel.
 
 Also confirm outbound network exists at all — several checks below depend on the
 host being able to reach the internet **without** the sandbox:

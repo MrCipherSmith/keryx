@@ -1,9 +1,18 @@
 # ADR-0006: OS sandbox for real shell execution (v1)
 
-- **Status:** Accepted (flow 093)
+- **Status:** Accepted (flow 093); **Linux launcher choice superseded by
+  [ADR-0010](./ADR-0010-linux-containment-without-privilege.md)** (2026-08-08)
 - **Date:** 2026-07-21
 - **Supersedes / relates to:** ADR-0003 (security profiles & containment) — this
   adds the OS-level enforcement layer under the policy engine defined there.
+
+> **Superseded in part.** The Linux decision below (bubblewrap) and the
+> "Deferred to v1.x" line on Landlock were both written on the assumption that
+> unprivileged user namespaces are available. Ubuntu 23.10+ withdrew them, which
+> makes bubblewrap unusable on a stock current Ubuntu and makes Landlock the
+> mechanism rather than the hardening. Everything else here — the paradigm, the
+> adapter integration, fail-closed, canonicalization — stands unchanged. See
+> [ADR-0010](./ADR-0010-linux-containment-without-privilege.md).
 
 ## Context
 

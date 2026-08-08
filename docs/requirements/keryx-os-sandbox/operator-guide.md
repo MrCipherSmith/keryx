@@ -182,7 +182,8 @@ keep the domain restriction and lose HTTPS credential masking.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `no command. Put the program after a --` | Flags given but no `-- <path>`. | Add the `--` terminator and an absolute path. |
-| Everything fails, including things that should work | The sandbox is not launching. | macOS: check `sandbox-exec` exists. Linux: `bwrap --version`, and on Ubuntu 23.10+ `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`. |
+| Everything fails, including things that should work | The sandbox is not launching. | macOS: check `sandbox-exec` exists. Linux: `bwrap --version`. |
+| `bwrap: setting up uid map: Permission denied` | Ubuntu 23.10+ restricts unprivileged user namespaces, which is what bubblewrap builds its boundary from. | Install an AppArmor profile for `bwrap` alone — see [linux-sandbox-verification.md §1](../../verification/linux-sandbox-verification.md). **Not** `sysctl …_restrict_unprivileged_userns=0`: that disarms every process on the machine to fix one. |
 | `blocked: OS sandbox launcher unavailable` | No launcher installed. | Linux: `sudo apt-get install -y bubblewrap`. Or accept the refusal — it is protecting you. |
 | `--mask-env requires --tls-terminate` | Masking over HTTPS cannot work without termination. | Add `--tls-terminate`, or drop the mask. |
 | A Go tool reports `x509: certificate signed by unknown authority` | `--tls-terminate` is on. | Drop `--tls-terminate` (see §7). |
