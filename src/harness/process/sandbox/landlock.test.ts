@@ -69,6 +69,24 @@ function rulesetOf(profile: SandboxProfile, abi = ABI_CURRENT): LandlockRuleset 
   return result.ruleset;
 }
 
+/**
+ * True when an identifier sits anywhere inside a type. `readonly at: Date` and
+ * `function f(d: Date)` are erased at compile time and reach nothing at run
+ * time; reporting them would be a false positive, and a guard that cries wolf on
+ * ordinary code is one someone deletes.
+ */
+function isTypePosition(node: ts.Node): boolean {
+  for (let current = node.parent; current !== undefined; current = current.parent) {
+    if (ts.isTypeNode(current) || ts.isTypeAliasDeclaration(current) || ts.isInterfaceDeclaration(current)) {
+      return true;
+    }
+    if (ts.isSourceFile(current)) {
+      return false;
+    }
+  }
+  return false;
+}
+
 /** Rules that grant a writable hierarchy, i.e. everything but the device carve-out. */
 function rootRules(ruleset: LandlockRuleset) {
   return ruleset.pathRules.filter((r) => r.onMissing === "fail");
@@ -85,30 +103,73 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     // is perfectly deterministic within a run, so only a source guard can hold
     // it.
     //
-    // This is the guard's third form. Twice it was written over text and twice
-    // it was defeated by respelling — `from 'fs'` with single quotes, then
-    // `process["platform"]`, a destructured `const { platform } = process`, an
-    // interpolated `${process.platform}`, and a regex literal containing `//`
-    // that ate the line-comment stripper. It now asks the parser, reusing
-    // `config-dir.ast.ts`, whose header is this repository's written record of
-    // the same lesson.
+    // This is the guard's fourth form. Twice it was written over text and twice
+    // respelling beat it; the third asked the parser and was beaten again — by a
+    // specifier built with `+` (which produces NO entry, so an allowlist is
+    // satisfied rather than violated), by `import.meta.require`, by
+    // `Function("return process.platform")()` because only `eval` was named, and
+    // by `Math["random"]` because that one arm matched a property access while
+    // the rest of the guard matched identifiers.
     //
-    // KNOWN GAPS, kept honest rather than claimed closed (that header's point
-    // is that structure has spellings too):
-    //   · a specifier that is not a string literal — `"./prof" + "ile"`, or a
-    //     template with a substitution
-    //   · an impure global reached through an alias created elsewhere and
-    //     imported, which module-level parsing cannot resolve
-    //   · `import.meta.require`, and `createRequire` bound to another name
-    // The allowlist below closes the first-order version of all three: no
-    // specifier other than the two expected ones may appear in any load
-    // position, so an alias has to come from a module that is itself forbidden.
+    // WHAT IS CLOSED, measured rather than asserted:
+    //   · every load position must carry a STRING-LITERAL specifier, and that
+    //     literal must be one of two. A computed specifier is now a failure in
+    //     itself, so "no entry" can no longer pass.
+    //   · `import.meta` in any form, which removes `import.meta.require`.
+    //   · `createRequire` under another name, since importing `node:module` is
+    //     already forbidden by the allowlist.
+    //   · the indirect-call family, by naming `Function` beside `eval`.
+    //   · `Math` by identifier with a member allowlist, so `Math["random"]`,
+    //     `const { random } = Math` and `const M = Math` are one check — the
+    //     principle the guard already applied to `process`.
+    //
+    // KNOWN GAPS, kept because this file's ancestor (`config-dir.ast.ts`) is the
+    // repository's record that structure has spellings too:
+    //   · a global reached through a name not in the set below — there is no
+    //     enumeration of "every impure global", only of the ones worth naming.
+    //   · a forbidden name the module also declares locally is skipped, because
+    //     a shadow is not the global. Reaching the real one through such a
+    //     shadow needs an initialiser that every check here already sees.
+    //   · anything `./profile` or `node:path` might do. Both are in-repo or
+    //     stdlib and pure, and `./profile` is itself spawn-free by spec §2.
+    //   · what the BUNDLER ships. This reads one file from disk; the oracle for
+    //     the shipped graph is `src/lib/production-graph.test.ts`, which
+    //     resolves specifiers instead of matching them.
     const path = fileURLToPath(new URL("./landlock.ts", import.meta.url));
     const sourceFile = parse(path, await readFile(path, "utf8"));
 
+    const reached: string[] = [];
+
     // An allowlist, so it fails closed on a dependency added later rather than
     // on a name someone thought to forbid.
+    //
+    // Type-only loads are counted too, deliberately. They are erased before
+    // anything runs, so they are not a purity question — but this list is also
+    // the record of what the module may depend on at all, and `./profile` is on
+    // it precisely because it is imported (for `SandboxProfile`, type-only). A
+    // closed list costs one line to update when a dependency is genuinely added
+    // and catches one that was not meant to be.
     expect([...new Set(moduleSpecifiers(sourceFile))].sort()).toEqual(["./profile", "node:path"]);
+
+    // `moduleSpecifiers` reports literals. A specifier that is not a literal is
+    // therefore invisible to the assertion above — so it is a failure here.
+    for (const node of walk(sourceFile)) {
+      const isDynamicImport =
+        ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire =
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "require";
+      if (isDynamicImport || isRequire) {
+        const [specifier] = node.arguments;
+        if (specifier === undefined || !ts.isStringLiteralLike(specifier)) {
+          reached.push(`load with a non-literal specifier: ${node.getText(sourceFile)}`);
+        }
+      }
+      if (node.kind === ts.SyntaxKind.MetaProperty) {
+        reached.push("import.meta");
+      }
+    }
 
     // A global has no specifier to allowlist, so these are named. Matching
     // identifiers rather than text means `process`, `process.platform`,
@@ -122,31 +183,72 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
       "Date",
       "performance",
       "eval",
+      "Function",
       "require",
       "fetch",
       "XMLHttpRequest",
       "WebAssembly",
+      "Math",
     ]);
-    const reached: string[] = [];
+    /** `Math` members this module legitimately uses; everything else is a reach. */
+    const pureMathMembers = new Set(["max"]);
+
+    // A name the module declares itself is not the global of that name: `const
+    // performance = 1` shadows it. Reaching a global THROUGH such a shadow would
+    // need an initialiser that reaches it, which every check here already sees.
+    const declaredLocally = new Set<string>();
     for (const node of walk(sourceFile)) {
-      if (ts.isIdentifier(node) && forbiddenGlobals.has(node.text)) {
-        // A property NAME is not a reach for the global: `{ process: 1 }` and
-        // `x.process` are ordinary. A property VALUE, an element access, a
-        // destructuring source and a bare reference all are.
-        const parent = node.parent;
-        const isPropertyName =
-          (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-          (ts.isPropertyAssignment(parent) && parent.name === node);
-        if (!isPropertyName) {
-          reached.push(node.text);
+      const name =
+        ts.isVariableDeclaration(node) ||
+        ts.isParameter(node) ||
+        ts.isBindingElement(node) ||
+        ts.isFunctionDeclaration(node)
+          ? node.name
+          : undefined;
+      if (name !== undefined && ts.isIdentifier(name)) {
+        declaredLocally.add(name.text);
+      }
+    }
+
+    for (const node of walk(sourceFile)) {
+      if (!ts.isIdentifier(node) || !forbiddenGlobals.has(node.text)) {
+        continue;
+      }
+      const parent = node.parent;
+
+      // A NAME is not a reach for the global. `{ process: 1 }`, `x.process`,
+      // `interface X { process: 1 }`, `const Date = …` and an import binding are
+      // all ordinary code, and a guard that reddens on them gets switched off by
+      // whoever trips on it — which protects nothing at all.
+      const isName =
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node) ||
+        (ts.isPropertySignature(parent) && parent.name === node) ||
+        (ts.isMethodSignature(parent) && parent.name === node) ||
+        (ts.isVariableDeclaration(parent) && parent.name === node) ||
+        (ts.isParameter(parent) && parent.name === node) ||
+        (ts.isBindingElement(parent) && parent.name === node) ||
+        ts.isImportSpecifier(parent) ||
+        ts.isExportSpecifier(parent) ||
+        ts.isImportClause(parent);
+      if (isName || isTypePosition(node) || declaredLocally.has(node.text)) {
+        continue;
+      }
+
+      // `Math.max` is pure and used. Any other way of reaching `Math` — a
+      // different member, an element access, a destructure, a bare alias — is
+      // not, and all of them look identical here because the check is on the
+      // identifier rather than on one access shape.
+      if (node.text === "Math") {
+        const usedPurely =
+          ts.isPropertyAccessExpression(parent) &&
+          parent.expression === node &&
+          pureMathMembers.has(parent.name.text);
+        if (usedPurely) {
+          continue;
         }
       }
-      // `Math.max` is pure and used; `Math.random` is not.
-      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
-        if (node.expression.text === "Math" && node.name.text === "random") {
-          reached.push("Math.random");
-        }
-      }
+      reached.push(node.text);
     }
     expect(reached).toEqual([]);
   });
@@ -663,13 +765,13 @@ describe("AC3: a returned ruleset is complete by construction", () => {
     }
   });
 
-  test("the residue does not vary with the profile — it is a mechanism fact", () => {
-    const before = LANDLOCK_RESIDUAL_ACTIONS;
+  test("no profile shape ever handles the deferred device-ioctl right", () => {
+    // The residue's profile-independence needs no assertion: it is a module-level
+    // `export const`, so the type system already forbids a per-profile value. An
+    // earlier version compared the binding to itself, which no legal
+    // implementation could fail. What is worth checking is the ruleset side.
     for (const profile of expressibleShapes) {
       expect(rulesetOf(profile).handledFs).not.toContain("ioctl_dev");
-      // Identity, not length: a list rebuilt per call would be a different fact
-      // per profile, which is exactly what this must not become.
-      expect(LANDLOCK_RESIDUAL_ACTIONS).toBe(before);
     }
   });
 

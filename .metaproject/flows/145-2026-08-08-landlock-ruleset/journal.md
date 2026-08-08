@@ -135,11 +135,14 @@ AC3's had been widened; the ruleset and its `pathRules` were not frozen; and
 
 ### Obligations this flow cannot discharge, recorded so they survive it
 
-1. **`LANDLOCK_UNRESTRICTABLE_ACTIONS` and `LANDLOCK_UNHANDLED_ACTIONS` have no
-   consumer.** They exist so `sandbox status` and `capability-matrix.ts` can state
-   the layer-1/layer-2 boundary asymmetry from a value. Until one of them renders
-   it, the asymmetry is still only in a comment — the defect is relocated, not
-   closed. Both files are out of this lane; step 4 must wire it.
+1. **`LANDLOCK_RESIDUAL_ACTIONS` has no consumer.** (Round 3 replaced the two
+   earlier lists, `LANDLOCK_UNRESTRICTABLE_ACTIONS` and
+   `LANDLOCK_UNHANDLED_ACTIONS`, with this one; the obligation is unchanged.) It
+   exists so `sandbox status` and `capability-matrix.ts` can state the
+   layer-1/layer-2 boundary asymmetry from a value, per entry, including which
+   entries bubblewrap actually refuses. Until one of them renders it, the
+   asymmetry is still only in a comment — the defect is relocated, not closed.
+   Both files are out of this lane; step 4 must wire it.
 2. **The Landlock ABI reader must declare a signed return type.**
    `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)` returns
    `-1` on failure; declared `u32` in `bun:ffi` that becomes `4294967295`, which

@@ -41,7 +41,7 @@
     "test": "bun test",
     "check": "tsc --noEmit && bun test",
     "check:doc-links": "bun scripts/check-doc-links.ts",
-    "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts"
+    "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/harness/process/sandbox/landlock.test.ts"
   },
   "files": [
     "dist",
