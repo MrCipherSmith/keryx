@@ -2,16 +2,20 @@
 // `keryx-linux-containment`, specification §2 (`landlock-abi.ts`) and N4.
 //
 // This module holds the *interface* and the cache, and deliberately holds no
-// mechanism. Reading the kernel's Landlock ABI means asking the kernel — today
-// the intended route is `landlock_create_ruleset(NULL, 0,
-// LANDLOCK_CREATE_RULESET_VERSION)` through `bun:ffi`, but whether `bun:ffi` can
-// carry Landlock at all is the open question of the specification's step-2 spike
-// (§4.2), and its stated fallback is a compiled helper. An interface that
-// assumed either one would have to be rewritten when that spike concludes.
+// mechanism. Reading the kernel's Landlock ABI means asking the kernel, via
+// `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)`.
 //
-// So: the reader is injected. `detect.ts` — not this module — decides what a
-// failure to read the ABI means for layer selection; a policy decision does not
-// belong behind a cache.
+// The specification's step-2 spike (§4.2, flow 143) has since concluded that
+// `bun:ffi` carries that call, that the restriction survives `execve`, and that
+// it is inherited by descendants — so the compiled-helper fallback is not
+// needed. The seam stays mechanism-free anyway: the conclusion removed the
+// reason to *choose* here, not the reason to keep the choice out of a cache.
+// Nothing in this file had to change when the spike landed, which is the
+// property it was written for.
+//
+// The reader is injected. `detect.ts` — not this module — decides what a failure
+// to read the ABI means for layer selection; a policy decision does not belong
+// behind a cache.
 
 /**
  * The kernel's Landlock ABI version. `0` means Landlock is not available, which
@@ -32,9 +36,10 @@ export const LANDLOCK_ABI_UNAVAILABLE: LandlockAbiVersion = 0;
  * An implementation **must** declare the underlying call's return type as
  * signed. `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)`
  * returns `-1` on failure, and a `u32` declaration — a routine `bun:ffi`
- * mistake — turns that into `4294967295`, a number no validator downstream can
- * distinguish from a very new kernel. {@link cacheLandlockAbi} rejects
- * negatives and non-integers, which is the half a seam can check.
+ * mistake, and `bun:ffi` is now the confirmed route — turns that into
+ * `4294967295`, a number no validator downstream can distinguish from a very
+ * new kernel. {@link cacheLandlockAbi} rejects negatives and non-integers,
+ * which is the half a seam can check; the reader's own test must cover the rest.
  */
 export type LandlockAbiReader = () => LandlockAbiVersion;
 

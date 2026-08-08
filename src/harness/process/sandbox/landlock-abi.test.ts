@@ -57,9 +57,10 @@ describe("AC5: cacheLandlockAbi is a mechanism-free, single-call seam", () => {
   });
 
   test("the module exposes no mechanism of its own", async () => {
-    // The spike on `bun:ffi` (specification §4.2) may conclude that a compiled
-    // helper is required. Anything here that assumed a mechanism would have to
-    // be rewritten when it does, so the seam holds only the interface.
+    // The step-2 spike (§4.2) has concluded that `bun:ffi` carries Landlock, so
+    // the compiled-helper fallback is not needed — and this module did not have
+    // to change when that landed, which is the property it was written for. The
+    // seam still holds only the interface: the mechanism belongs to the reader.
     const module = await import("./landlock-abi");
     expect(Object.keys(module).sort()).toEqual([
       "LANDLOCK_ABI_UNAVAILABLE",
@@ -80,8 +81,9 @@ describe("AC5: cacheLandlockAbi is a mechanism-free, single-call seam", () => {
     // Recorded, not fixed: 4294967295 is a valid non-negative integer and no
     // ceiling on a future ABI can be justified. The defence is the reader's own
     // declaration — `landlock_create_ruleset` returns a SIGNED value, and
-    // `LandlockAbiReader`'s doc says so. Named so the spike's implementer meets
-    // the trap here rather than in a false "Landlock available" report.
+    // `LandlockAbiReader`'s doc says so. Now that `bun:ffi` is the confirmed
+    // route this is a live trap, not a hypothetical one: named here so the
+    // reader's author meets it before a false "Landlock available" report does.
     const abi = cacheLandlockAbi(() => 4294967295);
     expect(abi()).toBe(4294967295);
   });

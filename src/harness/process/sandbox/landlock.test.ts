@@ -231,6 +231,49 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
 // The device carve-out — the compatibility floor both sibling launchers carry
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Nested rules — the shape the step-2 spike proved is mandatory
+// ---------------------------------------------------------------------------
+
+describe("a narrower rule can nest inside a broader hierarchy", () => {
+  test("a writable root beneath another writable root is kept, not folded away", () => {
+    // Rights accumulate downwards, so the only way to give a subtree more is a
+    // deeper rule. A builder that merged or dropped nested paths would force the
+    // applier to widen the ancestor instead, which is how the spike turned
+    // "make /dev/shm writable" into "may unlink device nodes".
+    const ruleset = rulesetOf({ ...expressible, writableRoots: ["/work", "/work/cache"] });
+    expect(rootRules(ruleset).map((r) => r.path)).toEqual(["/work", "/work/cache"]);
+  });
+
+  test("a device rule survives beneath an ancestor root that already covers it", () => {
+    const ruleset = rulesetOf({ ...expressible, writableRoots: ["/"] });
+    const paths = ruleset.pathRules.map((r) => r.path);
+    expect(paths).toContain("/");
+    expect(paths).toContain("/dev/null");
+    // …and it keeps its own, narrower rights rather than inheriting the root's.
+    const device = ruleset.pathRules.find((r) => r.path === "/dev/null");
+    expect(device?.allow).toEqual(["write_file", "truncate"]);
+    expect(device?.allow.length).toBeLessThan(ruleset.handledFs.length);
+  });
+
+  test("nested rules are never merged, sorted or de-duplicated by prefix", () => {
+    const ruleset = rulesetOf({ ...expressible, writableRoots: ["/a/b/c", "/a", "/a/b"] });
+    // Profile order is preserved exactly — no prefix sort, no ancestor folding.
+    expect(rootRules(ruleset).map((r) => r.path)).toEqual(["/a/b/c", "/a", "/a/b"]);
+  });
+
+  test("rule order carries no precedence, so it cannot encode a narrowing", () => {
+    // Landlock accumulates: whatever order these are added in, the grant is the
+    // union. A test that depended on order would be encoding a deny that does
+    // not exist.
+    const forward = rulesetOf({ ...expressible, writableRoots: ["/a", "/a/b"] });
+    const reverse = rulesetOf({ ...expressible, writableRoots: ["/a/b", "/a"] });
+    expect(new Set(rootRules(forward).map((r) => r.path))).toEqual(
+      new Set(rootRules(reverse).map((r) => r.path)),
+    );
+  });
+});
+
 describe("stdio devices stay writable, as in seatbelt.ts and bwrap.ts", () => {
   test.each(["/dev/null", "/dev/zero", "/dev/tty"])("%s is writable in every mode", (device) => {
     for (const profile of expressibleShapes) {

@@ -44,15 +44,14 @@ export {
 } from "./detect";
 export { createRunCa, type RunCa, type LeafCertificate, type CreateRunCaOptions } from "./tls-ca";
 // Linux Landlock, layer 1 of ADR-0010. The ruleset builder only: applying a
-// ruleset to a process is a separate module gated on the specification's §4.2
-// spike, and nothing here spawns, opens a file or touches the kernel.
+// ruleset to a process is a separate module, and nothing here spawns, opens a
+// file or touches the kernel.
 //
 // Curated like every block above it. The UAPI bit table and the mask folder stay
 // exported from `./landlock` for the sibling applier, which imports the module
-// directly as `wrap.ts` imports `./bwrap` — they are marshalling detail of a
-// mechanism the spike has not chosen yet, and `index.ts` is the public surface
-// (specification §1). `bwrap.ts`'s `inspectMaskTarget` is withheld here for the
-// same reason.
+// directly as `wrap.ts` imports `./bwrap` — they are `bun:ffi` marshalling
+// detail, and `index.ts` is the public surface (specification §1).
+// `bwrap.ts`'s `inspectMaskTarget` is withheld here for the same reason.
 export {
   buildLandlockRuleset,
   LANDLOCK_UNHANDLED_ACTIONS,

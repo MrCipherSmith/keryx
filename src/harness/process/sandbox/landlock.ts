@@ -18,7 +18,7 @@
 // rules, and `landlock_add_rule` rejects an empty `allowed_access` (`ENOMSG`),
 // so a deeper rule cannot narrow a shallower one.
 //
-// Three consequences, and each is load-bearing:
+// Four consequences, and each is load-bearing:
 //
 // 1. **Handle only what the profile restricts.** The profile's read default is
 //    broad (bubblewrap expresses it as `--ro-bind / /`), so no read-ish access
@@ -34,6 +34,18 @@
 // 3. **A deny-exception under a broad allow has no representation.** That is
 //    what `readDenyList` is, and it is specification §4.3's "no mount view"
 //    paragraph. See {@link LandlockInexpressibleCode} for the disposition.
+// 4. **A subtree that needs more rights gets its own nested rule — never a
+//    wider ancestor.** Rights accumulate downwards, so widening an ancestor to
+//    reach one descendant grants the widened set to *every* descendant. The
+//    step-2 spike (flow 143) hit this on `/dev`: widening all of `/dev` to make
+//    `/dev/shm` writable also bought the ability to unlink device nodes. The
+//    correct shape is a narrow rule deeper in the tree, so `pathRules` is an
+//    ordered list that may contain a path beneath another path with a different
+//    `allow` set, and nothing here merges, sorts or de-duplicates rules by
+//    prefix. The applier must add every rule exactly as given.
+//
+//    The asymmetry is the whole model in one line: nesting can *add* rights to a
+//    subtree and can never *remove* them. That is why (4) works and (3) cannot.
 //
 // ## What this ruleset does not reach, stated rather than hidden
 //
@@ -257,7 +269,16 @@ const DEVICE_WRITE_RIGHTS: readonly LandlockFsAccess[] = Object.freeze(["write_f
  */
 export type LandlockMissingPathDisposition = "fail" | "skip";
 
-/** One `landlock_add_rule(fd, LANDLOCK_RULE_PATH_BENEATH, …)` call. */
+/**
+ * One `landlock_add_rule(fd, LANDLOCK_RULE_PATH_BENEATH, …)` call.
+ *
+ * Rules may nest: a rule's `path` may lie beneath another rule's `path`, with a
+ * different and possibly narrower `allow` set. Rights accumulate downwards, so a
+ * nested rule adds to whatever an ancestor already granted and can never subtract
+ * from it — see consequence (4) in the module header. The applier issues every
+ * rule; it must not drop one because an ancestor exists, and it must never widen
+ * an ancestor to reach a descendant.
+ */
 export interface LandlockPathRule {
   /**
    * Absolute, canonical path of the hierarchy root; the applier opens it
@@ -306,7 +327,12 @@ export interface LandlockRuleset {
    * pairs Landlock with a seccomp filter widens this.
    */
   readonly handledNet: readonly never[];
-  /** Path-beneath allow-rules, in a deterministic order. */
+  /**
+   * Path-beneath allow-rules, in a deterministic order. May contain nested
+   * paths with differing `allow` sets ({@link LandlockPathRule}); the order is
+   * stable for reporting and diffing, and carries no precedence — Landlock
+   * accumulates, so no ordering of these rules changes what they grant.
+   */
   readonly pathRules: readonly LandlockPathRule[];
   /** Net-port allow-rules. Typed empty for the same reason as `handledNet`. */
   readonly netRules: readonly never[];
