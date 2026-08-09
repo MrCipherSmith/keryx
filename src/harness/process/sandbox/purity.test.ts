@@ -38,8 +38,16 @@ const PURE_MODULES = [
   "adapter.ts",
 ] as const;
 
-/** Ways a module could spawn a process. */
-const SPAWN_IMPORTS = ["node:child_process", "child_process", "Bun.spawn", "Bun.$"];
+/**
+ * Ways a module could reach the operating system directly.
+ *
+ * `bun:ffi` is here for the same reason the spawn APIs are, and it arrived with
+ * the Landlock layer: `landlock-exec.ts` issues raw syscalls and then `execve`s,
+ * which starts a process without naming any spawn API at all. A guard that
+ * enumerated only `child_process` and `Bun.spawn` would have called it pure, and
+ * would then have let a launcher builder import it.
+ */
+const SPAWN_IMPORTS = ["node:child_process", "child_process", "Bun.spawn", "Bun.$", "bun:ffi"];
 
 /**
  * Does `source` IMPORT `needle`, as opposed to merely mentioning it?
@@ -160,13 +168,32 @@ describe("sandbox module purity (N3 / AC14)", () => {
     expect(source).toContain("spawn?: ProbeSpawn");
   });
 
-  test("the set of DIRECT spawners is exactly the two that are meant to spawn", () => {
-    // Pinned so that a third one cannot appear unremarked. `probe.ts` runs the
+  test("the set of DIRECT spawners is exactly the three that are meant to reach the OS", () => {
+    // Pinned so that a fourth one cannot appear unremarked. `probe.ts` runs the
     // trial containment; `tls-ca.ts` shells out to openssl for the restricted-
-    // network CA and predates this flow. Both are deliberate; anything else
-    // showing up here is a purity regression and should fail loudly rather than
-    // widen the transitive check by accident.
-    expect(directSpawningModules().sort()).toEqual(["probe.ts", "tls-ca.ts"]);
+    // network CA and predates this flow; `landlock-exec.ts` is the applier, and
+    // it is meant to be reached by being SPAWNED, never by being imported —
+    // which is exactly what listing it here enforces for every pure module.
+    // Anything else showing up is a purity regression and should fail loudly
+    // rather than widen the transitive check by accident.
+    expect(directSpawningModules().sort()).toEqual([
+      "landlock-exec.ts",
+      "probe.ts",
+      "tls-ca.ts",
+    ]);
+  });
+
+  test("the applier is reached by spawning it, so nothing in the package imports it", () => {
+    // `wrap.ts` names its path as an injected string and never loads it: that is
+    // what keeps the dispatcher pure while the boundary it describes is applied
+    // in another process (§4.1 — a Landlock domain cannot be shed, so rules may
+    // never be applied in a long-lived one).
+    const importers = packageModules().filter((file) =>
+      /from\s+["']\.\/landlock-exec["']|import\s*\(\s*["']\.\/landlock-exec["']/.test(
+        withoutComments(sourceOf(file)),
+      ),
+    );
+    expect(importers).toEqual([]);
   });
 
   test("the transitive closure is a superset, and includes the barrel", () => {

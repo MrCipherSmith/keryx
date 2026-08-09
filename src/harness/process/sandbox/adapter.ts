@@ -38,6 +38,24 @@ export interface SandboxedProcessAdapterOptions {
   launcherAvailable: boolean;
   /** Resolved absolute bwrap path (Linux). */
   bwrapPath?: string;
+  /** The kernel's Landlock ABI, when the caller measured one (Linux). */
+  landlockAbi?: number;
+  /** Absolute path of the Bun that runs the Landlock applier. */
+  bunPath?: string;
+  /** Absolute path of the bundled `landlock-exec` entry point. */
+  landlockExecPath?: string;
+  /** Absolute `$HOME`. Granted by nothing; see the grant model (§4.4). */
+  home?: string;
+  /** Read-only hierarchies beyond the system ones, each measured. */
+  extraReadRoots?: readonly string[];
+  /**
+   * Called with the layer that actually wrapped a command.
+   *
+   * The layer is reported from this decision — the parent's — and never from the
+   * contained command's exit status, which it is free to choose. 125 means
+   * "the launcher failed" only because keryx says so here.
+   */
+  onLayer?: (layer: "seatbelt" | "landlock" | "bwrap") => void;
   /**
    * When the sandbox cannot be applied, refuse to run rather than fall back to
    * an unsandboxed spawn. Defaults to true (prod-safe). A `required` profile
@@ -93,6 +111,15 @@ export class SandboxedProcessAdapter implements ProcessAdapter {
     const wrap = wrapWithSandbox(command, profile, {
       platform,
       ...(bwrapPath !== undefined ? { bwrapPath } : {}),
+      ...(this.opts.landlockAbi !== undefined ? { landlockAbi: this.opts.landlockAbi } : {}),
+      ...(this.opts.bunPath !== undefined ? { bunPath: this.opts.bunPath } : {}),
+      ...(this.opts.landlockExecPath !== undefined
+        ? { landlockExecPath: this.opts.landlockExecPath }
+        : {}),
+      ...(this.opts.home !== undefined ? { home: this.opts.home } : {}),
+      ...(this.opts.extraReadRoots !== undefined
+        ? { extraReadRoots: this.opts.extraReadRoots }
+        : {}),
     });
     if (!wrap.ok) {
       if (failClosed) {
@@ -102,6 +129,10 @@ export class SandboxedProcessAdapter implements ProcessAdapter {
         );
       }
       return inner.spawn(command);
+    }
+
+    if (wrap.layer !== undefined) {
+      this.opts.onLayer?.(wrap.layer);
     }
 
     const observation = inner.spawn(wrap.command);

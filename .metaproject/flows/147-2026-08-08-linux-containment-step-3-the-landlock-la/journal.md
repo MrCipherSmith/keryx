@@ -118,3 +118,5 @@ module acquired no host access along with the grant list.
 - 2026-08-08T23:58:46.378Z - task-done: T7: rework landlock.ts to the grant model (handle read rights, grant roots, check the deny list)
 - 2026-08-09T00:08:23.091Z - task-done: T9: implement landlock-exec.ts: FFI applier, PATH resolution that refuses, execve, exit-status mapping
 - 2026-08-09T00:08:23.184Z - task-done: T10: live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3
+- 2026-08-09T00:15:30.542Z - task-done: T8: tests for layer selection in wrap.ts and the resolved layer in detect.ts (AC3, AC8)
+- 2026-08-09T00:15:30.726Z - task-done: T11: wire the Linux branch: wrap.ts layer choice, detect.ts layer field, adapter and callers unchanged

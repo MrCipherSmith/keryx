@@ -192,3 +192,123 @@ describe("SandboxedProcessAdapter", () => {
     expect(obs.errorMessage).toContain("ENOENT");
   });
 });
+
+// ---------------------------------------------------------------------------
+// AC3 — layer selection, per profile rather than per host
+// ---------------------------------------------------------------------------
+
+describe("Linux layer selection", () => {
+  /** Everything the Landlock branch needs, none of it read from this host. */
+  const landlockOpts = {
+    platform: "linux",
+    landlockAbi: 4,
+    bunPath: "/usr/local/bin/bun",
+    landlockExecPath: "/opt/keryx/landlock-exec.js",
+    home: "/home/u",
+  } as const;
+
+  /** An expressible profile: workspace-write, network on. */
+  const expressible: SandboxProfile = { ...profile, network: "on" };
+
+  test("an expressible profile is wrapped by Landlock, in the §4.2 shape", () => {
+    const r = wrapWithSandbox(command, expressible, landlockOpts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("landlock");
+    expect(r.command.path).toBe("/usr/local/bin/bun");
+    expect(r.command.argv.slice(0, 3)).toEqual([
+      "/usr/local/bin/bun",
+      "/opt/keryx/landlock-exec.js",
+      "--ruleset",
+    ]);
+    expect(r.command.argv[4]).toBe("--");
+    // The real command follows, argv[0] dropped exactly as wrapBwrap drops it.
+    expect(r.command.argv.slice(5)).toEqual(["/bin/echo", "hi"]);
+    expect(r.command.cwd).toBe(command.cwd);
+    expect(r.command.env).toBe(command.env);
+  });
+
+  test("the ruleset it passes is the translation of that profile", () => {
+    const r = wrapWithSandbox(command, expressible, landlockOpts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const ruleset = JSON.parse(r.command.argv[3] as string);
+    const paths = ruleset.pathRules.map((rule: { path: string }) => rule.path);
+    expect(paths).toContain("/work/repo");
+    expect(paths).toContain("/usr");
+    // The mechanism, asserted where it is used and not only where it is built.
+    expect(paths).not.toContain("/home/u");
+  });
+
+  test('network "off" selects bubblewrap, because Landlock is TCP-only', () => {
+    // Selection is per PROFILE: this is the same host as the test above.
+    const r = wrapWithSandbox(command, { ...profile, network: "off" }, landlockOpts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("bwrap");
+    expect(r.command.argv[0]).toBe("bwrap");
+  });
+
+  test("a kernel below the write boundary's ABI falls back rather than under-restricting", () => {
+    const r = wrapWithSandbox(command, expressible, { ...landlockOpts, landlockAbi: 2 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("bwrap");
+  });
+
+  test("a kernel with no Landlock falls back", () => {
+    const r = wrapWithSandbox(command, expressible, { ...landlockOpts, landlockAbi: 0 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("bwrap");
+  });
+
+  test("an unmeasured ABI is not a guess in either direction — it falls back", () => {
+    const { landlockAbi: _abi, ...withoutAbi } = landlockOpts;
+    const r = wrapWithSandbox(command, expressible, withoutAbi);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("bwrap");
+  });
+
+  test("not knowing where the applier is falls back, and says nothing about the profile", () => {
+    const { landlockExecPath: _path, ...withoutApplier } = landlockOpts;
+    const r = wrapWithSandbox(command, expressible, withoutApplier);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("bwrap");
+  });
+
+  test("a profile neither layer can express fails closed, with the reason", () => {
+    // A malformed writable root is the profile's own shape, not the kernel's:
+    // handing it to bubblewrap would hand a second launcher the same bad input.
+    const r = wrapWithSandbox(command, { ...expressible, writableRoots: ["relative"] }, landlockOpts);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toContain("relative");
+  });
+
+  test("network=restricted still fails closed on both layers", () => {
+    const r = wrapWithSandbox(command, { ...expressible, network: "restricted" }, landlockOpts);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toContain("network=restricted");
+  });
+
+  test("danger-full-access is still the only pass-through (AC8)", () => {
+    const r = wrapWithSandbox(command, { ...expressible, mode: "danger-full-access" }, landlockOpts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.wrapped).toBe(false);
+    expect(r.command).toBe(command);
+    expect(r.layer).toBeUndefined();
+  });
+
+  test("darwin is untouched by any of this (AC9)", () => {
+    const r = wrapWithSandbox(command, expressible, { ...landlockOpts, platform: "darwin" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.layer).toBe("seatbelt");
+    expect(r.command.path).toBe("/usr/bin/sandbox-exec");
+  });
+});

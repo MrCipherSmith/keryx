@@ -5,7 +5,7 @@
   "title": "Linux containment step 3: the Landlock launcher — apply the ruleset in a child and exec the real command",
   "status": "in-progress",
   "createdAt": "2026-08-08T23:45:13.769Z",
-  "updatedAt": "2026-08-09T00:08:23.184Z",
+  "updatedAt": "2026-08-09T00:15:30.726Z",
   "source": {
     "type": "description",
     "ref": null
@@ -122,7 +122,7 @@
       "id": "T8",
       "title": "tests for layer selection in wrap.ts and the resolved layer in detect.ts (AC3, AC8)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -130,7 +130,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -166,7 +167,7 @@
       "id": "T11",
       "title": "wire the Linux branch: wrap.ts layer choice, detect.ts layer field, adapter and callers unchanged",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -174,7 +175,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -369,6 +371,16 @@
       "at": "2026-08-09T00:08:23.184Z",
       "event": "task-done",
       "detail": "T10: live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3"
+    },
+    {
+      "at": "2026-08-09T00:15:30.542Z",
+      "event": "task-done",
+      "detail": "T8: tests for layer selection in wrap.ts and the resolved layer in detect.ts (AC3, AC8)"
+    },
+    {
+      "at": "2026-08-09T00:15:30.726Z",
+      "event": "task-done",
+      "detail": "T11: wire the Linux branch: wrap.ts layer choice, detect.ts layer field, adapter and callers unchanged"
     }
   ]
 }
