@@ -5,7 +5,7 @@
   "title": "Linux containment step 3: the Landlock launcher — apply the ruleset in a child and exec the real command",
   "status": "in-progress",
   "createdAt": "2026-08-08T23:45:13.769Z",
-  "updatedAt": "2026-08-08T23:58:46.378Z",
+  "updatedAt": "2026-08-09T00:08:23.184Z",
   "source": {
     "type": "description",
     "ref": null
@@ -136,7 +136,7 @@
       "id": "T9",
       "title": "implement landlock-exec.ts: FFI applier, PATH resolution that refuses, execve, exit-status mapping",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -144,13 +144,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -158,7 +159,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -357,6 +359,16 @@
       "at": "2026-08-08T23:58:46.378Z",
       "event": "task-done",
       "detail": "T7: rework landlock.ts to the grant model (handle read rights, grant roots, check the deny list)"
+    },
+    {
+      "at": "2026-08-09T00:08:23.091Z",
+      "event": "task-done",
+      "detail": "T9: implement landlock-exec.ts: FFI applier, PATH resolution that refuses, execve, exit-status mapping"
+    },
+    {
+      "at": "2026-08-09T00:08:23.184Z",
+      "event": "task-done",
+      "detail": "T10: live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3"
     }
   ]
 }

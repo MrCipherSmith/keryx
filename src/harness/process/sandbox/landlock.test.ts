@@ -327,6 +327,23 @@ const LANDLOCK_MODULES = [
   { file: "landlock-abi.ts", allowed: [] as string[] },
 ];
 
+/**
+ * The modules in this family that are deliberately impure, and why.
+ *
+ * The guard above holds the *translation* pure. `landlock-exec.ts` is the
+ * opposite kind of module — it exists to issue the syscalls — so applying that
+ * guard to it would be asserting the reverse of its purpose. It is listed here
+ * instead, which keeps the closure property intact: a new `landlock*.ts` file
+ * still cannot appear without a decision being written down about which of the
+ * two lists it belongs on.
+ */
+const LANDLOCK_IMPURE_MODULES = [
+  {
+    file: "landlock-exec.ts",
+    why: "the applier: it issues the landlock_* syscalls through bun:ffi and then execve's, in a short-lived child (§4.1 — rules are never applied in the keryx process).",
+  },
+];
+
 describe("AC1: buildLandlockRuleset is a pure translation", () => {
   test("the guard covers every source module in the flow", async () => {
     // The closure that makes the list above a class rather than two examples:
@@ -340,7 +357,50 @@ describe("AC1: buildLandlockRuleset is a pure translation", () => {
     const present = (await readdir(directory))
       .filter((f) => /^landlock.*\.[cm]?ts$/.test(f) && !/\.test\./.test(f))
       .sort();
-    expect(present).toEqual(LANDLOCK_MODULES.map((m) => m.file).sort());
+    expect(present).toEqual(
+      [...LANDLOCK_MODULES.map((m) => m.file), ...LANDLOCK_IMPURE_MODULES.map((m) => m.file)].sort(),
+    );
+    // …and the two lists are disjoint, or a module could be declared impure and
+    // silently stop being checked while still appearing to be covered.
+    for (const impure of LANDLOCK_IMPURE_MODULES) {
+      expect(LANDLOCK_MODULES.map((m) => m.file)).not.toContain(impure.file);
+      expect(impure.why.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("the applier reaches bun:ffi only through a dynamic import", async () => {
+    // Two things at once. A static `import … from "bun:ffi"` would dlopen libc
+    // for anyone importing this module for its pure parts — including the tests
+    // that assert the argv parser on a platform with no Landlock at all — and it
+    // would make the module unloadable outside Bun. Neither is visible from
+    // outputs, so it is a source guard like the one above.
+    const file = fileURLToPath(new URL("./landlock-exec.ts", import.meta.url));
+    const sourceFile = parse(file, await readFile(file, "utf8"));
+    // `moduleSpecifiers` reports dynamic loads too, so the static half is read
+    // off the declarations themselves — the distinction IS the assertion here.
+    const staticSpecifiers: string[] = [];
+    for (const node of walk(sourceFile)) {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier !== undefined &&
+        ts.isStringLiteralLike(node.moduleSpecifier)
+      ) {
+        staticSpecifiers.push(node.moduleSpecifier.text);
+      }
+    }
+    expect(staticSpecifiers).not.toContain("bun:ffi");
+
+    const dynamicSpecifiers: string[] = [];
+    for (const node of walk(sourceFile)) {
+      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const [specifier] = node.arguments;
+        expect(specifier !== undefined && ts.isStringLiteralLike(specifier)).toBe(true);
+        if (specifier !== undefined && ts.isStringLiteralLike(specifier)) {
+          dynamicSpecifiers.push(specifier.text);
+        }
+      }
+    }
+    expect(dynamicSpecifiers).toEqual(["bun:ffi"]);
   });
 
   test.each(LANDLOCK_MODULES)("$file loads nothing impure and reaches for no impure global", async ({

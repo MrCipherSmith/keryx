@@ -116,3 +116,5 @@ clean; `bun run test:guards` 275 pass — the purity guard still holds, so the
 module acquired no host access along with the grant list.
 - 2026-08-08T23:58:46.288Z - task-done: T6: tests for the grant model: AC1 profiles, AC2 refusals, deny-list-under-a-granted-root
 - 2026-08-08T23:58:46.378Z - task-done: T7: rework landlock.ts to the grant model (handle read rights, grant roots, check the deny list)
+- 2026-08-09T00:08:23.091Z - task-done: T9: implement landlock-exec.ts: FFI applier, PATH resolution that refuses, execve, exit-status mapping
+- 2026-08-09T00:08:23.184Z - task-done: T10: live enforcement tests with negative controls (AC4, AC5, AC6, AC7), skipped-with-reason below ABI 3
