@@ -7,6 +7,48 @@ All notable changes to `keryx` are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.17] — 2026-08-11
+
+This release makes project bootstrap reliable without inflating every agent
+turn, gives read-heavy investigation enough room to finish, and completes the
+memory reliability work from recall through lifecycle writes.
+
+### Added
+
+- **Agent orientation now starts from the launch project's Metaproject.** When
+  `.metaproject/index.md` exists at the project root, `keryx orient` includes a
+  bounded excerpt of its routing sections and tells the agent to read the full
+  file before project work. It deliberately does not discover an ancestor
+  Metaproject or describe the prompt instruction as an enforced runtime gate.
+- **Memory reports and lifecycle transitions are explicit surfaces.** Default
+  recall is side-effect free; `memory search --save-report` persists an
+  immutable report only when requested; `memory transition` validates status
+  changes; and supersession updates both entries through the guarded lifecycle.
+
+### Changed
+
+- **Interactive-agent tool budgets are split by risk inside a 48-signature
+  total:** up to 40 read signatures and 8 non-read or unknown-risk signatures.
+  Repeating the same normalized call still occupies one slot, and merely
+  reaching a limit no longer ends the turn before the model can answer from the
+  last result.
+- **Automatic memory influence is accepted-only, current, and bounded** across
+  shell approval context, flows, the harness adapter, MCP, and skill
+  verification. Search filters, temporal validity, memory types, templates, and
+  configuration now share one validated contract.
+- **Canonical memory writes are confined, security-gated, and atomic.** Paired
+  supersession writes roll back together on failure. Legacy generated
+  `data/memory/artifacts/latest.*` files receive advisory migration guidance;
+  Keryx does not delete downstream files or mutate the Git index automatically.
+
+### Documentation
+
+- Added the implemented P0–P6 memory reliability requirements, specification,
+  migration policy, verification evidence, schema, and updated CLI/module/wiki
+  guidance.
+- Added a frozen 26-case shell benchmark protocol for comparing Keryx model
+  legs with Claude Code and Codex without claiming results before a run.
+
 ## [0.2.16] — 2026-08-05
 
 The other half of the 0.2.15 audit. That release corrected what the README
@@ -625,9 +667,6 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
 
 ### Added
 
-- Memory reliability lifecycle and reporting surfaces: pure default recall,
-  explicit `memory search --save-report`, validated `memory transition`, and
-  non-destructive `memory supersede` documentation/registry coverage.
 - Language-aware gdgraph import resolution: Java (Maven/Gradle source roots,
   fully-qualified-name → file mapping) and Python (dotted modules, `__init__.py`
   packages, and relative `from . import x`) source now produce real dependency
@@ -648,12 +687,6 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
 
 ### Changed
 
-- Memory documentation now treats Markdown as canonical, catalogs/embeddings as
-  optional disposable views, and automatic recall as accepted/current/bounded.
-- Init/update migration guidance for legacy `data/memory/artifacts/latest.*`
-  is advisory only; Keryx never deletes those downstream files or mutates the
-  Git index automatically. The Keryx repository's generated legacy copies were
-  retired after byte-for-byte backup to `/private/tmp/keryx-memory-latest-backup-2026-08-10/`.
 - Graph symbol resolution now disambiguates loose names and resolves cross-file
   calls before computing callers and impact.
 - Agent bootstrap rules enforce the Metaproject hard gate before project work.
@@ -688,9 +721,6 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
 
 ### Documentation
 
-- Added the P0–P6 memory reliability verification/evidence package, migration
-  guidance, CLI/module/architecture/setup updates, and refreshed the accepted
-  `src-memory` wiki page.
 - Refreshed public, developer, CLI, architecture, module, onboarding, workspace,
   and release-readiness documentation for the post-`v0.1.0` feature set.
 
@@ -786,4 +816,11 @@ runtime dependencies, no sockets).
 [0.2.8]: https://github.com/MrCipherSmith/keryx/compare/v0.2.7...v0.2.8
 [0.2.9]: https://github.com/MrCipherSmith/keryx/compare/v0.2.8...v0.2.9
 [0.2.10]: https://github.com/MrCipherSmith/keryx/compare/v0.2.9...v0.2.10
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.10...HEAD
+[0.2.11]: https://github.com/MrCipherSmith/keryx/compare/v0.2.10...v0.2.11
+[0.2.12]: https://github.com/MrCipherSmith/keryx/compare/v0.2.11...v0.2.12
+[0.2.13]: https://github.com/MrCipherSmith/keryx/compare/v0.2.12...v0.2.13
+[0.2.14]: https://github.com/MrCipherSmith/keryx/compare/v0.2.13...v0.2.14
+[0.2.15]: https://github.com/MrCipherSmith/keryx/compare/v0.2.14...v0.2.15
+[0.2.16]: https://github.com/MrCipherSmith/keryx/compare/v0.2.15...v0.2.16
+[0.2.17]: https://github.com/MrCipherSmith/keryx/compare/v0.2.16...v0.2.17
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.17...HEAD
