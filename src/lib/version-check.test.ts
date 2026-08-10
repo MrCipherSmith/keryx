@@ -6,7 +6,7 @@
 // developer's real configuration directory.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -16,11 +16,13 @@ import {
   REQUEST_TIMEOUT_MS,
   RESPONSE_BODY_LIMIT_BYTES,
   SUCCESS_CACHE_TTL_MS,
+  VERSION_STRING_LIMIT_CHARS,
   checkVersion,
   type VersionCheckResult,
   type VersionFetch,
 } from "./version-check";
 
+const EXPECTED_VERSION_STRING_LIMIT_CHARS = 64;
 const cacheDirs: string[] = [];
 
 afterEach(async () => {
@@ -39,6 +41,10 @@ function response(body: string, status = 200): Response {
 
 function registryResponse(version: string, extra: Record<string, unknown> = {}): Response {
   return response(JSON.stringify({ name: "@mrciphersmith/keryx", version, ...extra }));
+}
+
+function numericVersionWithLength(length: number, digit: "8" | "9" = "9"): string {
+  return `${digit.repeat(length - ".0.0".length)}.0.0`;
 }
 
 type FetchCall = { url: string; signal: AbortSignal | null | undefined };
@@ -71,6 +77,7 @@ describe("version-check service contract", () => {
     expect(REQUEST_TIMEOUT_MS).toBe(2_000);
     expect(SUCCESS_CACHE_TTL_MS).toBe(24 * 60 * 60 * 1_000);
     expect(FAILURE_BACKOFF_MS).toBe(15 * 60 * 1_000);
+    expect(VERSION_STRING_LIMIT_CHARS).toBe(EXPECTED_VERSION_STRING_LIMIT_CHARS);
   });
 
   test.each([
@@ -111,12 +118,82 @@ describe("version-check service contract", () => {
     expect(result.status).toBe("unavailable");
   });
 
-  test("accepts arbitrarily large numeric identifiers without number coercion", async () => {
+  test("accepts large numeric identifiers within the display bound without number coercion", async () => {
     const cacheDir = await newCacheDir();
     const huge = "999999999999999999999999999999.0.0";
     const result = await check("1.0.0", stubFetch(registryResponse(huge), []), cacheDir, () => 1_000);
 
     expect(result).toMatchObject({ status: "update-available", latestVersion: huge });
+  });
+
+  test("accepts current and registry versions exactly at the display-safe boundary", async () => {
+    const cacheDir = await newCacheDir();
+    const current = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS, "8");
+    const latest = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS, "9");
+    let fetchCount = 0;
+    const fetchImpl: VersionFetch = async () => {
+      fetchCount += 1;
+      return registryResponse(latest);
+    };
+
+    const result = await check(current, fetchImpl, cacheDir, () => 1_000);
+    const cached = await check(current, fetchImpl, cacheDir, () => 1_001);
+
+    expect(current).toHaveLength(EXPECTED_VERSION_STRING_LIMIT_CHARS);
+    expect(latest).toHaveLength(EXPECTED_VERSION_STRING_LIMIT_CHARS);
+    expect(result).toMatchObject({
+      status: "update-available",
+      currentVersion: current,
+      latestVersion: latest,
+      source: "registry",
+    });
+    expect(cached).toMatchObject({
+      status: "update-available",
+      currentVersion: current,
+      latestVersion: latest,
+      source: "cache",
+    });
+    expect(fetchCount).toBe(1);
+  });
+
+  test("rejects an oversized current version before fetching", async () => {
+    const cacheDir = await newCacheDir();
+    const calls: FetchCall[] = [];
+    const oversizedCurrent = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS + 1);
+
+    const result = await check(
+      oversizedCurrent,
+      stubFetch(registryResponse("1.0.1"), calls),
+      cacheDir,
+      () => 1_000,
+    );
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      currentVersion: oversizedCurrent,
+      reason: "invalid-current-version",
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  test("rejects an oversized registry version without caching or recommending it", async () => {
+    const cacheDir = await newCacheDir();
+    const oversizedLatest = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS + 1);
+
+    const result = await check(
+      "1.0.0",
+      stubFetch(registryResponse(oversizedLatest), []),
+      cacheDir,
+      () => 1_000,
+    );
+
+    expect(result).toMatchObject({ status: "unavailable", reason: "invalid-latest-version" });
+    expect(result).not.toHaveProperty("latestVersion");
+    expect(result).not.toHaveProperty("installCommand");
+    const persisted = JSON.parse(
+      await readFile(path.join(cacheDir, "version-check.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(persisted).not.toHaveProperty("latestVersion");
   });
 
   test.each([
@@ -401,7 +478,7 @@ describe("version-check service contract", () => {
 
   test("rejects an oversized cached version before SemVer bigint parsing", async () => {
     const cacheDir = await newCacheDir();
-    const oversizedVersion = `${"9".repeat(RESPONSE_BODY_LIMIT_BYTES + 1)}.0.0`;
+    const oversizedVersion = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS + 1);
     await writeFile(
       path.join(cacheDir, "version-check.json"),
       JSON.stringify({ latestVersion: oversizedVersion, successAt: 32_000 }),

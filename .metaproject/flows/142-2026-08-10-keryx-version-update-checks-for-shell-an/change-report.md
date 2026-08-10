@@ -42,6 +42,13 @@ entry. The locked success merge now prioritizes the observation timestamp and,
 for equal timestamps, the higher strict SemVer. Three deterministic regressions
 cover both completion orders and timestamp ties.
 
+A second Ready-for-review Sol pass found that an otherwise valid 504-character
+SemVer could consume the finite 24-row sidebar and clip the required install
+command. Version sources are now rejected above a shared 64-character ceiling
+before regex/BigInt parsing. Boundary tests cover current, registry, and cached
+values, and a 100x24 headless regression proves both versions and the complete
+command remain visible.
+
 ## Verification evidence
 
 - Flow-focused service/CLI/TUI/readline tests: 75 passed, 0 failed.

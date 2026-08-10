@@ -9,6 +9,14 @@ import { withFileLock } from "./fs";
 export const REGISTRY_URL = "https://registry.npmjs.org/@mrciphersmith%2Fkeryx/latest";
 export const FIXED_INSTALL_COMMAND = "npm install -g @mrciphersmith/keryx@latest";
 export const RESPONSE_BODY_LIMIT_BYTES = 64 * 1024;
+/**
+ * Shared validation/display ceiling for every SemVer source. With two 64-char
+ * versions, `Keryx update <current> → <latest>` is 144 columns: six rows in the
+ * shared 26-column sidebar. The complete 42-char install command occupies two
+ * more rows, so the full eight-row notice (nine with top padding) fits at the
+ * supported 100x24 terminal size without truncating the command.
+ */
+export const VERSION_STRING_LIMIT_CHARS = 64;
 export const REQUEST_TIMEOUT_MS = 2_000;
 export const SUCCESS_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const FAILURE_BACKOFF_MS = 15 * 60 * 1_000;
@@ -91,6 +99,7 @@ const STRICT_SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 function parseSemVer(value: string): ParsedSemVer | undefined {
+  if (value.length > VERSION_STRING_LIMIT_CHARS) return undefined;
   const match = STRICT_SEMVER.exec(value);
   if (match === null) return undefined;
   const prereleaseText = match[4];
@@ -154,7 +163,6 @@ function parseCache(file: string): VersionCache | undefined {
     const cache: VersionCache = {};
     if (
       typeof record.latestVersion === "string" &&
-      record.latestVersion.length <= RESPONSE_BODY_LIMIT_BYTES &&
       parseSemVer(record.latestVersion) !== undefined
     ) {
       cache.latestVersion = record.latestVersion;

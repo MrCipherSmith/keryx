@@ -23,7 +23,11 @@ import {
   type ShellChrome,
   type ShellChromeOptions,
 } from "./shell-chrome";
-import { FIXED_INSTALL_COMMAND, type VersionCheckResult } from "../lib/version-check";
+import {
+  FIXED_INSTALL_COMMAND,
+  VERSION_STRING_LIMIT_CHARS,
+  type VersionCheckResult,
+} from "../lib/version-check";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -126,6 +130,9 @@ const TOAST_HOLD_MS = 60_000;
  * rendered first" assertion is not racing the expiry it then waits for.
  */
 const TOAST_CLEAR_MS = 300;
+function numericVersionWithLength(length: number, digit: "8" | "9"): string {
+  return `${digit.repeat(length - ".0.0".length)}.0.0`;
+}
 
 test("flow 142 AC4: sidebar notice keeps the fixed install command complete on two bounded rows", () => {
   const notice = formatSidebarVersionUpdateAdvisory({
@@ -243,6 +250,35 @@ otuiTest("flow 142 AC4: shared chrome paints a persistent nonmodal update notice
 
   await h.flush();
   expect(h.captureCharFrame()).toContain("Keryx update"); // persistent, not a toast
+  h.destroy();
+});
+
+otuiTest("flow 142 AC4: 24-row shared chrome keeps the full command visible at the version boundary", async () => {
+  const otui = requireOtui();
+  const currentVersion = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS, "8");
+  const latestVersion = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS, "9");
+  const h = await mountChrome(otui, {
+    width: 100,
+    height: 24,
+    chrome: {
+      versionCheck: Promise.resolve({
+        status: "update-available",
+        currentVersion,
+        latestVersion,
+        installCommand: FIXED_INSTALL_COMMAND,
+        source: "registry",
+      }),
+    },
+  });
+  await Promise.resolve();
+  await h.flush();
+
+  const compact = h.captureCharFrame().replace(/[\s│]/g, "");
+  expect(currentVersion).toHaveLength(VERSION_STRING_LIMIT_CHARS);
+  expect(latestVersion).toHaveLength(VERSION_STRING_LIMIT_CHARS);
+  expect(compact).toContain(currentVersion);
+  expect(compact).toContain(latestVersion);
+  expect(compact).toContain(FIXED_INSTALL_COMMAND.replace(/\s/g, ""));
   h.destroy();
 });
 
