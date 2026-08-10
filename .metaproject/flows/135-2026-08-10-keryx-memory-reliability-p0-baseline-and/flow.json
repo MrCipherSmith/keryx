@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 2,
+  "id": "135",
+  "slug": "keryx-memory-reliability-p0-baseline-and",
+  "title": "Keryx Memory Reliability P0 — baseline and contract tests",
+  "status": "done",
+  "createdAt": "2026-08-10T12:25:11.986Z",
+  "updatedAt": "2026-08-10T19:59:20.255Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0bbea4a591690c3148b87438002f624b7a5d70b6d5a534e820435fef7d1fac86",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-10T12:32:21.523Z",
+      "note": "Baseline counts recorded in flow context and journal for memory, harness, MCP, approval, flow, init/update, and embeddings."
+    },
+    "AC2": {
+      "at": "2026-08-10T12:32:21.697Z",
+      "note": "src/memory/p0-test-utils.ts records root-relative content and SHA-256 plus scoped Git status and skips runtime noise."
+    },
+    "AC3": {
+      "at": "2026-08-10T12:32:21.951Z",
+      "note": "Service and CLI text/--json purity characterizations plus KERYX_P0_ENFORCE target assertion are implemented."
+    },
+    "AC4": {
+      "at": "2026-08-10T12:32:22.122Z",
+      "note": "Native adapter and unified memory_search tests preserve structured results and risk read."
+    },
+    "AC5": {
+      "at": "2026-08-10T12:32:22.283Z",
+      "note": "MCP memory_search mutating:false and approval-context purity characterization are covered."
+    },
+    "AC6": {
+      "at": "2026-08-10T12:32:22.458Z",
+      "note": "fixtures/memory-reliability-p0 contains accepted, draft, conflict, deprecated, expired, superseded and boundary entries."
+    },
+    "AC7": {
+      "at": "2026-08-10T12:32:22.618Z",
+      "note": "Legacy latest.md/latest.json paths are asserted and documented as the P1 migration contract."
+    },
+    "AC8": {
+      "at": "2026-08-10T12:33:13.868Z",
+      "note": "Updated final focused verification: 107 passed, 0 failed across 27 files; no P0 default-suite failure."
+    },
+    "AC9": {
+      "at": "2026-08-10T12:32:23.110Z",
+      "note": "implementation-plan.md marks only P0-1 through P0-10 complete; no P1 production changes were made."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-10T12:25:11.986Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-10T12:27:21.809Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-10T12:27:24.040Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-10T12:30:16.857Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-10T12:30:16.892Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-10T12:30:16.920Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-10T12:32:04.627Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-10T12:32:21.524Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Baseline counts recorded in flow context and journal for memory, harness, MCP, approval, flow, init/update, and embeddings."
+    },
+    {
+      "at": "2026-08-10T12:32:21.697Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/memory/p0-test-utils.ts records root-relative content and SHA-256 plus scoped Git status and skips runtime noise."
+    },
+    {
+      "at": "2026-08-10T12:32:21.951Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Service and CLI text/--json purity characterizations plus KERYX_P0_ENFORCE target assertion are implemented."
+    },
+    {
+      "at": "2026-08-10T12:32:22.122Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Native adapter and unified memory_search tests preserve structured results and risk read."
+    },
+    {
+      "at": "2026-08-10T12:32:22.283Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: MCP memory_search mutating:false and approval-context purity characterization are covered."
+    },
+    {
+      "at": "2026-08-10T12:32:22.458Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: fixtures/memory-reliability-p0 contains accepted, draft, conflict, deprecated, expired, superseded and boundary entries."
+    },
+    {
+      "at": "2026-08-10T12:32:22.619Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Legacy latest.md/latest.json paths are asserted and documented as the P1 migration contract."
+    },
+    {
+      "at": "2026-08-10T12:32:22.921Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Final focused verification passed 106/0 across 27 files; default suite has no P0 failures."
+    },
+    {
+      "at": "2026-08-10T12:32:23.110Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: implementation-plan.md marks only P0-1 through P0-10 complete; no P1 production changes were made."
+    },
+    {
+      "at": "2026-08-10T12:33:13.868Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Updated final focused verification: 107 passed, 0 failed across 27 files; no P0 default-suite failure."
+    },
+    {
+      "at": "2026-08-10T19:42:13.055Z",
+      "event": "renumbered",
+      "detail": "105 -> 135: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:52.500Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:20.019Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:20.255Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

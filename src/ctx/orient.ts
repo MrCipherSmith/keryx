@@ -3,7 +3,8 @@ import { spawn } from "node:child_process";
 import { pathExists } from "../lib/fs";
 import { readFile } from "node:fs/promises";
 
-// Orientation context for the graph + wiki enforcement layer. Where the gdctx
+// Orientation context for the Metaproject bootstrap + graph/wiki enforcement
+// layer. Where the gdctx
 // guard is a HARD gate (deterministic deny+route on raw rg/cat), graph and wiki
 // are about PRECEDENCE — consult them before broad search / deep reads. A raw
 // Read/Grep is not reliably a violation, so hard-blocking is the wrong altitude.
@@ -15,17 +16,91 @@ import { readFile } from "node:fs/promises";
 // / user-prompt-submit) decides how to surface it.
 
 const GRAPH_SUMMARY = ["data", "gdgraph", "artifacts", "summary.md"];
+const METAPROJECT_INDEX = ["index.md"];
 const WIKI_INDEX = ["wiki", "index.md"];
 const WIKI_BEGIN = "<!-- keryx:wiki-index:begin -->";
 const WIKI_END = "<!-- keryx:wiki-index:end -->";
 
 const CODE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|php|c|h|cc|cpp|hpp|cs|swift|kt|scala|sh)$/;
 
+const INDEX_SECTIONS = ["Purpose", "Intent Router", "Enabled Modules", "Agent Operating Model"] as const;
+const MAX_INDEX_CHARS = 3_200;
+const MAX_INDEX_LINE_CHARS = 180;
+const MAX_INDEX_LINES = 60;
 const MAX_MODULE_ROWS = 12;
 const MAX_WIKI_LINES = 40;
 
 function metaPath(cwd: string, parts: string[]): string {
   return path.join(cwd, ".metaproject", ...parts);
+}
+
+function boundedIndexExcerpt(raw: string): string {
+  const sections = new Map<string, string[]>();
+  let projectTitle = "# Metaproject Index";
+  let currentSection: string | undefined;
+
+  for (const line of raw.split("\n")) {
+    if (/^#\s+/.test(line) && !/^##\s+/.test(line)) {
+      projectTitle = line;
+      continue;
+    }
+
+    const section = line.match(/^##\s+(.+?)\s*$/)?.[1];
+    if (section !== undefined) {
+      currentSection = INDEX_SECTIONS.includes(section as (typeof INDEX_SECTIONS)[number]) ? section : undefined;
+      if (currentSection !== undefined) sections.set(currentSection, [line]);
+      continue;
+    }
+    if (currentSection !== undefined) sections.get(currentSection)?.push(line);
+  }
+
+  const candidates = [
+    projectTitle,
+    "",
+    ...INDEX_SECTIONS.flatMap((section) => {
+      const lines = sections.get(section) ?? [];
+      while (lines.at(-1)?.trim().length === 0) lines.pop();
+      return lines.length > 0 ? [...lines, ""] : [];
+    }),
+  ];
+  const kept: string[] = [];
+  let charCount = 0;
+  for (const line of candidates) {
+    const boundedLine =
+      line.length > MAX_INDEX_LINE_CHARS ? `${line.slice(0, MAX_INDEX_LINE_CHARS - 1)}…` : line;
+    const nextCount = charCount + boundedLine.length + (kept.length > 0 ? 1 : 0);
+    if (kept.length >= MAX_INDEX_LINES || nextCount > MAX_INDEX_CHARS) break;
+    kept.push(boundedLine);
+    charCount = nextCount;
+  }
+
+  while (kept.at(-1)?.trim().length === 0) kept.pop();
+  return [
+    ...kept,
+    "… (bounded excerpt — read `.metaproject/index.md` for the complete routing instructions)",
+  ].join("\n");
+}
+
+// Advertise the mandatory Metaproject entrypoint only when it exists in the
+// project root passed by the harness. Deliberately do not walk ancestors:
+// `keryx shell` treats its launch cwd as the project boundary. The injected
+// excerpt is bounded orientation; the model reads the full file via read_file.
+export async function metaprojectIndexContext(cwd: string): Promise<string> {
+  const file = metaPath(cwd, METAPROJECT_INDEX);
+  if (!(await pathExists(file))) {
+    return "";
+  }
+
+  const excerpt = boundedIndexExcerpt(await readFile(file, "utf8"));
+  return [
+    "## Keryx Metaproject bootstrap — mandatory entrypoint (precedence)",
+    "",
+    "The project root contains `.metaproject/index.md`. Before other project work, use `read_file` to read that file in full and follow its routing. The bounded excerpt below is orientation, not an enforced runtime gate. Do not search parent directories for another Metaproject.",
+    "",
+    "### Project-root index (bounded excerpt)",
+    "",
+    excerpt,
+  ].join("\n");
 }
 
 // Count uncommitted code-file changes — a deterministic freshness signal that
@@ -141,13 +216,18 @@ export async function wikiContext(cwd: string): Promise<string> {
   ].join("\n");
 }
 
-// Combined turn-start orientation block: graph map + wiki index. Bounded and
-// safe to inject on every prompt.
+// Combined turn-start orientation block: bounded project-root Metaproject
+// excerpt + bounded graph map and wiki index. Safe to inject on every prompt.
 export async function buildOrientation(cwd: string): Promise<string> {
-  const [graph, wiki] = await Promise.all([graphContext(cwd), wikiContext(cwd)]);
+  const [metaprojectIndex, graph, wiki] = await Promise.all([
+    metaprojectIndexContext(cwd),
+    graphContext(cwd),
+    wikiContext(cwd),
+  ]);
   return [
     "# keryx orientation — consult before broad search / deep reads",
     "",
+    ...(metaprojectIndex.length > 0 ? [metaprojectIndex, ""] : []),
     graph,
     "",
     wiki,

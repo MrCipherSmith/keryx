@@ -559,7 +559,8 @@ adapter reads normalized reports via `loadCompatibleTestingReport`) and **gdskil
 durable, agent-facing knowledge base of lessons, decisions, constraints, known
 mistakes, patterns, and more. Markdown files under `.metaproject/memory/` are the
 source of truth; the module reads, ranks, deduplicates, and consolidates them
-**deterministically** by default — pure token/trigram similarity, with an optional
+**deterministically** by default — pure token/trigram similarity over canonical
+Markdown (never a generated/inverted index), with an optional
 embedding rerank (Block C) that is opt-in and always degrades back to lexical. It is
 a Mem0-style memory layer reimplemented deterministically, and it feeds a "learning
 signal" (only `accepted` entries) into gdskills.
@@ -569,15 +570,16 @@ signal" (only `accepted` entries) into gdskills.
 | Command | Usage |
 |---|---|
 | `memory new` | `new <type> [slug] --title "<t>" [--force]` — scaffold a draft entry; prints possible duplicates |
-| `memory index` | build `data/memory/index/index.json` |
-| `memory search` | `search "<q>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--semantic]` — ranked retrieval (`current` by default; `--as-of` for a point-in-time view; `--semantic` opts into the embedding rerank) |
+| `memory index` | optionally build the reproducible disposable catalog `data/memory/index/index.json`; search does not consume it |
+| `memory search` | `search "<q>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic\|episodic\|procedural>] [--semantic] [--save-report]` — filesystem-pure ranked retrieval by default; `--save-report` explicitly publishes an ignored bounded runtime report |
+| `memory transition` | `transition <path> --to <draft\|accepted\|conflict\|deprecated> [--reason <text>]` — explicit validated lifecycle mutation through the guarded atomic seam |
 | `memory supersede` | `supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]` — non-destructively replace an entry (sets `Supersedes`/`Superseded-By`, closes the old validity interval) |
 | `memory ingest` | `ingest --from-<review\|health\|job\|skill-verifier> <path>` — ADD/UPDATE entries |
 | `memory check` | integrity lint; non-zero exit on issues |
 | `memory reflect` | cluster entries by tag; create `pattern` drafts for clusters ≥ minClusterSize |
 
-There are **11 entry types** (`MEMORY_TYPES`), of which `lesson`, `decision`,
-`constraint`, `known-mistake` are first-class "new-able" MVP types.
+There are **11 entry types** (`MEMORY_TYPES`), all accepted by the type registry
+and `memory new`.
 
 **Key files.** `commands/memory.ts` (dispatcher), `memory/service.ts`
 (`createMemoryService` facade: create/index/search/ingest/**supersede**/check),
@@ -599,7 +601,8 @@ keyed on `(source, link, date)`; `reflect` = CONSOLIDATE tag-clusters into patte
 drafts (no LLM synthesis). Dedup marks a duplicate at title-similarity ≥ 0.8 or
 summary-jaccard ≥ 0.6 with a shared scope/tag; conflict detection flags candidate
 decisions/constraints against accepted ones (never auto-resolves). `check` lints
-metadata, links, dedup, conflicts, and index presence. Note `reflect` and
+metadata, links, dedup, and conflicts; the generated catalog is optional and
+its absence is not an integrity failure. Note `reflect` and
 `relevant` bypass the `MemoryService` interface (5 of the 6 subcommands).
 
 **Block C additions (bitemporal + typing + embeddings).** Entries gained an optional
@@ -618,11 +621,12 @@ content-hash-keyed vector cache under `data/memory/embeddings/` that reranks the
 lexical candidate pool; it never mutates the Markdown store, and lexical search stays
 the default and the fallback on any unavailability or error.
 
-**Data & artifacts.** Two roots: `memoryRoot` = `.metaproject/memory/` (Markdown
-source of truth, one subfolder per type) and `dataRoot` =
-`.metaproject/data/memory/` (generated: `index/index.json`, `artifacts/latest.md`,
-`artifacts/latest.json`, and — only when the embedding capability is active — the
-derived, disposable `embeddings/`). Config `.metaproject/memory.config.json`.
+**Data & artifacts.** Canonical `memoryRoot` is `.metaproject/memory/` (Markdown,
+one subfolder per type). Generated catalogs and optional embeddings live under
+`.metaproject/data/memory/` and are ignored/disposable. Explicit bounded reports
+live under `.metaproject/runtime/memory/search/<run-id>/`; no service or default
+search writes `artifacts/latest.*`, and no generated catalog is a runtime source
+of truth. Config is `.metaproject/memory.config.json`.
 
 **Dependencies / integrations.** Node builtins + `lib/fs`, `lib/json`, `lib/args`.
 No embedding runtime is shipped; the default search path is deterministic and an
@@ -630,8 +634,8 @@ explicitly configured compatible adapter is loaded only on the opt-in semantic
 path. **Consumed by gdskills** via
 `relevantAcceptedMemory` (the memory→skills
 learning signal, `skills learn --from-memory`); `init`/`update` scaffold config/index/
-skill files via `templates.ts`. `allowAutoAccept` is defined in config but never
-read (latent flag).
+skill files via `templates.ts`. `allowAutoAccept` is deprecated, ignored, and
+warns when configured true; ingest/reflection remain draft-only.
 
 ---
 
@@ -1053,9 +1057,10 @@ Standalone: no cross-module imports.
 
 ## orientation
 
-**Purpose.** Orientation provides a bounded startup context so an agent sees the
-current graph map, wiki index, and freshness state before broad navigation. It is
-an opt-in presentation/integration layer, not a new source of project knowledge.
+**Purpose.** Orientation provides bounded startup context so an agent sees the
+project-root Metaproject entrypoint, current graph map, wiki index, and freshness
+state before broad navigation. It is an opt-in presentation/integration layer,
+not a new source of project knowledge.
 
 **CLI surface.** `keryx orient [<runtime>]` emits formatted context;
 `orient install-hook --runtime <id|all>` and `uninstall-hook` manage compatible
@@ -1063,13 +1068,18 @@ turn-start hooks. Hook installation is supported for Claude, Codex, and Cursor;
 Windsurf and Zed are reported as unsupported because they lack a compatible
 context-injection hook.
 
-**Key files.** `src/ctx/orient.ts` builds the graph and wiki halves;
+**Key files.** `src/ctx/orient.ts` builds the bounded project-root
+`.metaproject/index.md` excerpt and the graph/wiki portions;
 `src/ctx/orient-runtimes.ts` owns runtime-specific locations, merge/strip logic,
 formatting, and validation; `src/commands/orient.ts` is the CLI adapter.
 
-**How it works.** Orientation reads existing graph/wiki artifacts only, bounds
-the output, and formats it for the selected runtime. Installers modify only their
-managed sentinel/config entry and preserve surrounding user configuration.
+**How it works.** Orientation reads `.metaproject/index.md` only from the cwd
+treated as the project root (never from ancestors), retains at most 60 useful
+lines while skipping low-value `Data`/`Refresh` sections, and appends an explicit
+truncation/read-the-full-file marker when needed. It also reads and bounds the
+existing graph/wiki artifacts, then formats the combined output for the selected
+runtime. Installers modify only their managed sentinel/config entry and preserve
+surrounding user configuration.
 
 ---
 

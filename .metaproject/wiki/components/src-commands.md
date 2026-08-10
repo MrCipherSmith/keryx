@@ -1,6 +1,6 @@
 # Module src/commands
 
-Version: 1.0.0
+Version: 1.1.0
 Type: component
 Status: accepted
 
@@ -10,7 +10,7 @@ Status: accepted
 
 ## Overview
 
-`src/commands` is the CLI command layer of keryx: it owns the implementations of every top-level `keryx <subcommand>` entry point and is the only module that performs user-facing side effects such as writing `.metaproject/` workspace files, installing git hooks, and printing the interactive setup wizard. The two most connected files — `init.ts` (imported by 9, imports 27) and `update.ts` (imported by 3, imports 21) — together scaffold and refresh the entire metaproject workspace. The remaining command files (`gdgraph.ts`, `skills.ts`, `security.ts`, `ctx.ts`) each front a specific keryx capability module, delegating to the domain layer while handling CLI argument parsing and user-facing output themselves.
+`src/commands` is the CLI command layer of keryx: it owns the implementations of every top-level `keryx <subcommand>` entry point, the interactive shell/agent driver, and user-facing side effects such as writing `.metaproject/` workspace files, installing git hooks, and printing the setup wizard. The two most connected files — `init.ts` (imported by 9, imports 27) and `update.ts` (imported by 3, imports 21) — together scaffold and refresh the entire metaproject workspace. Capability command files (`gdgraph.ts`, `skills.ts`, `security.ts`, `ctx.ts`) front individual modules, while `shell.ts` and `agent.ts` run the interactive provider and tool-call loop.
 
 ## How it works
 
@@ -19,6 +19,8 @@ Each command file exports one or two public functions (e.g. `initCommand`, `upda
 The two lifecycle commands form the conceptual core. `init.ts` is the workspace constructor: it orchestrates an interactive or `--yes`-driven wizard that collects per-module enable/disable choices, then calls a cascade of `create*Structure`, `install*Hook`, and `writeText*`/`writeJson*` helpers to materialize the entire `.metaproject/` directory tree, write the `metaproject.json` manifest via `buildManifest`, sync agent-entrypoint rule files, register opt-in capabilities, and emit next-step guidance to the user. It distinguishes between "write only if missing" (user-authored files such as `wiki/index.md`) and "write if changed" (managed service files such as `skills/gdgraph/SKILL.md`) to avoid clobbering user edits. `update.ts` is the workspace refresher: it reads the existing manifest via `readManifest` (which can also infer module state from directory presence when the manifest is absent or corrupt), then re-writes all managed service files, re-installs git hooks that the manifest records, backfills modules added after initial setup (e.g. the task manager), reconciles security hook drift between manifest and disk, and regenerates the dashboard HTML via `buildDashboard`. Both commands use the same `installManagedHook` primitive to write or replace keryx-owned sentinel blocks inside `.git/hooks/post-commit` and `.git/hooks/pre-push` without disturbing user content.
 
 The capability-specific command files (`gdgraph.ts`, `ctx.ts`, `skills.ts`, `security.ts`) are thin CLI adapters: they parse subcommands and flags from `args[]`, delegate to domain services in `src/gdgraph`, `src/ctx`, `src/gdskills`, and `src/security`, and format the results for the terminal using helpers from `src/lib/ui`.
+
+`agent.ts` is a separate deterministic interactive driver used by both TUI and readline agent mode. Each user turn may span multiple provider rounds. Tool calls are validated, classified by risk, executed through injected `InteractiveTool` implementations, appended as `role: "tool"` history, and fed back to the provider. Loop safety uses three nested unique-signature pools: `48` total, `40` read, and `8` non-read/unknown-risk. The explicit `maxToolCalls` override remains the total hard ceiling, so the side worker's configured value of `4` still limits read calls as well.
 
 ## Key concepts
 
@@ -29,6 +31,7 @@ The capability-specific command files (`gdgraph.ts`, `ctx.ts`, `skills.ts`, `sec
 - **writeTextIfChanged / writeTextIfMissing / writeJsonIfChanged**: the three write primitives that enforce the "managed vs. user-owned" contract. Managed service files (skills, manifests, README docs) use `IfChanged`; user-authored scaffolds (wiki index, memory templates) use `IfMissing`.
 - **DashboardBuildResult**: the exported type from `update.ts` that wraps the generated dashboard HTML path and the structured data object collected by `collectDashboardData`.
 - **GdskillsProfile**: the install profile (minimal, recommended, full, custom) chosen at `init` time and preserved in the manifest; `update.ts` reads it back when reinstalling bundled skills.
+- **Agent tool budget**: per-user-turn loop protection keyed by normalized `tool name + input`. Read and non-read signatures consume their risk pool and the total pool. Identical calls may retry three times in one unique slot; unknown risks are conservatively non-read.
 
 ## Main flows
 
@@ -40,6 +43,9 @@ The capability-specific command files (`gdgraph.ts`, `ctx.ts`, `skills.ts`, `sec
 
 **Flow 3 — Dashboard rebuild (`buildDashboard`)**
 The exported `buildDashboard` function in `update.ts` is called by post-commit hooks and the `keryx update` path. It reads the manifest, invokes `collectDashboardData` to gather structured data from health JSON artifacts, gdgraph JSONL storage, testing artifacts, and wiki/memory markdown files, then passes the combined data object to `renderMetaprojectDashboardHtml` from `src/lib/templates` and writes the result to `keryx-dashboard.html` via `writeTextIfChanged`.
+
+**Flow 4 — Interactive agent tool loop (`runAgentTurn`)**
+The shell submits a provider request with registered tools, executes returned calls, and repeats with accumulated tool results. Reaching a budget exactly does not end the turn: the model receives one normal round to answer from the newest result. A tool-free wrap-up is requested only when the model asks for a new signature beyond the total/read/non-read pool, or when a round makes no progress because it only repeats exhausted signatures. The wrap-up identifies the exhausted pool.
 
 ---
 
@@ -102,5 +108,6 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.1.0 - Documented the interactive agent driver, risk-separated `48/40/8` unique-signature budgets, side-worker total ceiling, and non-premature wrap-up behavior (2026-08-10).
 - 1.0.0 - Prose sections enriched by gdwiki enrich workflow.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

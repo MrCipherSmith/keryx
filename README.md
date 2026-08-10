@@ -315,6 +315,13 @@ Alternative install paths — the managed installer (`~/.keryx` with a wrapper i
 Bare `keryx` prints the main commands; `keryx shell` starts the agent harness
 described [above](#the-agent-harness).
 
+Agent mode protects each user turn with nested unique-signature budgets: `48`
+total, including at most `40` risk-`read` signatures and `8` non-read (or
+unknown-risk) signatures. An identical `tool + normalized input` may retry up
+to three times while occupying one unique slot. Reaching a limit exactly still
+gives the model a normal round to answer; only a new signature beyond a pool or
+a no-progress repeat loop forces the final tool-free wrap-up.
+
 ## Agent integrations
 
 | Runtime | Integration |
@@ -327,6 +334,11 @@ described [above](#the-agent-harness).
 After `init`, agents follow the root `AGENTS.md`/`CLAUDE.md` pointer to
 `.metaproject/index.md`, which routes them to the right capability. Two commands
 sharpen that routing:
+
+`keryx orient` emits a bounded excerpt of the launch project's own
+`.metaproject/index.md`, followed by the graph map and wiki index. The excerpt
+directs the agent to read the full project-root entrypoint; it does not discover
+or substitute an ancestor Metaproject.
 
 ```bash
 keryx orient install-hook --runtime codex   # graph + wiki map at turn start

@@ -51,7 +51,7 @@ code `1`.
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
 | `agents` | Manage the optional global Metaproject bootstrap for agent runtimes. |
-| `orient` | Emit or install bounded graph + wiki startup context. |
+| `orient` | Emit or install bounded Metaproject + graph + wiki startup context. |
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
 | `mcp` | Expose read-only Metaproject services over the Model Context Protocol (opt-in, off by default). |
 
@@ -471,7 +471,7 @@ keryx gdgraph assets list | verify [<id>] | pull <id>
 | `path "<A>" "<B>"` | — | Resolve file or symbol endpoints and print the shortest path across import and call edges. |
 | `affected <file-or-symbol>` | `--depth <N>`, `--ranked`, `--json` | Resolve a file or symbol, print dependencies/dependents, and optionally walk/rank the transitive blast radius. |
 | `repomap` | `--budget <N>`, `--seed <path>...`, `--changed` | Write a token-budgeted repo map artifact. `--budget` caps the token estimate, `--seed` biases toward one or more paths (repeatable), and `--changed` seeds from locally changed files (`git diff --name-only HEAD`). |
-| `context` | — | Emit the bounded graph half of the turn-start orientation block. |
+| `context` | — | Emit the bounded graph portion of the turn-start orientation block. |
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json`: `list` shows resolved/missing state, `verify` checks checksums (exit `1` on mismatch), `pull` fetches and verifies one asset (the only networked verb). |
 
 Only the exact queries `cycles` and `orphans` are accepted; anything else exits
@@ -539,7 +539,7 @@ keryx wiki backlinks <wiki-page-or-code-file>
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
 | `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
-| `context` | — | Emit the bounded wiki-index half of the turn-start orientation block. |
+| `context` | — | Emit the bounded wiki-index portion of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 
 Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
@@ -729,7 +729,8 @@ deterministic (non-LLM) search, dedup, and consolidation.
 ```
 keryx memory new <type> [slug] --title "<title>" [--force]
 keryx memory index [--embeddings]
-keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic]
+keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic] [--save-report]
+keryx memory transition <path> --to <draft|accepted|conflict|deprecated> [--reason <text>]
 keryx memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
 keryx memory assets list | verify [<id>] | pull <id>
 keryx memory ingest --from-<source> <path>
@@ -740,8 +741,14 @@ keryx memory reflect [--narrate] [--provider <p>]
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `new <type> [slug]` | `--title "<t>"`, `--force` | Scaffold a new draft entry; print possible duplicates. |
-| `index` | `--embeddings` | Build `data/memory/index/index.json` from all entries. `--embeddings` additionally builds a vector index when the embedding capability is available; if it is absent, it warns and keeps the lexical index only. |
-| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>`, `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic` | Ranked retrieval; write `latest.md`/`latest.json`, print the ranked list. `--as-of` restricts to entries as of a date, `--class` filters by memory class, and `--semantic` prefers semantic (vector) ranking when available. |
+| `index` | `--embeddings` | Build an optional disposable catalog at `data/memory/index/index.json`; `--embeddings` additionally builds a disposable vector cache when the capability is available. Search scans canonical Markdown directly and does not consume either generated output. |
+| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` (1–100), `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic`, `--save-report` | Filesystem-pure ranked retrieval by default; validates status/class/date/limit before reading. `--save-report` explicitly publishes one bounded immutable report under ignored `.metaproject/runtime/memory/search/<run-id>/`; without it neither text nor `--json` writes artifacts. |
+
+Generated memory catalogs and embedding caches under `.metaproject/data/memory/`
+are disposable and ignored. Existing legacy `data/memory/artifacts/latest.*`
+files receive an advisory during init/update; migration is maintainer-owned and
+never deletes files or changes the Git index automatically.
+| `transition <path>` | `--to <draft\|accepted\|conflict\|deprecated>`, `--reason <text>` | Explicit validated lifecycle transition through the guarded atomic write seam; invalid or terminal edges fail without changing bytes. |
 | `supersede <old-path>` | `--by <new-path>` (required), `--date <YYYY-MM-DD>` | Mark one entry as superseded by another. Non-destructive and git-diffable — both entries stay on disk. A blocking security gate can abort the write. |
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json` (`list`/`verify`/`pull`; `pull` is the only networked verb). |
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |
@@ -901,10 +908,14 @@ Runtime ids: `claude` (`~/.claude/CLAUDE.md`), `opencode`
 
 ## orient
 
-Emit or install a compact turn-start orientation block containing the current
-graph map, wiki index, and freshness information. Orientation is separate from
-the gdctx routing guard: orientation supplies context, while the routing guard
-controls which shell/search commands an agent may run directly.
+Emit or install a compact turn-start orientation block. When the launch cwd has
+`.metaproject/index.md`, the block contains a bounded excerpt of that exact
+project-root file, then the current graph map, wiki index, and freshness
+information. It does not search ancestors. The excerpt instructs the model to
+read the full index; it is precedence guidance, not an enforced runtime gate.
+Orientation is separate from the gdctx routing guard: orientation supplies
+context, while the routing guard controls which shell/search commands an agent
+may run directly.
 
 ```text
 keryx orient [<runtime>]
@@ -914,7 +925,7 @@ keryx orient uninstall-hook [--runtime <id|all>] [--dry-run]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| default emit | optional runtime id | Build the bounded graph + wiki orientation and format it for the selected runtime (`claude` by default). |
+| default emit | optional runtime id | Build the bounded project-root Metaproject + graph + wiki orientation and format it for the selected runtime (`claude` by default). |
 | `install-hook` | `--runtime <id\|all>`, `--dry-run` | Merge-safely install the runtime's turn-start/prompt hook. Supported hook runtimes are `claude`, `codex`, and `cursor`. `--dry-run` reports the file it would write and changes nothing. |
 | `uninstall-hook` | `--runtime <id\|all>`, `--dry-run` | Remove only the managed orientation integration. `--dry-run` reports what it would strip and changes nothing. |
 

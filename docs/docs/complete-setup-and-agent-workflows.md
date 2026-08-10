@@ -245,7 +245,9 @@ failure is explicitly documented.
 There are four independent integrations:
 
 1. Global bootstrap: tells the agent to discover `.metaproject/index.md`.
-2. Orientation: injects a bounded graph + wiki map at turn start.
+2. Orientation: injects a bounded project-root `.metaproject/index.md` excerpt,
+   graph map, and wiki index at turn start. The excerpt directs the agent to read
+   the full index and is not an enforced runtime gate.
 3. gdctx routing guard: redirects broad raw commands to compact context commands.
 4. Security hooks: checks agent input/output at supported runtime seams.
 
@@ -469,7 +471,7 @@ the supported runtimes listed in section 6.
 | `keryx agents bootstrap install --runtime <id|all>` | Install or update the global discovery block. |
 | `keryx agents bootstrap uninstall --runtime <id|all>` | Remove only the managed global block. |
 | `keryx agents bootstrap print` | Print the block for manual installation. |
-| `keryx orient [<runtime>]` | Emit bounded graph + wiki startup context. |
+| `keryx orient [<runtime>]` | Emit bounded project-root Metaproject + graph + wiki startup context. |
 | `keryx orient install-hook --runtime <id|all>` | Install compatible orientation hooks. |
 | `keryx orient uninstall-hook --runtime <id|all>` | Remove managed orientation hooks. |
 
@@ -589,8 +591,10 @@ Test kinds: `unit`, `integration`, `e2e`, and `smoke`.
 | `keryx memory new <type> --title "<title>"` | Create a typed draft memory entry. |
 | `keryx memory index [--embeddings]` | Rebuild deterministic and optional semantic indexes. |
 | `keryx memory search "<query>"` | Search current project memory. |
+| `keryx memory search "<query>" --save-report` | Explicitly publish a bounded report under ignored `.metaproject/runtime/memory/search/<run-id>/`. |
 | `keryx memory search "<query>" --status accepted` | Restrict results to accepted knowledge. |
 | `keryx memory search "<query>" --as-of <date>` | Search historical validity state. |
+| `keryx memory transition <path> --to <status> [--reason <text>]` | Explicitly promote, deprecate, or classify one entry through the guarded lifecycle. |
 | `keryx memory supersede <old> --by <new>` | Non-destructively replace an entry. |
 | `keryx memory assets list|verify|pull [<id>]` | Manage optional memory assets. |
 | `keryx memory ingest --from-review <path>` | Derive proposed memory from review evidence. |
@@ -601,6 +605,23 @@ Test kinds: `unit`, `integration`, `e2e`, and `smoke`.
 Memory types include `lesson`, `decision`, `constraint`, `known-mistake`,
 `historical-context`, `pattern`, `task-note`, `review-note`, `incident`,
 `migration-note`, and `integration-note`.
+
+Canonical memory is Markdown under `.metaproject/memory/`; the catalog under
+`.metaproject/data/memory/index/`, optional embeddings under
+`.metaproject/data/memory/embeddings/`, and explicit reports under
+`.metaproject/runtime/memory/` are generated and ignored. If an older project
+contains `.metaproject/data/memory/artifacts/latest.md` or `latest.json`, init
+and update print a non-destructive advisory. Review it and optionally untrack
+those legacy reports with `git rm --cached`; Keryx never deletes files or
+mutates the Git index automatically.
+
+Search is a pure read and scans canonical Markdown directly. Catalog and
+embedding output is optional generated data, not an inverted-index source of
+truth. `keryx memory search --save-report` is the only search form that
+persists a bounded report. Invalid status/class/date/limit inputs fail before
+any write; missing or corrupt catalogs do not break lexical recall. Lifecycle
+and supersession writes validate, guard, and atomically replace canonical
+entries.
 
 ### Task Manager / flow
 

@@ -40,6 +40,41 @@ test("passes gdwiki evidence when wiki validates", async () => {
   }
 });
 
+test("P3: verification consults only canonical current accepted authority, never legacy latest artifacts", async () => {
+  const root = await createVerificationProject();
+  try {
+    await wikiGenerateIndex(root);
+    const decisions = path.join(root, ".metaproject", "memory", "decisions");
+    const artifacts = path.join(root, ".metaproject", "data", "memory", "artifacts");
+    await mkdir(decisions, { recursive: true });
+    await mkdir(artifacts, { recursive: true });
+    await writeFile(path.join(artifacts, "latest.md"), "legacy query receipt", "utf8");
+    await writeFile(
+      path.join(decisions, "accepted.md"),
+      "# Canonical authority\n\nType: decision\nStatus: accepted\nValid-From: 2026-01-01\n\n## Summary\n\nWiki verification must use this canonical authority.\n\n## Tags\n\n- wiki\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(decisions, "draft.md"),
+      "# Draft authority\n\nType: decision\nStatus: draft\n\n## Summary\n\nDo not use this.\n\n## Tags\n\n- wiki\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(decisions, "expired.md"),
+      "# Expired authority\n\nType: decision\nStatus: accepted\nValid-To: 2020-01-01\n\n## Summary\n\nDo not use this.\n\n## Tags\n\n- wiki\n",
+      "utf8",
+    );
+
+    const report = await verifyProjectSkill(root, { input: "wiki/example", dryRun: true });
+    const memory = report.signals.find((signal) => signal.name === "evidence:memory-consultation");
+    expect(memory?.status).toBe("pass");
+    expect(memory?.message).toContain("1 canonical accepted memory entry");
+    expect(report.signals.some((signal) => signal.name === "documentation-memory")).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function createVerificationProject(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-verify-"));
   const packageRoot = path.join(root, ".metaproject", "project-skills", "wiki", "example");

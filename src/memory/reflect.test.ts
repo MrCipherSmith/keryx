@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { reflectMemory } from "./reflect";
 import { DEFAULT_MEMORY_CONFIG } from "./config";
@@ -40,6 +40,7 @@ test("consolidates a tag cluster into a pattern draft and is idempotent", async 
     expect(first.clusters.map((c) => c.tag)).toContain("caching");
     expect(first.clusters.map((c) => c.tag)).not.toContain("other");
     expect(first.created).toContain("patterns/pattern-caching.md");
+    expect(await readFile(path.join(root, ".metaproject", "memory", "patterns", "pattern-caching.md"), "utf8")).toContain("Status: draft");
 
     // Second run must not recreate the existing pattern.
     const second = await reflectMemory(root, DEFAULT_MEMORY_CONFIG, new Date("2026-07-07"));

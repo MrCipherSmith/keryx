@@ -394,7 +394,11 @@ test("runAgentTurn forwards usage_update events to onUsage", async () => {
 
 // --- flow 057: runaway tool-loop guard ---
 
-function baseDeps(provider: AgentDeps["provider"], maxToolCalls?: number): AgentDeps {
+function baseDeps(
+  provider: AgentDeps["provider"],
+  maxToolCalls?: number,
+  maxReadToolCalls?: number,
+): AgentDeps {
   return {
     provider,
     providerId: "s",
@@ -403,7 +407,16 @@ function baseDeps(provider: AgentDeps["provider"], maxToolCalls?: number): Agent
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
     ...(maxToolCalls !== undefined ? { maxToolCalls } : {}),
+    ...(maxReadToolCalls !== undefined ? { maxReadToolCalls } : {}),
   };
+}
+
+function readToolRound(id: string, path: string): Partial<NormalizedEvent>[] {
+  return [
+    { kind: "tool_call_start", toolCallId: id, toolName: "list_dir" },
+    { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ path }) },
+    { kind: "model_end" },
+  ];
 }
 
 test("toolCallHash is stable for key order and distinguishes different inputs", () => {
@@ -414,11 +427,19 @@ test("toolCallHash is stable for key order and distinguishes different inputs", 
 });
 
 test("reserveToolAttempt: same hash costs 1 budget slot for up to MAX_ATTEMPTS_PER_HASH tries", () => {
-  const state = { charged: new Set<string>(), attempts: new Map<string, number>(), maxUnique: 2 };
-  const a1 = reserveToolAttempt(state, "get_cwd", "{}");
-  const a2 = reserveToolAttempt(state, "get_cwd", "{}");
-  const a3 = reserveToolAttempt(state, "get_cwd", "{}");
-  const a4 = reserveToolAttempt(state, "get_cwd", "{}");
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 2,
+    maxReadUnique: 2,
+    maxNonReadUnique: 2,
+  };
+  const a1 = reserveToolAttempt(state, "get_cwd", "{}", "read");
+  const a2 = reserveToolAttempt(state, "get_cwd", "{}", "read");
+  const a3 = reserveToolAttempt(state, "get_cwd", "{}", "read");
+  const a4 = reserveToolAttempt(state, "get_cwd", "{}", "read");
   expect(a1.ok && a1.chargedNew).toBe(true);
   expect(a2.ok && !a2.chargedNew).toBe(true);
   expect(a3.ok && !a3.chargedNew).toBe(true);
@@ -428,7 +449,16 @@ test("reserveToolAttempt: same hash costs 1 budget slot for up to MAX_ATTEMPTS_P
 });
 
 test("reserveToolAttempt: state.maxAttempts overrides the per-signature cap and refusal message", () => {
-  const state = { charged: new Set<string>(), attempts: new Map<string, number>(), maxUnique: 4, maxAttempts: 2 };
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 4,
+    maxReadUnique: 4,
+    maxNonReadUnique: 4,
+    maxAttempts: 2,
+  };
   const a1 = reserveToolAttempt(state, "search_code", '{"pattern":"x"}');
   const a2 = reserveToolAttempt(state, "search_code", '{"pattern":"x"}');
   const a3 = reserveToolAttempt(state, "search_code", '{"pattern":"x"}');
@@ -438,8 +468,76 @@ test("reserveToolAttempt: state.maxAttempts overrides the per-signature cap and 
   expect(!a3.ok && a3.reason).toContain("already tried 2×");
 });
 
-test("runAgentTurn: unique-signature budget; wrap-up turn without tools when exhausted", async () => {
-  // Two DIFFERENT signatures fill budget of 2; then wrap-up text (no tools).
+test("reserveToolAttempt: read calls consume both total and read pools", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 4,
+    maxReadUnique: 1,
+    maxNonReadUnique: 4,
+  };
+
+  const firstRead = reserveToolAttempt(state, "read_file", '{"path":"a"}', "read");
+  const secondRead = reserveToolAttempt(state, "read_file", '{"path":"b"}', "read");
+  const shell = reserveToolAttempt(state, "shell_exec", '{"command":"true"}', "shell");
+
+  expect(firstRead.ok).toBe(true);
+  expect(secondRead.ok).toBe(false);
+  expect(!secondRead.ok && secondRead.reason).toMatch(/read tool-call budget exhausted/);
+  expect(shell.ok).toBe(true);
+  expect(state.charged.size).toBe(2);
+  expect(state.readCharged.size).toBe(1);
+  expect(state.nonReadCharged.size).toBe(1);
+});
+
+test("reserveToolAttempt: non-read and unknown risks share a conservative sub-limit", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 4,
+    maxReadUnique: 4,
+    maxNonReadUnique: 1,
+  };
+
+  const shell = reserveToolAttempt(state, "shell_exec", '{"command":"true"}', "shell");
+  const unknownRisk = reserveToolAttempt(state, "mystery", "{}", undefined);
+  const read = reserveToolAttempt(state, "read_file", '{"path":"a"}', "read");
+
+  expect(shell.ok).toBe(true);
+  expect(unknownRisk.ok).toBe(false);
+  expect(!unknownRisk.ok && unknownRisk.reason).toMatch(/non-read tool-call budget exhausted/);
+  expect(read.ok).toBe(true);
+  expect(state.nonReadCharged.size).toBe(1);
+  expect(state.readCharged.size).toBe(1);
+  expect(state.charged.size).toBe(2);
+});
+
+test("reserveToolAttempt: the total pool remains a hard ceiling for read calls", () => {
+  const state = {
+    charged: new Set<string>(),
+    readCharged: new Set<string>(),
+    nonReadCharged: new Set<string>(),
+    attempts: new Map<string, number>(),
+    maxUnique: 4,
+    maxReadUnique: 40,
+    maxNonReadUnique: 4,
+  };
+
+  for (let i = 0; i < 4; i += 1) {
+    expect(reserveToolAttempt(state, "list_dir", JSON.stringify({ path: `p${i}` }), "read").ok).toBe(true);
+  }
+  const fifth = reserveToolAttempt(state, "list_dir", '{"path":"p4"}', "read");
+  expect(fifth.ok).toBe(false);
+  expect(!fifth.ok && fifth.reason).toMatch(/tool-call budget exhausted/);
+  expect(state.charged.size).toBe(4);
+  expect(state.readCharged.size).toBe(4);
+});
+
+test("runAgentTurn: reaching the exact budget still allows a normal final model answer", async () => {
   const r1: Partial<NormalizedEvent>[] = [
     { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
     { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
@@ -450,26 +548,76 @@ test("runAgentTurn: unique-signature budget; wrap-up turn without tools when exh
     { kind: "tool_call_end", toolCallId: "c2", input: '{"path":"."}' },
     { kind: "model_end" },
   ];
-  // Would try a third unique call — budget already full after r1+r2 if both succeed in one round;
-  // use two rounds that each charge one unique, then a third tool round is skipped and wrap-up runs.
-  const wrap: Partial<NormalizedEvent>[] = [
-    { kind: "text_delta", text: "Budget done: re-run with a narrower ask." },
+  const done: Partial<NormalizedEvent>[] = [
+    { kind: "text_delta", text: "I have enough information." },
     { kind: "model_end" },
   ];
-  // Round1: get_cwd, Round2: list_dir → budget 2 full → wrap-up
-  const { provider, requests } = scriptedProvider([r1, r2, wrap]);
+  const { provider, requests } = scriptedProvider([r1, r2, done]);
   const systemMsgs: string[] = [];
   const text: string[] = [];
   const io: AgentIO = {
     write: (s) => text.push(s),
     onSystem: (t) => systemMsgs.push(t),
   };
-  await runAgentTurn(io, baseDeps(provider, 2), [], "loop");
-  expect(systemMsgs.join("")).toMatch(/\[budget\]|unique signature budget|wrap-up/i);
-  expect(text.join("")).toMatch(/Budget done/);
-  // Last model request must NOT advertise tools (wrap-up).
+  await runAgentTurn(io, baseDeps(provider, 2, 2), [], "loop");
+
+  expect(systemMsgs.join("")).not.toMatch(/\[budget\]|wrap-up/i);
+  expect(text.join("")).toContain("I have enough information.");
+  expect(requests).toHaveLength(3);
+  const last = requests[requests.length - 1];
+  expect((last?.tools?.length ?? 0) > 0).toBe(true);
+});
+
+test("runAgentTurn: a new read signature beyond the read pool triggers a tool-free wrap-up", async () => {
+  const wrap: Partial<NormalizedEvent>[] = [
+    { kind: "text_delta", text: "Read budget done." },
+    { kind: "model_end" },
+  ];
+  const { provider, requests } = scriptedProvider([
+    readToolRound("r1", "."),
+    readToolRound("r2", "src"),
+    readToolRound("r3", "docs"),
+    wrap,
+  ]);
+  const systemMsgs: string[] = [];
+  const results: string[] = [];
+  await runAgentTurn(
+    {
+      write: () => {},
+      onSystem: (text) => systemMsgs.push(text),
+      onToolResult: (_name, result) => results.push(result.output),
+    },
+    baseDeps(provider, 8, 2),
+    [],
+    "read",
+  );
+
+  expect(results.some((result) => /read tool-call budget exhausted/.test(result))).toBe(true);
+  expect(systemMsgs.join("")).toMatch(/read signature budget 2\/2/);
   const last = requests[requests.length - 1];
   expect(last?.tools === undefined || last?.tools?.length === 0).toBe(true);
+});
+
+test("runAgentTurn: the default read budget permits more than eight distinct reads", async () => {
+  const rounds = Array.from({ length: 9 }, (_unused, index) =>
+    readToolRound(`r${index}`, `missing-${index}`),
+  );
+  const done: Partial<NormalizedEvent>[] = [
+    { kind: "text_delta", text: "Nine reads completed." },
+    { kind: "model_end" },
+  ];
+  const { provider, requests } = scriptedProvider([...rounds, done]);
+  const systemMsgs: string[] = [];
+
+  await runAgentTurn(
+    { write: () => {}, onSystem: (text) => systemMsgs.push(text) },
+    baseDeps(provider),
+    [],
+    "inspect broadly",
+  );
+
+  expect(requests).toHaveLength(10);
+  expect(systemMsgs.join("")).not.toMatch(/\[budget\]/i);
 });
 
 test("runAgentTurn: identical failing calls only burn one unique slot; after 3 attempts further same hash is skipped", async () => {
@@ -478,13 +626,8 @@ test("runAgentTurn: identical failing calls only burn one unique slot; after 3 a
     { kind: "tool_call_end", toolCallId: "c", input: "{}" },
     { kind: "model_end" },
   ];
-  // 5 rounds of the same failure; only 3 real executes, then skips; eventually wrap-up if budget...
-  // With maxUnique=8, unique stays 1, model could loop forever → we need wrap-up when a whole round
-  // only produces skips. Currently we only wrap on budget full. After 3 attempts, further rounds
-  // get "same tool call already tried 3×" — if model only returns that call, we loop forever!
-  //
-  // Guard: if a full execute pass produced only skips and no new work, finish with wrap-up.
-  // That will be fixed in agent.ts if needed after test.
+  // Three real executions share one unique slot. The fourth identical call is
+  // skipped, making the round no-progress and triggering the tool-free wrap-up.
   const done: Partial<NormalizedEvent>[] = [{ kind: "text_delta", text: "gave up" }, { kind: "model_end" }];
   const { provider } = scriptedProvider([round, round, round, round, done]);
   let toolResultCount = 0;

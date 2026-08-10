@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 2,
+  "id": "140",
+  "slug": "keryx-memory-reliability-p5-temporal-con",
+  "title": "Keryx Memory Reliability P5 — Temporal, Config, Catalog, and Validation Consistency",
+  "status": "done",
+  "createdAt": "2026-08-10T18:41:48.186Z",
+  "updatedAt": "2026-08-10T19:59:21.274Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:cc5d6980df1ffefff82477e0edc686dc0779e25b7ad6c972e8c6e854312d7a29",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-10T18:50:48.052Z",
+      "note": "src/memory/temporal.ts isCurrentAt/isValidAt is consumed by search.ts, relevant.ts, and inject.ts."
+    },
+    "AC2": {
+      "at": "2026-08-10T18:50:48.718Z",
+      "note": "Temporal fixture and P5 tests cover leap day, impossible date, future validity, no bounds, and exclusive Valid-To boundary."
+    },
+    "AC3": {
+      "at": "2026-08-10T18:50:49.201Z",
+      "note": "validation.ts and CLI/config tests cover status/class/query/limit/as-of and bounded actionable errors; old additive configs deep-merge."
+    },
+    "AC4": {
+      "at": "2026-08-10T18:50:49.748Z",
+      "note": "loadMemoryConfig warns and strips allowAutoAccept; P4 draft-only ingest/reflection and P5 compatibility tests pass."
+    },
+    "AC5": {
+      "at": "2026-08-10T18:50:50.028Z",
+      "note": "MemoryTypeConfig.template removed; all 11 MEMORY_TYPES remain registered and templates/docs reflect that."
+    },
+    "AC6": {
+      "at": "2026-08-10T18:50:50.276Z",
+      "note": "memory index output is explicitly optional generated catalog; templates/docs state search scans Markdown directly."
+    },
+    "AC7": {
+      "at": "2026-08-10T18:50:50.699Z",
+      "note": "memory check no longer treats absent catalog as integrity issue; P5 test passes without catalog."
+    },
+    "AC8": {
+      "at": "2026-08-10T18:50:51.251Z",
+      "note": "P5 deletion test plus existing embedding delete/rebuild/no-network tests prove deterministic lexical/embedding compatibility."
+    },
+    "AC9": {
+      "at": "2026-08-10T18:50:51.530Z",
+      "note": "Focused 54/0, changed 104/0, and bunx tsc --noEmit pass; P5 checklist is the only requirements-plan phase updated."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-10T18:41:48.186Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-10T18:42:51.345Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-10T18:42:51.477Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-10T18:50:29.830Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-10T18:50:29.957Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-10T18:50:30.425Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-10T18:50:30.997Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-10T18:50:48.053Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/memory/temporal.ts isCurrentAt/isValidAt is consumed by search.ts, relevant.ts, and inject.ts."
+    },
+    {
+      "at": "2026-08-10T18:50:48.718Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Temporal fixture and P5 tests cover leap day, impossible date, future validity, no bounds, and exclusive Valid-To boundary."
+    },
+    {
+      "at": "2026-08-10T18:50:49.201Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: validation.ts and CLI/config tests cover status/class/query/limit/as-of and bounded actionable errors; old additive configs deep-merge."
+    },
+    {
+      "at": "2026-08-10T18:50:49.748Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: loadMemoryConfig warns and strips allowAutoAccept; P4 draft-only ingest/reflection and P5 compatibility tests pass."
+    },
+    {
+      "at": "2026-08-10T18:50:50.028Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: MemoryTypeConfig.template removed; all 11 MEMORY_TYPES remain registered and templates/docs reflect that."
+    },
+    {
+      "at": "2026-08-10T18:50:50.276Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: memory index output is explicitly optional generated catalog; templates/docs state search scans Markdown directly."
+    },
+    {
+      "at": "2026-08-10T18:50:50.699Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: memory check no longer treats absent catalog as integrity issue; P5 test passes without catalog."
+    },
+    {
+      "at": "2026-08-10T18:50:51.251Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: P5 deletion test plus existing embedding delete/rebuild/no-network tests prove deterministic lexical/embedding compatibility."
+    },
+    {
+      "at": "2026-08-10T18:50:51.530Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Focused 54/0, changed 104/0, and bunx tsc --noEmit pass; P5 checklist is the only requirements-plan phase updated."
+    },
+    {
+      "at": "2026-08-10T19:42:13.957Z",
+      "event": "renumbered",
+      "detail": "110 -> 140: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.611Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:21.199Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:21.274Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

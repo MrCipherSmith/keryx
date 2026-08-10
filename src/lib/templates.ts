@@ -1,4 +1,5 @@
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
+import { renderMetaprojectGitignoreBlock as renderGeneratedGitignoreBlock } from "./metaproject-gitignore";
 
 export function renderIndexMarkdown({
   enableGdgraph,
@@ -45,7 +46,7 @@ export function renderIndexMarkdown({
       ? "| testing | Test context, related tests, execution reports, and test intelligence | modules/testing.md |"
       : "",
     enableMemory
-      ? "| memory | Long-lived project memory: lessons, decisions, constraints, known mistakes | modules/memory.md |"
+      ? "| memory | Markdown-canonical memory: pure recall, explicit reports, lifecycle, and accepted/current bounded influence | modules/memory.md |"
       : "",
     enableTasks
       ? "| tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |"
@@ -89,7 +90,8 @@ export function renderIndexMarkdown({
       ? [
           "- `memory/index.md`",
           "- `data/memory/index/index.json`",
-          "- `data/memory/artifacts/latest.md`",
+          "- `data/memory/embeddings/` (disposable cache, when enabled)",
+          "- `runtime/memory/search/<run-id>/` (explicit reports only)",
         ]
       : []),
     ...(enableTasks ? ["- `flows/` (flow packages)"] : []),
@@ -119,7 +121,7 @@ export function renderIndexMarkdown({
       ? "| testing | Read testing context before creating/changing tests and normalized reports before raw test logs | skills/testing/SKILL.md |"
       : "",
     enableMemory
-      ? "| memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |"
+      ? "| memory | Search accepted/current project memory; default recall is pure and bounded | skills/memory/SKILL.md |"
       : "",
     enableTasks
       ? "| flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |"
@@ -1580,34 +1582,7 @@ function escapeHtml(value: string): string {
 }
 
 export function renderMetaprojectGitignoreBlock(): string {
-  return `# Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
-.metaproject/runtime/
-.metaproject/core/**/*.ts
-.metaproject/data/**/storage/
-.metaproject/data/**/raw/
-.metaproject/data/**/queries/
-.metaproject/data/**/summaries/
-.metaproject/data/gdctx/artifacts/
-.metaproject/data/gdwiki/artifacts/
-.metaproject/data/gdwiki/link-check/
-.metaproject/data/health/history/
-.metaproject/data/health/artifacts/latest.md
-.metaproject/data/health/artifacts/latest.json
-.metaproject/data/testing/history/
-.metaproject/data/testing/logs/
-.metaproject/data/testing/artifacts/latest.md
-.metaproject/data/testing/artifacts/latest.json
-.metaproject/data/tasks/runtime/
-.metaproject/data/tasks/logs/
-.metaproject/flows/.flow-init.lock/
-.metaproject/flows/.flow-lock-*/
-# Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
-.metaproject/data/security/raw/
-.metaproject/data/security/raw/**
-.metaproject/data/security/artifacts/latest.md
-.metaproject/data/security/artifacts/latest.json
-.metaproject/reports/
-`;
+  return renderGeneratedGitignoreBlock();
 }
 
 export function renderProjectRulesReadme(): string {

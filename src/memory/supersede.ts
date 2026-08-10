@@ -5,11 +5,11 @@
 // existing `guardOutput` security seam before landing (XP4). Plain Markdown
 // only — no database, git-diffable, reproducible.
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { guardOutput } from "../security/guard";
 import { memoryRoot } from "./store";
+import { resolveCanonicalEntryPath, writeCanonicalPair } from "./write";
 import type { MemorySupersedeInput, MemorySupersedeResult } from "./types";
 
 export async function supersedeEntry(
@@ -51,6 +51,7 @@ export async function supersedeEntry(
     nextOld,
     `- Superseded by ${newResolved.relative} on ${date}.`,
   );
+  nextOld = setProvenanceUpdated(nextOld, today);
 
   // Build the NEW entry: point back + open its validity interval.
   let nextNew = setHeaderField(newContent, "Supersedes", oldResolved.relative);
@@ -58,32 +59,29 @@ export async function supersedeEntry(
     nextNew = setHeaderField(nextNew, "Valid-From", date);
   }
   nextNew = setHeaderField(nextNew, "Recorded-At", today);
+  nextNew = setProvenanceUpdated(nextNew, today);
+  nextNew = appendChangelog(nextNew, `- Supersedes ${oldResolved.relative} on ${date}.`);
 
-  // Both writes pass the security seam. In enforced/ci mode a blocked write is
-  // reported and skipped rather than landing (leak-safe).
-  const oldGuard = await guardOutput({
+  // The pair seam validates and guards both next values before either
+  // replacement, then restores the first byte-for-byte if the second fails.
+  const persisted = await writeCanonicalPair({
     cwd: input.cwd,
-    content: nextOld,
-    target: "memory",
-    source: "tool-output",
+    entries: [
+      { relativePath: oldResolved.relative, content: nextOld },
+      { relativePath: newResolved.relative, content: nextNew },
+    ],
   });
-  const newGuard = await guardOutput({
-    cwd: input.cwd,
-    content: nextNew,
-    target: "memory",
-    source: "tool-output",
-  });
-  if (!oldGuard.allowed || !newGuard.allowed) {
+  if (persisted.status === "skipped") {
     return {
       superseded: oldResolved.relative,
       supersededBy: newResolved.relative,
       changed: false,
-      securitySkipped: oldGuard.allowed ? newResolved.relative : oldResolved.relative,
+      securitySkipped: persisted.reason,
     };
   }
-
-  await writeFile(oldResolved.absolute, nextOld, "utf8");
-  await writeFile(newResolved.absolute, nextNew, "utf8");
+  if (persisted.status === "error") {
+    throw new Error(persisted.error.message);
+  }
 
   return {
     superseded: oldResolved.relative,
@@ -108,8 +106,9 @@ async function resolveEntryPath(
     path.isAbsolute(raw) ? raw : path.join(cwd, raw),
   ];
   for (const absolute of candidates) {
-    if (await pathExists(absolute)) {
-      return { absolute, relative: toPosix(path.relative(root, absolute)) };
+    const confined = await resolveCanonicalEntryPath(cwd, path.relative(root, absolute));
+    if (confined && (await pathExists(confined.absolutePath))) {
+      return { absolute: confined.absolutePath, relative: confined.relativePath };
     }
   }
   return null;
@@ -168,6 +167,16 @@ function appendChangelog(content: string, note: string): string {
     return content.replace(marker, (heading) => `${heading}\n\n${note}`);
   }
   return `${content.trimEnd()}\n\n## Changelog\n\n${note}\n`;
+}
+
+function setProvenanceUpdated(content: string, date: string): string {
+  if (/^[-*]\s*Updated:/im.test(content)) {
+    return content.replace(/^[-*]\s*Updated:.*$/im, `- Updated: ${date}`);
+  }
+  if (/^##\s+Provenance\s*$/im.test(content)) {
+    return content.replace(/^##\s+Provenance\s*$/im, `## Provenance\n\n- Updated: ${date}`);
+  }
+  return `${content.trimEnd()}\n\n## Provenance\n\n- Updated: ${date}\n`;
 }
 
 function escapeRe(value: string): string {

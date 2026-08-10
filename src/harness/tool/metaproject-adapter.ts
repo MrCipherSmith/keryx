@@ -26,7 +26,8 @@ import {
   type RepomapResult as GdgraphRepomapResult,
 } from "../../gdgraph/repomap";
 import { createMemoryService } from "../../memory/service";
-import type { MemoryService, MemoryStatus, SearchFilters } from "../../memory/types";
+import { acceptedCurrentSearchFilters, clipAutomaticRecallText, MAX_AUTOMATIC_RECALL_RESULTS } from "../../memory/relevant";
+import { MEMORY_CLASS_VALUES, type MemoryClass, type MemoryService, type SearchFilters } from "../../memory/types";
 import { findRelatedTests } from "../../testing/service";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
@@ -89,21 +90,14 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
 
 /** Bounded excerpt/output cap so a structured result stays modest. */
 const MAX_EXCERPT_BYTES = 400;
-/** The subset of MemoryStatus values exposed as a `status` filter. */
-const MEMORY_STATUS_VALUES: readonly MemoryStatus[] = [
-  "draft",
-  "accepted",
-  "deprecated",
-  "conflict",
-  "superseded",
-];
-
+const MAX_QUERY_BYTES = 4096;
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
+function portableMemoryPath(candidate: string): string | null {
+  const normalized = candidate.replaceAll("\\", "/");
+  return !isAbsolute(normalized) && normalized !== ".." && !normalized.startsWith("../") && !normalized.includes("/../") ? normalized : null;
 }
 
 /**
@@ -172,30 +166,52 @@ export function createMetaprojectAdapter(
     },
 
     async memorySearch(input): Promise<MemorySearchResult> {
-      const filters: SearchFilters = {};
-      if (input.module !== undefined) {
-        filters.module = input.module;
+      if (input.query.trim().length === 0 || Buffer.byteLength(input.query, "utf8") > MAX_QUERY_BYTES) {
+        return { query: input.query, hits: [], error: "memory query must be non-empty and at most 4096 UTF-8 bytes" };
       }
-      if (input.status !== undefined && (MEMORY_STATUS_VALUES as readonly string[]).includes(input.status)) {
-        filters.status = input.status as MemoryStatus;
+      if (input.status !== undefined && input.status !== "accepted") {
+        return { query: input.query, hits: [], error: "automatic memory search only accepts status accepted" };
+      }
+      if (input.class !== undefined && !(MEMORY_CLASS_VALUES as readonly string[]).includes(input.class)) {
+        return { query: input.query, hits: [], error: "memory class is invalid" };
+      }
+      if (input.limit !== undefined && (!Number.isInteger(input.limit) || input.limit < 1)) {
+        return { query: input.query, hits: [], error: "memory limit must be a positive integer" };
+      }
+      const requested: Pick<SearchFilters, "module" | "class" | "limit"> = {};
+      if (input.module !== undefined) {
+        requested.module = input.module;
+      }
+      if (input.class !== undefined) {
+        requested.class = input.class as MemoryClass;
       }
       if (input.limit !== undefined) {
-        filters.limit = input.limit;
+        requested.limit = Math.min(input.limit, MAX_AUTOMATIC_RECALL_RESULTS);
       }
+      const filters = acceptedCurrentSearchFilters(new Date(), requested);
       const appliedFilters = {
         ...(input.module !== undefined ? { module: input.module } : {}),
-        ...(input.status !== undefined ? { status: input.status } : {}),
+        status: filters.status ?? "accepted",
+        ...(input.class !== undefined ? { class: input.class } : {}),
       };
       try {
         const result = await memory.search({ cwd, query: input.query, filters });
-        const hits = result.results.map((scored) => ({
-          path: scored.entry.relativePath,
-          title: scored.entry.title,
-          type: scored.entry.type,
-          status: scored.entry.status,
-          score: scored.score,
-          excerpt: clip(scored.entry.summary, MAX_EXCERPT_BYTES),
-        }));
+        const hits = result.results
+          .map((scored) => {
+            const path = portableMemoryPath(scored.entry.relativePath);
+            return path === null
+              ? null
+              : {
+                  path,
+                  title: clipAutomaticRecallText(scored.entry.title, 200),
+                  type: scored.entry.type,
+                  status: scored.entry.status,
+                  score: scored.score,
+                  excerpt: clipAutomaticRecallText(scored.entry.summary, MAX_EXCERPT_BYTES),
+                };
+          })
+          .filter((hit): hit is NonNullable<typeof hit> => hit !== null)
+          .slice(0, MAX_AUTOMATIC_RECALL_RESULTS);
         return {
           query: input.query,
           ...(Object.keys(appliedFilters).length > 0 ? { filters: appliedFilters } : {}),

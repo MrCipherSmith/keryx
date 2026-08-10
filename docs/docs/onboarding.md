@@ -212,7 +212,8 @@ keryx ctx install-hook --runtime codex
 keryx review start --target branch --ref feature/example
 ```
 
-The orientation hook injects a bounded graph + wiki map at turn start. The gdctx
+The orientation hook injects a bounded project-root Metaproject excerpt, graph
+map, and wiki index at turn start. The gdctx
 routing guard keeps broad raw shell/search output out of the agent context.
 Managed review packages preserve coverage, findings, decisions, and learning
 candidates for standalone or flow-attached reviews.

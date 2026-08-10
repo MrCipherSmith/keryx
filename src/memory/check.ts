@@ -56,10 +56,9 @@ export async function checkMemory(
     }
   }
 
-  const indexFile = path.join(cwd, ".metaproject", "data", "memory", "index", "index.json");
-  if (entries.length > 0 && !(await pathExists(indexFile))) {
-    issues.push({ path: "index", kind: "index", message: "index missing; run `keryx memory index`" });
-  }
+  // The generated catalog is disposable and not an integrity prerequisite.
+  // Canonical Markdown is always checked directly, even when index.json is
+  // absent, stale, or corrupt.
 
   return { ok: issues.length === 0, issues };
 }

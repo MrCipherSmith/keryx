@@ -5,26 +5,33 @@ export type MemoryStatus =
   | "conflict"
   | "superseded";
 
+export const MEMORY_STATUS_VALUES: readonly MemoryStatus[] = [
+  "draft",
+  "accepted",
+  "deprecated",
+  "conflict",
+  "superseded",
+];
+
 export type Confidence = "low" | "medium" | "high";
 
 export type MemoryTypeConfig = {
   type: string;
   folder: string;
-  template: boolean; // has an MVP template / is a first-class new-able type
 };
 
 export const MEMORY_TYPES: MemoryTypeConfig[] = [
-  { type: "lesson", folder: "lessons", template: true },
-  { type: "decision", folder: "decisions", template: true },
-  { type: "constraint", folder: "constraints", template: true },
-  { type: "known-mistake", folder: "known-mistakes", template: true },
-  { type: "historical-context", folder: "historical-context", template: false },
-  { type: "pattern", folder: "patterns", template: false },
-  { type: "task-note", folder: "task-notes", template: false },
-  { type: "review-note", folder: "review-notes", template: false },
-  { type: "incident", folder: "incidents", template: false },
-  { type: "migration-note", folder: "migration-notes", template: false },
-  { type: "integration-note", folder: "integration-notes", template: false },
+  { type: "lesson", folder: "lessons" },
+  { type: "decision", folder: "decisions" },
+  { type: "constraint", folder: "constraints" },
+  { type: "known-mistake", folder: "known-mistakes" },
+  { type: "historical-context", folder: "historical-context" },
+  { type: "pattern", folder: "patterns" },
+  { type: "task-note", folder: "task-notes" },
+  { type: "review-note", folder: "review-notes" },
+  { type: "incident", folder: "incidents" },
+  { type: "migration-note", folder: "migration-notes" },
+  { type: "integration-note", folder: "integration-notes" },
 ];
 
 export const MEMORY_TYPE_VALUES = MEMORY_TYPES.map((entry) => entry.type);
@@ -123,7 +130,7 @@ export type MemoryConfig = {
     summaryJaccard: number;
     minSharedScopeOrTags: number;
   };
-  ingest: { defaultStatus: MemoryStatus; allowAutoAccept: boolean };
+  ingest: { defaultStatus: MemoryStatus };
   reflect: { minClusterSize: number };
   // --- C1 embedding index (opt-in ceiling; default OFF ⇒ lexical only). ---
   index: {
@@ -198,6 +205,7 @@ export type MemoryCreateResult = {
   path: string;
   type: string;
   duplicates: DuplicateHint[];
+  securitySkipped?: string | undefined;
 };
 
 export type MemoryIndexInput = { cwd: string; embeddings?: boolean | undefined };
@@ -220,11 +228,37 @@ export type MemorySearchInput = {
   cwd: string;
   query: string;
   filters?: SearchFilters | undefined;
+  now?: Date | undefined;
 };
 export type MemorySearchResult = {
   schemaVersion: number;
   query: string;
   results: ScoredEntry[];
+};
+export type MemorySearchReport = {
+  schemaVersion: 1;
+  runId: string;
+  query: string;
+  generatedAt: string;
+  filters: SearchFilters;
+  results: Array<{
+    path: string;
+    title: string;
+    type: string;
+    status: MemoryStatus;
+    score: number;
+    reason: string;
+    summary: string;
+  }>;
+};
+export type MemoryReportInput = {
+  cwd: string;
+  search: MemorySearchResult;
+  filters?: SearchFilters | undefined;
+  runId?: string | undefined;
+};
+export type MemoryReportResult = {
+  runId: string;
   markdownPath: string;
   jsonPath: string;
 };
@@ -260,6 +294,23 @@ export type MemorySupersedeResult = {
   securitySkipped?: string | undefined;
 };
 
+export type MemoryTransitionInput = {
+  cwd: string;
+  path: string;
+  to: Exclude<MemoryStatus, "superseded">;
+  reason?: string | undefined;
+  /** Injectable clock for deterministic lifecycle tests. */
+  now?: Date | undefined;
+};
+export type MemoryTransitionResult = {
+  path: string;
+  from: MemoryStatus;
+  to: MemoryStatus;
+  changed: boolean;
+  error?: { code: "invalid-transition" | "terminal-state" | "not-found" | "write-failed"; message: string } | undefined;
+  securitySkipped?: string | undefined;
+};
+
 export type MemoryCheckInput = { cwd: string };
 export type MemoryCheckIssue = {
   path: string;
@@ -272,7 +323,9 @@ export interface MemoryService {
   create(input: MemoryCreateInput): Promise<MemoryCreateResult>;
   index(input: MemoryIndexInput): Promise<MemoryIndexResult>;
   search(input: MemorySearchInput): Promise<MemorySearchResult>;
+  writeReport(input: MemoryReportInput): Promise<MemoryReportResult>;
   ingest(input: MemoryIngestInput): Promise<MemoryIngestResult>;
   supersede(input: MemorySupersedeInput): Promise<MemorySupersedeResult>;
+  transition(input: MemoryTransitionInput): Promise<MemoryTransitionResult>;
   check(input: MemoryCheckInput): Promise<MemoryCheckResult>;
 }

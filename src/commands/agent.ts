@@ -99,13 +99,17 @@ export interface AgentDeps {
   systemInstruction: string;
   idSeq: () => string;
   /**
-   * Max **unique** tool signatures per user turn (loop-safety guard).
+   * Max total **unique** tool signatures per user turn (loop-safety guard).
    * Default {@link DEFAULT_MAX_TOOL_CALLS} (overridable via
    * {@link resolveAgentMaxToolCalls} / `KERYX_AGENT_MAX_TOOL_CALLS`).
    * The same call (name + normalized input hash) may be retried up to
    * {@link MAX_ATTEMPTS_PER_HASH} times and still counts as **one** budget slot.
    */
   maxToolCalls?: number;
+  /** Max unique risk-`read` signatures inside the total budget. Default 40. */
+  maxReadToolCalls?: number;
+  /** Max unique non-read signatures inside the total budget. Default 8. */
+  maxNonReadToolCalls?: number;
 }
 
 /**
@@ -122,6 +126,12 @@ export const ENV_AGENT_MAX_TOOL_CALLS = "KERYX_AGENT_MAX_TOOL_CALLS";
 
 /** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
 export const MAX_AGENT_MAX_TOOL_CALLS = 256;
+
+/** Default unique risk-`read` signature budget inside the total pool. */
+export const DEFAULT_MAX_READ_TOOL_CALLS = 40;
+
+/** Default unique non-read/unknown-risk signature budget inside the total pool. */
+export const DEFAULT_MAX_NON_READ_TOOL_CALLS = 8;
 
 /**
  * Resolve unique tool-signature budget for an interactive agent turn.
@@ -319,11 +329,17 @@ export function toolCallHash(name: string, input: string): string {
 }
 
 interface ToolBudgetState {
-  /** Unique signatures that have consumed a budget slot. */
+  /** All unique signatures that have consumed a total budget slot. */
   charged: Set<string>;
+  /** Risk-`read` signatures, also present in {@link charged}. */
+  readCharged: Set<string>;
+  /** All other signatures, including unknown risks, also present in {@link charged}. */
+  nonReadCharged: Set<string>;
   /** Attempt count per signature (capped at {@link maxAttempts}). */
   attempts: Map<string, number>;
   maxUnique: number;
+  maxReadUnique: number;
+  maxNonReadUnique: number;
   /** Per-signature attempt cap; defaults to {@link MAX_ATTEMPTS_PER_HASH} when absent. */
   maxAttempts?: number;
 }
@@ -332,16 +348,33 @@ function budgetUsed(state: ToolBudgetState): number {
   return state.charged.size;
 }
 
+function readBudgetUsed(state: ToolBudgetState): number {
+  return state.readCharged.size;
+}
+
+function nonReadBudgetUsed(state: ToolBudgetState): number {
+  return state.nonReadCharged.size;
+}
+
 /**
  * Decide whether to run this call and whether it charges a new budget slot.
  * - Same hash: up to {@link MAX_ATTEMPTS_PER_HASH} attempts, **one** budget slot.
- * - New hash: charges one slot if budget remains; else rejected.
+ * - New read hash: charges both the total and read pools if both have room.
+ * - New non-read/unknown-risk hash: charges both total and non-read pools.
  */
 export function reserveToolAttempt(
   state: ToolBudgetState,
   name: string,
   input: string,
-): { ok: true; hash: string; attempt: number; chargedNew: boolean } | { ok: false; hash: string; reason: string } {
+  risk?: string,
+):
+  | { ok: true; hash: string; attempt: number; chargedNew: boolean }
+  | {
+      ok: false;
+      hash: string;
+      reason: string;
+      kind: "repeat" | "total_budget" | "read_budget" | "non_read_budget";
+    } {
   const hash = toolCallHash(name, input);
   const maxAttempts = state.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const prev = state.attempts.get(hash) ?? 0;
@@ -350,6 +383,7 @@ export function reserveToolAttempt(
       ok: false,
       hash,
       reason: `same tool call already tried ${maxAttempts}× (hash budget); change the arguments or a different tool`,
+      kind: "repeat",
     };
   }
   const isNew = !state.charged.has(hash);
@@ -358,10 +392,33 @@ export function reserveToolAttempt(
       ok: false,
       hash,
       reason: `tool-call budget exhausted (${state.maxUnique} unique signatures per turn; same call may retry up to ${maxAttempts}× as one slot)`,
+      kind: "total_budget",
+    };
+  }
+  const isRead = risk === "read";
+  if (isNew && isRead && state.readCharged.size >= state.maxReadUnique) {
+    return {
+      ok: false,
+      hash,
+      reason: `read tool-call budget exhausted (${state.maxReadUnique} unique read signatures per turn; same call may retry up to ${maxAttempts}× as one slot)`,
+      kind: "read_budget",
+    };
+  }
+  if (isNew && !isRead && state.nonReadCharged.size >= state.maxNonReadUnique) {
+    return {
+      ok: false,
+      hash,
+      reason: `non-read tool-call budget exhausted (${state.maxNonReadUnique} unique non-read signatures per turn; same call may retry up to ${maxAttempts}× as one slot)`,
+      kind: "non_read_budget",
     };
   }
   if (isNew) {
     state.charged.add(hash);
+    if (isRead) {
+      state.readCharged.add(hash);
+    } else {
+      state.nonReadCharged.add(hash);
+    }
   }
   const attempt = prev + 1;
   state.attempts.set(hash, attempt);
@@ -385,12 +442,18 @@ export async function runAgentTurn(
   const toolDefs = deps.tools.map((t) => t.definition);
   const maxToolCalls = deps.maxToolCalls ?? resolveAgentMaxToolCalls();
   const maxAttempts = resolveAgentMaxAttemptsPerHash();
+  const maxReadToolCalls = deps.maxReadToolCalls ?? DEFAULT_MAX_READ_TOOL_CALLS;
+  const maxNonReadToolCalls = deps.maxNonReadToolCalls ?? DEFAULT_MAX_NON_READ_TOOL_CALLS;
   const parentRunId = deps.idSeq();
   const budget: ToolBudgetState = {
     charged: new Set(),
+    readCharged: new Set(),
+    nonReadCharged: new Set(),
     attempts: new Map(),
     maxUnique: maxToolCalls,
     maxAttempts,
+    maxReadUnique: maxReadToolCalls,
+    maxNonReadUnique: maxNonReadToolCalls,
   };
   /** Short log of tool outcomes for the budget-exhausted wrap-up. */
   const toolLog: string[] = [];
@@ -489,18 +552,23 @@ export async function runAgentTurn(
     }
 
     // Execute each tool call and append its result, then loop to re-request.
-    let stopForBudget = false;
+    let exhaustedBudget: "total" | "read" | "non-read" | undefined;
     let executedAny = false;
     for (const call of calls) {
       io.onToolCall?.(call.name, call.input);
-      const reservation = reserveToolAttempt(budget, call.name, call.input);
+      const risk = toolByName.get(call.name)?.definition.risk;
+      const reservation = reserveToolAttempt(budget, call.name, call.input, risk);
       if (!reservation.ok) {
         const result: InteractiveToolResult = { output: reservation.reason, isError: true };
         io.onToolResult?.(call.name, result);
         history.push({ role: "tool", content: result.output, provenance: "tool" });
         toolLog.push(`${call.name}: skipped (${reservation.reason.split(";")[0] ?? "budget"})`);
-        if (reservation.reason.startsWith("tool-call budget exhausted")) {
-          stopForBudget = true;
+        if (reservation.kind === "total_budget") {
+          exhaustedBudget = "total";
+        } else if (reservation.kind === "read_budget") {
+          exhaustedBudget = "read";
+        } else if (reservation.kind === "non_read_budget") {
+          exhaustedBudget = "non-read";
         }
         continue;
       }
@@ -513,8 +581,12 @@ export async function runAgentTurn(
       // not receive a credential a command happened to read.
       history.push({ role: "tool", content: redactSensitiveText(result.output), provenance: "tool" });
       const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
+      const riskUsage =
+        risk === "read"
+          ? `, read ${readBudgetUsed(budget)}/${maxReadToolCalls}`
+          : `, non-read ${nonReadBudgetUsed(budget)}/${maxNonReadToolCalls}`;
       toolLog.push(
-        `${call.name}(${shortIn}) → ${result.isError ? "error" : "ok"} [attempt ${reservation.attempt}/${maxAttempts}, unique ${budgetUsed(budget)}/${maxToolCalls}]`,
+        `${call.name}(${shortIn}) → ${result.isError ? "error" : "ok"} [attempt ${reservation.attempt}/${maxAttempts}, unique ${budgetUsed(budget)}/${maxToolCalls}${riskUsage}]`,
       );
 
       // Preventive hint: a tool failing identically N× in a row is almost never
@@ -541,15 +613,21 @@ export async function runAgentTurn(
       }
     }
 
-    // Stop when unique budget is full, OR the model only re-issued exhausted
-    // hashes (no progress) — otherwise it could loop forever on the same call.
+    // Reaching a limit exactly is not itself a stop: give the model one normal
+    // round to answer from the latest result. Stop only when it actually asks for
+    // a new signature beyond a pool, or only re-issues exhausted hashes.
     const noProgress = !executedAny && calls.length > 0;
-    if (stopForBudget || budgetUsed(budget) >= maxToolCalls || noProgress) {
+    if (exhaustedBudget !== undefined || noProgress) {
       await finishWithBudgetSummary(io, deps, history, parentRunId, {
         maxUnique: maxToolCalls,
         maxAttempts,
         used: budgetUsed(budget),
+        maxReadUnique: maxReadToolCalls,
+        readUsed: readBudgetUsed(budget),
+        maxNonReadUnique: maxNonReadToolCalls,
+        nonReadUsed: nonReadBudgetUsed(budget),
         toolLog,
+        ...(exhaustedBudget !== undefined ? { exhaustedBudget } : {}),
         noProgress,
       });
       return;
@@ -566,7 +644,18 @@ async function finishWithBudgetSummary(
   deps: AgentDeps,
   history: NormalizedMessage[],
   parentRunId: string,
-  info: { maxUnique: number; maxAttempts?: number; used: number; toolLog: string[]; noProgress?: boolean },
+  info: {
+    maxUnique: number;
+    maxAttempts?: number;
+    used: number;
+    maxReadUnique: number;
+    readUsed: number;
+    maxNonReadUnique: number;
+    nonReadUsed: number;
+    toolLog: string[];
+    exhaustedBudget?: "total" | "read" | "non-read";
+    noProgress?: boolean;
+  },
 ): Promise<void> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -577,9 +666,14 @@ async function finishWithBudgetSummary(
   };
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
-  const why = info.noProgress
-    ? `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`
-    : `unique signature budget ${info.used}/${info.maxUnique} (same call may retry up to ${maxAttempts}× as one slot)`;
+  const why =
+    info.exhaustedBudget === "read"
+      ? `read signature budget ${info.readUsed}/${info.maxReadUnique} (total ${info.used}/${info.maxUnique}; same call may retry up to ${maxAttempts}× as one slot)`
+      : info.exhaustedBudget === "non-read"
+        ? `non-read signature budget ${info.nonReadUsed}/${info.maxNonReadUnique} (total ${info.used}/${info.maxUnique}; same call may retry up to ${maxAttempts}× as one slot)`
+      : info.exhaustedBudget === "total"
+          ? `unique signature budget ${info.used}/${info.maxUnique} (read ${info.readUsed}/${info.maxReadUnique}, non-read ${info.nonReadUsed}/${info.maxNonReadUnique}; same call may retry up to ${maxAttempts}× as one slot)`
+          : `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
 
   system(`\n[budget] Stopping tools: ${why}. Asking the model for a short wrap-up…\n`);
 

@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 2,
+  "id": "139",
+  "slug": "keryx-memory-reliability-p4-lifecycle-an",
+  "title": "Keryx Memory Reliability P4 — Lifecycle and Unified Guarded Write Seam",
+  "status": "done",
+  "createdAt": "2026-08-10T18:32:19.662Z",
+  "updatedAt": "2026-08-10T19:59:21.119Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fc06cfde262c2a67dc89749197f24e67d65438d53735f4398b2fefc4b57054e1",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-10T18:39:58.904Z",
+      "note": "src/memory/lifecycle.ts table tests cover every allowed target, invalid target, and terminal state"
+    },
+    "AC2": {
+      "at": "2026-08-10T18:39:59.013Z",
+      "note": "MemoryService.transition returns changed/no-op/structured errors; focused tests prove byte-identical terminal rejection"
+    },
+    "AC3": {
+      "at": "2026-08-10T18:39:59.143Z",
+      "note": "memory transition CLI validates --to and delegates to service; focused CLI test passes"
+    },
+    "AC4": {
+      "at": "2026-08-10T18:39:59.378Z",
+      "note": "writeCanonicalEntry confines typed-root paths and validates title/type/status/required sections"
+    },
+    "AC5": {
+      "at": "2026-08-10T18:39:59.598Z",
+      "note": "security seam preserves advisory warnings and enforced rejection; transition guard test proves unchanged bytes"
+    },
+    "AC6": {
+      "at": "2026-08-10T18:39:59.814Z",
+      "note": "same-directory temp, fsync, rename and cleanup are implemented and tested"
+    },
+    "AC7": {
+      "at": "2026-08-10T18:39:59.916Z",
+      "note": "MemoryService.create uses writeCanonicalEntry for create and --force overwrite"
+    },
+    "AC8": {
+      "at": "2026-08-10T18:40:00.056Z",
+      "note": "ingest create/reconciliation and reflection drafts delegate to writeCanonicalEntry; ingest remains draft-only"
+    },
+    "AC9": {
+      "at": "2026-08-10T18:40:00.210Z",
+      "note": "supersede prevalidates and preguards both next values then uses rollback-capable pair persistence"
+    },
+    "AC10": {
+      "at": "2026-08-10T18:40:00.503Z",
+      "note": "transition and supersession write deterministic changelog and provenance once; retry no-ops are byte-identical"
+    },
+    "AC11": {
+      "at": "2026-08-10T18:40:01.009Z",
+      "note": "focused lifecycle/seam/supersede/security tests cover stated edge cases"
+    },
+    "AC12": {
+      "at": "2026-08-10T18:40:01.154Z",
+      "note": "P4 test proves legacy auto-accept config still creates draft; explicit CLI transition accepts"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-10T18:32:19.662Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-10T18:33:17.738Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-10T18:33:18.153Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-10T18:33:18.383Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-10T18:39:58.307Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-10T18:39:58.599Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-10T18:39:58.782Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-10T18:39:58.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/memory/lifecycle.ts table tests cover every allowed target, invalid target, and terminal state"
+    },
+    {
+      "at": "2026-08-10T18:39:59.014Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: MemoryService.transition returns changed/no-op/structured errors; focused tests prove byte-identical terminal rejection"
+    },
+    {
+      "at": "2026-08-10T18:39:59.143Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: memory transition CLI validates --to and delegates to service; focused CLI test passes"
+    },
+    {
+      "at": "2026-08-10T18:39:59.378Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: writeCanonicalEntry confines typed-root paths and validates title/type/status/required sections"
+    },
+    {
+      "at": "2026-08-10T18:39:59.598Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: security seam preserves advisory warnings and enforced rejection; transition guard test proves unchanged bytes"
+    },
+    {
+      "at": "2026-08-10T18:39:59.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: same-directory temp, fsync, rename and cleanup are implemented and tested"
+    },
+    {
+      "at": "2026-08-10T18:39:59.916Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: MemoryService.create uses writeCanonicalEntry for create and --force overwrite"
+    },
+    {
+      "at": "2026-08-10T18:40:00.057Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: ingest create/reconciliation and reflection drafts delegate to writeCanonicalEntry; ingest remains draft-only"
+    },
+    {
+      "at": "2026-08-10T18:40:00.210Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: supersede prevalidates and preguards both next values then uses rollback-capable pair persistence"
+    },
+    {
+      "at": "2026-08-10T18:40:00.503Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: transition and supersession write deterministic changelog and provenance once; retry no-ops are byte-identical"
+    },
+    {
+      "at": "2026-08-10T18:40:01.010Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: focused lifecycle/seam/supersede/security tests cover stated edge cases"
+    },
+    {
+      "at": "2026-08-10T18:40:01.154Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: P4 test proves legacy auto-accept config still creates draft; explicit CLI transition accepts"
+    },
+    {
+      "at": "2026-08-10T19:42:13.780Z",
+      "event": "renumbered",
+      "detail": "109 -> 139: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.455Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:21.056Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:21.119Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

@@ -7,7 +7,7 @@
 // the assembled prompt is byte-for-byte unchanged (AC-C8).
 
 import { loadMemoryConfig } from "./config";
-import { proceduralMemoryForScope, type SkillScope } from "./relevant";
+import { clipAutomaticRecallText, isCurrentMemory, proceduralMemoryForScope, type SkillScope } from "./relevant";
 import type { MemoryEntry } from "./types";
 
 export const PROCEDURAL_BLOCK_HEADING = "## Procedural Memory";
@@ -25,8 +25,10 @@ export function renderProceduralBlock(entries: MemoryEntry[]): string {
     "",
   ];
   for (const entry of entries) {
-    const summary = entry.summary ? ` — ${entry.summary}` : "";
-    lines.push(`- [${entry.type}] ${entry.title}${summary} (\`${entry.relativePath}\`)`);
+    const summary = entry.summary ? ` — ${clipAutomaticRecallText(entry.summary)}` : "";
+    lines.push(
+      `- [${entry.type}] ${clipAutomaticRecallText(entry.title, 200)}${summary} (\`${clipAutomaticRecallText(entry.relativePath, 200)}\`)`,
+    );
   }
   return `${lines.join("\n")}\n`;
 }
@@ -46,5 +48,8 @@ export async function renderProceduralMemoryForScope(
     config.typing.injectClasses,
     now,
   );
-  return renderProceduralBlock(entries);
+  // Keep the shared temporal helper explicit at this boundary as well: a
+  // future caller cannot accidentally render an entry selected outside the
+  // accepted/current contract.
+  return renderProceduralBlock(entries.filter((entry) => isCurrentMemory(entry, now)));
 }

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { collectEntries, memoryRoot } from "./store";
+import { writeCanonicalEntry } from "./write";
 import type { MemoryConfig, MemoryEntry } from "./types";
 
 // Deterministic consolidation: cluster entries by shared tag and, for clusters
@@ -51,9 +51,9 @@ export async function reflectMemory(
       skippedExisting += 1;
       continue;
     }
-    await mkdir(dir, { recursive: true });
-    await writeFile(file, buildPattern(tag, members, dateString(now)), "utf8");
-    created.push(`patterns/${slug}.md`);
+    const write = await writeCanonicalEntry({ cwd, relativePath: `patterns/${slug}.md`, content: buildPattern(tag, members, dateString(now)) });
+    if (write.status === "error") throw new Error(write.error.message);
+    if (write.status === "written") created.push(`patterns/${slug}.md`);
   }
 
   return { clusters, created, skippedExisting };

@@ -71,6 +71,7 @@ export interface MemorySearchHit {
 export interface MemorySearchFilters {
   module?: string;
   status?: string;
+  class?: string;
 }
 
 /** Structured result of `memorySearch` — memory-search-result.schema.json. */
@@ -272,6 +273,7 @@ export interface MetaprojectPort {
     query: string;
     module?: string;
     status?: string;
+    class?: string;
     limit?: number;
   }): Promise<MemorySearchResult>;
   readWiki(input: { path: string }): Promise<WikiPageResult>;

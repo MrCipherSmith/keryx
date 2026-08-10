@@ -1,5 +1,7 @@
 import { tokenSet, tokenize } from "./text";
 import { memoryClassOf } from "./types";
+import { isValidAt, validateAsOf } from "./temporal";
+import { validateQuery, validateSearchFilters, MAX_GENERAL_RESULTS } from "./validation";
 import type {
   MemoryClass,
   MemoryConfig,
@@ -15,6 +17,8 @@ export function searchEntries(
   config: MemoryConfig,
   now: Date,
 ): ScoredEntry[] {
+  validateQuery(query);
+  validateSearchFilters(filters, now);
   const queryTokens = [...new Set(tokenize(query))];
   const today = now.toISOString().slice(0, 10);
   const filtered = entries.filter(
@@ -36,7 +40,7 @@ export function searchEntries(
         queryTokens.length === 0,
     )
     .sort((a, b) => b.score - a.score)
-    .slice(0, filters.limit ?? config.ranking.maxResults);
+    .slice(0, Math.min(MAX_GENERAL_RESULTS, filters.limit ?? config.ranking.maxResults));
 }
 
 // C1 rerank candidate pool: the top-k entries by deterministic lexical score,
@@ -53,6 +57,8 @@ export function candidatePool(
   now: Date,
   k: number,
 ): ScoredEntry[] {
+  validateQuery(query);
+  validateSearchFilters(filters, now);
   const queryTokens = [...new Set(tokenize(query))];
   const today = now.toISOString().slice(0, 10);
   return entries
@@ -64,7 +70,7 @@ export function candidatePool(
     )
     .map((entry) => scoreEntry(entry, queryTokens, filters, config, now))
     .sort((a, b) => b.score - a.score)
-    .slice(0, Math.max(0, k));
+    .slice(0, Math.min(MAX_GENERAL_RESULTS, Math.max(0, k)));
 }
 
 function matchesFilters(entry: MemoryEntry, filters: SearchFilters): boolean {
@@ -95,10 +101,8 @@ function classMatch(entry: MemoryEntry, cls: MemoryClass | undefined): boolean {
   return memoryClassOf(entry) === cls;
 }
 
-// C2 bitemporal filter. Deterministic string/date comparison — no runtime, no
-// network. A no-op for entries without validity fields (byte-identical default).
-//   as-of <d>: include iff Valid-From ≤ d AND (Valid-To unset OR Valid-To > d).
-//   current  : exclude entries with a past Valid-To or any Superseded-By.
+// C2 bitemporal filter. All interval semantics live in temporal.ts so general
+// search, relevant recall, and procedural injection cannot drift apart.
 function temporalMatch(
   entry: MemoryEntry,
   asOf: string | null,
@@ -109,27 +113,14 @@ function temporalMatch(
     return true;
   }
   if (asOf) {
-    const from = entry.validFrom ?? null;
-    const to = entry.validTo ?? null;
-    if (from && from > asOf) {
-      return false; // not yet valid at asOf
-    }
-    if (to && to <= asOf) {
-      return false; // validity interval [from, to) already closed at asOf
-    }
-    return true;
+    validateAsOf(asOf, new Date(`${today}T00:00:00.000Z`));
+    return isValidAt(entry, asOf);
   }
   // No explicit as-of date. Only the "current" default performs exclusion.
   if (config.temporal.defaultQuery === "as-of") {
     return true;
   }
-  if (entry.supersededBy) {
-    return false;
-  }
-  if (entry.validTo && entry.validTo < today) {
-    return false;
-  }
-  return true;
+  return isValidAt(entry, today) && !entry.supersededBy;
 }
 
 function scoreEntry(

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { validateMemoryConfig } from "./validation";
 import type { MemoryConfig } from "./types";
 
 export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
@@ -19,7 +20,7 @@ export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
     superseded: 0.1,
   },
   dedup: { titleSimilarity: 0.8, summaryJaccard: 0.6, minSharedScopeOrTags: 1 },
-  ingest: { defaultStatus: "draft", allowAutoAccept: false },
+  ingest: { defaultStatus: "draft" },
   reflect: { minClusterSize: 3 },
   index: {
     enabled: false, // C1 default OFF ⇒ lexical only (C-2, AC-C1)
@@ -50,9 +51,14 @@ export async function loadMemoryConfig(cwd: string): Promise<MemoryConfig> {
   if (!(await pathExists(file))) {
     return DEFAULT_MEMORY_CONFIG;
   }
-  const parsed = await readJsonFileOr<Partial<MemoryConfig>>(file, {});
+  const parsed = await readJsonFileOr<Partial<MemoryConfig> & { ingest?: Partial<MemoryConfig["ingest"]> & { allowAutoAccept?: unknown } }>(file, {});
   const base = DEFAULT_MEMORY_CONFIG;
-  return {
+  const legacyAllowAutoAccept = parsed.ingest?.allowAutoAccept === true;
+  if (legacyAllowAutoAccept) {
+    console.warn("[memory config] allowAutoAccept is deprecated and ignored; ingest and reflection remain draft-only. Remove it from memory.config.json.");
+  }
+  const { allowAutoAccept: _ignored, ...parsedIngest } = parsed.ingest ?? {};
+  return validateMemoryConfig({
     schemaVersion: parsed.schemaVersion ?? base.schemaVersion,
     ranking: {
       ...base.ranking,
@@ -66,12 +72,12 @@ export async function loadMemoryConfig(cwd: string): Promise<MemoryConfig> {
     },
     statusBoost: { ...base.statusBoost, ...(parsed.statusBoost ?? {}) },
     dedup: { ...base.dedup, ...(parsed.dedup ?? {}) },
-    ingest: { ...base.ingest, ...(parsed.ingest ?? {}) },
+    ingest: { ...base.ingest, ...parsedIngest },
     reflect: { ...base.reflect, ...(parsed.reflect ?? {}) },
     index: { ...base.index, ...(parsed.index ?? {}) },
     temporal: { ...base.temporal, ...(parsed.temporal ?? {}) },
     typing: { ...base.typing, ...(parsed.typing ?? {}) },
-  };
+  });
 }
 
 export function renderMemoryConfig(): string {

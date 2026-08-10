@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { guardOutput, formatGuardWarning } from "../security/guard";
 import { MEMORY_TYPES } from "./types";
 import { collectEntries, memoryRoot } from "./store";
 import { findConflicts, findDuplicates, type Candidate } from "./dedup";
+import { writeCanonicalEntry } from "./write";
 import type {
   Confidence,
   MemoryConfig,
@@ -78,9 +78,11 @@ export async function ingestMemory(
     if (dupes.length > 0) {
       const match = existing.find((e) => e.relativePath === dupes[0]?.path);
       if (match) {
-        const changed = await reconcileEntry(match.absolutePath, source, link, date);
-        if (changed) {
+        const reconciledWrite = await reconcileEntry(cwd, match.relativePath, match.absolutePath, source, link, date);
+        if (reconciledWrite.changed) {
           reconciled.push(match.relativePath);
+        } else if (reconciledWrite.securitySkipped) {
+          securitySkipped.push({ title, reason: reconciledWrite.securitySkipped });
         } else {
           skippedDuplicates += 1;
         }
@@ -95,7 +97,9 @@ export async function ingestMemory(
     const markdown = buildEntryMarkdown({
       title,
       type,
-      status: config.ingest.defaultStatus,
+      // Automatic sources may only propose drafts; lifecycle acceptance is
+      // explicit through MemoryService.transition / `memory transition`.
+      status: "draft",
       confidence,
       summary: text,
       source,
@@ -103,28 +107,15 @@ export async function ingestMemory(
       date,
     });
 
-    // Security write seam (§11): gate the accepted entry before it lands on
-    // disk. Advisory reports only (write proceeds unchanged); enforced/ci may
-    // suppress this entry's write and record why.
-    const guard = await guardOutput({
-      cwd,
-      content: markdown,
-      target: "memory",
-      source: "tool-output",
-    });
-    if (!guard.allowed) {
-      securitySkipped.push({ title, reason: guard.reason ?? "security gate blocked" });
-      continue;
-    }
-    const warning = formatGuardWarning(guard.decision, "memory");
-    if (warning) {
-      securityWarnings.push(warning);
-    }
-
     const slug = uniqueSlug(dir, title);
     const filename = `${slug}.md`;
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, filename), markdown, "utf8");
+    const write = await writeCanonicalEntry({ cwd, relativePath: `${folder}/${filename}`, content: markdown });
+    if (write.status === "skipped") {
+      securitySkipped.push({ title, reason: write.reason });
+      continue;
+    }
+    if (write.status === "error") throw new Error(write.error.message);
+    securityWarnings.push(...write.warnings);
     created.push(`${folder}/${filename}`);
     createdTitles.add(title.toLowerCase());
   }
@@ -142,15 +133,17 @@ export async function ingestMemory(
 // Mem0-style UPDATE: append a provenance reconciliation note to an existing
 // entry and bump its Updated date. Idempotent per (source, link, date).
 async function reconcileEntry(
+  cwd: string,
+  relativePath: string,
   absolutePath: string,
   source: string,
   link: string,
   date: string,
-): Promise<boolean> {
+): Promise<{ changed: boolean; securitySkipped?: string }> {
   const content = await readFile(absolutePath, "utf8");
   const note = `- Reconciled: ${source} ${date}${link ? ` (${link})` : ""}`;
   if (content.includes(note)) {
-    return false;
+    return { changed: false };
   }
 
   let next = content.replace(/^[-*]\s*Updated:.*$/m, `- Updated: ${date}\n${note}`);
@@ -160,8 +153,10 @@ async function reconcileEntry(
   if (next === content) {
     next = `${content.trimEnd()}\n\n## Provenance\n\n${note}\n`;
   }
-  await writeFile(absolutePath, next, "utf8");
-  return true;
+  const write = await writeCanonicalEntry({ cwd, relativePath, content: next });
+  if (write.status === "skipped") return { changed: false, securitySkipped: write.reason };
+  if (write.status === "error") throw new Error(write.error.message);
+  return { changed: true };
 }
 
 function extractCandidates(content: string): string[] {

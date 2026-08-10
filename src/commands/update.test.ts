@@ -54,6 +54,51 @@ test("refreshes service files without touching data artifacts", async () => {
   }
 });
 
+test("update refreshes generated memory ignore policy without ignoring canonical entries", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-memory-policy-"));
+  try {
+    await mkdir(path.join(root, ".git"), { recursive: true });
+    Bun.spawnSync(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({ modules: { memory: { enabled: true } }, agentEntrypoints: { root: ["AGENTS.md"] } }),
+      "utf8",
+    );
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--no-tasks"]);
+    });
+    const generatedPaths = [
+      ".metaproject/data/memory/index/index.json",
+      ".metaproject/data/memory/embeddings/index.meta.json",
+      ".metaproject/data/memory/artifacts/legacy.json",
+      ".metaproject/runtime/memory/search/run/report.md",
+      ".metaproject/runtime/memory/tmp/lock",
+    ];
+    for (const candidate of generatedPaths) {
+      const result = Bun.spawnSync(["git", "check-ignore", "--no-index", "--quiet", "--", candidate], {
+        cwd: root,
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+      expect(result.exitCode).toBe(0);
+    }
+    await writeFile(path.join(root, ".metaproject", "memory.config.json"), "{}\n", "utf8");
+    const canonical = Bun.spawnSync([
+      "git",
+      "check-ignore",
+      "--no-index",
+      "--quiet",
+      "--",
+      ".metaproject/memory.config.json",
+    ], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    expect(canonical.exitCode).not.toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("recovers manifest and dashboard for existing metaprojects without metaproject.json", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-update-legacy-"));
   const graphStoragePath = path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");

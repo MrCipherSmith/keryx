@@ -27,7 +27,7 @@ export const MODULE_COMMANDS = {
     "sync",
     "contracts",
   ],
-  memory: ["new", "index", "search", "ingest", "check", "reflect"],
+  memory: ["new", "index", "search", "supersede", "transition", "ingest", "check", "reflect"],
   tasks: [
     "init",
     "list",
