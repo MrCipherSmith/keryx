@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { buildOrientation, graphContext, wikiContext } from "./orient";
+import { buildOrientation, graphContext, metaprojectIndexContext, wikiContext } from "./orient";
 
 async function withProject(
   files: Record<string, string>,
@@ -60,6 +60,35 @@ _No pages yet._
 <!-- keryx:wiki-index:end -->
 `;
 
+const METAPROJECT_INDEX = `# Metaproject Index
+
+## Purpose
+
+Route project work through the installed Metaproject capabilities.
+
+## Enabled Modules
+
+| Module | Purpose |
+|---|---|
+| gdgraph | Code navigation |
+
+## Agent Operating Model
+
+Use the narrowest relevant capability.
+
+## Intent Router
+
+Use the graph before broad code search.
+
+## Data
+
+This generated-data listing should not be injected.
+
+## Refresh
+
+This maintenance section should not be injected.
+`;
+
 test("graphContext emits stats + top modules and stops at the next section", async () => {
   await withProject(
     { ".metaproject/data/gdgraph/artifacts/summary.md": SUMMARY },
@@ -102,19 +131,75 @@ test("wikiContext handles a missing wiki gracefully", async () => {
   });
 });
 
+test("metaprojectIndexContext injects a bounded project-root precedence excerpt", async () => {
+  await withProject({ ".metaproject/index.md": METAPROJECT_INDEX }, async (root) => {
+    const out = await metaprojectIndexContext(root);
+    expect(out).toContain("Metaproject bootstrap — mandatory entrypoint (precedence)");
+    expect(out).toContain("read_file");
+    expect(out).toContain("Purpose");
+    expect(out).toContain("Enabled Modules");
+    expect(out).toContain("Agent Operating Model");
+    expect(out).toContain("Intent Router");
+    expect(out).not.toContain("HARD GATE");
+    expect(out).not.toContain("<project-metaproject-index>");
+    expect(out).not.toContain("This generated-data listing should not be injected.");
+    expect(out).not.toContain("This maintenance section should not be injected.");
+  });
+});
+
+test("metaprojectIndexContext truncates oversized selected sections", async () => {
+  const routes = Array.from({ length: 100 }, (_, index) => `- route-${index} ${"x".repeat(200)}`).join("\n");
+  const index = `# Metaproject Index\n\n## Intent Router\n\n${routes}\n`;
+
+  await withProject({ ".metaproject/index.md": index }, async (root) => {
+    const out = await metaprojectIndexContext(root);
+    expect(out).toContain("route-0");
+    expect(out).not.toContain("route-99");
+    expect(out).toContain("bounded excerpt");
+    expect(Buffer.byteLength(out)).toBeLessThanOrEqual(4_096);
+  });
+});
+
+test("metaprojectIndexContext does not search parent directories", async () => {
+  await withProject({ ".metaproject/index.md": METAPROJECT_INDEX }, async (root) => {
+    const nestedProjectRoot = path.join(root, "nested-project");
+    await mkdir(nestedProjectRoot);
+
+    expect(await metaprojectIndexContext(nestedProjectRoot)).toBe("");
+  });
+});
+
 test("buildOrientation combines both sections under one header", async () => {
+  await withProject(
+    {
+      ".metaproject/data/gdgraph/artifacts/summary.md": SUMMARY,
+      ".metaproject/index.md": METAPROJECT_INDEX,
+      ".metaproject/wiki/index.md": WIKI_INDEX,
+    },
+    async (root) => {
+      const out = await buildOrientation(root);
+      expect(out).toContain("keryx orientation");
+      expect(out).toContain("Metaproject bootstrap — mandatory entrypoint (precedence)");
+      expect(out).toContain("Code graph");
+      expect(out).toContain("Wiki");
+      expect(out).toContain("health");
+      expect(out).toContain("Project Map");
+    },
+  );
+});
+
+test("buildOrientation without a project-root index preserves the graph + wiki format", async () => {
   await withProject(
     {
       ".metaproject/data/gdgraph/artifacts/summary.md": SUMMARY,
       ".metaproject/wiki/index.md": WIKI_INDEX,
     },
     async (root) => {
-      const out = await buildOrientation(root);
-      expect(out).toContain("keryx orientation");
-      expect(out).toContain("Code graph");
-      expect(out).toContain("Wiki");
-      expect(out).toContain("health");
-      expect(out).toContain("Project Map");
+      const graph = await graphContext(root);
+      const wiki = await wikiContext(root);
+      expect(await buildOrientation(root)).toBe(
+        ["# keryx orientation — consult before broad search / deep reads", "", graph, "", wiki].join("\n"),
+      );
     },
   );
 });
