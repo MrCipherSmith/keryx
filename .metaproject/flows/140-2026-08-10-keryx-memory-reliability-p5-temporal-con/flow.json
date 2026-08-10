@@ -3,9 +3,9 @@
   "id": "140",
   "slug": "keryx-memory-reliability-p5-temporal-con",
   "title": "Keryx Memory Reliability P5 — Temporal, Config, Catalog, and Validation Consistency",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T18:41:48.186Z",
-  "updatedAt": "2026-08-10T19:42:53.611Z",
+  "updatedAt": "2026-08-10T19:59:21.274Z",
   "source": {
     "type": "description",
     "ref": null
@@ -202,6 +202,15 @@
       "at": "2026-08-10T19:42:53.611Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:21.199Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:21.274Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

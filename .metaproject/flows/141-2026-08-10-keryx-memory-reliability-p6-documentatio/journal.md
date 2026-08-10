@@ -48,3 +48,5 @@
 - 2026-08-10T19:05:43.623Z - ac-confirmed: AC11: Unreleased changelog and migration guidance cover reports/catalogs/embeddings, legacy latest advisory, lifecycle and validation behavior.
 - 2026-08-10T19:42:14.081Z - renumbered: 111 -> 141: ID collision after rebase onto origin/main
 - 2026-08-10T19:42:53.752Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)
+- 2026-08-10T19:59:21.349Z - completing
+- 2026-08-10T19:59:21.416Z - done: all gates passed

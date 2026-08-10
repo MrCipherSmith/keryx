@@ -3,12 +3,12 @@ Version: 1.2.0
 
 ## Status
 
-`implemented (draft PR #261; CI and release completion pending)` — Keryx
+`implemented and verified (PR #261)` — Keryx
 has a Markdown-first memory module with pure lexical and optional semantic search,
 explicit reports, lifecycle transitions, accepted/current bounded automatic
 recall, guarded writes, and coherent temporal/catalog/config semantics. This
 package records the implementation and evidence; renumbered flows 135–141 are
-linked to draft PR #261 and remain `implemented` until the PR is merged.
+linked to PR #261 and completed after all acceptance, health, and security gates.
 
 ## Purpose
 

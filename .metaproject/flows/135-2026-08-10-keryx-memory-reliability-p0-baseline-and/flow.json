@@ -3,9 +3,9 @@
   "id": "135",
   "slug": "keryx-memory-reliability-p0-baseline-and",
   "title": "Keryx Memory Reliability P0 — baseline and contract tests",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T12:25:11.986Z",
-  "updatedAt": "2026-08-10T19:42:52.500Z",
+  "updatedAt": "2026-08-10T19:59:20.255Z",
   "source": {
     "type": "description",
     "ref": null
@@ -207,6 +207,15 @@
       "at": "2026-08-10T19:42:52.500Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:20.019Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:20.255Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

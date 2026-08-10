@@ -11,8 +11,8 @@ by TypeScript and the full Bun suite. Record exact command evidence and classify
 any warning or exception rather than weakening tests. Retire only the two
 tracked legacy latest artifacts after copying exact bytes to the requested
 timestamped `/private/tmp` backup and verifying hashes. Keep flow state changes
-CLI-owned and finish with a verified handoff, leaving flow 141 implemented
-against draft PR #261 until merge.
+CLI-owned and finish with a verified handoff, completing flow 141 against PR
+#261 once its gates pass.
 
 ## Steps
 

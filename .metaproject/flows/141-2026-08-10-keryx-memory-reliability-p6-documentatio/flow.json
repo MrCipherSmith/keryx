@@ -3,9 +3,9 @@
   "id": "141",
   "slug": "keryx-memory-reliability-p6-documentatio",
   "title": "Keryx Memory Reliability P6 — Documentation, Full Verification, and Rollout",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T18:52:42.820Z",
-  "updatedAt": "2026-08-10T19:42:53.752Z",
+  "updatedAt": "2026-08-10T19:59:21.416Z",
   "source": {
     "type": "description",
     "ref": null
@@ -220,6 +220,15 @@
       "at": "2026-08-10T19:42:53.752Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:21.349Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:21.416Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

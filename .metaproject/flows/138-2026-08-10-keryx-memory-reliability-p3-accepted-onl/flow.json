@@ -3,9 +3,9 @@
   "id": "138",
   "slug": "keryx-memory-reliability-p3-accepted-onl",
   "title": "Keryx Memory Reliability P3 — Accepted-Only Bounded Automatic Recall",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T12:52:54.263Z",
-  "updatedAt": "2026-08-10T19:42:53.302Z",
+  "updatedAt": "2026-08-10T19:59:20.974Z",
   "source": {
     "type": "description",
     "ref": null
@@ -202,6 +202,15 @@
       "at": "2026-08-10T19:42:53.302Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:20.909Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:20.974Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

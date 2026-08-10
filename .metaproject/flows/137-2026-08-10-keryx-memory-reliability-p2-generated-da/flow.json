@@ -3,9 +3,9 @@
   "id": "137",
   "slug": "keryx-memory-reliability-p2-generated-da",
   "title": "Keryx memory reliability P2: generated data and migration policy",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T12:50:23.388Z",
-  "updatedAt": "2026-08-10T19:42:53.152Z",
+  "updatedAt": "2026-08-10T19:59:20.806Z",
   "source": {
     "type": "description",
     "ref": null
@@ -193,6 +193,15 @@
       "at": "2026-08-10T19:42:53.152Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:20.711Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:20.806Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

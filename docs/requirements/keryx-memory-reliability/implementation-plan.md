@@ -25,7 +25,7 @@ document's version whenever progress or scope changes.
 | P3 | Accepted-only bounded automatic recall | complete | flow 138 verified handoff: authority/bounds matrix, focused tests, changed tests, and typecheck |
 | P4 | Lifecycle and unified write seam | complete | flow 139 verified handoff: lifecycle table/CLI, guarded canonical seam, pair rollback, focused 26/0, changed 91/0, typecheck |
 | P5 | Temporal/config/catalog consistency | complete | flow 140 verified handoff: temporal/config/catalog compatibility, changed tests, and typecheck pass |
-| P6 | Documentation, full verification, rollout | complete (implemented; PR #261 pending CI/merge) | flow 141 evidence: docs, wiki, migration, targeted/full checks, graph, and docpack review |
+| P6 | Documentation, full verification, rollout | complete (PR #261) | flow 141 evidence: docs, wiki, migration, targeted/full checks, graph, and docpack review |
 
 ## Delivery Rules
 

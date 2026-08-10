@@ -3,9 +3,9 @@
   "id": "136",
   "slug": "keryx-memory-reliability-p1-pure-recall-",
   "title": "Keryx Memory Reliability P1 — Pure Recall and Explicit Reports",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T12:35:53.945Z",
-  "updatedAt": "2026-08-10T19:42:52.665Z",
+  "updatedAt": "2026-08-10T19:59:20.495Z",
   "source": {
     "type": "description",
     "ref": null
@@ -343,6 +343,15 @@
       "at": "2026-08-10T19:42:52.665Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:20.394Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:20.495Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

@@ -3,9 +3,9 @@
   "id": "139",
   "slug": "keryx-memory-reliability-p4-lifecycle-an",
   "title": "Keryx Memory Reliability P4 — Lifecycle and Unified Guarded Write Seam",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T18:32:19.662Z",
-  "updatedAt": "2026-08-10T19:42:53.455Z",
+  "updatedAt": "2026-08-10T19:59:21.119Z",
   "source": {
     "type": "description",
     "ref": null
@@ -229,6 +229,15 @@
       "at": "2026-08-10T19:42:53.455Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-10T19:59:21.056Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T19:59:21.119Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
