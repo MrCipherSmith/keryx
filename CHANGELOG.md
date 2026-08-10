@@ -5,6 +5,8 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.18] — 2026-08-11
+
 ### Added
 
 - **Bounded version update advisories.** `keryx shell` performs one background,
@@ -841,4 +843,5 @@ runtime dependencies, no sockets).
 [0.2.15]: https://github.com/MrCipherSmith/keryx/compare/v0.2.14...v0.2.15
 [0.2.16]: https://github.com/MrCipherSmith/keryx/compare/v0.2.15...v0.2.16
 [0.2.17]: https://github.com/MrCipherSmith/keryx/compare/v0.2.16...v0.2.17
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.17...HEAD
+[0.2.18]: https://github.com/MrCipherSmith/keryx/compare/v0.2.17...v0.2.18
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.18...HEAD

@@ -55,15 +55,19 @@ describe("keryx version check command", () => {
   });
 
   test("prints human output from the shared service without installing", async () => {
-    const fetch = stubRegistry("0.2.18");
+    const fetch = stubRegistry("2.0.0");
     const captured = captureConsole();
     try {
-      await versionCommand(["check"], { fetch, cacheDir: await isolatedCacheDir() });
+      await versionCommand(["check"], {
+        currentVersion: "1.0.0",
+        fetch,
+        cacheDir: await isolatedCacheDir(),
+      });
     } finally {
       captured.restore();
     }
 
-    expect(captured.lines.join("\n")).toContain("0.2.18");
+    expect(captured.lines.join("\n")).toContain("1.0.0 → 2.0.0");
     expect(captured.lines.join("\n")).toContain("npm install -g @mrciphersmith/keryx@latest");
     expect(captured.lines.join("\n")).not.toMatch(/installing|installed/i);
   });
