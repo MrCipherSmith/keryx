@@ -40,6 +40,7 @@ import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { saveShellConfig } from "../lib/shell-config";
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, createAssistantMessageStream } from "./transcript-blocks";
+import type { VersionCheckResult } from "../lib/version-check";
 import {
   estimateContextTokens,
   fmtTokens,
@@ -289,6 +290,8 @@ export interface ChatShellOptions {
   persistSelection?: boolean;
   /** `/exit`: the caller tears the renderer down. */
   onExit?: () => void;
+  /** One shell-scoped, already-started advisory check. */
+  versionCheck?: Promise<VersionCheckResult>;
 }
 
 /**
@@ -317,6 +320,7 @@ export async function mountChatShell(
     // The shared registry stays the single source of truth for the dropdown,
     // resolved through THIS surface's mode so the wording is chat-mode's (S4).
     filterCommands: (query) => filterCommands(query, "chat"),
+    ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
   });
 
   let uid = 0;
@@ -478,6 +482,7 @@ export async function launchTuiChatShell(opts: {
   /** Build `runShell`'s deps once the provider/model is resolved. */
   makeShellDeps: (sel: TuiSelection) => ShellDeps;
   runShell: (io: ShellIO, deps: ShellDeps) => Promise<void>;
+  versionCheck?: Promise<VersionCheckResult>;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -539,6 +544,7 @@ export async function launchTuiChatShell(opts: {
       onExit: () => {
         r.destroy();
       },
+      ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
     });
     // Either the user exits (renderer teardown) or the driver returns on its own.
     await Promise.race([exited, handle.done]);

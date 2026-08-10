@@ -139,6 +139,7 @@ describe("command registry coverage", () => {
       "projects list",
       "projects register",
       "status",
+      "version check",
     ]);
   });
 });

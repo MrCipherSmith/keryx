@@ -166,6 +166,32 @@ keryx shell --chat                            # chat without tools
 keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
 
+### Version update advisory
+
+`keryx shell` starts one bounded, non-blocking version check in the background.
+It shows a notice only when the registry returns a strictly newer validated
+version; it never installs anything and never blocks the shell or project work.
+The same check is available to humans and agents with:
+
+```bash
+keryx version check [--json]
+```
+
+Successful metadata is cached for 24 hours, failed checks are suppressed for 15
+minutes, and each registry request times out after 2 seconds. When an update is
+available, the exact command is:
+
+```bash
+npm install -g @mrciphersmith/keryx@latest
+```
+
+Offline, timed-out, unknown, or otherwise unavailable results remain advisory
+and do not stop work. The generated `.metaproject/index.md` instruction is
+prompt guidance rather than enforcement, and existing installations from
+before the first feature-bearing release cannot discover that release through
+code they do not yet contain; existing projects gain the guidance only after
+their index is regenerated or updated.
+
 Here it is answering a blast-radius question through the project graph rather
 than by reading files and guessing — one tool call, twelve seconds:
 

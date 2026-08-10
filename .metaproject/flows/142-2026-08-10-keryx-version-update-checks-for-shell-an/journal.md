@@ -1,0 +1,34 @@
+# Flow Journal
+
+- 2026-08-10T20:36:40.638Z - flow created
+- 2026-08-10T20:38:00Z - execution metrics enabled by user; worker model policy: Luna for mechanical context/test work, Sol for complex architecture/implementation/review.
+- 2026-08-10T20:44:00Z - context worker DONE_WITH_CONCERNS; retained distinction between workspace `keryx update` and npm package upgrade.
+- 2026-08-10T20:47:00Z - architecture worker DONE_WITH_CONCERNS; retained unavoidable pre-feature bootstrap gap and prompt-level (not enforced) index behavior.
+- 2026-08-10T20:47:00Z - implementation spec and AC1-AC8 formalized before code changes.
+- 2026-08-10T20:45:12.102Z - task-added: T5: Update documentation and generated Metaproject guidance
+- 2026-08-10T20:45:12.230Z - task-added: T6: Run release-equivalent verification and Code Health
+- 2026-08-10T20:45:12.355Z - task-added: T7: Perform independent architecture, logic, and security review
+- 2026-08-10T20:45:12.770Z - task-done: T1: Collect remaining context
+- 2026-08-10T20:45:15.482Z - frozen: 8 criteria; checksum recorded
+- 2026-08-10T20:45:15.756Z - started
+- 2026-08-10T20:48:00Z - Luna TDD worker captured RED for the missing service, CLI route, and generated-index guidance.
+- 2026-08-10T21:01:00Z - Sol implementation worker reached GREEN across version service, shell startup, agent/chat TUI, readline, command registry, and template surfaces.
+- 2026-08-10T21:05:00Z - Luna documentation worker updated README, CLI/workflow docs, changelog, managed index guidance, and the documentation report.
+- 2026-08-10T21:12:00Z - independent Sol architecture/logic/security review reproduced seven findings: cache-write result loss, concurrent cache overwrite, clipped late TUI notice, uncancelled declared oversize body, permissive CLI args, oversized cached SemVer, and wall-clock timeout test.
+- 2026-08-10T21:19:00Z - Sol fix round resolved all seven findings with regression coverage; focused and shell/TUI suites plus typecheck passed.
+- 2026-08-10T21:22:00Z - release-equivalent verification completed: changed 347/347, doc links 632/632, security corpus passed, Standard passed with one existing warning, build/pack passed, and Code Health PASS at 93.
+- 2026-08-10T21:22:40Z - change report finalized; implementation is ready for the user's A/B/C completion choice.
+- 2026-08-10T21:23:29.591Z - task-done: T2: Implement per plan
+- 2026-08-10T21:23:29.777Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-10T21:23:29.881Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-10T21:23:29.992Z - task-done: T5: Update documentation and generated Metaproject guidance
+- 2026-08-10T21:23:30.086Z - task-done: T6: Run release-equivalent verification and Code Health
+- 2026-08-10T21:23:30.197Z - task-done: T7: Perform independent architecture, logic, and security review
+- 2026-08-10T21:23:30.284Z - ac-confirmed: AC1
+- 2026-08-10T21:23:30.377Z - ac-confirmed: AC2
+- 2026-08-10T21:23:30.469Z - ac-confirmed: AC3
+- 2026-08-10T21:23:30.559Z - ac-confirmed: AC4
+- 2026-08-10T21:23:30.686Z - ac-confirmed: AC5
+- 2026-08-10T21:23:30.812Z - ac-confirmed: AC6
+- 2026-08-10T21:23:30.908Z - ac-confirmed: AC7
+- 2026-08-10T21:23:31.004Z - ac-confirmed: AC8

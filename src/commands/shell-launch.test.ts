@@ -12,8 +12,16 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chooseShellSurface, parseShellCliFlags, resolveTuiStartup } from "./shell";
+import {
+  chooseShellSurface,
+  createVersionAdvisoryBoundary,
+  parseShellCliFlags,
+  resolveTuiStartup,
+  shellCommand,
+  type ShellCommandRuntime,
+} from "./shell";
 import type { DetectedProvider } from "./select";
+import { FIXED_INSTALL_COMMAND, type VersionCheckResult } from "../lib/version-check";
 
 /** A env var name no other test or real environment uses. */
 const ENV_KEY = "KERYX_FLOW112_FAKE_API_KEY";
@@ -145,4 +153,88 @@ test("AC12: `--base-url` is carried into the reused selection", async () => {
       baseUrl: "http://127.0.0.1:11434/v1",
     });
   });
+});
+
+const UPDATE_RESULT: VersionCheckResult = {
+  status: "update-available",
+  currentVersion: "0.2.17",
+  latestVersion: "0.2.18",
+  installCommand: FIXED_INSTALL_COMMAND,
+  source: "registry",
+};
+
+test("AC4: shell starts one check and forwards it without awaiting agent or chat TUI startup", async () => {
+  for (const mode of ["--agent", "--chat"] as const) {
+    await withConfigDir({}, async (dir) => {
+      const events: string[] = [];
+      let resolveCheck: (result: VersionCheckResult) => void = () => {};
+      const check = new Promise<VersionCheckResult>((resolve) => {
+        resolveCheck = resolve;
+      });
+      const runtime = {
+        cacheDir: dir,
+        isTty: true,
+        checkVersion: () => {
+          events.push("check");
+          return check;
+        },
+        launchAgent: async (opts: Parameters<NonNullable<ShellCommandRuntime["launchAgent"]>>[0]) => {
+          expect(opts.versionCheck).toBe(check);
+          events.push("agent-ui");
+          return true;
+        },
+        launchChat: async (opts: Parameters<NonNullable<ShellCommandRuntime["launchChat"]>>[0]) => {
+          expect(opts.versionCheck).toBe(check);
+          events.push("chat-ui");
+          return true;
+        },
+      };
+
+      await shellCommand([mode, "--provider", "fake", "--model", "fake-echo"], runtime);
+      expect(events).toEqual(["check", mode === "--agent" ? "agent-ui" : "chat-ui"]);
+      resolveCheck(UPDATE_RESULT);
+    });
+  }
+});
+
+test("AC5: readline advisory is queued until a safe boundary, shown once, and ignored after teardown", async () => {
+  let resolveCheck: (result: VersionCheckResult) => void = () => {};
+  const check = new Promise<VersionCheckResult>((resolve) => {
+    resolveCheck = resolve;
+  });
+  const boundary = createVersionAdvisoryBoundary(check);
+  const writes: string[] = [];
+
+  boundary.flush((text) => writes.push(text));
+  expect(writes).toEqual([]);
+  resolveCheck(UPDATE_RESULT);
+  await Promise.resolve();
+  expect(writes).toEqual([]); // settlement itself never writes asynchronously
+
+  boundary.flush((text) => writes.push(text));
+  boundary.flush((text) => writes.push(text));
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toContain("0.2.17 → 0.2.18");
+  expect(writes[0]).toContain(FIXED_INSTALL_COMMAND);
+
+  const late = Promise.resolve(UPDATE_RESULT);
+  const destroyed = createVersionAdvisoryBoundary(late);
+  destroyed.destroy();
+  await Promise.resolve();
+  destroyed.flush((text) => writes.push(text));
+  expect(writes).toHaveLength(1);
+});
+
+test("AC5: readline emits no ordinary startup notice for up-to-date or unavailable", async () => {
+  const outcomes: VersionCheckResult[] = [
+    { status: "up-to-date", currentVersion: "0.2.17", latestVersion: "0.2.17", source: "cache" },
+    { status: "unavailable", currentVersion: "0.2.17", reason: "network" },
+  ];
+  for (const result of outcomes) {
+    const boundary = createVersionAdvisoryBoundary(Promise.resolve(result));
+    const writes: string[] = [];
+    await Promise.resolve();
+    boundary.flush((text) => writes.push(text));
+    expect(writes).toEqual([]);
+  }
 });
