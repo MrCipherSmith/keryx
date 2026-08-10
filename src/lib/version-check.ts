@@ -262,12 +262,15 @@ function mergeSuccessfulCache(
 
   const committedVersion = parseSemVer(committed.latestVersion);
   const candidateVersion = parseSemVer(latestVersion);
-  if (
-    committedVersion !== undefined &&
-    candidateVersion !== undefined &&
-    compareSemVer(committedVersion, candidateVersion) >= 0
-  ) {
-    return committed;
+  if (committedVersion !== undefined && candidateVersion !== undefined) {
+    const precedence = compareSemVer(committedVersion, candidateVersion);
+    if (precedence > 0) return committed;
+    if (precedence < 0) return { latestVersion, successAt };
+
+    // SemVer precedence deliberately ignores build metadata. Strict validation
+    // above leaves an ASCII version string, so binary comparison provides a
+    // locale-independent total order for otherwise equal successes.
+    if (committed.latestVersion >= latestVersion) return committed;
   }
   return { latestVersion, successAt };
 }

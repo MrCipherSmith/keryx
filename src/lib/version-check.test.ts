@@ -476,6 +476,39 @@ describe("version-check service contract", () => {
     expect(refreshCalls).toBe(0);
   });
 
+  test.each([
+    { name: "first request completes first", completionOrder: [0, 1] as const },
+    { name: "second request completes first", completionOrder: [1, 0] as const },
+  ])("SemVer-equal build metadata resolves deterministically when $name", async ({
+    completionOrder,
+  }) => {
+    const cacheDir = await newCacheDir();
+    const versions = ["2.0.0+aaa", "2.0.0+bbb"] as const;
+    const resolvers: Array<(response: Response) => void> = [];
+    const concurrentFetch: VersionFetch = async () => new Promise<Response>((resolve) => {
+      resolvers.push(resolve);
+    });
+
+    const checks = versions.map((version) =>
+      check("1.0.0", concurrentFetch, cacheDir, () => 35_000).then((result) => {
+        expect(result).toMatchObject({ latestVersion: version, source: "registry" });
+      })
+    );
+
+    for (const index of completionOrder) {
+      resolvers[index]!(registryResponse(versions[index]!));
+      await checks[index];
+    }
+
+    let refreshCalls = 0;
+    const cached = await check("1.0.0", async () => {
+      refreshCalls += 1;
+      return registryResponse("9.0.0");
+    }, cacheDir, () => 35_001);
+    expect(cached).toMatchObject({ latestVersion: "2.0.0+bbb", source: "cache" });
+    expect(refreshCalls).toBe(0);
+  });
+
   test("rejects an oversized cached version before SemVer bigint parsing", async () => {
     const cacheDir = await newCacheDir();
     const oversizedVersion = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS + 1);
