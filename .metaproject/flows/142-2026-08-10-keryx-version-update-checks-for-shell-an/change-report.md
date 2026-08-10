@@ -36,6 +36,12 @@ sidebar; declared oversized bodies are cancelled; CLI arguments are strict;
 cached SemVer length is bounded; and timeout tests use an injected scheduler
 instead of real wall-clock delay.
 
+The Ready-for-review Sol pass then reproduced one additional success/success
+race: an older request completing last could replace a newer successful cache
+entry. The locked success merge now prioritizes the observation timestamp and,
+for equal timestamps, the higher strict SemVer. Three deterministic regressions
+cover both completion orders and timestamp ties.
+
 ## Verification evidence
 
 - Flow-focused service/CLI/TUI/readline tests: 75 passed, 0 failed.

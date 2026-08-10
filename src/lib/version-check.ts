@@ -241,6 +241,29 @@ function saveCache(file: string, cache: VersionCache): boolean {
   }
 }
 
+function mergeSuccessfulCache(
+  committed: VersionCache,
+  latestVersion: string,
+  successAt: number,
+): VersionCache {
+  if (committed.latestVersion === undefined || committed.successAt === undefined) {
+    return { latestVersion, successAt };
+  }
+  if (committed.successAt > successAt) return committed;
+  if (committed.successAt < successAt) return { latestVersion, successAt };
+
+  const committedVersion = parseSemVer(committed.latestVersion);
+  const candidateVersion = parseSemVer(latestVersion);
+  if (
+    committedVersion !== undefined &&
+    candidateVersion !== undefined &&
+    compareSemVer(committedVersion, candidateVersion) >= 0
+  ) {
+    return committed;
+  }
+  return { latestVersion, successAt };
+}
+
 /**
  * Serialize only the read/merge/write cache critical section. Network I/O is
  * deliberately outside the lock, and lock contention is bounded so a cache can
@@ -350,6 +373,6 @@ export async function checkVersion(options: VersionCheckOptions): Promise<Versio
     await updateCache(cacheFile, (committed) => ({ ...committed, failureAt: timestamp }));
     return unavailable(options.currentVersion, failure ?? "network", cache);
   }
-  await updateCache(cacheFile, () => ({ latestVersion, successAt: timestamp }));
+  await updateCache(cacheFile, (committed) => mergeSuccessfulCache(committed, latestVersion, timestamp));
   return resultFor(options.currentVersion, current, latestVersion, "registry");
 }

@@ -33,3 +33,5 @@
 - 2026-08-10T21:23:30.908Z - ac-confirmed: AC7
 - 2026-08-10T21:23:31.004Z - ac-confirmed: AC8
 - 2026-08-10T21:32:27.812Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/262
+- 2026-08-10T21:44:00Z - Ready-for-review Sol pass reproduced an out-of-order success/success cache regression; merge was paused.
+- 2026-08-10T21:46:00Z - fixed successful-cache reconciliation by timestamp and SemVer tie-break; three race regressions, focused 78/78, and typecheck passed.

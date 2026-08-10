@@ -448,11 +448,12 @@ export function ensureKeryxConfigDir(dir?: string): string {
     // `ensureKeryxConfigDir(` outside tests before editing this:
     //
     //   report it     `saveServeConfig`, `saveProjectRegistry`, `writeStore`
-    //                 return false; their callers print the failure. The
-    //                 version check returns typed `unavailable`.
+    //                 return false; their callers print the failure.
     //   swallow it    `saveShellConfig`, `saveShellPermissions` and
     //                 `saveSandboxDefaults` are best-effort by contract and say
     //                 nothing; `saveApiKey` inherits that from `saveShellConfig`.
+    //                 Version-cache persistence is also best-effort: a valid
+    //                 live registry result remains authoritative.
     //   throw         `ensureDir` in `src/session/store.ts` lets the following
     //                 `mkdirSync` throw EACCES up through `createSession`. That
     //                 predates this helper — a shell that cannot write its

@@ -339,6 +339,66 @@ describe("version-check service contract", () => {
     expect(refreshCalls).toBe(0);
   });
 
+  test.each([
+    {
+      name: "an older observation loses even when its version is higher",
+      firstAt: 32_000,
+      firstVersion: "4.0.0",
+      secondAt: 32_001,
+      secondVersion: "3.0.0",
+      cachedVersion: "3.0.0",
+    },
+    {
+      name: "equal timestamps retain the higher version by SemVer precedence",
+      firstAt: 33_000,
+      firstVersion: "2.0.0-beta.2",
+      secondAt: 33_000,
+      secondVersion: "2.0.0-beta.11",
+      cachedVersion: "2.0.0-beta.11",
+    },
+    {
+      name: "equal timestamps allow the later-completing higher version to replace the lower one",
+      firstAt: 34_000,
+      firstVersion: "2.0.0-beta.11",
+      secondAt: 34_000,
+      secondVersion: "2.0.0-beta.2",
+      cachedVersion: "2.0.0-beta.11",
+    },
+  ])("out-of-order successful refreshes: $name", async ({
+    firstAt,
+    firstVersion,
+    secondAt,
+    secondVersion,
+    cachedVersion,
+  }) => {
+    const cacheDir = await newCacheDir();
+    let resolveFirst: (response: Response) => void = () => {};
+    let resolveSecond: (response: Response) => void = () => {};
+    let call = 0;
+    const concurrentFetch: VersionFetch = async () => {
+      call += 1;
+      return new Promise<Response>((resolve) => {
+        if (call === 1) resolveFirst = resolve;
+        else resolveSecond = resolve;
+      });
+    };
+
+    const first = check("1.0.0", concurrentFetch, cacheDir, () => firstAt);
+    const second = check("1.0.0", concurrentFetch, cacheDir, () => secondAt);
+    resolveSecond(registryResponse(secondVersion));
+    expect(await second).toMatchObject({ latestVersion: secondVersion, source: "registry" });
+    resolveFirst(registryResponse(firstVersion));
+    expect(await first).toMatchObject({ latestVersion: firstVersion, source: "registry" });
+
+    let refreshCalls = 0;
+    const cached = await check("1.0.0", async () => {
+      refreshCalls += 1;
+      return registryResponse("9.0.0");
+    }, cacheDir, () => Math.max(firstAt, secondAt) + 1);
+    expect(cached).toMatchObject({ latestVersion: cachedVersion, source: "cache" });
+    expect(refreshCalls).toBe(0);
+  });
+
   test("rejects an oversized cached version before SemVer bigint parsing", async () => {
     const cacheDir = await newCacheDir();
     const oversizedVersion = `${"9".repeat(RESPONSE_BODY_LIMIT_BYTES + 1)}.0.0`;
