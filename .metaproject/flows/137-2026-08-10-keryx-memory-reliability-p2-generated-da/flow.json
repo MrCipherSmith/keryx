@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "107",
+  "id": "137",
   "slug": "keryx-memory-reliability-p2-generated-da",
   "title": "Keryx memory reliability P2: generated data and migration policy",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T12:50:23.388Z",
-  "updatedAt": "2026-08-10T19:07:40.340Z",
+  "updatedAt": "2026-08-10T19:42:53.152Z",
   "source": {
     "type": "description",
     "ref": null
@@ -46,7 +46,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -183,6 +183,16 @@
       "at": "2026-08-10T19:07:40.340Z",
       "event": "ac-confirmed",
       "detail": "AC8: Final stable integration evidence: P2 focused 24/0, combined P2/P3 targeted 27/0, P5 changed 104/0, P6 targeted 319/0, bunx tsc --noEmit passed, and P3-only runtime authority changes remained outside P2 ownership."
+    },
+    {
+      "at": "2026-08-10T19:42:13.475Z",
+      "event": "renumbered",
+      "detail": "107 -> 137: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.152Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

@@ -38,5 +38,61 @@
     "toDir": "121-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a",
     "at": "2026-07-23T19:03:24.158Z",
     "reason": "duplicate of flow 115 (shell-approval-hardening, created earlier); ids collided because allocation was per working copy — flow 120"
+  },
+  {
+    "from": "105",
+    "to": "135",
+    "fromDir": "105-2026-08-10-keryx-memory-reliability-p0-baseline-and",
+    "toDir": "135-2026-08-10-keryx-memory-reliability-p0-baseline-and",
+    "at": "2026-08-10T19:42:13.055Z",
+    "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "106",
+    "to": "136",
+    "fromDir": "106-2026-08-10-keryx-memory-reliability-p1-pure-recall-",
+    "toDir": "136-2026-08-10-keryx-memory-reliability-p1-pure-recall-",
+    "at": "2026-08-10T19:42:13.229Z",
+    "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "107",
+    "to": "137",
+    "fromDir": "107-2026-08-10-keryx-memory-reliability-p2-generated-da",
+    "toDir": "137-2026-08-10-keryx-memory-reliability-p2-generated-da",
+    "at": "2026-08-10T19:42:13.475Z",
+    "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "108",
+    "to": "138",
+    "fromDir": "108-2026-08-10-keryx-memory-reliability-p3-accepted-onl",
+    "toDir": "138-2026-08-10-keryx-memory-reliability-p3-accepted-onl",
+    "at": "2026-08-10T19:42:13.617Z",
+    "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "109",
+    "to": "139",
+    "fromDir": "109-2026-08-10-keryx-memory-reliability-p4-lifecycle-an",
+    "toDir": "139-2026-08-10-keryx-memory-reliability-p4-lifecycle-an",
+    "at": "2026-08-10T19:42:13.780Z",
+    "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "110",
+    "to": "140",
+    "fromDir": "110-2026-08-10-keryx-memory-reliability-p5-temporal-con",
+    "toDir": "140-2026-08-10-keryx-memory-reliability-p5-temporal-con",
+    "at": "2026-08-10T19:42:13.957Z",
+    "reason": "ID collision after rebase onto origin/main"
+  },
+  {
+    "from": "111",
+    "to": "141",
+    "fromDir": "111-2026-08-10-keryx-memory-reliability-p6-documentatio",
+    "toDir": "141-2026-08-10-keryx-memory-reliability-p6-documentatio",
+    "at": "2026-08-10T19:42:14.080Z",
+    "reason": "ID collision after rebase onto origin/main"
   }
 ]

@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.13.0
+Version: 0.13.1
 
 ## Status
 
@@ -7,6 +7,10 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.13.1** — Memory Reliability P0–P6 is implemented in draft PR #261.
+>   Rebase-time flow ID collisions were resolved through Task Manager by
+>   renumbering the package flows from 105–111 to 135–141; CI/merge remains the
+>   release-completion gate.
 > - **0.13.0** — Added `keryx-shell-benchmark` (specification ready; no run
 >   executed, no result claimed). It supplies the single input
 >   `keryx-execution-observability` declared out of scope for itself —
@@ -109,7 +113,7 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 
 | Package | Status | Summary |
 |---|---|---|
-| [Keryx Memory Reliability](keryx-memory-reliability/README.md) | verified handoff (release completion pending) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Flow 111 remains in progress pending user-selected completion. |
+| [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented (draft PR #261; CI/merge pending) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are linked to PR #261. |
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |

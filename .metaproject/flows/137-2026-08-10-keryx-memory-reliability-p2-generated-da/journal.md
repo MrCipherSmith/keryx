@@ -45,3 +45,5 @@ performed. T4 review remains for the parent handoff decision.
 - 2026-08-10T13:01:33.949Z - ac-confirmed: AC2: src/commands/init.test.ts and update.test.ts use temporary Git repositories and git check-ignore for concrete generated/canonical paths.
 - 2026-08-10T13:01:47.153Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-10T19:07:40.340Z - ac-confirmed: AC8: Final stable integration evidence: P2 focused 24/0, combined P2/P3 targeted 27/0, P5 changed 104/0, P6 targeted 319/0, bunx tsc --noEmit passed, and P3-only runtime authority changes remained outside P2 ownership.
+- 2026-08-10T19:42:13.475Z - renumbered: 107 -> 137: ID collision after rebase onto origin/main
+- 2026-08-10T19:42:53.152Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)

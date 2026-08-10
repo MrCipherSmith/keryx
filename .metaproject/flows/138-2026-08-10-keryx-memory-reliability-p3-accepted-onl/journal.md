@@ -31,3 +31,5 @@
 - 2026-08-10T18:31:00.917Z - ac-confirmed: AC7: P2 canonical consultation integration retained; P3 verifier test proves current accepted authority and ignores legacy latest artifacts
 - 2026-08-10T18:31:04.443Z - ac-confirmed: AC8: P3 authority matrix covers accepted draft conflict deprecated expired superseded future and Valid-To boundary; large payload test covers bounds
 - 2026-08-10T18:31:09.060Z - ac-confirmed: AC9: focused 36/0 and review regression 19/0; changed selection 80/0; parent combined verification TypeScript pass plus 27/0 appropriate broader scope
+- 2026-08-10T19:42:13.617Z - renumbered: 108 -> 138: ID collision after rebase onto origin/main
+- 2026-08-10T19:42:53.302Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)

@@ -1,14 +1,14 @@
 # Keryx Memory Reliability Requirements Package
-Version: 1.1.0
+Version: 1.2.0
 
 ## Status
 
-`verified handoff (P0–P6 evidence complete; release completion pending)` — Keryx
+`implemented (draft PR #261; CI and release completion pending)` — Keryx
 has a Markdown-first memory module with pure lexical and optional semantic search,
 explicit reports, lifecycle transitions, accepted/current bounded automatic
 recall, guarded writes, and coherent temporal/catalog/config semantics. This
-package records the implementation and evidence; flow 111 remains in progress
-intentionally because no PR or completion transition was requested.
+package records the implementation and evidence; renumbered flows 135–141 are
+linked to draft PR #261 and remain `implemented` until the PR is merged.
 
 ## Purpose
 

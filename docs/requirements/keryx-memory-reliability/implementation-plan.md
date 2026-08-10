@@ -1,5 +1,5 @@
 # Keryx Memory Reliability Implementation Plan
-Version: 1.1.0
+Version: 1.2.0
 
 ## Purpose
 
@@ -19,13 +19,13 @@ document's version whenever progress or scope changes.
 | Phase | Scope | Status | Exit evidence |
 |---|---|---|---|
 | D0 | Requirements package | complete | docpack files, roadmap, review |
-| P0 | Baseline and contract tests | complete | targeted baseline, purity characterization, authority/temporal fixtures, and focused verification recorded in flow 105 |
-| P1 | Pure recall and explicit reports | complete | service/CLI/harness/MCP purity passes; flow 106 verified handoff |
-| P2 | Generated-data and migration policy | complete | Git-ignore/init-update tests pass; legacy tracked latest files backed up, removed, and advisory documented |
-| P3 | Accepted-only bounded automatic recall | complete | flow 108 verified handoff: authority/bounds matrix, focused tests, changed tests, and typecheck |
-| P4 | Lifecycle and unified write seam | complete | flow 109 verified handoff: lifecycle table/CLI, guarded canonical seam, pair rollback, focused 26/0, changed 91/0, typecheck |
-| P5 | Temporal/config/catalog consistency | complete | flow 110 verified handoff: temporal/config/catalog compatibility, changed tests, and typecheck pass |
-| P6 | Documentation, full verification, rollout | complete (verified handoff; flow 111 in progress) | flow 111 evidence: docs, wiki, migration, targeted/full checks, graph, and docpack review |
+| P0 | Baseline and contract tests | complete | targeted baseline, purity characterization, authority/temporal fixtures, and focused verification recorded in flow 135 |
+| P1 | Pure recall and explicit reports | complete | service/CLI/harness/MCP purity passes; flow 136 verified handoff |
+| P2 | Generated-data and migration policy | complete | flow 137: Git-ignore/init-update tests pass; legacy tracked latest files backed up, removed, and advisory documented |
+| P3 | Accepted-only bounded automatic recall | complete | flow 138 verified handoff: authority/bounds matrix, focused tests, changed tests, and typecheck |
+| P4 | Lifecycle and unified write seam | complete | flow 139 verified handoff: lifecycle table/CLI, guarded canonical seam, pair rollback, focused 26/0, changed 91/0, typecheck |
+| P5 | Temporal/config/catalog consistency | complete | flow 140 verified handoff: temporal/config/catalog compatibility, changed tests, and typecheck pass |
+| P6 | Documentation, full verification, rollout | complete (implemented; PR #261 pending CI/merge) | flow 141 evidence: docs, wiki, migration, targeted/full checks, graph, and docpack review |
 
 ## Delivery Rules
 

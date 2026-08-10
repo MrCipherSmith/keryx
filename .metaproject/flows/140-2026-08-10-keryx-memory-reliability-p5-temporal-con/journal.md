@@ -30,3 +30,5 @@
 - 2026-08-10T18:50:50.699Z - ac-confirmed: AC7: memory check no longer treats absent catalog as integrity issue; P5 test passes without catalog.
 - 2026-08-10T18:50:51.251Z - ac-confirmed: AC8: P5 deletion test plus existing embedding delete/rebuild/no-network tests prove deterministic lexical/embedding compatibility.
 - 2026-08-10T18:50:51.530Z - ac-confirmed: AC9: Focused 54/0, changed 104/0, and bunx tsc --noEmit pass; P5 checklist is the only requirements-plan phase updated.
+- 2026-08-10T19:42:13.957Z - renumbered: 110 -> 140: ID collision after rebase onto origin/main
+- 2026-08-10T19:42:53.611Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)

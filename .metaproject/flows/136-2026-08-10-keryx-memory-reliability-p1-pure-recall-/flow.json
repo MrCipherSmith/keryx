@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "106",
+  "id": "136",
   "slug": "keryx-memory-reliability-p1-pure-recall-",
   "title": "Keryx Memory Reliability P1 — Pure Recall and Explicit Reports",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T12:35:53.945Z",
-  "updatedAt": "2026-08-10T12:48:28.345Z",
+  "updatedAt": "2026-08-10T19:42:52.665Z",
   "source": {
     "type": "description",
     "ref": null
@@ -46,7 +46,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -333,6 +333,16 @@
       "at": "2026-08-10T12:48:28.345Z",
       "event": "ac-confirmed",
       "detail": "AC8: Changed-test run passed 37/0, full test run passed 1853/0, and tsc --noEmit passed; health WARN regression is pre-existing/non-P1."
+    },
+    {
+      "at": "2026-08-10T19:42:13.229Z",
+      "event": "renumbered",
+      "detail": "106 -> 136: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:52.665Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

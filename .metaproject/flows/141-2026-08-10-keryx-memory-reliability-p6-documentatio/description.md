@@ -1,6 +1,6 @@
 # Keryx Memory Reliability P6 — Documentation, Full Verification, and Rollout
 
-Status: draft (verified-handoff flow; no PR or completion transition)
+Status: implemented (draft PR #261; completion pending CI and merge)
 Source: delegated P6 execution request
 
 ## Problem
@@ -23,8 +23,8 @@ updated and indexed; the requirements package, roadmap, changelog, and metrics
 are honest and versioned; legacy artifacts are safely retired; targeted and
 full verification plus structural/adversarial doc review have run; and every
 PRD criterion has an evidence mapping. Implementation work is finished, but
-flow 111 intentionally remains `in-progress` because no PR is created and the
-CLI must not be advanced to `implemented` or `complete`.
+flow 141 is linked to draft PR #261 and remains `implemented`; `complete` is
+reserved for the post-merge gate.
 
 ## Out of Scope
 

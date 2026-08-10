@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "110",
+  "id": "140",
   "slug": "keryx-memory-reliability-p5-temporal-con",
   "title": "Keryx Memory Reliability P5 — Temporal, Config, Catalog, and Validation Consistency",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T18:41:48.186Z",
-  "updatedAt": "2026-08-10T18:50:51.530Z",
+  "updatedAt": "2026-08-10T19:42:53.611Z",
   "source": {
     "type": "description",
     "ref": null
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -192,6 +192,16 @@
       "at": "2026-08-10T18:50:51.530Z",
       "event": "ac-confirmed",
       "detail": "AC9: Focused 54/0, changed 104/0, and bunx tsc --noEmit pass; P5 checklist is the only requirements-plan phase updated."
+    },
+    {
+      "at": "2026-08-10T19:42:13.957Z",
+      "event": "renumbered",
+      "detail": "110 -> 140: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.611Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

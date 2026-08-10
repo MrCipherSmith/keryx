@@ -30,3 +30,5 @@
 - 2026-08-10T18:40:00.503Z - ac-confirmed: AC10: transition and supersession write deterministic changelog and provenance once; retry no-ops are byte-identical
 - 2026-08-10T18:40:01.010Z - ac-confirmed: AC11: focused lifecycle/seam/supersede/security tests cover stated edge cases
 - 2026-08-10T18:40:01.154Z - ac-confirmed: AC12: P4 test proves legacy auto-accept config still creates draft; explicit CLI transition accepts
+- 2026-08-10T19:42:13.780Z - renumbered: 109 -> 139: ID collision after rebase onto origin/main
+- 2026-08-10T19:42:53.455Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)

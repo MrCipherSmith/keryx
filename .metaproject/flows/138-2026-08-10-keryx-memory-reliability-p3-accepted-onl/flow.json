@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "108",
+  "id": "138",
   "slug": "keryx-memory-reliability-p3-accepted-onl",
   "title": "Keryx Memory Reliability P3 — Accepted-Only Bounded Automatic Recall",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T12:52:54.263Z",
-  "updatedAt": "2026-08-10T18:31:09.060Z",
+  "updatedAt": "2026-08-10T19:42:53.302Z",
   "source": {
     "type": "description",
     "ref": null
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -192,6 +192,16 @@
       "at": "2026-08-10T18:31:09.060Z",
       "event": "ac-confirmed",
       "detail": "AC9: focused 36/0 and review regression 19/0; changed selection 80/0; parent combined verification TypeScript pass plus 27/0 appropriate broader scope"
+    },
+    {
+      "at": "2026-08-10T19:42:13.617Z",
+      "event": "renumbered",
+      "detail": "108 -> 138: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.302Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

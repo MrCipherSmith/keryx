@@ -49,3 +49,5 @@
 - 2026-08-10T12:48:24.498Z - ac-confirmed: AC6: KERYX_P0_ENFORCE=1 focused enforcement passed across service, CLI, harness/unified, MCP, approval, and flow context.
 - 2026-08-10T12:48:26.431Z - ac-confirmed: AC7: Embedding semantic rerank and no-network suites pass with lexical fallback intact.
 - 2026-08-10T12:48:28.345Z - ac-confirmed: AC8: Changed-test run passed 37/0, full test run passed 1853/0, and tsc --noEmit passed; health WARN regression is pre-existing/non-P1.
+- 2026-08-10T19:42:13.229Z - renumbered: 106 -> 136: ID collision after rebase onto origin/main
+- 2026-08-10T19:42:52.665Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)

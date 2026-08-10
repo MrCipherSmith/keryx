@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "111",
+  "id": "141",
   "slug": "keryx-memory-reliability-p6-documentatio",
   "title": "Keryx Memory Reliability P6 — Documentation, Full Verification, and Rollout",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T18:52:42.820Z",
-  "updatedAt": "2026-08-10T19:05:43.623Z",
+  "updatedAt": "2026-08-10T19:42:53.752Z",
   "source": {
     "type": "description",
     "ref": null
@@ -58,7 +58,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -210,6 +210,16 @@
       "at": "2026-08-10T19:05:43.623Z",
       "event": "ac-confirmed",
       "detail": "AC11: Unreleased changelog and migration guidance cover reports/catalogs/embeddings, legacy latest advisory, lifecycle and validation behavior."
+    },
+    {
+      "at": "2026-08-10T19:42:14.081Z",
+      "event": "renumbered",
+      "detail": "111 -> 141: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.752Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

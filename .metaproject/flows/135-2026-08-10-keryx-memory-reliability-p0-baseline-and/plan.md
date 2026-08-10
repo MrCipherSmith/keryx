@@ -23,7 +23,7 @@ green while making the desired contract executable and reviewable.
 5. Add flow-context authority/temporal tests and init/update/embedding baseline
    coverage or traceability where existing suites already prove the behavior.
 6. Run focused verification, then update only P0 progress documentation and
-   leave flow 105 in-progress for verified handoff.
+   leave flow 135 in-progress for verified handoff until a draft PR exists.
 
 ## Risks
 

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "105",
+  "id": "135",
   "slug": "keryx-memory-reliability-p0-baseline-and",
   "title": "Keryx Memory Reliability P0 — baseline and contract tests",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T12:25:11.986Z",
-  "updatedAt": "2026-08-10T12:33:13.868Z",
+  "updatedAt": "2026-08-10T19:42:52.500Z",
   "source": {
     "type": "description",
     "ref": null
@@ -50,7 +50,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -197,6 +197,16 @@
       "at": "2026-08-10T12:33:13.868Z",
       "event": "ac-confirmed",
       "detail": "AC8: Updated final focused verification: 107 passed, 0 failed across 27 files; no P0 default-suite failure."
+    },
+    {
+      "at": "2026-08-10T19:42:13.055Z",
+      "event": "renumbered",
+      "detail": "105 -> 135: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:52.500Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

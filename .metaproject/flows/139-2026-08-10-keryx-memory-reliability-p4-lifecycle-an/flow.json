@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "109",
+  "id": "139",
   "slug": "keryx-memory-reliability-p4-lifecycle-an",
   "title": "Keryx Memory Reliability P4 — Lifecycle and Unified Guarded Write Seam",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-10T18:32:19.662Z",
-  "updatedAt": "2026-08-10T18:40:01.154Z",
+  "updatedAt": "2026-08-10T19:42:53.455Z",
   "source": {
     "type": "description",
     "ref": null
@@ -62,7 +62,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/261"
   },
   "tasks": [
     {
@@ -219,6 +219,16 @@
       "at": "2026-08-10T18:40:01.154Z",
       "event": "ac-confirmed",
       "detail": "AC12: P4 test proves legacy auto-accept config still creates draft; explicit CLI transition accepts"
+    },
+    {
+      "at": "2026-08-10T19:42:13.780Z",
+      "event": "renumbered",
+      "detail": "109 -> 139: ID collision after rebase onto origin/main"
+    },
+    {
+      "at": "2026-08-10T19:42:53.455Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)"
     }
   ]
 }

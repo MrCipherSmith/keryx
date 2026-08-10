@@ -11,11 +11,12 @@ by TypeScript and the full Bun suite. Record exact command evidence and classify
 any warning or exception rather than weakening tests. Retire only the two
 tracked legacy latest artifacts after copying exact bytes to the requested
 timestamped `/private/tmp` backup and verifying hashes. Keep flow state changes
-CLI-owned and finish with a verified handoff, leaving flow 111 in progress.
+CLI-owned and finish with a verified handoff, leaving flow 141 implemented
+against draft PR #261 until merge.
 
 ## Steps
 
-1. Record the P6 context, freeze 11 verifiable criteria, and start flow 111.
+1. Record the P6 context, freeze 11 verifiable criteria, and start flow 141.
 2. Update source command metadata, module registry, user/module/architecture/
    setup/workflow/memory manifest/template/skill/index documentation.
 3. Update the accepted `src-memory` wiki page and regenerate its wiki index;

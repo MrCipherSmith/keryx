@@ -46,3 +46,5 @@
 - 2026-08-10T19:05:43.134Z - ac-confirmed: AC9: Structural check: 6 Markdown files versioned, README links complete, schema valid; adversarial review has zero blockers and warnings documented.
 - 2026-08-10T19:05:43.330Z - ac-confirmed: AC10: Final gdgraph build 562 nodes/1203 edges; affected contexts inspected for registry/module/templates/gitignore/wiki anchors; wiki links pass.
 - 2026-08-10T19:05:43.623Z - ac-confirmed: AC11: Unreleased changelog and migration guidance cover reports/catalogs/embeddings, legacy latest advisory, lifecycle and validation behavior.
+- 2026-08-10T19:42:14.081Z - renumbered: 111 -> 141: ID collision after rebase onto origin/main
+- 2026-08-10T19:42:53.752Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/261 (tracker unavailable: existence not verified)
