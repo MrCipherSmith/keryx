@@ -5,7 +5,25 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Bounded version update advisories.** `keryx shell` performs one background,
+  non-blocking check and shows a notice only for a strictly newer validated
+  npm version. `keryx version check [--json]` exposes the same typed result;
+  neither surface auto-installs or blocks project work. Successful metadata is
+  cached for 24 hours, failed checks are suppressed for 15 minutes, and the
+  registry request times out after 2 seconds. The exact manual update command
+  is `npm install -g @mrciphersmith/keryx@latest`.
+
+### Documentation
+
+- Generated `.metaproject/index.md` guidance asks agents to run the JSON check
+  once per session and to notify only on `update-available`; the instruction is
+  prompt guidance, not enforcement, and unknown/offline/unavailable results
+  remain non-blocking. Existing installations from before the first
+  feature-bearing release cannot discover that release through code they do not
+  yet contain, and existing projects gain the guidance only after index
+  regeneration or update.
 
 ## [0.2.17] — 2026-08-11
 

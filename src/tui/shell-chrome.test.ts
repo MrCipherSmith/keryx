@@ -16,7 +16,18 @@
 // forbidden import form must not be spelled out in a comment here either.
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
-import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
+import {
+  createShellChrome,
+  formatSidebarVersionUpdateAdvisory,
+  SIDEBAR_TEXT_WIDTH,
+  type ShellChrome,
+  type ShellChromeOptions,
+} from "./shell-chrome";
+import {
+  FIXED_INSTALL_COMMAND,
+  VERSION_STRING_LIMIT_CHARS,
+  type VersionCheckResult,
+} from "../lib/version-check";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -119,6 +130,23 @@ const TOAST_HOLD_MS = 60_000;
  * rendered first" assertion is not racing the expiry it then waits for.
  */
 const TOAST_CLEAR_MS = 300;
+function numericVersionWithLength(length: number, digit: "8" | "9"): string {
+  return `${digit.repeat(length - ".0.0".length)}.0.0`;
+}
+
+test("flow 142 AC4: sidebar notice keeps the fixed install command complete on two bounded rows", () => {
+  const notice = formatSidebarVersionUpdateAdvisory({
+    status: "update-available",
+    currentVersion: "0.2.17",
+    latestVersion: "0.2.18",
+    installCommand: FIXED_INSTALL_COMMAND,
+    source: "registry",
+  });
+  const commandRows = notice?.split("\n").slice(-2) ?? [];
+  expect(commandRows).toHaveLength(2);
+  expect(commandRows.every((line) => line.length <= SIDEBAR_TEXT_WIDTH)).toBe(true);
+  expect(commandRows.join("")).toBe(FIXED_INSTALL_COMMAND);
+});
 
 async function mountChrome(
   otui: OtuiBundle,
@@ -191,6 +219,136 @@ otuiTest("AC1: mounting the chrome renders header, transcript, composer and foot
   h.chrome.focusComposer();
   expect(h.chrome.textarea.focused).toBe(true);
   h.destroy();
+});
+
+otuiTest("flow 142 AC4: shared chrome paints a persistent nonmodal update notice", async () => {
+  const otui = requireOtui();
+  let resolveCheck: (result: VersionCheckResult) => void = () => {};
+  const check = new Promise<VersionCheckResult>((resolve) => {
+    resolveCheck = resolve;
+  });
+  const h = await mountChrome(otui, { width: 100, height: 24, chrome: { versionCheck: check } });
+  expect(h.chrome.textarea.focused).toBe(true);
+  expect(h.captureCharFrame()).not.toContain("Keryx update");
+
+  resolveCheck({
+    status: "update-available",
+    currentVersion: "0.2.17",
+    latestVersion: "0.2.18",
+    installCommand: FIXED_INSTALL_COMMAND,
+    source: "registry",
+  });
+  await Promise.resolve();
+  await h.flush();
+  const first = h.captureCharFrame();
+  const compact = first.replace(/[\s│]/g, "");
+  expect(first).toContain("Keryx update");
+  expect(compact).toContain("0.2.17→0.2.18");
+  expect(first).toContain("npm install -g");
+  expect(compact).toContain("@mrciphersmith/keryx@latest");
+  expect(h.chrome.textarea.focused).toBe(true); // notice never steals focus
+
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("Keryx update"); // persistent, not a toast
+  h.destroy();
+});
+
+otuiTest("flow 142 AC4: 24-row shared chrome keeps the full command visible at the version boundary", async () => {
+  const otui = requireOtui();
+  const currentVersion = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS, "8");
+  const latestVersion = numericVersionWithLength(VERSION_STRING_LIMIT_CHARS, "9");
+  const h = await mountChrome(otui, {
+    width: 100,
+    height: 24,
+    chrome: {
+      versionCheck: Promise.resolve({
+        status: "update-available",
+        currentVersion,
+        latestVersion,
+        installCommand: FIXED_INSTALL_COMMAND,
+        source: "registry",
+      }),
+    },
+  });
+  await Promise.resolve();
+  await h.flush();
+
+  const compact = h.captureCharFrame().replace(/[\s│]/g, "");
+  expect(currentVersion).toHaveLength(VERSION_STRING_LIMIT_CHARS);
+  expect(latestVersion).toHaveLength(VERSION_STRING_LIMIT_CHARS);
+  expect(compact).toContain(currentVersion);
+  expect(compact).toContain(latestVersion);
+  expect(compact).toContain(FIXED_INSTALL_COMMAND.replace(/\s/g, ""));
+  h.destroy();
+});
+
+otuiTest("flow 142 AC4: late notice remains visible above a full 12-agent sidebar", async () => {
+  const otui = requireOtui();
+  let resolveCheck: (result: VersionCheckResult) => void = () => {};
+  const check = new Promise<VersionCheckResult>((resolve) => { resolveCheck = resolve; });
+  const h = await mountChrome(otui, { width: 100, height: 24, chrome: { versionCheck: check } });
+  const sidebar = h.chrome.sidebarTop;
+  sidebar.add(new otui.core.TextRenderable(h.renderer, { id: "full-title", content: "keryx" }));
+  for (const [id, label, value] of [
+    ["model", "Model", "provider/model"],
+    ["cwd", "Directory", "/workspace"],
+    ["ctx", "Context", "0 tokens"],
+    ["tools", "Tools", "12 available"],
+  ] as const) {
+    sidebar.add(new otui.core.TextRenderable(h.renderer, { id: `full-${id}-k`, content: label, marginTop: 1 }));
+    sidebar.add(new otui.core.TextRenderable(h.renderer, { id: `full-${id}-v`, content: value }));
+  }
+  sidebar.add(new otui.core.TextRenderable(h.renderer, { id: "full-status-k", content: "Status", marginTop: 1 }));
+  sidebar.add(new otui.core.TextRenderable(h.renderer, {
+    id: "full-status-v",
+    content: Array.from({ length: 12 }, (_, index) => `● agent-${index + 1}`).join("\n"),
+  }));
+  await h.flush();
+
+  resolveCheck({
+    status: "update-available",
+    currentVersion: "0.2.17",
+    latestVersion: "0.2.18",
+    installCommand: FIXED_INSTALL_COMMAND,
+    source: "registry",
+  });
+  await Promise.resolve();
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Keryx update");
+  expect(frame.replace(/[\s│]/g, "")).toContain("@mrciphersmith/keryx@latest");
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("flow 142 AC4-AC5: shared chrome stays silent for non-updates and ignores late teardown", async () => {
+  const otui = requireOtui();
+  for (const result of [
+    { status: "up-to-date", currentVersion: "0.2.17", latestVersion: "0.2.17", source: "cache" },
+    { status: "unavailable", currentVersion: "0.2.17", reason: "network" },
+  ] satisfies VersionCheckResult[]) {
+    const h = await mountChrome(otui, { chrome: { versionCheck: Promise.resolve(result) } });
+    await Promise.resolve();
+    await h.flush();
+    expect(h.captureCharFrame()).not.toContain("Keryx update");
+    h.destroy();
+  }
+
+  let resolveLate: (result: VersionCheckResult) => void = () => {};
+  const late = new Promise<VersionCheckResult>((resolve) => {
+    resolveLate = resolve;
+  });
+  const h = await mountChrome(otui, { chrome: { versionCheck: late } });
+  h.destroy();
+  resolveLate({
+    status: "update-available",
+    currentVersion: "0.2.17",
+    latestVersion: "0.2.18",
+    installCommand: FIXED_INSTALL_COMMAND,
+    source: "registry",
+  });
+  await Promise.resolve(); // no paint into the destroyed renderer and no rejection
 });
 
 otuiTest("AC2: showToast and the busy status are live at mount, not placeholder no-ops rebound later", async () => {

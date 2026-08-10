@@ -14,6 +14,7 @@
 //   serve-credentials.json  salted bearer-token hash (0600, flow 128)
 //   permissions.json        shell-command auto-approval allowlist
 //   sandbox.json            global sandbox defaults
+//   version-check.json      cached npm latest metadata + failure backoff
 //   turns/                  durable remote-turn records (flow 131 / R4c) — the
 //                           event log and terminal result each remote turn is
 //                           streamed and replayed from, plus the idempotency
@@ -42,10 +43,13 @@ import {
   chmodSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   type Stats,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -378,6 +382,32 @@ export function writeOwnerOnlyFile(file: string, body: string): void {
 }
 
 /**
+ * Atomically replace a user-global config file with owner-only contents.
+ *
+ * The temporary file lives beside the destination so `renameSync` is a
+ * same-filesystem atomic replacement. Callers retain their own error contract;
+ * this helper cleans up an unrenamed temporary file and rethrows the write or
+ * rename failure.
+ */
+export function writeOwnerOnlyFileAtomic(file: string, body: string): void {
+  const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, body, { encoding: "utf8", mode: 0o600 });
+    if (process.platform !== "win32") {
+      chmodSync(temporary, 0o600);
+    }
+    renameSync(temporary, file);
+  } catch (cause) {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // The rename may already have consumed the temporary path.
+    }
+    throw cause;
+  }
+}
+
+/**
  * Resolve the config directory, create it if absent, and force it owner-only.
  *
  * Every writer of a file in this directory must call this instead of
@@ -399,7 +429,7 @@ export function writeOwnerOnlyFile(file: string, body: string): void {
  * Best-effort: a directory that cannot be created or chmodded (a read-only
  * mount, a network filesystem that refuses chmod, a directory owned by someone
  * else) returns normally rather than throwing, because this helper sits under
- * seven callers with three different error contracts. What the operator sees then
+ * eight callers with three different error contracts. What the operator sees then
  * is the caller's business and is not uniform — see the catch block below.
  * `chmod` is skipped on Windows, where POSIX modes carry no meaning.
  */
@@ -410,7 +440,7 @@ export function ensureKeryxConfigDir(dir?: string): string {
   } catch {
     // Deliberately swallowed: failing here would turn a persistence problem
     // into a crash in a helper every writer calls. What happens next differs by
-    // caller and is NOT uniform. There are SEVEN direct callers and three
+    // caller and is NOT uniform. There are EIGHT direct callers and three
     // behaviours between them. Counting them has itself gone wrong twice — one
     // version claimed a single uniform behaviour, the next claimed two and said
     // "five callers" while counting `saveApiKey` (which reaches this only
@@ -422,6 +452,8 @@ export function ensureKeryxConfigDir(dir?: string): string {
     //   swallow it    `saveShellConfig`, `saveShellPermissions` and
     //                 `saveSandboxDefaults` are best-effort by contract and say
     //                 nothing; `saveApiKey` inherits that from `saveShellConfig`.
+    //                 Version-cache persistence is also best-effort: a valid
+    //                 live registry result remains authoritative.
     //   throw         `ensureDir` in `src/session/store.ts` lets the following
     //                 `mkdirSync` throw EACCES up through `createSession`. That
     //                 predates this helper — a shell that cannot write its

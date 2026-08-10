@@ -49,6 +49,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 - If the same capability is available through MCP tools/resources, prefer MCP because it preserves structured inputs and outputs. If MCP is unavailable, use the module skill and `keryx` CLI fallback.
 - Load the narrowest relevant skill/rule before reading broad source files. Do not ask the user which internal command to run unless multiple user-level outcomes are genuinely possible.
 - When reporting results, name the Metaproject sources used at a high level (for example: graph, wiki, memory, health), not every internal command.
+- Once per session, run `keryx version check --json`. Notify the user only when the result is `update-available`; this is an advisory and never installs anything. A timeout, offline registry, `unavailable`, or `unknown-command` result is non-blocking: never block project work on the check.
 
 ## Intent Router
 

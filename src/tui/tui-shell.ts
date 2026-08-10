@@ -90,6 +90,7 @@ import {
 } from "./side-worker";
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
+import type { VersionCheckResult } from "../lib/version-check";
 import {
   appendUserEcho,
   createAssistantMessageStream,
@@ -855,6 +856,7 @@ export async function launchTuiAgentShell(opts: {
   makeAgentDeps: (sel: TuiSelection) => Promise<AgentDeps>;
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
+  versionCheck?: Promise<VersionCheckResult>;
   /**
    * Per-project session bootstrap. Sessions never cross git-root/cwd boundaries.
    * `pickOnStart` opens the resume menu when `-r` is given without an id.
@@ -942,6 +944,7 @@ export async function launchTuiAgentShell(opts: {
       // The shared registry stays the single source of truth for the dropdown,
       // resolved through THIS surface's mode so the wording is agent-mode's.
       filterCommands: (query) => filterCommands(query, "agent"),
+      ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
     });
     mountedChrome = chrome;
     const transcript = chrome.transcript;

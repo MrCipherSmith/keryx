@@ -42,6 +42,7 @@
 // static guard in `src/capability/no-optional-imports` is a regex over file
 // text, so the forbidden form must not appear in a comment either).
 import type { SlashCommandOption } from "../commands/agent-commands";
+import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -100,6 +101,19 @@ const SIDEBAR_PADDING_RIGHT = 1;
  */
 export const SIDEBAR_TEXT_WIDTH =
   SIDEBAR_WIDTH - SIDEBAR_BORDER_LEFT - SIDEBAR_PADDING_LEFT - SIDEBAR_PADDING_RIGHT;
+
+/** Keep the fixed install command complete while fitting it on two sidebar rows. */
+export function formatSidebarVersionUpdateAdvisory(
+  result: VersionCheckResult,
+): string | undefined {
+  const advisory = formatVersionUpdateAdvisory(result);
+  if (advisory === undefined || result.status !== "update-available") return undefined;
+  const split = Math.ceil(result.installCommand.length / 2);
+  return advisory.replace(
+    result.installCommand,
+    `${result.installCommand.slice(0, split)}\n${result.installCommand.slice(split)}`,
+  );
+}
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_MS = 120;
 const TOAST_MS = 5000;
@@ -155,6 +169,8 @@ export interface ShellChromeOptions {
   toastMs?: number | undefined;
   /** Menu filter override; defaults to a prefix match over `commands`. */
   filterCommands?: ((query: string) => readonly SlashCommandOption[]) | undefined;
+  /** One shell-scoped, already-started advisory check. Never awaited by chrome. */
+  versionCheck?: Promise<VersionCheckResult> | undefined;
 }
 
 /**
@@ -297,6 +313,7 @@ export async function createShellChrome(
   const filter = opts.filterCommands ?? ((query: string) => prefixFilter(opts.commands, query));
   /** Unique suffix for generated renderable ids. */
   let uid = 0;
+  let alive = true;
 
   // --- layout skeleton ----------------------------------------------------
   // opencode-style: a main chat column on the left + a right status sidebar.
@@ -324,6 +341,31 @@ export async function createShellChrome(
   // renderables around a spacer it does not own.
   const sidebarTop = new otui.BoxRenderable(r, { id: "sb-top", flexShrink: 0, flexDirection: "column" });
   sidebar.add(sidebarTop);
+  if (opts.versionCheck !== undefined) {
+    // Reserve the notice's position before callers append model/context/worker
+    // panels. Late settlement then changes content in place instead of appending
+    // below a full sidebar where the advisory can be clipped off-screen.
+    const versionNotice = new otui.TextRenderable(r, {
+      id: `sb-version-${uid++}`,
+      content: "",
+    });
+    sidebarTop.add(versionNotice);
+    void opts.versionCheck.then(
+      (result) => {
+        const advisory = formatSidebarVersionUpdateAdvisory(result);
+        if (!alive || advisory === undefined) return;
+        try {
+          versionNotice.content = otui.t`${otui.yellow(advisory)}`;
+        } catch {
+          // The renderer may have been torn down between settlement and paint.
+        }
+      },
+      () => {
+        // The production service resolves typed unavailable, but an injected
+        // promise is still prevented from becoming an unhandled rejection.
+      },
+    );
+  }
   const sidebarSpacer = new otui.BoxRenderable(r, { id: "sb-spacer", flexGrow: 1 });
   sidebar.add(sidebarSpacer);
   const toastText = new otui.TextRenderable(r, { id: "sb-toast", content: "" });
@@ -790,6 +832,7 @@ export async function createShellChrome(
     },
 
     destroy: () => {
+      alive = false;
       clearBusyTimer();
       clearToastTimer();
       unsubscribeMenuKeys();

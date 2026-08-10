@@ -52,6 +52,12 @@ import {
   summarizeToolArgs,
 } from "../lib/ui";
 import { blockLabel, looksLikeUnifiedDiff } from "../lib/md-blocks";
+import {
+  checkVersion,
+  formatVersionUpdateAdvisory,
+  type VersionCheckResult,
+} from "../lib/version-check";
+import packageJson from "../../package.json" with { type: "json" };
 import { describeUnavailableCommand, renderCommandHelp } from "./agent-commands";
 import {
   type AgentDeps,
@@ -92,6 +98,8 @@ export interface ShellIO {
   onTurnStart?: () => void;
   onTurnEnd?: (full: string) => void;
   onSystem?: (text: string) => void;
+  /** Flush queued asynchronous notices only while terminal output is safe. */
+  onSafeBoundary?: () => void;
 }
 
 /** Optional per-project session wiring for chat/agent REPLs. */
@@ -275,6 +283,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   };
 
   for await (const line of io.lines) {
+    io.onSafeBoundary?.();
     // Slash commands FIRST — a slash line NEVER reaches `provider.stream`.
     if (line.startsWith("/")) {
       const parts = line.trim().split(/\s+/);
@@ -442,6 +451,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
 
     // Terminate the streamed reply with a blank line so consecutive turns are
     // visually separated instead of running together on one line.
+    io.onSafeBoundary?.();
     io.write("\n\n");
   }
 }
@@ -560,6 +570,47 @@ interface RichIo {
   printHeader: (title: string, subtitle: string) => void;
   /** Print the colored input prompt marker (used between agent-mode turns). */
   printPrompt: () => void;
+  /** Stop accepting a late version result after readline teardown. */
+  destroy: () => void;
+}
+
+export interface VersionAdvisoryBoundary {
+  flush(write: (text: string) => void): void;
+  destroy(): void;
+}
+
+/**
+ * Store asynchronous completion without writing. `flush` is called only by a
+ * known prompt/output boundary, so a late registry response cannot corrupt the
+ * active readline input buffer.
+ */
+export function createVersionAdvisoryBoundary(
+  versionCheck: Promise<VersionCheckResult>,
+): VersionAdvisoryBoundary {
+  let active = true;
+  let pending: string | undefined;
+  let shown = false;
+  void versionCheck.then(
+    (result) => {
+      if (active) pending = formatVersionUpdateAdvisory(result);
+    },
+    () => {
+      // Production resolves typed unavailable; injected rejection is ignored.
+    },
+  );
+  return {
+    flush: (write) => {
+      if (!active || shown || pending === undefined) return;
+      shown = true;
+      const advisory = pending;
+      pending = undefined;
+      write(`\n${advisory}\n`);
+    },
+    destroy: () => {
+      active = false;
+      pending = undefined;
+    },
+  };
 }
 
 /**
@@ -570,7 +621,7 @@ interface RichIo {
  * stays timer/`Date.now`/`Math.random`-free) and degrades to plain, uncorrupted
  * output when `NO_COLOR` is set or the sink is not a TTY.
  */
-function createRichIo(lines: AsyncIterable<string>): RichIo {
+function createRichIo(lines: AsyncIterable<string>, versionCheck: Promise<VersionCheckResult>): RichIo {
   const stdout = process.stdout;
   const rich = colorEnabled() && Boolean(stdout.isTTY);
   const out = (s: string): void => {
@@ -581,6 +632,7 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
   let frame = 0;
   let awaitingFirstToken = false;
   let raw = "";
+  const advisory = createVersionAdvisoryBoundary(versionCheck);
 
   const stopSpinner = (): void => {
     if (spinner !== undefined) {
@@ -662,11 +714,19 @@ function createRichIo(lines: AsyncIterable<string>): RichIo {
       out(`${GUTTER}${title} — ${subtitle}\n`);
       out(`${GUTTER}Type a message, or /help for commands.\n\n`);
     }
+    advisory.flush(emitSystem);
     printPrompt();
   };
 
-  const io: ShellIO = { lines, write, onTurnStart, onTurnEnd, onSystem: emitSystem };
-  return { io, emitSystem, printHeader, printPrompt };
+  const io: ShellIO = {
+    lines,
+    write,
+    onTurnStart,
+    onTurnEnd,
+    onSystem: emitSystem,
+    onSafeBoundary: () => advisory.flush(emitSystem),
+  };
+  return { io, emitSystem, printHeader, printPrompt, destroy: advisory.destroy };
 }
 
 /** A dim, terminal-width-agnostic separator between agent turns. */
@@ -702,7 +762,7 @@ function formatUsage(usage: NormalizedUsage | undefined): string {
  */
 async function runAgentRepl(
   lines: AsyncIterable<string>,
-  rich: { printPrompt: () => void },
+  rich: { printPrompt: () => void; safeBoundary: (() => void) | undefined },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
@@ -928,6 +988,7 @@ async function runAgentRepl(
     if (line === undefined) {
       return; // end of input
     }
+    rich.safeBoundary?.();
     if (line.startsWith("/")) {
       const parts = line.trim().split(/\s+/);
       const command = parts[0] ?? "";
@@ -1020,6 +1081,7 @@ async function runAgentRepl(
       out(`\n${GUTTER}${usageLine}\n`);
     }
     out(`\n${GUTTER}${turnSeparator()}\n\n`);
+    rich.safeBoundary?.();
     rich.printPrompt();
   }
 }
@@ -1201,7 +1263,21 @@ export function chooseShellSurface(
  * given, the picker is skipped: the model is `--model Y` if given, otherwise
  * that provider's first detected model.
  */
-export async function shellCommand(args: string[]): Promise<void> {
+export interface ShellCommandRuntime {
+  checkVersion?: () => Promise<VersionCheckResult>;
+  cacheDir?: string;
+  isTty?: boolean;
+  launchAgent?: typeof launchTuiAgentShell;
+  launchChat?: typeof launchTuiChatShell;
+}
+
+export async function shellCommand(args: string[], runtime: ShellCommandRuntime = {}): Promise<void> {
+  // Start exactly once, before provider detection, renderer creation, or
+  // readline. Nothing below awaits this promise during startup.
+  const versionCheck = (runtime.checkVersion ?? (() => checkVersion({
+    currentVersion: packageJson.version,
+    ...(runtime.cacheDir !== undefined ? { cacheDir: runtime.cacheDir } : {}),
+  })))();
   const flags = parseShellCliFlags(args);
   let providerArg = flags.providerArg;
   let modelArg = flags.modelArg;
@@ -1222,7 +1298,7 @@ export async function shellCommand(args: string[]): Promise<void> {
   // dispatches on the mode — agent → `launchTuiAgentShell`, chat → the chat
   // driver, which renders `ShellIO` through the same chrome and is driven by the
   // very `runShell` the readline fallback runs.
-  const surface = chooseShellSurface(flags, process.stdout.isTTY === true);
+  const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
   if (surface !== "readline") {
     const cwd = process.cwd();
     const tuiProviderFactory = realMakeProvider(() => {});
@@ -1289,6 +1365,7 @@ export async function shellCommand(args: string[]): Promise<void> {
       modelArg,
       baseUrl,
       detect: redetect,
+      ...(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {}),
     });
     const tuiInitial = startup.initial;
     const tuiDetected = startup.detected;
@@ -1302,7 +1379,7 @@ export async function shellCommand(args: string[]): Promise<void> {
         chatResumeId = latestSession(cwd)?.id;
       }
       if (
-        await launchTuiChatShell({
+        await (runtime.launchChat ?? launchTuiChatShell)({
           detected: tuiDetected,
           redetect,
           ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
@@ -1318,13 +1395,14 @@ export async function shellCommand(args: string[]): Promise<void> {
               ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
             },
           }),
+          versionCheck,
         })
       ) {
         return;
       }
       // else: optional dep absent / init failed → readline chat below.
     } else if (
-      await launchTuiAgentShell({
+      await (runtime.launchAgent ?? launchTuiAgentShell)({
         detected: tuiDetected,
         makeAgentDeps,
         // `/connect` and `/model` re-probe providers fresh.
@@ -1336,6 +1414,7 @@ export async function shellCommand(args: string[]): Promise<void> {
           ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
           ...(flags.resumePick === true ? { pickOnStart: true } : {}),
         },
+        versionCheck,
       })
     ) {
       return;
@@ -1349,7 +1428,7 @@ export async function shellCommand(args: string[]): Promise<void> {
   const lineIterator = rl[Symbol.asyncIterator]();
   const sharedLines: AsyncIterable<string> = { [Symbol.asyncIterator]: () => lineIterator };
 
-  const { io, emitSystem, printHeader, printPrompt } = createRichIo(sharedLines);
+  const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 
   let provider: string;
   let model: string;
@@ -1456,7 +1535,7 @@ export async function shellCommand(args: string[]): Promise<void> {
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = latestSession(process.cwd())?.id;
       }
-      await runAgentRepl(sharedLines, { printPrompt }, agentDeps, metaprojectPort, {
+      await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, {
         cwd: process.cwd(),
         ...(flags.continueLast === true ? { continueLast: true } : {}),
         ...(resumeId !== undefined ? { resumeId } : {}),
@@ -1476,6 +1555,7 @@ export async function shellCommand(args: string[]): Promise<void> {
       });
     }
   } finally {
+    destroy();
     rl.close();
   }
 }

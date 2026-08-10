@@ -457,6 +457,7 @@ the supported runtimes listed in section 6.
 | `keryx update` | Update a managed runtime and refresh service files. |
 | `keryx update --skip-runtime` | Refresh local service files without fetching runtime updates. |
 | `keryx update --hooks` | Refresh and run executable post-update hooks. |
+| `keryx version check [--json]` | Run the bounded, advisory npm version check; `--json` is the agent-facing form. |
 | `keryx dashboard build` | Rebuild the offline HTML dashboard. |
 | `keryx dashboard open` | Rebuild and open the dashboard. |
 | `keryx dash` | Alias for dashboard open. |

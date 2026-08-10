@@ -463,6 +463,15 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: true,
     read: true,
   },
+  {
+    module: "core",
+    command: "version check",
+    summary: "Check the fixed npm latest endpoint for a newer Keryx release.",
+    intent: ["check keryx version", "check for update", "проверь версию keryx"],
+    args: [{ name: "json", type: "bool", required: false, desc: "typed structured result" }],
+    json: true,
+    read: true,
+  },
 ];
 
 /**

@@ -21,11 +21,39 @@ Running `keryx` with no command, or with `--help`/`-h`, prints the usage
 block. An unknown command prints an error plus the usage block and exits with
 code `1`.
 
+## version
+
+Check the installed Keryx version against the fixed npm registry endpoint.
+
+```
+keryx version check [--json]
+```
+
+The command uses the same advisory service as `keryx shell`. Human output shows
+the exact upgrade command only when npm reports a strictly newer validated
+version; `--json` returns the typed result for agents. A successful result is
+cached for 24 hours, failed checks are suppressed for 15 minutes, and the
+request timeout is 2 seconds. Unavailable, offline, timeout, and malformed
+registry results are operational outcomes and exit successfully; they must not
+block project work. Keryx never auto-installs an update. If an update is
+available, run:
+
+```bash
+npm install -g @mrciphersmith/keryx@latest
+```
+
+A pre-feature installation cannot discover the first release containing this
+check through code it does not yet have; if `version check` is unknown there,
+continue work and update through an external or manual channel. A project's
+generated index gains the guidance only after `keryx init`, `keryx update`, or
+rules sync regenerates it. That index text is prompt guidance, not enforcement.
+
 ### Top-level commands
 
 | Command | Purpose |
 |---|---|
 | `shell` | Start the interactive TUI agent shell (sessions are per-project). |
+| `version` | Check whether the installed Keryx version has a newer npm release. |
 | `sessions` | List, fork, export, or locate agent sessions for the current project. |
 | `harness` | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`, `replay`). |
 | `init` | Initialize `.metaproject/` in the current project. |

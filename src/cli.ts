@@ -28,6 +28,7 @@ import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
 import { metricsCommand } from "./commands/metrics";
+import { versionCommand } from "./commands/version";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -80,6 +81,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   shell: shellCommand,
   sessions: sessionsCommand,
   session: sessionsCommand,
+  version: versionCommand,
 };
 
 export async function main(): Promise<void> {
@@ -119,6 +121,7 @@ Usage:
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
                                                List / branch / export sessions for the current project
+  keryx version check [--json]                 Check npm latest (advisory; never installs)
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
                      [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]
@@ -202,6 +205,7 @@ Commands:
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions
+  version   Check whether a newer npm release is available
   harness   Run a single provider turn (harness run) and print structured events
   init      Initialize .metaproject in the current project
   status    Show local Metaproject status

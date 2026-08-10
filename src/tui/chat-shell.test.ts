@@ -16,6 +16,7 @@ import { expect, test } from "bun:test";
 import { createChatBridge, mountChatShell, type ChatShellHandle } from "./chat-shell";
 import { runShell, type ShellDeps, type ShellIO } from "../commands/shell";
 import type { NormalizedEvent, ProviderPort, ProviderDescription } from "../harness/provider/types";
+import { FIXED_INSTALL_COMMAND, type VersionCheckResult } from "../lib/version-check";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -123,13 +124,14 @@ async function settle(h: { flush: TestSetup["flush"] }, rounds = 6): Promise<voi
 
 async function mountChat(
   otui: OtuiBundle,
-  opts: { replies: readonly string[]; width?: number; height?: number },
+  opts: { replies: readonly string[]; width?: number; height?: number; versionCheck?: Promise<VersionCheckResult> },
 ): Promise<TestSetup & { handle: ChatShellHandle; destroy: () => void }> {
   const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 90, height: opts.height ?? 26 });
   const handle = await mountChatShell(otui.core, setup.renderer, {
     deps: chatDeps(opts.replies),
     runShell, // the REAL driver — not a stand-in (AC10)
     persistSelection: false,
+    ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
   });
   await setup.flush();
   return {
@@ -141,6 +143,32 @@ async function mountChat(
     },
   };
 }
+
+otuiTest("flow 142 AC4: chat TUI receives the shared persistent version notice", async () => {
+  const otui = requireOtui();
+  const h = await mountChat(otui, {
+    replies: [],
+    width: 100,
+    height: 26,
+    versionCheck: Promise.resolve({
+      status: "update-available",
+      currentVersion: "0.2.17",
+      latestVersion: "0.2.18",
+      installCommand: FIXED_INSTALL_COMMAND,
+      source: "registry",
+    }),
+  });
+  await Promise.resolve();
+  await h.flush();
+  const frame = h.captureCharFrame();
+  const compact = frame.replace(/[\s│]/g, "");
+  expect(frame).toContain("Keryx update");
+  expect(compact).toContain("0.2.17→0.2.18");
+  expect(frame).toContain("npm install -g");
+  expect(compact).toContain("@mrciphersmith/keryx@latest");
+  expect(h.handle.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
 
 otuiTest("AC10: a chat turn runs end to end through the real runShell and the reply is on the frame", async () => {
   const otui = requireOtui();

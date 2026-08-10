@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 2,
+  "id": "142",
+  "slug": "keryx-version-update-checks-for-shell-an",
+  "title": "Keryx version update checks for shell and Metaproject agents",
+  "status": "done",
+  "createdAt": "2026-08-10T20:36:40.638Z",
+  "updatedAt": "2026-08-10T22:29:23.560Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:4a7bc2676d4938c82558d9909236bfc77df079228db22a66ea21ac64d82a3840",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-10T21:23:30.284Z"
+    },
+    "AC2": {
+      "at": "2026-08-10T21:23:30.377Z"
+    },
+    "AC3": {
+      "at": "2026-08-10T21:23:30.469Z"
+    },
+    "AC4": {
+      "at": "2026-08-10T21:23:30.559Z"
+    },
+    "AC5": {
+      "at": "2026-08-10T21:23:30.686Z"
+    },
+    "AC6": {
+      "at": "2026-08-10T21:23:30.812Z"
+    },
+    "AC7": {
+      "at": "2026-08-10T21:23:30.908Z"
+    },
+    "AC8": {
+      "at": "2026-08-10T21:23:31.004Z"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/262"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Update documentation and generated Metaproject guidance",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Run release-equivalent verification and Code Health",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Perform independent architecture, logic, and security review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-10T20:36:40.638Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-10T20:45:12.102Z",
+      "event": "task-added",
+      "detail": "T5: Update documentation and generated Metaproject guidance"
+    },
+    {
+      "at": "2026-08-10T20:45:12.230Z",
+      "event": "task-added",
+      "detail": "T6: Run release-equivalent verification and Code Health"
+    },
+    {
+      "at": "2026-08-10T20:45:12.355Z",
+      "event": "task-added",
+      "detail": "T7: Perform independent architecture, logic, and security review"
+    },
+    {
+      "at": "2026-08-10T20:45:12.770Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-10T20:45:15.482Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-10T20:45:15.756Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-10T21:23:29.591Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-10T21:23:29.777Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-10T21:23:29.881Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-10T21:23:29.992Z",
+      "event": "task-done",
+      "detail": "T5: Update documentation and generated Metaproject guidance"
+    },
+    {
+      "at": "2026-08-10T21:23:30.086Z",
+      "event": "task-done",
+      "detail": "T6: Run release-equivalent verification and Code Health"
+    },
+    {
+      "at": "2026-08-10T21:23:30.197Z",
+      "event": "task-done",
+      "detail": "T7: Perform independent architecture, logic, and security review"
+    },
+    {
+      "at": "2026-08-10T21:23:30.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-08-10T21:23:30.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-08-10T21:23:30.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-08-10T21:23:30.559Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-08-10T21:23:30.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-08-10T21:23:30.812Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-08-10T21:23:30.908Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-08-10T21:23:31.004Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-08-10T21:32:27.812Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/262"
+    },
+    {
+      "at": "2026-08-10T22:29:21.016Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T22:29:23.560Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}
