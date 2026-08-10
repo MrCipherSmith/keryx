@@ -1053,9 +1053,10 @@ Standalone: no cross-module imports.
 
 ## orientation
 
-**Purpose.** Orientation provides a bounded startup context so an agent sees the
-current graph map, wiki index, and freshness state before broad navigation. It is
-an opt-in presentation/integration layer, not a new source of project knowledge.
+**Purpose.** Orientation provides bounded startup context so an agent sees the
+project-root Metaproject entrypoint, current graph map, wiki index, and freshness
+state before broad navigation. It is an opt-in presentation/integration layer,
+not a new source of project knowledge.
 
 **CLI surface.** `keryx orient [<runtime>]` emits formatted context;
 `orient install-hook --runtime <id|all>` and `uninstall-hook` manage compatible
@@ -1063,13 +1064,18 @@ turn-start hooks. Hook installation is supported for Claude, Codex, and Cursor;
 Windsurf and Zed are reported as unsupported because they lack a compatible
 context-injection hook.
 
-**Key files.** `src/ctx/orient.ts` builds the graph and wiki halves;
+**Key files.** `src/ctx/orient.ts` builds the bounded project-root
+`.metaproject/index.md` excerpt and the graph/wiki portions;
 `src/ctx/orient-runtimes.ts` owns runtime-specific locations, merge/strip logic,
 formatting, and validation; `src/commands/orient.ts` is the CLI adapter.
 
-**How it works.** Orientation reads existing graph/wiki artifacts only, bounds
-the output, and formats it for the selected runtime. Installers modify only their
-managed sentinel/config entry and preserve surrounding user configuration.
+**How it works.** Orientation reads `.metaproject/index.md` only from the cwd
+treated as the project root (never from ancestors), retains at most 60 useful
+lines while skipping low-value `Data`/`Refresh` sections, and appends an explicit
+truncation/read-the-full-file marker when needed. It also reads and bounds the
+existing graph/wiki artifacts, then formats the combined output for the selected
+runtime. Installers modify only their managed sentinel/config entry and preserve
+surrounding user configuration.
 
 ---
 

@@ -245,7 +245,9 @@ failure is explicitly documented.
 There are four independent integrations:
 
 1. Global bootstrap: tells the agent to discover `.metaproject/index.md`.
-2. Orientation: injects a bounded graph + wiki map at turn start.
+2. Orientation: injects a bounded project-root `.metaproject/index.md` excerpt,
+   graph map, and wiki index at turn start. The excerpt directs the agent to read
+   the full index and is not an enforced runtime gate.
 3. gdctx routing guard: redirects broad raw commands to compact context commands.
 4. Security hooks: checks agent input/output at supported runtime seams.
 
@@ -469,7 +471,7 @@ the supported runtimes listed in section 6.
 | `keryx agents bootstrap install --runtime <id|all>` | Install or update the global discovery block. |
 | `keryx agents bootstrap uninstall --runtime <id|all>` | Remove only the managed global block. |
 | `keryx agents bootstrap print` | Print the block for manual installation. |
-| `keryx orient [<runtime>]` | Emit bounded graph + wiki startup context. |
+| `keryx orient [<runtime>]` | Emit bounded project-root Metaproject + graph + wiki startup context. |
 | `keryx orient install-hook --runtime <id|all>` | Install compatible orientation hooks. |
 | `keryx orient uninstall-hook --runtime <id|all>` | Remove managed orientation hooks. |
 

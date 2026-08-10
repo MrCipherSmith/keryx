@@ -51,7 +51,7 @@ code `1`.
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
 | `agents` | Manage the optional global Metaproject bootstrap for agent runtimes. |
-| `orient` | Emit or install bounded graph + wiki startup context. |
+| `orient` | Emit or install bounded Metaproject + graph + wiki startup context. |
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
 | `mcp` | Expose read-only Metaproject services over the Model Context Protocol (opt-in, off by default). |
 
@@ -471,7 +471,7 @@ keryx gdgraph assets list | verify [<id>] | pull <id>
 | `path "<A>" "<B>"` | — | Resolve file or symbol endpoints and print the shortest path across import and call edges. |
 | `affected <file-or-symbol>` | `--depth <N>`, `--ranked`, `--json` | Resolve a file or symbol, print dependencies/dependents, and optionally walk/rank the transitive blast radius. |
 | `repomap` | `--budget <N>`, `--seed <path>...`, `--changed` | Write a token-budgeted repo map artifact. `--budget` caps the token estimate, `--seed` biases toward one or more paths (repeatable), and `--changed` seeds from locally changed files (`git diff --name-only HEAD`). |
-| `context` | — | Emit the bounded graph half of the turn-start orientation block. |
+| `context` | — | Emit the bounded graph portion of the turn-start orientation block. |
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json`: `list` shows resolved/missing state, `verify` checks checksums (exit `1` on mismatch), `pull` fetches and verifies one asset (the only networked verb). |
 
 Only the exact queries `cycles` and `orphans` are accepted; anything else exits
@@ -539,7 +539,7 @@ keryx wiki backlinks <wiki-page-or-code-file>
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
 | `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
-| `context` | — | Emit the bounded wiki-index half of the turn-start orientation block. |
+| `context` | — | Emit the bounded wiki-index portion of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 
 Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
@@ -901,10 +901,14 @@ Runtime ids: `claude` (`~/.claude/CLAUDE.md`), `opencode`
 
 ## orient
 
-Emit or install a compact turn-start orientation block containing the current
-graph map, wiki index, and freshness information. Orientation is separate from
-the gdctx routing guard: orientation supplies context, while the routing guard
-controls which shell/search commands an agent may run directly.
+Emit or install a compact turn-start orientation block. When the launch cwd has
+`.metaproject/index.md`, the block contains a bounded excerpt of that exact
+project-root file, then the current graph map, wiki index, and freshness
+information. It does not search ancestors. The excerpt instructs the model to
+read the full index; it is precedence guidance, not an enforced runtime gate.
+Orientation is separate from the gdctx routing guard: orientation supplies
+context, while the routing guard controls which shell/search commands an agent
+may run directly.
 
 ```text
 keryx orient [<runtime>]
@@ -914,7 +918,7 @@ keryx orient uninstall-hook [--runtime <id|all>] [--dry-run]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| default emit | optional runtime id | Build the bounded graph + wiki orientation and format it for the selected runtime (`claude` by default). |
+| default emit | optional runtime id | Build the bounded project-root Metaproject + graph + wiki orientation and format it for the selected runtime (`claude` by default). |
 | `install-hook` | `--runtime <id\|all>`, `--dry-run` | Merge-safely install the runtime's turn-start/prompt hook. Supported hook runtimes are `claude`, `codex`, and `cursor`. `--dry-run` reports the file it would write and changes nothing. |
 | `uninstall-hook` | `--runtime <id\|all>`, `--dry-run` | Remove only the managed orientation integration. `--dry-run` reports what it would strip and changes nothing. |
 

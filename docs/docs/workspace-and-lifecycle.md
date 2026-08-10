@@ -368,7 +368,8 @@ like the git hooks, refreshed by `update` only when already recorded.
 Two additional opt-in integrations are installed explicitly rather than by
 `init` defaults:
 
-- `keryx orient install-hook --runtime <id>` injects a bounded graph + wiki map
+- `keryx orient install-hook --runtime <id>` injects a bounded project-root
+  `.metaproject/index.md` excerpt plus the graph map and wiki index
   at turn start for Claude, Codex, or Cursor.
 - `keryx ctx install-hook --runtime <id>` installs the gdctx routing guard, which
   blocks broad raw shell/search reads and recommends the bounded `ctx` command.
