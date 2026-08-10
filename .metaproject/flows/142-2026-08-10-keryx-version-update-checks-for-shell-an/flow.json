@@ -3,9 +3,9 @@
   "id": "142",
   "slug": "keryx-version-update-checks-for-shell-an",
   "title": "Keryx version update checks for shell and Metaproject agents",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-10T20:36:40.638Z",
-  "updatedAt": "2026-08-10T21:32:27.812Z",
+  "updatedAt": "2026-08-10T22:29:23.560Z",
   "source": {
     "type": "description",
     "ref": null
@@ -255,6 +255,15 @@
       "at": "2026-08-10T21:32:27.812Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/262"
+    },
+    {
+      "at": "2026-08-10T22:29:21.016Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-10T22:29:23.560Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
