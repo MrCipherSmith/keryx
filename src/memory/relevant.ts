@@ -1,7 +1,9 @@
 import { collectEntries } from "./store";
 import { jaccard, tokenSet } from "./text";
 import { memoryClassOf } from "./types";
-import type { MemoryClass, MemoryEntry } from "./types";
+import { currentDay, isCurrentAt } from "./temporal";
+import { MAX_AGENT_EXCERPT_BYTES, MAX_AUTOMATIC_RESULTS } from "./validation";
+import type { MemoryClass, MemoryEntry, SearchFilters } from "./types";
 
 export type SkillScope = {
   module?: string | null;
@@ -10,6 +12,46 @@ export type SkillScope = {
 };
 
 const AUTHORITATIVE_TYPES = new Set(["decision", "constraint", "known-mistake"]);
+export const MAX_AUTOMATIC_RECALL_RESULTS = 10;
+export const MAX_AUTOMATIC_RECALL_EXCERPT_BYTES = 400;
+
+function boundedLimit(limit: number): number {
+  return Math.min(MAX_AUTOMATIC_RESULTS, Math.max(1, Math.floor(limit)));
+}
+
+/** Shared accepted/current boundary for automatic agent-facing recall. */
+export function acceptedCurrentSearchFilters(
+  now: Date,
+  filters: Pick<SearchFilters, "module" | "entity" | "class" | "status" | "limit"> = {},
+): SearchFilters {
+  return {
+    ...filters,
+    status: filters.status ?? "accepted",
+    asOf: currentDay(now),
+    limit: boundedLimit(filters.limit ?? MAX_AUTOMATIC_RECALL_RESULTS),
+  };
+}
+
+/** Current means Valid-From has arrived, Valid-To is exclusive, and no supersession exists. */
+export function isCurrentMemory(entry: MemoryEntry, now: Date): boolean {
+  return isCurrentAt(entry, now);
+}
+
+export function clipAutomaticRecallText(text: string, maxBytes = MAX_AUTOMATIC_RECALL_EXCERPT_BYTES): string {
+  const boundedBytes = Math.min(MAX_AGENT_EXCERPT_BYTES, Math.max(1, Math.floor(maxBytes)));
+  if (Buffer.byteLength(text, "utf8") <= boundedBytes) {
+    return text;
+  }
+  const suffix = "…";
+  let output = "";
+  for (const character of text) {
+    if (Buffer.byteLength(`${output}${character}${suffix}`, "utf8") > boundedBytes) {
+      break;
+    }
+    output += character;
+  }
+  return `${output}${suffix}`;
+}
 
 // True when an accepted entry applies to a skill/task scope: same module (by
 // scope or tag), a shared file, or a target-title token overlap. Shared by the
@@ -41,31 +83,20 @@ function inScope(entry: MemoryEntry, scope: SkillScope): boolean {
   return false;
 }
 
-// C2: a "current" entry is one that has not been superseded and whose validity
-// interval is still open (no past Valid-To). Deterministic string comparison.
-function isCurrent(entry: MemoryEntry, today: string): boolean {
-  if (entry.supersededBy) {
-    return false;
-  }
-  if (entry.validTo && entry.validTo < today) {
-    return false;
-  }
-  return true;
-}
-
 // Accepted decisions/constraints/known-mistakes that apply to a skill's scope.
 // Used by skill-verify-skill to surface memory the skill must not contradict.
 export async function relevantAcceptedMemory(
   cwd: string,
   scope: SkillScope,
   limit = 10,
+  now: Date = new Date(),
 ): Promise<MemoryEntry[]> {
   const entries = await collectEntries(cwd);
   const accepted = entries.filter(
-    (entry) => entry.status === "accepted" && AUTHORITATIVE_TYPES.has(entry.type),
+    (entry) => entry.status === "accepted" && AUTHORITATIVE_TYPES.has(entry.type) && isCurrentMemory(entry, now),
   );
 
-  return accepted.filter((entry) => inScope(entry, scope)).slice(0, limit);
+  return accepted.filter((entry) => inScope(entry, scope)).slice(0, boundedLimit(limit));
 }
 
 // C3/C5: accepted, CURRENT, procedural-class memory that applies to a task
@@ -78,7 +109,6 @@ export async function proceduralMemoryForScope(
   classes: MemoryClass[] = ["procedural"],
   now: Date = new Date(),
 ): Promise<MemoryEntry[]> {
-  const today = now.toISOString().slice(0, 10);
   const allowed = new Set(classes);
   const entries = await collectEntries(cwd);
 
@@ -87,8 +117,8 @@ export async function proceduralMemoryForScope(
       (entry) =>
         entry.status === "accepted" &&
         allowed.has(memoryClassOf(entry)) &&
-        isCurrent(entry, today) &&
+        isCurrentMemory(entry, now) &&
         inScope(entry, scope),
     )
-    .slice(0, limit);
+    .slice(0, boundedLimit(limit));
 }

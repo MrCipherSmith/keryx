@@ -16,7 +16,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | gdskills | Native bundled working skills, orchestration, review, and project-skill lifecycle | modules/gdskills.md |
 | health | Code quality aggregation, scoring, and quality gate | modules/health.md |
 | testing | Test context, related tests, execution reports, and test intelligence | modules/testing.md |
-| memory | Long-lived project memory: lessons, decisions, constraints, known mistakes | modules/memory.md |
+| memory | Long-lived Markdown-canonical memory: pure recall, explicit reports, lifecycle, and accepted/current bounded influence | modules/memory.md |
 | tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |
 ## Rules
 
@@ -38,7 +38,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | gdskills | Use project-local bundled working skills and project-skill routing before external/global skills | skills/catalog.md |
 | health | Read data/health/artifacts/latest.md before claiming quality status or gate results | skills/health/SKILL.md |
 | testing | Read testing context before creating/changing tests and normalized reports before raw test logs | skills/testing/SKILL.md |
-| memory | Search accepted project memory before historical, decision, and repeated-mistake questions | skills/memory/SKILL.md |
+| memory | Search accepted/current project memory; default recall is pure and bounded | skills/memory/SKILL.md |
 | flow | Start/track/finish managed work items (создай фло, create a flow from an issue) | skills/flow/SKILL.md |
 | flow-orchestrator | Task Manager implementation orchestrator: flow state + gdskills workers + completion choice/health gates | skills/gdskills/orchestration/flow-orchestrator/SKILL.md |
 
@@ -136,8 +136,9 @@ the registry (`src/standard/command-registry.ts`) is the source of truth.
 - `data/testing/recommendations.md`
 - `data/testing/artifacts/latest.md`
 - `memory/index.md`
-- `data/memory/index/index.json`
-- `data/memory/artifacts/latest.md`
+- `data/memory/index/` (optional disposable catalog; search does not consume it)
+- `data/memory/embeddings/` (optional disposable cache)
+- `runtime/memory/search/<run-id>/` (explicit reports only)
 - `flows/` (flow packages)
 
 ## Refresh

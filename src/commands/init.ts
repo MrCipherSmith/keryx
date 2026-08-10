@@ -116,6 +116,11 @@ import {
 } from "../lib/templates";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import { hasDistilledEntrypoints } from "../rules/distill";
+import {
+  findLegacyMemoryArtifacts,
+  formatLegacyMemoryMigrationAdvisory,
+  syncMetaprojectGitignore,
+} from "../lib/metaproject-gitignore";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { registerCapabilitiesFromArgs } from "../capability/registry";
 import {
@@ -472,7 +477,11 @@ export async function initCommand(args: string[]): Promise<void> {
   const testingTiaFlagPresent = options.testingTia || options.noTestingTia;
 
   await createBaseStructure(metaprojectRoot);
-  await syncGitignore(projectRoot);
+  await syncMetaprojectGitignore(projectRoot);
+  const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
+  if (legacyMemoryArtifacts.length > 0) {
+    note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
+  }
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     createDefault: true,
@@ -1153,7 +1162,6 @@ async function createMemoryStructure(root: string): Promise<void> {
     ...MEMORY_TYPES.map((entry) => path.join(root, "memory", entry.folder)),
     path.join(root, "core", "memory"),
     path.join(root, "data", "memory", "index"),
-    path.join(root, "data", "memory", "artifacts"),
     path.join(root, "data", "memory", "queries"),
     path.join(root, "data", "memory", "raw"),
     path.join(root, "skills", "memory"),

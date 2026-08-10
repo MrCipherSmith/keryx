@@ -1,6 +1,6 @@
 # <Title>
 
-Version: 0.1.0
+Version: 0.2.0
 Type: <lesson|decision|constraint|known-mistake|...>
 Status: draft
 Confidence: medium
@@ -35,4 +35,5 @@ Main memory content.
 
 ## Changelog
 
-- 0.1.0 - Initial version.
+- 0.2.0 - Canonical Markdown entry template; search is read-only and lifecycle
+  transitions are explicit.

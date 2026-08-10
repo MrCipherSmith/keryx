@@ -209,26 +209,22 @@ async function collectVerificationSignals({
     ".metaproject/data/health/artifacts/latest.json",
     ".metaproject/data/health/artifacts/latest.md",
   ]);
-  await pushArtifactSignal(projectRoot, signals, "documentation-memory", [
-    ".metaproject/data/memory/artifacts/latest.json",
-    ".metaproject/data/memory/artifacts/latest.md",
-  ]);
 
-  // Active memory consultation: surface accepted decisions/constraints/known
-  // mistakes that apply to this skill so the verifier checks for contradiction.
+  // Consult canonical Markdown memory directly. Generated search artifacts are
+  // disposable and are not evidence that memory was actually consulted.
   const acceptedMemory = await relevantAcceptedMemory(projectRoot, {
     module: metadata.module ?? registryEntry?.module ?? null,
     target,
     files: [],
   });
-  if (acceptedMemory.length > 0) {
-    signals.push({
-      name: "memory:accepted",
-      status: "warn",
-      message: `${acceptedMemory.length} accepted memory ${acceptedMemory.length === 1 ? "entry applies" : "entries apply"} to this skill; verify no contradiction`,
-      path: acceptedMemory[0]?.relativePath,
-    });
-  }
+  signals.push({
+    name: "evidence:memory-consultation",
+    status: acceptedMemory.length > 0 ? "pass" : "warn",
+    message: acceptedMemory.length > 0
+      ? `Consulted ${acceptedMemory.length} canonical accepted memory ${acceptedMemory.length === 1 ? "entry" : "entries"} for this skill.`
+      : "No applicable canonical accepted memory entries were found.",
+    path: acceptedMemory[0]?.relativePath,
+  });
 
   return signals;
 }
@@ -340,8 +336,8 @@ function recommendationsFor(
   if (signals.some((signal) => signal.name === "evidence:code-health" && signal.status === "warn")) {
     recommendations.push("Run Code Health when quality metrics should influence skill freshness.");
   }
-  if (signals.some((signal) => signal.name === "evidence:documentation-memory" && signal.status === "warn")) {
-    recommendations.push("Search Documentation Memory before learning from repeated decisions or mistakes.");
+  if (signals.some((signal) => signal.name === "evidence:memory-consultation" && signal.status === "warn")) {
+    recommendations.push("Search canonical accepted memory before learning from repeated decisions or mistakes.");
   }
   if (recommendations.length === 0) {
     recommendations.push("Skill evidence is sufficient for the current first-slice verifier.");

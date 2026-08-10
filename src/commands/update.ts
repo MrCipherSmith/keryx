@@ -53,6 +53,11 @@ import {
 } from "../wiki/templates";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
+import {
+  findLegacyMemoryArtifacts,
+  formatLegacyMemoryMigrationAdvisory,
+  syncMetaprojectGitignore,
+} from "../lib/metaproject-gitignore";
 import { seedAssetsLock } from "../assets/seed";
 import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
 import {
@@ -168,6 +173,11 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     await updateRuntime(projectRoot);
   }
 
+  await syncMetaprojectGitignore(projectRoot);
+  const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
+  if (legacyMemoryArtifacts.length > 0) {
+    note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
+  }
   const summary = await refreshServiceFiles(projectRoot, options);
 
   heading("Refreshed service files");

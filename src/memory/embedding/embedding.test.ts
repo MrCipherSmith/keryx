@@ -95,13 +95,13 @@ test("AC-C1: default search is byte-identical and never consults the embedding s
 
   const query = "how should the service retry failed outbound network requests";
   const first = await service.search({ cwd: root, query });
-  const latestMd = path.join(root, ".metaproject", "data", "memory", "artifacts", "latest.md");
-  const mdA = await readFile(latestMd, "utf8");
   const second = await service.search({ cwd: root, query });
-  const mdB = await readFile(latestMd, "utf8");
 
-  // Byte-identical Markdown across runs.
-  expect(mdB).toBe(mdA);
+  // Pure recall returns byte-identical rankings and creates no report artifact.
+  expect(second.results.map((r) => ({ path: r.entry.relativePath, score: r.score }))).toEqual(
+    first.results.map((r) => ({ path: r.entry.relativePath, score: r.score })),
+  );
+  expect(await pathExists(path.join(root, ".metaproject", "data", "memory", "artifacts"))).toBe(false);
   // Ordering/scores identical to a direct lexical searchEntries call.
   const entries = await collectEntries(root);
   const direct = searchEntries(entries, query, {}, C, new Date());

@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { resolveCapability } from "../capability/seam";
@@ -6,9 +7,12 @@ import { loadMemoryConfig } from "./config";
 import { checkMemory } from "./check";
 import { findDuplicates, type Candidate } from "./dedup";
 import { ingestMemory } from "./ingest";
-import { candidatePool, renderSearchMarkdown, searchEntries } from "./search";
+import { candidatePool, searchEntries } from "./search";
+import { createMemoryReportStore } from "./report";
 import { collectEntries, memoryRoot } from "./store";
 import { supersedeEntry } from "./supersede";
+import { transitionMemoryStatus } from "./lifecycle";
+import { resolveCanonicalEntryPath, writeCanonicalEntry } from "./write";
 import { renderMemoryEntry } from "./templates";
 import { memoryEmbeddingSpec, type Embedder } from "./embedding/adapter";
 import {
@@ -31,6 +35,8 @@ import type {
   MemoryService,
   MemorySupersedeInput,
   MemorySupersedeResult,
+  MemoryTransitionInput,
+  MemoryTransitionResult,
 } from "./types";
 
 function dataRoot(cwd: string): string {
@@ -38,6 +44,7 @@ function dataRoot(cwd: string): string {
 }
 
 export function createMemoryService(): MemoryService {
+  const reportStore = createMemoryReportStore();
   return {
     async create(input: MemoryCreateInput): Promise<MemoryCreateResult> {
       const typeConfig = MEMORY_TYPES.find((t) => t.type === input.type);
@@ -71,19 +78,21 @@ export function createMemoryService(): MemoryService {
       const config = await loadMemoryConfig(input.cwd);
       const duplicates = findDuplicates(candidate, existing, config);
 
-      await mkdir(dir, { recursive: true });
-      await writeFile(
-        filePath,
-        renderMemoryEntry({
+      const write = await writeCanonicalEntry({
+        cwd: input.cwd,
+        relativePath: `${typeConfig.folder}/${slug}.md`,
+        content: renderMemoryEntry({
           title,
           type: input.type,
           date: new Date().toISOString().slice(0, 10),
           confidence: config.confidence.default,
         }),
-        "utf8",
-      );
+      });
+      if (write.status === "error") throw new Error(write.error.message);
 
-      return { path: relativePath, type: input.type, duplicates };
+      return write.status === "skipped"
+        ? { path: relativePath, type: input.type, duplicates, securitySkipped: write.reason }
+        : { path: relativePath, type: input.type, duplicates };
     },
 
     async index(input: MemoryIndexInput): Promise<MemoryIndexResult> {
@@ -96,7 +105,13 @@ export function createMemoryService(): MemoryService {
         indexPath,
         `${JSON.stringify(
           {
-            generatedAt,
+            // generatedAt remains a user-facing result field; the persisted
+            // catalog itself is source-fingerprint based and reproducible.
+            catalogVersion: 1,
+            sourceFingerprint: createHash("sha256").update(JSON.stringify(entries.map((e) => ({
+              path: e.relativePath,
+              content: [e.title, e.type, e.status, e.confidence, e.summary, e.details, e.tags, e.scopes, e.validFrom, e.validTo].join("\u0000"),
+            })))).digest("hex"),
             entryCount: entries.length,
             entries: entries.map((e) => ({
               path: e.relativePath,
@@ -151,7 +166,7 @@ export function createMemoryService(): MemoryService {
       const config = await loadMemoryConfig(input.cwd);
       const entries = await collectEntries(input.cwd);
       const filters = input.filters ?? {};
-      const now = new Date();
+      const now = input.now ?? new Date();
       // The deterministic lexical candidate set is ALWAYS computed first — it is
       // both the default result and the fallback when embeddings are off/absent.
       let results = searchEntries(entries, input.query, filters, config, now);
@@ -163,30 +178,15 @@ export function createMemoryService(): MemoryService {
         results = await semanticRerank(input.cwd, input.query, entries, filters, config, now, results);
       }
 
-      const artifacts = path.join(dataRoot(input.cwd), "artifacts");
-      await mkdir(artifacts, { recursive: true });
-      const markdownPath = path.join(artifacts, "latest.md");
-      const jsonPath = path.join(artifacts, "latest.json");
-      const generatedAt = new Date().toISOString();
-
-      await writeFile(markdownPath, renderSearchMarkdown(input.query, results), "utf8");
-      await writeFile(
-        jsonPath,
-        `${JSON.stringify(
-          { schemaVersion: config.schemaVersion, query: input.query, generatedAt, results },
-          null,
-          2,
-        )}\n`,
-        "utf8",
-      );
-
       return {
         schemaVersion: config.schemaVersion,
         query: input.query,
         results,
-        markdownPath: path.relative(input.cwd, markdownPath),
-        jsonPath: path.relative(input.cwd, jsonPath),
       };
+    },
+
+    async writeReport(input) {
+      return reportStore.writeReport(input);
     },
 
     async ingest(input: MemoryIngestInput): Promise<MemoryIngestResult> {
@@ -196,6 +196,30 @@ export function createMemoryService(): MemoryService {
 
     async supersede(input: MemorySupersedeInput): Promise<MemorySupersedeResult> {
       return supersedeEntry(input, new Date());
+    },
+
+    async transition(input: MemoryTransitionInput): Promise<MemoryTransitionResult> {
+      const resolved = await resolveCanonicalEntryPath(input.cwd, input.path);
+      if (!resolved) {
+        return { path: input.path, from: "draft", to: input.to, changed: false, error: { code: "not-found", message: "Memory entry path must be confined to the typed memory root." } };
+      }
+      let content: string;
+      try { content = await readFile(resolved.absolutePath, "utf8"); } catch {
+        return { path: resolved.relativePath, from: "draft", to: input.to, changed: false, error: { code: "not-found", message: `Memory entry not found: ${resolved.relativePath}` } };
+      }
+      const from = statusOf(content);
+      const permitted = transitionMemoryStatus(from, input.to);
+      if (!permitted.ok) return { path: resolved.relativePath, from, to: input.to, changed: false, error: permitted.error };
+      if (!permitted.changed) return { path: resolved.relativePath, from, to: input.to, changed: false };
+      const date = (input.now ?? new Date()).toISOString().slice(0, 10);
+      let next = setHeader(content, "Status", input.to);
+      if (!header(next, "Recorded-At")) next = setHeader(next, "Recorded-At", date);
+      next = setProvenanceUpdated(next, date);
+      next = appendChangelog(next, `- Lifecycle: ${from} -> ${input.to} on ${date}${input.reason ? `: ${input.reason}` : ""}.`);
+      const write = await writeCanonicalEntry({ cwd: input.cwd, relativePath: resolved.relativePath, content: next });
+      if (write.status === "skipped") return { path: resolved.relativePath, from, to: input.to, changed: false, securitySkipped: write.reason };
+      if (write.status === "error") return { path: resolved.relativePath, from, to: input.to, changed: false, error: { code: "write-failed", message: write.error.message } };
+      return { path: resolved.relativePath, from, to: input.to, changed: true };
     },
 
     async check(input) {
@@ -263,3 +287,10 @@ function slugToTitle(slug: string): string {
     .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
     .join(" ");
 }
+
+function header(content: string, key: string): string | null { return content.match(new RegExp(`^${escapeRe(key)}:\\s*(.*)$`, "mi"))?.[1]?.trim() || null; }
+function statusOf(content: string): import("./types").MemoryStatus { const value = header(content, "Status"); return value === "accepted" || value === "deprecated" || value === "conflict" || value === "superseded" ? value : "draft"; }
+function setHeader(content: string, key: string, value: string): string { const re = new RegExp(`^${escapeRe(key)}:\\s*.*$`, "mi"); if (re.test(content)) return content.replace(re, `${key}: ${value}`); const lines = content.split("\n"); const index = lines.findIndex((line) => /^##\s/.test(line)); lines.splice(index < 0 ? 1 : index, 0, `${key}: ${value}`); return lines.join("\n"); }
+function setProvenanceUpdated(content: string, date: string): string { return /^[-*]\s*Updated:/mi.test(content) ? content.replace(/^[-*]\s*Updated:.*$/mi, `- Updated: ${date}`) : content.replace(/(##\s+Provenance\s*\n)/i, `$1\n- Updated: ${date}\n`); }
+function appendChangelog(content: string, note: string): string { if (content.includes(note)) return content; return /^##\s+Changelog\s*$/mi.test(content) ? content.replace(/^##\s+Changelog\s*$/mi, `## Changelog\n\n${note}`) : `${content.trimEnd()}\n\n## Changelog\n\n${note}\n`; }
+function escapeRe(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

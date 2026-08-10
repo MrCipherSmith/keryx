@@ -21,6 +21,9 @@ intent, implementation plans, and release evidence do not get mixed together.
   their verified implementation state.
 - [Managed Review Feedback Loop](requirements/managed-review-feedback-loop/README.md)
   — requirements and contracts for managed review packages.
+- [Keryx Memory Reliability](requirements/keryx-memory-reliability/README.md)
+  — corrective requirements and implementation tracking for side-effect-free
+  recall, accepted-only agent influence, durable lifecycle, and generated data.
 
 ## Plans and reports
 

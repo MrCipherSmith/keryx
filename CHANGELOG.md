@@ -625,6 +625,9 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
 
 ### Added
 
+- Memory reliability lifecycle and reporting surfaces: pure default recall,
+  explicit `memory search --save-report`, validated `memory transition`, and
+  non-destructive `memory supersede` documentation/registry coverage.
 - Language-aware gdgraph import resolution: Java (Maven/Gradle source roots,
   fully-qualified-name → file mapping) and Python (dotted modules, `__init__.py`
   packages, and relative `from . import x`) source now produce real dependency
@@ -645,6 +648,12 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
 
 ### Changed
 
+- Memory documentation now treats Markdown as canonical, catalogs/embeddings as
+  optional disposable views, and automatic recall as accepted/current/bounded.
+- Init/update migration guidance for legacy `data/memory/artifacts/latest.*`
+  is advisory only; Keryx never deletes those downstream files or mutates the
+  Git index automatically. The Keryx repository's generated legacy copies were
+  retired after byte-for-byte backup to `/private/tmp/keryx-memory-latest-backup-2026-08-10/`.
 - Graph symbol resolution now disambiguates loose names and resolves cross-file
   calls before computing callers and impact.
 - Agent bootstrap rules enforce the Metaproject hard gate before project work.
@@ -679,6 +688,9 @@ agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
 
 ### Documentation
 
+- Added the P0–P6 memory reliability verification/evidence package, migration
+  guidance, CLI/module/architecture/setup updates, and refreshed the accepted
+  `src-memory` wiki page.
 - Refreshed public, developer, CLI, architecture, module, onboarding, workspace,
   and release-readiness documentation for the post-`v0.1.0` feature set.
 

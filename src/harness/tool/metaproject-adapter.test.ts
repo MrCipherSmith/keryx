@@ -86,15 +86,19 @@ function fakeDeps(opts: {
           schemaVersion: 1,
           query: input.query,
           results: [],
-          markdownPath: "",
-          jsonPath: "",
         }
       );
+    },
+    async writeReport() {
+      throw new Error("not used");
     },
     async ingest() {
       throw new Error("not used");
     },
     async supersede() {
+      throw new Error("not used");
+    },
+    async transition() {
       throw new Error("not used");
     },
     async check() {
@@ -166,7 +170,7 @@ test("memorySearch delegates to the injected memory fake and maps ranked hits", 
     reason: "match",
   };
   const { deps, calls } = fakeDeps({
-    search: { schemaVersion: 1, query: "offline", results: [scored], markdownPath: "", jsonPath: "" },
+    search: { schemaVersion: 1, query: "offline", results: [scored] },
   });
   const port = createMetaprojectAdapter(CWD, deps);
   const result = await port.memorySearch({ query: "offline", module: "harness", limit: 5 });
@@ -174,8 +178,9 @@ test("memorySearch delegates to the injected memory fake and maps ranked hits", 
   expect(calls.search).toHaveLength(1);
   expect(calls.search[0]?.cwd).toBe(CWD);
   expect(calls.search[0]?.query).toBe("offline");
-  expect(calls.search[0]?.filters).toEqual({ module: "harness", limit: 5 });
-  expect(result.filters).toEqual({ module: "harness" });
+  expect(calls.search[0]?.filters).toMatchObject({ module: "harness", status: "accepted", limit: 5 });
+  expect(calls.search[0]?.filters?.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(result.filters).toMatchObject({ module: "harness", status: "accepted" });
   expect(result.hits).toEqual([
     {
       path: "decisions/x.md",
@@ -186,6 +191,24 @@ test("memorySearch delegates to the injected memory fake and maps ranked hits", 
       excerpt: "Keep the harness core offline and deterministic.",
     },
   ]);
+});
+
+test("memorySearch validates automatic-recall inputs at the port boundary", async () => {
+  const { deps, calls } = fakeDeps({});
+  const port = createMetaprojectAdapter(CWD, deps);
+  for (const input of [
+    { query: "" },
+    { query: "x".repeat(4097) },
+    { query: "x", status: "unknown" },
+    { query: "x", status: "draft" },
+    { query: "x", class: "unknown" },
+    { query: "x", limit: 0 },
+  ]) {
+    const result = await port.memorySearch(input);
+    expect(result.hits).toEqual([]);
+    expect(result.error).toBeDefined();
+  }
+  expect(calls.search).toEqual([]);
 });
 
 test("readWiki rejects a path that escapes the wiki root with a structured error result", async () => {

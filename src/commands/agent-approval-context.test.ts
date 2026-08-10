@@ -36,14 +36,20 @@ test("buildApprovalContext reports blast radius for a file with graph dependents
 });
 
 test("buildApprovalContext includes the top memory note", async () => {
+  let memoryInput: unknown;
   const port = fakePort({
-    memorySearch: async ({ query }) => ({
+    memorySearch: async (input) => {
+      memoryInput = input;
+      const { query } = input;
+      return {
       query,
       hits: [{ path: "memory/known-mistakes/x.md", title: "Do not rm -rf node_modules", score: 0.9 }],
-    }),
+      };
+    },
   });
   const context = await buildApprovalContext(port, "rm -rf node_modules");
   expect(context).toContain("memory: Do not rm -rf node_modules");
+  expect(memoryInput).toMatchObject({ status: "accepted", limit: 1 });
 });
 
 test("buildApprovalContext is empty for a plain command with no dependents or memory", async () => {

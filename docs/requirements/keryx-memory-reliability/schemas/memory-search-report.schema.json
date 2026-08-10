@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/memory-search-report.schema.json",
+  "title": "Keryx Memory Search Report",
+  "description": "Bounded, portable output of an explicitly persisted memory search run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "query",
+    "generatedAt",
+    "filters",
+    "results"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "query": { "type": "string", "maxLength": 4096 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "filters": { "$ref": "#/$defs/filters" },
+    "results": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/result" }
+    }
+  },
+  "$defs": {
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "module": { "type": "string", "maxLength": 256 },
+        "entity": { "type": "string", "maxLength": 256 },
+        "status": {
+          "enum": ["draft", "accepted", "deprecated", "conflict", "superseded"]
+        },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "asOf": { "type": "string", "format": "date" },
+        "class": { "enum": ["semantic", "episodic", "procedural"] },
+        "semantic": { "type": "boolean" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "title", "type", "status", "score", "reason", "summary"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Memory-root-relative Markdown path; never absolute."
+        },
+        "title": { "type": "string", "maxLength": 512 },
+        "type": { "type": "string", "maxLength": 128 },
+        "status": {
+          "enum": ["draft", "accepted", "deprecated", "conflict", "superseded"]
+        },
+        "score": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 512 },
+        "summary": { "type": "string", "maxLength": 2000 }
+      }
+    }
+  }
+}

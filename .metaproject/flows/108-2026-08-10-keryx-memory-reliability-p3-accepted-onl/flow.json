@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 2,
+  "id": "108",
+  "slug": "keryx-memory-reliability-p3-accepted-onl",
+  "title": "Keryx Memory Reliability P3 — Accepted-Only Bounded Automatic Recall",
+  "status": "in-progress",
+  "createdAt": "2026-08-10T12:52:54.263Z",
+  "updatedAt": "2026-08-10T18:31:09.060Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:141d3dff8d45bdffbfd4c13fba6fc30af9072e7ccdb1c6844d5f580f4f6705ad",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-10T18:30:33.880Z",
+      "note": "acceptedCurrentSearchFilters hard-caps automatic recall; CLI --status draft covered by focused P3 test"
+    },
+    "AC2": {
+      "at": "2026-08-10T18:30:38.819Z",
+      "note": "adapter defaults accepted/current, validates inputs, caps results and UTF-8 excerpts; adapter focused tests pass"
+    },
+    "AC3": {
+      "at": "2026-08-10T18:30:43.351Z",
+      "note": "memory-recall-p3 test verifies unified harness/MCP and legacy MCP portable bounded DTOs with no details or absolute paths"
+    },
+    "AC4": {
+      "at": "2026-08-10T18:30:47.486Z",
+      "note": "approval explicitly requests accepted status limit 1 and remains best-effort; approval and authority matrix focused tests pass"
+    },
+    "AC5": {
+      "at": "2026-08-10T18:30:53.909Z",
+      "note": "flow related-memory uses acceptedCurrentSearchFilters; focused flow context test excludes non-authoritative and boundary-expired entries"
+    },
+    "AC6": {
+      "at": "2026-08-10T18:30:57.207Z",
+      "note": "procedural selector is accepted/current/scoped with hard cap; renderer bounds title summary and path; focused regression 19/0"
+    },
+    "AC7": {
+      "at": "2026-08-10T18:31:00.917Z",
+      "note": "P2 canonical consultation integration retained; P3 verifier test proves current accepted authority and ignores legacy latest artifacts"
+    },
+    "AC8": {
+      "at": "2026-08-10T18:31:04.443Z",
+      "note": "P3 authority matrix covers accepted draft conflict deprecated expired superseded future and Valid-To boundary; large payload test covers bounds"
+    },
+    "AC9": {
+      "at": "2026-08-10T18:31:09.060Z",
+      "note": "focused 36/0 and review regression 19/0; changed selection 80/0; parent combined verification TypeScript pass plus 27/0 appropriate broader scope"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-10T12:52:54.263Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-10T12:56:35.270Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-10T12:56:38.650Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-10T12:57:26.110Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-10T18:29:08.809Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-10T18:29:13.461Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-10T18:29:16.393Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-10T18:30:33.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: acceptedCurrentSearchFilters hard-caps automatic recall; CLI --status draft covered by focused P3 test"
+    },
+    {
+      "at": "2026-08-10T18:30:38.819Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: adapter defaults accepted/current, validates inputs, caps results and UTF-8 excerpts; adapter focused tests pass"
+    },
+    {
+      "at": "2026-08-10T18:30:43.351Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: memory-recall-p3 test verifies unified harness/MCP and legacy MCP portable bounded DTOs with no details or absolute paths"
+    },
+    {
+      "at": "2026-08-10T18:30:47.486Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: approval explicitly requests accepted status limit 1 and remains best-effort; approval and authority matrix focused tests pass"
+    },
+    {
+      "at": "2026-08-10T18:30:53.909Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: flow related-memory uses acceptedCurrentSearchFilters; focused flow context test excludes non-authoritative and boundary-expired entries"
+    },
+    {
+      "at": "2026-08-10T18:30:57.207Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: procedural selector is accepted/current/scoped with hard cap; renderer bounds title summary and path; focused regression 19/0"
+    },
+    {
+      "at": "2026-08-10T18:31:00.917Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: P2 canonical consultation integration retained; P3 verifier test proves current accepted authority and ignores legacy latest artifacts"
+    },
+    {
+      "at": "2026-08-10T18:31:04.443Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: P3 authority matrix covers accepted draft conflict deprecated expired superseded future and Valid-To boundary; large payload test covers bounds"
+    },
+    {
+      "at": "2026-08-10T18:31:09.060Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: focused 36/0 and review regression 19/0; changed selection 80/0; parent combined verification TypeScript pass plus 27/0 appropriate broader scope"
+    }
+  ]
+}

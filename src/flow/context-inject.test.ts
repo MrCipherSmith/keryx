@@ -3,6 +3,31 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { collectContext } from "./context";
+import { renderProceduralBlock } from "../memory/inject";
+import type { MemoryEntry } from "../memory/types";
+
+test("P3: procedural prompt rendering bounds title, summary, and path", () => {
+  const block = renderProceduralBlock([
+    {
+      absolutePath: "/tmp/secret.md",
+      relativePath: `patterns/${"p".repeat(1_000)}.md`,
+      type: "pattern",
+      title: "T".repeat(1_000),
+      version: null,
+      status: "accepted",
+      confidence: "high",
+      summary: "S".repeat(2_000),
+      details: "must not render",
+      tags: [],
+      scopes: { module: null, entity: null, files: [], skills: [] },
+      created: null,
+      updated: null,
+      provenance: { source: null, link: null },
+    } satisfies MemoryEntry,
+  ]);
+  expect(Buffer.byteLength(block, "utf8")).toBeLessThanOrEqual(1_100);
+  expect(block).not.toContain("must not render");
+});
 
 // AC-C8: accepted/current/procedural memory in the task scope is rendered into
 // the assembled flow prompt via proceduralMemoryForScope + renderProceduralBlock;

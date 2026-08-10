@@ -36,6 +36,11 @@ coverage/
 .metaproject/data/testing/artifacts/runs/
 .metaproject/data/tasks/runtime/
 .metaproject/data/tasks/logs/
+# Memory generated views, caches, reports, and atomic staging are disposable.
+.metaproject/data/memory/index/
+.metaproject/data/memory/embeddings/
+.metaproject/data/memory/artifacts/
+.metaproject/runtime/memory/
 # Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
 .metaproject/data/security/raw/
 .metaproject/data/security/raw/**

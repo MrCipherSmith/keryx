@@ -12,7 +12,7 @@ import { getAffected, getCycles, getOrphans, loadGraph } from "../gdgraph/query"
 import type { GraphData } from "../gdgraph/types";
 import { createSecurityService, runScan } from "../security/service";
 import { scanMcpManifest } from "../security/detect/mcp";
-import { createMemoryService } from "../memory/service";
+import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
 import { createFlowService } from "../flow/service";
@@ -199,7 +199,7 @@ export function buildToolRegistry(): ToolEntry[] {
       mutating: false,
       async invoke(cwd, params) {
         const query = stringParam(params, "query") ?? "";
-        return createMemoryService().search({ cwd, query });
+        return createMetaprojectAdapter(cwd).memorySearch({ query });
       },
     },
     {

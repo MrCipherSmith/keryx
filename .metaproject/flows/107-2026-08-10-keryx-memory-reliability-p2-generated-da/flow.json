@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 2,
+  "id": "107",
+  "slug": "keryx-memory-reliability-p2-generated-da",
+  "title": "Keryx memory reliability P2: generated data and migration policy",
+  "status": "in-progress",
+  "createdAt": "2026-08-10T12:50:23.388Z",
+  "updatedAt": "2026-08-10T19:07:40.340Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:64315747472861667b1ef6cce3078a41511f6c249edb92258b0f6d838cb9972f",
+  "acConfirmed": {
+    "AC5": {
+      "at": "2026-08-10T13:01:33.217Z",
+      "note": "findLegacyMemoryArtifacts classifies tracked/untracked paths; init/update print advisory and never delete or mutate Git index."
+    },
+    "AC3": {
+      "at": "2026-08-10T13:01:33.284Z",
+      "note": "Init index test verifies repeated catalog generation has equal entries; embedding suite verifies delete/rebuild byte-identical vectors and no canonical mutation."
+    },
+    "AC4": {
+      "at": "2026-08-10T13:01:33.331Z",
+      "note": "Generated index/manifest/skill/docs no longer reference legacy latest paths; verifier emits evidence:memory-consultation from canonical entries."
+    },
+    "AC1": {
+      "at": "2026-08-10T13:01:33.595Z",
+      "note": "Generated block and Git matching tests cover catalog, embeddings, legacy artifacts, runtime, staging, locks; canonical memory remains unignored."
+    },
+    "AC7": {
+      "at": "2026-08-10T13:01:33.673Z",
+      "note": "Dirty tracked latest.md/json were preserved without staging/deletion; exact P2-3 concern is recorded in flow journal and implementation plan."
+    },
+    "AC6": {
+      "at": "2026-08-10T13:01:33.814Z",
+      "note": "CLI reference, modules documentation, and complete setup guide document canonical/generated locations and advisory migration."
+    },
+    "AC2": {
+      "at": "2026-08-10T13:01:33.948Z",
+      "note": "src/commands/init.test.ts and update.test.ts use temporary Git repositories and git check-ignore for concrete generated/canonical paths."
+    },
+    "AC8": {
+      "at": "2026-08-10T19:07:40.339Z",
+      "note": "Final stable integration evidence: P2 focused 24/0, combined P2/P3 targeted 27/0, P5 changed 104/0, P6 targeted 319/0, bunx tsc --noEmit passed, and P3-only runtime authority changes remained outside P2 ownership."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-10T12:50:23.388Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-10T12:53:06.954Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-10T12:53:07.155Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-10T13:00:19.722Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-10T13:00:19.934Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-10T13:00:20.064Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-10T13:01:33.217Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: findLegacyMemoryArtifacts classifies tracked/untracked paths; init/update print advisory and never delete or mutate Git index."
+    },
+    {
+      "at": "2026-08-10T13:01:33.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Init index test verifies repeated catalog generation has equal entries; embedding suite verifies delete/rebuild byte-identical vectors and no canonical mutation."
+    },
+    {
+      "at": "2026-08-10T13:01:33.331Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Generated index/manifest/skill/docs no longer reference legacy latest paths; verifier emits evidence:memory-consultation from canonical entries."
+    },
+    {
+      "at": "2026-08-10T13:01:33.596Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Generated block and Git matching tests cover catalog, embeddings, legacy artifacts, runtime, staging, locks; canonical memory remains unignored."
+    },
+    {
+      "at": "2026-08-10T13:01:33.673Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Dirty tracked latest.md/json were preserved without staging/deletion; exact P2-3 concern is recorded in flow journal and implementation plan."
+    },
+    {
+      "at": "2026-08-10T13:01:33.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CLI reference, modules documentation, and complete setup guide document canonical/generated locations and advisory migration."
+    },
+    {
+      "at": "2026-08-10T13:01:33.949Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/commands/init.test.ts and update.test.ts use temporary Git repositories and git check-ignore for concrete generated/canonical paths."
+    },
+    {
+      "at": "2026-08-10T13:01:47.153Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-10T19:07:40.340Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Final stable integration evidence: P2 focused 24/0, combined P2/P3 targeted 27/0, P5 changed 104/0, P6 targeted 319/0, bunx tsc --noEmit passed, and P3-only runtime authority changes remained outside P2 ownership."
+    }
+  ]
+}

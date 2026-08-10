@@ -1,19 +1,19 @@
 ---
 Title: Module src/memory
-Version: 1.0.0
+Version: 1.1.0
 Type: component
 Status: accepted
-Summary: `src/memory` groups 25 file(s). Depends on `src/lib`, `src/security`, `src/memory/embedding`. Exposes 5 public symbol(s).
+Summary: `src/memory` groups 36 file(s). Depends on `src/lib`, `src/security`, `src/memory/embedding`. Exposes 5 public symbol(s).
 
 # Module src/memory
 
 ## Summary
 
-`src/memory` groups 25 file(s). Depends on `src/lib`, `src/security`, `src/memory/embedding`. Exposes 5 public symbol(s).
+`src/memory` groups 36 file(s). Depends on `src/lib`, `src/security`, `src/memory/embedding`. Exposes 5 public symbol(s).
 
 ## Overview
 
-`src/memory` is keryx's long-lived project knowledge store. It owns the full lifecycle of typed memory entries — creating, indexing, searching, ingesting, and superseding Markdown files that live under `.metaproject/memory/`. The module gives agents and humans a queryable, ranked, and deduplicated record of lessons, decisions, constraints, known mistakes, and related observations accumulated during a project's lifetime. It is the primary dependency of `src/commands` (9 imports) and is also consumed by `src/flow`, `src/wiki`, and the MCP layer.
+`src/memory` is keryx's long-lived project knowledge store. It owns the full lifecycle of typed memory entries — creating, optionally cataloging, purely searching, ingesting, transitioning, and superseding Markdown files that live under `.metaproject/memory/`. Markdown is canonical; catalogs, embedding caches, and explicitly saved reports are disposable generated views. The module gives agents and humans a queryable, ranked, bounded record while automatic consumers receive only accepted/current scoped projections. It is consumed by commands, flow, gdskills, harness, MCP, and wiki integrations.
 
 ## How it works
 
@@ -25,17 +25,17 @@ The source of truth. It walks the filesystem under `.metaproject/memory/`, reads
 
 ### Search layer (`search.ts`)
 
-Operates entirely on in-memory `MemoryEntry` arrays and never touches the filesystem itself. It runs a deterministic lexical scoring pipeline:
+Operates entirely on in-memory `MemoryEntry` arrays and never persists a report. It runs a deterministic lexical scoring pipeline:
 
 - Entries are first filtered by status, module/entity scope, knowledge class, and a bitemporal validity window.
 - Then scored across five configurable dimensions (relevance, recency, confidence, status boost, scope match) whose weights come from `MemoryConfig`.
 - The top-k results are returned as `ScoredEntry` objects with per-dimension score breakdowns.
 
-On the opt-in semantic path (`filters.semantic === true` or `config.index.enabled`), `search.ts` also exposes a `candidatePool` function used by `service.ts` to widen the candidate set before embedding reranking.
+On the opt-in semantic path (`filters.semantic === true` or `config.index.enabled`), `search.ts` also exposes a `candidatePool` function used by `service.ts` to widen a bounded candidate set before embedding reranking. Capability failure falls back to lexical results. The generated catalog is optional and is not consumed by runtime recall.
 
 ### Service layer (`service.ts`)
 
-The single public façade created by `createMemoryService()`. It orchestrates the data and search layers plus a set of peer modules (`ingest.ts`, `dedup.ts`, `check.ts`, `supersede.ts`, `templates.ts`) to implement the full `MemoryService` interface. When embedding support is requested, it resolves an `Embedder` through `src/capability`'s capability seam (`resolveCapability`) and delegates to `src/memory/embedding` for index build and cosine reranking; when the capability is unavailable the service degrades silently to the lexical result. Search and index operations write their outputs as artifacts under `.metaproject/data/memory/`.
+The single public façade created by `createMemoryService()`. It orchestrates the data and search layers plus a set of peer modules (`ingest.ts`, `dedup.ts`, `check.ts`, `supersede.ts`, `templates.ts`) to implement the full `MemoryService` interface. When embedding support is requested, it resolves an `Embedder` through `src/capability`'s capability seam (`resolveCapability`) and delegates to `src/memory/embedding` for index build and cosine reranking; when the capability is unavailable the service degrades silently to the lexical result. `memory index` writes an optional disposable catalog/cache; `search()` is pure, and only CLI `--save-report` writes a bounded unique report under ignored `.metaproject/runtime/memory/`.
 
 ### Configuration (`config.ts`)
 
@@ -63,37 +63,30 @@ Bridges external tool outputs (health reports, code reviews, job results) into m
 
 ## Main flows
 
-### 1. Agent memory search (`keryx memory search <query>`)
+**1. Pure memory search (`keryx memory search <query>`).**
+`service.ts` scans canonical Markdown through `store.ts`, applies validated
+status/class/scope/temporal filters, ranks bounded results, and returns them
+without writing files or consuming a generated catalog. `--semantic` may
+rerank a bounded lexical candidate pool through the optional embedding seam;
+failure falls back to lexical results. `--save-report` is a separate explicit
+operation that validates and atomically publishes a unique bounded Markdown/JSON
+report under ignored `.metaproject/runtime/memory/`.
 
-`service.ts`'s `search()` method:
+**2. Automated ingest from a health or review artifact.**
+`service.ts` delegates to `ingestMemory()`, which extracts candidate text,
+maps it to a type, checks duplicate/conflict state, applies the security write
+seam, and creates or reconciles draft entries. It never auto-accepts content.
 
-1. Calls `loadMemoryConfig()` to get ranking weights.
-2. Calls `collectEntries()` (via `store.ts`) to scan `.metaproject/memory/` and parse all Markdown files into `MemoryEntry` objects.
-3. `searchEntries()` in `search.ts` filters entries by status, class, scope, and temporal validity, scores each candidate across five dimensions, sorts by composite score, and returns the top-k `ScoredEntry` list.
-4. The service writes the results as `latest.md` and `latest.json` under `.metaproject/data/memory/artifacts/`.
-5. If `filters.semantic === true`, the service widens the candidate pool via `candidatePool()` and reranks it through the embedding adapter before slicing to the limit.
+**3. Manual creation and lifecycle transition.**
+`create()` validates type and writes a draft through the guarded seam. The
+explicit `transition` command validates allowed edges, next headers, path
+confinement, and security before same-directory atomic replacement; repeated
+transitions are idempotent and invalid/terminal edges preserve bytes.
 
-### 2. Automated ingest from a health or review artifact (`keryx memory ingest --source health <file>`)
-
-`service.ts`'s `ingest()` method delegates to `ingestMemory()` in `ingest.ts`:
-
-1. Reads the source file.
-2. Extracts candidate text snippets (preferring structured JSON fields such as `message`, `summary`, `recommendation`; falling back to Markdown lines).
-3. Maps them to the `known-mistake` or `lesson` type based on the declared source.
-4. Checks each candidate against existing entries with `findDuplicates()` and `findConflicts()`.
-5. For near-duplicates it reconciles in place (Mem0-style UPDATE); for genuinely new entries it runs the security write gate (`guardOutput`) and writes a fresh Markdown file under the appropriate type folder.
-6. Returns counts of created, reconciled, and skipped entries.
-
-### 3. Manual entry creation (`keryx memory create --type decision --title "Use X"`)
-
-`service.ts`'s `create()` method:
-
-1. Validates the type against `MEMORY_TYPES`.
-2. Derives a slug.
-3. Loads config for the default confidence level.
-4. Checks for near-duplicates in the current store (returning them as advisory `DuplicateHint` objects without blocking).
-5. Writes a scaffolded Markdown file via `renderMemoryEntry()` from `templates.ts`.
-6. The resulting entry starts in `draft` status and is not yet queryable with the default "accepted"-boosted search until manually reviewed and accepted.
+**4. Non-destructive supersession.**
+`supersede` pre-validates and guards both entries, closes the old validity
+interval, records provenance/changelog metadata, and retains both Markdown
+files for git-diffable history.
 
 ---
 
@@ -137,8 +130,8 @@ Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. T
 
 ### Graph signals
 
-- Files: 25
-- Cross-module imports: 14
+- Files: 36
+- Cross-module imports: 18
 
 ## Related Wiki
 
@@ -156,5 +149,6 @@ Graph-derived — regenerated by `keryx wiki collect --force`. Only pages that e
 
 ## Changelog
 
+- **1.1.0** — Documented pure recall, explicit disposable reports, accepted/current automatic projections, guarded lifecycle transitions, and non-destructive supersession.
 - **1.0.0** — Prose sections enriched from code (config.ts, store.ts, service.ts, search.ts, ingest.ts, types.ts). Status set to accepted.
 - **0.1.0** — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

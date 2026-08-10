@@ -4,13 +4,22 @@ import path from "node:path";
 import { relevantAcceptedMemory } from "./relevant";
 import { uniqueTestRoot } from "../lib/test-tmp";
 
-function entryMd(title: string, type: string, status: string, moduleName: string): string {
+function entryMd(
+  title: string,
+  type: string,
+  status: string,
+  moduleName: string,
+  temporal: { validFrom?: string; validTo?: string; supersededBy?: string } = {},
+): string {
   return `# ${title}
 
 Version: 0.1.0
 Type: ${type}
 Status: ${status}
 Confidence: high
+Valid-From: ${temporal.validFrom ?? ""}
+Valid-To: ${temporal.validTo ?? ""}
+Superseded-By: ${temporal.supersededBy ?? ""}
 
 ## Summary
 
@@ -46,6 +55,30 @@ test("returns accepted decisions/constraints for the module; ignores drafts, les
       "constraints/c1.md",
       "decisions/d1.md",
     ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P3: authoritative recall excludes expired, boundary-closed, future, and superseded accepted entries", async () => {
+  const root = path.join(import.meta.dir, "..", "..", ".tmp-relevant-current-test");
+  await rm(root, { recursive: true, force: true });
+  const decisions = path.join(root, ".metaproject", "memory", "decisions");
+  await mkdir(decisions, { recursive: true });
+  await writeFile(path.join(decisions, "current.md"), entryMd("Current", "decision", "accepted", "pipelines"), "utf8");
+  await writeFile(path.join(decisions, "expired.md"), entryMd("Expired", "decision", "accepted", "pipelines", { validTo: "2026-08-09" }), "utf8");
+  await writeFile(path.join(decisions, "boundary.md"), entryMd("Boundary", "decision", "accepted", "pipelines", { validTo: "2026-08-10" }), "utf8");
+  await writeFile(path.join(decisions, "future.md"), entryMd("Future", "decision", "accepted", "pipelines", { validFrom: "2026-08-11" }), "utf8");
+  await writeFile(path.join(decisions, "superseded.md"), entryMd("Superseded", "decision", "accepted", "pipelines", { supersededBy: "decisions/current.md" }), "utf8");
+
+  try {
+    const relevant = await relevantAcceptedMemory(
+      root,
+      { module: "pipelines", target: "http-step", files: [] },
+      99,
+      new Date("2026-08-10T00:00:00.000Z"),
+    );
+    expect(relevant.map((entry) => entry.relativePath)).toEqual(["decisions/current.md"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

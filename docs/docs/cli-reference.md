@@ -729,7 +729,8 @@ deterministic (non-LLM) search, dedup, and consolidation.
 ```
 keryx memory new <type> [slug] --title "<title>" [--force]
 keryx memory index [--embeddings]
-keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic]
+keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic] [--save-report]
+keryx memory transition <path> --to <draft|accepted|conflict|deprecated> [--reason <text>]
 keryx memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
 keryx memory assets list | verify [<id>] | pull <id>
 keryx memory ingest --from-<source> <path>
@@ -740,8 +741,14 @@ keryx memory reflect [--narrate] [--provider <p>]
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `new <type> [slug]` | `--title "<t>"`, `--force` | Scaffold a new draft entry; print possible duplicates. |
-| `index` | `--embeddings` | Build `data/memory/index/index.json` from all entries. `--embeddings` additionally builds a vector index when the embedding capability is available; if it is absent, it warns and keeps the lexical index only. |
-| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>`, `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic` | Ranked retrieval; write `latest.md`/`latest.json`, print the ranked list. `--as-of` restricts to entries as of a date, `--class` filters by memory class, and `--semantic` prefers semantic (vector) ranking when available. |
+| `index` | `--embeddings` | Build an optional disposable catalog at `data/memory/index/index.json`; `--embeddings` additionally builds a disposable vector cache when the capability is available. Search scans canonical Markdown directly and does not consume either generated output. |
+| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` (1–100), `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic`, `--save-report` | Filesystem-pure ranked retrieval by default; validates status/class/date/limit before reading. `--save-report` explicitly publishes one bounded immutable report under ignored `.metaproject/runtime/memory/search/<run-id>/`; without it neither text nor `--json` writes artifacts. |
+
+Generated memory catalogs and embedding caches under `.metaproject/data/memory/`
+are disposable and ignored. Existing legacy `data/memory/artifacts/latest.*`
+files receive an advisory during init/update; migration is maintainer-owned and
+never deletes files or changes the Git index automatically.
+| `transition <path>` | `--to <draft\|accepted\|conflict\|deprecated>`, `--reason <text>` | Explicit validated lifecycle transition through the guarded atomic write seam; invalid or terminal edges fail without changing bytes. |
 | `supersede <old-path>` | `--by <new-path>` (required), `--date <YYYY-MM-DD>` | Mark one entry as superseded by another. Non-destructive and git-diffable — both entries stay on disk. A blocking security gate can abort the write. |
 | `assets list \| verify [<id>] \| pull <id>` | — | Manage declared assets from `assets.lock.json` (`list`/`verify`/`pull`; `pull` is the only networked verb). |
 | `ingest` | `--from-review\|--from-health\|--from-job\|--from-skill-verifier <path>` | Extract candidate insights from a source artifact into ADD/UPDATE entries. |

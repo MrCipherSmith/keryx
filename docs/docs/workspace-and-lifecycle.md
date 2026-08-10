@@ -55,7 +55,7 @@ data/
 ├── gdskills/{artifacts,proposals,reports}/          # skill learn/verify outputs
 ├── security/{artifacts,incidents,policies,raw,redactions}/  # scan reports, incidents, redactions
 ├── tasks/{artifacts}/                               # flow (task) run outputs
-└── memory/{index,artifacts,queries,raw}/            # typed memory index outputs
+└── memory/{index,embeddings}/                      # optional disposable memory catalog/cache
 ```
 
 ## Source of truth vs generated `data/` — the data-vs-service invariant

@@ -82,6 +82,10 @@ test("supersede keeps both files and writes bitemporal fields (AC-C6)", async ()
     // Changelog note appended to the old entry (git-diffable).
     const oldRaw = await readFile(path.join(dir, "old.md"), "utf8");
     expect(oldRaw).toContain("Superseded by decisions/new.md on 2026-05-01.");
+    expect(oldRaw).toContain("- Updated: 2026-07-08");
+    const newRaw = await readFile(path.join(dir, "new.md"), "utf8");
+    expect(newRaw).toContain("Supersedes decisions/old.md on 2026-05-01.");
+    expect(newRaw).toContain("- Updated: 2026-07-08");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -97,6 +101,7 @@ test("supersede is idempotent (second run reports no change)", async () => {
     expect(first.changed).toBe(true);
     const dir = path.join(root, ".metaproject", "memory", "decisions");
     const afterFirst = await readFile(path.join(dir, "old.md"), "utf8");
+    const afterFirstNew = await readFile(path.join(dir, "new.md"), "utf8");
 
     const second = await supersedeEntry(
       { cwd: root, oldPath: "decisions/old.md", newPath: "decisions/new.md", date: "2026-05-01" },
@@ -105,6 +110,7 @@ test("supersede is idempotent (second run reports no change)", async () => {
     expect(second.changed).toBe(false);
     // No further mutation on the idempotent re-run.
     expect(await readFile(path.join(dir, "old.md"), "utf8")).toBe(afterFirst);
+    expect(await readFile(path.join(dir, "new.md"), "utf8")).toBe(afterFirstNew);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

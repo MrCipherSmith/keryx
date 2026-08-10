@@ -4,6 +4,7 @@ import { reflectMemory } from "../memory/reflect";
 import { optionValue } from "../lib/args";
 import { runAssetsSubcommand } from "../assets/command";
 import { MEMORY_CLASS_VALUES } from "../memory/types";
+import { MemoryValidationError } from "../memory/validation";
 import type { MemoryClass, MemoryStatus, SearchFilters } from "../memory/types";
 
 let service: ReturnType<typeof createMemoryService> | null = null;
@@ -42,6 +43,10 @@ export async function memoryCommand(args: string[]): Promise<void> {
   }
   if (command === "supersede") {
     await runSupersede(args.slice(1));
+    return;
+  }
+  if (command === "transition") {
+    await runTransition(args.slice(1));
     return;
   }
   if (command === "assets") {
@@ -96,12 +101,17 @@ async function runNew(args: string[]): Promise<void> {
       console.log(`- ${dupe.path} (title ${dupe.titleSimilarity}, summary ${dupe.summaryJaccard})`);
     }
   }
+  if (result.securitySkipped) {
+    console.log(`Creation blocked by security gate: ${result.securitySkipped}`);
+    process.exitCode = 1;
+  }
 }
 
 async function runIndex(args: string[]): Promise<void> {
   const embeddings = args.includes("--embeddings");
   const result = await getService().index({ cwd: process.cwd(), embeddings });
-  console.log(`Indexed ${result.entryCount} entries -> ${result.path}`);
+  console.log(`Generated optional memory catalog for ${result.entryCount} entries -> ${result.path}`);
+  console.log("Search scans canonical Markdown directly and does not depend on this catalog.");
   const { recordProvenance } = await import("../sync/provenance");
   await recordProvenance(process.cwd(), "memory", new Date().toISOString());
   if (result.embeddings) {
@@ -116,7 +126,7 @@ async function runIndex(args: string[]): Promise<void> {
 }
 
 async function runSearch(args: string[]): Promise<void> {
-  const query = args.find((arg) => !arg.startsWith("--")) ?? "";
+  const query = positionalArgs(args)[0] ?? "";
   if (!query) {
     console.error('Usage: keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]');
     process.exitCode = 1;
@@ -130,17 +140,36 @@ async function runSearch(args: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  const parsedLimit = limitArg === undefined ? undefined : Number(limitArg);
+  if (limitArg !== undefined && (parsedLimit === undefined || !Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100)) {
+    printMemoryValidationError(new MemoryValidationError("limit", "must be an integer from 1 to 100", "Choose a value in that range."), args.includes("--json"));
+    process.exitCode = 1;
+    return;
+  }
   const filters: SearchFilters = {
     module: optionValue(args, "--module"),
     entity: optionValue(args, "--entity"),
     status: optionValue(args, "--status") as MemoryStatus | undefined,
-    limit: limitArg ? Number(limitArg) : undefined,
+    limit: parsedLimit,
     asOf: optionValue(args, "--as-of"),
     class: classArg as MemoryClass | undefined,
     semantic: args.includes("--semantic") ? true : undefined,
   };
 
-  const result = await getService().search({ cwd: process.cwd(), query, filters });
+  let result;
+  try {
+    result = await getService().search({ cwd: process.cwd(), query, filters });
+  } catch (error) {
+    if (error instanceof MemoryValidationError || error instanceof Error && error.name === "TemporalValidationError") {
+      printMemoryValidationError(error, args.includes("--json"));
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
+  const report = args.includes("--save-report")
+    ? await getService().writeReport({ cwd: process.cwd(), search: result, filters })
+    : undefined;
 
   if (args.includes("--json")) {
     console.log(
@@ -154,6 +183,7 @@ async function runSearch(args: string[]): Promise<void> {
             status: item.entry.status,
             path: item.entry.relativePath,
           })),
+          ...(report ? { report } : {}),
         },
         null,
         2,
@@ -171,9 +201,11 @@ async function runSearch(args: string[]): Promise<void> {
       `${i + 1}. [${item.score}] ${item.entry.title} (${item.entry.type}/${item.entry.status}) - ${item.entry.relativePath}`,
     );
   }
-  console.log("");
-  console.log(`report: ${result.markdownPath}`);
-  console.log(`json: ${result.jsonPath}`);
+  if (report) {
+    console.log("");
+    console.log(`report: ${report.markdownPath}`);
+    console.log(`json: ${report.jsonPath}`);
+  }
 }
 
 async function runSupersede(args: string[]): Promise<void> {
@@ -205,6 +237,23 @@ async function runSupersede(args: string[]): Promise<void> {
   }
   console.log(`Superseded ${result.superseded} -> ${result.supersededBy}.`);
   console.log("Both entries remain on disk (non-destructive, git-diffable).");
+}
+
+async function runTransition(args: string[]): Promise<void> {
+  const entryPath = args.find((arg) => !arg.startsWith("--"));
+  const to = optionValue(args, "--to") as Exclude<MemoryStatus, "superseded"> | undefined;
+  if (!entryPath || !to || !["draft", "accepted", "conflict", "deprecated"].includes(to)) {
+    console.error("Usage: keryx memory transition <path> --to <draft|accepted|conflict|deprecated> [--reason <text>]");
+    process.exitCode = 1;
+    return;
+  }
+  const result = await getService().transition({ cwd: process.cwd(), path: entryPath, to, reason: optionValue(args, "--reason") });
+  if (result.error || result.securitySkipped) {
+    console.error(result.error?.message ?? `Transition blocked by security gate: ${result.securitySkipped}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(result.changed ? `Transitioned ${result.path}: ${result.from} -> ${result.to}.` : `Already ${result.to}: ${result.path} (no change).`);
 }
 
 async function runIngest(args: string[]): Promise<void> {
@@ -313,8 +362,9 @@ function printHelp(): void {
 Usage:
   keryx memory new <type> [slug] --title "<title>" [--force]
   keryx memory index [--embeddings]
-  keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic]
+  keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic] [--save-report]
   keryx memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
+  keryx memory transition <path> --to <draft|accepted|conflict|deprecated> [--reason <text>]
   keryx memory assets <list|verify|pull> [<id>]
   keryx memory ingest --from-<review|health|job|skill-verifier> <path>
   keryx memory check
@@ -324,4 +374,28 @@ Types:
   lesson, decision, constraint, known-mistake, historical-context, pattern,
   task-note, review-note, incident, migration-note, integration-note
 `);
+}
+
+function positionalArgs(args: string[]): string[] {
+  const valueOptions = new Set(["--module", "--entity", "--status", "--limit", "--as-of", "--class", "--provider"]);
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index];
+    if (!value || value.startsWith("--")) {
+      if (valueOptions.has(value ?? "")) index += 1;
+      continue;
+    }
+    if (index > 0 && valueOptions.has(args[index - 1] ?? "")) continue;
+    values.push(value);
+  }
+  return values;
+}
+
+function printMemoryValidationError(error: Error & { code?: string; field?: string; action?: string }, json: boolean): void {
+  const payload = { code: error.code ?? "invalid-memory-input", field: error.field ?? "input", message: error.message, action: error.action ?? "Correct the value and try again." };
+  if (json) {
+    console.log(JSON.stringify({ error: payload }, null, 2));
+  } else {
+    console.error(`[${payload.code}] ${payload.field}: ${payload.message} Action: ${payload.action}`);
+  }
 }

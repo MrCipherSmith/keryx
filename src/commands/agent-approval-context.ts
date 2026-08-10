@@ -54,7 +54,7 @@ export async function buildApprovalContext(port: MetaprojectPort, command: strin
 
   // The single most relevant memory note for this command.
   try {
-    const memory = await port.memorySearch({ query: command, limit: 1 });
+    const memory = await port.memorySearch({ query: command, status: "accepted", limit: 1 });
     const hit = memory.error === undefined ? memory.hits[0] : undefined;
     if (hit !== undefined) {
       lines.push(`memory: ${hit.title}`);

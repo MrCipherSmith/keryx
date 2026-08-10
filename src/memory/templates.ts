@@ -15,7 +15,7 @@ export function renderMemoryEntry({
 }): string {
   return `# ${title}
 
-Version: 0.1.0
+Version: 0.2.0
 Type: ${type}
 Status: draft
 Confidence: ${confidence}
@@ -99,13 +99,15 @@ export function renderMemoryIndexScaffold(): string {
 
   return `# Project Memory
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose
 
 Long-term project memory: lessons learned, decisions, constraints, known
 mistakes, historical context, and reusable patterns. Markdown is the source of
-truth; \`keryx memory index\` builds a searchable local index.
+truth; \`keryx memory index\` optionally builds a disposable generated catalog
+for inspection. Search scans canonical Markdown directly and does not depend on
+the catalog.
 
 ## Entry Types
 
@@ -115,18 +117,20 @@ ${typeList}
 
 \`\`\`bash
 keryx memory new lesson --title "<title>"
-keryx memory index
-keryx memory search "<query>" --status accepted
+keryx memory index [--embeddings]
+keryx memory search "<query>" --status accepted [--save-report]
+keryx memory transition <path> --to accepted --reason "<reason>"
 \`\`\`
 
-Only \`accepted\` entries influence skills. \`draft\` entries are advisory.
+Default search is pure and never writes a report. Only \`accepted\`, current,
+scoped, bounded projections influence skills; \`draft\` entries are advisory.
 `;
 }
 
 export function renderMemoryManifest(): string {
   return `# memory
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose
 
@@ -136,8 +140,10 @@ gdskills learning signal.
 ## Commands
 
 - \`keryx memory new <type> --title "<title>"\`
-- \`keryx memory index\`
-- \`keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>]\`
+- \`keryx memory index [--embeddings]\` (optional disposable catalog/cache)
+- \`keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <class>] [--semantic] [--save-report]\` (pure by default)
+- \`keryx memory transition <path> --to <draft|accepted|conflict|deprecated> [--reason <text>]\`
+- \`keryx memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]\`
 - \`keryx memory ingest --from-<source> <path>\`
 - \`keryx memory check\`
 
@@ -148,7 +154,14 @@ gdskills learning signal.
 ## Data
 
 - \`memory/index.md\`
-- \`data/memory/artifacts/latest.md\`
+- \`data/memory/index/index.json\` (disposable generated catalog)
+- \`data/memory/embeddings/\` (disposable optional cache)
+- \`runtime/memory/search/<run-id>/\` (explicit reports only)
+
+Search reads canonical Markdown directly and never consumes the generated
+catalog or writes a legacy global \`latest\` report. Downstream migration from
+legacy \`data/memory/artifacts/latest.*\` is advisory and never deletes files or
+changes the Git index automatically.
 
 ## Skills
 
@@ -164,7 +177,8 @@ Local Documentation Memory service layer.
 Responsibilities:
 
 - read typed Markdown entries under \`.metaproject/memory\` (source of truth);
-- build a deterministic inverted index under \`.metaproject/data/memory/index\`;
+- optionally build a deterministic disposable catalog under
+  \`.metaproject/data/memory/index\` (search does not consume it);
 - rank search by relevance + recency + confidence + status + scope;
 - ingest source artifacts as \`draft\` entries with provenance;
 - run deterministic dedup/conflict checks.
@@ -205,6 +219,9 @@ keryx memory check
 ## Notes
 
 - Only \`accepted\` entries influence skills; \`draft\` are advisory.
-- Markdown is the source of truth; never hand-edit generated indexes.
+- Markdown is the source of truth; generated catalogs, embeddings, and reports
+  are disposable and ignored. Default recall does not persist a report.
+- Existing legacy \`data/memory/artifacts/latest.*\` files are never deleted or
+  changed automatically; init/update report an advisory migration instead.
 `;
 }

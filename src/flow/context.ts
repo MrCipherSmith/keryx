@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { loadMemoryConfig } from "../memory/config";
 import { renderProceduralMemoryForScope } from "../memory/inject";
+import { acceptedCurrentSearchFilters } from "../memory/relevant";
 import { searchEntries } from "../memory/search";
 import { collectEntries } from "../memory/store";
 import type { TrackerAdapter, TrackerRef } from "./types";
@@ -46,7 +47,7 @@ export async function collectContext(input: {
   try {
     const config = await loadMemoryConfig(cwd);
     const entries = await collectEntries(cwd);
-    const results = searchEntries(entries, title, { limit: 5 }, config, now);
+    const results = searchEntries(entries, title, acceptedCurrentSearchFilters(now, { limit: 5 }), config, now);
     if (results.length > 0) {
       sections.push(
         `## Related Memory\n\n${results
