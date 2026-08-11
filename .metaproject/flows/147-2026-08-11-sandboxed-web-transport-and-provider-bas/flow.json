@@ -5,7 +5,7 @@
   "title": "Sandboxed web transport and provider-based web search",
   "status": "in-progress",
   "createdAt": "2026-08-11T22:32:37.150Z",
-  "updatedAt": "2026-08-11T23:11:51.382Z",
+  "updatedAt": "2026-08-11T23:12:16.292Z",
   "source": {
     "type": "description",
     "ref": null
@@ -95,7 +95,7 @@
       "id": "T6",
       "title": "Review, fix findings, prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -103,7 +103,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -154,6 +155,11 @@
       "at": "2026-08-11T23:11:51.382Z",
       "event": "task-done",
       "detail": "T5: Run focused, integration, and platform verification"
+    },
+    {
+      "at": "2026-08-11T23:12:16.292Z",
+      "event": "task-done",
+      "detail": "T6: Review, fix findings, prepare draft PR"
     }
   ]
 }

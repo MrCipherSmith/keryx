@@ -10,3 +10,4 @@
 - 2026-08-11T23:05:31.373Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-08-11T23:09:16.334Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-11T23:11:51.382Z - task-done: T5: Run focused, integration, and platform verification
+- 2026-08-11T23:12:16.292Z - task-done: T6: Review, fix findings, prepare draft PR
