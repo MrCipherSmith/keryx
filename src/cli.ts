@@ -29,6 +29,7 @@ import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
 import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
+import { workspaceCommand } from "./commands/workspace";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -82,6 +83,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   sessions: sessionsCommand,
   session: sessionsCommand,
   version: versionCommand,
+  workspace: workspaceCommand,
 };
 
 export async function main(): Promise<void> {
@@ -198,6 +200,8 @@ Usage:
   keryx security hooks install --runtime <claude|cursor|windsurf|generic-mcp|all>
   keryx security eval [--corpus <name|all>] [--with-model]
   keryx mcp serve [--http] [--cwd <project-root>]
+  keryx workspace create --title <title> [--component <workspace-relative-ref>]
+  keryx workspace list|show|add-resource
   keryx mcp install|uninstall --runtime <cursor|claude|generic|all> [--dry-run]
   keryx --version
 

@@ -52,6 +52,7 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   { verb: "orient", reason: "emits or installs an orientation block into agent entrypoints; lifecycle" },
   { verb: "metrics", reason: "execution-metrics tooling aimed at maintainers and CI, not agents" },
   { verb: "commands", reason: "the registry surface itself; describing it in itself adds nothing" },
+  { verb: "workspace", reason: "offline SAC registry mutation is intentionally local-CLI only in Phase 1; exposing a descriptor would make it eligible for future remote/MCP projection before that security boundary exists" },
 ];
 
 /** Verbs that carry at least one descriptor, derived from the registry. */
