@@ -134,7 +134,7 @@ export interface ServeOptions {
 // builds the server, and connects the default stdio transport — or the isolated
 // HTTP/SSE opt-in when `--http` is passed and the capability is enabled.
 export async function serveMcp(options: ServeOptions): Promise<void> {
-  const ctx = await buildMcpContext(options.cwd);
+  const ctx = await buildMcpContext(options.cwd, options.http ? "http" : "stdio");
   const server = await createMcpServer(ctx);
 
   if (options.http) {

@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
+import { readWorkspaceFileNoFollow } from "./secure-resource-read";
 import {
   authorizeSacUse,
   createSacAuthorizationServer,
@@ -33,6 +34,8 @@ type WorkspaceServiceOptions = {
   authorizationServer: SacAuthorizationServer;
   strictGuard: StrictSacGuard;
   now?: () => Date;
+  /** Test seam: runs after authorization/containment but before the safe FD open. */
+  beforeResourceOpen?: () => Promise<void> | void;
 };
 
 export class WorkspaceServiceError extends Error {
@@ -96,10 +99,68 @@ export class WorkspaceService {
 
   async show(input: { request: unknown; requestCorrelationId: string; workspaceId: string }): Promise<WorkspaceManifest> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.showForActor({ actorContext: actor, workspaceId: input.workspaceId });
+  }
+
+  /**
+   * In-process SAC readers receive this only after their transport boundary has
+   * issued a TrustedActorContext.  The trust marker is verified again by
+   * requireAuthorization; a structurally similar client object cannot pass.
+   */
+  async showForActor(input: { actorContext: TrustedActorContext; workspaceId: string }): Promise<WorkspaceManifest> {
     await this.requireStrict("read");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(input.actorContext, initial.id, "read");
+    // Re-read and re-authorize at the source-use point.  This is deliberately
+    // adjacent to returning the manifest to a resolver, rather than trusting a
+    // role snapshot captured at the transport boundary.
     const manifest = await this.readManifest(input.workspaceId);
-    await this.requireAuthorization(actor, manifest.id, "read");
+    const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, input.actorContext.subject));
+    if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
     return manifest;
+  }
+
+  /**
+   * Re-authorize and realpath-resolve immediately before a SAC resolver opens
+   * a source target.  A previously returned manifest is never an authority to
+   * disclose a later resource path.
+   */
+  async resolveResourceForActor(input: { actorContext: TrustedActorContext; workspaceId: string; resource: WorkspaceResource }): Promise<WorkspaceResource & { absolutePath: string }> {
+    await this.requireStrict("read");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(input.actorContext, initial.id, "read");
+    const manifest = await this.readManifest(input.workspaceId);
+    const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(await this.readManifest(input.workspaceId), input.actorContext.subject));
+    if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+    const resource = manifest.resources.find((candidate) => candidate.kind === input.resource.kind && candidate.uri === input.resource.uri && candidate.revision === input.resource.revision);
+    if (!resource) throw new WorkspaceServiceError("not_found", "workspace resource is no longer available");
+    try {
+      const absolutePath = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: resource.kind, uri: resource.uri });
+      return { ...resource, absolutePath };
+    } catch (error) {
+      throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "unsafe workspace reference");
+    }
+  }
+
+  /**
+   * The only source-content boundary for local SAC resolvers.  It revalidates
+   * ACL and containment immediately before opening, then walks every parent
+   * directory via descriptor-relative O_NOFOLLOW opens. Reads are from the
+   * final descriptor, so neither intermediate nor final swaps can redirect
+   * disclosed content.
+   */
+  async readResourceForActor(input: { actorContext: TrustedActorContext; workspaceId: string; resource: WorkspaceResource; encoding?: BufferEncoding }): Promise<Buffer | string> {
+    await this.resolveResourceForActor(input);
+    await this.options.beforeResourceOpen?.();
+    // Revalidate the actual target immediately before FD acquisition. The
+    // descriptor-relative walk below closes both intermediate and final swaps.
+    const target = await this.resolveResourceForActor(input);
+    try {
+      const content = readWorkspaceFileNoFollow(this.root, target.absolutePath);
+      return input.encoding ? content.toString(input.encoding) : content;
+    } catch (error) {
+      throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "safe source open failed");
+    }
   }
 
   async addResource(input: { request: unknown; requestCorrelationId: string; workspaceId: string; resource: WorkspaceResource }): Promise<WorkspaceManifest> {

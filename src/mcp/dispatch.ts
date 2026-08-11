@@ -8,7 +8,7 @@
 import { loadMcpConfig, type McpConfig } from "./config";
 import { loadDiscovery, type McpDiscovery } from "./discovery";
 import { buildToolRegistry } from "./tools";
-import type { JsonSchema, ToolEntry } from "./types";
+import type { JsonSchema, McpInvocationContext, ToolEntry } from "./types";
 import {
   listResources,
   readResource,
@@ -22,14 +22,15 @@ export interface McpContext {
   config: McpConfig;
   discovery: McpDiscovery;
   tools: ToolEntry[];
+  transport: McpInvocationContext["transport"];
 }
 
-export async function buildMcpContext(cwd: string): Promise<McpContext> {
+export async function buildMcpContext(cwd: string, transport: McpInvocationContext["transport"] = "in-process"): Promise<McpContext> {
   const [config, discovery] = await Promise.all([
     loadMcpConfig(cwd),
     loadDiscovery(cwd),
   ]);
-  return { cwd, config, discovery, tools: buildToolRegistry() };
+  return { cwd, config, discovery, tools: buildToolRegistry(), transport };
 }
 
 // A tool name passes the config filter when the include list contains "*" or the
@@ -88,7 +89,7 @@ export async function dispatchCallTool(
     return { text: `Unknown or unavailable tool: ${name}`, isError: true };
   }
   try {
-    const result = await tool.invoke(ctx.cwd, args ?? {});
+    const result = await tool.invoke(ctx.cwd, args ?? {}, { transport: ctx.transport });
     const json = JSON.stringify(result ?? null, null, 2);
     // M-5 / AC4: EVERY tool result passes through redactRaw before transport.
     const redacted = await redactToolOutput(ctx.cwd, json, ctx.config.redactToolOutput);

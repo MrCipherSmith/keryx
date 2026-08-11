@@ -8,5 +8,8 @@ export interface ToolEntry {
   // When true, the tool calls a gate-preserving service method (M-10). Block A
   // exposes only read-only or report-writing tools; no mutating flow transition.
   mutating: boolean;
-  invoke(cwd: string, params: Record<string, unknown>): Promise<unknown>;
+  invoke(cwd: string, params: Record<string, unknown>, context?: McpInvocationContext): Promise<unknown>;
 }
+
+/** Server-owned transport context; never supplied through tool parameters. */
+export type McpInvocationContext = Readonly<{ transport: "stdio" | "http" | "in-process" }>;

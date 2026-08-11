@@ -9,7 +9,7 @@ async function invoke(cwd: string, args: string[]) {
   return { exitCode: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() };
 }
 
-test("workspace CLI exposes only offline create/list/show/add-resource operations", async () => {
+test("workspace CLI exposes only offline create/list/show/add-resource and guarded read operations", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-cli-")); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
   const created = await invoke(cwd, ["create", "--title", "CLI workspace", "--component", "./src/a.ts"]);
   expect(created.exitCode).toBe(0); const manifest = JSON.parse(created.stdout) as { id: string };
