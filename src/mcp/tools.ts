@@ -96,12 +96,10 @@ export function buildToolRegistry(): ToolEntry[] {
     },
     {
       name: "sac.propose", module: "sac", description: "Create an immutable local SAC proposal from explicit wrap-up output.",
-      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, kind: { type: "string" }, summary: { type: "string" }, evidenceUri: { type: "string" }, revision: { type: "string" } }, ["workspaceId", "kind", "summary", "evidenceUri"]),
+      inputSchema: OBJECT_SCHEMA(),
       mutating: true,
       async invoke(cwd, params, context) {
-        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
-        const workspaceId = stringParam(params, "workspaceId") ?? ""; const kind = stringParam(params, "kind") as "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk"; const summary = stringParam(params, "summary") ?? ""; const evidenceUri = stringParam(params, "evidenceUri") ?? ""; const revision = stringParam(params, "revision") ?? "r1";
-        return normalizeProposalLifecycleResult(await createLocalProposalLifecycleService(cwd).create({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalRevision: revision, kind, summary, evidence: [{ kind: "evidence", uri: evidenceUri, revision, observedAt: new Date().toISOString() }] }));
+        return { code: context?.transport === "http" ? "sac_transport_denied" as const : "trusted_wrap_up_required" as const };
       },
     },
     {

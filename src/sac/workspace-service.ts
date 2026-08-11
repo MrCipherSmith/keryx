@@ -149,6 +149,16 @@ export class WorkspaceService {
     return manifest;
   }
 
+  /** Owner-use evidence gate: ACL and FD-safe source bytes are obtained together. */
+  async readEvidenceAtUse(input: { actorContext: TrustedActorContext; workspaceId: string; uri: string }): Promise<Buffer> {
+    await this.reauthorizeAtUse({ actorContext: input.actorContext, workspaceId: input.workspaceId, action: "review" });
+    let absolutePath: string;
+    try { absolutePath = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: "evidence", uri: input.uri }); }
+    catch (error) { throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "unsafe evidence reference"); }
+    try { return readWorkspaceFileNoFollow(this.root, absolutePath); }
+    catch (error) { throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "safe evidence open failed"); }
+  }
+
   /**
    * Re-authorize and realpath-resolve immediately before a SAC resolver opens
    * a source target.  A previously returned manifest is never an authority to

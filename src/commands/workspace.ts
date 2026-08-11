@@ -54,11 +54,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(normalizeFwkResult(result), null, 2)); return;
     }
     if (subcommand === "propose") {
-      rejectUnknownOptions(args.slice(2), new Set(["--kind", "--summary", "--evidence", "--revision"]));
-      const workspaceId = args[1]; const kind = optionValue(args, "--kind") as "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk" | undefined; const summary = optionValue(args, "--summary"); const evidence = optionValue(args, "--evidence"); const revision = optionValue(args, "--revision") ?? "r1";
-      if (!workspaceId || !kind || !summary || !evidence) throw new Error("Usage: keryx workspace propose <workspace-id> --kind <kind> --summary <explicit-summary> --evidence <workspace-relative-ref> [--revision <revision>]");
-      const result = await createLocalProposalLifecycleService(process.cwd()).create({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalRevision: revision, kind, summary, evidence: [{ kind: "evidence", uri: evidence, revision, observedAt: new Date().toISOString() }] });
-      console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
+      throw new Error("workspace propose requires a trusted Harness/Flow wrap-up artifact; raw CLI summary input is not accepted");
     }
     if (subcommand === "review") {
       rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key"]));
