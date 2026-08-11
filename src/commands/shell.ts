@@ -1123,7 +1123,16 @@ export async function resolveTuiStartup(opts: {
       appliedKeys,
     };
   }
-  return { detected: await opts.detect(), appliedKeys };
+  const detected = await opts.detect();
+  return {
+    detected: detected.map((provider) => {
+      const savedBaseUrl = savedCfg.baseUrls?.[provider.name];
+      return typeof savedBaseUrl === "string" && savedBaseUrl.length > 0
+        ? { ...provider, baseUrl: savedBaseUrl }
+        : provider;
+    }),
+    appliedKeys,
+  };
 }
 
 /** Parsed flags for the interactive shell entrypoint. */

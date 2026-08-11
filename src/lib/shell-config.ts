@@ -15,6 +15,8 @@ export interface ShellConfig {
   provider?: string;
   model?: string;
   baseUrl?: string;
+  /** Per-provider endpoint overrides selected in the TUI. */
+  baseUrls?: Record<string, string>;
   /** Legacy single OpenRouter key (flow 080); migrated into `apiKeys` on read. */
   openrouterKey?: string;
   /**
@@ -75,6 +77,12 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
 export function saveApiKey(envKey: string, value: string, dir?: string): void {
   const existing = loadShellConfig(dir).apiKeys ?? {};
   saveShellConfig({ apiKeys: { ...existing, [envKey]: value } }, dir);
+}
+
+/** Persist a user-selected endpoint without overwriting other providers. */
+export function saveProviderBaseUrl(provider: string, baseUrl: string, dir?: string): void {
+  const existing = loadShellConfig(dir).baseUrls ?? {};
+  saveShellConfig({ baseUrls: { ...existing, [provider]: baseUrl } }, dir);
 }
 
 /**

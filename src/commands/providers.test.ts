@@ -142,17 +142,17 @@ test("fetchOpenAiCompatModels: local keyless provider can be probed without auth
   expect(calledWithAuth).toBeUndefined();
 });
 
-test("fetchOpenAiCompatModels: falls back to curated models on non-2xx / throw / empty", async () => {
+test("fetchOpenAiCompatModels: returns no models on non-2xx / throw / empty", async () => {
   const groq = providerByName("groq");
   expect(groq).toBeDefined();
   const bad = (async () => ({ ok: false, json: async () => ({}) }) as Response) as unknown as typeof fetch;
-  expect(await fetchOpenAiCompatModels(bad, groq!)).toEqual([...groq!.models]);
+  expect(await fetchOpenAiCompatModels(bad, groq!)).toEqual([]);
   const boom = (async () => {
     throw new Error("offline");
   }) as unknown as typeof fetch;
-  expect(await fetchOpenAiCompatModels(boom, groq!)).toEqual([...groq!.models]);
+  expect(await fetchOpenAiCompatModels(boom, groq!)).toEqual([]);
   const empty = (async () => ({ ok: true, json: async () => ({ data: [] }) }) as Response) as unknown as typeof fetch;
-  expect(await fetchOpenAiCompatModels(empty, groq!)).toEqual([...groq!.models]);
+  expect(await fetchOpenAiCompatModels(empty, groq!)).toEqual([]);
 });
 
 test("fetchOpenAiCompatModelsDetailed: reports live vs fallback source", async () => {
@@ -172,7 +172,7 @@ test("fetchOpenAiCompatModelsDetailed: reports live vs fallback source", async (
   }) as unknown as typeof fetch;
   const offlineResult = await fetchOpenAiCompatModelsDetailed(offline, groq!);
   expect(offlineResult.source).toBe("fallback");
-  expect(offlineResult.models).toEqual([...groq!.models]);
+  expect(offlineResult.models).toEqual([]);
 });
 
 test("resolveModelsForPicker: always probes live for registry providers when online", async () => {
