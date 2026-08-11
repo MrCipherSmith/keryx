@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type InteractiveTool, builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
@@ -16,7 +16,9 @@ function tool(name: string): InteractiveTool {
 }
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "keryx-tools-"));
+  // macOS exposes /var through /private/var; confineToRoot canonicalizes paths
+  // to keep symlink escapes out, so the fixture root must be canonical too.
+  root = await realpath(await mkdtemp(join(tmpdir(), "keryx-tools-")));
   await writeFile(join(root, "hello.txt"), "hi there", "utf8");
   await writeFile(join(root, "second.md"), "# second", "utf8");
   tools = builtinReadOnlyTools(root);
