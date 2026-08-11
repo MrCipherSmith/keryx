@@ -62,6 +62,24 @@ export class SearchProviderController {
     return readSearchCredential(providerId, this.configDir);
   }
 
+  /** Run only the explicitly selected, still-connected provider. No fallback. */
+  async search(query: string, signal?: AbortSignal) {
+    const config = this.config();
+    const activeProviderId = config.activeProviderId as SearchProviderId | undefined;
+    if (!activeProviderId) return { ok: false as const, reason: "no-active-provider" as const };
+    const stored = config.providers?.[activeProviderId];
+    if (!stored || stored.status !== "connected") {
+      return { ok: false as const, reason: "provider-disconnected" as const };
+    }
+    const descriptor = this.registry.get(activeProviderId);
+    if (!descriptor) return { ok: false as const, reason: "provider-disconnected" as const };
+    try {
+      return { ok: true as const, value: await descriptor.search(stored.fields, query, signal) };
+    } catch {
+      return { ok: false as const, reason: "search-failed" as const };
+    }
+  }
+
   private config(): SearchConfig {
     return loadSearchConfig(this.configDir);
   }

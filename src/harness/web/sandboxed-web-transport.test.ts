@@ -45,3 +45,21 @@ test("transport rejects binary responses and malformed worker results without a 
   expect(await transport.fetchPage({ url: "https://example.com", providerId: "web_fetch" })).toEqual({ ok: false, reason: "response is not readable text content" });
   expect(calls).toBe(1);
 });
+
+test("local-search capability is restricted to exact loopback endpoints", async () => {
+  let calls = 0;
+  const runner: WebWorkerRunner = {
+    run: async () => {
+      calls += 1;
+      return { ok: true, value: { status: 200, contentType: "application/json", body: '{"results":[]}' } };
+    },
+  };
+  const transport = new SandboxedWebTransport({ runner });
+  const denied = await transport.request({ providerId: "searxng", capability: "local-search", url: "http://10.0.0.7:8080/search?format=json", method: "GET" });
+  expect(denied.error).toBe("policy-denied");
+  expect(calls).toBe(0);
+
+  const accepted = await transport.request({ providerId: "searxng", capability: "local-search", url: "http://localhost:8080/search?format=json", method: "GET" });
+  expect(accepted.ok).toBe(true);
+  expect(calls).toBe(1);
+});

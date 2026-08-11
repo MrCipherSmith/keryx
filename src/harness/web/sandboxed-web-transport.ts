@@ -1,5 +1,9 @@
 import { lookup as systemLookup } from "node:dns/promises";
 import { sanitizeWebContent, type SanitizedWebContent } from "./web-content";
+import type {
+  SandboxedWebRequest as SearchWebRequest,
+  SandboxedWebResponse as SearchWebResponse,
+} from "../search/types";
 import {
   parsePublicHttpsUrl,
   validatePublicTarget,
@@ -14,7 +18,9 @@ export interface WebWorkerRequest {
   url: string;
   hostname: string;
   address: string;
-  method: "GET";
+  method: "GET" | "POST";
+  body?: Record<string, unknown>;
+  credential?: { injection: "header" | "json-body"; name: string; value: string };
 }
 
 export interface WebWorkerResponse {
@@ -64,15 +70,86 @@ export class SandboxedWebTransport {
   }
 
   async fetchPage(request: WebPageRequest): Promise<WebPolicyResult<SanitizedWebContent>> {
+    const raw = await this.fetchRaw({ url: request.url, method: "GET", ...(request.signal !== undefined ? { signal: request.signal } : {}) });
+    if (!raw.ok) return raw;
+    if (raw.value.response.status < 200 || raw.value.response.status >= 300) {
+      return { ok: false, reason: `request failed with HTTP ${raw.value.response.status}` };
+    }
+    return sanitizeWebContent({
+      url: raw.value.url,
+      providerId: request.providerId,
+      retrievedAt: this.now(),
+      contentType: raw.value.response.contentType,
+      text: raw.value.response.body,
+    });
+  }
+
+  /** Search-provider bridge: only adapter-owned request shapes reach this API. */
+  async request(request: SearchWebRequest): Promise<SearchWebResponse> {
+    const raw = await this.fetchRaw({
+      url: request.url,
+      method: request.method,
+      ...(request.body !== undefined ? { body: request.body } : {}),
+      ...(request.credential !== undefined ? { credential: request.credential } : {}),
+      ...(request.signal !== undefined ? { signal: request.signal } : {}),
+      localOnly: request.capability === "local-search",
+    });
+    if (!raw.ok) {
+      return {
+        ok: false,
+        status: 0,
+        url: request.url,
+        contentType: "",
+        text: "",
+        error: request.signal?.aborted ? "cancelled" : raw.reason.includes("policy") || raw.reason.includes("private") ? "policy-denied" : "transport-failed",
+      };
+    }
+    return {
+      ok: raw.value.response.status >= 200 && raw.value.response.status < 300,
+      status: raw.value.response.status,
+      url: raw.value.url,
+      contentType: raw.value.response.contentType,
+      text: raw.value.response.body,
+    };
+  }
+
+  private async fetchRaw(request: {
+    url: string;
+    method: "GET" | "POST";
+    body?: Record<string, unknown>;
+    credential?: { injection: "header" | "json-body"; name: string; value: string };
+    signal?: AbortSignal;
+    localOnly?: boolean;
+  }): Promise<WebPolicyResult<{ url: string; response: WebWorkerResponse }>> {
     let parsed = parsePublicHttpsUrl(request.url);
+    if (request.localOnly === true) {
+      try {
+        const local = new URL(request.url);
+        const allowedHost = local.hostname === "localhost" || local.hostname === "127.0.0.1" || local.hostname === "::1";
+        if (local.protocol !== "http:" || !allowedHost || local.username || local.password) {
+          return { ok: false, reason: "local search endpoint violates its capability policy" };
+        }
+        parsed = { ok: true, value: local };
+      } catch {
+        return { ok: false, reason: "local search endpoint violates its capability policy" };
+      }
+    }
     if (!parsed.ok) return parsed;
     let url = parsed.value;
     for (let redirects = 0; redirects <= WEB_MAX_REDIRECTS; redirects += 1) {
-      const target = await validatePublicTarget(url, this.lookup);
+      const target = request.localOnly === true
+        ? { ok: true as const, value: { url: url.toString(), hostname: url.hostname, address: url.hostname === "::1" ? "::1" : "127.0.0.1" } }
+        : await validatePublicTarget(url, this.lookup);
       if (!target.ok) return target;
       const worker = await this.runner.run(
-        { url: target.value.url, hostname: target.value.hostname, address: target.value.address, method: "GET" },
-        request.signal,
+        {
+          url: target.value.url,
+          hostname: target.value.hostname,
+          address: target.value.address,
+          method: request.method,
+          ...(request.body !== undefined ? { body: request.body } : {}),
+          ...(request.credential !== undefined ? { credential: request.credential } : {}),
+        }, request.signal,
       );
       if (!worker.ok) return worker;
       const response = worker.value;
@@ -80,6 +157,7 @@ export class SandboxedWebTransport {
         return { ok: false, reason: "sandbox worker returned an invalid response" };
       }
       if (response.status >= 300 && response.status < 400) {
+        if (request.localOnly === true) return { ok: false, reason: "local search redirects are not allowed" };
         if (redirects === WEB_MAX_REDIRECTS) return { ok: false, reason: "too many redirects" };
         if (typeof response.location !== "string") return { ok: false, reason: "invalid redirect destination" };
         parsed = parsePublicHttpsUrl(new URL(response.location, url).toString());
@@ -87,22 +165,13 @@ export class SandboxedWebTransport {
         url = parsed.value;
         continue;
       }
-      if (response.status < 200 || response.status >= 300) {
-        return { ok: false, reason: `request failed with HTTP ${response.status}` };
-      }
       if (!readableContentType(response.contentType)) {
         return { ok: false, reason: "response is not readable text content" };
       }
       if (new TextEncoder().encode(response.body).byteLength > WEB_MAX_TEXT_BYTES) {
         return { ok: false, reason: "response exceeds size limit" };
       }
-      return sanitizeWebContent({
-        url: url.toString(),
-        providerId: request.providerId,
-        retrievedAt: this.now(),
-        contentType: response.contentType,
-        text: response.body,
-      });
+      return { ok: true, value: { url: url.toString(), response } };
     }
     return { ok: false, reason: "too many redirects" };
   }

@@ -18,11 +18,20 @@ const input = JSON.parse(await Bun.stdin.text());
 const fail = () => process.stdout.write(JSON.stringify({ ok: false, reason: "request failed or timed out" }));
 try {
   const timer = setTimeout(() => req.destroy(new Error("timeout")), input.timeoutMs);
+  const headers = { accept: "text/html, text/plain, application/json, application/xml, application/xhtml+xml" };
+  const payload = input.body && typeof input.body === "object" ? { ...input.body } : undefined;
+  if (input.credential && input.credential.injection === "header") headers[input.credential.name] = input.credential.value;
+  if (input.credential && input.credential.injection === "json-body") {
+    if (!payload) throw new Error("missing JSON request payload");
+    payload[input.credential.name] = input.credential.value;
+  }
+  const encoded = payload ? JSON.stringify(payload) : undefined;
+  if (encoded) { headers["content-type"] = "application/json"; headers["content-length"] = String(Buffer.byteLength(encoded)); }
   const req = request(input.url, {
-    method: "GET",
+    method: input.method,
     lookup: (_host, _opts, callback) => callback(null, input.address, isIP(input.address)),
     servername: input.hostname,
-    headers: { accept: "text/html, text/plain, application/json, application/xml, application/xhtml+xml" },
+    headers,
   }, (res) => {
     const chunks = []; let size = 0;
     res.on("data", (chunk) => {
@@ -41,7 +50,7 @@ try {
     });
   });
   req.on("error", () => { clearTimeout(timer); fail(); });
-  req.end();
+  req.end(encoded);
 } catch { fail(); }
 `;
 
