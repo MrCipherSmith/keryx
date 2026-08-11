@@ -20,7 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult } from "../sac/fwk-service";
+import { createLocalFwkReadService, normalizeFwkResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 

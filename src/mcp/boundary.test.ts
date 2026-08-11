@@ -47,6 +47,7 @@ const ALLOWED_EXTERNAL = new Set([
   "../wiki/service",
   "../flow/service",
   "../standard/service",
+  "../sac/service",
   "../harness/tool/metaproject-operations",
   "../harness/tool/metaproject-port",
   "../harness/tool/metaproject-adapter",
