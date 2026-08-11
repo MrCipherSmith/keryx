@@ -60,10 +60,13 @@ export type MaskResolveResult =
  * plus Anthropic. Callers pass `OPENAI_COMPAT_PROVIDERS` (or a test double).
  */
 export function buildDefaultMaskProviders(
-  openaiCompat: readonly { envKey: string; baseUrl: string }[],
+  openaiCompat: readonly { envKey?: string; baseUrl: string }[],
 ): ProviderMaskSource[] {
   const out: ProviderMaskSource[] = [];
   for (const p of openaiCompat) {
+    if (p.envKey === undefined) {
+      continue;
+    }
     out.push({ envKey: p.envKey, baseUrl: p.baseUrl });
   }
   out.push({ envKey: "ANTHROPIC_API_KEY", baseUrl: "https://api.anthropic.com" });

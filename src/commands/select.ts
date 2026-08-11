@@ -180,11 +180,11 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
       name: p.name,
       models: [...p.models],
       baseUrl: p.baseUrl,
-      envKey: p.envKey,
       label: p.label,
       ...(p.chatPath !== undefined ? { chatPath: p.chatPath } : {}),
       ...(p.modelsPath !== undefined ? { modelsPath: p.modelsPath } : {}),
       ...(p.note !== undefined ? { note: p.note } : {}),
+      ...(p.envKey !== undefined ? { envKey: p.envKey } : {}),
     });
   }
 

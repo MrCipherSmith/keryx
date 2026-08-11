@@ -26,7 +26,7 @@ test("registry lists the flow-085 providers with sensible metadata", () => {
       expect(p.envKey).toBeUndefined();
     } else {
       expect(p.envKey).toBeDefined();
-      expect(p.envKey.length).toBeGreaterThan(0);
+      expect(p.envKey!.length).toBeGreaterThan(0);
     }
     expect(p.models.length).toBeGreaterThan(0);
   }

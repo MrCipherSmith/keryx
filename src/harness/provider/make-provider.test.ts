@@ -196,12 +196,12 @@ function buildRequest(): NormalizedRequest {
 
 function makeSseFetchMock() {
   const calls: unknown[] = [];
-  const fetch = (async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
+  const fetchMock = (async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     calls.push({});
     const body = 'data: {"id":"x","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
     return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
   }) as unknown as typeof fetch;
-  return { fetch, calls };
+  return { fetch: fetchMock, calls };
 }
 
 test("rapid-mlx uses allowLoopback grant so local baseUrl is permitted for stream()", async () => {

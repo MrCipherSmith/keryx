@@ -73,15 +73,22 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
     if (needsKey && (apiKey === undefined || apiKey.length === 0)) {
       return new FakeProvider([]);
     }
+    const grant: {
+      network: true;
+      baseUrl: string;
+      allowLoopback?: true;
+      chatPath?: string;
+      apiKey?: string;
+    } = {
+      network: true,
+      baseUrl: opts.baseUrl ?? compat.baseUrl,
+      ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
+      ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
+      ...(apiKey !== undefined ? { apiKey } : {}),
+    };
     return new OllamaProvider({
       fetch: opts.fetch,
-      grant: {
-        network: true,
-        baseUrl: opts.baseUrl ?? compat.baseUrl,
-        apiKey,
-        ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
-        ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
-      },
+      grant,
     });
   }
   return new FakeProvider([]);
