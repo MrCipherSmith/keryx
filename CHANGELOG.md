@@ -4,7 +4,6 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
-
 ## [0.2.30] — 2026-08-12
 
 ### Fixed
@@ -72,7 +71,6 @@ All notable changes to `keryx` are documented here. The format follows
 - **Rapid-MLX model discovery no longer invents a fallback model.** When its
   local `/v1/models` endpoint is unavailable or empty, the picker shows that no
   models were found instead of offering a hard-coded model id.
-
 ## [0.2.24] — 2026-08-11
 
 ### Fixed
