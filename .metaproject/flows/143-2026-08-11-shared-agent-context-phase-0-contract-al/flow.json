@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 2,
+  "id": "143",
+  "slug": "shared-agent-context-phase-0-contract-al",
+  "title": "Shared Agent Context Phase 0 — Contract alignment",
+  "status": "in-progress",
+  "createdAt": "2026-08-11T20:10:33.201Z",
+  "updatedAt": "2026-08-11T20:31:49.917Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8786cf8ad273a9c3ee57479ee8af579aba23a13520e3f6ccb60cecdb8f9cfb05",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Validate SAC contract fixtures and semantic security cases",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Run code verifier and Code Health gate",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Run architecture, logic and security review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Remediate final security and normative schema review findings",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Re-verify remediation and rerun final review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Close normative schema vocabulary coverage gap from final review",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-11T20:10:33.201Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-11T20:11:24.295Z",
+      "event": "task-added",
+      "detail": "T5: Validate SAC contract fixtures and semantic security cases"
+    },
+    {
+      "at": "2026-08-11T20:11:24.370Z",
+      "event": "task-added",
+      "detail": "T6: Run code verifier and Code Health gate"
+    },
+    {
+      "at": "2026-08-11T20:11:24.441Z",
+      "event": "task-added",
+      "detail": "T7: Run architecture, logic and security review"
+    },
+    {
+      "at": "2026-08-11T20:11:24.517Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-11T20:11:24.591Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-11T20:11:50.462Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-11T20:19:08.888Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-11T20:19:08.961Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-11T20:19:09.036Z",
+      "event": "task-done",
+      "detail": "T5: Validate SAC contract fixtures and semantic security cases"
+    },
+    {
+      "at": "2026-08-11T20:19:17.991Z",
+      "event": "task-done",
+      "detail": "T6: Run code verifier and Code Health gate"
+    },
+    {
+      "at": "2026-08-11T20:25:00.299Z",
+      "event": "task-added",
+      "detail": "T8: Remediate final security and normative schema review findings"
+    },
+    {
+      "at": "2026-08-11T20:25:00.372Z",
+      "event": "task-added",
+      "detail": "T9: Re-verify remediation and rerun final review"
+    },
+    {
+      "at": "2026-08-11T20:28:34.518Z",
+      "event": "task-done",
+      "detail": "T8: Remediate final security and normative schema review findings"
+    },
+    {
+      "at": "2026-08-11T20:29:27.376Z",
+      "event": "task-added",
+      "detail": "T10: Close normative schema vocabulary coverage gap from final review"
+    },
+    {
+      "at": "2026-08-11T20:31:49.703Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-11T20:31:49.775Z",
+      "event": "task-done",
+      "detail": "T7: Run architecture, logic and security review"
+    },
+    {
+      "at": "2026-08-11T20:31:49.846Z",
+      "event": "task-done",
+      "detail": "T9: Re-verify remediation and rerun final review"
+    },
+    {
+      "at": "2026-08-11T20:31:49.917Z",
+      "event": "task-done",
+      "detail": "T10: Close normative schema vocabulary coverage gap from final review"
+    }
+  ]
+}
