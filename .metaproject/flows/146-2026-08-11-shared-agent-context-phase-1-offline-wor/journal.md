@@ -21,3 +21,12 @@
 - 2026-08-11T21:14:43.092Z - ac-confirmed: AC4: viewer, foreign actor, revocation and lock-held TOCTOU tests passed
 - 2026-08-11T21:14:43.155Z - ac-confirmed: AC5: escaping, missing and traversal references reject before persistence
 - 2026-08-11T21:14:43.218Z - ac-confirmed: AC6: disabled/advisory guard denies; no owner-module runtime changes
+- 2026-08-11T21:28:16.972Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/268 (warning: PR is not a draft)
+- 2026-08-11T21:28:17.051Z - ac-confirmed: AC1: Merged WorkspaceService schema-validated primary manifest CRUD; 19 focused SAC tests pass.
+- 2026-08-11T21:28:17.120Z - ac-confirmed: AC2: Atomic replacement and existing locking discipline verified by service regression tests.
+- 2026-08-11T21:28:17.191Z - ac-confirmed: AC3: Offline create/list/show/add-resource CLI verified without remote dependencies.
+- 2026-08-11T21:28:17.261Z - ac-confirmed: AC4: Trusted ActorContext point-of-use ACL, revocation and TOCTOU tests pass.
+- 2026-08-11T21:28:17.331Z - ac-confirmed: AC5: Typed workspace-relative realpath containment rejects unsafe references before persistence.
+- 2026-08-11T21:28:17.401Z - ac-confirmed: AC6: Strict production guard fails closed; no MCP, UI, remote or tracker changes.
+- 2026-08-11T21:28:17.484Z - completing
+- 2026-08-11T21:28:19.450Z - done: all gates passed
