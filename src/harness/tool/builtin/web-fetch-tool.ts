@@ -75,7 +75,7 @@ function pinnedFetch(url: URL, address: string, signal: AbortSignal): Promise<Re
     request.once("error", reject);
     request.once("response", (response) => {
       signal.removeEventListener("abort", abort);
-      resolve(new Response(Readable.toWeb(response) as ReadableStream, {
+      resolve(new Response(Readable.toWeb(response) as unknown as BodyInit, {
         status: response.statusCode ?? 502,
         headers: headersFor(response.headers),
       }));
