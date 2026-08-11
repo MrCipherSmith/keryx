@@ -12,7 +12,7 @@ type Proposal = { schemaVersion: "1.0"; recordType: "proposal-created"; id: stri
 type Transition = Record<string, unknown> & { eventId: string; proposalId: string; toStatus: Terminal; idempotencyKey: string };
 type TargetOwner = "wiki" | "memory" | "skill";
 export type TargetWriteResult = { ok: true; owner: TargetOwner; receiptRef: string; targetRef: string; completedAt: string; correlationId: string } | { ok: false; code: string };
-export type GuardedTargetWriter = Readonly<{ owner: TargetOwner; write: (input: { proposal: Proposal; reviewer: TrustedActorContext; correlationId: string; approvalRef: string; policyRevision: string }) => Promise<TargetWriteResult> }>;
+export type GuardedTargetWriter = Readonly<{ owner: TargetOwner; write: (input: { proposal: Proposal; reviewer: TrustedActorContext; correlationId: string; idempotencyKey: string; approvalRef: string; policyRevision: string }) => Promise<TargetWriteResult> }>;
 type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
@@ -90,16 +90,19 @@ export class ProposalLifecycleService {
     } });
   }
 
-  private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, input: { requestCorrelationId: string }, approvalRef: string, policyRevision: string): Promise<TargetWriteAttempt> {
+  private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, input: { requestCorrelationId: string; idempotencyKey: string }, approvalRef: string, policyRevision: string): Promise<TargetWriteAttempt> {
     await this.options.beforeTargetWrite?.();
     // Evidence containment/existence and strict policy are rechecked immediately
     // before the owner write; a stale/removed reference can never be accepted.
     try { await this.strict(policyRevision); await this.validateEvidence(proposal.evidence, true, actor, proposal.workspaceId); }
     catch { return { result: { ok: false, code: "stale_evidence" } }; }
     const freshnessVerifiedAt = this.timestamp();
+    const saved = await this.loadWriteResult(proposal.workspaceId, proposal.id, input.idempotencyKey);
+    if (saved) return { freshnessVerifiedAt, result: saved };
     const owner = ownerFor(proposal.kind); const writer = this.options.targetWriters[owner];
     if (!writer || writer.owner !== owner) return { result: { ok: false, code: "owner_writer_required" } };
-    const result = await writer.write({ proposal, reviewer: actor, correlationId: input.requestCorrelationId, approvalRef, policyRevision });
+    const result = await writer.write({ proposal, reviewer: actor, correlationId: input.requestCorrelationId, idempotencyKey: input.idempotencyKey, approvalRef, policyRevision });
+    await writeFileAtomic(this.writeResultPath(proposal.workspaceId, proposal.id, input.idempotencyKey), `${JSON.stringify(result)}\n`);
     if (result.ok && (result.correlationId !== input.requestCorrelationId || result.owner !== owner || !result.targetRef.startsWith(`./${owner}`))) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     return { freshnessVerifiedAt, result: result.ok && result.correlationId !== input.requestCorrelationId ? { ok: false, code: "correlation_mismatch" } : result };
   }
@@ -134,6 +137,8 @@ export class ProposalLifecycleService {
   private proposalPath(workspaceId: string, proposalId: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.json`); }
   private decisionPath(workspaceId: string, proposalId: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.decision.json`); }
   private approvalPath(workspaceId: string, proposalId: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.approval.json`); }
+  private writeResultPath(workspaceId: string, proposalId: string, key: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.${hash(key)}.write-result.json`); }
+  private async loadWriteResult(workspaceId: string, proposalId: string, key: string): Promise<TargetWriteResult | undefined> { try { return JSON.parse(await readFile(this.writeResultPath(workspaceId, proposalId, key), "utf8")) as TargetWriteResult; } catch (error) { if (isNotFound(error)) return undefined; throw error; } }
   private ledgerPath(workspaceId: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "activity.jsonl"); }
   private timestamp(): string { return this.now().toISOString(); }
 }
