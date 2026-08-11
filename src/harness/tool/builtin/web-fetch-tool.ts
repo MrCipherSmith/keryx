@@ -9,8 +9,9 @@ const MAX_BYTES = 128_000;
 const TIMEOUT_MS = 10_000;
 
 export type HostLookup = (host: string) => Promise<readonly { address: string }[]>;
+export type WebFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export interface WebFetchDeps {
-  fetch?: typeof fetch;
+  fetch?: WebFetch;
   lookup?: HostLookup;
   timeoutMs?: number;
 }
@@ -103,9 +104,9 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const response = await fetchFn(url, { method: "GET", redirect: "manual", signal: controller.signal });
+          const response: Response = await fetchFn(url, { method: "GET", redirect: "manual", signal: controller.signal });
           if (response.status >= 300 && response.status < 400) {
-            const location = response.headers.get("location");
+            const location: string | null = response.headers.get("location");
             url = location ? invalidUrl(new URL(location, url).toString()) : undefined;
             if (!url) return { output: "web_fetch: invalid redirect destination", isError: true };
             continue;
