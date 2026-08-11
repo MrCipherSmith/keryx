@@ -138,6 +138,17 @@ export class WorkspaceService {
     });
   }
 
+  /** Re-checks the trusted actor and current role at a guarded owner-use point. */
+  async reauthorizeAtUse(input: { actorContext: TrustedActorContext; workspaceId: string; action: "write" | "review" }): Promise<WorkspaceManifest> {
+    await this.requireStrict("write");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(input.actorContext, initial.id, input.action);
+    const manifest = await this.readManifest(input.workspaceId);
+    const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(await this.readManifest(input.workspaceId), input.actorContext.subject));
+    if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+    return manifest;
+  }
+
   /**
    * Re-authorize and realpath-resolve immediately before a SAC resolver opens
    * a source target.  A previously returned manifest is never an authority to
