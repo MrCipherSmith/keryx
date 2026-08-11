@@ -152,3 +152,50 @@ test("uses persisted runtime translations without rebuilding fallback", async ()
   const result = await wikiAsk({ cwd: root, question: "Квазифраза для проверки" });
   expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/validation.md" }));
 });
+
+test("learns term translations from fallback and reuses them on later similar questions", async () => {
+  const runtimeDictionaryPath = path.join(
+    root,
+    ".metaproject",
+    "runtime",
+    "wiki-ask",
+    "translations.json",
+  );
+  await mkdir(path.join(root, ".metaproject", "runtime", "wiki-ask"), { recursive: true });
+  await writeFile(
+    runtimeDictionaryPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        phrases: {
+          "какая режим сессии": "which mode session",
+        },
+        terms: {},
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  await writeFile(
+    path.join(root, ".metaproject", "wiki", "architecture", "session-mode.md"),
+    "# Session mode\n\nSession mode configures context switching between command runs.\n",
+    "utf8",
+  );
+
+  const first = await wikiAsk({ cwd: root, question: "Какая режим сессии" });
+  expect(first.citations).toContainEqual(
+    expect.objectContaining({ path: "wiki/architecture/session-mode.md" }),
+  );
+
+  const dictionary = await readRuntimeDictionary();
+  expect((dictionary as { terms?: Record<string, string> })?.terms).toBeDefined();
+  expect((dictionary as { terms?: Record<string, string> })?.terms?.["режим"]).toBe("mode");
+  expect((dictionary as { terms?: Record<string, string> })?.terms?.["сессии"]).toBe("session");
+
+  const second = await wikiAsk({ cwd: root, question: "Какой режим сессии" });
+  expect(second.citations).toContainEqual(
+    expect.objectContaining({ path: "wiki/architecture/session-mode.md" }),
+  );
+});

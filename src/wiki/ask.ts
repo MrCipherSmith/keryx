@@ -22,6 +22,7 @@ const DEFAULT_K = 8;
 const EXCERPT_MAX = 240;
 const DICTIONARY_SCHEMA_VERSION = 1;
 const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
+const ENGLISH_WORD_RE = /^[a-z][a-z0-9_-]*$/i;
 
 type RuntimeRussianDictionary = {
   schemaVersion: number;
@@ -92,12 +93,18 @@ export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
 
   const state = wikiAskDictionaryState(input.cwd);
   if (scored.length === 0 && CYRILLIC_RE.test(input.question)) {
-    const translatedQuestion = await fallbackTranslateRussianQuestion(input.question, state);
+    const fallback = await fallbackTranslateRussianQuestion(input.question, state);
+    const translatedQuestion = fallback.translatedQuestion;
     if (translatedQuestion !== input.question) {
       const translatedTokens = tokenSet(translatedQuestion);
       scored = scoreByQuestion(translatedQuestion, translatedTokens, candidates);
       if (scored.length > 0) {
-        await upsertDynamicTranslation(state, input.question, translatedQuestion);
+        await upsertDynamicTranslation(
+          state,
+          input.question,
+          translatedQuestion,
+          fallback.learnedTerms,
+        );
       }
     }
   }
@@ -146,28 +153,79 @@ function wikiAskDictionaryState(cwd: string): RuntimeDictionaryState {
   };
 }
 
-async function fallbackTranslateRussianQuestion(question: string, state: RuntimeDictionaryState): Promise<string> {
+async function fallbackTranslateRussianQuestion(
+  question: string,
+  state: RuntimeDictionaryState,
+): Promise<{ translatedQuestion: string; learnedTerms: Record<string, string> }> {
   const translations = await loadDynamicDictionary(state);
   const normalizedQuestion = normalizeLookupQuestion(question);
 
   const knownPhrase = translations.phrases[normalizedQuestion];
   if (knownPhrase) {
-    return knownPhrase;
+    return {
+      translatedQuestion: knownPhrase,
+      learnedTerms: extractLearnedTermTranslations(question, knownPhrase, translations.terms),
+    };
   }
 
   const translated = translateRussianQuestionWithTerms(question, translations.terms);
-  if (translated !== question) {
-    const normalizedTranslated = normalizeLookupQuestion(translated);
-    if (normalizedTranslated !== normalizedQuestion) {
-      return normalizedTranslated;
-    }
+  const normalizedTranslated = normalizeLookupQuestion(translated);
+  if (normalizedTranslated !== normalizedQuestion) {
+    return {
+      translatedQuestion: normalizedTranslated,
+      learnedTerms: extractLearnedTermTranslations(question, translated, translations.terms),
+    };
   }
-  return translated;
+  return {
+    translatedQuestion: translated,
+    learnedTerms: extractLearnedTermTranslations(question, translated, translations.terms),
+  };
+}
+
+function extractLearnedTermTranslations(
+  question: string,
+  translatedQuestion: string,
+  existingTerms: Record<string, string>,
+): Record<string, string> {
+  const sourceTokens = extractLexTokens(question);
+  const translatedTokens = extractLexTokens(translatedQuestion);
+  const max = Math.min(sourceTokens.length, translatedTokens.length);
+  const learned: Record<string, string> = {};
+
+  for (let i = 0; i < max; i += 1) {
+    const sourceRaw = sourceTokens[i];
+    const translatedRaw = translatedTokens[i];
+    if (sourceRaw == null || translatedRaw == null) {
+      continue;
+    }
+
+    const sourceToken = sourceRaw.toLowerCase();
+    const translatedToken = translatedRaw.toLowerCase();
+    if (!CYRILLIC_RE.test(sourceToken)) {
+      continue;
+    }
+    if (RUSSIAN_TO_ENGLISH[sourceToken] || existingTerms[sourceToken]) {
+      continue;
+    }
+    if (!ENGLISH_WORD_RE.test(translatedToken)) {
+      continue;
+    }
+    if (sourceToken === translatedToken) {
+      continue;
+    }
+    learned[sourceToken] = translatedToken;
+  }
+
+  return learned;
+}
+
+function extractLexTokens(text: string): string[] {
+  return text.toLowerCase().match(/\p{L}+/gu) ?? [];
 }
 
 function translateRussianQuestionWithTerms(question: string, terms: Record<string, string>): string {
-  const questionTokens = question.toLowerCase().match(/\p{L}+/gu);
-  if (!questionTokens) {
+  const questionTokens = extractLexTokens(question);
+  if (questionTokens.length === 0) {
     return question;
   }
 
@@ -228,6 +286,7 @@ async function upsertDynamicTranslation(
   state: RuntimeDictionaryState,
   question: string,
   translatedQuestion: string,
+  learnedTerms: Record<string, string>,
 ): Promise<void> {
   const key = normalizeLookupQuestion(question);
   if (!key || key === translatedQuestion.toLowerCase()) {
@@ -236,13 +295,21 @@ async function upsertDynamicTranslation(
 
   try {
     const existing = await loadDynamicDictionary(state);
-    if (existing.phrases[key] === translatedQuestion) {
+    const mergedTerms = { ...existing.terms, ...learnedTerms };
+    const termKeys = Object.keys(learnedTerms);
+    if (existing.phrases[key] === translatedQuestion && termKeys.length === 0) {
+      return;
+    }
+    if (
+      existing.phrases[key] === translatedQuestion &&
+      Object.keys(mergedTerms).length === Object.keys(existing.terms).length
+    ) {
       return;
     }
 
     const next = {
       phrases: { ...existing.phrases, [key]: translatedQuestion },
-      terms: { ...existing.terms },
+      terms: mergedTerms,
       schemaVersion: DICTIONARY_SCHEMA_VERSION,
       updatedAt: new Date().toISOString(),
     };
