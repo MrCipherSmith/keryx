@@ -93,6 +93,7 @@ import {
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
+import type { SearchProviderController } from "../harness/search";
 import {
   appendUserEcho,
   createAssistantMessageStream,
@@ -734,6 +735,28 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
 /** Result of the API-key step: a key to save, skip (proceed keyless), or go back. */
 type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
 
+/** A small, modal text field used for provider-owned configuration values. */
+function promptTextStep(otui: OpenTui, r: Renderer, opts: { title: string; note: string; value: string }): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "search-field-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "sf-title", content: otui.t`${otui.bold(opts.title)} ${otui.dim("(Enter · Esc to cancel)")}` }));
+    box.add(new otui.TextRenderable(r, { id: "sf-note", content: otui.t`${otui.dim(opts.note)}`, marginTop: 1 }));
+    const field = new otui.InputRenderable(r, { id: "sf-input", value: opts.value, marginTop: 1 });
+    box.add(field);
+    field.focus();
+    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
+    });
+    field.on(otui.InputRenderableEvents.ENTER, () => {
+      const value = field.value.trim();
+      cleanup();
+      resolve(value.length > 0 ? value : undefined);
+    });
+  });
+}
+
 /** Ask for a local provider endpoint, keeping its configured value editable. */
 function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -1139,6 +1162,8 @@ export async function launchTuiAgentShell(opts: {
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   versionCheck?: Promise<VersionCheckResult>;
+  /** Search configuration is kept outside model context and rendered only by trusted TUI code. */
+  searchController?: SearchProviderController;
   /**
    * Per-project session bootstrap. Sessions never cross git-root/cwd boundaries.
    * `pickOnStart` opens the resume menu when `-r` is given without an id.
@@ -2263,6 +2288,85 @@ export async function launchTuiAgentShell(opts: {
           if (target === undefined || !copyBlock(target.id)) {
             io.onSystem?.("Nothing to copy yet.\n");
           }
+          return;
+        }
+        if (command.name === "/search-provider") {
+          if (opts.searchController === undefined) {
+            io.onSystem?.("Web search configuration is unavailable in this shell.\n");
+            return;
+          }
+          void (async () => {
+            const descriptors = opts.searchController!.configurable();
+            const selected = await showComposerChoice(otui, r, chrome.dock, {
+              title: "Configure web search provider",
+              subtitle: "All supported providers are shown; only a successful test makes one selectable.",
+              options: descriptors.map((descriptor) => ({
+                id: descriptor.id,
+                label: descriptor.displayName,
+                description: descriptor.kind === "local" ? "Local loopback only" : "Remote HTTPS API",
+                recommended: descriptor.id === "searxng",
+              })),
+              cancelId: "cancel",
+            });
+            if (selected === "cancel") { input.focus(); return; }
+            const descriptor = descriptors.find((item) => item.id === selected);
+            if (descriptor === undefined) { input.focus(); return; }
+            const fields: Record<string, string> = { ...descriptor.defaults };
+            if (descriptor.id === "searxng") {
+              const baseUrl = await promptTextStep(otui, r, {
+                title: "SearXNG URL",
+                note: "Default is local; only localhost, 127.0.0.1, or ::1 is permitted.",
+                value: fields.baseUrl ?? "http://localhost",
+              });
+              if (baseUrl === undefined) { input.focus(); return; }
+              const port = await promptTextStep(otui, r, {
+                title: "SearXNG port",
+                note: "Default: 8080. Edit it when your local server uses another port.",
+                value: fields.port ?? "8080",
+              });
+              if (port === undefined) { input.focus(); return; }
+              fields.baseUrl = baseUrl;
+              fields.port = port;
+              opts.searchController!.configure(descriptor.id, fields);
+            } else {
+              const key = await promptApiKeyStep(otui, r, { label: descriptor.displayName, envKey: "stored privately" });
+              if (key.kind !== "key") { input.focus(); return; }
+              opts.searchController!.configure(descriptor.id, fields, key.value);
+            }
+            const result = await opts.searchController!.test(descriptor.id);
+            io.onSystem?.(
+              result.ok
+                ? `${descriptor.displayName} connected. Use /search-connect to make it active.\n`
+                : `${descriptor.displayName} could not be connected (${result.reason ?? "unknown error"}).\n`,
+            );
+            input.focus();
+          })();
+          return;
+        }
+        if (command.name === "/search-connect") {
+          if (opts.searchController === undefined) {
+            io.onSystem?.("Web search configuration is unavailable in this shell.\n");
+            return;
+          }
+          void (async () => {
+            const connected = opts.searchController!.selectable();
+            if (connected.length === 0) {
+              io.onSystem?.("No tested search providers. Configure one with /search-provider first.\n");
+              input.focus();
+              return;
+            }
+            const selected = await showComposerChoice(otui, r, chrome.dock, {
+              title: "Select web search provider",
+              subtitle: "Only successfully tested providers are available.",
+              options: connected.map((descriptor) => ({ id: descriptor.id, label: descriptor.displayName, description: descriptor.kind })),
+              cancelId: "cancel",
+            });
+            if (selected !== "cancel") {
+              const result = await opts.searchController!.select(selected as import("../harness/search").SearchProviderId);
+              io.onSystem?.(result.ok ? "Web search provider selected.\n" : "Provider is no longer connected; test it again.\n");
+            }
+            input.focus();
+          })();
           return;
         }
         if (command.name === "/model") {
