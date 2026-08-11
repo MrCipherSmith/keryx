@@ -1012,7 +1012,8 @@ export function selectProviderModelInTui(
  */
 export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const all = models.length > 0 ? models : ["fake-echo"];
+    const all = models;
+    const NO_MODELS = "(no models found)";
     const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
@@ -1026,7 +1027,7 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
       height: 14,
       showScrollIndicator: true,
       wrapSelection: true,
-      options: all.map((m) => ({ name: m, description: "" })),
+      options: (all.length > 0 ? all : [NO_MODELS]).map((m) => ({ name: m, description: "" })),
       selectedTextColor: "#ffd166",
     });
     box.add(sel);
@@ -1073,7 +1074,7 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
     sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = sel.getSelectedOption();
       cleanup();
-      resolve(chosen === null || chosen.name === NO_MATCH ? undefined : chosen.name);
+      resolve(chosen === null || chosen.name === NO_MATCH || chosen.name === NO_MODELS ? undefined : chosen.name);
     });
   });
 }
