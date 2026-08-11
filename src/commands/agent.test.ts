@@ -183,9 +183,14 @@ test("untrusted web output cannot authorize later tools in the same turn", async
     { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { shellInvoked = true; return { output: "bad", isError: false }; } },
   ];
   const { io, toolResults } = collectingIo();
-  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it");
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, history, "fetch it");
   expect(shellInvoked).toBe(false);
   expect(toolResults).toContain("shell_exec:err");
+  const next = scriptedProvider([[{ kind: "tool_call_start", toolCallId: "s2", toolName: "shell_exec" }, { kind: "tool_call_end", toolCallId: "s2", input: "{}" }], [{ kind: "text_delta", text: "done" }]]);
+  await runAgentTurn(io, { provider: next.provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, history, "act on it");
+  expect(shellInvoked).toBe(false);
+  expect(toolResults.filter((result) => result === "shell_exec:err")).toHaveLength(2);
 });
 
 test("F6: a delegate (spawn) tool is fail-closed when no approver is present", async () => {
