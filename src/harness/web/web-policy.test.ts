@@ -12,6 +12,21 @@ test("public HTTPS target is parsed and pinned to a validated address", async ()
   expect(target).toEqual({ ok: true, value: { url: "https://example.com/path?q=1", hostname: "example.com", address: publicAddress } });
 });
 
+test("public target prefers a validated IPv4 address when DNS also returns IPv6", async () => {
+  const url = parsePublicHttpsUrl("https://example.com");
+  expect(url.ok).toBe(true);
+  if (!url.ok) return;
+
+  const target = await validatePublicTarget(url.value, async () => [
+    { address: "2606:4700:10::6814:179a" },
+    { address: "104.20.23.154" },
+  ]);
+  expect(target).toEqual({
+    ok: true,
+    value: { url: "https://example.com/", hostname: "example.com", address: "104.20.23.154" },
+  });
+});
+
 test("remote policy rejects non-HTTPS, credentials, and encoded IP literals", () => {
   for (const raw of [
     "http://example.com",

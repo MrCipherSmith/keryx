@@ -29,7 +29,14 @@ try {
   if (encoded) { headers["content-type"] = "application/json"; headers["content-length"] = String(Buffer.byteLength(encoded)); }
   const req = request(input.url, {
     method: input.method,
-    lookup: (_host, _opts, callback) => callback(null, input.address, isIP(input.address)),
+    lookup: (_host, options, callback) => {
+      const record = { address: input.address, family: isIP(input.address) };
+      // Bun's HTTPS client may request all=true for its connection strategy.
+      // Return the same prevalidated pinned address in the exact callback shape
+      // requested, never delegate another DNS lookup to the worker.
+      if (options && options.all) callback(null, [record]);
+      else callback(null, record.address, record.family);
+    },
     servername: input.hostname,
     headers,
   }, (res) => {

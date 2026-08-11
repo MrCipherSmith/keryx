@@ -5,6 +5,17 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.27] — 2026-08-12
+
+### Fixed
+
+- **Sandboxed web fetch now connects reliably on dual-stack hosts.** The worker
+  returns the correct Bun DNS-pinning callback shape and prefers a validated
+  IPv4 address when it is available alongside IPv6.
+- **Agent web-tool guidance no longer treats fetch as search.** For unknown
+  sources, the agent now gives search-provider setup guidance instead of
+  guessing URLs or repeatedly retrying an unavailable search provider.
+
 ## [0.2.26] — 2026-08-12
 
 ### Added

@@ -77,7 +77,11 @@ export async function validatePublicTarget(
     if (answers.length === 0 || answers.some(({ address }) => isBlockedRemoteAddress(address))) {
       return { ok: false, reason: "destination does not resolve exclusively to public addresses" };
     }
-    const address = answers[0]?.address;
+    // A host may legitimately publish both address families. All answers are
+    // validated above, so preferring IPv4 does not weaken the mixed-answer
+    // protection. It avoids pinning an unreachable IPv6 route when a public
+    // IPv4 route is also available (a common local-network configuration).
+    const address = answers.find(({ address }) => isIP(address) === 4)?.address ?? answers[0]?.address;
     if (address === undefined) return { ok: false, reason: "destination DNS lookup failed" };
     return {
       ok: true,
