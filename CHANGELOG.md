@@ -5,6 +5,14 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.24] — 2026-08-11
+
+### Fixed
+
+- **Provider switching is available in agent TUI.** `/provider` now opens the
+  provider, API-key, and model picker in agent mode, matching `/connect` and
+  avoiding a switch to chat mode solely to change providers.
+
 ## [0.2.23] — 2026-08-11
 
 ### Added

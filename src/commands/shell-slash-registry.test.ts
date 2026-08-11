@@ -131,7 +131,7 @@ describe("AC9 — the readline agent surface derives its commands from the regis
     }
   });
 
-  test("it does not advertise chat-only commands, nor agent commands it cannot run", () => {
+  test("it does not advertise picker-only or agent commands it cannot run", () => {
     const help = readlineAgentHelpText();
     expect(help).not.toContain("/models");
     expect(help).not.toContain("/provider");

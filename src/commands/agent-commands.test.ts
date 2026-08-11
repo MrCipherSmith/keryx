@@ -41,11 +41,12 @@ test("every command declares at least one mode, and every mode resolves a descri
   }
 });
 
-test("commandsForMode: agent keeps the pre-flow-112 menu, in order", () => {
+test("commandsForMode: agent lists its commands in stable order", () => {
   expect(commandsForMode("agent").map((c) => c.name)).toEqual([
     "/help",
     "/model",
     "/connect",
+    "/provider",
     "/think",
     "/expand",
     "/copy",
@@ -59,7 +60,7 @@ test("commandsForMode: agent keeps the pre-flow-112 menu, in order", () => {
   ]);
 });
 
-test("commandsForMode: chat gets /models + /provider and none of the agent-only trio", () => {
+test("commandsForMode: chat gets its commands and none of the agent-only trio", () => {
   const chat = commandsForMode("chat").map((c) => c.name);
   expect(chat).toEqual([
     "/help",
@@ -77,15 +78,17 @@ test("commandsForMode: chat gets /models + /provider and none of the agent-only 
   expect(chat).not.toContain("/copy");
 });
 
-test("/expand, /think and /copy are agent-only; /models and /provider are chat-only", () => {
+test("/expand, /think and /copy are agent-only; /models is chat-only; /provider is available in both modes", () => {
   for (const name of ["/expand", "/think", "/copy"]) {
     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
     expect(command?.modes).toEqual(["agent"]);
   }
-  for (const name of ["/models", "/provider"]) {
+  for (const name of ["/models"]) {
     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
     expect(command?.modes).toEqual(["chat"]);
   }
+  const provider = AGENT_SLASH_COMMANDS.find((c) => c.name === "/provider");
+  expect(provider?.modes).toEqual(["chat", "agent"]);
 });
 
 test("/model and /connect carry PER-MODE descriptions, not one flattened entry (R4)", () => {
@@ -121,6 +124,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/help",
     "/model",
     "/connect",
+    "/provider",
     "/think",
     "/expand",
     "/copy",
@@ -145,7 +149,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
   ]);
 });
 
-test("filterCommands: prefix narrows the set (agent, unchanged from flow 062)", () => {
+test("filterCommands: prefix narrows the set (agent)", () => {
   expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help"]);
   expect(filterCommands("/c", "agent").map((c) => c.name)).toEqual([
     "/connect",
@@ -170,6 +174,7 @@ test("filterCommands: prefix narrows the set (agent, unchanged from flow 062)", 
 test("filterCommands: prefix narrows the set (chat)", () => {
   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
   expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
+  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider"]);
   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
     "/connect",
@@ -233,7 +238,7 @@ test("renderCommandHelp lists the mode's commands with the mode's descriptions",
   expect(chat).not.toContain("/expand");
   const agent = renderCommandHelp("agent");
   expect(agent).toContain("/expand");
-  expect(agent).not.toContain("/provider");
+  expect(agent).toContain("/provider");
 });
 
 test("renderCommandHelp `only` restricts the list to a surface's subset", () => {
