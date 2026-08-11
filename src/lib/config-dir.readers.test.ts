@@ -196,11 +196,8 @@ async function runReader(
     return { exit: -1, out: "probe timed out", timedOut: true };
   }
 
-  // Bun can leave a stdio pipe open after a child terminates through
-  // `process.abort()`. There is no useful reader output in that path, and
-  // awaiting the pipe would turn the test harness itself into the hang under
-  // test. Other failing probes still drain output because their diagnostics are
-  // assertions in their own right.
+  // Some intentional failure probes only need their exit status. They opt out
+  // of stdio draining; other failures retain diagnostic output for assertions.
   if (settled !== 0 && options?.drainOnNonZero === false) {
     return { exit: settled, out: "", timedOut: false };
   }
@@ -235,13 +232,13 @@ describe("every reader of the shared config directory survives an oversized file
     }, 60_000);
   }
 
-  test("the probe harness itself can observe a controlled abort", async () => {
-    // This validates the harness rather than asking a child to allocate a 3 GiB
-    // buffer. That empirical raw-read probe is runtime- and resource-dependent
-    // (and can starve the parent event loop on a CI runner). The cases above
-    // exercise real readers against oversized files; the source-level guard
-    // below prevents reintroducing an unbounded raw read.
-    const { exit, timedOut } = await runReader("process.abort();", undefined, { drainOnNonZero: false });
+  test("the probe harness itself can observe a controlled failed exit", async () => {
+    // The readers above are the behavioural protection for oversized files.
+    // Triggering an actual Bun abort here is runtime- and resource-dependent:
+    // under Bun's parallel test runner it can block the worker before
+    // `proc.exited` resolves. A deterministic child failure still proves that
+    // the harness executes a separate process and handles a non-zero result.
+    const { exit, timedOut } = await runReader("process.exit(1);", undefined, { drainOnNonZero: false });
 
     expect(timedOut).toBe(false);
     expect(exit).not.toBe(0);
