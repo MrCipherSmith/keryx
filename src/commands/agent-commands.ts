@@ -86,8 +86,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   {
     name: "/provider",
     description: "Switch provider — /provider <name>, or no arg to re-select",
-    // The TUI's `/connect` picker subsumes this, so it stays a chat-mode entry.
-    modes: CHAT_ONLY,
+    // Agent mode uses the same provider → API-key → model picker as `/connect`.
+    // Keep `/provider` available there too: it is the discoverable, conventional
+    // command users expect when changing the active provider mid-session.
+    modes: BOTH,
+    modeDescriptions: {
+      agent: "Switch provider / API key (interactive picker)",
+    },
   },
   { name: "/think", description: "Expand the last reasoning block", modes: AGENT_ONLY },
   { name: "/expand", description: "Expand the last tool output block", modes: AGENT_ONLY },

@@ -2260,7 +2260,7 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
-        if (command.name === "/connect") {
+        if (command.name === "/connect" || command.name === "/provider") {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const ns = await chrome.withOverlay(() => selectProviderModelInTui(otui, r, detected));
