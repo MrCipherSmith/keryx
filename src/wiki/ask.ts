@@ -9,15 +9,32 @@ import { resolveCapability } from "../capability/seam";
 import { loadMemoryConfig } from "../memory/config";
 import { memoryEmbeddingSpec, type Embedder } from "../memory/embedding/adapter";
 import { cosine } from "../memory/embedding/index";
+import { readJsonFileOr } from "../lib/json";
 import { collectEntries } from "../memory/store";
 import { jaccard, tokenSet } from "../memory/text";
 import type { MemoryEntry } from "../memory/types";
+import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { collectPages } from "./collect";
 import type { WikiAskCitation, WikiAskInput, WikiAskResult, WikiPage } from "./types";
+import path from "node:path";
 
 const DEFAULT_K = 8;
 const EXCERPT_MAX = 240;
+const DICTIONARY_SCHEMA_VERSION = 1;
 const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
+
+type RuntimeRussianDictionary = {
+  schemaVersion: number;
+  phrases: Record<string, string>;
+  terms: Record<string, string>;
+  updatedAt?: string;
+};
+
+type RuntimeDictionaryState = {
+  lockPath: string;
+  dictPath: string;
+};
+
 const RUSSIAN_TO_ENGLISH: Record<string, string> = {
   "как": "how",
   "как-то": "how",
@@ -65,17 +82,23 @@ type Candidate = {
 
 export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
   const k = input.k && input.k > 0 ? input.k : DEFAULT_K;
+  const questionTokens = tokenSet(input.question);
   const candidates = [
     ...(await wikiCandidates(input.cwd)),
     ...(await memoryCandidates(input.cwd)),
   ];
 
-  let scored = scoreByQuestion(input.question, candidates);
+  let scored = scoreByQuestion(input.question, questionTokens, candidates);
 
+  const state = wikiAskDictionaryState(input.cwd);
   if (scored.length === 0 && CYRILLIC_RE.test(input.question)) {
-    const translatedQuestion = translateRussianQuestion(input.question);
+    const translatedQuestion = await fallbackTranslateRussianQuestion(input.question, state);
     if (translatedQuestion !== input.question) {
-      scored = scoreByQuestion(translatedQuestion, candidates);
+      const translatedTokens = tokenSet(translatedQuestion);
+      scored = scoreByQuestion(translatedQuestion, translatedTokens, candidates);
+      if (scored.length > 0) {
+        await upsertDynamicTranslation(state, input.question, translatedQuestion);
+      }
     }
   }
 
@@ -101,8 +124,11 @@ export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
   };
 }
 
-function scoreByQuestion(question: string, candidates: Candidate[]): Array<{ candidate: Candidate; score: number }> {
-  const questionTokens = tokenSet(question);
+function scoreByQuestion(
+  question: string,
+  questionTokens: Set<string>,
+  candidates: Candidate[],
+): Array<{ candidate: Candidate; score: number }> {
   return candidates
     .map((candidate) => ({
       candidate,
@@ -112,15 +138,47 @@ function scoreByQuestion(question: string, candidates: Candidate[]): Array<{ can
     .sort((a, b) => b.score - a.score || a.candidate.path.localeCompare(b.candidate.path));
 }
 
-function translateRussianQuestion(question: string): string {
+function wikiAskDictionaryState(cwd: string): RuntimeDictionaryState {
+  const basePath = path.join(cwd, ".metaproject", "runtime", "wiki-ask");
+  return {
+    lockPath: path.join(basePath, "translations.lock"),
+    dictPath: path.join(basePath, "translations.json"),
+  };
+}
+
+async function fallbackTranslateRussianQuestion(question: string, state: RuntimeDictionaryState): Promise<string> {
+  const translations = await loadDynamicDictionary(state);
+  const normalizedQuestion = normalizeLookupQuestion(question);
+
+  const knownPhrase = translations.phrases[normalizedQuestion];
+  if (knownPhrase) {
+    return knownPhrase;
+  }
+
+  const translated = translateRussianQuestionWithTerms(question, translations.terms);
+  if (translated !== question) {
+    const normalizedTranslated = normalizeLookupQuestion(translated);
+    if (normalizedTranslated !== normalizedQuestion) {
+      return normalizedTranslated;
+    }
+  }
+  return translated;
+}
+
+function translateRussianQuestionWithTerms(question: string, terms: Record<string, string>): string {
   const questionTokens = question.toLowerCase().match(/\p{L}+/gu);
   if (!questionTokens) {
     return question;
   }
+
   const translatedTokens = questionTokens.map((token) => {
-    const directMatch = RUSSIAN_TO_ENGLISH[token];
+    const directMatch = terms[token];
     if (directMatch) {
       return directMatch;
+    }
+    const staticMatch = RUSSIAN_TO_ENGLISH[token];
+    if (staticMatch) {
+      return staticMatch;
     }
 
     const stemmed = token
@@ -132,6 +190,69 @@ function translateRussianQuestion(question: string): string {
 
   const translated = translatedTokens.join(" ");
   return translated === question.toLowerCase() ? question : translated;
+}
+
+async function loadDynamicDictionary(state: RuntimeDictionaryState): Promise<RuntimeRussianDictionary> {
+  const fallback = { schemaVersion: DICTIONARY_SCHEMA_VERSION, phrases: {}, terms: {} };
+  const raw = await readJsonFileOr<unknown>(state.dictPath, fallback);
+
+  if (raw === fallback || raw == null || typeof raw !== "object") {
+    return { schemaVersion: DICTIONARY_SCHEMA_VERSION, phrases: {}, terms: {} };
+  }
+
+  const dict = raw as Partial<RuntimeRussianDictionary>;
+  return {
+    phrases: isRecordStringMap(dict.phrases) ? dict.phrases : {},
+    terms: isRecordStringMap(dict.terms) ? dict.terms : {},
+    schemaVersion: DICTIONARY_SCHEMA_VERSION,
+  };
+}
+
+function isRecordStringMap(value: unknown): value is Record<string, string> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  return Object.entries(value).every(([, v]) => typeof v === "string");
+}
+
+function normalizeLookupQuestion(question: string): string {
+  return question
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/gu, " ");
+}
+
+async function upsertDynamicTranslation(
+  state: RuntimeDictionaryState,
+  question: string,
+  translatedQuestion: string,
+): Promise<void> {
+  const key = normalizeLookupQuestion(question);
+  if (!key || key === translatedQuestion.toLowerCase()) {
+    return;
+  }
+
+  try {
+    const existing = await loadDynamicDictionary(state);
+    if (existing.phrases[key] === translatedQuestion) {
+      return;
+    }
+
+    const next = {
+      phrases: { ...existing.phrases, [key]: translatedQuestion },
+      terms: { ...existing.terms },
+      schemaVersion: DICTIONARY_SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await withFileLock(state.lockPath, async () => {
+      await writeFileAtomic(state.dictPath, `${JSON.stringify(next, null, 2)}\n`);
+    });
+  } catch {
+    // best-effort: dictionary growth should never block answering.
+  }
 }
 
 async function wikiCandidates(cwd: string): Promise<Candidate[]> {

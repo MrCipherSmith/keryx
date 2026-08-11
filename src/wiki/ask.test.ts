@@ -41,6 +41,15 @@ async function memorySnapshot(): Promise<string[]> {
   return Promise.all(files.sort().map((f) => readFile(path.join(dir, f), "utf8")));
 }
 
+async function readRuntimeDictionary(): Promise<Record<string, unknown> | null> {
+  const candidate = path.join(root, ".metaproject", "runtime", "wiki-ask", "translations.json");
+  try {
+    return JSON.parse(await readFile(candidate, "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 test("returns deterministic citations from wiki + memory and never mutates the store", async () => {
   const before = await memorySnapshot();
   const first = await wikiAsk({ cwd: root, question: "how are failed payments retried" });
@@ -92,4 +101,54 @@ test("falls back to translation when Russian query matches English corpus", asyn
   );
   const result = await wikiAsk({ cwd: root, question: "Как работает шлюз" });
   expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/gate.md" }));
+});
+
+test("persists dynamic translation after successful russian fallback", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "wiki", "architecture", "session.md"),
+    "# Session lifecycle\n\n## Summary\n\nHow work session keeps command context after pause.\n",
+    "utf8",
+  );
+  const result = await wikiAsk({ cwd: root, question: "Как работают сессии" });
+  expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/session.md" }));
+
+  const dictionary = await readRuntimeDictionary();
+  expect(dictionary).not.toBeNull();
+  expect((dictionary as { phrases?: Record<string, string> })?.phrases).toBeDefined();
+  expect(
+    (dictionary as { phrases?: Record<string, string> })?.phrases?.["как работают сессии"],
+  ).toBeTruthy();
+});
+
+test("uses persisted runtime translations without rebuilding fallback", async () => {
+  const runtimeDictionaryPath = path.join(
+    root,
+    ".metaproject",
+    "runtime",
+    "wiki-ask",
+    "translations.json",
+  );
+  await mkdir(path.join(root, ".metaproject", "runtime", "wiki-ask"), { recursive: true });
+  await writeFile(
+    runtimeDictionaryPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        phrases: {
+          "квазифраза для проверки": "validation token check",
+        },
+        terms: {},
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    path.join(root, ".metaproject", "wiki", "architecture", "validation.md"),
+    "# Validation token check\n\nUse this for internal validation tokens.\n",
+    "utf8",
+  );
+  const result = await wikiAsk({ cwd: root, question: "Квазифраза для проверки" });
+  expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/validation.md" }));
 });
