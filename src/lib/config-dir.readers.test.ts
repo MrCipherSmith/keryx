@@ -166,7 +166,11 @@ function plantFifo(file: string): boolean {
  */
 const PROBE_TIMEOUT_MS = 5_000;
 
-async function runReader(call: string, env?: Record<string, string>): Promise<{ exit: number; out: string; timedOut: boolean }> {
+async function runReader(
+  call: string,
+  env?: Record<string, string>,
+  options?: { drainOnNonZero?: boolean },
+): Promise<{ exit: number; out: string; timedOut: boolean }> {
   const source = call
     .replaceAll("SRC", path.join(import.meta.dir, ".."))
     .replaceAll("DIR", JSON.stringify(configDir));
@@ -191,6 +195,16 @@ async function runReader(call: string, env?: Record<string, string>): Promise<{ 
     await proc.exited;
     return { exit: -1, out: "probe timed out", timedOut: true };
   }
+
+  // Bun can leave a stdio pipe open after a child terminates through
+  // `process.abort()`. There is no useful reader output in that path, and
+  // awaiting the pipe would turn the test harness itself into the hang under
+  // test. Other failing probes still drain output because their diagnostics are
+  // assertions in their own right.
+  if (settled !== 0 && options?.drainOnNonZero === false) {
+    return { exit: settled, out: "", timedOut: false };
+  }
+
   const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   // Read from the process, never through a pipe: `process.exitCode = undefined`
   // does not reset in Bun and a piped read has produced a false green here.
@@ -227,7 +241,7 @@ describe("every reader of the shared config directory survives an oversized file
     // (and can starve the parent event loop on a CI runner). The cases above
     // exercise real readers against oversized files; the source-level guard
     // below prevents reintroducing an unbounded raw read.
-    const { exit, timedOut } = await runReader("process.abort();");
+    const { exit, timedOut } = await runReader("process.abort();", undefined, { drainOnNonZero: false });
 
     expect(timedOut).toBe(false);
     expect(exit).not.toBe(0);
