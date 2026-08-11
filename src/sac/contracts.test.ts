@@ -99,6 +99,23 @@ test("SAC semantic validation rejects non-UTC timestamps and invalid lifecycle o
   expect(nonUtcResult.errors.some((error) => error.code === "invalid_utc_timestamp")).toBe(true);
 });
 
+test("SAC UTC validation rejects impossible calendar dates and accepts valid leap days", async () => {
+  for (const createdAt of ["2026-02-30T00:00:00Z", "2026-02-29T00:00:00Z"]) {
+    const document = structuredClone(await fixture("valid-workspace.json")) as { createdAt: string };
+    document.createdAt = createdAt;
+    const result = await validateSacContract({ schema: "workspace-manifest", document });
+    expect(result.valid, createdAt).toBe(false);
+    expect(result.errors.some((error) => error.code === "invalid_utc_timestamp"), createdAt).toBe(true);
+  }
+
+  const validLeapDay = structuredClone(await fixture("valid-workspace.json")) as { createdAt: string; updatedAt: string };
+  validLeapDay.createdAt = "2028-02-29T00:00:00Z";
+  validLeapDay.updatedAt = "2028-02-29T00:00:01Z";
+  await expect(
+    validateSacContract({ schema: "workspace-manifest", document: validLeapDay }),
+  ).resolves.toMatchObject({ valid: true, errors: [] });
+});
+
 test("SAC resolves only realpath-contained workspace-relative typed references", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-root-"));
   const outside = await mkdtemp(path.join(tmpdir(), "keryx-sac-outside-"));

@@ -24,7 +24,7 @@ const subjectPattern = /^(?:user|team|service|agent):[a-z0-9][a-z0-9._-]{0,127}$
 const revisionPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const correlationPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$/;
 const workspacePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
-const utcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const utcPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 const forbiddenPayloadKeys = new Set(["prompt", "transcript", "hiddenReasoning", "secret", "secrets", "rawContent"]);
 const normativeSchemaFiles: Record<SacSchema, string> = {
   "workspace-manifest": "workspace-manifest.schema.json",
@@ -34,6 +34,42 @@ const normativeSchemaFiles: Record<SacSchema, string> = {
   "review-decision": "review-decision.schema.json",
 };
 const normativeSchemas = new Map<SacSchema, Promise<JsonSchema>>();
+
+type StrictUtcInstant = Readonly<{ epochSeconds: number; fractionalDigits: string }>;
+
+/**
+ * Parses the SAC RFC3339 UTC profile without JavaScript's date normalization.
+ * The Date instance is used only after extracting numeric components, and its
+ * UTC fields must round-trip exactly. This rejects values such as February 30
+ * that `Date.parse` would silently normalize into a different instant.
+ */
+function parseStrictRfc3339Utc(value: unknown): StrictUtcInstant | undefined {
+  if (typeof value !== "string") return undefined;
+  const match = utcPattern.exec(value);
+  if (!match) return undefined;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionalDigits = ""] = match;
+  const year = Number(yearText); const month = Number(monthText); const day = Number(dayText);
+  const hour = Number(hourText); const minute = Number(minuteText); const second = Number(secondText);
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return undefined;
+
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, 0);
+  if (
+    date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day
+    || date.getUTCHours() !== hour || date.getUTCMinutes() !== minute || date.getUTCSeconds() !== second
+  ) return undefined;
+  return { epochSeconds: date.getTime() / 1000, fractionalDigits };
+}
+
+function compareStrictUtc(left: StrictUtcInstant, right: StrictUtcInstant): number {
+  if (left.epochSeconds !== right.epochSeconds) return left.epochSeconds < right.epochSeconds ? -1 : 1;
+  const width = Math.max(left.fractionalDigits.length, right.fractionalDigits.length);
+  const leftFraction = left.fractionalDigits.padEnd(width, "0");
+  const rightFraction = right.fractionalDigits.padEnd(width, "0");
+  if (leftFraction === rightFraction) return 0;
+  return leftFraction < rightFraction ? -1 : 1;
+}
 
 function isRecord(value: unknown): value is RecordValue {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -134,7 +170,7 @@ function validateNormativeSchema(root: JsonSchema, schema: JsonSchema, value: un
     if (typeof schema.minLength === "number" && value.length < schema.minLength) error(errors, "schema_min_length", field, "is shorter than the normative minimum");
     if (typeof schema.maxLength === "number" && value.length > schema.maxLength) error(errors, "schema_max_length", field, "is longer than the normative maximum");
     if (typeof schema.pattern === "string" && !(new RegExp(schema.pattern).test(value))) error(errors, "schema_pattern", field, "does not match normative pattern");
-    if (schema.format === "date-time" && (typeof value !== "string" || Number.isNaN(Date.parse(value)))) error(errors, "schema_format", field, "is not a valid date-time");
+    if (schema.format === "date-time" && !parseStrictRfc3339Utc(value)) error(errors, "schema_format", field, "is not a valid date-time");
   }
   if (schema.type === "integer" && (!Number.isInteger(value))) error(errors, "schema_type", field, "must be an integer");
   if ((schema.type === "integer" || schema.type === "number") && typeof value === "number") {
@@ -176,7 +212,10 @@ function stringMatch(value: unknown, pattern: RegExp, errors: SacValidationError
 }
 
 function utc(value: unknown, errors: SacValidationError[], field: string): value is string {
-  if (typeof value !== "string" || !stringMatch(value, utcPattern, errors, field, "invalid_utc_timestamp") || Number.isNaN(Date.parse(value))) return false;
+  if (!parseStrictRfc3339Utc(value)) {
+    error(errors, "invalid_utc_timestamp", field, "has an invalid UTC timestamp");
+    return false;
+  }
   return true;
 }
 
@@ -186,7 +225,9 @@ function workspaceUri(value: unknown, errors: SacValidationError[], field: strin
 }
 
 function ordered(earlier: unknown, later: unknown, errors: SacValidationError[], field: string): void {
-  if (typeof earlier === "string" && typeof later === "string" && Date.parse(earlier) > Date.parse(later)) {
+  const earlierInstant = parseStrictRfc3339Utc(earlier);
+  const laterInstant = parseStrictRfc3339Utc(later);
+  if (earlierInstant && laterInstant && compareStrictUtc(earlierInstant, laterInstant) > 0) {
     error(errors, "invalid_temporal_order", field, "timestamps must be non-decreasing");
   }
 }
@@ -367,7 +408,7 @@ export async function validateSacContract(input: { schema: SacSchema | string; d
 
 /** Append-only proposal transition validation, including idempotency and sequencing. */
 export async function validateSacLedger(input: { events: unknown[] }): Promise<SacValidationResult> {
-  const errors: SacValidationError[] = []; const idempotency = new Map<string, string>(); const sequences = new Map<string, number>(); const timestamps = new Map<string, number>();
+  const errors: SacValidationError[] = []; const idempotency = new Map<string, string>(); const sequences = new Map<string, number>(); const timestamps = new Map<string, StrictUtcInstant>();
   for (const [index, value] of input.events.entries()) {
     const result = await validateSacContract({ schema: "workspace-proposal", document: value });
     errors.push(...result.errors.map((entry) => ({ ...entry, path: `$.events[${index}]${entry.path.slice(1)}` })));
@@ -377,9 +418,9 @@ export async function validateSacLedger(input: { events: unknown[] }): Promise<S
     const expected = (sequences.get(stream) ?? 0) + 1;
     if (value.sequence !== expected) error(errors, "invalid_ledger_sequence", `$.events[${index}].sequence`, "must be the next sequence in its proposal stream");
     if (typeof value.sequence === "number") sequences.set(stream, value.sequence);
-    const time = typeof value.occurredAt === "string" ? Date.parse(value.occurredAt) : NaN; const previous = timestamps.get(stream);
-    if (previous !== undefined && !Number.isNaN(time) && time < previous) error(errors, "invalid_temporal_order", `$.events[${index}].occurredAt`, "must not precede an earlier transition");
-    if (!Number.isNaN(time)) timestamps.set(stream, time);
+    const time = parseStrictRfc3339Utc(value.occurredAt); const previous = timestamps.get(stream);
+    if (previous !== undefined && time && compareStrictUtc(time, previous) < 0) error(errors, "invalid_temporal_order", `$.events[${index}].occurredAt`, "must not precede an earlier transition");
+    if (time) timestamps.set(stream, time);
   }
   return { valid: errors.length === 0, errors };
 }

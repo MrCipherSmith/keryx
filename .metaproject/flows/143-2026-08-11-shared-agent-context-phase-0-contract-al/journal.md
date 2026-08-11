@@ -21,3 +21,5 @@
 - 2026-08-11T20:31:49.775Z - task-done: T7: Run architecture, logic and security review
 - 2026-08-11T20:31:49.846Z - task-done: T9: Re-verify remediation and rerun final review
 - 2026-08-11T20:31:49.917Z - task-done: T10: Close normative schema vocabulary coverage gap from final review
+- 2026-08-11T20:46:05.586Z - task-added: T11: Remediate strict UTC calendar validation finding from PR #265
+- 2026-08-11T20:47:49.706Z - task-done: T11: Remediate strict UTC calendar validation finding from PR #265

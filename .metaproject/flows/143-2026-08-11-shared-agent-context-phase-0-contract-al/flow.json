@@ -5,7 +5,7 @@
   "title": "Shared Agent Context Phase 0 — Contract alignment",
   "status": "in-progress",
   "createdAt": "2026-08-11T20:10:33.201Z",
-  "updatedAt": "2026-08-11T20:31:49.917Z",
+  "updatedAt": "2026-08-11T20:47:49.706Z",
   "source": {
     "type": "description",
     "ref": null
@@ -165,6 +165,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Remediate strict UTC calendar validation finding from PR #265",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -260,6 +275,16 @@
       "at": "2026-08-11T20:31:49.917Z",
       "event": "task-done",
       "detail": "T10: Close normative schema vocabulary coverage gap from final review"
+    },
+    {
+      "at": "2026-08-11T20:46:05.586Z",
+      "event": "task-added",
+      "detail": "T11: Remediate strict UTC calendar validation finding from PR #265"
+    },
+    {
+      "at": "2026-08-11T20:47:49.706Z",
+      "event": "task-done",
+      "detail": "T11: Remediate strict UTC calendar validation finding from PR #265"
     }
   ]
 }
