@@ -5,6 +5,15 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.22] — 2026-08-11
+
+### Fixed
+
+- **Durable interactive-session checkpoints.** `keryx shell` now writes the user
+  message immediately, checkpoints tool results, and journals streamed assistant
+  text every 300 ms. `/interrupt` therefore preserves the latest partial answer
+  instead of losing the active turn.
+
 ## [0.2.21] — 2026-08-11
 
 ### Fixed

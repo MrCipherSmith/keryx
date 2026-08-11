@@ -41,6 +41,11 @@ repository — and durable on disk as JSONL:
 - `context.jsonl` — the model window a resume loads
 - `archive.jsonl` — the full audit log, which survives `/compact`
 
+User messages and tool results are checkpointed immediately; streamed assistant
+text is journaled at most every 300 ms and is flushed when a turn ends or is
+interrupted. An interrupted turn therefore remains resumable with its latest
+partial answer.
+
 ```bash
 keryx shell -c                 # continue the last session in this project
 keryx shell -r <id>            # resume by id, short id, or title

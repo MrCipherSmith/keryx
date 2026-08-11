@@ -1645,6 +1645,8 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
+    let nextArchiveIndex = 0;
+    let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
 
     const applyOpened = (
       opened: {
@@ -1658,6 +1660,7 @@ export async function launchTuiAgentShell(opts: {
       liveSession = opened.handle;
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
+      nextArchiveIndex = history.length;
     };
 
     const pickRecentSession = async (): Promise<SessionSummary | undefined> => {
@@ -1807,6 +1810,36 @@ export async function launchTuiAgentShell(opts: {
       paintSessionHeader();
     };
 
+    const syncArchive = (): void => {
+      while (nextArchiveIndex < history.length) {
+        const message = history[nextArchiveIndex];
+        if (message !== undefined) {
+          archive.push(message);
+        }
+        nextArchiveIndex += 1;
+      }
+    };
+    const flushSessionCheckpoint = (): void => {
+      if (sessionPersistTimer !== undefined) {
+        clearTimeout(sessionPersistTimer);
+        sessionPersistTimer = undefined;
+      }
+      syncArchive();
+      saveSession();
+    };
+    io.onHistoryChange = (kind) => {
+      syncArchive();
+      if (kind === "assistant_delta") {
+        if (sessionPersistTimer === undefined) {
+          sessionPersistTimer = setTimeout(() => {
+            sessionPersistTimer = undefined;
+            saveSession();
+          }, 300);
+        }
+        return;
+      }
+      flushSessionCheckpoint();
+    };
     const startNewSession = (note?: string): void => {
       liveSession = createSession({
         cwd: sessionCwd,
@@ -1815,6 +1848,7 @@ export async function launchTuiAgentShell(opts: {
       });
       history = [];
       archive = [];
+      nextArchiveIndex = 0;
       paintSessionHeader();
       if (note !== undefined && note.length > 0) {
         io.onSystem?.(`${note}\n`);
@@ -2166,6 +2200,7 @@ export async function launchTuiAgentShell(opts: {
           });
           liveSession = packed.handle;
           history = packed.context;
+          nextArchiveIndex = history.length;
           paintSessionHeader();
           if (packed.result.noop) {
             io.onSystem?.("Nothing to compact (context already small).\n");
@@ -2442,7 +2477,6 @@ export async function launchTuiAgentShell(opts: {
         }
         prevOnSystem?.(text);
       };
-      const beforeLen = history.length;
       const controller = new AbortController();
       mainTurnAbortController = controller;
       void runAgentTurn(io, deps, history, line, { signal: controller.signal }).finally(() => {
@@ -2450,14 +2484,8 @@ export async function launchTuiAgentShell(opts: {
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
-        for (let i = beforeLen; i < history.length; i++) {
-          const m = history[i];
-          if (m !== undefined) {
-            archive.push(m);
-          }
-        }
         try {
-          saveSession();
+          flushSessionCheckpoint();
         } catch {
           // best-effort persist
         }

@@ -876,6 +876,8 @@ async function runAgentRepl(
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
+  let nextArchiveIndex = 0;
+  let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
   if (sessionsOn) {
     try {
       let resumeId = sessionOpts?.resumeId;
@@ -892,6 +894,7 @@ async function runAgentRepl(
       live = opened.handle;
       history = opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
+      nextArchiveIndex = history.length;
       if (opened.resumed) {
         agentIo.onSystem?.(
           `Resumed session ${shortSessionId(live.summary.id)} · ${live.summary.title} (${history.length} context · archive ${archive.length})\n`,
@@ -909,6 +912,7 @@ async function runAgentRepl(
       });
       history = [];
       archive = [];
+      nextArchiveIndex = 0;
       agentIo.onSystem?.(
         `${cause instanceof Error ? cause.message : String(cause)}\nNew session ${shortSessionId(live.summary.id)}.\n`,
       );
@@ -930,6 +934,36 @@ async function runAgentRepl(
     }
   };
 
+  const syncArchive = (): void => {
+    while (nextArchiveIndex < history.length) {
+      const message = history[nextArchiveIndex];
+      if (message !== undefined) {
+        archive.push(message);
+      }
+      nextArchiveIndex += 1;
+    }
+  };
+  const flushSessionCheckpoint = (): void => {
+    if (sessionPersistTimer !== undefined) {
+      clearTimeout(sessionPersistTimer);
+      sessionPersistTimer = undefined;
+    }
+    syncArchive();
+    save();
+  };
+  agentIo.onHistoryChange = (kind) => {
+    syncArchive();
+    if (kind === "assistant_delta") {
+      if (sessionPersistTimer === undefined) {
+        sessionPersistTimer = setTimeout(() => {
+          sessionPersistTimer = undefined;
+          save();
+        }, 300);
+      }
+      return;
+    }
+    flushSessionCheckpoint();
+  };
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
   for (;;) {
@@ -964,6 +998,7 @@ async function runAgentRepl(
           });
           history = [];
           archive = [];
+          nextArchiveIndex = 0;
           agentIo.onSystem?.(
             `New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`,
           );
@@ -984,6 +1019,7 @@ async function runAgentRepl(
           });
           live = packed.handle;
           history = packed.context;
+          nextArchiveIndex = history.length;
           if (packed.result.noop) {
             agentIo.onSystem?.("Nothing to compact (context already small).\n");
           } else {
@@ -1009,7 +1045,6 @@ async function runAgentRepl(
     }
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
-    const before = history.length;
     startSpinner();
     try {
       await runAgentTurn(agentIo, deps, history, line);
@@ -1017,14 +1052,7 @@ async function runAgentRepl(
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
     }
-    // Append only newly produced messages to the full archive.
-    for (let i = before; i < history.length; i++) {
-      const m = history[i];
-      if (m !== undefined) {
-        archive.push(m);
-      }
-    }
-    save();
+    flushSessionCheckpoint();
     const usageLine = formatUsage(lastUsage);
     if (usageLine.length > 0) {
       out(`\n${GUTTER}${usageLine}\n`);

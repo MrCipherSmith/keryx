@@ -312,6 +312,37 @@ test("runAgentTurn respects an already-aborted signal before issuing requests", 
   expect(history.length).toBe(1);
 });
 
+test("runAgentTurn keeps an interrupted streamed assistant draft in history", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "partial answer" }, { kind: "model_end" }]]);
+  const controller = new AbortController();
+  const history: NormalizedMessage[] = [];
+  const system: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onHistoryChange: (kind) => {
+      if (kind === "assistant_delta") {
+        controller.abort();
+      }
+    },
+    onSystem: (text) => system.push(text),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, history, "save this", { signal: controller.signal });
+
+  expect(history).toEqual([
+    { role: "user", content: "save this", provenance: "project" },
+    { role: "assistant", content: "partial answer", provenance: "model" },
+  ]);
+  expect(system.join("")).toContain("[stopped]");
+});
+
 /** A fake risk-`shell` tool that records whether its runner was invoked. */
 function fakeShellTool(): { tool: import("../harness/tool/builtin/interactive-tools").InteractiveTool; ran: () => boolean } {
   let invoked = false;
@@ -401,6 +432,44 @@ test("runAgentTurn calls onAssistantText once per round with the full finalized 
   await runAgentTurn(io, deps, [], "go");
   // One call per round that produced text, each carrying that round's FULL text.
   expect(rounds).toEqual(["Let me check.", "Here is the answer."]);
+});
+
+test("runAgentTurn checkpoints the user and each streamed assistant delta", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "text_delta", text: "first " },
+      { kind: "text_delta", text: "second" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const history: NormalizedMessage[] = [];
+  const checkpoints: Array<{ kind: string; messages: string[] }> = [];
+  const io: AgentIO = {
+    write: () => {},
+    onHistoryChange: (kind) => checkpoints.push({ kind, messages: history.map((message) => message.content) }),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, history, "persist this");
+
+  expect(checkpoints.map((checkpoint) => checkpoint.kind)).toEqual([
+    "user",
+    "assistant_delta",
+    "assistant_delta",
+    "assistant_final",
+  ]);
+  expect(checkpoints[1]?.messages).toEqual(["persist this", "first "]);
+  expect(checkpoints[2]?.messages).toEqual(["persist this", "first second"]);
+  expect(history).toEqual([
+    { role: "user", content: "persist this", provenance: "project" },
+    { role: "assistant", content: "first second", provenance: "model" },
+  ]);
 });
 
 test("runAgentTurn does not call onAssistantText for a round with no assistant text", async () => {

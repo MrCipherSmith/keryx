@@ -149,6 +149,9 @@ holds and what forking copies.
   live shell to the chosen session.
 - `keryx shell` supports a hard stop for a running main turn via
   `/interrupt`.
+- Session history is durable during a turn: user input and tool results save
+  immediately; streamed assistant text checkpoints every 300 ms and is flushed
+  by `/interrupt`.
 - If the main turn is busy, additional normal questions are queued as read-only
   "side workers" (single slot by default, labeled as `side-1`) and processed
   after each answer. While queued, the transcript notes `◦ side-1 queued`.

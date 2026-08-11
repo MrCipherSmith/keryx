@@ -59,6 +59,12 @@ export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: stri
 export interface AgentIO {
   write: (s: string) => void;
   /**
+   * A durable-history checkpoint is needed. Emitted after every history
+   * mutation, including streamed assistant deltas, so interrupted turns are
+   * recoverable instead of being lost at the end of a model turn.
+   */
+  onHistoryChange?: (kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void;
+  /**
    * A round's assistant text is finalized (called once per round that produced
    * text, AFTER `write` streamed the tokens and BEFORE any tool execution).
    * A rich renderer uses this to re-render the buffered round as markdown; when
@@ -546,6 +552,7 @@ export async function runAgentTurn(
   options: RunAgentTurnOptions = {},
 ): Promise<void> {
   history.push({ role: "user", content: userLine, provenance: "project" });
+  io.onHistoryChange?.("user");
   const signal = options.signal;
   const isAborted = (): boolean => signal?.aborted === true;
 
@@ -610,6 +617,7 @@ export async function runAgentTurn(
       signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
     let assistantText = "";
+    let assistantMessage: NormalizedMessage | undefined;
     let reasoningText = "";
     let reasoningFlushed = false;
     const flushReasoning = (): void => {
@@ -636,6 +644,13 @@ export async function runAgentTurn(
           const text = event.text ?? "";
           io.write(text);
           assistantText += text;
+          if (assistantMessage === undefined) {
+            assistantMessage = { role: "assistant", content: text, provenance: "model" };
+            history.push(assistantMessage);
+          } else {
+            assistantMessage.content += text;
+          }
+          io.onHistoryChange?.("assistant_delta");
         } else if (event.kind === "tool_call_start") {
           if (event.toolCallId !== undefined && event.toolName !== undefined) {
             nameById.set(event.toolCallId, event.toolName);
@@ -672,8 +687,8 @@ export async function runAgentTurn(
     flushReasoning(); // reasoning-only round (e.g. before a tool call) still surfaces it
 
     if (assistantText.length > 0) {
-      history.push({ role: "assistant", content: assistantText, provenance: "model" });
       io.onAssistantText?.(assistantText);
+      io.onHistoryChange?.("assistant_final");
     }
 
     if (isAborted()) {
@@ -698,6 +713,7 @@ export async function runAgentTurn(
             "Resend a single compliant tool call now (with fully populated required arguments).",
           provenance: "project",
         });
+        io.onHistoryChange?.("tool");
         continue;
       }
 
@@ -730,6 +746,7 @@ export async function runAgentTurn(
         const result: InteractiveToolResult = { output: reservation.reason, isError: true };
         io.onToolResult?.(call.name, result);
         history.push({ role: "tool", content: result.output, provenance: "tool" });
+        io.onHistoryChange?.("tool");
         toolLog.push(`${call.name}: skipped (${reservation.reason.split(";")[0] ?? "budget"})`);
         if (reservation.kind === "total_budget") {
           exhaustedBudget = "total";
@@ -748,6 +765,7 @@ export async function runAgentTurn(
       // (F3): the local UI above sees the raw output, but the model/provider must
       // not receive a credential a command happened to read.
       history.push({ role: "tool", content: redactSensitiveText(result.output), provenance: "tool" });
+      io.onHistoryChange?.("tool");
       const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
       const riskUsage =
         risk === "read"
@@ -773,6 +791,7 @@ export async function runAgentTurn(
           const hint = buildRepeatedFailureHint(call.name, result.output);
           system(`\n${hint}\n`);
           history.push({ role: "user", content: hint, provenance: "project" });
+          io.onHistoryChange?.("tool");
         }
       } else {
         // A success resets the streak so a later, unrelated failure starts fresh.
