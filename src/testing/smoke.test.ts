@@ -87,7 +87,7 @@ test("AC14: with no smoke block, smokeTests is [] and selection is byte-identica
   // Scope selection unchanged (only the scope's own tests).
   expect(scope.report.selection.selectedTests).toContain("src/a.test.ts");
   expect(scope.report.selection.selectedTests).not.toContain("src/smoke.test.ts");
-  expect(scope.report.selection.strategies).toEqual(["runner", "gdgraph", "naming"]);
+  expect(scope.report.selection.strategies).toEqual(["runner", "gdgraph", "naming", "imports"]);
 
   await rm(root, { recursive: true, force: true });
 });

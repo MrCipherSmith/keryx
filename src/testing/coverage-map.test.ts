@@ -162,7 +162,7 @@ test("AC8: with capability ON + map present, selectChangedTests uses the coverag
 
   const result = await selectChangedTests(root, ctx(TEST_FILES), "HEAD", baseConfig());
   expect(result.changedFiles).toContain("src/alpha.ts");
-  expect(result.strategies).toEqual(["runner", "gdgraph", "naming", "coverage-map"]);
+  expect(result.strategies).toEqual(["runner", "gdgraph", "naming", "imports", "coverage-map"]);
   expect(result.selectedTests).toEqual(["src/alpha.test.ts"]);
 
   await rm(root, { recursive: true, force: true });
@@ -176,7 +176,7 @@ test("AC11: with capability OFF (no manifest), selectChangedTests is byte-identi
 
   const result = await selectChangedTests(root, ctx(TEST_FILES), "HEAD", baseConfig());
   // Static path: naming over-selects alpha.extra.test.ts; strategies stay base.
-  expect(result.strategies).toEqual(["runner", "gdgraph", "naming"]);
+  expect(result.strategies).toEqual(["runner", "gdgraph", "naming", "imports"]);
   const expectedStatic = Array.from(staticChangedSelection(result.changedFiles, TEST_FILES)).sort();
   expect(result.selectedTests).toEqual(expectedStatic);
   expect(result.selectedTests).toContain("src/alpha.extra.test.ts");
