@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx/shared-agent-context/fwk-receipt/v1",
+  "$vocabulary": {"https://json-schema.org/draft/2020-12/vocab/format-assertion": true},
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workspaceId", "generatedAt", "facts", "work", "knowHow", "freshness"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "workspaceId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "generatedAt": {"$ref": "#/$defs/utcTimestamp"},
+    "facts": {"type": "array", "items": {"$ref": "#/$defs/fact"}},
+    "work": {"$ref": "#/$defs/work"},
+    "knowHow": {"type": "array", "items": {"$ref": "#/$defs/knowHow"}},
+    "freshness": {"enum": ["fresh", "stale", "partial", "denied"]}
+  },
+  "x-temporalOrder": [{"earlier": "facts[].observedAt", "laterOrEqual": "facts[].expiresAt"}, {"earlier": "facts[].observedAt", "laterOrEqual": "generatedAt"}],
+  "$defs": {
+    "utcTimestamp": {"type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$", "x-formatAssertionRequired": true},
+    "immutableRevision": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$", "x-immutable": true},
+    "workspacePath": {"type": "string", "pattern": "^\\./(?!.*(?:^|/)\\.\\.(?:/|$))(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$", "x-rootContainment": "workspace root realpath"},
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["kind", "uri", "revision", "observedAt", "trust"], "properties": {"kind": {"enum": ["code", "flow", "wiki", "memory", "test", "health", "artifact"]}, "uri": {"$ref": "#/$defs/workspacePath"}, "revision": {"$ref": "#/$defs/immutableRevision"}, "observedAt": {"$ref": "#/$defs/utcTimestamp"}, "trust": {"enum": ["primary", "accepted", "reviewed"]}}},
+    "fact": {"type": "object", "additionalProperties": false, "required": ["statement", "evidence", "observedAt", "expiresAt", "freshness"], "properties": {"statement": {"type": "string", "minLength": 1, "maxLength": 4000}, "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidence"}}, "observedAt": {"$ref": "#/$defs/utcTimestamp"}, "expiresAt": {"$ref": "#/$defs/utcTimestamp"}, "freshness": {"enum": ["fresh", "stale", "expired", "denied"]}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}}},
+    "flowRef": {"type": "object", "additionalProperties": false, "required": ["uri", "snapshot", "revision"], "properties": {"uri": {"$ref": "#/$defs/workspacePath"}, "snapshot": {"type": "string", "minLength": 1, "maxLength": 256}, "revision": {"$ref": "#/$defs/immutableRevision"}}},
+    "work": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["state", "flowRef"], "properties": {"state": {"const": "bound"}, "flowRef": {"$ref": "#/$defs/flowRef"}, "completed": {"type": "array", "items": {"type": "string"}}, "next": {"type": "array", "items": {"type": "string"}}, "blocked": {"type": "array", "items": {"type": "string"}}, "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}}}, {"type": "object", "additionalProperties": false, "required": ["state"], "properties": {"state": {"const": "unbound"}}, "x-forbids": ["flowRef", "completed", "next", "blocked", "evidence"]}]},
+    "knowHow": {"type": "object", "additionalProperties": false, "required": ["kind", "uri", "revision", "trust", "status"], "properties": {"kind": {"enum": ["wiki", "memory", "skill"]}, "uri": {"$ref": "#/$defs/workspacePath"}, "revision": {"$ref": "#/$defs/immutableRevision"}, "trust": {"enum": ["accepted", "reviewed"]}, "status": {"enum": ["fresh", "stale", "withdrawn", "denied"]}, "applicability": {"type": "string", "maxLength": 1000}}}
+  }
+}
