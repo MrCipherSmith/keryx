@@ -3,17 +3,46 @@
   "id": "148",
   "slug": "shared-agent-context-phase-2-fwk-read-pa",
   "title": "Shared Agent Context Phase 2: FWK read path",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-11T22:33:04.745Z",
-  "updatedAt": "2026-08-11T22:38:34.503Z",
+  "updatedAt": "2026-08-11T23:29:16.494Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:afbf69592c19a462cc23a909e4729848befae90b8596bab351a4786f7cdcb27c",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-11T23:29:07.053Z",
+      "note": "Facts resolver validates evidence revision, visibility, freshness and expiry; explicit lifecycle tests pass."
+    },
+    "AC2": {
+      "at": "2026-08-11T23:29:07.125Z",
+      "note": "Work projection reads one Flow snapshot read-only; SAC tests verify no Flow mutation."
+    },
+    "AC3": {
+      "at": "2026-08-11T23:29:07.197Z",
+      "note": "Know-how resolver admits only accepted/reviewed Wiki, Memory and Skill sources with lifecycle status."
+    },
+    "AC4": {
+      "at": "2026-08-11T23:29:07.266Z",
+      "note": "Required overflow is typed context_overflow without success receipt; optional omissions are partial with IDs."
+    },
+    "AC5": {
+      "at": "2026-08-11T23:29:07.336Z",
+      "note": "Allowed and denied metadata-only receipts link persisted canonical traces and append-only ledger."
+    },
+    "AC6": {
+      "at": "2026-08-11T23:29:07.417Z",
+      "note": "Real CLI and spawned stdio MCP SDK parity passes for overview, read and overflow; HTTP SAC denies."
+    },
+    "AC7": {
+      "at": "2026-08-11T23:29:07.488Z",
+      "note": "26 final focused tests, typecheck and health PASS; final independent review APPROVE."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/269"
   },
   "tasks": [
     {
@@ -65,7 +94,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +102,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -104,6 +134,60 @@
       "at": "2026-08-11T22:38:34.503Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-11T23:29:04.987Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-11T23:29:06.967Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/269 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-11T23:29:07.053Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Facts resolver validates evidence revision, visibility, freshness and expiry; explicit lifecycle tests pass."
+    },
+    {
+      "at": "2026-08-11T23:29:07.125Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Work projection reads one Flow snapshot read-only; SAC tests verify no Flow mutation."
+    },
+    {
+      "at": "2026-08-11T23:29:07.197Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Know-how resolver admits only accepted/reviewed Wiki, Memory and Skill sources with lifecycle status."
+    },
+    {
+      "at": "2026-08-11T23:29:07.266Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Required overflow is typed context_overflow without success receipt; optional omissions are partial with IDs."
+    },
+    {
+      "at": "2026-08-11T23:29:07.336Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Allowed and denied metadata-only receipts link persisted canonical traces and append-only ledger."
+    },
+    {
+      "at": "2026-08-11T23:29:07.417Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Real CLI and spawned stdio MCP SDK parity passes for overview, read and overflow; HTTP SAC denies."
+    },
+    {
+      "at": "2026-08-11T23:29:07.488Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 26 final focused tests, typecheck and health PASS; final independent review APPROVE."
+    },
+    {
+      "at": "2026-08-11T23:29:14.367Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-11T23:29:16.494Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
