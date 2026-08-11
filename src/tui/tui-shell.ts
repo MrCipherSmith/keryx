@@ -72,6 +72,7 @@ import {
   compactSession,
   createSession,
   findSession,
+  type SessionSummary,
   listSessions,
   openSession,
   persistHistory,
@@ -108,6 +109,8 @@ interface SidebarRepoMetadata {
   branch?: string;
   prUrl?: string;
 }
+
+const SESSION_PREVIEW_MESSAGE_COUNT = 200;
 
 /** Parse a GitHub remote URL into `owner/repo` (if possible). */
 function parseGitHubRemote(remote: string): string | undefined {
@@ -968,6 +971,124 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
   });
 }
 
+interface SessionPickerOption {
+  value: string;
+  label: string;
+  description: string;
+  search: string;
+}
+
+function formatSessionDate(iso: string): string {
+  const short = iso.trim().replace("T", " ");
+  return short.length >= 16 ? short.slice(0, 16) : short;
+}
+
+/**
+ * In-TUI session picker with TYPE-TO-FILTER. Shows id / project / title / created / updated
+ * in one list, and resolves the selected session id, or `undefined` on Esc / no match.
+ */
+export function pickSessionInTui(
+  otui: OpenTui,
+  r: Renderer,
+  sessions: SessionSummary[],
+): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const all: SessionPickerOption[] = sessions.map((s) => {
+      const created = formatSessionDate(s.createdAt);
+      const updated = formatSessionDate(s.updatedAt);
+      const short = shortSessionId(s.id);
+      const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
+      return {
+        value: s.id,
+        label: `${short} · ${title}`,
+        description: `${s.projectPath} · created ${created} · updated ${updated}`,
+        search: `${s.id} ${short} ${s.projectPath} ${s.title} ${created} ${updated}`.toLowerCase(),
+      };
+    });
+    const box = overlayBox(otui, r, "session-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "sp-title", content: otui.t`${otui.bold("Open session")} ${otui.dim("↑/↓ Enter · Esc to cancel")}` }));
+    const filterLine = new otui.TextRenderable(r, {
+      id: "sp-filter",
+      content: otui.t`${otui.dim("type to filter by id, title, project, created, updated")}`,
+    });
+    box.add(filterLine);
+    const NO_MATCH = "(no match)";
+    const sel = new otui.SelectRenderable(r, {
+      id: "sp-sel",
+      width: "100%",
+      showDescription: true,
+      height: 14,
+      showScrollIndicator: true,
+      wrapSelection: true,
+      options: [],
+      selectedTextColor: "#ffd166",
+    });
+    box.add(sel);
+    sel.focus();
+
+    let filter = "";
+    let matches: SessionPickerOption[] = all;
+    const apply = (): void => {
+      const q = filter.trim().toLowerCase();
+      matches = q.length > 0 ? all.filter((row) => row.search.includes(q)) : all;
+      const items = matches.length > 0 ? matches : [{ value: "", name: NO_MATCH, description: "" }];
+      sel.options = items.map((row) => ({ name: row.label, description: row.description, value: row.value }));
+      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to cancel")}`;
+      sel.selectedIndex = 0;
+    };
+    apply();
+
+    const onKey = (key: {
+      name: string;
+      ctrl: boolean;
+      meta: boolean;
+      sequence: string;
+      preventDefault: () => void;
+      stopPropagation: () => void;
+    }): void => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve(undefined);
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (key.name === "backspace") {
+        filter = filter.slice(0, -1);
+        apply();
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      const ch = key.sequence;
+      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
+        filter += ch;
+        apply();
+        key.preventDefault();
+        key.stopPropagation();
+      }
+      // ↑/↓/Enter fall through to the focused SelectRenderable.
+    };
+    const unsub = onKeypress(r, onKey);
+    const cleanup = (): void => {
+      unsub();
+      r.root.remove(box);
+    };
+
+    sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = sel.getSelectedOption();
+      cleanup();
+      if (chosen === null || chosen.value === "" || chosen.name === NO_MATCH) {
+        resolve(undefined);
+        return;
+      }
+      const matched = matches.find((row) => row.value === chosen.value);
+      resolve(matched?.value);
+    });
+  });
+}
+
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
  * NO concurrent readline (that leaked terminal query responses, flows 065/066).
@@ -1517,15 +1638,38 @@ export async function launchTuiAgentShell(opts: {
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
 
-    const applyOpened = (opened: {
-      handle: SessionHandle;
-      history: NormalizedMessage[];
-      archive: NormalizedMessage[];
-      resumed: boolean;
-    }): void => {
+    const applyOpened = (
+      opened: {
+        handle: SessionHandle;
+        history: NormalizedMessage[];
+        archive: NormalizedMessage[];
+        resumed: boolean;
+      },
+      previewHistory?: boolean,
+    ): void => {
       liveSession = opened.handle;
-      history = opened.history;
+      history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
+    };
+
+    const pickRecentSession = async (): Promise<SessionSummary | undefined> => {
+      const rows = listSessions(sessionCwd);
+      if (rows.length === 0) {
+        io.onSystem?.("No saved sessions in this project.\n");
+        return undefined;
+      }
+      chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, r, rows));
+      input.focus();
+      if (pickId === undefined) {
+        return undefined;
+      }
+      const found = findSession(sessionCwd, pickId);
+      if (found === undefined) {
+        io.onSystem?.("Session not found in this project.\n");
+        return undefined;
+      }
+      return found;
     };
 
     try {
@@ -1670,31 +1814,8 @@ export async function launchTuiAgentShell(opts: {
     };
 
     const resumeSessionInteractive = async (): Promise<void> => {
-      const rows = listSessions(sessionCwd).slice(0, 12);
-      if (rows.length === 0) {
-        io.onSystem?.("No saved sessions in this project.\n");
-        input.focus();
-        return;
-      }
-      chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const pickId = await showComposerChoice(otui, r, chrome.dock, {
-        title: "Resume session (this project only)",
-        subtitle: "Esc cancels",
-        cancelId: "__cancel__",
-        options: rows.map((s, i) => ({
-          id: s.id,
-          label: s.title.length > 40 ? `${s.title.slice(0, 37)}…` : s.title,
-          description: `${shortSessionId(s.id)} · ctx ${s.messageCount} · arch ${s.archiveMessageCount} · ${s.updatedAt.slice(0, 16).replace("T", " ")}`,
-          ...(i === 0 ? { recommended: true } : {}),
-        })),
-      });
-      input.focus();
-      if (pickId === "__cancel__") {
-        return;
-      }
-      const found = findSession(sessionCwd, pickId);
+      const found = await pickRecentSession();
       if (found === undefined) {
-        io.onSystem?.("Session not found in this project.\n");
         return;
       }
       // Guarded, and deliberately NOT by falling back to a new session the way
@@ -1717,7 +1838,7 @@ export async function launchTuiAgentShell(opts: {
         );
         return;
       }
-      applyOpened(opened);
+      applyOpened(opened, true);
       paintSessionHeader();
       if (opened.archiveDegraded !== undefined) {
         io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
@@ -1921,7 +2042,7 @@ export async function launchTuiAgentShell(opts: {
           );
           return;
         }
-        // /new /resume /compact /model while busy: refuse (avoid racing main session).
+        // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
         if (command !== undefined || line.startsWith("/")) {
           transcript.add(
             new otui.TextRenderable(r, {
@@ -1963,7 +2084,7 @@ export async function launchTuiAgentShell(opts: {
           );
           return;
         }
-        if (command.name === "/resume") {
+        if (command.name === "/resume" || command.name === "/sessions") {
           void resumeSessionInteractive();
           return;
         }

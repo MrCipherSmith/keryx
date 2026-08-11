@@ -98,6 +98,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/new", description: "Start a new session (old kept on disk)", modes: BOTH },
   { name: "/resume", description: "Resume a prior session in this project", modes: AGENT_ONLY },
+  { name: "/sessions", description: "Open the session list and switch to one", modes: AGENT_ONLY },
   {
     name: "/compact",
     description: "Compact model context — /compact [focus] (archive kept)",

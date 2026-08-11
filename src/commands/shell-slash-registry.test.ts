@@ -139,6 +139,7 @@ describe("AC9 — the readline agent surface derives its commands from the regis
     expect(help).not.toContain("/think");
     expect(help).not.toContain("/copy");
     expect(help).not.toContain("/resume");
+    expect(help).not.toContain("/sessions");
   });
 
   test("/exit carries the AGENT wording here and the CHAT wording in runShell", async () => {
@@ -153,7 +154,7 @@ describe("AC9 — the readline agent surface derives its commands from the regis
 });
 
 describe("AC8 — an agent-only command typed in chat fails cleanly", () => {
-  for (const name of ["/expand", "/think", "/copy", "/resume"]) {
+  for (const name of ["/expand", "/think", "/copy", "/resume", "/sessions"]) {
     test(`${name} explains that it is agent-mode only, and starts no turn`, async () => {
       const output = await chatOutput(name);
       expect(output).toContain(name);
