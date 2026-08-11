@@ -12,6 +12,7 @@ type Proposal = { schemaVersion: "1.0"; recordType: "proposal-created"; id: stri
 type Transition = Record<string, unknown> & { eventId: string; proposalId: string; toStatus: Terminal; idempotencyKey: string };
 export type TargetWriteResult = { ok: true; receiptRef: string; targetRef: string; completedAt: string; correlationId: string } | { ok: false; code: string };
 export type GuardedTargetWriter = (input: { proposal: Proposal; reviewer: TrustedActorContext; correlationId: string }) => Promise<TargetWriteResult>;
+type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
   constructor(readonly code: "access_denied" | "guard_denied" | "invalid_proposal" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
@@ -69,14 +70,16 @@ export class ProposalLifecycleService {
       const ledger = this.ledgerPath(input.workspaceId);
       await mkdir(path.dirname(ledger), { recursive: true, mode: 0o700 });
       return withFileLock(`${ledger}.lock`, async () => {
-        const events = await this.events(ledger); const replay = events.find((event) => event.idempotencyKey === input.idempotencyKey);
+        const events = (await this.events(ledger)).filter((event) => event.proposalId === proposal.id);
+        const replay = events.find((event) => event.idempotencyKey === input.idempotencyKey);
         if (replay) return { event: replay };
         if (events.length > 0) throw new ProposalLifecycleError("conflict", "proposal already has a terminal transition");
-        const targetWrite = input.decision === "accepted" ? await this.targetWriteOrStale(proposal, actor, input) : undefined;
+        const targetAttempt = input.decision === "accepted" ? await this.targetWriteOrStale(proposal, actor, input) : undefined;
+        const targetWrite = targetAttempt?.result;
         const outcome: Terminal = input.decision === "accepted" ? (targetWrite?.ok ? "accepted" : "stale") : input.decision;
         const decision = outcome === "stale" ? undefined : await this.reviewDecision(proposal, actor, input, outcome, targetWrite);
         if (decision) await writeFileAtomic(this.decisionPath(input.workspaceId, proposal.id), `${JSON.stringify(decision)}\n`);
-        const event = await this.transition({ proposal, actor, input, events, outcome, targetWrite, reviewerAuthority: manifest.members.find((member) => member.subject === actor.subject)?.role === "owner" ? "owner" : "editor" });
+        const event = await this.transition({ proposal, actor, input, events, outcome, targetWrite, freshnessVerifiedAt: targetAttempt?.freshnessVerifiedAt, reviewerAuthority: manifest.members.find((member) => member.subject === actor.subject)?.role === "owner" ? "owner" : "editor" });
         await this.validateTransition(event);
         await appendFile(ledger, `${JSON.stringify(event)}\n`, { mode: 0o600 });
         return { event };
@@ -84,22 +87,23 @@ export class ProposalLifecycleService {
     } });
   }
 
-  private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, input: { requestCorrelationId: string }): Promise<TargetWriteResult> {
+  private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, input: { requestCorrelationId: string }): Promise<TargetWriteAttempt> {
     await this.options.beforeTargetWrite?.();
     // Evidence containment/existence and strict policy are rechecked immediately
     // before the owner write; a stale/removed reference can never be accepted.
     try { await this.strict(); await this.validateEvidence(proposal.evidence); }
-    catch { return { ok: false, code: "stale_evidence" }; }
+    catch { return { result: { ok: false, code: "stale_evidence" } }; }
+    const freshnessVerifiedAt = this.timestamp();
     const result = await this.options.targetWriter({ proposal, reviewer: actor, correlationId: input.requestCorrelationId });
-    return result.ok && result.correlationId !== input.requestCorrelationId ? { ok: false, code: "correlation_mismatch" } : result;
+    return { freshnessVerifiedAt, result: result.ok && result.correlationId !== input.requestCorrelationId ? { ok: false, code: "correlation_mismatch" } : result };
   }
 
-  private async transition(input: { proposal: Proposal; actor: TrustedActorContext; input: { requestCorrelationId: string; idempotencyKey: string; reason?: string }; events: Transition[]; outcome: Terminal; targetWrite?: TargetWriteResult; reviewerAuthority: "owner" | "editor" }): Promise<Transition> {
+  private async transition(input: { proposal: Proposal; actor: TrustedActorContext; input: { requestCorrelationId: string; idempotencyKey: string; reason?: string }; events: Transition[]; outcome: Terminal; targetWrite?: TargetWriteResult; freshnessVerifiedAt?: string; reviewerAuthority: "owner" | "editor" }): Promise<Transition> {
     const previous = input.events.at(-1); const base: Record<string, unknown> = { schemaVersion: "1.0", recordType: "proposal-transition", eventId: `event-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalId: input.proposal.id, proposalRevision: input.proposal.proposalRevision, correlationId: input.input.requestCorrelationId, workspaceId: input.proposal.workspaceId, sequence: input.events.length + 1, priorEventHash: previous ? eventHash(previous) : hash("GENESIS"), fromStatus: "proposed", toStatus: input.outcome, occurredAt: this.timestamp(), idempotencyKey: input.input.idempotencyKey };
     if (input.outcome === "accepted") {
       const write = input.targetWrite;
       if (!write?.ok) return this.transition({ ...input, outcome: "stale" });
-      Object.assign(base, { acceptance: { reviewDecisionRef: `./proposals/${input.proposal.id}.decision.json`, reviewer: { subject: input.actor.subject, authority: input.reviewerAuthority, trustedPrincipalRef: "./principals/local" }, security: { gate: "pass", policyRef: this.options.policyRef, policyRevision: this.options.policyRevision }, freshness: { state: "fresh", verifiedAt: this.timestamp(), maxEvidenceAgeSeconds: 3600 }, targetWrite: { receiptRef: write.receiptRef, targetRef: write.targetRef, completedAt: write.completedAt }, evidence: input.proposal.evidence, idempotencyKey: input.input.idempotencyKey } });
+      Object.assign(base, { acceptance: { reviewDecisionRef: `./proposals/${input.proposal.id}.decision.json`, reviewer: { subject: input.actor.subject, authority: input.reviewerAuthority, trustedPrincipalRef: "./principals/local" }, security: { gate: "pass", policyRef: this.options.policyRef, policyRevision: this.options.policyRevision }, freshness: { state: "fresh", verifiedAt: input.freshnessVerifiedAt ?? this.timestamp(), maxEvidenceAgeSeconds: 3600 }, targetWrite: { receiptRef: write.receiptRef, targetRef: write.targetRef, completedAt: write.completedAt }, evidence: input.proposal.evidence, idempotencyKey: input.input.idempotencyKey } });
     } else Object.assign(base, { reason: input.input.reason ?? (input.outcome === "stale" ? "evidence, policy, or guarded target write did not remain fresh" : "review decision" ) });
     return base as Transition;
   }

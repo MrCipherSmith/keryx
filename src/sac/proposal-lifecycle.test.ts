@@ -53,3 +53,13 @@ test("rejection is terminal append-only and does not call a target writer", asyn
   const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001" });
   expect(result.event.toStatus).toBe("rejected"); expect(writes).toBe(0);
 });
+
+test("a terminal transition in another proposal does not consume this proposal idempotency stream", async () => {
+  const { service } = await setup();
+  await propose(service);
+  await service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0002", workspaceId: "workspace-a", id: "proposal-b", proposalRevision: "r1", kind: "risk", summary: "separate explicit wrap-up", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: "r1", observedAt: time }] });
+  await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0002", workspaceId: "workspace-a", proposalId: "proposal-b", decision: "dismissed", reason: "out of scope", idempotencyKey: "proposal-review-idempotency-0001" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001" });
+  expect(result.event.proposalId).toBe("proposal-a");
+  expect(result.event.sequence).toBe(1);
+});
