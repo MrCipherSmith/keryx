@@ -1032,7 +1032,14 @@ export function pickSessionInTui(
     const apply = (): void => {
       const q = filter.trim().toLowerCase();
       matches = q.length > 0 ? all.filter((row) => row.search.includes(q)) : all;
-      const items = matches.length > 0 ? matches : [{ value: "", name: NO_MATCH, description: "" }];
+      const items = matches.length > 0 ? matches : [
+        {
+          value: "",
+          label: NO_MATCH,
+          description: "",
+          search: "",
+        },
+      ];
       sel.options = items.map((row) => ({ name: row.label, description: row.description, value: row.value }));
       filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to cancel")}`;
       sel.selectedIndex = 0;
