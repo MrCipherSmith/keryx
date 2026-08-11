@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { assembleContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
+import { assembleAndRecordContext, assembleContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
 import { evaluateStrictSacGuard, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
 import { createFlowService } from "../flow/service";
 
-export type FwkEvidence = Readonly<{ id: string; uri: string; revision: string; observedAt: string; expiresAt: string; trust: "primary" | "accepted" | "reviewed"; visible: boolean; statement: string }>;
+export type FwkEvidence = Readonly<{ id: string; uri: string; revision: string; observedAt: string; expiresAt: string; trust: "primary" | "accepted" | "reviewed"; visible: boolean; statement: string; status?: "fresh" | "stale" | "expired" | "denied" }>;
 export type FwkKnowHow = Readonly<{ id: string; kind: "wiki" | "memory" | "skill"; uri: string; revision: string; trust: "accepted" | "reviewed"; status: "fresh" | "stale" | "withdrawn" | "denied"; applicability?: string; accepted: boolean; visible: boolean }>;
 export type FwkWork = Readonly<{ flowRef?: { uri: string; snapshot: string; revision: string }; completed?: string[]; next?: string[]; blocked?: string[]; evidence?: FwkEvidence[] }>;
 export type FwkSource = Readonly<{ facts: readonly FwkEvidence[]; work?: FwkWork; knowHow: readonly FwkKnowHow[] }>;
@@ -30,11 +30,20 @@ export class FwkReadService {
     guard: StrictSacGuard;
     authorizationServer: SacAuthorizationServer;
     source: (input: { workspaceId: string; actorContext: TrustedActorContext }) => Promise<FwkSource>;
-    canonical: { traceRef: string; configurationRevision: string; policyRef: string; policyRevision: string };
+    canonical: { traceRef?: string; configurationRevision: string; policyRef: string; policyRevision: string; workspaceRoot?: string };
     now?: () => Date;
   }) {}
 
   async overview(input: { workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }): Promise<FwkReadResult> {
+    return this.resolve(input, "overview");
+  }
+
+  /** Progressive, read-only detail operation over a single previously discoverable ID. */
+  async read(input: { workspaceId: string; itemId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number } }): Promise<FwkReadResult> {
+    return this.resolve({ ...input, required: [input.itemId], optional: [] }, "resource", input.itemId);
+  }
+
+  private async resolve(input: { workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }, action: "overview" | "resource", itemId?: string): Promise<FwkReadResult> {
     // Actor identity is intentionally absent from the public payload.  Only a
     // transport-owned authorization server may issue the WeakSet-trusted
     // context carried into source resolution.
@@ -55,26 +64,34 @@ export class FwkReadService {
     }
     const now = this.options.now ?? (() => new Date());
     const required = new Set(input.required ?? []); const optional = new Set(input.optional ?? []);
-    const facts = source.facts.map((fact) => ({ ...fact, freshness: !fact.visible ? "denied" : new Date(fact.expiresAt) <= now() ? "expired" : "fresh" as const }));
-    const usableFacts = facts.filter((fact) => fact.visible && fact.freshness === "fresh");
-    const knowHow = source.knowHow.filter((item) => item.visible && item.accepted && item.status !== "withdrawn");
+    const facts = source.facts.map((fact) => ({ ...fact, freshness: !fact.visible ? "denied" as const : fact.status === "stale" ? "stale" as const : new Date(fact.expiresAt) <= now() ? "expired" as const : "fresh" as const }));
+    const knowHow = source.knowHow.map((item) => ({ ...item, status: !item.visible ? "denied" as const : !item.accepted ? "denied" as const : item.status }));
     const work = source.work?.flowRef ? { state: "bound" as const, ...source.work } : { state: "unbound" as const };
+    const visibleFacts = facts.filter((fact) => fact.visible);
+    const acceptedKnowHow = knowHow.filter((entry) => entry.visible && entry.accepted && entry.status !== "withdrawn" && entry.status !== "denied");
+    const withheld = [...facts.filter((fact) => !fact.visible).map((fact) => fact.id), ...knowHow.filter((entry) => !entry.visible || !entry.accepted || entry.status === "withdrawn" || entry.status === "denied").map((entry) => entry.id)];
+    const select = <T extends { id: string }>(items: T[]): T[] => itemId ? items.filter((entry) => entry.id === itemId) : items;
     const candidates: ContextCandidate[] = [
-      ...usableFacts.map((fact) => ({ id: fact.id, required: required.has(fact.id) || !optional.has(fact.id), tokens: Math.ceil(fact.statement.length / 4) })),
-      ...(work.state === "bound" ? [{ id: "work", required: required.has("work") || !optional.has("work"), tokens: 32 }] : []),
-      ...knowHow.map((item) => ({ id: item.id, required: required.has(item.id), tokens: 16 })),
+      ...select(visibleFacts).map((fact) => ({ id: fact.id, required: required.has(fact.id) || !optional.has(fact.id), tokens: Math.ceil(fact.statement.length / 4) })),
+      ...(work.state === "bound" && (!itemId || itemId === "work") ? [{ id: "work", required: required.has("work") || !optional.has("work"), tokens: 32 }] : []),
+      ...select(acceptedKnowHow).map((item) => ({ id: item.id, required: required.has(item.id) || !optional.has(item.id), tokens: 16 })),
     ];
-    const assembly = assembleContext({ ...input.budget, candidates, ...this.options.canonical });
+    const assembly = this.options.canonical.workspaceRoot
+      ? await assembleAndRecordContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId: input.requestCorrelationId, ...input.budget, candidates, omittedOptional: withheld, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision })
+      : assembleContext({ ...input.budget, candidates, omittedOptional: withheld, traceRef: this.options.canonical.traceRef ?? "./context-operations/traces/unresolved", configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision });
     if ("code" in assembly) return assembly;
-    return this.success(input.workspaceId, actor.subject, assembly, usableFacts, work, knowHow, now);
+    return this.success(input.workspaceId, actor.subject, assembly, facts, work, acceptedKnowHow, now, action, itemId);
   }
 
-  private async success(workspaceId: string, actor: string, assembly: ContextAssembly, facts: Array<FwkEvidence & { freshness: string }>, work: unknown, knowHow: FwkKnowHow[], now: () => Date): Promise<FwkResult> {
+  private async success(workspaceId: string, actor: string, assembly: ContextAssembly, facts: Array<FwkEvidence & { freshness: "fresh" | "stale" | "expired" | "denied" }>, work: unknown, knowHow: FwkKnowHow[], now: () => Date, action: "overview" | "resource", resourceId?: string): Promise<FwkResult> {
     const selected = new Set(assembly.selected);
-    const manifest = { schemaVersion: "1.0" as const, workspaceId, generatedAt: nowIso(now), facts: facts.filter((fact) => selected.has(fact.id)).map((fact) => ({ statement: fact.statement, evidence: [{ kind: "artifact" as const, uri: fact.uri, revision: fact.revision, observedAt: fact.observedAt, trust: fact.trust }], observedAt: fact.observedAt, expiresAt: fact.expiresAt, freshness: "fresh" as const })), work: selected.has("work") ? work : { state: "unbound" }, knowHow: knowHow.filter((item) => selected.has(item.id)).map(({ id, accepted, visible, ...item }) => item), freshness: assembly.partial ? "partial" as const : "fresh" as const };
+    const selectedFacts = facts.filter((fact) => selected.has(fact.id));
+    const selectedKnowHow = knowHow.filter((item) => selected.has(item.id));
+    const stale = selectedFacts.some((fact) => fact.freshness !== "fresh") || selectedKnowHow.some((item) => item.status !== "fresh");
+    const manifest = { schemaVersion: "1.0" as const, workspaceId, generatedAt: nowIso(now), facts: selectedFacts.map((fact) => ({ statement: fact.statement, evidence: [{ kind: "artifact" as const, uri: fact.uri, revision: fact.revision, observedAt: fact.observedAt, trust: fact.trust }], observedAt: fact.observedAt, expiresAt: fact.expiresAt, freshness: fact.freshness })), work: selected.has("work") ? work : { state: "unbound" }, knowHow: selectedKnowHow.map(({ id, accepted, visible, ...item }) => item), freshness: stale ? "stale" as const : assembly.partial ? "partial" as const : "fresh" as const };
     const fwk = await validateSacContract({ schema: "fwk-receipt", document: manifest });
     if (!fwk.valid) throw new Error(`invalid FWK manifest: ${fwk.errors.map((error) => error.code).join(",")}`);
-    const receipt = this.receipt(workspaceId, actor, "allowed", assembly, now);
+    const receipt = this.receipt(workspaceId, actor, stale ? "stale" : "allowed", assembly, now, action, resourceId);
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
     if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
@@ -83,7 +100,7 @@ export class FwkReadService {
 
   private async denied(workspaceId: string, actor: string): Promise<FwkResult> {
     const now = this.options.now ?? (() => new Date());
-    const assembly: ContextAssembly = { ...this.options.canonical, selected: [], omittedOptional: [], partial: false };
+    const assembly: ContextAssembly = { traceRef: this.options.canonical.traceRef ?? "./context-operations/traces/denied", configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision, selected: [], omittedOptional: [], partial: false };
     const receipt = this.receipt(workspaceId, actor, "denied", assembly, now);
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
@@ -91,9 +108,9 @@ export class FwkReadService {
     return { partial: false, omittedOptional: [], manifest: { facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" }, receipt };
   }
 
-  private receipt(workspaceId: string, actor: string, decision: AccessReceipt["decision"], assembly: ContextAssembly, now: () => Date): AccessReceipt {
+  private receipt(workspaceId: string, actor: string, decision: AccessReceipt["decision"], assembly: ContextAssembly, now: () => Date, action: "overview" | "resource" = "overview", resourceId?: string): AccessReceipt {
     const recordedAt = nowIso(now); const id = `receipt-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
-    const base = { schemaVersion: "1.0" as const, id, workspaceId, actor, action: "overview" as const, decision, recordedAt, cost: { tokens: 0, toolCalls: 1, elapsedMs: 0 }, contextAssembly: { traceRef: assembly.traceRef, configurationRevision: assembly.configurationRevision, selected: assembly.selected.map((id) => `./ids/${id}`), omittedOptional: assembly.omittedOptional.map((id) => `./ids/${id}`) }, policy: { ref: assembly.policyRef, revision: assembly.policyRevision } };
+    const base = { schemaVersion: "1.0" as const, id, workspaceId, actor, action, decision, recordedAt, cost: { tokens: 0, toolCalls: 1, elapsedMs: 0 }, contextAssembly: { traceRef: assembly.traceRef, configurationRevision: assembly.configurationRevision, selected: assembly.selected.map((id) => `./ids/${id}`), omittedOptional: assembly.omittedOptional.map((id) => `./ids/${id}`) }, policy: { ref: assembly.policyRef, revision: assembly.policyRevision }, ...(action === "resource" ? { resourceRef: `./ids/${resourceId ?? "unknown"}` } : {}) };
     return { ...base, integrity: { recordHash: createHash("sha256").update(JSON.stringify(base)).digest("hex"), previousRecordHash: "GENESIS" } };
   }
 }
@@ -115,15 +132,13 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
       const facts = await Promise.all(manifest.resources.filter((resource) => resource.kind === "evidence").map(async (resource, index) => {
         const raw = await readFile(path.resolve(cwd, resource.uri.slice(2)));
         const revision = createHash("sha256").update(raw).digest("hex");
-        if (resource.revision !== revision) return undefined;
-        return { id: `fact-${index}`, uri: resource.uri, revision, observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true, statement: `Evidence reference ${resource.uri}` };
+        return { id: `fact-${index}`, uri: resource.uri, revision: resource.revision ?? revision, observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true, statement: `Evidence reference ${resource.uri}`, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const };
       }));
       const knowHow = await Promise.all(manifest.resources.filter((resource) => resource.kind === "wiki" || resource.kind === "memory" || resource.kind === "skill").map(async (resource, index) => {
         const raw = await readFile(path.resolve(cwd, resource.uri.slice(2)), "utf8");
         const revision = createHash("sha256").update(raw).digest("hex");
         const accepted = /^Status:\s*(accepted|reviewed)\s*$/mi.test(raw);
-        if (!accepted || resource.revision !== revision) return undefined;
-        return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision, trust: "accepted" as const, status: "fresh" as const, accepted: true, visible: true };
+        return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? revision, trust: "accepted" as const, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const, accepted, visible: true };
       }));
       const work = flow ? await (async () => {
         const id = /(?:^|\/)0*([0-9]+)-/.exec(flow.uri)?.[1];
@@ -137,7 +152,7 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
         knowHow: knowHow.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
       };
     },
-    canonical: { traceRef: "./context-operations/traces/local-read-v1", configurationRevision: "context-operations-v1", policyRef: "./security/policy/local", policyRevision: "local-offline-v1" },
+    canonical: { workspaceRoot: cwd, configurationRevision: "context-operations-v1", policyRef: "./security/policy/local", policyRevision: "local-offline-v1" },
   });
 }
 

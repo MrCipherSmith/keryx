@@ -71,11 +71,27 @@ export function buildToolRegistry(): ToolEntry[] {
       name: "sac.overview", module: "sac", description: "Read a bounded Shared Agent Context overview.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId"]),
       mutating: false,
-      async invoke(cwd, params) {
+      async invoke(cwd, params, context) {
+        // v1 SAC is local-stdio only. HTTP has no verified principal policy and
+        // must never inherit a local OS actor.
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const workspaceId = stringParam(params, "workspaceId") ?? "";
         const maxItems = typeof params.maxItems === "number" ? params.maxItems : 32;
         const maxTokens = typeof params.maxTokens === "number" ? params.maxTokens : 4096;
         return normalizeFwkResult(await createLocalFwkReadService(cwd).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } }));
+      },
+    },
+    {
+      name: "sac.read", module: "sac", description: "Read one bounded Shared Agent Context item after overview.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, itemId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId", "itemId"]),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? "";
+        const itemId = stringParam(params, "itemId") ?? "";
+        const maxItems = typeof params.maxItems === "number" ? params.maxItems : 1;
+        const maxTokens = typeof params.maxTokens === "number" ? params.maxTokens : 4096;
+        return normalizeFwkResult(await createLocalFwkReadService(cwd).read({ workspaceId, itemId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } }));
       },
     },
     {

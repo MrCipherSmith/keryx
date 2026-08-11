@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -22,6 +22,8 @@ function normalizeFixture(value: unknown): unknown {
     receipt.recordedAt = "1970-01-01T00:00:00.000Z";
     const integrity = receipt.integrity as Record<string, unknown>;
     integrity.recordHash = "0".repeat(64);
+    const assembly = receipt.contextAssembly as Record<string, unknown>;
+    assembly.traceRef = "./.metaproject/context-operations/traces/normalized.json";
   }
   return copy;
 }
@@ -48,10 +50,29 @@ test("real local CLI and MCP adapter produce matching normalized overview and ov
   const mcp = await dispatchCallTool(await buildMcpContext(cwd), "sac.overview", { workspaceId, maxItems: 2, maxTokens: 100 });
   expect(mcp.isError).toBe(false);
   expect(normalizeFixture(JSON.parse(cliOverview.stdout))).toEqual(normalizeFixture(JSON.parse(mcp.text)));
+  const overviewReceipt = JSON.parse(cliOverview.stdout) as { receipt: { contextAssembly: { traceRef: string } } };
+  const trace = await readFile(path.join(cwd, overviewReceipt.receipt.contextAssembly.traceRef.slice(2)), "utf8");
+  expect(trace).toContain("correlationId");
+  expect(trace).not.toContain("verified evidence");
 
   const cliOverflow = await invokeCli(cwd, ["overview", workspaceId, "--max-items", "0", "--max-tokens", "0"]);
   expect(cliOverflow.exitCode).toBe(0);
   const mcpOverflow = await dispatchCallTool(await buildMcpContext(cwd), "sac.overview", { workspaceId, maxItems: 0, maxTokens: 0 });
   expect(mcpOverflow.isError).toBe(false);
   expect(JSON.parse(cliOverflow.stdout)).toEqual(JSON.parse(mcpOverflow.text));
+});
+
+test("HTTP MCP transport cannot use the local OS SAC identity", async () => {
+  const { cwd, workspaceId } = await fixtureWorkspace();
+  const http = await dispatchCallTool(await buildMcpContext(cwd, "http"), "sac.overview", { workspaceId, maxItems: 2, maxTokens: 100 });
+  expect(http.isError).toBe(false);
+  expect(JSON.parse(http.text)).toEqual({ code: "sac_transport_denied" });
+});
+
+test("CLI and stdio MCP normalize the progressive read contract", async () => {
+  const { cwd, workspaceId } = await fixtureWorkspace();
+  const cliRead = await invokeCli(cwd, ["read", workspaceId, "fact-0", "--max-items", "1", "--max-tokens", "100"]);
+  const mcpRead = await dispatchCallTool(await buildMcpContext(cwd, "stdio"), "sac.read", { workspaceId, itemId: "fact-0", maxItems: 1, maxTokens: 100 });
+  expect(cliRead.exitCode).toBe(0); expect(mcpRead.isError).toBe(false);
+  expect(normalizeFixture(JSON.parse(cliRead.stdout))).toEqual(normalizeFixture(JSON.parse(mcpRead.text)));
 });
