@@ -5,6 +5,15 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.25] — 2026-08-11
+
+### Changed
+
+- **Provider configuration is now uniform in the agent TUI.** `/provider`
+  lists all supported providers and lets every endpoint-based provider edit its
+  endpoint URL before live model discovery; overrides are stored per provider.
+  `/connect` lists only configured or currently reachable providers.
+
 ### Fixed
 
 - **Rapid-MLX model discovery no longer invents a fallback model.** When its
