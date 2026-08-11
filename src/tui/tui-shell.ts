@@ -807,7 +807,7 @@ function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: s
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "base-url-picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} server URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+  box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} endpoint URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
     box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${otui.dim("Edit host and port before discovering models")}`, marginTop: 1 }));
     const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
     box.add(input);
