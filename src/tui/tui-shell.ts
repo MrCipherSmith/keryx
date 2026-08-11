@@ -56,7 +56,7 @@ import type { DetectedProvider } from "../commands/select";
 import { resolveModelsForPicker } from "../commands/providers";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { collapseHome } from "../lib/statusbar";
-import { saveApiKey, saveShellConfig } from "../lib/shell-config";
+import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import {
   allowShellPattern,
   isShellCommandAllowed,
@@ -734,6 +734,24 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
 /** Result of the API-key step: a key to save, skip (proceed keyless), or go back. */
 type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
 
+/** Ask for a local provider endpoint, keeping its configured value editable. */
+function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "base-url-picker");
+    r.root.add(box);
+  box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} endpoint URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${otui.dim("Edit host and port before discovering models")}`, marginTop: 1 }));
+    const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
+    box.add(input);
+    input.focus();
+    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
+    });
+    input.on(otui.InputRenderableEvents.ENTER, () => { const value = input.value.trim(); cleanup(); resolve(value.length > 0 ? value : undefined); });
+  });
+}
+
 /**
  * API-key entry step. Enter with text → `key`; empty Enter → `skip` (proceed without
  * a key); Esc → `back` (return to the previous step). Absolute overlay; removes its
@@ -863,6 +881,15 @@ export function selectProviderModelInTui(
           return;
         }
 
+        const selectedBaseUrl = prov.baseUrl !== undefined
+          ? await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl)
+          : prov.baseUrl;
+        if (prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
+          continue;
+        }
+        if (selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl);
+        const selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
+
         const envKey = prov.envKey;
         if (envKey !== undefined) {
           const existingKey = process.env[envKey];
@@ -880,15 +907,15 @@ export function selectProviderModelInTui(
         }
 
         // Fetch AFTER key is available so live GET /models can authenticate.
-        const models = await modelsForPicker(prov);
+        const models = await modelsForPicker(selectedProvider);
         const model = await pickModelInTui(otui, r, models);
         if (model === undefined) {
           continue; // Esc at the model step → re-pick the provider
         }
         resolve(
-          prov.baseUrl === undefined
+          selectedBaseUrl === undefined
             ? { provider: prov.name, model }
-            : { provider: prov.name, model, baseUrl: prov.baseUrl },
+            : { provider: prov.name, model, baseUrl: selectedBaseUrl },
         );
         return;
       }
@@ -905,7 +932,8 @@ export function selectProviderModelInTui(
  */
 export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const all = models.length > 0 ? models : ["fake-echo"];
+    const all = models;
+    const NO_MODELS = "(no models found)";
     const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
@@ -919,7 +947,7 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
       height: 14,
       showScrollIndicator: true,
       wrapSelection: true,
-      options: all.map((m) => ({ name: m, description: "" })),
+      options: (all.length > 0 ? all : [NO_MODELS]).map((m) => ({ name: m, description: "" })),
       selectedTextColor: "#ffd166",
     });
     box.add(sel);
@@ -966,7 +994,7 @@ export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Pr
     sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = sel.getSelectedOption();
       cleanup();
-      resolve(chosen === null || chosen.name === NO_MATCH ? undefined : chosen.name);
+      resolve(chosen === null || chosen.name === NO_MATCH || chosen.name === NO_MODELS ? undefined : chosen.name);
     });
   });
 }
@@ -2263,7 +2291,27 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/connect" || command.name === "/provider") {
           void (async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-            const ns = await chrome.withOverlay(() => selectProviderModelInTui(otui, r, detected));
+            const candidates =
+              command.name === "/provider"
+                ? detected
+                : (await Promise.all(
+                    detected.map(async (provider) => {
+                      if (provider.name === "fake") return undefined;
+                      if (provider.name === "rapid-mlx") {
+                        return (await modelsForPicker(provider)).length > 0 ? provider : undefined;
+                      }
+                      if (provider.envKey !== undefined) {
+                        return process.env[provider.envKey]?.length ? provider : undefined;
+                      }
+                      return provider;
+                    }),
+                  )).filter((provider): provider is DetectedProvider => provider !== undefined);
+            if (candidates.length === 0) {
+              io.onSystem?.("No connected providers found. Use /provider to add or configure one.\n");
+              input.focus();
+              return;
+            }
+            const ns = await chrome.withOverlay(() => selectProviderModelInTui(otui, r, candidates));
             if (ns !== undefined) {
               await switchTo(ns);
             } else {

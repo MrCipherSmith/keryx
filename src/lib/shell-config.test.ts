@@ -8,6 +8,7 @@ import {
   envWithSavedApiKeys,
   loadShellConfig,
   saveApiKey,
+  saveProviderBaseUrl,
   saveShellConfig,
   shellConfigPath,
 } from "./shell-config";
@@ -62,6 +63,17 @@ test("saveApiKey merges per-provider keys under apiKeys (flow 085)", () => {
   saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
   saveApiKey("GROQ_API_KEY", "gsk-x", dir);
   expect(loadShellConfig(dir).apiKeys).toEqual({ DEEPSEEK_API_KEY: "sk-ds", GROQ_API_KEY: "gsk-x" });
+});
+
+test("saveProviderBaseUrl merges endpoint overrides per provider", () => {
+  const dir = tempDir();
+  saveProviderBaseUrl("rapid-mlx", "http://127.0.0.1:8010", dir);
+  saveProviderBaseUrl("openrouter", "https://openrouter.ai/api/v1", dir);
+
+  expect(loadShellConfig(dir).baseUrls).toEqual({
+    "rapid-mlx": "http://127.0.0.1:8010",
+    openrouter: "https://openrouter.ai/api/v1",
+  });
 });
 
 test("applySavedApiKeys sets env for saved keys without overwriting an existing env var", () => {

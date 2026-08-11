@@ -372,7 +372,7 @@ describe("flow 053 — pickAgentMode: agent/chat menu, agent default", () => {
   });
 });
 
-test("flow 083: fetchOpenRouterModels parses /v1/models (sorted, deduped); falls back on failure", async () => {
+test("flow 083: fetchOpenRouterModels parses /v1/models (sorted, deduped); returns none on failure", async () => {
   const okFetch = (async () =>
     new Response(JSON.stringify({ data: [{ id: "z/m" }, { id: "a/m" }, { id: "a/m" }, { id: 42 }] }), {
       status: 200,
@@ -380,12 +380,12 @@ test("flow 083: fetchOpenRouterModels parses /v1/models (sorted, deduped); falls
   expect(await fetchOpenRouterModels(okFetch)).toEqual(["a/m", "z/m"]);
 
   const badFetch = (async () => new Response("nope", { status: 500 })) as unknown as typeof fetch;
-  expect(await fetchOpenRouterModels(badFetch)).toContain("openai/gpt-4o-mini"); // curated fallback
+  expect(await fetchOpenRouterModels(badFetch)).toEqual([]);
 
   const throwFetch = (async () => {
     throw new Error("offline");
   }) as unknown as typeof fetch;
-  expect(await fetchOpenRouterModels(throwFetch)).toContain("openai/gpt-4o-mini");
+  expect(await fetchOpenRouterModels(throwFetch)).toEqual([]);
 });
 
 test("flow 078: openrouter is ALWAYS offered (key entered at use time; no network probe)", async () => {

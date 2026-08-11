@@ -165,7 +165,9 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     requiresApiKey: false,
     allowLoopback: true,
     platforms: ["darwin"],
-    models: ["qwen3.5-9b-4bit"],
+    // Local servers are authoritative for their installed model inventory.
+    // Do not offer a guessed model when `/v1/models` is unavailable.
+    models: [],
     note: "local · no key",
   },
   {
@@ -231,7 +233,9 @@ export async function fetchOpenAiCompatModelsDetailed(
 ): Promise<ModelsResolveResult> {
   const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.modelsPath ?? DEFAULT_MODELS_PATH}`;
   const timeoutMs = opts?.timeoutMs ?? MODELS_FETCH_TIMEOUT_MS;
-  const fallback: ModelsResolveResult = { models: [...provider.models], source: "fallback" };
+  // A failed discovery must never turn curated/documentary ids into selectable
+  // models: only the provider's live `/models` response is authoritative.
+  const fallback: ModelsResolveResult = { models: [], source: "fallback" };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

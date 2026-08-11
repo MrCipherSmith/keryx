@@ -30,7 +30,9 @@ test("registry lists the flow-085 providers with sensible metadata", () => {
       expect(p.envKey).toBeDefined();
       expect(p.envKey!.length).toBeGreaterThan(0);
     }
-    expect(p.models.length).toBeGreaterThan(0);
+    if (p.name !== "rapid-mlx") {
+      expect(p.models.length).toBeGreaterThan(0);
+    }
   }
 });
 
@@ -38,7 +40,7 @@ test("rapid-mlx is local/macOS-only and keyless", () => {
   const rapid = providerByName("rapid-mlx");
   expect(rapid).toBeDefined();
   expect(rapid?.baseUrl).toBe("http://127.0.0.1:8010");
-  expect(rapid?.models).toContain("qwen3.5-9b-4bit");
+  expect(rapid?.models).toEqual([]);
   expect(rapid?.requiresApiKey).toBe(false);
   expect(rapid?.platforms).toEqual(["darwin"]);
 });
@@ -140,17 +142,17 @@ test("fetchOpenAiCompatModels: local keyless provider can be probed without auth
   expect(calledWithAuth).toBeUndefined();
 });
 
-test("fetchOpenAiCompatModels: falls back to curated models on non-2xx / throw / empty", async () => {
+test("fetchOpenAiCompatModels: returns no models on non-2xx / throw / empty", async () => {
   const groq = providerByName("groq");
   expect(groq).toBeDefined();
   const bad = (async () => ({ ok: false, json: async () => ({}) }) as Response) as unknown as typeof fetch;
-  expect(await fetchOpenAiCompatModels(bad, groq!)).toEqual([...groq!.models]);
+  expect(await fetchOpenAiCompatModels(bad, groq!)).toEqual([]);
   const boom = (async () => {
     throw new Error("offline");
   }) as unknown as typeof fetch;
-  expect(await fetchOpenAiCompatModels(boom, groq!)).toEqual([...groq!.models]);
+  expect(await fetchOpenAiCompatModels(boom, groq!)).toEqual([]);
   const empty = (async () => ({ ok: true, json: async () => ({ data: [] }) }) as Response) as unknown as typeof fetch;
-  expect(await fetchOpenAiCompatModels(empty, groq!)).toEqual([...groq!.models]);
+  expect(await fetchOpenAiCompatModels(empty, groq!)).toEqual([]);
 });
 
 test("fetchOpenAiCompatModelsDetailed: reports live vs fallback source", async () => {
@@ -170,7 +172,7 @@ test("fetchOpenAiCompatModelsDetailed: reports live vs fallback source", async (
   }) as unknown as typeof fetch;
   const offlineResult = await fetchOpenAiCompatModelsDetailed(offline, groq!);
   expect(offlineResult.source).toBe("fallback");
-  expect(offlineResult.models).toEqual([...groq!.models]);
+  expect(offlineResult.models).toEqual([]);
 });
 
 test("resolveModelsForPicker: always probes live for registry providers when online", async () => {
