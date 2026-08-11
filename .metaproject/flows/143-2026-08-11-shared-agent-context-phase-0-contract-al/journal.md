@@ -23,3 +23,12 @@
 - 2026-08-11T20:31:49.917Z - task-done: T10: Close normative schema vocabulary coverage gap from final review
 - 2026-08-11T20:46:05.586Z - task-added: T11: Remediate strict UTC calendar validation finding from PR #265
 - 2026-08-11T20:47:49.706Z - task-done: T11: Remediate strict UTC calendar validation finding from PR #265
+- 2026-08-11T20:56:17.758Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/265 (warning: PR is not a draft)
+- 2026-08-11T20:56:17.844Z - ac-confirmed: AC1: 13 focused tests: schema fixtures and semantic contract checks pass.
+- 2026-08-11T20:56:17.913Z - ac-confirmed: AC2: Focused tests cover roles, containment, UTC ordering and replay/idempotency.
+- 2026-08-11T20:56:17.984Z - ac-confirmed: AC3: Focused tests cover realpath/root containment and traversal/symlink rejection.
+- 2026-08-11T20:56:18.055Z - ac-confirmed: AC4: Focused tests cover forged actors, spoofing, workspace TOCTOU and revoked roles.
+- 2026-08-11T20:56:18.127Z - ac-confirmed: AC5: Focused tests cover strict enforced guard and all fail-closed modes.
+- 2026-08-11T20:56:18.198Z - ac-confirmed: AC6: No Flow mutation/knowledge store in scope; 13 focused tests, typecheck, health 93 and PR review APPROVE.
+- 2026-08-11T20:56:18.271Z - completing
+- 2026-08-11T20:56:20.487Z - done: all gates passed

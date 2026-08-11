@@ -3,17 +3,42 @@
   "id": "143",
   "slug": "shared-agent-context-phase-0-contract-al",
   "title": "Shared Agent Context Phase 0 — Contract alignment",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-11T20:10:33.201Z",
-  "updatedAt": "2026-08-11T20:47:49.706Z",
+  "updatedAt": "2026-08-11T20:56:20.487Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:8786cf8ad273a9c3ee57479ee8af579aba23a13520e3f6ccb60cecdb8f9cfb05",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-11T20:56:17.843Z",
+      "note": "13 focused tests: schema fixtures and semantic contract checks pass."
+    },
+    "AC2": {
+      "at": "2026-08-11T20:56:17.913Z",
+      "note": "Focused tests cover roles, containment, UTC ordering and replay/idempotency."
+    },
+    "AC3": {
+      "at": "2026-08-11T20:56:17.984Z",
+      "note": "Focused tests cover realpath/root containment and traversal/symlink rejection."
+    },
+    "AC4": {
+      "at": "2026-08-11T20:56:18.055Z",
+      "note": "Focused tests cover forged actors, spoofing, workspace TOCTOU and revoked roles."
+    },
+    "AC5": {
+      "at": "2026-08-11T20:56:18.127Z",
+      "note": "Focused tests cover strict enforced guard and all fail-closed modes."
+    },
+    "AC6": {
+      "at": "2026-08-11T20:56:18.198Z",
+      "note": "No Flow mutation/knowledge store in scope; 13 focused tests, typecheck, health 93 and PR review APPROVE."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/265"
   },
   "tasks": [
     {
@@ -285,6 +310,50 @@
       "at": "2026-08-11T20:47:49.706Z",
       "event": "task-done",
       "detail": "T11: Remediate strict UTC calendar validation finding from PR #265"
+    },
+    {
+      "at": "2026-08-11T20:56:17.758Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/265 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-11T20:56:17.844Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 13 focused tests: schema fixtures and semantic contract checks pass."
+    },
+    {
+      "at": "2026-08-11T20:56:17.913Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Focused tests cover roles, containment, UTC ordering and replay/idempotency."
+    },
+    {
+      "at": "2026-08-11T20:56:17.984Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Focused tests cover realpath/root containment and traversal/symlink rejection."
+    },
+    {
+      "at": "2026-08-11T20:56:18.055Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Focused tests cover forged actors, spoofing, workspace TOCTOU and revoked roles."
+    },
+    {
+      "at": "2026-08-11T20:56:18.127Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Focused tests cover strict enforced guard and all fail-closed modes."
+    },
+    {
+      "at": "2026-08-11T20:56:18.198Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: No Flow mutation/knowledge store in scope; 13 focused tests, typecheck, health 93 and PR review APPROVE."
+    },
+    {
+      "at": "2026-08-11T20:56:18.271Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-11T20:56:20.487Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
