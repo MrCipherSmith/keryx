@@ -63,12 +63,14 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
     });
   }
   // Any registered OpenAI-compatible provider (OpenRouter, DeepSeek, Z.AI GLM,
-  // Cerebras, Groq, Moonshot, …) — reuse the OpenAI-compat adapter with a bearer
-  // credential read from its `envKey`. Fail-closed without a key (never fetches).
+  // Cerebras, Groq, Moonshot, …, Rapid-MLX) — reuse the OpenAI-compat adapter
+  // with a bearer credential read from its `envKey` when required by the
+  // provider definition. Keyless entries (e.g. rapid-mlx) are still accepted.
   const compat = providerByName(name);
   if (compat !== undefined) {
-    const apiKey = env[compat.envKey];
-    if (apiKey === undefined || apiKey.length === 0) {
+    const needsKey = compat.requiresApiKey !== false;
+    const apiKey = compat.envKey === undefined ? undefined : env[compat.envKey];
+    if (needsKey && (apiKey === undefined || apiKey.length === 0)) {
       return new FakeProvider([]);
     }
     return new OllamaProvider({
@@ -77,6 +79,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
         network: true,
         baseUrl: opts.baseUrl ?? compat.baseUrl,
         apiKey,
+        ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
         ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       },
     });

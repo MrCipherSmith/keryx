@@ -205,6 +205,14 @@ describe("AC1 — detectProviders: ollama /api/tags, env-gated anthropic, always
     const second = await detectProviders(makeDeps());
     expect(first).toEqual(second);
   });
+
+  test("platform filtering hides rapid-mlx on non-macOS providers list", async () => {
+    const base = { fetch: fixedFetch(FIXTURE_BODY), env: {} };
+    const onMac = await detectProviders({ ...base, platform: "darwin" });
+    const onLinux = await detectProviders({ ...base, platform: "linux" });
+    expect(onMac.find((d) => d.name === "rapid-mlx")).toBeDefined();
+    expect(onLinux.find((d) => d.name === "rapid-mlx")).toBeUndefined();
+  });
 });
 
 describe("SSRF guard on the ollama probe baseUrl (review-hardening fix #1)", () => {

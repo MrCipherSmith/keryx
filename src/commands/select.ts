@@ -19,7 +19,13 @@
 // 022-2026-07-13-keryx-r2-4-tui/acceptance-criteria.md` (AC1-AC2).
 
 import { isLoopbackHost, isPrivateEgressHost } from "../harness/mutation/guard";
-import { OPENAI_COMPAT_PROVIDERS, fetchOpenAiCompatModels, providerByName, resolveModelsForPicker } from "./providers";
+import {
+  OPENAI_COMPAT_PROVIDERS,
+  fetchOpenAiCompatModels,
+  isProviderPlatformSupported,
+  providerByName,
+  resolveModelsForPicker,
+} from "./providers";
 import type { ShellIO } from "./shell";
 
 /** A provider detected as usable, with its selectable chat `models`. */
@@ -45,6 +51,8 @@ export interface DetectProvidersDeps {
   env: Record<string, string | undefined>;
   /** Ollama probe base URL; defaults to the loopback Ollama default. */
   baseUrl?: string;
+  /** Runtime platform filter for registry providers (defaults to `process.platform`). */
+  platform?: string;
 }
 
 /** Mirrors `OllamaProvider`'s `DEFAULT_BASE_URL` (loopback Ollama default). */
@@ -144,6 +152,7 @@ async function probeOllamaModels(deps: DetectProvidersDeps, baseUrl: string): Pr
  */
 export async function detectProviders(deps: DetectProvidersDeps): Promise<DetectedProvider[]> {
   const baseUrl = deps.baseUrl ?? DEFAULT_OLLAMA_BASE_URL;
+  const platform = deps.platform ?? process.platform;
   const detected: DetectedProvider[] = [];
 
   const ollamaModels = await probeOllamaModels(deps, baseUrl);
@@ -164,6 +173,9 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
   // need not pre-set env vars just to see them. Curated `models` are a fallback; the
   // picker fetches each provider's live `/models` list. Keys never surface here.
   for (const p of OPENAI_COMPAT_PROVIDERS) {
+    if (!isProviderPlatformSupported(p, platform)) {
+      continue;
+    }
     detected.push({
       name: p.name,
       models: [...p.models],

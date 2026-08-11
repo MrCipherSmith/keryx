@@ -22,7 +22,13 @@ export interface OpenAiCompatProvider {
   /** API base URL (before the chat/models path). */
   baseUrl: string;
   /** Env var carrying the Bearer key (e.g. `DEEPSEEK_API_KEY`). */
-  envKey: string;
+  envKey?: string;
+  /** False for local/edge OpenAI-compatible services that do not require a key (e.g. local Rapid/MLX). */
+  requiresApiKey?: boolean;
+  /** Optional platform allow-list for providers that are only valid on some OSes. */
+  platforms?: readonly NodeJS.Platform[];
+  /** Optional explicit SSRF-loopback opt-in for local/private endpoints (e.g. 127.0.0.1). */
+  allowLoopback?: boolean;
   /** Chat path appended to `baseUrl`; defaults to `/v1/chat/completions`. */
   chatPath?: string;
   /** Model-list path appended to `baseUrl`; defaults to `/v1/models`. */
@@ -31,6 +37,20 @@ export interface OpenAiCompatProvider {
   models: string[];
   /** Short picker note (e.g. `coding plan`). */
   note?: string;
+}
+
+/** Normalize a provider registry entry's platform policy.
+ * - If `platforms` is absent/empty, provider is treated as cross-platform.
+ * - If `requiresApiKey` is absent, default is true.
+ */
+export function isProviderPlatformSupported(
+  provider: OpenAiCompatProvider,
+  platform: string = process.platform,
+): boolean {
+  if (provider.platforms === undefined || provider.platforms.length === 0) {
+    return true;
+  }
+  return provider.platforms.includes(platform as NodeJS.Platform);
 }
 
 /** Default OpenAI-compatible chat + models paths (OpenRouter/DeepSeek/Groq/…). */
@@ -114,6 +134,16 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "GROQ_API_KEY",
     models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gpt-oss-120b"],
     note: "free tier · fast",
+  },
+  {
+    name: "rapid-mlx",
+    label: "Rapid-MLX (Local)",
+    baseUrl: "http://127.0.0.1:8010",
+    requiresApiKey: false,
+    allowLoopback: true,
+    platforms: ["darwin"],
+    models: ["qwen3.5-9b-4bit"],
+    note: "local · no key",
   },
   {
     name: "moonshot",
@@ -233,7 +263,7 @@ export async function resolveModelsForPicker(
     return { models: [...provider.models], source: "fallback" };
   }
   const envKey = provider.envKey ?? compat.envKey;
-  const raw = env[envKey];
+  const raw = envKey === undefined ? undefined : env[envKey];
   const apiKey = typeof raw === "string" && raw.length > 0 ? raw : undefined;
   return fetchOpenAiCompatModelsDetailed(fetchFn, compat, apiKey, opts);
 }

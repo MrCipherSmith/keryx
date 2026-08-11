@@ -61,6 +61,12 @@ export function hasCredential(provider: string, env: Record<string, string | und
   }
   const compat = providerByName(provider);
   if (compat) {
+    if (compat.requiresApiKey === false) {
+      return true;
+    }
+    if (compat.envKey === undefined) {
+      return false;
+    }
     const key = env[compat.envKey];
     return key !== undefined && key.length > 0;
   }
@@ -72,7 +78,10 @@ export function hasCredential(provider: string, env: Record<string, string | und
  * so it must not win automatic selection unless the user asked for it).
  */
 export function keyedProviderCandidates(): string[] {
-  return ["anthropic", ...OPENAI_COMPAT_PROVIDERS.map((p) => p.name)];
+  return [
+    "anthropic",
+    ...OPENAI_COMPAT_PROVIDERS.filter((provider) => provider.requiresApiKey !== false).map((p) => p.name),
+  ];
 }
 
 /**

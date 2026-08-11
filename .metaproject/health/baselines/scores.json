@@ -1,37 +1,809 @@
 {
-  "generatedAt": "2026-07-06T18:37:26.176Z",
+  "generatedAt": "2026-08-10T23:39:24.717Z",
   "scopes": {
-    "module:src": {
+    "component:fixtures/change-impacted-test/src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:fixtures/churn-complexity/src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:fixtures/symbol-graph": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:scripts/stress": {
+      "health_score": 89,
+      "risk_score": 10
+    },
+    "component:src/flow/tracker": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/gdgraph/treesitter": {
+      "health_score": 90,
+      "risk_score": 10
+    },
+    "component:src/harness/branch": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/budget": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/child": {
+      "health_score": 96,
+      "risk_score": 15
+    },
+    "component:src/harness/completion": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "component:src/harness/context": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/evidence": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/extension": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/flow": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/monitor": {
+      "health_score": 86,
+      "risk_score": 10
+    },
+    "component:src/harness/mutation": {
       "health_score": 98,
+      "risk_score": 5
+    },
+    "component:src/harness/parallel": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/policy": {
+      "health_score": 97,
+      "risk_score": 5
+    },
+    "component:src/harness/process": {
+      "health_score": 96,
+      "risk_score": 5
+    },
+    "component:src/harness/process/sandbox": {
+      "health_score": 95,
+      "risk_score": 15
+    },
+    "component:src/harness/provider": {
+      "health_score": 90,
+      "risk_score": 15
+    },
+    "component:src/harness/provider/anthropic": {
+      "health_score": 96,
+      "risk_score": 5
+    },
+    "component:src/harness/provider/ollama": {
+      "health_score": 94,
+      "risk_score": 5
+    },
+    "component:src/harness/replay": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "component:src/harness/resume": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/run": {
+      "health_score": 96,
+      "risk_score": 5
+    },
+    "component:src/harness/session": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/harness/tool": {
+      "health_score": 98,
+      "risk_score": 5
+    },
+    "component:src/harness/tool/builtin": {
+      "health_score": 91,
+      "risk_score": 15
+    },
+    "component:src/health/metrics": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "component:src/health/sources": {
+      "health_score": 79,
+      "risk_score": 15
+    },
+    "component:src/mcp/transport": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/memory/embedding": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/security/agent-hooks": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "component:src/security/detect": {
+      "health_score": 90,
+      "risk_score": 10
+    },
+    "component:src/security/detect/injection": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "component:src/security/detect/pii": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "component:src/security/eval": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:scripts/check-doc-links.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:scripts/stress/concurrent-suite-stress.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:scripts/stress/keryx-shell-stress.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:scripts/verify-opentui-native.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/agents/bootstrap.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/assets/command.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/assets/lock.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/agent.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/commands/agents.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/ctx.ts": {
+      "health_score": 92,
+      "risk_score": 5
+    },
+    "file:src/commands/flow.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/commands/gdgraph.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/commands/harness.ts": {
+      "health_score": 86,
+      "risk_score": 5
+    },
+    "file:src/commands/health.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/init.ts": {
+      "health_score": 95,
+      "risk_score": 5
+    },
+    "file:src/commands/mcp.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/memory.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/commands/metrics.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/commands/modules.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/projects.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/review.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/rules.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/security.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/commands/select.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/serve.recovery.test.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/serve.ts": {
+      "health_score": 87,
+      "risk_score": 5
+    },
+    "file:src/commands/sessions.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/shell.ts": {
+      "health_score": 92,
+      "risk_score": 5
+    },
+    "file:src/commands/skills.ts": {
+      "health_score": 87,
+      "risk_score": 5
+    },
+    "file:src/commands/sync.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/test.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/commands/update.ts": {
+      "health_score": 92,
+      "risk_score": 5
+    },
+    "file:src/commands/version.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/commands/wiki.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/contracts/keyword-coverage.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/contracts/validator.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/ctx/hook-classify.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/ctx/orient.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/eval/corpus.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/flow/service.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/affected.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/build.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/find.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/pagerank.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/path.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/repomap.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/symbol.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/treesitter/adapter.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdgraph/treesitter/grammars.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/gdskills/contracts.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/gdskills/verify.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/harness/child/isolation.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/child/model.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/child/spawn.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/completion/gate.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/monitor/reduce-state.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/monitor/reduce.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/mutation/approval.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/policy/profiles.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/process/executor.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/process/sandbox/adapter.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/process/sandbox/dual-axis-report.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/process/sandbox/mask-resolve.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/harness/provider/anthropic/anthropic-provider.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/provider/fake-provider.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/provider/make-provider.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/provider/ollama/ollama-provider.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/provider/single-turn.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/replay/replay.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/run/run.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/startup.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/tool/builtin/ask-user-tool.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/tool/builtin/shell-exec-tool.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/tool/builtin/spawn-subagent-tool.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/harness/tool/metaproject-adapter.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/health/gate.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/health/metrics/complexity.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/health/run.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/health/scopes.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/health/service.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/health/sources/dependency-audit.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/health/sources/eslint.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/health/sources/sonarqube.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/config-dir.ast.ts": {
+      "health_score": 83,
+      "risk_score": 5
+    },
+    "file:src/lib/file-lock.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/live-render.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/production-graph.test.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/lib/project-sandbox-policy.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/serve-config.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/lib/serve-credential.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/serve-server.ts": {
+      "health_score": 87,
+      "risk_score": 5
+    },
+    "file:src/lib/serve-throttle.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/serve-turn-store.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/serve-turn.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/lib/shell-config.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/shell-syntax.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/lib/templates.ts": {
+      "health_score": 95,
+      "risk_score": 5
+    },
+    "file:src/lib/version-check.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/mcp/client-config.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/mcp/config.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/mcp/metaproject-tools.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/memory/check.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/memory/config.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/memory/dedup.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/memory/ingest.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/memory/report.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/memory/store.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/metrics/events.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/review/managed.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/rules/agent-entrypoints.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/rules/distill.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/security/config.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/security/detect/injection/adapter.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/security/detect/mcp.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/security/detect/pii.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/security/detect/pii/ner-adapter.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/security/eval/harness.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/security/schemas.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/session/compact.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/session/store.callers.test.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/session/store.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/standard/emit-llms.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/standard/profiles.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/standard/validate.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/sync/diff.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/testing/capability.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/testing/service.ts": {
+      "health_score": 89,
+      "risk_score": 5
+    },
+    "file:src/tui/shell-chrome.ts": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "file:src/tui/tui-shell.ts": {
+      "health_score": 92,
+      "risk_score": 5
+    },
+    "file:src/tui/worker-fleet.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/wiki/enrich.ts": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "file:src/wiki/service.ts": {
+      "health_score": 92,
+      "risk_score": 5
+    },
+    "module:fixtures": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "module:scripts": {
+      "health_score": 88,
+      "risk_score": 20
+    },
+    "module:src": {
+      "health_score": 100,
+      "risk_score": 0
+    },
+    "module:src/agents": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "module:src/assets": {
+      "health_score": 86,
+      "risk_score": 10
+    },
+    "module:src/capability": {
+      "health_score": 100,
       "risk_score": 0
     },
     "module:src/commands": {
-      "health_score": 94,
-      "risk_score": 0
+      "health_score": 91,
+      "risk_score": 135
+    },
+    "module:src/contracts": {
+      "health_score": 84,
+      "risk_score": 10
+    },
+    "module:src/ctx": {
+      "health_score": 92,
+      "risk_score": 10
+    },
+    "module:src/eval": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "module:src/flow": {
+      "health_score": 97,
+      "risk_score": 5
     },
     "module:src/gdgraph": {
-      "health_score": 100,
-      "risk_score": 0
+      "health_score": 88,
+      "risk_score": 45
     },
     "module:src/gdskills": {
-      "health_score": 97,
-      "risk_score": 0
+      "health_score": 96,
+      "risk_score": 10
+    },
+    "module:src/harness": {
+      "health_score": 96,
+      "risk_score": 120
     },
     "module:src/health": {
-      "health_score": 93,
-      "risk_score": 0
+      "health_score": 85,
+      "risk_score": 40
     },
     "module:src/lib": {
-      "health_score": 96,
-      "risk_score": 0
+      "health_score": 94,
+      "risk_score": 75
+    },
+    "module:src/mcp": {
+      "health_score": 92,
+      "risk_score": 15
+    },
+    "module:src/memory": {
+      "health_score": 92,
+      "risk_score": 30
+    },
+    "module:src/metrics": {
+      "health_score": 91,
+      "risk_score": 5
+    },
+    "module:src/review": {
+      "health_score": 95,
+      "risk_score": 5
+    },
+    "module:src/rules": {
+      "health_score": 86,
+      "risk_score": 10
+    },
+    "module:src/security": {
+      "health_score": 92,
+      "risk_score": 35
+    },
+    "module:src/session": {
+      "health_score": 84,
+      "risk_score": 15
+    },
+    "module:src/standard": {
+      "health_score": 90,
+      "risk_score": 15
+    },
+    "module:src/sync": {
+      "health_score": 93,
+      "risk_score": 5
+    },
+    "module:src/testing": {
+      "health_score": 92,
+      "risk_score": 10
+    },
+    "module:src/tui": {
+      "health_score": 97,
+      "risk_score": 15
     },
     "module:src/wiki": {
-      "health_score": 100,
-      "risk_score": 0
+      "health_score": 94,
+      "risk_score": 10
     },
     "project": {
+      "health_score": 93,
+      "risk_score": 660
+    },
+    "skill:gdgraph/module": {
+      "health_score": 88,
+      "risk_score": 45
+    },
+    "skill:metaproject/init-command": {
       "health_score": 95,
-      "risk_score": 0
+      "risk_score": 5
     }
   }
 }

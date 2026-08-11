@@ -74,6 +74,14 @@ import type { ApprovalCheckInput } from "../harness/mutation/approval";
 import type { ParsedChildResult } from "../harness/child/contract";
 import type { Provenance } from "../harness/session/types";
 
+const HARNESS_PROVIDER_OPTIONS: readonly string[] = [
+  "fake",
+  "anthropic",
+  "ollama",
+  ...OPENAI_COMPAT_PROVIDERS.map((provider) => provider.name),
+];
+const HARNESS_PROVIDER_USAGE = `Usage: keryx harness run --provider <${HARNESS_PROVIDER_OPTIONS.join("|")}> --model <m> [--base-url <url>] "<prompt>"`;
+
 /** realpath a path, falling back to the input if it cannot be resolved. */
 function canonicalPath(p: string): string {
   try {
@@ -236,7 +244,7 @@ interface ParsedArgs {
 
 /** The usage text, printed on an unknown subcommand or invalid args. */
 const USAGE = [
-  'Usage: keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] "<prompt>"',
+  HARNESS_PROVIDER_USAGE,
   "       keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]",
       "         [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask]",
       "         -- <path> [args...]",
@@ -333,7 +341,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running
   // runOffline — never a blocked/failed structured run result.
-  const validProviders = new Set(["fake", "anthropic", "ollama"]);
+  const validProviders = new Set(HARNESS_PROVIDER_OPTIONS);
   if (!validProviders.has(provider) || prompt.length === 0) {
     console.log(USAGE);
     return;

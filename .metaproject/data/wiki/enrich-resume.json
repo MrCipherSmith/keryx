@@ -1,5 +1,7 @@
 {
-  "updatedAt": "2026-07-21T18:23:52.437Z",
+  "updatedAt": "2026-08-10T23:34:29.953Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
   "completed": [
     "architecture/quality-map.md",
     "architecture/testing-map.md",
@@ -16,7 +18,8 @@
     "components/src-security-detect-pii.md",
     "components/src-security-detect.md",
     "components/src-testing.md",
-    "components/src-wiki.md"
+    "components/src-wiki.md",
+    "architecture/project-map.md"
   ],
   "failed": [
     {
@@ -107,7 +110,5 @@
       "path": "components/src.md",
       "reason": "validation: missing YAML frontmatter (must start with ---)"
     }
-  ],
-  "provider": "deepseek",
-  "model": "deepseek-v4-flash"
+  ]
 }

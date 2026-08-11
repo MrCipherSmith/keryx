@@ -137,6 +137,8 @@
     "src/commands/test.ts",
     "src/commands/update.test.ts",
     "src/commands/update.ts",
+    "src/commands/version.test.ts",
+    "src/commands/version.ts",
     "src/commands/wiki.ts"
   ],
   "contracts": [
@@ -532,7 +534,9 @@
     "src/lib/test-preload.ts",
     "src/lib/test-tmp.ts",
     "src/lib/ui.test.ts",
-    "src/lib/ui.ts"
+    "src/lib/ui.ts",
+    "src/lib/version-check.test.ts",
+    "src/lib/version-check.ts"
   ],
   "mcp": [
     "src/mcp/boundary.test.ts",

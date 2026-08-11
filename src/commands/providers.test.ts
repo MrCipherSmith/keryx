@@ -3,11 +3,12 @@ import {
   OPENAI_COMPAT_PROVIDERS,
   fetchOpenAiCompatModels,
   fetchOpenAiCompatModelsDetailed,
+  isProviderPlatformSupported,
   providerByName,
   resolveModelsForPicker,
 } from "./providers";
 
-test("registry lists the flow-085 providers with base URL + env key", () => {
+test("registry lists the flow-085 providers with sensible metadata", () => {
   const names = OPENAI_COMPAT_PROVIDERS.map((p) => p.name);
   expect(names).toContain("openrouter");
   expect(names).toContain("deepseek");
@@ -15,11 +16,37 @@ test("registry lists the flow-085 providers with base URL + env key", () => {
   expect(names).toContain("cerebras");
   expect(names).toContain("groq");
   expect(names).toContain("moonshot");
+  expect(names).toContain("rapid-mlx");
+  expect(names).toContain("zai-coding");
   for (const p of OPENAI_COMPAT_PROVIDERS) {
-    expect(p.baseUrl.startsWith("https://")).toBe(true);
-    expect(p.envKey.length).toBeGreaterThan(0);
+    if (p.name !== "rapid-mlx") {
+      expect(p.baseUrl.startsWith("https://")).toBe(true);
+    }
+    if (p.requiresApiKey === false) {
+      expect(p.envKey).toBeUndefined();
+    } else {
+      expect(p.envKey).toBeDefined();
+      expect(p.envKey.length).toBeGreaterThan(0);
+    }
     expect(p.models.length).toBeGreaterThan(0);
   }
+});
+
+test("rapid-mlx is local/macOS-only and keyless", () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  expect(rapid?.baseUrl).toBe("http://127.0.0.1:8010");
+  expect(rapid?.models).toContain("qwen3.5-9b-4bit");
+  expect(rapid?.requiresApiKey).toBe(false);
+  expect(rapid?.platforms).toEqual(["darwin"]);
+});
+
+test("rapid-mlx is only available on darwin when platform filtering is applied", () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  expect(isProviderPlatformSupported(rapid!, "darwin")).toBe(true);
+  expect(isProviderPlatformSupported(rapid!, "linux")).toBe(false);
+  expect(isProviderPlatformSupported(rapid!, "win32")).toBe(false);
 });
 
 test("Z.AI GLM uses versioned paas/v4 endpoints (no /v1) via path overrides", () => {
@@ -78,6 +105,19 @@ test("fetchOpenAiCompatModels: default /v1/models path; no auth header without a
   expect(models).toEqual(["deepseek-chat"]);
   expect(calledUrl).toBe("https://api.deepseek.com/v1/models");
   expect(hadAuth).toBe(false);
+});
+
+test("fetchOpenAiCompatModels: local keyless provider can be probed without auth", async () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  let calledWithAuth: string | undefined;
+  const fetchFn = (async (_url: string, init?: RequestInit) => {
+    calledWithAuth = (init?.headers as Record<string, string> | undefined)?.authorization;
+    return { ok: true, json: async () => ({ data: [{ id: "qwen3.5-9b-4bit" }] }) } as Response;
+  }) as unknown as typeof fetch;
+  const models = await fetchOpenAiCompatModels(fetchFn, rapid!);
+  expect(models).toEqual(["qwen3.5-9b-4bit"]);
+  expect(calledWithAuth).toBeUndefined();
 });
 
 test("fetchOpenAiCompatModels: falls back to curated models on non-2xx / throw / empty", async () => {

@@ -493,6 +493,7 @@ function realSelectProviderModel(baseUrl: string | undefined): NonNullable<Shell
     const detected = await detectProviders({
       fetch: globalThis.fetch,
       env: process.env,
+      platform: process.platform,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
     });
     const filtered =

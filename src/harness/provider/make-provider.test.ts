@@ -50,6 +50,7 @@ import { describe, expect, test } from "bun:test";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
+import type { NormalizedRequest, StreamOptions } from "./types";
 
 // PINNED API under test — T6 impl exports these; import fails until then
 // (expected RED: "Cannot find module './make-provider'").
@@ -176,4 +177,46 @@ describe("makeProvider — scoped credentials (flow 090, AC4)", () => {
     );
     expect(provider).toBeInstanceOf(FakeProvider);
   });
+});
+
+// --- flow 085: loopback-granted local OpenAI-compatible providers ------------
+
+function buildRequest(): NormalizedRequest {
+  return {
+    providerId: "rapid-mlx",
+    modelId: "qwen3.5-9b-4bit",
+    systemInstruction: "",
+    messages: [{ role: "user", content: "ping" }],
+    budget: { maxOutputTokens: 64, runReservation: 64 },
+    stream: true,
+    requestId: "make-provider-rapid-loopback",
+    parentRunId: "parent-rapid-loopback",
+  };
+}
+
+function makeSseFetchMock() {
+  const calls: unknown[] = [];
+  const fetch = (async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
+    calls.push({});
+    const body = 'data: {"id":"x","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }) as unknown as typeof fetch;
+  return { fetch, calls };
+}
+
+test("rapid-mlx uses allowLoopback grant so local baseUrl is permitted for stream()", async () => {
+  const { fetch: fetchMock, calls } = makeSseFetchMock();
+  const provider = makeProvider("rapid-mlx", "qwen3.5-9b-4bit", makeOpts({ env: {}, fetch: fetchMock }));
+  expect(provider).toBeInstanceOf(OllamaProvider);
+
+  const request = buildRequest();
+  const opts: StreamOptions = { attemptId: "rapid-loopback-attempt" };
+  const events = [];
+  for await (const event of provider.stream(request, opts)) {
+    events.push(event);
+  }
+
+  expect(calls).toHaveLength(1);
+  expect(events.length).toBeGreaterThan(0);
+  expect(events[events.length - 1]!.kind).toBe("model_end");
 });
