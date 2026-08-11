@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { assembleContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../context-operations/assembly";
+import { assembleContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
 import { evaluateStrictSacGuard, validateSacContract, type StrictSacGuard } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService } from "./workspace-service";
 import { createFlowService } from "../flow/service";
@@ -54,7 +54,9 @@ export class FwkReadService {
 
   private async success(workspaceId: string, actor: string, assembly: ContextAssembly, facts: Array<FwkEvidence & { freshness: string }>, work: unknown, knowHow: FwkKnowHow[], now: () => Date): Promise<FwkResult> {
     const selected = new Set(assembly.selected);
-    const manifest = { facts: facts.filter((fact) => selected.has(fact.id)).map(({ id, visible, ...fact }) => fact), work: selected.has("work") ? work : { state: "unbound" }, knowHow: knowHow.filter((item) => selected.has(item.id)).map(({ id, accepted, visible, ...item }) => item), freshness: assembly.partial ? "partial" as const : "fresh" as const };
+    const manifest = { schemaVersion: "1.0" as const, workspaceId, generatedAt: nowIso(now), facts: facts.filter((fact) => selected.has(fact.id)).map((fact) => ({ statement: fact.statement, evidence: [{ kind: "artifact" as const, uri: fact.uri, revision: fact.revision, observedAt: fact.observedAt, trust: fact.trust }], observedAt: fact.observedAt, expiresAt: fact.expiresAt, freshness: "fresh" as const })), work: selected.has("work") ? work : { state: "unbound" }, knowHow: knowHow.filter((item) => selected.has(item.id)).map(({ id, accepted, visible, ...item }) => item), freshness: assembly.partial ? "partial" as const : "fresh" as const };
+    const fwk = await validateSacContract({ schema: "fwk-receipt", document: manifest });
+    if (!fwk.valid) throw new Error(`invalid FWK manifest: ${fwk.errors.map((error) => error.code).join(",")}`);
     const receipt = this.receipt(workspaceId, actor, "allowed", assembly, now);
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
