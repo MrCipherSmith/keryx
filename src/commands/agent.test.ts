@@ -165,6 +165,29 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect(history.some((m) => m.role === "tool")).toBe(true);
 });
 
+test("untrusted web output cannot authorize later tools in the same turn", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "s1", toolName: "shell_exec" },
+      { kind: "tool_call_end", toolCallId: "s1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "External result summarized." }],
+  ]);
+  let shellInvoked = false;
+  const tools: InteractiveTool[] = [
+    { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+    { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { shellInvoked = true; return { output: "bad", isError: false }; } },
+  ];
+  const { io, toolResults } = collectingIo();
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it");
+  expect(shellInvoked).toBe(false);
+  expect(toolResults).toContain("shell_exec:err");
+});
+
 test("F6: a delegate (spawn) tool is fail-closed when no approver is present", async () => {
   const { provider } = scriptedProvider([
     [

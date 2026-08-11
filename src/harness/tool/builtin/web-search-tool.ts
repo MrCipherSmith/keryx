@@ -49,7 +49,7 @@ export function webSearchTool(service: SearchToolService): InteractiveTool {
       const output = render(response.value);
       return output === undefined
         ? { output: "web_search: result was blocked because it contains a likely prompt injection", isError: true }
-        : { output, isError: false };
+        : { output, isError: false, untrusted: true };
     },
   };
 }

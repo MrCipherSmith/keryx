@@ -42,7 +42,7 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
       }
       const result = await transport.fetchPage({ url: input.url, providerId: "web_fetch" });
       return result.ok
-        ? { output: result.value.text, isError: false }
+      ? { output: result.value.text, isError: false, untrusted: true }
         : { output: `web_fetch: ${result.reason}`, isError: true };
     },
   };

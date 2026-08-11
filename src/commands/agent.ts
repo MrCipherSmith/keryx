@@ -591,6 +591,7 @@ export async function runAgentTurn(
   const lastErrorByHash = new Map<string, string>();
   const errorStreakByHash = new Map<string, number>();
   const warnedFailingHashes = new Set<string>();
+  let untrustedContentSeen = false;
 
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -736,10 +737,21 @@ export async function runAgentTurn(
     // Execute each tool call and append its result, then loop to re-request.
     let exhaustedBudget: "total" | "read" | "non-read" | undefined;
     let executedAny = false;
+    const batchContainsUntrustedWeb = calls.some((call) => call.name === "web_fetch" || call.name === "web_search");
     for (const call of calls) {
       if (isAborted()) {
         system("\n[stopped] Model turn interrupted by user.\n");
         return;
+      }
+      if (untrustedContentSeen || (batchContainsUntrustedWeb && call.name !== "web_fetch" && call.name !== "web_search")) {
+        const result: InteractiveToolResult = {
+          output: "tool blocked: external web content cannot authorize further tool calls in this turn",
+          isError: true,
+        };
+        io.onToolResult?.(call.name, result);
+        history.push({ role: "tool", content: result.output, provenance: "tool" });
+        io.onHistoryChange?.("tool");
+        continue;
       }
       io.onToolCall?.(call.name, call.input);
       const risk = toolByName.get(call.name)?.definition.risk;
@@ -768,6 +780,9 @@ export async function runAgentTurn(
       // not receive a credential a command happened to read.
       history.push({ role: "tool", content: redactSensitiveText(result.output), provenance: "tool" });
       io.onHistoryChange?.("tool");
+      if (result.untrusted === true && !result.isError) {
+        untrustedContentSeen = true;
+      }
       const shortIn = call.input.length > 80 ? `${call.input.slice(0, 77)}…` : call.input;
       const riskUsage =
         risk === "read"
