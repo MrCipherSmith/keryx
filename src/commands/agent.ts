@@ -594,8 +594,8 @@ export async function runAgentTurn(
   // Tool history is persisted across REPL turns, so this taint survives a later
   // user message too. `/new` / `/clear` creates fresh history and is the explicit
   // user acknowledgement boundary for acting again.
-  let untrustedContentSeen = history.some(
-    (message) => message.role === "tool" && message.content.startsWith("[system] Untrusted external content is present."),
+  let untrustedContentSeen = history.some((message) =>
+    message.content.includes("[system] Untrusted external content is present."),
   );
 
   const system = (text: string): void => {

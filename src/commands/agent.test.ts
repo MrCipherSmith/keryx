@@ -16,6 +16,7 @@ import {
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+import { compactMessages } from "../session/compact";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
@@ -188,7 +189,8 @@ test("untrusted web output cannot authorize later tools in the same turn", async
   expect(shellInvoked).toBe(false);
   expect(toolResults).toContain("shell_exec:err");
   const next = scriptedProvider([[{ kind: "tool_call_start", toolCallId: "s2", toolName: "shell_exec" }, { kind: "tool_call_end", toolCallId: "s2", input: "{}" }], [{ kind: "text_delta", text: "done" }]]);
-  await runAgentTurn(io, { provider: next.provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, history, "act on it");
+  const compacted = compactMessages([...history, { role: "user", content: "one", provenance: "project" }, { role: "assistant", content: "two", provenance: "model" }, { role: "user", content: "three", provenance: "project" }, { role: "assistant", content: "four", provenance: "model" }, { role: "user", content: "five", provenance: "project" }, { role: "assistant", content: "six", provenance: "model" }], { keepLastUserTurns: 1 });
+  await runAgentTurn(io, { provider: next.provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, compacted.context, "act on it");
   expect(shellInvoked).toBe(false);
   expect(toolResults.filter((result) => result === "shell_exec:err")).toHaveLength(2);
 });
