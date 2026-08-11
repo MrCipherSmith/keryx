@@ -202,6 +202,107 @@ function normalizeToolError(output: string): string {
   return output.trim().replace(/\s+/g, " ");
 }
 
+const MAX_TOOLLESS_REPROMPTS = 1;
+
+/** Split text into word tokens for action detection (works with Cyrillic). */
+function tokensForActionDetection(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}_]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
+
+/** True when a user request is clearly action-oriented and should usually require tools. */
+function isActionRequest(text: string): boolean {
+  const asciiActionTokens = new Set([
+    "run",
+    "start",
+    "execute",
+    "invoke",
+    "call",
+    "launch",
+    "check",
+    "test",
+    "search",
+    "find",
+    "list",
+    "open",
+    "read",
+    "show",
+    "inspect",
+    "analyze",
+    "status",
+    "probe",
+    "fetch",
+    "curl",
+    "keryx",
+    "grep",
+    "ls",
+    "npm",
+    "bun",
+  ]);
+  const cyrillicActionTokens = new Set([
+    "запусти",
+    "запустить",
+    "запуск",
+    "выполни",
+    "выполнить",
+    "выполняй",
+    "проверь",
+    "проверить",
+    "проверьте",
+    "покажи",
+    "выведи",
+    "найди",
+    "найти",
+    "ищи",
+    "ищите",
+    "прогони",
+    "скануй",
+    "обнови",
+    "обновить",
+    "перезапусти",
+    "подготовь",
+    "сделай",
+  ]);
+  const tokens = tokensForActionDetection(text);
+  return tokens.some((token) => asciiActionTokens.has(token) || cyrillicActionTokens.has(token));
+}
+
+/** True when model text implies it planned to perform an action but emitted no tool call. */
+function modelClaimedAction(text: string): boolean {
+  const tokens = tokensForActionDetection(text);
+  const markers = new Set([
+    "trying",
+    "executing",
+    "running",
+    "starting",
+    "checking",
+    "searching",
+    "scanning",
+    "i",
+    "im",
+    "will",
+    "сейчас",
+    "праюсь",
+    "пыта",
+    "запуска",
+    "выполня",
+    "проверя",
+    "ищи",
+    "ищет",
+    "прогони",
+  ]);
+  return tokens.some((token) =>
+    markers.has(token)
+      || token.startsWith("пыта")
+      || token.startsWith("запуска")
+      || token.startsWith("выполня")
+      || token.startsWith("проверя"),
+  );
+}
+
 /**
  * The hint injected when a tool keeps failing identically. It names the tool and
  * echoes the (bounded) error so the model has an explicit signal to change tool
@@ -275,6 +376,8 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "matching `keryx …` CLI when the user wants a full command run.\n\n" +
     "ALWAYS use a tool to obtain facts instead of guessing; never fabricate paths, file " +
     "contents, or results. Be economical with output tokens: lead with the conclusion, " +
+    "if the user asks you to run, inspect, or execute anything, call the relevant tool before " +
+    "sending explanatory text.\n" +
     "give the shortest correct answer, prefer bullet points over prose, and omit preamble. " +
     "Do NOT paste large tool/command output back into your reply — the compact tool result " +
     "is already in context; reference it instead of repeating it.";
@@ -445,6 +548,7 @@ export async function runAgentTurn(
   const maxReadToolCalls = deps.maxReadToolCalls ?? DEFAULT_MAX_READ_TOOL_CALLS;
   const maxNonReadToolCalls = deps.maxNonReadToolCalls ?? DEFAULT_MAX_NON_READ_TOOL_CALLS;
   const parentRunId = deps.idSeq();
+  const actionRequest = isActionRequest(userLine);
   const budget: ToolBudgetState = {
     charged: new Set(),
     readCharged: new Set(),
@@ -476,6 +580,7 @@ export async function runAgentTurn(
 
   // Loop: request → stream → (execute tool calls, re-request) until a text-only
   // finish or the tool-call guard trips.
+  let toollessReprompts = 0;
   for (;;) {
     const request: NormalizedRequest = {
       providerId: deps.providerId,
@@ -547,7 +652,33 @@ export async function runAgentTurn(
       io.onAssistantText?.(assistantText);
     }
 
-    if (errored || calls.length === 0) {
+    if (errored) {
+      return;
+    }
+      if (calls.length === 0) {
+      const shouldReprompt = actionRequest && (assistantText.length === 0 || modelClaimedAction(assistantText));
+      if (shouldReprompt && toollessReprompts < MAX_TOOLLESS_REPROMPTS) {
+        toollessReprompts += 1;
+        const hint =
+          " [system] No tool calls were emitted. Re-run this request now and emit ONE tool call instead of a narrative sentence. " +
+          "If the model cannot call tools, tell the user that tool calling is unavailable for the active provider.\n";
+        system(hint);
+        history.push({
+          role: "user",
+          content:
+            "[system] You were asked to execute or inspect, but you replied with text and no tool call. " +
+            "Resend a single compliant tool call now (with fully populated required arguments).",
+          provenance: "project",
+        });
+        continue;
+      }
+
+      if (shouldReprompt) {
+        system(
+          "\n[warning] The provider/model did not emit a tool call for an explicit action request. " +
+            "Use a chat-safe fallback (`keryx shell --chat`) or switch to a tool-capable model.\n",
+        );
+      }
       return; // error, or a text-only finish → turn complete
     }
 
