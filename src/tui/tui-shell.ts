@@ -61,7 +61,7 @@ import {
 } from "../commands/providers";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { collapseHome } from "../lib/statusbar";
-import { saveApiKey, saveShellConfig } from "../lib/shell-config";
+import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import {
   allowShellPattern,
   isShellCommandAllowed,
@@ -803,11 +803,11 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
 type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
 
 /** Ask for a local provider endpoint, keeping its configured value editable. */
-function promptBaseUrlStep(otui: OpenTui, r: Renderer, baseUrl: string): Promise<string | undefined> {
+function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "base-url-picker");
     r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold("Rapid-MLX server URL")} ${otui.dim("(Enter · Esc to go back)")}` }));
+    box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} server URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
     box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${otui.dim("Edit host and port before discovering models")}`, marginTop: 1 }));
     const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
     box.add(input);
@@ -962,12 +962,13 @@ export function selectProviderModelInTui(
           return;
         }
 
-        const selectedBaseUrl = prov.name === "rapid-mlx" && prov.baseUrl !== undefined
-          ? await promptBaseUrlStep(otui, r, prov.baseUrl)
+        const selectedBaseUrl = prov.baseUrl !== undefined
+          ? await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl)
           : prov.baseUrl;
-        if (prov.name === "rapid-mlx" && selectedBaseUrl === undefined) {
+        if (prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
           continue;
         }
+        if (selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl);
         const selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
 
         const envKey = prov.envKey;
