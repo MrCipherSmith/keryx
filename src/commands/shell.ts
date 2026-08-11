@@ -36,6 +36,7 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
@@ -1322,6 +1323,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         tools: [
           ...builtinReadOnlyTools(cwd),
           ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
+          webFetchTool(),
           shellExecTool(cwd),
           createAskUserTool(invokeAskUserHost),
           spawnTool,

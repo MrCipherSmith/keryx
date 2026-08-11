@@ -356,7 +356,7 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
   const base =
     "You are the keryx interactive agent (project harness). You have read-only tools to " +
     "inspect the real project: get_cwd, list_dir, read_file (filesystem), and search_code, " +
-    "graph_affected, memory_search, read_wiki, wiki_ask, graph_symbol (keryx metaproject). " +
+    "graph_affected, memory_search, read_wiki, wiki_ask, graph_symbol (keryx metaproject), and web_fetch for a known public HTTPS URL. " +
     "You may also propose shell_exec to run a command, which requires the user's explicit " +
     "approval before it executes.\n\n" +
     "Tool-calling rules (critical):\n" +
