@@ -125,7 +125,7 @@ export class SandboxedWebTransport {
     if (request.localOnly === true) {
       try {
         const local = new URL(request.url);
-        const allowedHost = local.hostname === "localhost" || local.hostname === "127.0.0.1" || local.hostname === "::1";
+      const allowedHost = local.hostname === "localhost" || local.hostname === "127.0.0.1" || local.hostname === "::1" || local.hostname === "[::1]";
         if (local.protocol !== "http:" || !allowedHost || local.username || local.password) {
           return { ok: false, reason: "local search endpoint violates its capability policy" };
         }
@@ -138,7 +138,7 @@ export class SandboxedWebTransport {
     let url = parsed.value;
     for (let redirects = 0; redirects <= WEB_MAX_REDIRECTS; redirects += 1) {
       const target = request.localOnly === true
-        ? { ok: true as const, value: { url: url.toString(), hostname: url.hostname, address: url.hostname === "::1" ? "::1" : "127.0.0.1" } }
+        ? { ok: true as const, value: { url: url.toString(), hostname: url.hostname, address: url.hostname === "::1" || url.hostname === "[::1]" ? "::1" : "127.0.0.1" } }
         : await validatePublicTarget(url, this.lookup);
       if (!target.ok) return target;
       const worker = await this.runner.run(

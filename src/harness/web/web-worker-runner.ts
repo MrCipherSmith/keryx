@@ -150,8 +150,14 @@ export class SystemWebWorkerRunner implements WebWorkerRunner {
       }
       stdin.write(JSON.stringify({ ...request, timeoutMs: WORKER_TIMEOUT_MS, maxBytes: 128_000 }));
       stdin.end();
-      const [output, exit] = await Promise.all([readBounded(stdout), proc.exited]);
-      if (output === undefined || exit !== 0) return { ok: false, reason: "web sandbox request failed" };
+      const output = await readBounded(stdout);
+      if (output === undefined) {
+        proc.kill();
+        await proc.exited;
+        return { ok: false, reason: "web sandbox returned oversized output" };
+      }
+      const exit = await proc.exited;
+      if (exit !== 0) return { ok: false, reason: "web sandbox request failed" };
       try {
         const parsed = JSON.parse(output) as WebPolicyResult<WebWorkerResponse>;
         if (!parsed || typeof parsed !== "object" || typeof parsed.ok !== "boolean") {

@@ -17,7 +17,7 @@ function render(response: SearchResponse): string | undefined {
     const source = `${result.title}\n${result.snippet}\n${result.canonicalUrl}`;
     if (detectInjection(source).length > 0) return undefined;
     lines.push(`[${result.providerId}] ${redactSensitiveText(result.title)}`);
-    lines.push(result.canonicalUrl);
+    lines.push(redactSensitiveText(result.canonicalUrl));
     if (result.snippet.length > 0) lines.push(redactSensitiveText(result.snippet));
     lines.push("");
   }
