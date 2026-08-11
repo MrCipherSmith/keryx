@@ -2,6 +2,7 @@ import { optionValue } from "../lib/args";
 import { randomUUID } from "node:crypto";
 import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, normalizeFwkResult } from "../sac/fwk-service";
+import { createLocalProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/proposal-lifecycle";
 
 function service(): WorkspaceService {
   return new WorkspaceService({
@@ -52,6 +53,20 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const result = await createLocalFwkReadService(process.cwd()).read({ workspaceId, itemId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } });
       console.log(JSON.stringify(normalizeFwkResult(result), null, 2)); return;
     }
+    if (subcommand === "propose") {
+      rejectUnknownOptions(args.slice(2), new Set(["--kind", "--summary", "--evidence", "--revision"]));
+      const workspaceId = args[1]; const kind = optionValue(args, "--kind") as "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk" | undefined; const summary = optionValue(args, "--summary"); const evidence = optionValue(args, "--evidence"); const revision = optionValue(args, "--revision") ?? "r1";
+      if (!workspaceId || !kind || !summary || !evidence) throw new Error("Usage: keryx workspace propose <workspace-id> --kind <kind> --summary <explicit-summary> --evidence <workspace-relative-ref> [--revision <revision>]");
+      const result = await createLocalProposalLifecycleService(process.cwd()).create({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalRevision: revision, kind, summary, evidence: [{ kind: "evidence", uri: evidence, revision, observedAt: new Date().toISOString() }] });
+      console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
+    }
+    if (subcommand === "review") {
+      rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key"]));
+      const workspaceId = args[1]; const proposalId = args[2]; const decision = optionValue(args, "--decision") as "accepted" | "rejected" | "dismissed" | undefined; const reason = optionValue(args, "--reason"); const idempotencyKey = optionValue(args, "--idempotency-key") ?? randomUUID();
+      if (!workspaceId || !proposalId || !decision) throw new Error("Usage: keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]");
+      const result = await createLocalProposalLifecycleService(process.cwd()).review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) });
+      console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
+    }
     throw new Error(`Unknown workspace command: ${subcommand}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1;
@@ -67,5 +82,5 @@ function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\nkeryx workspace propose <workspace-id> --kind <kind> --summary <explicit-summary> --evidence <workspace-relative-ref> [--revision <revision>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]");
 }

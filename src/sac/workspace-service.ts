@@ -121,6 +121,24 @@ export class WorkspaceService {
   }
 
   /**
+   * Executes a SAC-owned lifecycle operation while the workspace ACL is held
+   * stable by the same lock used for manifest writes.  The caller receives the
+   * manifest only after trusted-actor authorization has been rechecked at use;
+   * it cannot turn the manifest into a client supplied capability.
+   */
+  async withAuthorizedActor<T>(input: { actorContext: TrustedActorContext; workspaceId: string; action: "write" | "review"; execute: (manifest: WorkspaceManifest) => Promise<T> }): Promise<T> {
+    await this.requireStrict("write");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(input.actorContext, initial.id, input.action);
+    return withFileLock(this.lockPath(input.workspaceId), async () => {
+      const manifest = await this.readManifest(input.workspaceId);
+      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(await this.readManifest(input.workspaceId), input.actorContext.subject));
+      if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+      return input.execute(manifest);
+    });
+  }
+
+  /**
    * Re-authorize and realpath-resolve immediately before a SAC resolver opens
    * a source target.  A previously returned manifest is never an authority to
    * disclose a later resource path.
@@ -194,7 +212,7 @@ export class WorkspaceService {
     if (!decision.allowed) throw new WorkspaceServiceError("guard_denied", "strict SAC guard denied operation");
   }
 
-  private async requireAuthorization(actor: TrustedActorContext, workspaceId: string, action: "read" | "write") {
+  private async requireAuthorization(actor: TrustedActorContext, workspaceId: string, action: "read" | "write" | "review") {
     const authorization = await authorizeSacUse({ actorContext: actor, workspaceId, action, resolveCurrentRole: async (subject, id) => currentRoleOrRevoked(await this.readManifest(id), subject) });
     if (!authorization.allowed) throw new WorkspaceServiceError("access_denied", authorization.code);
     return authorization;
