@@ -117,6 +117,28 @@ export class WorkspaceService {
     return manifest;
   }
 
+  /**
+   * Re-authorize and realpath-resolve immediately before a SAC resolver opens
+   * a source target.  A previously returned manifest is never an authority to
+   * disclose a later resource path.
+   */
+  async resolveResourceForActor(input: { actorContext: TrustedActorContext; workspaceId: string; resource: WorkspaceResource }): Promise<WorkspaceResource & { absolutePath: string }> {
+    await this.requireStrict("read");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(input.actorContext, initial.id, "read");
+    const manifest = await this.readManifest(input.workspaceId);
+    const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(await this.readManifest(input.workspaceId), input.actorContext.subject));
+    if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+    const resource = manifest.resources.find((candidate) => candidate.kind === input.resource.kind && candidate.uri === input.resource.uri && candidate.revision === input.resource.revision);
+    if (!resource) throw new WorkspaceServiceError("not_found", "workspace resource is no longer available");
+    try {
+      const absolutePath = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: resource.kind, uri: resource.uri });
+      return { ...resource, absolutePath };
+    } catch (error) {
+      throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "unsafe workspace reference");
+    }
+  }
+
   async addResource(input: { request: unknown; requestCorrelationId: string; workspaceId: string; resource: WorkspaceResource }): Promise<WorkspaceManifest> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
     await this.requireStrict("write");
