@@ -126,4 +126,16 @@ describe("search provider registry", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("remote providers reject successful JSON error payloads during connection tests", async () => {
+    const transport: SandboxedWebTransport = {
+      async request(request) {
+        return { ok: true, status: 200, url: request.url, contentType: "application/json", text: JSON.stringify({ error: "invalid API key" }) };
+      },
+    };
+    const registry = createSearchProviderRegistry(transport, () => "key");
+    for (const id of ["brave", "tavily", "exa"] as const) {
+      expect(await registry.get(id)!.testConnection({})).toEqual({ ok: false, reason: "transport-failed" });
+    }
+  });
 });

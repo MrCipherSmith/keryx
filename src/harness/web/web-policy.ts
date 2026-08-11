@@ -43,6 +43,7 @@ export function isBlockedRemoteAddress(input: string): boolean {
     address === "::1" ||
     address.startsWith("fc") ||
     address.startsWith("fd") ||
+    address.startsWith("ff") ||
     address.startsWith("fe8") ||
     address.startsWith("fe9") ||
     address.startsWith("fea") ||

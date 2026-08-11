@@ -17,6 +17,13 @@ export interface SanitizedWebContent {
   text: string;
 }
 
+/** External text may be reference data only, never a request to operate tools. */
+export function isUnsafeExternalInstruction(text: string): boolean {
+  if (detectInjection(text).length > 0) return true;
+  return /\b(?:to\s+(?:complete|continue|proceed|solve)|you\s+(?:must|should|need\s+to))\b[\s\S]{0,120}\b(?:run|execute|invoke|call|use)\b[\s\S]{0,120}\b(?:shell|terminal|command|tool|function|api)\b/i.test(text)
+    || /\b(?:run|execute|invoke|call)\b[\s\S]{0,80}\b(?:shell|terminal|command|tool|function)\b/i.test(text);
+}
+
 /**
  * The only conversion permitted from an untrusted worker body to agent-visible
  * text. It deliberately drops headers and transport diagnostics.
@@ -31,7 +38,7 @@ export function sanitizeWebContent(
         .replace(/\s+/g, " ")
         .trim()
     : content.text.trim();
-  if (detectInjection(text).length > 0) {
+  if (isUnsafeExternalInstruction(text)) {
     return { ok: false, reason: "external content contains a likely prompt injection" };
   }
   return {

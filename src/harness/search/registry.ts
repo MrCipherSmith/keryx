@@ -34,6 +34,15 @@ function parseResponse(response: SandboxedWebResponse): unknown | undefined {
   }
 }
 
+function isUsableConnectionPayload(providerId: SearchProviderId, parsed: unknown): boolean {
+  if (typeof parsed !== "object" || parsed === null) return false;
+  if (providerId === "brave") {
+    const web = (parsed as { web?: unknown }).web;
+    return typeof web === "object" && web !== null && Array.isArray((web as { results?: unknown }).results);
+  }
+  return Array.isArray((parsed as { results?: unknown }).results);
+}
+
 function toNormalized(providerId: SearchProviderId, raw: unknown, mapping: { title: string; url: string; snippet: string; date?: string }, rawResultCount: number): NormalizedSearchResult | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const record = raw as Record<string, unknown>;
@@ -144,7 +153,10 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
       const key = credential(id, resolveCredential, injection, name);
       if (!key) return { ok: false, reason: "missing-credential" };
       const response = await transport.request(remoteRequest(id, endpoint, "keryx healthcheck", key));
-      return parseResponse(response) === undefined ? requestFailure(response) : { ok: true };
+      const parsed = parseResponse(response);
+      return parsed === undefined || !isUsableConnectionPayload(id, parsed)
+        ? requestFailure(response)
+        : { ok: true };
     },
     async search(_fields, query, signal) {
       const key = credential(id, resolveCredential, injection, name);

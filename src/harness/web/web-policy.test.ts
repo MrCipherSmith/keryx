@@ -46,3 +46,10 @@ test("remote policy rejects mixed DNS results before a connection can be selecte
   ]);
   expect(result.ok).toBe(false);
 });
+
+test("remote policy rejects IPv6 multicast DNS answers", async () => {
+  const url = parsePublicHttpsUrl("https://example.com");
+  expect(url.ok).toBe(true);
+  if (!url.ok) return;
+  expect((await validatePublicTarget(url.value, async () => [{ address: "ff02::1" }])).ok).toBe(false);
+});

@@ -30,7 +30,7 @@ export interface SandboxedWebResponse {
   status: number;
   url: string;
   contentType: string;
-  /** Bounded and redacted by the transport before it reaches an adapter. */
+  /** Bounded raw provider payload for a trusted adapter only; never agent-visible. */
   text: string;
   error?: "cancelled" | "timeout" | "policy-denied" | "transport-failed" | "malformed-response";
 }
