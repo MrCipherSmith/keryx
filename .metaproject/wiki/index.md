@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-10T23:37:45.191Z | pages: 39 -->
+<!-- generated: 2026-08-11T07:37:31.324Z | pages: 40 -->
 
 ### Architecture
 
@@ -68,6 +68,7 @@ _No pages yet._
   - [src/gdgraph/treesitter](components/src-gdgraph-treesitter.md) (accepted)
 - [src/gdskills](components/src-gdskills.md) (accepted)
 - [src/harness](components/src-harness.md) (accepted)
+  - [src/harness/provider](components/src-harness-provider.md) (draft)
 - [src/health](components/src-health.md) (accepted)
   - [src/health/metrics](components/src-health-metrics.md) (accepted)
   - [src/health/sources](components/src-health-sources.md) (accepted)
