@@ -96,9 +96,24 @@ export class WorkspaceService {
 
   async show(input: { request: unknown; requestCorrelationId: string; workspaceId: string }): Promise<WorkspaceManifest> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.showForActor({ actorContext: actor, workspaceId: input.workspaceId });
+  }
+
+  /**
+   * In-process SAC readers receive this only after their transport boundary has
+   * issued a TrustedActorContext.  The trust marker is verified again by
+   * requireAuthorization; a structurally similar client object cannot pass.
+   */
+  async showForActor(input: { actorContext: TrustedActorContext; workspaceId: string }): Promise<WorkspaceManifest> {
     await this.requireStrict("read");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(input.actorContext, initial.id, "read");
+    // Re-read and re-authorize at the source-use point.  This is deliberately
+    // adjacent to returning the manifest to a resolver, rather than trusting a
+    // role snapshot captured at the transport boundary.
     const manifest = await this.readManifest(input.workspaceId);
-    await this.requireAuthorization(actor, manifest.id, "read");
+    const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, input.actorContext.subject));
+    if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
     return manifest;
   }
 

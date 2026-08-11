@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { assembleContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
-import { evaluateStrictSacGuard, validateSacContract, type StrictSacGuard } from "./index";
-import { localWorkspaceAuthorizationServer, WorkspaceService } from "./workspace-service";
+import { evaluateStrictSacGuard, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
+import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
 import { createFlowService } from "../flow/service";
 
 export type FwkEvidence = Readonly<{ id: string; uri: string; revision: string; observedAt: string; expiresAt: string; trust: "primary" | "accepted" | "reviewed"; visible: boolean; statement: string }>;
@@ -28,15 +28,32 @@ const nowIso = (now: () => Date) => now().toISOString();
 export class FwkReadService {
   constructor(private readonly options: {
     guard: StrictSacGuard;
-    source: (workspaceId: string) => Promise<FwkSource>;
+    authorizationServer: SacAuthorizationServer;
+    source: (input: { workspaceId: string; actorContext: TrustedActorContext }) => Promise<FwkSource>;
     canonical: { traceRef: string; configurationRevision: string; policyRef: string; policyRevision: string };
     now?: () => Date;
   }) {}
 
-  async overview(input: { workspaceId: string; actor: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }): Promise<FwkReadResult> {
+  async overview(input: { workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }): Promise<FwkReadResult> {
+    // Actor identity is intentionally absent from the public payload.  Only a
+    // transport-owned authorization server may issue the WeakSet-trusted
+    // context carried into source resolution.
+    const actor = await this.options.authorizationServer.actorContextFor(input.request, input.requestCorrelationId);
+    if (!actor) return this.denied(input.workspaceId, "service:untrusted");
     const guard = await evaluateStrictSacGuard({ guard: this.options.guard, operation: "read" });
-    if (!guard.allowed) return this.denied(input.workspaceId, input.actor);
-    const source = await this.options.source(input.workspaceId); const now = this.options.now ?? (() => new Date());
+    if (!guard.allowed) return this.denied(input.workspaceId, actor.subject);
+    let source: FwkSource;
+    try {
+      // The source adapter must authorize/revalidate while opening its source,
+      // so a role revoked after actor issuance cannot disclose a reference.
+      source = await this.options.source({ workspaceId: input.workspaceId, actorContext: actor });
+    } catch (error) {
+      // Do not turn source existence, cross-workspace, or revoked-role errors
+      // into a discovery oracle.  All are represented as the same receipt.
+      if (error instanceof WorkspaceServiceError && (error.code === "access_denied" || error.code === "not_found")) return this.denied(input.workspaceId, actor.subject);
+      throw error;
+    }
+    const now = this.options.now ?? (() => new Date());
     const required = new Set(input.required ?? []); const optional = new Set(input.optional ?? []);
     const facts = source.facts.map((fact) => ({ ...fact, freshness: !fact.visible ? "denied" : new Date(fact.expiresAt) <= now() ? "expired" : "fresh" as const }));
     const usableFacts = facts.filter((fact) => fact.visible && fact.freshness === "fresh");
@@ -49,7 +66,7 @@ export class FwkReadService {
     ];
     const assembly = assembleContext({ ...input.budget, candidates, ...this.options.canonical });
     if ("code" in assembly) return assembly;
-    return this.success(input.workspaceId, input.actor, assembly, usableFacts, work, knowHow, now);
+    return this.success(input.workspaceId, actor.subject, assembly, usableFacts, work, knowHow, now);
   }
 
   private async success(workspaceId: string, actor: string, assembly: ContextAssembly, facts: Array<FwkEvidence & { freshness: string }>, work: unknown, knowHow: FwkKnowHow[], now: () => Date): Promise<FwkResult> {
@@ -67,7 +84,11 @@ export class FwkReadService {
   private async denied(workspaceId: string, actor: string): Promise<FwkResult> {
     const now = this.options.now ?? (() => new Date());
     const assembly: ContextAssembly = { ...this.options.canonical, selected: [], omittedOptional: [], partial: false };
-    return { partial: false, omittedOptional: [], manifest: { facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" }, receipt: this.receipt(workspaceId, actor, "denied", assembly, now) };
+    const receipt = this.receipt(workspaceId, actor, "denied", assembly, now);
+    if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
+    const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
+    if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
+    return { partial: false, omittedOptional: [], manifest: { facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" }, receipt };
   }
 
   private receipt(workspaceId: string, actor: string, decision: AccessReceipt["decision"], assembly: ContextAssembly, now: () => Date): AccessReceipt {
@@ -87,8 +108,9 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
   });
   return new FwkReadService({
     guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
-    source: async (workspaceId) => {
-      const manifest = await workspaces.show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+    authorizationServer,
+    source: async ({ workspaceId, actorContext }) => {
+      const manifest = await workspaces.showForActor({ actorContext, workspaceId });
       const flow = manifest.resources.find((resource) => resource.kind === "flow");
       const facts = await Promise.all(manifest.resources.filter((resource) => resource.kind === "evidence").map(async (resource, index) => {
         const raw = await readFile(path.resolve(cwd, resource.uri.slice(2)));

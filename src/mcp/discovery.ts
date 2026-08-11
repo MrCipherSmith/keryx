@@ -22,6 +22,9 @@ export const MODULE_MANIFEST_KEY: Record<string, string | null> = {
   wiki: "gdwiki",
   standard: null,
   mcp: null,
+  // SAC's local read facade is independently guarded and has no manifest
+  // module of its own; the MCP transport gate remains the mcp module.
+  sac: null,
 };
 
 type ManifestModule = { enabled?: boolean };

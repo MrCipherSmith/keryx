@@ -40,8 +40,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const workspaceId = args[1]; if (!workspaceId) throw new Error("Usage: keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]");
       const maxItems = Number(optionValue(args, "--max-items") ?? "32"); const maxTokens = Number(optionValue(args, "--max-tokens") ?? "4096");
       if (!Number.isInteger(maxItems) || !Number.isInteger(maxTokens) || maxItems < 0 || maxTokens < 0) throw new Error("--max-items and --max-tokens must be non-negative integers");
-      const actor = `user:local-${process.getuid?.() ?? process.pid}`;
-      const result = await createLocalFwkReadService(process.cwd()).overview({ workspaceId, actor, budget: { maxItems, maxTokens } });
+      const result = await createLocalFwkReadService(process.cwd()).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } });
       console.log(JSON.stringify(normalizeFwkResult(result), null, 2)); return;
     }
     throw new Error(`Unknown workspace command: ${subcommand}`);

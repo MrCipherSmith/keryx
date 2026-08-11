@@ -21,6 +21,7 @@ import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
 import { createLocalFwkReadService, normalizeFwkResult } from "../sac/fwk-service";
+import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
@@ -74,7 +75,7 @@ export function buildToolRegistry(): ToolEntry[] {
         const workspaceId = stringParam(params, "workspaceId") ?? "";
         const maxItems = typeof params.maxItems === "number" ? params.maxItems : 32;
         const maxTokens = typeof params.maxTokens === "number" ? params.maxTokens : 4096;
-        return normalizeFwkResult(await createLocalFwkReadService(cwd).overview({ workspaceId, actor: `user:local-${process.getuid?.() ?? process.pid}`, budget: { maxItems, maxTokens } }));
+        return normalizeFwkResult(await createLocalFwkReadService(cwd).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } }));
       },
     },
     {
