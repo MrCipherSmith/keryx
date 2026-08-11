@@ -30,7 +30,9 @@ test("registry lists the flow-085 providers with sensible metadata", () => {
       expect(p.envKey).toBeDefined();
       expect(p.envKey!.length).toBeGreaterThan(0);
     }
-    expect(p.models.length).toBeGreaterThan(0);
+    if (p.name !== "rapid-mlx") {
+      expect(p.models.length).toBeGreaterThan(0);
+    }
   }
 });
 
@@ -38,7 +40,7 @@ test("rapid-mlx is local/macOS-only and keyless", () => {
   const rapid = providerByName("rapid-mlx");
   expect(rapid).toBeDefined();
   expect(rapid?.baseUrl).toBe("http://127.0.0.1:8010");
-  expect(rapid?.models).toContain("qwen3.5-9b-4bit");
+  expect(rapid?.models).toEqual([]);
   expect(rapid?.requiresApiKey).toBe(false);
   expect(rapid?.platforms).toEqual(["darwin"]);
 });

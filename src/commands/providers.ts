@@ -165,7 +165,9 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     requiresApiKey: false,
     allowLoopback: true,
     platforms: ["darwin"],
-    models: ["qwen3.5-9b-4bit"],
+    // Local servers are authoritative for their installed model inventory.
+    // Do not offer a guessed model when `/v1/models` is unavailable.
+    models: [],
     note: "local · no key",
   },
   {
