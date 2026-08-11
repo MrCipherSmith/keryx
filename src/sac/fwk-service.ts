@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { assembleContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../context-operations/assembly";
 import { evaluateStrictSacGuard, validateSacContract, type StrictSacGuard } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService } from "./workspace-service";
+import { createFlowService } from "../flow/service";
 
 export type FwkEvidence = Readonly<{ id: string; uri: string; revision: string; observedAt: string; expiresAt: string; trust: "primary" | "accepted" | "reviewed"; visible: boolean; statement: string }>;
 export type FwkKnowHow = Readonly<{ id: string; kind: "wiki" | "memory" | "skill"; uri: string; revision: string; trust: "accepted" | "reviewed"; status: "fresh" | "stale" | "withdrawn" | "denied"; applicability?: string; accepted: boolean; visible: boolean }>;
@@ -85,18 +88,29 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
     source: async (workspaceId) => {
       const manifest = await workspaces.show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
       const flow = manifest.resources.find((resource) => resource.kind === "flow");
+      const facts = await Promise.all(manifest.resources.filter((resource) => resource.kind === "evidence").map(async (resource, index) => {
+        const raw = await readFile(path.resolve(cwd, resource.uri.slice(2)));
+        const revision = createHash("sha256").update(raw).digest("hex");
+        if (resource.revision !== revision) return undefined;
+        return { id: `fact-${index}`, uri: resource.uri, revision, observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true, statement: `Evidence reference ${resource.uri}` };
+      }));
+      const knowHow = await Promise.all(manifest.resources.filter((resource) => resource.kind === "wiki" || resource.kind === "memory" || resource.kind === "skill").map(async (resource, index) => {
+        const raw = await readFile(path.resolve(cwd, resource.uri.slice(2)), "utf8");
+        const revision = createHash("sha256").update(raw).digest("hex");
+        const accepted = /^Status:\s*(accepted|reviewed)\s*$/mi.test(raw);
+        if (!accepted || resource.revision !== revision) return undefined;
+        return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision, trust: "accepted" as const, status: "fresh" as const, accepted: true, visible: true };
+      }));
+      const work = flow ? await (async () => {
+        const id = /(?:^|\/)0*([0-9]+)-/.exec(flow.uri)?.[1];
+        if (!id) return undefined;
+        const snapshot = await createFlowService({ tracker: null, healthGate: async () => ({ status: "skipped", reasons: [] }), now: () => new Date() }).get({ cwd, id });
+        return { flowRef: { uri: flow.uri, snapshot: snapshot.status, revision: snapshot.updatedAt }, completed: snapshot.tasks.filter((task) => task.status === "done").map((task) => task.id), next: snapshot.tasks.filter((task) => task.status !== "done").map((task) => task.id), blocked: snapshot.status === "blocked" ? [snapshot.id] : [] };
+      })() : undefined;
       return {
-        facts: manifest.resources.filter((resource) => resource.kind === "evidence").map((resource, index) => ({
-          id: `fact-${index}`, uri: resource.uri, revision: resource.revision ?? "unrevisioned", observedAt: manifest.updatedAt,
-          expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true,
-          statement: `Evidence reference ${resource.uri}`,
-        })),
-        ...(flow ? { work: { flowRef: { uri: flow.uri, snapshot: "referenced", revision: flow.revision ?? "unrevisioned" } } } : {}),
-        knowHow: manifest.resources.filter((resource) => resource.kind === "wiki" || resource.kind === "memory" || resource.kind === "skill").map((resource, index) => ({
-          id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri,
-          revision: resource.revision ?? "unrevisioned", trust: "accepted" as const, status: "fresh" as const,
-          accepted: true, visible: true,
-        })),
+        facts: facts.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
+        ...(work ? { work } : {}),
+        knowHow: knowHow.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
       };
     },
     canonical: { traceRef: "./context-operations/traces/local-read-v1", configurationRevision: "context-operations-v1", policyRef: "./security/policy/local", policyRevision: "local-offline-v1" },
