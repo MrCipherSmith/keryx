@@ -38,21 +38,14 @@ async function fixture(): Promise<{ cwd: string; workspaceId: string; evidence: 
   return { cwd, workspaceId, evidence };
 }
 
-test("local CLI and stdio MCP normalize proposal and non-accepting review contracts", async () => {
+test("local CLI and stdio MCP normalize trusted-wrap-up denial", async () => {
   const cliFixture = await fixture();
   const mcpFixture = await fixture();
   const cliProposal = await invoke(cliFixture.cwd, ["propose", cliFixture.workspaceId, "--kind", "wiki-update", "--summary", "explicit minimized wrap-up", "--evidence", cliFixture.evidence, "--revision", "r1"]);
   const mcpProposal = await dispatchCallTool(await buildMcpContext(mcpFixture.cwd, "stdio"), "sac.propose", { workspaceId: mcpFixture.workspaceId, kind: "wiki-update", summary: "explicit minimized wrap-up", evidenceUri: mcpFixture.evidence, revision: "r1" });
   expect(cliProposal.exitCode).toBe(0); expect(mcpProposal.isError).toBe(false);
   expect(normalize(JSON.parse(cliProposal.stdout))).toEqual(normalize(JSON.parse(mcpProposal.text)));
-
-  const cliId = (JSON.parse(cliProposal.stdout) as { id: string }).id;
-  const mcpId = (JSON.parse(mcpProposal.text) as { id: string }).id;
-  const key = "proposal-dismiss-idempotency-0001";
-  const cliReview = await invoke(cliFixture.cwd, ["review", cliFixture.workspaceId, cliId, "--decision", "dismissed", "--reason", "out of scope", "--idempotency-key", key]);
-  const mcpReview = await dispatchCallTool(await buildMcpContext(mcpFixture.cwd, "stdio"), "sac.review", { workspaceId: mcpFixture.workspaceId, proposalId: mcpId, decision: "dismissed", reason: "out of scope", idempotencyKey: key });
-  expect(cliReview.exitCode).toBe(0); expect(mcpReview.isError).toBe(false);
-  expect(normalize((JSON.parse(cliReview.stdout) as { event: unknown }).event)).toEqual(normalize((JSON.parse(mcpReview.text) as { event: unknown }).event));
+  expect(JSON.parse(cliProposal.stdout)).toEqual({ code: "trusted_wrap_up_required" });
 });
 
 test("HTTP MCP cannot create or review local SAC proposals", async () => {

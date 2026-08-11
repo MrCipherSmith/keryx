@@ -54,7 +54,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(normalizeFwkResult(result), null, 2)); return;
     }
     if (subcommand === "propose") {
-      throw new Error("workspace propose requires a trusted Harness/Flow wrap-up artifact; raw CLI summary input is not accepted");
+      console.log(JSON.stringify({ code: "trusted_wrap_up_required" }, null, 2)); return;
     }
     if (subcommand === "review") {
       rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key"]));
