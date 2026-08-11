@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSacAuthorizationServer } from "./index";
@@ -127,7 +127,7 @@ test("target access re-authorizes and re-resolves changed resources before discl
   await expect(readFile(path.join(root, result.receipt.contextAssembly.traceRef.slice(2)), "utf8")).resolves.toContain("\"outcome\":\"denied\"");
 });
 
-test("safe descriptor source open rejects a symlink swapped after containment and before open", async () => {
+test("safe descriptor source open rejects an intermediate directory swapped after containment and before open", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-fd-race-"));
   const outside = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-fd-outside-"));
   const targetPath = path.join(root, "evidence", "fact.md");
@@ -140,8 +140,8 @@ test("safe descriptor source open rejects a symlink swapped after containment an
     workspaceRoot: root, authorizationServer, strictGuard: guard,
     beforeResourceOpen: async () => {
       if (!swap) return;
-      await rm(targetPath);
-      await symlink(path.join(outside, "secret.md"), targetPath);
+      await rename(path.join(root, "evidence"), path.join(root, "evidence-original"));
+      await symlink(outside, path.join(root, "evidence"));
     },
   });
   await workspaces.create({ request: undefined, requestCorrelationId: "fwk-fd-race-create-correlation-1", id: "workspace-alpha", title: "Alpha" });

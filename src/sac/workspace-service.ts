@@ -1,8 +1,8 @@
-import { constants } from "node:fs";
-import { mkdir, open, readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
+import { readWorkspaceFileNoFollow } from "./secure-resource-read";
 import {
   authorizeSacUse,
   createSacAuthorizationServer,
@@ -144,26 +144,22 @@ export class WorkspaceService {
 
   /**
    * The only source-content boundary for local SAC resolvers.  It revalidates
-   * ACL and containment immediately before opening, then opens the resolved
-   * file descriptor with O_NOFOLLOW.  Reads are from that descriptor, so a
-   * subsequent pathname replacement cannot redirect disclosed content.
+   * ACL and containment immediately before opening, then walks every parent
+   * directory via descriptor-relative O_NOFOLLOW opens. Reads are from the
+   * final descriptor, so neither intermediate nor final swaps can redirect
+   * disclosed content.
    */
   async readResourceForActor(input: { actorContext: TrustedActorContext; workspaceId: string; resource: WorkspaceResource; encoding?: BufferEncoding }): Promise<Buffer | string> {
     await this.resolveResourceForActor(input);
     await this.options.beforeResourceOpen?.();
-    // Revalidate the actual target immediately before FD acquisition.  The
-    // no-follow open below closes the remaining final-component swap window.
+    // Revalidate the actual target immediately before FD acquisition. The
+    // descriptor-relative walk below closes both intermediate and final swaps.
     const target = await this.resolveResourceForActor(input);
-    let handle: Awaited<ReturnType<typeof open>>;
     try {
-      handle = await open(target.absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const content = readWorkspaceFileNoFollow(this.root, target.absolutePath);
+      return input.encoding ? content.toString(input.encoding) : content;
     } catch (error) {
       throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "safe source open failed");
-    }
-    try {
-      return input.encoding ? await handle.readFile({ encoding: input.encoding }) : await handle.readFile();
-    } finally {
-      await handle.close();
     }
   }
 
