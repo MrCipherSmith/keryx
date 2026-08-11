@@ -11,3 +11,16 @@
 - 2026-08-11T23:09:16.334Z - task-done: T4: Self-review and prepare draft PR
 - 2026-08-11T23:11:51.382Z - task-done: T5: Run focused, integration, and platform verification
 - 2026-08-11T23:12:16.292Z - task-done: T6: Review, fix findings, prepare draft PR
+- 2026-08-11T23:28:29.049Z - ac-confirmed: AC1: PR #270: shared sandboxed transport
+- 2026-08-11T23:28:29.119Z - ac-confirmed: AC2: CI macOS/Linux sandbox legs passed
+- 2026-08-11T23:28:29.183Z - ac-confirmed: AC3: DNS pinning and redirect tests
+- 2026-08-11T23:28:29.249Z - ac-confirmed: AC4: sanitization and taint enforcement review
+- 2026-08-11T23:28:29.313Z - ac-confirmed: AC5: TUI provider flows and registry tests
+- 2026-08-11T23:28:29.377Z - ac-confirmed: AC6: SearXNG guide and strict docs CI
+- 2026-08-11T23:28:29.437Z - ac-confirmed: AC7: CI green; security and logic review approved
+- 2026-08-11T23:28:31.963Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/270 (warning: PR is not a draft)
+- 2026-08-11T23:28:32.032Z - completing
+- 2026-08-11T23:28:34.252Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-08-11T23:28:48.621Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/270 (warning: PR is not a draft)
+- 2026-08-11T23:28:48.692Z - completing
+- 2026-08-11T23:28:50.555Z - done: all gates passed

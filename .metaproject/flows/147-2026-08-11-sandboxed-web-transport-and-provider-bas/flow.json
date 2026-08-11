@@ -3,17 +3,46 @@
   "id": "147",
   "slug": "sandboxed-web-transport-and-provider-bas",
   "title": "Sandboxed web transport and provider-based web search",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-11T22:32:37.150Z",
-  "updatedAt": "2026-08-11T23:12:16.292Z",
+  "updatedAt": "2026-08-11T23:28:50.555Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e924fc898d8dc5ecb7801343e75dfca2c114a77aee4b86625ec7db2b36b7ef2c",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-11T23:28:29.049Z",
+      "note": "PR #270: shared sandboxed transport"
+    },
+    "AC2": {
+      "at": "2026-08-11T23:28:29.118Z",
+      "note": "CI macOS/Linux sandbox legs passed"
+    },
+    "AC3": {
+      "at": "2026-08-11T23:28:29.183Z",
+      "note": "DNS pinning and redirect tests"
+    },
+    "AC4": {
+      "at": "2026-08-11T23:28:29.249Z",
+      "note": "sanitization and taint enforcement review"
+    },
+    "AC5": {
+      "at": "2026-08-11T23:28:29.313Z",
+      "note": "TUI provider flows and registry tests"
+    },
+    "AC6": {
+      "at": "2026-08-11T23:28:29.377Z",
+      "note": "SearXNG guide and strict docs CI"
+    },
+    "AC7": {
+      "at": "2026-08-11T23:28:29.437Z",
+      "note": "CI green; security and logic review approved"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/270"
   },
   "tasks": [
     {
@@ -160,6 +189,69 @@
       "at": "2026-08-11T23:12:16.292Z",
       "event": "task-done",
       "detail": "T6: Review, fix findings, prepare draft PR"
+    },
+    {
+      "at": "2026-08-11T23:28:29.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #270: shared sandboxed transport"
+    },
+    {
+      "at": "2026-08-11T23:28:29.119Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: CI macOS/Linux sandbox legs passed"
+    },
+    {
+      "at": "2026-08-11T23:28:29.183Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: DNS pinning and redirect tests"
+    },
+    {
+      "at": "2026-08-11T23:28:29.249Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: sanitization and taint enforcement review"
+    },
+    {
+      "at": "2026-08-11T23:28:29.313Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: TUI provider flows and registry tests"
+    },
+    {
+      "at": "2026-08-11T23:28:29.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: SearXNG guide and strict docs CI"
+    },
+    {
+      "at": "2026-08-11T23:28:29.437Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: CI green; security and logic review approved"
+    },
+    {
+      "at": "2026-08-11T23:28:31.963Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/270 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-11T23:28:32.032Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-11T23:28:34.252Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-11T23:28:48.621Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/270 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-11T23:28:48.692Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-11T23:28:50.555Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
