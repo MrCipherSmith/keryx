@@ -1147,8 +1147,14 @@ where tools actually run: the non-interactive harness paths register none.
 | `sessions fork <id> [--title "<t>"] [--json]` | branch a session, ancestry recorded |
 | `sessions export <id>` | Markdown transcript |
 | `sessions path` | the on-disk sessions directory |
+| `shell /sessions` | interactive session picker + live switch in TUI |
+| `shell /interrupt` | hard-stop main turn in TUI |
 
 `session` is a singular alias for `sessions`.
+
+In the TUI, plain questions submitted while the main turn is active are queued as
+read-only side work on a single worker (`side-1`). Those side prompts are processed
+sequentially, and the queue is surfaced in the sidebar and transcript.
 
 **Key files.**
 - `src/session/store.ts` — create, list, find, load, persist, compact, fork; atomic multi-file writes.

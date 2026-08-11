@@ -112,6 +112,11 @@ export interface AgentDeps {
   maxNonReadToolCalls?: number;
 }
 
+export interface RunAgentTurnOptions {
+  /** Abort signal for a running turn (UI hard-stop support). */
+  signal?: AbortSignal;
+}
+
 /**
  * Default unique tool-signature budget per user turn for interactive agent
  * (`keryx shell` / TUI). Sized so multi-step operator prompts (read several
@@ -538,8 +543,16 @@ export async function runAgentTurn(
   deps: AgentDeps,
   history: NormalizedMessage[],
   userLine: string,
+  options: RunAgentTurnOptions = {},
 ): Promise<void> {
   history.push({ role: "user", content: userLine, provenance: "project" });
+  const signal = options.signal;
+  const isAborted = (): boolean => signal?.aborted === true;
+
+  if (isAborted()) {
+    io.onSystem?.("\n[stopped] Model turn interrupted by user.\n");
+    return;
+  }
 
   const toolByName = new Map(deps.tools.map((t) => [t.definition.name, t]));
   const toolDefs = deps.tools.map((t) => t.definition);
@@ -582,7 +595,7 @@ export async function runAgentTurn(
   // finish or the tool-call guard trips.
   let toollessReprompts = 0;
   for (;;) {
-    const request: NormalizedRequest = {
+    const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
       systemInstruction: deps.systemInstruction,
@@ -593,6 +606,8 @@ export async function runAgentTurn(
       requestId: deps.idSeq(),
       parentRunId,
     };
+    const request: NormalizedRequest =
+      signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
     let assistantText = "";
     let reasoningText = "";
@@ -608,7 +623,12 @@ export async function runAgentTurn(
     let errored = false;
 
     try {
-      for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
+      const streamOptions = signal === undefined ? { attemptId: deps.idSeq() } : { attemptId: deps.idSeq(), signal };
+      for await (const event of deps.provider.stream(request, streamOptions)) {
+        if (isAborted()) {
+          system("\n[stopped] Model turn interrupted by user.\n");
+          return;
+        }
         if (event.kind === "reasoning_delta") {
           reasoningText += event.text ?? "";
         } else if (event.kind === "text_delta") {
@@ -641,6 +661,10 @@ export async function runAgentTurn(
         }
       }
     } catch (cause) {
+      if (isAborted()) {
+        system("\n[stopped] Model turn interrupted by user.\n");
+        return;
+      }
       system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
       errored = true;
     }
@@ -652,10 +676,14 @@ export async function runAgentTurn(
       io.onAssistantText?.(assistantText);
     }
 
+    if (isAborted()) {
+      system("\n[stopped] Model turn interrupted by user.\n");
+      return;
+    }
     if (errored) {
       return;
     }
-      if (calls.length === 0) {
+    if (calls.length === 0) {
       const shouldReprompt = actionRequest && (assistantText.length === 0 || modelClaimedAction(assistantText));
       if (shouldReprompt && toollessReprompts < MAX_TOOLLESS_REPROMPTS) {
         toollessReprompts += 1;
@@ -682,10 +710,19 @@ export async function runAgentTurn(
       return; // error, or a text-only finish → turn complete
     }
 
+    if (isAborted()) {
+      system("\n[stopped] Model turn interrupted by user.\n");
+      return;
+    }
+
     // Execute each tool call and append its result, then loop to re-request.
     let exhaustedBudget: "total" | "read" | "non-read" | undefined;
     let executedAny = false;
     for (const call of calls) {
+      if (isAborted()) {
+        system("\n[stopped] Model turn interrupted by user.\n");
+        return;
+      }
       io.onToolCall?.(call.name, call.input);
       const risk = toolByName.get(call.name)?.definition.risk;
       const reservation = reserveToolAttempt(budget, call.name, call.input, risk);

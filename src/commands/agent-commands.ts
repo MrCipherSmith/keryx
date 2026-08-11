@@ -105,6 +105,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: BOTH,
   },
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
+  { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
   {
     name: "/exit",
     description: "Leave the shell (/quit works too)",
@@ -154,6 +155,9 @@ export function filterCommands(query: string, mode: ShellMode): SlashCommandOpti
 /** The first whitespace-delimited token of `line`, with `/quit` mapped to `/exit`. */
 function commandToken(line: string): string {
   const token = line.trim().split(/\s+/)[0] ?? "";
+  if (token === "/interrapt") {
+    return "/interrupt";
+  }
   return token === "/quit" ? "/exit" : token;
 }
 

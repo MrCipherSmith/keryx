@@ -141,6 +141,21 @@ git root, or by absolute cwd outside a repository — so `list` never shows anot
 project's work. The [harness page](./harness.md#sessions) covers what a session
 holds and what forking copies.
 
+## shell behavior
+
+### Interactive behavior
+
+- `/sessions` opens an interactive session picker in the TUI and switches the
+  live shell to the chosen session.
+- `keryx shell` supports a hard stop for a running main turn via
+  `/interrupt`.
+- If the main turn is busy, additional normal questions are queued as read-only
+  "side workers" (single slot by default, labeled as `side-1`) and processed
+  after each answer. While queued, the transcript notes `◦ side-1 queued`.
+
+When side-worker context is still processing, queued questions do not block the
+session state and still see recent context about the busy main turn.
+
 ---
 
 ## harness

@@ -26,6 +26,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/sessions",
     "/compact",
     "/clear",
+    "/interrupt",
     "/exit",
   ]);
 });
@@ -53,6 +54,7 @@ test("commandsForMode: agent keeps the pre-flow-112 menu, in order", () => {
     "/sessions",
     "/compact",
     "/clear",
+    "/interrupt",
     "/exit",
   ]);
 });
@@ -127,6 +129,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/sessions",
     "/compact",
     "/clear",
+    "/interrupt",
     "/exit",
   ]);
   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([
@@ -158,6 +161,7 @@ test("filterCommands: prefix narrows the set (agent, unchanged from flow 062)", 
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model"]);
   expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume"]);
+  expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual(["/interrupt"]);
   expect(filterCommands("/s", "agent").map((c) => c.name)).toEqual(["/sessions"]);
   expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
   expect(filterCommands("/comp", "agent").map((c) => c.name)).toEqual(["/compact"]);

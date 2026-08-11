@@ -214,9 +214,12 @@ What is in it today:
   change the loop, the tools or the policy.
 - **Durable sessions, per project.** JSONL transcripts on disk, resume across a
   process restart, and context compaction that keeps the full archive.
-  `/resume`, `/compact`, `/new`, and `keryx sessions list|fork|export` — `fork`
-  branches a conversation into a new session that keeps its ancestry, without
-  editing a transcript by hand.
+  `/resume`, `/sessions`, `/compact`, `/new`, and `keryx sessions list|fork|export` —
+  `fork` branches a conversation into a new session that keeps its ancestry,
+  without editing a transcript by hand.
+- **Responsive busy-turn UX.** A running main turn can be interrupted with
+  `/interrupt`; additional prompts are queued and answered as read-only side workers
+  (`side-1`) in the TUI so the shell stays usable under long-running turns.
 - **A policy engine with three answers, not two.** `allow`, `ask`, `deny` over
   seven risk classes — read, write, shell, network, credential, delegate,
   destructive — with path and command rules underneath. Shell and destructive

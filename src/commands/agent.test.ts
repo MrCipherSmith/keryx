@@ -288,6 +288,30 @@ test("runAgentTurn reports an unknown tool without throwing", async () => {
   expect(toolResults).toContain("definitely_not_a_tool:err");
 });
 
+test("runAgentTurn respects an already-aborted signal before issuing requests", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "ignored" }]]);
+  const { io, text } = collectingIo();
+  const system: string[] = [];
+  const abortedIo = { ...io, onSystem: (line: string) => system.push(line) };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  const controller = new AbortController();
+  controller.abort();
+
+  await runAgentTurn(abortedIo, deps, history, "should stop", { signal: controller.signal });
+
+  expect(system.join("")).toContain("[stopped]");
+  expect(requests).toHaveLength(0);
+  expect(history.length).toBe(1);
+});
+
 /** A fake risk-`shell` tool that records whether its runner was invoked. */
 function fakeShellTool(): { tool: import("../harness/tool/builtin/interactive-tools").InteractiveTool; ran: () => boolean } {
   let invoked = false;

@@ -5,6 +5,23 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.20] — 2026-08-11
+
+### Added
+
+- **Interactive session switching in the TUI (`/sessions`).** The shell now opens a
+  per-project session picker for live switching while preserving current sessions on
+  disk.
+- **Main-turn interrupt command in the TUI (`/interrupt`).** Added a hard-stop path for
+  an in-flight main turn, with deterministic teardown of the running provider loop.
+
+### Changed
+
+- **Side prompt execution model in the TUI.** While the main turn is busy, additional
+  plain prompts are queued into a single read-only side worker (`side-1`) and processed
+  sequentially. This keeps the interface responsive without mutating context during
+  background helper turns.
+
 ## [0.2.19] — 2026-08-11
 
 ### Fixed
@@ -857,4 +874,5 @@ runtime dependencies, no sockets).
 [0.2.17]: https://github.com/MrCipherSmith/keryx/compare/v0.2.16...v0.2.17
 [0.2.18]: https://github.com/MrCipherSmith/keryx/compare/v0.2.17...v0.2.18
 [0.2.19]: https://github.com/MrCipherSmith/keryx/compare/v0.2.18...v0.2.19
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.19...HEAD
+[0.2.20]: https://github.com/MrCipherSmith/keryx/compare/v0.2.19...v0.2.20
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.20...HEAD

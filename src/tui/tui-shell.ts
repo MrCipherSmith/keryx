@@ -1221,6 +1221,7 @@ export async function launchTuiAgentShell(opts: {
     const stopBusy = (): void => {
       chrome.stopBusy();
     };
+    let mainTurnAbortController: AbortController | undefined;
 
     // Sidebar panels (model, context, tools, workers) go in `sidebarTop`, NOT
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
@@ -1876,9 +1877,47 @@ export async function launchTuiAgentShell(opts: {
     };
 
     // Side workers while main is busy (automatic — no special slash command).
-    let sideSeq = 0;
-    let activeSides = 0;
-    const MAX_SIDE_WORKERS = 3;
+    const SIDE_WORKER_ID = `${SIDE_WORKER_ID_PREFIX}1`;
+    const sideWorkerLabelText = sideWorkerLabel(1);
+    type QueuedSideQuestion = {
+      question: string;
+      displayQuestion: string;
+    };
+    const sideQueue: QueuedSideQuestion[] = [];
+    let sideWorkerRunning = false;
+    let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const showSideQueueStatus = (): void => {
+      if (sideQueue.length === 0) {
+        if (!sideWorkerRunning) {
+          return;
+        }
+        fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "running", detail: "side Q" });
+        return;
+      }
+      fleet.upsert({
+        id: SIDE_WORKER_ID,
+        label: sideWorkerLabelText,
+        status: sideWorkerRunning ? "running" : "queued",
+        detail: `queued ×${sideQueue.length}`,
+      });
+    };
+
+    const clearSideWorkerSlot = (): void => {
+      if (sideClearTimeout !== undefined) {
+        clearTimeout(sideClearTimeout);
+      }
+      sideClearTimeout = setTimeout(() => {
+        if (sideWorkerRunning || sideQueue.length > 0) {
+          return;
+        }
+        try {
+          fleet.remove(SIDE_WORKER_ID);
+        } catch {
+          // ignore
+        }
+      }, 12_000);
+    };
 
     const summarizeSubmittedLine = (line: string): string => {
       const normalized = line.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -1890,130 +1929,137 @@ export async function launchTuiAgentShell(opts: {
     };
 
     const spawnSideWorker = (question: string, displayQuestion = question): void => {
-      if (activeSides >= MAX_SIDE_WORKERS) {
+      sideQueue.push({ question, displayQuestion });
+      if (sideQueue.length > 1 || sideWorkerRunning) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `side-max${uid++}`,
-            content: otui.t`${otui.yellow(
-              `◇ side worker limit (${MAX_SIDE_WORKERS}) — wait for one to finish`,
-            )}`,
+            content: otui.t`${otui.yellow(`◦ side-1 queued (${sideQueue.length - 1} pending)`)} ${
+              otui.dim(`· while main: ${busyPhase}`)
+            }`,
             marginTop: 1,
           }),
         );
+        showSideQueueStatus();
         return;
       }
-      sideSeq += 1;
-      activeSides += 1;
-      const seq = sideSeq;
-      const workerId = `${SIDE_WORKER_ID_PREFIX}${seq}`;
-      const label = sideWorkerLabel(seq);
-      const mainSlot = fleet.list().find((w) => w.id === MAIN_AGENT_ID);
-      const elapsedSec = busyStartedAt > 0 ? (Date.now() - busyStartedAt) / 1000 : undefined;
-
-      fleet.upsert({
-        id: workerId,
-        label,
-        status: "running",
-        detail: "side Q",
-        model: `${currentSel.provider}/${currentSel.model}`,
-      });
-
-      transcript.add(
-        new otui.TextRenderable(r, {
-          id: `side-h${uid++}`,
-          content: otui.t`${otui.magenta(`◇ ${label}`)} ${otui.dim(`· while main: ${busyPhase}`)}`,
-          marginTop: 1,
-        }),
-      );
-      appendUserEcho(otui, r, transcript, {
-        id: `side-q${uid++}`,
-        line: displayQuestion,
-        borderColor: "#5a3a6a",
-        marginTop: 0,
-      });
-
-      const prompt = buildSideWorkerPrompt({
-        question,
-        snapshot: {
-          phase: busyPhase,
-          ...(mainSlot?.detail !== undefined ? { mainDetail: mainSlot.detail } : {}),
-          ...(elapsedSec !== undefined ? { elapsedSec } : {}),
-        },
-        recentHistory: history,
-      });
 
       void (async () => {
-        let answer = "";
-        try {
-          const base = await opts.makeAgentDeps(currentSel);
-          // Read-only: never allow shell/mutations from a side worker.
-          const tools = base.tools.filter((t) => t.definition.risk === "read");
-          const sideDeps: AgentDeps = {
-            ...base,
-            tools,
-            systemInstruction: buildSideWorkerSystemInstruction(currentSel.provider, currentSel.model),
-            maxToolCalls: 4,
-            idSeq: () => `${workerId}-${base.idSeq()}`,
-          };
-          const sideHistory: NormalizedMessage[] = [];
-          const sideIo: AgentIO = {
-            write: (s) => {
-              answer += s;
-            },
-            onAssistantText: (text) => {
-              answer = text;
-            },
-            onToolCall: (name) => {
-              fleet.upsert({
-                id: workerId,
-                label,
-                status: "running",
-                detail: name.length > 12 ? `${name.slice(0, 10)}…` : name,
-              });
-            },
-            onToolResult: () => {
-              fleet.upsert({ id: workerId, label, status: "running", detail: "waiting" });
-            },
-            onSystem: (text) => {
-              transcript.add(
-                new otui.TextRenderable(r, {
-                  id: `side-sys${uid++}`,
-                  content: otui.t`${otui.dim(text.trimEnd())}`,
-                }),
-              );
-            },
-            // Side workers never get shell approval — tools are read-only only.
-            requestApproval: async () => false,
-          };
-          await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
-          const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
+        while (sideQueue.length > 0) {
+          const next = sideQueue.shift();
+          if (next === undefined) {
+            break;
+          }
+          const currentQuestion = next.question;
+          sideWorkerRunning = true;
+          if (sideClearTimeout !== undefined) {
+            clearTimeout(sideClearTimeout);
+            sideClearTimeout = undefined;
+          }
+
+          const mainSlot = fleet.list().find((w) => w.id === MAIN_AGENT_ID);
+          const elapsedSec = busyStartedAt > 0 ? (Date.now() - busyStartedAt) / 1000 : undefined;
+
+          fleet.upsert({
+            id: SIDE_WORKER_ID,
+            label: sideWorkerLabelText,
+            status: "running",
+            detail: sideQueue.length > 0 ? `side Q (${sideQueue.length} queued)` : "side Q",
+            model: `${currentSel.provider}/${currentSel.model}`,
+          });
+
           transcript.add(
             new otui.TextRenderable(r, {
-              id: `side-a${uid++}`,
-              content: otui.t`${otui.magenta("◇")} ${body}`,
-              marginTop: 0,
+              id: `side-h${uid++}`,
+              content: otui.t`${otui.magenta(`◇ ${sideWorkerLabelText}`)} ${otui.dim(`· while main: ${busyPhase}`)}`,
+              marginTop: 1,
             }),
           );
-          fleet.upsert({ id: workerId, label, status: "done", detail: "answered" });
-        } catch (cause) {
-          const msg = cause instanceof Error ? cause.message : String(cause);
-          transcript.add(
-            new otui.TextRenderable(r, {
-              id: `side-err${uid++}`,
-              content: otui.t`${otui.red(`◇ ${label} failed: ${msg}`)}`,
-            }),
-          );
-          fleet.upsert({ id: workerId, label, status: "failed", detail: "error" });
-        } finally {
-          activeSides = Math.max(0, activeSides - 1);
-          // Auto-drop finished side slots after a short moment so the panel stays clean.
-          setTimeout(() => {
-            try {
-              fleet.remove(workerId);
-            } catch {
-              // ignore
+
+          const prompt = buildSideWorkerPrompt({
+            question: currentQuestion,
+            snapshot: {
+              phase: busyPhase,
+              ...(mainSlot?.detail !== undefined ? { mainDetail: mainSlot.detail } : {}),
+              ...(elapsedSec !== undefined ? { elapsedSec } : {}),
+            },
+            recentHistory: history,
+          });
+
+          let answer = "";
+          try {
+            const base = await opts.makeAgentDeps(currentSel);
+            // Read-only: never allow shell/mutations from a side worker.
+            const tools = base.tools.filter((t) => t.definition.risk === "read");
+            const sideDeps: AgentDeps = {
+              ...base,
+              tools,
+              systemInstruction: buildSideWorkerSystemInstruction(currentSel.provider, currentSel.model),
+              maxToolCalls: 4,
+              idSeq: () => `${SIDE_WORKER_ID}-${base.idSeq()}`,
+            };
+            const sideHistory: NormalizedMessage[] = [];
+            const sideIo: AgentIO = {
+              write: (s) => {
+                answer += s;
+              },
+              onAssistantText: (text) => {
+                answer = text;
+              },
+              onToolCall: (name) => {
+                fleet.upsert({
+                  id: SIDE_WORKER_ID,
+                  label: sideWorkerLabelText,
+                  status: "running",
+                  detail: name.length > 12 ? `${name.slice(0, 10)}…` : name,
+                });
+              },
+              onToolResult: () => {
+                fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "running", detail: "waiting" });
+              },
+              onSystem: (text) => {
+                transcript.add(
+                  new otui.TextRenderable(r, {
+                    id: `side-sys${uid++}`,
+                    content: otui.t`${otui.dim(text.trimEnd())}`,
+                  }),
+                );
+              },
+              // Side workers never get shell approval — tools are read-only only.
+              requestApproval: async () => false,
+            };
+            await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
+            const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `side-a${uid++}`,
+                content: otui.t`${otui.magenta("◇")} ${body}`,
+                marginTop: 0,
+              }),
+            );
+            fleet.upsert({
+              id: SIDE_WORKER_ID,
+              label: sideWorkerLabelText,
+              status: sideQueue.length > 0 ? "running" : "done",
+              detail: "answered",
+            });
+          } catch (cause) {
+            const msg = cause instanceof Error ? cause.message : String(cause);
+            transcript.add(
+              new otui.TextRenderable(r, {
+                id: `side-err${uid++}`,
+                content: otui.t`${otui.red(`◇ ${sideWorkerLabelText} failed: ${msg}`)}`,
+              }),
+            );
+            fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "failed", detail: "error" });
+          } finally {
+            sideWorkerRunning = false;
+            if (sideQueue.length > 0) {
+              showSideQueueStatus();
+              continue;
             }
-          }, 12_000);
+            clearSideWorkerSlot();
+          }
         }
       })();
     };
@@ -2046,7 +2092,16 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(
             "Main agent is busy. Type a normal question to spawn a side worker " +
               "(sees main status + recent context; read-only). /exit still works.\n",
-          );
+            );
+          return;
+        }
+        if (command?.name === "/interrupt") {
+          if (mainTurnAbortController !== undefined && !mainTurnAbortController.signal.aborted) {
+            mainTurnAbortController.abort();
+            io.onSystem?.("◇ main turn interrupted.\n");
+            return;
+          }
+          io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
         // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
@@ -2062,6 +2117,12 @@ export async function launchTuiAgentShell(opts: {
           );
           return;
         }
+        appendUserEcho(otui, r, transcript, {
+          id: `side-q${uid++}`,
+          line: displayLine,
+          borderColor: "#5a3a6a",
+          marginTop: 0,
+        });
         spawnSideWorker(line, displayLine);
         return;
       }
@@ -2158,6 +2219,10 @@ export async function launchTuiAgentShell(opts: {
               input.focus();
             }
           })();
+          return;
+        }
+        if (command.name === "/interrupt") {
+          io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
         if (command.name === "/connect") {
@@ -2378,7 +2443,10 @@ export async function launchTuiAgentShell(opts: {
         prevOnSystem?.(text);
       };
       const beforeLen = history.length;
-      void runAgentTurn(io, deps, history, line).finally(() => {
+      const controller = new AbortController();
+      mainTurnAbortController = controller;
+      void runAgentTurn(io, deps, history, line, { signal: controller.signal }).finally(() => {
+        mainTurnAbortController = undefined;
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
         setMainAgent(turnFailed ? "failed" : "done", turnFailed ? "error" : "idle");
