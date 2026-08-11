@@ -1,4 +1,5 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { mkdir, open, readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
@@ -33,6 +34,8 @@ type WorkspaceServiceOptions = {
   authorizationServer: SacAuthorizationServer;
   strictGuard: StrictSacGuard;
   now?: () => Date;
+  /** Test seam: runs after authorization/containment but before the safe FD open. */
+  beforeResourceOpen?: () => Promise<void> | void;
 };
 
 export class WorkspaceServiceError extends Error {
@@ -136,6 +139,31 @@ export class WorkspaceService {
       return { ...resource, absolutePath };
     } catch (error) {
       throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "unsafe workspace reference");
+    }
+  }
+
+  /**
+   * The only source-content boundary for local SAC resolvers.  It revalidates
+   * ACL and containment immediately before opening, then opens the resolved
+   * file descriptor with O_NOFOLLOW.  Reads are from that descriptor, so a
+   * subsequent pathname replacement cannot redirect disclosed content.
+   */
+  async readResourceForActor(input: { actorContext: TrustedActorContext; workspaceId: string; resource: WorkspaceResource; encoding?: BufferEncoding }): Promise<Buffer | string> {
+    await this.resolveResourceForActor(input);
+    await this.options.beforeResourceOpen?.();
+    // Revalidate the actual target immediately before FD acquisition.  The
+    // no-follow open below closes the remaining final-component swap window.
+    const target = await this.resolveResourceForActor(input);
+    let handle: Awaited<ReturnType<typeof open>>;
+    try {
+      handle = await open(target.absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    } catch (error) {
+      throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "safe source open failed");
+    }
+    try {
+      return input.encoding ? await handle.readFile({ encoding: input.encoding }) : await handle.readFile();
+    } finally {
+      await handle.close();
     }
   }
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSacAuthorizationServer } from "./index";
@@ -7,7 +7,6 @@ import { FwkReadService } from "./fwk-service";
 import { WorkspaceService } from "./workspace-service";
 
 const guard = { mode: "strict", availability: "available", decision: "pass", policyRevision: "test-policy" } as const;
-const canonical = { traceRef: "./context/traces/1", configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" } as const;
 const correlation = "fwk-authorize-correlation-0001";
 
 async function setup() {
@@ -18,8 +17,8 @@ async function setup() {
   return { root, authorizationServer, workspaces };
 }
 
-function reader(authorizationServer: ReturnType<typeof createSacAuthorizationServer>, source: ConstructorParameters<typeof FwkReadService>[0]["source"]) {
-  return new FwkReadService({ guard, authorizationServer, source, canonical });
+function reader(root: string, authorizationServer: ReturnType<typeof createSacAuthorizationServer>, source: ConstructorParameters<typeof FwkReadService>[0]["source"]) {
+  return new FwkReadService({ guard, authorizationServer, source, canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" } });
 }
 
 test("FWK source reads deny cross-workspace, revoked, and TOCTOU role changes with a receipt", async () => {
@@ -32,14 +31,14 @@ test("FWK source reads deny cross-workspace, revoked, and TOCTOU role changes wi
   await writeFile(foreignPath, `${JSON.stringify(foreign)}\n`);
   const empty = { facts: [], knowHow: [] };
 
-  const crossWorkspace = await reader(authorizationServer, async ({ actorContext }) => {
+  const crossWorkspace = await reader(root, authorizationServer, async ({ actorContext }) => {
     await workspaces.showForActor({ actorContext, workspaceId: "workspace-beta" });
     return empty;
   }).overview({ workspaceId: "workspace-beta", request: undefined, requestCorrelationId: correlation, budget: { maxItems: 1, maxTokens: 1 } });
   expect("code" in crossWorkspace).toBe(false); if ("code" in crossWorkspace) return;
   expect(crossWorkspace.receipt.decision).toBe("denied");
 
-  const revoked = await reader(authorizationServer, async ({ actorContext }) => {
+  const revoked = await reader(root, authorizationServer, async ({ actorContext }) => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { members: unknown[] };
     manifest.members = [{ subject: "user:other", role: "owner" }];
     await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
@@ -70,6 +69,19 @@ test("denied reads persist a resolvable metadata-only canonical trace", async ()
   // Keep the setup authorization server in scope so this test cannot
   // accidentally succeed by accepting a client-supplied identity.
   expect(await authorizationServer.actorContextFor(undefined, correlation)).toBeDefined();
+});
+
+test("public strict-guard denial also persists a resolvable no-content trace", async () => {
+  const { root, authorizationServer } = await setup();
+  const service = new FwkReadService({
+    guard: { mode: "disabled" }, authorizationServer, source: async () => { throw new Error("must not open source"); },
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+  });
+  const result = await service.overview({ workspaceId: "workspace-alpha", request: undefined, requestCorrelationId: "fwk-public-guard-deny-correlation-1", budget: { maxItems: 1, maxTokens: 1 } });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.receipt.decision).toBe("denied");
+  const trace = await readFile(path.join(root, result.receipt.contextAssembly.traceRef.slice(2)), "utf8");
+  expect(JSON.parse(trace)).toMatchObject({ outcome: "denied", selected: [] });
 });
 
 test("target access re-authorizes and re-resolves changed resources before disclosure", async () => {
@@ -113,4 +125,31 @@ test("target access re-authorizes and re-resolves changed resources before discl
   expect(result.manifest.freshness).toBe("denied");
   expect(result.receipt.decision).toBe("denied");
   await expect(readFile(path.join(root, result.receipt.contextAssembly.traceRef.slice(2)), "utf8")).resolves.toContain("\"outcome\":\"denied\"");
+});
+
+test("safe descriptor source open rejects a symlink swapped after containment and before open", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-fd-race-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-fd-outside-"));
+  const targetPath = path.join(root, "evidence", "fact.md");
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await writeFile(targetPath, "safe evidence");
+  await writeFile(path.join(outside, "secret.md"), "outside secret");
+  let swap = false;
+  const authorizationServer = createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os" as const, roleRevision: "roles-r1" }) });
+  const workspaces = new WorkspaceService({
+    workspaceRoot: root, authorizationServer, strictGuard: guard,
+    beforeResourceOpen: async () => {
+      if (!swap) return;
+      await rm(targetPath);
+      await symlink(path.join(outside, "secret.md"), targetPath);
+    },
+  });
+  await workspaces.create({ request: undefined, requestCorrelationId: "fwk-fd-race-create-correlation-1", id: "workspace-alpha", title: "Alpha" });
+  await workspaces.addResource({ request: undefined, requestCorrelationId: "fwk-fd-race-add-correlation-1", workspaceId: "workspace-alpha", resource: { kind: "evidence", uri: "./evidence/fact.md" } });
+  const actorContext = await authorizationServer.actorContextFor(undefined, "fwk-fd-race-actor-correlation-1");
+  if (!actorContext) throw new Error("expected trusted actor");
+  const resource = (await workspaces.showForActor({ actorContext, workspaceId: "workspace-alpha" })).resources[0]!;
+  swap = true;
+  await expect(workspaces.readResourceForActor({ actorContext, workspaceId: "workspace-alpha", resource, encoding: "utf8" })).rejects.toMatchObject({ code: "invalid_reference" });
+  expect(await readFile(path.join(outside, "secret.md"), "utf8")).toBe("outside secret");
 });

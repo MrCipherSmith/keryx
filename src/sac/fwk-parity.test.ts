@@ -22,6 +22,7 @@ function normalizeFixture(value: unknown): unknown {
     receipt.recordedAt = "1970-01-01T00:00:00.000Z";
     const integrity = receipt.integrity as Record<string, unknown>;
     integrity.recordHash = "0".repeat(64);
+    integrity.previousRecordHash = "previous-normalized";
     const assembly = receipt.contextAssembly as Record<string, unknown>;
     assembly.traceRef = "./.metaproject/context-operations/traces/normalized.json";
   }
@@ -75,4 +76,35 @@ test("CLI and stdio MCP normalize the progressive read contract", async () => {
   const mcpRead = await dispatchCallTool(await buildMcpContext(cwd, "stdio"), "sac.read", { workspaceId, itemId: "fact-0", maxItems: 1, maxTokens: 100 });
   expect(cliRead.exitCode).toBe(0); expect(mcpRead.isError).toBe(false);
   expect(normalizeFixture(JSON.parse(cliRead.stdout))).toEqual(normalizeFixture(JSON.parse(mcpRead.text)));
+});
+
+test("real SAC stdio MCP SDK round-trip preserves overview, read, and overflow parity", async () => {
+  let sdk: {
+    Client: new (info: unknown, options: unknown) => { connect(t: unknown): Promise<void>; callTool(args: { name: string; arguments: Record<string, unknown> }): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>; close(): Promise<void> };
+    StdioClientTransport: new (params: { command: string; args: string[]; cwd: string; stderr: "pipe" }) => unknown;
+  };
+  try {
+    const client = await import("@modelcontextprotocol/sdk/client/index.js");
+    const stdio = await import("@modelcontextprotocol/sdk/client/stdio.js");
+    sdk = { Client: client.Client as never, StdioClientTransport: stdio.StdioClientTransport as never };
+  } catch { return; }
+  const { cwd, workspaceId } = await fixtureWorkspace();
+  const transport = new sdk.StdioClientTransport({ command: process.execPath, args: [cli, "mcp", "serve"], cwd, stderr: "pipe" });
+  const client = new sdk.Client({ name: "sac-stdio-parity", version: "1" }, { capabilities: {} });
+  await client.connect(transport);
+  try {
+    for (const [tool, args, cliArgs] of [
+      ["sac.overview", { workspaceId, maxItems: 2, maxTokens: 100 }, ["overview", workspaceId, "--max-items", "2", "--max-tokens", "100"]],
+      ["sac.read", { workspaceId, itemId: "fact-0", maxItems: 1, maxTokens: 100 }, ["read", workspaceId, "fact-0", "--max-items", "1", "--max-tokens", "100"]],
+      ["sac.overview", { workspaceId, maxItems: 0, maxTokens: 0 }, ["overview", workspaceId, "--max-items", "0", "--max-tokens", "0"]],
+    ] as const) {
+      const cliResult = await invokeCli(cwd, [...cliArgs]);
+      expect(cliResult.exitCode).toBe(0);
+      const mcp = await client.callTool({ name: tool, arguments: args });
+      expect(mcp.isError).not.toBe(true);
+      expect(normalizeFixture(JSON.parse(mcp.content[0]!.text))).toEqual(normalizeFixture(JSON.parse(cliResult.stdout)));
+    }
+  } finally {
+    await client.close();
+  }
 });

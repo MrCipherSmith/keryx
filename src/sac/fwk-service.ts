@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { assembleAndRecordContext, assembleContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
+import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
 import { evaluateStrictSacGuard, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
-import { createFlowService } from "../flow/service";
+import { withFileLock } from "../lib/fs";
 
 export type FwkEvidence = Readonly<{ id: string; uri: string; revision: string; observedAt: string; expiresAt: string; trust: "primary" | "accepted" | "reviewed"; visible: boolean; statement: string; status?: "fresh" | "stale" | "expired" | "denied" }>;
 export type FwkKnowHow = Readonly<{ id: string; kind: "wiki" | "memory" | "skill"; uri: string; revision: string; trust: "accepted" | "reviewed"; status: "fresh" | "stale" | "withdrawn" | "denied"; applicability?: string; accepted: boolean; visible: boolean }>;
@@ -30,7 +30,7 @@ export class FwkReadService {
     guard: StrictSacGuard;
     authorizationServer: SacAuthorizationServer;
     source: (input: { workspaceId: string; actorContext: TrustedActorContext }) => Promise<FwkSource>;
-    canonical: { traceRef?: string; configurationRevision: string; policyRef: string; policyRevision: string; workspaceRoot?: string };
+    canonical: { workspaceRoot: string; configurationRevision: string; policyRef: string; policyRevision: string };
     now?: () => Date;
   }) {}
 
@@ -76,9 +76,7 @@ export class FwkReadService {
       ...(work.state === "bound" && (!itemId || itemId === "work") ? [{ id: "work", required: required.has("work") || !optional.has("work"), tokens: 32 }] : []),
       ...select(acceptedKnowHow).map((item) => ({ id: item.id, required: required.has(item.id) || !optional.has(item.id), tokens: 16 })),
     ];
-    const assembly = this.options.canonical.workspaceRoot
-      ? await assembleAndRecordContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId: input.requestCorrelationId, ...input.budget, candidates, omittedOptional: withheld, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision })
-      : assembleContext({ ...input.budget, candidates, omittedOptional: withheld, traceRef: this.options.canonical.traceRef ?? "./context-operations/traces/unresolved", configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision });
+    const assembly = await assembleAndRecordContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId: input.requestCorrelationId, ...input.budget, candidates, omittedOptional: withheld, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision });
     if ("code" in assembly) return assembly;
     return this.success(input.workspaceId, actor.subject, assembly, facts, work, acceptedKnowHow, now, action, itemId);
   }
@@ -91,7 +89,7 @@ export class FwkReadService {
     const manifest = { schemaVersion: "1.0" as const, workspaceId, generatedAt: nowIso(now), facts: selectedFacts.map((fact) => ({ statement: fact.statement, evidence: [{ kind: "artifact" as const, uri: fact.uri, revision: fact.revision, observedAt: fact.observedAt, trust: fact.trust }], observedAt: fact.observedAt, expiresAt: fact.expiresAt, freshness: fact.freshness })), work: selected.has("work") ? work : { state: "unbound" }, knowHow: selectedKnowHow.map(({ id, accepted, visible, ...item }) => item), freshness: stale ? "stale" as const : assembly.partial ? "partial" as const : "fresh" as const };
     const fwk = await validateSacContract({ schema: "fwk-receipt", document: manifest });
     if (!fwk.valid) throw new Error(`invalid FWK manifest: ${fwk.errors.map((error) => error.code).join(",")}`);
-    const receipt = this.receipt(workspaceId, actor, stale ? "stale" : "allowed", assembly, now, action, resourceId);
+    const receipt = await this.receipt(workspaceId, actor, stale ? "stale" : "allowed", assembly, now, action, resourceId);
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
     if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
@@ -100,20 +98,33 @@ export class FwkReadService {
 
   private async denied(workspaceId: string, actor: string, correlationId: string): Promise<FwkResult> {
     const now = this.options.now ?? (() => new Date());
-    const assembly: ContextAssembly = this.options.canonical.workspaceRoot
-      ? await recordNoContentContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision, outcome: "denied" })
-      : { traceRef: this.options.canonical.traceRef ?? "./context-operations/traces/unresolved", configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision, selected: [], omittedOptional: [], partial: false };
-    const receipt = this.receipt(workspaceId, actor, "denied", assembly, now);
+    const assembly = await recordNoContentContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision, outcome: "denied" });
+    const receipt = await this.receipt(workspaceId, actor, "denied", assembly, now);
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
     if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
     return { partial: false, omittedOptional: [], manifest: { facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" }, receipt };
   }
 
-  private receipt(workspaceId: string, actor: string, decision: AccessReceipt["decision"], assembly: ContextAssembly, now: () => Date, action: "overview" | "resource" = "overview", resourceId?: string): AccessReceipt {
+  private async receipt(workspaceId: string, actor: string, decision: AccessReceipt["decision"], assembly: ContextAssembly, now: () => Date, action: "overview" | "resource" = "overview", resourceId?: string): Promise<AccessReceipt> {
     const recordedAt = nowIso(now); const id = `receipt-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     const base = { schemaVersion: "1.0" as const, id, workspaceId, actor, action, decision, recordedAt, cost: { tokens: 0, toolCalls: 1, elapsedMs: 0 }, contextAssembly: { traceRef: assembly.traceRef, configurationRevision: assembly.configurationRevision, selected: assembly.selected.map((id) => `./ids/${id}`), omittedOptional: assembly.omittedOptional.map((id) => `./ids/${id}`) }, policy: { ref: assembly.policyRef, revision: assembly.policyRevision }, ...(action === "resource" ? { resourceRef: `./ids/${resourceId ?? "unknown"}` } : {}) };
-    return { ...base, integrity: { recordHash: createHash("sha256").update(JSON.stringify(base)).digest("hex"), previousRecordHash: "GENESIS" } };
+    const ledger = path.join(this.options.canonical.workspaceRoot, ".metaproject", "context-operations", "access-receipts.jsonl");
+    await mkdir(path.dirname(ledger), { recursive: true, mode: 0o700 });
+    return withFileLock(`${ledger}.lock`, async () => {
+      let previousRecordHash: string = "GENESIS";
+      try {
+        const lines = (await readFile(ledger, "utf8")).trim().split("\n").filter(Boolean);
+        if (lines.length) previousRecordHash = (JSON.parse(lines.at(-1)!) as AccessReceipt).integrity.recordHash;
+      } catch (error) { if (!(error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT")) throw error; }
+      const integrity = { previousRecordHash: previousRecordHash as AccessReceipt["integrity"]["previousRecordHash"] };
+      const receipt = { ...base, integrity: { ...integrity, recordHash: createHash("sha256").update(JSON.stringify({ ...base, integrity })).digest("hex") } } as AccessReceipt;
+      if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
+      const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
+      if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
+      await appendFile(ledger, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+      return receipt;
+    });
   }
 }
 
@@ -132,23 +143,20 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
       const manifest = await workspaces.showForActor({ actorContext, workspaceId });
       const flow = manifest.resources.find((resource) => resource.kind === "flow");
       const facts = await Promise.all(manifest.resources.filter((resource) => resource.kind === "evidence").map(async (resource, index) => {
-        const target = await workspaces.resolveResourceForActor({ actorContext, workspaceId, resource });
-        const raw = await readFile(target.absolutePath);
+        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource }) as Buffer;
         const revision = createHash("sha256").update(raw).digest("hex");
         return { id: `fact-${index}`, uri: resource.uri, revision: resource.revision ?? revision, observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true, statement: `Evidence reference ${resource.uri}`, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const };
       }));
       const knowHow = await Promise.all(manifest.resources.filter((resource) => resource.kind === "wiki" || resource.kind === "memory" || resource.kind === "skill").map(async (resource, index) => {
-        const target = await workspaces.resolveResourceForActor({ actorContext, workspaceId, resource });
-        const raw = await readFile(target.absolutePath, "utf8");
+        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource, encoding: "utf8" }) as string;
         const revision = createHash("sha256").update(raw).digest("hex");
         const accepted = /^Status:\s*(accepted|reviewed)\s*$/mi.test(raw);
         return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? revision, trust: "accepted" as const, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const, accepted, visible: true };
       }));
       const work = flow ? await (async () => {
-        await workspaces.resolveResourceForActor({ actorContext, workspaceId, resource: flow });
-        const id = /(?:^|\/)0*([0-9]+)-/.exec(flow.uri)?.[1];
-        if (!id) return undefined;
-        const snapshot = await createFlowService({ tracker: null, healthGate: async () => ({ status: "skipped", reasons: [] }), now: () => new Date() }).get({ cwd, id });
+        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource: flow, encoding: "utf8" }) as string;
+        const snapshot = JSON.parse(raw) as { id?: string; status?: string; updatedAt?: string; tasks?: Array<{ id: string; status: string }> };
+        if (!snapshot.id || !snapshot.status || !snapshot.updatedAt || !Array.isArray(snapshot.tasks)) return undefined;
         return { flowRef: { uri: flow.uri, snapshot: snapshot.status, revision: snapshot.updatedAt }, completed: snapshot.tasks.filter((task) => task.status === "done").map((task) => task.id), next: snapshot.tasks.filter((task) => task.status !== "done").map((task) => task.id), blocked: snapshot.status === "blocked" ? [snapshot.id] : [] };
       })() : undefined;
       return {
