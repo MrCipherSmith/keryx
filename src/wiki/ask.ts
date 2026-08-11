@@ -12,7 +12,7 @@ import { cosine } from "../memory/embedding/index";
 import { collectEntries } from "../memory/store";
 import { jaccard, tokenSet } from "../memory/text";
 import type { MemoryEntry } from "../memory/types";
-import { collectPages } from "./service";
+import { collectPages } from "./collect";
 import type { WikiAskCitation, WikiAskInput, WikiAskResult, WikiPage } from "./types";
 
 const DEFAULT_K = 8;

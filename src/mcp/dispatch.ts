@@ -7,7 +7,8 @@
 
 import { loadMcpConfig, type McpConfig } from "./config";
 import { loadDiscovery, type McpDiscovery } from "./discovery";
-import { buildToolRegistry, type JsonSchema, type ToolEntry } from "./tools";
+import { buildToolRegistry } from "./tools";
+import type { JsonSchema, ToolEntry } from "./types";
 import {
   listResources,
   readResource,

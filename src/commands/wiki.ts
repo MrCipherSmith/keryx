@@ -157,7 +157,7 @@ async function runCollect(args: string[]): Promise<void> {
 
   // Enrichment work-front: component pages still in draft (prose not written).
   // This is what the gdwiki enrichment pass (and the post-commit hook) should target.
-  const { collectPages } = await import("../wiki/service");
+  const { collectPages } = await import("../wiki/collect");
   const drafts = (await collectPages(process.cwd())).filter(
     (page) => page.pageType === "component" && (page.status ?? "draft") === "draft",
   );

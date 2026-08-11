@@ -26,7 +26,16 @@ import {
   providerByName,
   resolveModelsForPicker,
 } from "./providers";
-import type { ShellIO } from "./shell";
+
+type ShellIO = {
+  lines: AsyncIterable<string>;
+  write: (text: string) => void;
+  onTurnStart?: () => void;
+  onTurnEnd?: (full: string) => void;
+  onSystem?: (text: string) => void;
+  /** Flush queued asynchronous notices only while terminal output is safe. */
+  onSafeBoundary?: () => void;
+};
 
 /** A provider detected as usable, with its selectable chat `models`. */
 export interface DetectedProvider {

@@ -16,7 +16,8 @@ import { defaultModelFor, hasCredential, runModelTurn } from "../harness/provide
 import type { ProviderFactory } from "../harness/provider/single-turn";
 import { pathExists } from "../lib/fs";
 import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
-import { collectPages, wikiValidate } from "./service";
+import { collectPages } from "./collect";
+import { wikiValidate } from "./service";
 import type { WikiPage } from "./types";
 
 export type { ProviderFactory } from "../harness/provider/single-turn";

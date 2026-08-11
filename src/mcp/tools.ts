@@ -20,20 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-
-// A minimal JSON-Schema fragment advertised in `tools/list`.
-export type JsonSchema = Record<string, unknown>;
-
-export interface ToolEntry {
-  name: string; // e.g. "gdgraph.affected"
-  module: string; // "gdgraph" — filtered by the manifest (M-11)
-  description: string;
-  inputSchema: JsonSchema;
-  // When true, the tool calls a gate-preserving service method (M-10). Block A
-  // exposes only read-only or report-writing tools; no mutating flow transition.
-  mutating: boolean;
-  invoke(cwd: string, params: Record<string, unknown>): Promise<unknown>;
-}
+import type { JsonSchema, ToolEntry } from "./types";
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];

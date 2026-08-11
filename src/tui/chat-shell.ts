@@ -34,7 +34,7 @@
 // `runShell` is INJECTED rather than imported: `src/commands/shell.ts` imports
 // this module, so importing its runtime values back would close a module cycle.
 // Only its types are imported (erased at compile time).
-import type { ShellDeps, ShellIO } from "../commands/shell";
+import type { ShellDeps, ShellIO } from "../commands/shell-types";
 import type { DetectedProvider } from "../commands/select";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { saveShellConfig } from "../lib/shell-config";

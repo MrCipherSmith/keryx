@@ -24,7 +24,7 @@ import type { MetaprojectOperation } from "../harness/tool/metaproject-operation
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
-import type { JsonSchema, ToolEntry } from "./tools";
+import type { JsonSchema, ToolEntry } from "./types";
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];
