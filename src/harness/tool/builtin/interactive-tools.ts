@@ -20,6 +20,8 @@ import type { NormalizedToolDefinition } from "../../provider/types";
 export interface InteractiveToolResult {
   output: string;
   isError: boolean;
+  /** External content may be shown, but cannot authorize further tools this turn. */
+  untrusted?: boolean;
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */

@@ -94,6 +94,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
       agent: "Add or configure a provider (interactive picker)",
     },
   },
+  {
+    name: "/search-provider",
+    description: "Configure or edit a web search provider",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/search-connect",
+    description: "Select an active tested web search provider",
+    modes: AGENT_ONLY,
+  },
   { name: "/think", description: "Expand the last reasoning block", modes: AGENT_ONLY },
   { name: "/expand", description: "Expand the last tool output block", modes: AGENT_ONLY },
   {

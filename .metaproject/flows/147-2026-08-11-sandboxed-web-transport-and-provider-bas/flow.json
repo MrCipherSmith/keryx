@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 2,
+  "id": "147",
+  "slug": "sandboxed-web-transport-and-provider-bas",
+  "title": "Sandboxed web transport and provider-based web search",
+  "status": "in-progress",
+  "createdAt": "2026-08-11T22:32:37.150Z",
+  "updatedAt": "2026-08-11T23:12:16.292Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e924fc898d8dc5ecb7801343e75dfca2c114a77aee4b86625ec7db2b36b7ef2c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Run focused, integration, and platform verification",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Review, fix findings, prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-11T22:32:37.150Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-11T22:35:13.881Z",
+      "event": "task-added",
+      "detail": "T5: Run focused, integration, and platform verification"
+    },
+    {
+      "at": "2026-08-11T22:35:14.007Z",
+      "event": "task-added",
+      "detail": "T6: Review, fix findings, prepare draft PR"
+    },
+    {
+      "at": "2026-08-11T22:38:54.537Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-11T22:38:54.660Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-11T22:38:54.785Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-11T23:05:31.230Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-11T23:05:31.373Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-11T23:09:16.334Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-11T23:11:51.382Z",
+      "event": "task-done",
+      "detail": "T5: Run focused, integration, and platform verification"
+    },
+    {
+      "at": "2026-08-11T23:12:16.292Z",
+      "event": "task-done",
+      "detail": "T6: Review, fix findings, prepare draft PR"
+    }
+  ]
+}

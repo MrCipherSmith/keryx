@@ -118,7 +118,7 @@ import type {
 } from "../harness/provider/types";
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
-import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell } from "./shell";
+import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell, shellCommand } from "./shell";
 import { blockLabel } from "../lib/md-blocks";
 
 const NO_CAPS: ProviderCapabilities = {
@@ -745,6 +745,26 @@ describe("parseShellCliFlags — default TUI agent shell", () => {
     expect(parseShellCliFlags(["-r"]).resumePick).toBe(true);
     expect(parseShellCliFlags(["-r"]).resumeId).toBeUndefined();
   });
+});
+
+test("shellCommand wires web_search into the agent TUI tool set", async () => {
+  let toolNames: string[] = [];
+  await shellCommand(["--agent", "--provider", "fake", "--model", "fixture-model"], {
+    isTty: true,
+    checkVersion: async () => ({
+      status: "up-to-date",
+      currentVersion: "test",
+      latestVersion: "test",
+      source: "cache",
+    }),
+    launchAgent: async (opts) => {
+      const deps = await opts.makeAgentDeps({ provider: "fake", model: "fixture-model" });
+      toolNames = deps.tools.map((tool) => tool.definition.name);
+      return true;
+    },
+  });
+
+  expect(toolNames).toContain("web_search");
 });
 
 // --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----

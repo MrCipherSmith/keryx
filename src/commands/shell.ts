@@ -37,6 +37,8 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
+import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
+import { createDefaultSearchProviderController } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
@@ -1289,6 +1291,9 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   if (surface !== "readline") {
     const cwd = process.cwd();
     const tuiProviderFactory = realMakeProvider(() => {});
+    // Search credentials stay inside the controller/transport boundary. The
+    // model only sees the read-only `web_search` tool and its redacted result.
+    const searchProviderController = createDefaultSearchProviderController();
     const makeAgentDeps = async (sel: { provider: string; model: string; baseUrl?: string }): Promise<AgentDeps> => {
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
       let orient = "";
@@ -1324,6 +1329,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           ...builtinReadOnlyTools(cwd),
           ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort),
           webFetchTool(),
+          webSearchTool(searchProviderController),
           shellExecTool(cwd),
           createAskUserTool(invokeAskUserHost),
           spawnTool,
@@ -1393,6 +1399,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       await (runtime.launchAgent ?? launchTuiAgentShell)({
         detected: tuiDetected,
         makeAgentDeps,
+        searchController: searchProviderController,
         // `/connect` and `/model` re-probe providers fresh.
         redetect,
         ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
@@ -1486,6 +1493,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       // memory in-process; search_code still falls back to the subprocess runner.
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentCwd = process.cwd();
+      const searchProviderController = createDefaultSearchProviderController();
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
         getParentModel: () => ({
@@ -1504,6 +1512,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
         tools: [
           ...builtinReadOnlyTools(agentCwd),
           ...builtinMetaprojectTools(agentCwd, makeKeryxRunner(agentCwd), metaprojectPort),
+          webSearchTool(searchProviderController),
           shellExecTool(agentCwd),
           createAskUserTool(invokeAskUserHost),
           spawnTool,
