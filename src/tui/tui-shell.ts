@@ -41,6 +41,7 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { runAgentTurn } from "../commands/agent";
 import { buildApprovalContext } from "../commands/agent-approval-context";
+import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage } from "../harness/provider/types";
@@ -101,6 +102,110 @@ import {
   type BlockState,
   type BlockViewOptions,
 } from "./transcript-blocks";
+
+/** Result of a cheap git + gh lookup for sidebar metadata. */
+interface SidebarRepoMetadata {
+  branch?: string;
+  prUrl?: string;
+}
+
+/** Parse a GitHub remote URL into `owner/repo` (if possible). */
+function parseGitHubRemote(remote: string): string | undefined {
+  const trimmed = remote.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      const url = new URL(trimmed);
+      if (url.hostname !== "github.com") {
+        return undefined;
+      }
+      const [owner, repo] = url.pathname.split("/").filter(Boolean);
+      if (!owner || !repo) {
+        return undefined;
+      }
+      return `${owner}/${repo.replace(/\.git$/, "")}`;
+    } catch {
+      return undefined;
+    }
+  }
+
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (sshMatch?.[1] && sshMatch[2]) {
+    return `${sshMatch[1]}/${sshMatch[2].replace(/\.git$/, "")}`;
+  }
+
+  const sshUrlMatch = trimmed.match(/^ssh:\/\/(?:[^@/]+@)?github\.com(?::\d+)?\/([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (sshUrlMatch?.[1] && sshUrlMatch[2]) {
+    return `${sshUrlMatch[1]}/${sshUrlMatch[2]}`;
+  }
+
+  return undefined;
+}
+
+function runGitText(args: string[], cwd: string): string | undefined {
+  try {
+    const proc = spawnSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1200,
+    });
+    if (proc.status !== 0 || proc.error !== undefined) {
+      return undefined;
+    }
+    const out = typeof proc.stdout === "string" ? proc.stdout.trim() : "";
+    return out.length > 0 ? out : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function runGhJson(repo: string, branch: string, cwd: string): string | undefined {
+  try {
+    const proc = spawnSync("gh", ["pr", "view", branch, "--repo", repo, "--json", "url"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 1800,
+    });
+    if (proc.status !== 0 || proc.error !== undefined) {
+      return undefined;
+    }
+    return typeof proc.stdout === "string" ? proc.stdout.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveSidebarMetadata(cwd: string): SidebarRepoMetadata {
+  const branch = runGitText(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+  if (branch === undefined || branch === "HEAD") {
+    return {};
+  }
+
+  const remote = runGitText(["config", "--get", "remote.origin.url"], cwd);
+  const repo = parseGitHubRemote(remote ?? "");
+  if (repo === undefined) {
+    return { branch };
+  }
+
+  const rawPr = runGhJson(repo, branch, cwd);
+  if (rawPr === undefined) {
+    return { branch };
+  }
+
+  try {
+    const parsed = JSON.parse(rawPr) as { url?: unknown };
+    if (typeof parsed.url === "string" && parsed.url.length > 0) {
+      return { branch, prUrl: parsed.url };
+    }
+  } catch {
+    // fall through
+  }
+  return { branch };
+}
 
 /** A resolved provider/model selection. */
 export interface TuiSelection {
@@ -285,6 +390,27 @@ export function mountCwdPanel(otui: OpenTui, r: Renderer, sidebarTop: Box, cwd: 
       content: otui.t`${otui.dim(shortenCwd(cwd, SIDEBAR_TEXT_WIDTH))}`,
     }),
   );
+
+  const metadata = resolveSidebarMetadata(cwd);
+  if (metadata.branch !== undefined) {
+    sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${otui.dim("Branch")}`, marginTop: 1 }));
+    sidebarTop.add(
+      new otui.TextRenderable(r, {
+        id: "sb-branch-v",
+        content: otui.t`${otui.dim(shortenCwd(metadata.branch, SIDEBAR_TEXT_WIDTH))}`,
+      }),
+    );
+  }
+
+  if (metadata.prUrl !== undefined) {
+    sidebarTop.add(new otui.TextRenderable(r, { id: "sb-pr-k", content: otui.t`${otui.dim("PR")}`, marginTop: 1 }));
+    sidebarTop.add(
+      new otui.TextRenderable(r, {
+        id: "sb-pr-v",
+        content: otui.t`${otui.dim(shortenCwd(metadata.prUrl, SIDEBAR_TEXT_WIDTH))}`,
+      }),
+    );
+  }
 }
 
 /** Cumulative-counter sinks the shell owns; `attachUsageIo` drives them. */

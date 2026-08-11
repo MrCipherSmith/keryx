@@ -72,3 +72,14 @@ test("assembled answer carries a Sources section listing the citation paths", as
     expect(result.answerMarkdown).toContain(citation.path);
   }
 });
+
+test("answers are supported for Russian questions", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "wiki", "architecture", "payments-ru.md"),
+    "# Счет пользователя\n\n## Summary\n\nСчет создается в конце дня после успешной оплаты.\n",
+    "utf8",
+  );
+  const result = await wikiAsk({ cwd: root, question: "Как работает счет" });
+  expect(result.citations.length).toBeGreaterThan(0);
+  expect(result.answerMarkdown).toContain("Счет");
+});

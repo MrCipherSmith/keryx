@@ -50,6 +50,27 @@ test("finds related tests by naming convention", async () => {
   ]);
 });
 
+test("finds related tests by import path when naming is unrelated", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-testing-related-import");
+  await reset(root);
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  await mkdir(path.join(root, "src", "policy"), { recursive: true });
+  await mkdir(path.join(root, "src", "features", "checks"), { recursive: true });
+  await writeFile(
+    path.join(root, "src", "policy", "types.ts"),
+    "export type PolicyDecision = \"allow\" | \"deny\";\n",
+  );
+  await writeFile(
+    path.join(root, "src", "features", "checks", "policy-import.test.ts"),
+    "import type { PolicyDecision } from \"../../policy/types\";\n\ntest(\"policy\", () => {});\n",
+  );
+  await analyzeTestingProject(root);
+
+  await expect(findRelatedTests(root, "src/policy/types.ts")).resolves.toEqual([
+    "src/features/checks/policy-import.test.ts",
+  ]);
+});
+
 test("runTesting writes normalized report", async () => {
   const root = uniqueTestRoot(tmpdir(), "keryx-testing-run");
   await reset(root);

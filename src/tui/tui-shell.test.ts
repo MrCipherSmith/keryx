@@ -366,6 +366,41 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   setup.renderer.destroy();
 });
 
+otuiTest("G-2: the shipped sidebar shows the current git branch", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-tui-git-"));
+  Bun.spawnSync(["git", "init", "-q"], { cwd, stdout: "ignore", stderr: "ignore" });
+  Bun.spawnSync(["git", "checkout", "-b", "feature/sidebar-ui"], { cwd, stdout: "ignore", stderr: "ignore" });
+  Bun.spawnSync(["git", "config", "user.name", "Keryx Test"], { cwd, stdout: "ignore", stderr: "ignore" });
+  Bun.spawnSync(["git", "config", "user.email", "test@example.com"], { cwd, stdout: "ignore", stderr: "ignore" });
+  await writeFile(join(cwd, "readme.md"), "hello", "utf8");
+  Bun.spawnSync(["git", "add", "readme.md"], { cwd, stdout: "ignore", stderr: "ignore" });
+  Bun.spawnSync(["git", "commit", "-m", "Init"], { cwd, stdout: "ignore", stderr: "ignore" });
+
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "s/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  try {
+    mountCwdPanel(otui.core, setup.renderer, chrome.sidebarTop, cwd);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+
+    expect(frame).toContain("Directory");
+    expect(frame).toContain("Branch");
+    expect(frame).toContain("feature/sidebar-ui");
+    expect(frame).not.toContain("https://github.com/");
+  } finally {
+    chrome.destroy();
+    setup.renderer.destroy();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 // --- gap G-1: per-turn AND cumulative usage, not one instead of the other ----
 
 otuiTest("G-1: attachUsageIo keeps the per-turn line AND adds the cumulative counter", async () => {

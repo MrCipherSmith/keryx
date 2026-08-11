@@ -39,6 +39,7 @@ const SOURCE_FILE_RE = /\.[cm]?[tj]sx?$/;
 const CONFIG_FILE_RE = /(^|\/)(bunfig\.toml|vitest\.config\.[cm]?[tj]s|jest\.config\.[cm]?[tj]s|playwright\.config\.[cm]?[tj]s|cypress\.config\.[cm]?[tj]s|tsconfig.*\.json)$/;
 const CI_FILE_RE = /(^|\/)(\.github\/workflows\/.*\.ya?ml|\.gitlab-ci\.yml)$/;
 const INSTRUCTION_FILE_RE = /(^|\/)(AGENTS\.md|agents\.md|CLAUDE\.md|claude\.md|docs\/.*\.md|\.metaproject\/rules\/.*\.md|\.metaproject\/wiki\/.*\.md)$/;
+const IMPORT_RE = /(?:\bimport\s*\(\s*["'`]([^"'`]+)["'`]\s*\)|\bimport\s+[^"'`;\n]*\s+from\s+["'`]([^"'`]+)["'`]|\bimport\s+["'`]([^"'`]+)["'`]|\brequire\(\s*["'`]([^"'`]+)["'`]\s*\))/g;
 
 const DEFAULT_TESTING_CONFIG: TestingConfig = {
   schemaVersion: 1,
@@ -316,7 +317,10 @@ export async function loadCompatibleTestingReport(
 
 export async function findRelatedTests(cwd: string, target: string): Promise<string[]> {
   const context = (await loadTestingContext(cwd)) ?? (await analyzeTestingProject(cwd));
-  return relatedByNamingAndDirectory(normalizePath(target), context.testFiles);
+  const normalized = normalizePath(target);
+  const naming = relatedNaming(normalized, context.testFiles);
+  const imported = await findTestsByImportedTargets(cwd, [normalized], context.testFiles);
+  return Array.from(new Set([...naming, ...imported])).sort();
 }
 
 async function ensureContext(cwd: string): Promise<TestingContext> {
@@ -537,7 +541,7 @@ function buildRecommendations(input: {
   return recommendations;
 }
 
-const BASE_STRATEGIES = ["runner", "gdgraph", "naming"];
+const BASE_STRATEGIES = ["runner", "gdgraph", "naming", "imports"];
 
 export async function selectChangedTests(
   cwd: string,
@@ -552,6 +556,7 @@ export async function selectChangedTests(
 }> {
   const fallbackWhenEmpty = config.changedSelection.fallbackWhenEmpty;
   const changedFiles = await getChangedFiles(cwd, since ?? "HEAD");
+  const importRelated = await findTestsByImportedTargets(cwd, changedFiles, context.testFiles);
 
   // Map-first selection ONLY when the coverageMap capability is enabled in the
   // manifest AND a coverage map is present. Otherwise the static path below runs
@@ -579,6 +584,9 @@ export async function selectChangedTests(
         selected.add(related);
       }
     }
+    for (const related of importRelated) {
+      selected.add(related);
+    }
     return {
       selectedTests: Array.from(selected).sort(),
       changedFiles,
@@ -589,6 +597,9 @@ export async function selectChangedTests(
 
   // Static path — byte-identical to pre-D2.
   const selected = staticChangedSelection(changedFiles, context.testFiles);
+  for (const related of importRelated) {
+    selected.add(related);
+  }
   if (selected.size === 0 && fallbackWhenEmpty === "full") {
     return {
       selectedTests: context.testFiles,
@@ -650,32 +661,78 @@ async function getChangedFiles(cwd: string, since: string): Promise<string[]> {
     .filter((file) => file.length > 0 && !isIgnoredProjectFile(file));
 }
 
+async function findTestsByImportedTargets(
+  cwd: string,
+  targets: string[],
+  testFiles: string[],
+): Promise<Set<string>> {
+  if (targets.length === 0 || testFiles.length === 0) {
+    return new Set();
+  }
+  const targetKeys = new Set(targets.map((target) => modulePathKey(normalizePath(target))));
+  const selected = new Set<string>();
+  for (const testFile of testFiles) {
+    const absoluteTest = path.join(cwd, testFile);
+    if (!(await pathExists(absoluteTest))) {
+      continue;
+    }
+    const content = await readFile(absoluteTest, "utf8");
+    const imports = extractImportPaths(content);
+    if (imports.length === 0) {
+      continue;
+    }
+    const importedFromTest = new Set(imports.map((importPath) => resolveImportPath(cwd, testFile, importPath)).filter(Boolean) as string[]);
+    for (const importedPath of importedFromTest) {
+      if (targetKeys.has(importedPath)) {
+        selected.add(testFile);
+        break;
+      }
+    }
+  }
+  return selected;
+}
+
+function extractImportPaths(text: string): string[] {
+  const imports = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = IMPORT_RE.exec(text)) !== null) {
+    const matched = match[1] ?? match[2] ?? match[3] ?? match[4];
+    if (matched) {
+      imports.add(matched.trim());
+    }
+  }
+  return Array.from(imports);
+}
+
+function resolveImportPath(cwd: string, testFile: string, importPath: string): string | null {
+  if (!importPath.startsWith(".")) {
+    return null;
+  }
+  const importerDir = path.dirname(testFile);
+  const absoluteResolved = path.resolve(path.join(cwd, importerDir), importPath);
+  const relative = path.relative(cwd, absoluteResolved);
+  if (relative.startsWith(`..${path.sep}`) || relative === "..") {
+    return null;
+  }
+  const relativeNormalized = normalizePath(relative);
+  if (relativeNormalized.startsWith("..")) {
+    return null;
+  }
+  return modulePathKey(relativeNormalized);
+}
+
+function modulePathKey(file: string): string {
+  return normalizePath(file)
+    .replace(/\.(?:d\.)?(?:[cm]?[tj]sx?|jsx?|mjs|cjs|cts|mts)$/i, "")
+    .replace(/\/index$/, "");
+}
+
 function isIgnoredProjectFile(file: string): boolean {
   return (
     file.startsWith(".tmp-") ||
     file.includes("/.tmp-") ||
     file.startsWith(".metaproject/data/")
   );
-}
-
-function relatedByNamingAndDirectory(target: string, testFiles: string[]): string[] {
-  const normalized = normalizePath(target);
-  const ext = path.extname(normalized);
-  const withoutExt = ext ? normalized.slice(0, -ext.length) : normalized;
-  const base = path.basename(withoutExt);
-  const dir = path.dirname(normalized);
-  return testFiles
-    .filter((file) => {
-      const fileDir = path.dirname(file);
-      const fileBase = path.basename(file);
-      return (
-        file.startsWith(`${withoutExt}.`) ||
-        file.includes(`${withoutExt}.`) ||
-        (fileDir === dir && fileBase.startsWith(`${base}.`)) ||
-        (fileDir.startsWith(dir) && fileBase.includes(base))
-      );
-    })
-    .sort();
 }
 
 function resolveTestCommand(
