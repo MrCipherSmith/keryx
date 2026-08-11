@@ -5,6 +5,22 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.26] — 2026-08-12
+
+### Added
+
+- **Sandboxed web transport and provider-based search.** Agent mode now offers
+  `web_fetch` and `web_search` through a fail-closed, DNS-pinned sandbox worker.
+  SearXNG, Brave Search, Tavily, and Exa are configured through the TUI; only a
+  successfully tested provider can become active.
+- **Local SearXNG guide.** `/search-provider` supplies editable localhost URL
+  and port defaults, with an installation guide for a local Docker deployment.
+
+### Security
+
+- **External web data is tainted.** It is bounded, redacted, provenance-labelled,
+  and cannot authorize later agent tool calls across turns or session compaction.
+
 ## [0.2.25] — 2026-08-11
 
 ### Changed
