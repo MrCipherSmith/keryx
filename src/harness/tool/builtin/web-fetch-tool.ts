@@ -1,4 +1,7 @@
 import { lookup as systemLookup } from "node:dns/promises";
+import { request as httpsRequest } from "node:https";
+import { isIP } from "node:net";
+import { Readable } from "node:stream";
 import { detectInjection } from "../../../security/detect/injection";
 import { redactSensitiveText } from "../../../security/redact";
 import { isLoopbackHost, isPrivateEgressHost } from "../../mutation/guard";
@@ -20,6 +23,14 @@ function defaultLookup(host: string): Promise<readonly { address: string }[]> {
   return systemLookup(host, { all: true }).then((entries) => entries.map(({ address }) => ({ address })));
 }
 
+function isBlockedAddress(address: string): boolean {
+  const normalized = address.replace(/^\[|\]$/g, "").toLowerCase();
+  if (isLoopbackHost(normalized) || isPrivateEgressHost(normalized)) return true;
+  // ULA, link-local, unspecified and IPv4-mapped IPv6 must not become an
+  // egress bypass just because the legacy lexical guard only knows IPv4 forms.
+  return normalized === "::" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe8") || normalized.startsWith("fe9") || normalized.startsWith("fea") || normalized.startsWith("feb") || normalized.startsWith("::ffff:") && isBlockedAddress(normalized.slice(7));
+}
+
 function invalidUrl(raw: string): URL | undefined {
   try {
     const url = new URL(raw);
@@ -30,18 +41,47 @@ function invalidUrl(raw: string): URL | undefined {
   }
 }
 
-async function validateTarget(url: URL, lookup: HostLookup): Promise<string | undefined> {
+async function validateTarget(url: URL, lookup: HostLookup): Promise<{ address: string } | { reason: string }> {
   const host = url.hostname;
-  if (isLoopbackHost(host) || isPrivateEgressHost(host)) return "private or loopback destination is not allowed";
+  if (isBlockedAddress(host)) return { reason: "private or loopback destination is not allowed" };
   try {
     const addresses = await lookup(host);
-    if (addresses.length === 0 || addresses.some(({ address }) => isLoopbackHost(address) || isPrivateEgressHost(address))) {
-      return "destination does not resolve exclusively to public addresses";
+    if (addresses.length === 0 || addresses.some(({ address }) => isBlockedAddress(address))) {
+      return { reason: "destination does not resolve exclusively to public addresses" };
     }
+    return { address: addresses[0]!.address };
   } catch {
-    return "destination DNS lookup failed";
+    return { reason: "destination DNS lookup failed" };
   }
-  return undefined;
+}
+
+function headersFor(response: import("node:http").IncomingHttpHeaders): Headers {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(response)) {
+    if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+  }
+  return headers;
+}
+
+function pinnedFetch(url: URL, address: string, signal: AbortSignal): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(url, {
+      method: "GET",
+      lookup: (_host, _options, callback) => callback(null, address, isIP(address)),
+    });
+    const abort = () => request.destroy(new Error("aborted"));
+    if (signal.aborted) abort();
+    signal.addEventListener("abort", abort, { once: true });
+    request.once("error", reject);
+    request.once("response", (response) => {
+      signal.removeEventListener("abort", abort);
+      resolve(new Response(Readable.toWeb(response) as ReadableStream, {
+        status: response.statusCode ?? 502,
+        headers: headersFor(response.headers),
+      }));
+    });
+    request.end();
+  });
 }
 
 async function readBoundedText(response: Response): Promise<InteractiveToolResult> {
@@ -99,12 +139,14 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
       let url = typeof input.url === "string" ? invalidUrl(input.url) : undefined;
       if (!url) return { output: "web_fetch: url must be an absolute HTTPS URL without credentials", isError: true };
       for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-        const denied = await validateTarget(url, lookup);
-        if (denied) return { output: `web_fetch: ${denied}`, isError: true };
+        const target = await validateTarget(url, lookup);
+        if ("reason" in target) return { output: `web_fetch: ${target.reason}`, isError: true };
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const response: Response = await fetchFn(url, { method: "GET", redirect: "manual", signal: controller.signal });
+          const response: Response = deps.fetch
+            ? await fetchFn(url, { method: "GET", redirect: "manual", signal: controller.signal })
+            : await pinnedFetch(url, target.address, controller.signal);
           if (response.status >= 300 && response.status < 400) {
             const location: string | null = response.headers.get("location");
             url = location ? invalidUrl(new URL(location, url).toString()) : undefined;
@@ -112,7 +154,7 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
             continue;
           }
           if (!response.ok) return { output: `web_fetch: request failed with HTTP ${response.status}`, isError: true };
-          if (!/^text\/(?:html|plain)|application\/(?:json|xml|xhtml\+xml)/i.test(response.headers.get("content-type") ?? "text/plain")) {
+          if (!/^(?:text\/(?:html|plain)|application\/(?:json|xml|xhtml\+xml))(?:\s*;|$)/i.test(response.headers.get("content-type") ?? "text/plain")) {
             return { output: "web_fetch: response is not text content", isError: true };
           }
           return await readBoundedText(response);

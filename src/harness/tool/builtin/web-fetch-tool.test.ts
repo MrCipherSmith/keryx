@@ -92,3 +92,23 @@ test("web_fetch rejects failed/private DNS, non-text content, and oversized resp
   });
   expect((await oversized.invoke({ url: "https://example.com" })).isError).toBe(true);
 });
+
+test("web_fetch rejects IPv6 private and link-local addresses before fetching", async () => {
+  let calls = 0;
+  for (const address of ["fd00::2", "fe80::2"]) {
+    const tool = webFetchTool({
+      lookup: async () => [{ address }],
+      fetch: async () => { calls += 1; return new Response("no"); },
+    });
+    expect((await tool.invoke({ url: "https://public.example" })).isError).toBe(true);
+  }
+  expect(calls).toBe(0);
+});
+
+test("web_fetch requires an exact readable content type", async () => {
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    fetch: async () => new Response("binary", { headers: { "content-type": "image/pngapplication/json" } }),
+  });
+  expect((await tool.invoke({ url: "https://example.com" })).isError).toBe(true);
+});
