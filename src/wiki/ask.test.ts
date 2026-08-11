@@ -83,3 +83,13 @@ test("answers are supported for Russian questions", async () => {
   expect(result.citations.length).toBeGreaterThan(0);
   expect(result.answerMarkdown).toContain("Счет");
 });
+
+test("falls back to translation when Russian query matches English corpus", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "wiki", "architecture", "gate.md"),
+    "# Security gate\n\nThe security gate validates all risky operations and returns allow/deny decisions.\n",
+    "utf8",
+  );
+  const result = await wikiAsk({ cwd: root, question: "Как работает шлюз" });
+  expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/gate.md" }));
+});

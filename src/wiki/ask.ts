@@ -17,6 +17,43 @@ import type { WikiAskCitation, WikiAskInput, WikiAskResult, WikiPage } from "./t
 
 const DEFAULT_K = 8;
 const EXCERPT_MAX = 240;
+const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
+const RUSSIAN_TO_ENGLISH: Record<string, string> = {
+  "как": "how",
+  "как-то": "how",
+  "какой": "which",
+  "какая": "which",
+  "какие": "which",
+  "что": "what",
+  "это": "it",
+  "работает": "works",
+  "работать": "work",
+  "работают": "work",
+  "почему": "why",
+  "когда": "when",
+  "где": "where",
+  "есть": "is",
+  "происходит": "happens",
+  "шлюз": "gate",
+  "gate": "gate",
+  "модель": "model",
+  "команда": "command",
+  "команды": "commands",
+  "команду": "command",
+  "ошибка": "error",
+  "ошибки": "errors",
+  "безопасность": "security",
+  "политика": "policy",
+  "политики": "policy",
+  "ограничение": "limit",
+  "ограничения": "limits",
+  "доступ": "access",
+  "доступа": "access",
+  "данные": "data",
+  "данных": "data",
+  "память": "memory",
+  "памяти": "memory",
+};
 
 type Candidate = {
   path: string;
@@ -28,22 +65,19 @@ type Candidate = {
 
 export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
   const k = input.k && input.k > 0 ? input.k : DEFAULT_K;
-  const questionTokens = tokenSet(input.question);
-
   const candidates = [
     ...(await wikiCandidates(input.cwd)),
     ...(await memoryCandidates(input.cwd)),
   ];
 
-  // Deterministic lexical scoring: token overlap (Jaccard) with the question.
-  // Tie-break by path so the ordering is stable regardless of collection order.
-  const scored = candidates
-    .map((candidate) => ({
-      candidate,
-      score: round(jaccard(questionTokens, tokenSet(candidate.text))),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.candidate.path.localeCompare(b.candidate.path));
+  let scored = scoreByQuestion(input.question, candidates);
+
+  if (scored.length === 0 && CYRILLIC_RE.test(input.question)) {
+    const translatedQuestion = translateRussianQuestion(input.question);
+    if (translatedQuestion !== input.question) {
+      scored = scoreByQuestion(translatedQuestion, candidates);
+    }
+  }
 
   let top = scored.slice(0, k);
 
@@ -65,6 +99,39 @@ export async function wikiAsk(input: WikiAskInput): Promise<WikiAskResult> {
     citations,
     answerMarkdown: assembleAnswer(input.question, citations),
   };
+}
+
+function scoreByQuestion(question: string, candidates: Candidate[]): Array<{ candidate: Candidate; score: number }> {
+  const questionTokens = tokenSet(question);
+  return candidates
+    .map((candidate) => ({
+      candidate,
+      score: round(jaccard(questionTokens, tokenSet(candidate.text))),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.candidate.path.localeCompare(b.candidate.path));
+}
+
+function translateRussianQuestion(question: string): string {
+  const questionTokens = question.toLowerCase().match(/\p{L}+/gu);
+  if (!questionTokens) {
+    return question;
+  }
+  const translatedTokens = questionTokens.map((token) => {
+    const directMatch = RUSSIAN_TO_ENGLISH[token];
+    if (directMatch) {
+      return directMatch;
+    }
+
+    const stemmed = token
+      .replace(/(?:[аеёиоуыэюя]м|[ауя]ми|[ауомие]м|[а-я]+ние)$/u, "")
+      .replace(/(?:ов|ы|а|я|и|е|ю|ь)$/u, "");
+
+    return RUSSIAN_TO_ENGLISH[stemmed] ?? token;
+  });
+
+  const translated = translatedTokens.join(" ");
+  return translated === question.toLowerCase() ? question : translated;
 }
 
 async function wikiCandidates(cwd: string): Promise<Candidate[]> {
