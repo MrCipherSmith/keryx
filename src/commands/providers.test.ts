@@ -5,6 +5,8 @@ import {
   fetchOpenAiCompatModelsDetailed,
   isProviderPlatformSupported,
   providerByName,
+  providerBaseUrlEnvKey,
+  resolveProviderBaseUrl,
   resolveModelsForPicker,
 } from "./providers";
 
@@ -39,6 +41,24 @@ test("rapid-mlx is local/macOS-only and keyless", () => {
   expect(rapid?.models).toContain("qwen3.5-9b-4bit");
   expect(rapid?.requiresApiKey).toBe(false);
   expect(rapid?.platforms).toEqual(["darwin"]);
+});
+
+test("provider endpoint override uses a per-provider environment variable", () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  expect(providerBaseUrlEnvKey("rapid-mlx")).toBe("KERYX_RAPID_MLX_BASE_URL");
+  expect(resolveProviderBaseUrl(rapid!, { KERYX_RAPID_MLX_BASE_URL: "http://127.0.0.1:8000/" })).toBe(
+    "http://127.0.0.1:8000",
+  );
+});
+
+test("provider endpoint override rejects malformed and credential-bearing URLs", () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  expect(resolveProviderBaseUrl(rapid!, { KERYX_RAPID_MLX_BASE_URL: "not-a-url" })).toBe(rapid!.baseUrl);
+  expect(resolveProviderBaseUrl(rapid!, { KERYX_RAPID_MLX_BASE_URL: "https://user:secret@example.test" })).toBe(
+    rapid!.baseUrl,
+  );
 });
 
 test("rapid-mlx is only available on darwin when platform filtering is applied", () => {

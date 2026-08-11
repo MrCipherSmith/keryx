@@ -57,6 +57,29 @@ export function isProviderPlatformSupported(
 export const DEFAULT_CHAT_PATH = "/v1/chat/completions";
 export const DEFAULT_MODELS_PATH = "/v1/models";
 
+/** Environment variable used to override a built-in provider's API endpoint. */
+export function providerBaseUrlEnvKey(providerName: string): string {
+  return `KERYX_${providerName.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_BASE_URL`;
+}
+
+/** Resolve a provider endpoint from a safe environment override when present. */
+export function resolveProviderBaseUrl(
+  provider: OpenAiCompatProvider,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const override = env[providerBaseUrlEnvKey(provider.name)]?.trim();
+  if (override === undefined || override.length === 0) return provider.baseUrl;
+  try {
+    const url = new URL(override);
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username.length > 0 || url.password.length > 0) {
+      return provider.baseUrl;
+    }
+    return override.replace(/\/+$/, "");
+  } catch {
+    return provider.baseUrl;
+  }
+}
+
 /**
  * The registry, in picker order. All are ALWAYS offered (a key is prompted +
  * persisted in-TUI when absent). Curated `models` are a fallback only — the
@@ -254,7 +277,7 @@ export async function fetchOpenAiCompatModelsDetailed(
  */
 export async function resolveModelsForPicker(
   fetchFn: typeof fetch,
-  provider: { name: string; models: string[]; envKey?: string },
+  provider: { name: string; models: string[]; baseUrl?: string; envKey?: string },
   env: Record<string, string | undefined> = process.env,
   opts?: { timeoutMs?: number },
 ): Promise<ModelsResolveResult> {
@@ -265,5 +288,10 @@ export async function resolveModelsForPicker(
   const envKey = provider.envKey ?? compat.envKey;
   const raw = envKey === undefined ? undefined : env[envKey];
   const apiKey = typeof raw === "string" && raw.length > 0 ? raw : undefined;
-  return fetchOpenAiCompatModelsDetailed(fetchFn, compat, apiKey, opts);
+  return fetchOpenAiCompatModelsDetailed(
+    fetchFn,
+    { ...compat, ...(provider.baseUrl !== undefined ? { baseUrl: provider.baseUrl } : {}) },
+    apiKey,
+    opts,
+  );
 }

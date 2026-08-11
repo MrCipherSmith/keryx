@@ -24,6 +24,7 @@ import {
   fetchOpenAiCompatModels,
   isProviderPlatformSupported,
   providerByName,
+  resolveProviderBaseUrl,
   resolveModelsForPicker,
 } from "./providers";
 
@@ -188,7 +189,7 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
     detected.push({
       name: p.name,
       models: [...p.models],
-      baseUrl: p.baseUrl,
+      baseUrl: resolveProviderBaseUrl(p, deps.env),
       label: p.label,
       ...(p.chatPath !== undefined ? { chatPath: p.chatPath } : {}),
       ...(p.modelsPath !== undefined ? { modelsPath: p.modelsPath } : {}),

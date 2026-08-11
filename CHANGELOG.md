@@ -5,6 +5,15 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.23] — 2026-08-11
+
+### Added
+
+- **Configurable OpenAI-compatible provider endpoints.** Override any built-in
+  provider URL with `KERYX_<PROVIDER>_BASE_URL`; for example,
+  `KERYX_RAPID_MLX_BASE_URL=http://127.0.0.1:8010`. The selected endpoint is
+  also used to discover the provider's live model list.
+
 ## [0.2.22] — 2026-08-11
 
 ### Fixed

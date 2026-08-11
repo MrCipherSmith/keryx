@@ -10,7 +10,7 @@
 // Pure construction: `makeProvider` only CONSTRUCTS a provider — it never calls
 // `opts.fetch` (no network merely by selecting a provider). Deterministic and
 // offline aside from the credential read from `opts.env ?? process.env`.
-import { providerByName } from "../../commands/providers";
+import { providerByName, resolveProviderBaseUrl } from "../../commands/providers";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
@@ -81,7 +81,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       apiKey?: string;
     } = {
       network: true,
-      baseUrl: opts.baseUrl ?? compat.baseUrl,
+      baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(compat, env),
       ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
