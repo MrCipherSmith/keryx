@@ -164,7 +164,9 @@ function plantFifo(file: string): boolean {
  * literally becomes `KERYX_DATA_"/tmp/…"` and the probe fails to parse. Pass
  * environment through `env` instead of writing it into the source.
  */
-async function runReader(call: string, env?: Record<string, string>): Promise<{ exit: number; out: string }> {
+const PROBE_TIMEOUT_MS = 5_000;
+
+async function runReader(call: string, env?: Record<string, string>): Promise<{ exit: number; out: string; timedOut: boolean }> {
   const source = call
     .replaceAll("SRC", path.join(import.meta.dir, ".."))
     .replaceAll("DIR", JSON.stringify(configDir));
@@ -175,11 +177,24 @@ async function runReader(call: string, env?: Record<string, string>): Promise<{ 
     stderr: "pipe",
     ...(env !== undefined ? { env: { ...process.env, ...env } } : {}),
   });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timed-out">((resolve) => {
+    timer = setTimeout(() => resolve("timed-out"), PROBE_TIMEOUT_MS);
+  });
+  // Await process termination before draining pipes. An aborting Bun child can
+  // leave a pipe open, which used to make this harness consume the outer 60 s
+  // test timeout despite the child itself being the subject under test.
+  const settled = await Promise.race([proc.exited, timeout]);
+  if (timer !== undefined) clearTimeout(timer);
+  if (settled === "timed-out") {
+    proc.kill();
+    await proc.exited;
+    return { exit: -1, out: "probe timed out", timedOut: true };
+  }
   const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   // Read from the process, never through a pipe: `process.exitCode = undefined`
   // does not reset in Bun and a piped read has produced a false green here.
-  const exit = await proc.exited;
-  return { exit, out: `${out}${err}` };
+  return { exit: settled, out: `${out}${err}`, timedOut: false };
 }
 
 beforeEach(() => {
@@ -211,12 +226,13 @@ describe("every reader of the shared config directory survives an oversized file
     // Reads the oversized file with the RAW call these readers used to make.
     plantOversized("auth.json", 3 * 1024 * 1024 * 1024);
 
-    const { exit } = await runReader(
+    const { exit, timedOut } = await runReader(
       `const { readFileSync } = await import("node:fs");
        const path = await import("node:path");
        readFileSync(path.join(DIR, "auth.json"), "utf8");`,
     );
 
+    expect(timedOut).toBe(false);
     // The raw read aborts. If this ever starts exiting 0, Bun has changed and
     // the bound may no longer be load-bearing — which is worth knowing.
     expect(exit).not.toBe(0);
