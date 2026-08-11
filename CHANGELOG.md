@@ -5,6 +5,13 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.21] — 2026-08-11
+
+### Fixed
+
+- **Release verification for changed-test selection.** Updated stale test expectations
+  for the existing `imports` selection strategy, restoring the release test gate.
+
 ## [0.2.20] — 2026-08-11
 
 ### Added
