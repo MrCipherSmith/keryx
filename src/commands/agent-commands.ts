@@ -91,7 +91,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // command users expect when changing the active provider mid-session.
     modes: BOTH,
     modeDescriptions: {
-      agent: "Switch provider / API key (interactive picker)",
+      agent: "Add or configure a provider (interactive picker)",
     },
   },
   { name: "/think", description: "Expand the last reasoning block", modes: AGENT_ONLY },
