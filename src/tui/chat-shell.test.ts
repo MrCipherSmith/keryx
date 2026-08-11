@@ -224,6 +224,23 @@ otuiTest("AC10: a chat turn runs end to end through the real runShell and the re
   h.destroy();
 });
 
+otuiTest("multiline input shows pasted placeholder and submits once", async () => {
+  const otui = requireOtui();
+  const h = await mountChat(otui, { replies: ["ok"] });
+
+  h.handle.chrome.input.value = "line one\nline two\nline three";
+  await h.flush();
+  h.mockInput.pressEnter();
+  await settle(h);
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("[pasted 3 lines]");
+  expect(frame).not.toContain("line one");
+  expect(h.handle.chrome.input.value).toBe("");
+
+  h.destroy();
+});
+
 otuiTest("a turn settling never steals focus from a `/` dropdown opened while it streamed", async () => {
   const otui = requireOtui();
   // A driver whose turn is held open by the test, so the `/` menu can be opened

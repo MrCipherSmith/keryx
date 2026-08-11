@@ -365,9 +365,19 @@ export async function mountChatShell(
     sbModel.content = otui.t`${otui.dim(label())}`;
   };
 
+  const summarizeSubmittedLine = (line: string): string => {
+    const normalized = line.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const count = normalized.split("\n").filter((linePart) => linePart.length > 0).length;
+    if (count <= 1) {
+      return line;
+    }
+    return `[pasted ${count} lines]`;
+  };
+
   const bridge = createChatBridge({
     onAccepted: (line) => {
-      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line });
+      const displayLine = line.startsWith("/") ? line : summarizeSubmittedLine(line);
+      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line: displayLine });
       if (!line.startsWith("/")) {
         seen.push({ content: line });
         paintContext();

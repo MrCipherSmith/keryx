@@ -650,3 +650,23 @@ otuiTest("AC1: composer submissions and `/`-menu selections both reach the submi
   expect(h.chrome.input.value).toBe("");
   h.destroy();
 });
+
+otuiTest("AC1: multiline paste inserts as one composer value and submits once", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const submitted: string[] = [];
+  h.chrome.onSubmit((line) => {
+    submitted.push(line);
+  });
+
+  await h.mockInput.pasteBracketedText("first line\nsecond line\nthird");
+  await h.flush();
+  expect(submitted).toEqual([]);
+  expect(h.chrome.input.value).toBe("first line\nsecond line\nthird");
+
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(submitted).toEqual(["first line\nsecond line\nthird"]);
+  expect(h.chrome.input.value).toBe("");
+  h.destroy();
+});

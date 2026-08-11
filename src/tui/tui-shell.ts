@@ -1626,7 +1626,16 @@ export async function launchTuiAgentShell(opts: {
     let activeSides = 0;
     const MAX_SIDE_WORKERS = 3;
 
-    const spawnSideWorker = (question: string): void => {
+    const summarizeSubmittedLine = (line: string): string => {
+      const normalized = line.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const count = normalized.split("\n").filter((linePart) => linePart.length > 0).length;
+      if (count <= 1) {
+        return line;
+      }
+      return `[pasted ${count} lines]`;
+    };
+
+    const spawnSideWorker = (question: string, displayQuestion = question): void => {
       if (activeSides >= MAX_SIDE_WORKERS) {
         transcript.add(
           new otui.TextRenderable(r, {
@@ -1664,7 +1673,7 @@ export async function launchTuiAgentShell(opts: {
       );
       appendUserEcho(otui, r, transcript, {
         id: `side-q${uid++}`,
-        line: question,
+        line: displayQuestion,
         borderColor: "#5a3a6a",
         marginTop: 0,
       });
@@ -1761,6 +1770,7 @@ export async function launchTuiAgentShell(opts: {
       if (line.length === 0) {
         return;
       }
+      const displayLine = summarizeSubmittedLine(line);
 
       // While main is in progress: control slash still works; anything else → side worker.
       // "In progress" is the chrome's own spinner state, which `startBusy` /
@@ -1798,7 +1808,7 @@ export async function launchTuiAgentShell(opts: {
           );
           return;
         }
-        spawnSideWorker(line);
+        spawnSideWorker(line, displayLine);
         return;
       }
 
@@ -1919,7 +1929,7 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(helpText());
         return;
       }
-      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line });
+      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line: displayLine });
       transcript.add(
         new otui.TextRenderable(r, {
           id: `h${uid++}`,

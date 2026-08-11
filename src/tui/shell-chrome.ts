@@ -532,8 +532,8 @@ export async function createShellChrome(
     // are inverted).
     keyBindings: [
       { name: "return", action: "submit" },
-      { name: "linefeed", action: "submit" },
       { name: "kpenter", action: "submit" },
+      { name: "linefeed", action: "newline" },
       { name: "return", shift: true, action: "newline" },
       { name: "linefeed", shift: true, action: "newline" },
       { name: "kpenter", shift: true, action: "newline" },
