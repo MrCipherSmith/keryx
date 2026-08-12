@@ -3,17 +3,42 @@
   "id": "149",
   "slug": "shared-agent-context-phase-3-proposal-an",
   "title": "Shared Agent Context — Phase 3: Proposal and review lifecycle",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-11T23:32:20.044Z",
-  "updatedAt": "2026-08-12T00:04:19.526Z",
+  "updatedAt": "2026-08-12T00:46:36.969Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:16a36fefdacc1a523b8fd9e60b060d3eb13c8b5db4dfdce4656bcb8de5c6152e",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-12T00:46:34.697Z",
+      "note": "Server-issued explicit wrap-up provenance produces immutable schema-valid proposal without raw payload."
+    },
+    "AC2": {
+      "at": "2026-08-12T00:46:34.765Z",
+      "note": "Causal append-only ledger and same-key terminal replay are covered by lifecycle tests."
+    },
+    "AC3": {
+      "at": "2026-08-12T00:46:34.832Z",
+      "note": "Pending write-intent, bound guarded-owner receipt and durable recovery gate accepted exactly once."
+    },
+    "AC4": {
+      "at": "2026-08-12T00:46:34.900Z",
+      "note": "Failed/stale/denied/spoofed/revoked/cross-workspace/TOCTOU paths do not mutate targets."
+    },
+    "AC5": {
+      "at": "2026-08-12T00:46:34.968Z",
+      "note": "Reject/dismiss/stale paths are audit-only and SAC has no Flow mutation path."
+    },
+    "AC6": {
+      "at": "2026-08-12T00:46:35.036Z",
+      "note": "CLI subprocess and real stdio MCP SDK lifecycle parity pass under strict guard/ActorContext boundaries."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/271"
   },
   "tasks": [
     {
@@ -65,7 +90,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,13 +98,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
       "title": "Run focused lifecycle suite, typecheck, and health gate",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -87,13 +113,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Run full review and remediate findings until clean",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -101,7 +128,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -147,6 +175,65 @@
       "at": "2026-08-12T00:04:19.526Z",
       "event": "ac-updated",
       "detail": "User approved the crash-safe pending write-intent and owner-writer recovery contract required to make accepted durable across failure/retry."
+    },
+    {
+      "at": "2026-08-12T00:46:32.246Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-12T00:46:32.316Z",
+      "event": "task-done",
+      "detail": "T5: Run focused lifecycle suite, typecheck, and health gate"
+    },
+    {
+      "at": "2026-08-12T00:46:32.383Z",
+      "event": "task-done",
+      "detail": "T6: Run full review and remediate findings until clean"
+    },
+    {
+      "at": "2026-08-12T00:46:34.607Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/271 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-12T00:46:34.697Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Server-issued explicit wrap-up provenance produces immutable schema-valid proposal without raw payload."
+    },
+    {
+      "at": "2026-08-12T00:46:34.765Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Causal append-only ledger and same-key terminal replay are covered by lifecycle tests."
+    },
+    {
+      "at": "2026-08-12T00:46:34.832Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Pending write-intent, bound guarded-owner receipt and durable recovery gate accepted exactly once."
+    },
+    {
+      "at": "2026-08-12T00:46:34.900Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Failed/stale/denied/spoofed/revoked/cross-workspace/TOCTOU paths do not mutate targets."
+    },
+    {
+      "at": "2026-08-12T00:46:34.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Reject/dismiss/stale paths are audit-only and SAC has no Flow mutation path."
+    },
+    {
+      "at": "2026-08-12T00:46:35.036Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CLI subprocess and real stdio MCP SDK lifecycle parity pass under strict guard/ActorContext boundaries."
+    },
+    {
+      "at": "2026-08-12T00:46:35.106Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-12T00:46:36.969Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
