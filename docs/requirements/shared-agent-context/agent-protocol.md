@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Agent Protocol
-Version: 1.1.0
+Version: 1.2.0
 
 ## Status
 
@@ -65,13 +65,15 @@ transition event that points to the proposal revision and prior event.
 An `accepted` transition is valid only when, in causal order: (1) the current
 reviewer `ActorContext` has authority for the target; (2) the applicable
 security policy and its exact version/revision pass; (3) every evidence and ACL
-revision is fresh at transition time; (4) the idempotency key has not already
-settled a conflicting transition; and (5) the owning target completes its
-guarded write and returns a target-write receipt. The decision and write
-receipts must be linked by the same correlation ID. A retry with the same key
-returns the original terminal result; a different key after a terminal result
-is rejected. A target-write failure appends a non-accepted failure transition;
-it never leaves an ambiguous acceptance.
+revision is fresh at transition time; (4) SAC durably appends a `pending-write`
+intent containing the exact owner idempotency key; and (5) the owning target
+completes its guarded write and returns a correlation- and intent-bound
+target-write receipt. The decision, intent and write receipt must share their
+correlation ID. Recovery invokes the owner with the persisted key, so a crash
+between owner write and SAC receipt persistence cannot duplicate a mutation.
+A retry with the same key returns the original terminal result; a different key
+after a terminal result is rejected. A target-write failure appends a
+non-accepted failure transition; it never leaves an ambiguous acceptance.
 
 ## Failure protocol
 
@@ -105,5 +107,8 @@ it never leaves an ambiguous acceptance.
   write invalidates acceptance and leaves no target mutation.
 - Replay: duplicate delivery with the same idempotency key returns the original
   result; conflicting or late transitions do not change the terminal history.
+- Crash recovery: a failure after invoking an owner but before SAC appends the
+  terminal event resumes the durable write-intent with the same owner key and
+  yields the original receipt without a duplicate target mutation.
 - Budget: a missing mandatory item yields `context_overflow`; omitted optional
   details are explicitly named and cannot be presented as complete.

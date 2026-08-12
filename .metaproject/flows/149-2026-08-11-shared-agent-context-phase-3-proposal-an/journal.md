@@ -8,3 +8,4 @@
 - 2026-08-11T23:33:37.664Z - task-done: T1: Collect remaining context
 - 2026-08-11T23:40:19.432Z - task-done: T2: Implement per plan
 - 2026-08-11T23:40:19.491Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-12T00:04:19.526Z - ac-updated: User approved the crash-safe pending write-intent and owner-writer recovery contract required to make accepted durable across failure/retry.

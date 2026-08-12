@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Artifact Lifecycle
-Version: 1.1.0
+Version: 1.2.0
 
 ## Source of truth and derived artifacts
 
@@ -8,7 +8,7 @@ Version: 1.1.0
 | Workspace manifest | SAC local manifest | active → archived | Retain until authorised archive/deletion policy. |
 | Facts/Work/Know-how receipt | Derived from source modules | fresh → stale/expired/denied → regenerated | May be deleted/rebuilt; never primary knowledge. |
 | Access receipt | Derived pointer to Context Operations assembly/trace | recorded → retention expiry | Retain minimal metadata per project policy; no raw content. |
-| Proposal | Immutable SAC candidate record + append-only events | proposed → accepted/rejected/dismissed/stale | Retain audit metadata; content subject to security/data policy. |
+| Proposal | Immutable SAC candidate record + append-only events | proposed → pending-write → accepted/rejected/dismissed/stale | Retain audit metadata; content subject to security/data policy. |
 | Review decision | Append-only decision event | terminal except correction link | Retain with proposal, target-write and prior-event reference. |
 | Accepted knowledge | Owning wiki/memory/skill system | owner-defined | SAC stores only reference. |
 
@@ -22,7 +22,7 @@ not equivalent to deletion. Regeneration must produce a new receipt revision.
 ## Proposal state machine
 
 ```text
-proposed → accepted
+proposed → pending-write → accepted
 proposed → rejected | dismissed | stale
 stale → proposed (new evidence and new proposal revision only)
 ```
@@ -33,14 +33,15 @@ append-only transition event with an event ID, prior-event ID, correlation ID,
 actor/role revision, policy/version, review decision and target-write receipt
 where applicable. No record is overwritten to express a transition.
 
-`accepted` requires fresh evidence and ACL revisions, reviewer authority at the
-point of use, a passing named security policy/version, and a successful guarded
-write to the target. The target-write receipt is causally after review and is
-required before the accepted event. If target write fails, a non-accepted typed
-failure event is appended. Replaying the same idempotency key returns its
-original terminal event; a conflicting or late event is rejected. A correction
-creates a linked new proposal/target revision; it does not rewrite audit
-history.
+`pending-write` is a durable, append-only write-intent before SAC calls an
+owner. It binds the proposal revision, trusted reviewer, current security
+policy revision, fresh evidence, approval reference, correlation ID and owner
+idempotency key. An owner must treat that key as its write deduplication key.
+After a crash, recovery reuses the persisted intent and key: the owner returns
+the original write receipt or performs exactly one write. `accepted` requires
+that receipt and is appended only afterwards. Failed writes append a
+non-accepted typed outcome. A correction creates a linked new proposal/target
+revision; it never rewrites audit history.
 
 ## Access receipt and Context Operations linkage
 

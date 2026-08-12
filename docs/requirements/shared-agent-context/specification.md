@@ -23,7 +23,7 @@ context receipts и proposals; не заменяет существующие so
     workspace.json          # primary manifest
     fwk-receipt.json        # derived, regenerable snapshot
     access-receipts.jsonl   # append-only metadata, no raw content
-    proposals/<id>.json     # candidate + immutable review decisions
+    proposals/<id>.json     # candidate; keyed write-intents/decisions/receipts are immutable metadata
     activity.jsonl          # append-only lifecycle events
 ```
 
@@ -198,11 +198,13 @@ modules; this package does not authorize changing their existing contracts.
 - **AC-7:** Only a trusted `ActorContext` can authorize a request; Viewer cannot
   mutate; non-visible references are absent from both listings and direct read
   results; outbound MCP tools and resources pass configured redaction.
-- **AC-8:** A proposal cannot reach `accepted` without fresh evidence, reviewer
-  authority, passing security policy/version decision, causal transition order,
-  idempotency key and successful target guarded write receipt. An accepted
-  result without any one of these is invalid; failed/replayed target writes
-  leave the proposal non-accepted.
+- **AC-8:** A proposal cannot reach `accepted` without a durable pending
+  write-intent that binds fresh evidence, reviewer authority, passing security
+  policy/version, causal order and owner idempotency key; the owning guarded
+  writer must return a correlation- and intent-bound successful target-write
+  receipt before acceptance is appended. Recovery reuses the owner key and
+  cannot duplicate a target mutation; failed/replayed writes leave the proposal
+  non-accepted.
 - **AC-9:** Rejected/dismissed/stale proposals never change wiki, memory or
   skills and retain audit-only metadata according to lifecycle policy.
 - **AC-10:** With SAC disabled, existing Context Operations, Flow, Harness,
