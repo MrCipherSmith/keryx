@@ -1,0 +1,1 @@
+{"schemaVersion":"1.0","id":"payments-work","title":"Payments work","status":"active","members":[{"subject":"team:payments","role":"owner"},{"subject":"agent:release-bot","role":"editor"}],"resources":[{"kind":"component","uri":"./src/payments","revision":"abc123"}],"createdAt":"2026-08-11T00:00:00Z","updatedAt":"2026-08-11T00:00:00Z"}

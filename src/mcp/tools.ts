@@ -20,6 +20,8 @@ import { runValidate } from "../standard/service";
 import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
+import { createLocalFwkReadService, normalizeFwkResult, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult } from "../sac/service";
+import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
@@ -65,6 +67,52 @@ export function buildToolRegistry(): ToolEntry[] {
   // stability (see the flow 040 journal). No name collides with a legacy adapter.
   return [
     ...toMcpTools(),
+    { name: "sac.collaboration", module: "sac", description: "Read safe SAC collaboration references and activity.", inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]), mutating: false, async invoke(cwd, params, context) { if (context?.transport === "http") return { code: "sac_transport_denied" as const }; return normalizeCollaborationResult(await createLocalCollaborationService(cwd).overview({ workspaceId: stringParam(params, "workspaceId") ?? "", request: undefined, requestCorrelationId: randomUUID() })); } },
+    {
+      name: "sac.overview", module: "sac", description: "Read a bounded Shared Agent Context overview.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId"]),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        // v1 SAC is local-stdio only. HTTP has no verified principal policy and
+        // must never inherit a local OS actor.
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? "";
+        const maxItems = typeof params.maxItems === "number" ? params.maxItems : 32;
+        const maxTokens = typeof params.maxTokens === "number" ? params.maxTokens : 4096;
+        return normalizeFwkResult(await createLocalFwkReadService(cwd).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } }));
+      },
+    },
+    {
+      name: "sac.read", module: "sac", description: "Read one bounded Shared Agent Context item after overview.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, itemId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId", "itemId"]),
+      mutating: false,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? "";
+        const itemId = stringParam(params, "itemId") ?? "";
+        const maxItems = typeof params.maxItems === "number" ? params.maxItems : 1;
+        const maxTokens = typeof params.maxTokens === "number" ? params.maxTokens : 4096;
+        return normalizeFwkResult(await createLocalFwkReadService(cwd).read({ workspaceId, itemId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } }));
+      },
+    },
+    {
+      name: "sac.propose", module: "sac", description: "Create an immutable local SAC proposal from explicit wrap-up output.",
+      inputSchema: OBJECT_SCHEMA(),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        return { code: context?.transport === "http" ? "sac_transport_denied" as const : "trusted_wrap_up_required" as const };
+      },
+    },
+    {
+      name: "sac.review", module: "sac", description: "Record a terminal SAC review decision through the guarded owner-writer seam.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, proposalId: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, idempotencyKey: { type: "string" } }, ["workspaceId", "proposalId", "decision"]),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID();
+        return normalizeProposalLifecycleResult(await createLocalProposalLifecycleService(cwd).review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) }));
+      },
+    },
     {
       name: "gdgraph.affected",
       module: "gdgraph",

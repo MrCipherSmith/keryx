@@ -1,0 +1,1 @@
+{"schemaVersion":1,"gateId":"gate-synthetic-receipt-c","runId":"run-synthetic-receipt-c","status":"pass","checks":[{"checkId":"independent-task-verification","status":"pass","blocking":true,"evidenceRefs":["evidence-synthetic-receipt-c"]}],"evaluatedAt":"2026-08-12T00:00:00Z","evidenceRefs":["evidence-synthetic-receipt-c"],"unresolvedBlockerIds":[]}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "artifacts": {
+    "baseline": {
+      "ref": "./fixtures/sac-policy-experiment/artifacts/deterministic-baseline.json",
+      "sha256": "cce515bd4936afca41767f10ad33d1dddc020d5b5edab3e871ae749091aba60e"
+    },
+    "candidate": {
+      "ref": "./fixtures/sac-policy-experiment/artifacts/candidate.json",
+      "sha256": "f6de324efc35ac0602942f87d092aab6f8c01b6660f78607ee6572ed12f0c6f3"
+    },
+    "allowedControl": {
+      "ref": "./fixtures/sac-policy-experiment/sandbox/allowed-control.json",
+      "sha256": "f013326ad5a4850d68346c6350b196c93cfd98b2e20b3bb1331e9394db67c6bd"
+    },
+    "deniedEscapeControl": {
+      "ref": "./fixtures/sac-policy-experiment/sandbox/denied-escape-control.json",
+      "sha256": "95045b5f969e081575cf651746662926e1ef64f781589fb77afe9614a84cdc63"
+    },
+    "executionReceipts": {
+      "ref": "./fixtures/sac-policy-experiment/sandbox/execution-receipts.json",
+      "sha256": "8d3a9883cc41e8a17ebe08fbd59c70b588fc6b430744261fd516b242e5d79401"
+    }
+  }
+}

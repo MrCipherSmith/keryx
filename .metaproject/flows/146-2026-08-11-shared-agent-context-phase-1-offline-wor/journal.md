@@ -1,0 +1,32 @@
+# Flow Journal
+
+- 2026-08-11T21:06:19.659Z - flow created
+- 2026-08-11T21:07:11.944Z - task-added: T5: Implement WorkspaceService and guarded atomic manifest persistence
+- 2026-08-11T21:07:12.003Z - task-added: T6: Add offline workspace CLI adapter
+- 2026-08-11T21:07:12.062Z - task-added: T7: Add service and CLI regression tests
+- 2026-08-11T21:07:12.126Z - task-added: T8: Run verification, health, and internal review
+- 2026-08-11T21:07:12.190Z - frozen: 7 criteria; checksum recorded
+- 2026-08-11T21:07:12.250Z - started
+- 2026-08-11T21:14:30.966Z - task-done: T1: Collect remaining context
+- 2026-08-11T21:14:31.031Z - task-done: T2: Implement per plan
+- 2026-08-11T21:14:31.092Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-11T21:14:31.155Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-11T21:14:31.217Z - task-done: T5: Implement WorkspaceService and guarded atomic manifest persistence
+- 2026-08-11T21:14:31.280Z - task-done: T6: Add offline workspace CLI adapter
+- 2026-08-11T21:14:31.342Z - task-done: T7: Add service and CLI regression tests
+- 2026-08-11T21:14:31.405Z - task-done: T8: Run verification, health, and internal review
+- 2026-08-11T21:14:42.903Z - ac-confirmed: AC1: WorkspaceService CRUD, schema validation, focused and changed tests passed
+- 2026-08-11T21:14:42.966Z - ac-confirmed: AC2: withFileLock plus atomic replacement; duplicate and rejected writes covered
+- 2026-08-11T21:14:43.030Z - ac-confirmed: AC3: local workspace CLI commands and client actor flag rejection covered
+- 2026-08-11T21:14:43.092Z - ac-confirmed: AC4: viewer, foreign actor, revocation and lock-held TOCTOU tests passed
+- 2026-08-11T21:14:43.155Z - ac-confirmed: AC5: escaping, missing and traversal references reject before persistence
+- 2026-08-11T21:14:43.218Z - ac-confirmed: AC6: disabled/advisory guard denies; no owner-module runtime changes
+- 2026-08-11T21:28:16.972Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/268 (warning: PR is not a draft)
+- 2026-08-11T21:28:17.051Z - ac-confirmed: AC1: Merged WorkspaceService schema-validated primary manifest CRUD; 19 focused SAC tests pass.
+- 2026-08-11T21:28:17.120Z - ac-confirmed: AC2: Atomic replacement and existing locking discipline verified by service regression tests.
+- 2026-08-11T21:28:17.191Z - ac-confirmed: AC3: Offline create/list/show/add-resource CLI verified without remote dependencies.
+- 2026-08-11T21:28:17.261Z - ac-confirmed: AC4: Trusted ActorContext point-of-use ACL, revocation and TOCTOU tests pass.
+- 2026-08-11T21:28:17.331Z - ac-confirmed: AC5: Typed workspace-relative realpath containment rejects unsafe references before persistence.
+- 2026-08-11T21:28:17.401Z - ac-confirmed: AC6: Strict production guard fails closed; no MCP, UI, remote or tracker changes.
+- 2026-08-11T21:28:17.484Z - completing
+- 2026-08-11T21:28:19.450Z - done: all gates passed

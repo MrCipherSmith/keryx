@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-08-11T23:32:20.044Z - flow created
+- 2026-08-11T23:33:10.832Z - task-added: T5: Run focused lifecycle suite, typecheck, and health gate
+- 2026-08-11T23:33:10.900Z - task-added: T6: Run full review and remediate findings until clean
+- 2026-08-11T23:33:10.965Z - frozen: 6 criteria; checksum recorded
+- 2026-08-11T23:33:11.025Z - started
+- 2026-08-11T23:33:37.664Z - task-done: T1: Collect remaining context
+- 2026-08-11T23:40:19.432Z - task-done: T2: Implement per plan
+- 2026-08-11T23:40:19.491Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-12T00:04:19.526Z - ac-updated: User approved the crash-safe pending write-intent and owner-writer recovery contract required to make accepted durable across failure/retry.
+- 2026-08-12T00:46:32.246Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-12T00:46:32.316Z - task-done: T5: Run focused lifecycle suite, typecheck, and health gate
+- 2026-08-12T00:46:32.383Z - task-done: T6: Run full review and remediate findings until clean
+- 2026-08-12T00:46:34.607Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/271 (warning: PR is not a draft)
+- 2026-08-12T00:46:34.697Z - ac-confirmed: AC1: Server-issued explicit wrap-up provenance produces immutable schema-valid proposal without raw payload.
+- 2026-08-12T00:46:34.765Z - ac-confirmed: AC2: Causal append-only ledger and same-key terminal replay are covered by lifecycle tests.
+- 2026-08-12T00:46:34.832Z - ac-confirmed: AC3: Pending write-intent, bound guarded-owner receipt and durable recovery gate accepted exactly once.
+- 2026-08-12T00:46:34.900Z - ac-confirmed: AC4: Failed/stale/denied/spoofed/revoked/cross-workspace/TOCTOU paths do not mutate targets.
+- 2026-08-12T00:46:34.968Z - ac-confirmed: AC5: Reject/dismiss/stale paths are audit-only and SAC has no Flow mutation path.
+- 2026-08-12T00:46:35.036Z - ac-confirmed: AC6: CLI subprocess and real stdio MCP SDK lifecycle parity pass under strict guard/ActorContext boundaries.
+- 2026-08-12T00:46:35.106Z - completing
+- 2026-08-12T00:46:36.969Z - done: all gates passed

@@ -247,7 +247,7 @@ async function runTask(args: string[]): Promise<void> {
     const id = requireId(args.slice(1));
     const title = optionValue(args, "--title");
     if (!title) {
-      throw new Error('Usage: keryx flow task add <id> --title "<t>" [--kind context|implement|test|review|docs] [--depends T1,T2]');
+      throw new Error('Usage: keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]');
     }
     const dependsRaw = optionValue(args, "--depends");
     const dependsOn = dependsRaw
@@ -435,7 +435,7 @@ function printHelp(): void {
     "keryx flow status <id>",
     "keryx flow freeze <id>",
     "keryx flow start <id>",
-    'keryx flow task add <id> --title "<t>" [--kind context|implement|test|review|docs] [--depends T1,T2]',
+  'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',
     "keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped]",
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"]',
     'keryx flow ac update <id> --reason "<why>"',

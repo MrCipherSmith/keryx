@@ -7,7 +7,8 @@ export type FlowStatus =
   | "done"
   | "blocked";
 
-export type TaskKind = "context" | "implement" | "test" | "review" | "docs";
+/** `verify` is a first-class quality-gate task, distinct from test authoring. */
+export type TaskKind = "context" | "implement" | "test" | "verify" | "review" | "docs";
 export type TaskStatus = "todo" | "in-progress" | "done";
 
 // --- Task Manager evolution (TM-01: schemaVersion 2 additive fields) ---

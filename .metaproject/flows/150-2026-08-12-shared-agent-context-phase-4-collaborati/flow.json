@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 2,
+  "id": "150",
+  "slug": "shared-agent-context-phase-4-collaborati",
+  "title": "Shared Agent Context — Phase 4: Collaboration ergonomics",
+  "status": "done",
+  "createdAt": "2026-08-12T07:01:54.486Z",
+  "updatedAt": "2026-08-12T08:08:59.705Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:937caceb0859dcdc2f77f3f40a975bb7db9a2f108e061083b45eadf74459b9d3",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-12T08:08:24.701Z",
+      "note": "workspace schema and collaboration tests validate contained worktree/session references and trusted ACL paths"
+    },
+    "AC2": {
+      "at": "2026-08-12T08:08:24.785Z",
+      "note": "CollaborationService allowlist test rejects transcript payload and activity is append-only metadata"
+    },
+    "AC3": {
+      "at": "2026-08-12T08:08:24.857Z",
+      "note": "record operation uses trusted ActorContext, strict WorkspaceService guard, lock and point-of-use authorization"
+    },
+    "AC4": {
+      "at": "2026-08-12T08:08:24.976Z",
+      "note": "workspace collaboration CLI and sac.collaboration local-stdio MCP use the shared service normalizer; HTTP is denied"
+    },
+    "AC5": {
+      "at": "2026-08-12T08:08:25.073Z",
+      "note": "phase-4-usability-report.md records reproducible contract-only onboarding/handoff results and actionable gaps"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/272"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Record contract-based onboarding and handoff usability evaluation",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Run code verifier, health gate, fixture compatibility and full review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-12T07:01:54.486Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-12T07:04:53.079Z",
+      "event": "task-added",
+      "detail": "T5: Record contract-based onboarding and handoff usability evaluation"
+    },
+    {
+      "at": "2026-08-12T07:04:53.161Z",
+      "event": "task-added",
+      "detail": "T6: Run code verifier, health gate, fixture compatibility and full review"
+    },
+    {
+      "at": "2026-08-12T07:04:53.267Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-12T07:04:53.357Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-12T08:03:51.883Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-12T08:03:51.963Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-12T08:03:52.051Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-12T08:03:52.164Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-12T08:03:52.291Z",
+      "event": "task-done",
+      "detail": "T5: Record contract-based onboarding and handoff usability evaluation"
+    },
+    {
+      "at": "2026-08-12T08:03:52.413Z",
+      "event": "task-done",
+      "detail": "T6: Run code verifier, health gate, fixture compatibility and full review"
+    },
+    {
+      "at": "2026-08-12T08:03:56.164Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/272"
+    },
+    {
+      "at": "2026-08-12T08:08:24.701Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: workspace schema and collaboration tests validate contained worktree/session references and trusted ACL paths"
+    },
+    {
+      "at": "2026-08-12T08:08:24.785Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: CollaborationService allowlist test rejects transcript payload and activity is append-only metadata"
+    },
+    {
+      "at": "2026-08-12T08:08:24.857Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: record operation uses trusted ActorContext, strict WorkspaceService guard, lock and point-of-use authorization"
+    },
+    {
+      "at": "2026-08-12T08:08:24.976Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: workspace collaboration CLI and sac.collaboration local-stdio MCP use the shared service normalizer; HTTP is denied"
+    },
+    {
+      "at": "2026-08-12T08:08:25.073Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: phase-4-usability-report.md records reproducible contract-only onboarding/handoff results and actionable gaps"
+    },
+    {
+      "at": "2026-08-12T08:08:25.167Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-12T08:08:27.991Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-12T08:08:57.092Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/272 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-12T08:08:57.204Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-12T08:08:59.705Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

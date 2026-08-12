@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 2,
+  "id": "146",
+  "slug": "shared-agent-context-phase-1-offline-wor",
+  "title": "Shared Agent Context Phase 1: Offline workspace registry",
+  "status": "done",
+  "createdAt": "2026-08-11T21:06:19.659Z",
+  "updatedAt": "2026-08-11T21:28:19.450Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:692418e96182d98413a0d1b44c5d827c42e5760f2d21e7865374a8a5588c9362",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-11T21:28:17.051Z",
+      "note": "Merged WorkspaceService schema-validated primary manifest CRUD; 19 focused SAC tests pass."
+    },
+    "AC2": {
+      "at": "2026-08-11T21:28:17.120Z",
+      "note": "Atomic replacement and existing locking discipline verified by service regression tests."
+    },
+    "AC3": {
+      "at": "2026-08-11T21:28:17.191Z",
+      "note": "Offline create/list/show/add-resource CLI verified without remote dependencies."
+    },
+    "AC4": {
+      "at": "2026-08-11T21:28:17.261Z",
+      "note": "Trusted ActorContext point-of-use ACL, revocation and TOCTOU tests pass."
+    },
+    "AC5": {
+      "at": "2026-08-11T21:28:17.331Z",
+      "note": "Typed workspace-relative realpath containment rejects unsafe references before persistence."
+    },
+    "AC6": {
+      "at": "2026-08-11T21:28:17.401Z",
+      "note": "Strict production guard fails closed; no MCP, UI, remote or tracker changes."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/268"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Implement WorkspaceService and guarded atomic manifest persistence",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Add offline workspace CLI adapter",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Add service and CLI regression tests",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Run verification, health, and internal review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-11T21:06:19.659Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-11T21:07:11.944Z",
+      "event": "task-added",
+      "detail": "T5: Implement WorkspaceService and guarded atomic manifest persistence"
+    },
+    {
+      "at": "2026-08-11T21:07:12.003Z",
+      "event": "task-added",
+      "detail": "T6: Add offline workspace CLI adapter"
+    },
+    {
+      "at": "2026-08-11T21:07:12.062Z",
+      "event": "task-added",
+      "detail": "T7: Add service and CLI regression tests"
+    },
+    {
+      "at": "2026-08-11T21:07:12.126Z",
+      "event": "task-added",
+      "detail": "T8: Run verification, health, and internal review"
+    },
+    {
+      "at": "2026-08-11T21:07:12.190Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-11T21:07:12.250Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-11T21:14:30.966Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-11T21:14:31.031Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-11T21:14:31.092Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-11T21:14:31.155Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-11T21:14:31.217Z",
+      "event": "task-done",
+      "detail": "T5: Implement WorkspaceService and guarded atomic manifest persistence"
+    },
+    {
+      "at": "2026-08-11T21:14:31.280Z",
+      "event": "task-done",
+      "detail": "T6: Add offline workspace CLI adapter"
+    },
+    {
+      "at": "2026-08-11T21:14:31.342Z",
+      "event": "task-done",
+      "detail": "T7: Add service and CLI regression tests"
+    },
+    {
+      "at": "2026-08-11T21:14:31.405Z",
+      "event": "task-done",
+      "detail": "T8: Run verification, health, and internal review"
+    },
+    {
+      "at": "2026-08-11T21:14:42.903Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: WorkspaceService CRUD, schema validation, focused and changed tests passed"
+    },
+    {
+      "at": "2026-08-11T21:14:42.966Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: withFileLock plus atomic replacement; duplicate and rejected writes covered"
+    },
+    {
+      "at": "2026-08-11T21:14:43.030Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: local workspace CLI commands and client actor flag rejection covered"
+    },
+    {
+      "at": "2026-08-11T21:14:43.092Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: viewer, foreign actor, revocation and lock-held TOCTOU tests passed"
+    },
+    {
+      "at": "2026-08-11T21:14:43.155Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: escaping, missing and traversal references reject before persistence"
+    },
+    {
+      "at": "2026-08-11T21:14:43.218Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: disabled/advisory guard denies; no owner-module runtime changes"
+    },
+    {
+      "at": "2026-08-11T21:28:16.972Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/268 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-11T21:28:17.051Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Merged WorkspaceService schema-validated primary manifest CRUD; 19 focused SAC tests pass."
+    },
+    {
+      "at": "2026-08-11T21:28:17.120Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Atomic replacement and existing locking discipline verified by service regression tests."
+    },
+    {
+      "at": "2026-08-11T21:28:17.191Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Offline create/list/show/add-resource CLI verified without remote dependencies."
+    },
+    {
+      "at": "2026-08-11T21:28:17.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Trusted ActorContext point-of-use ACL, revocation and TOCTOU tests pass."
+    },
+    {
+      "at": "2026-08-11T21:28:17.331Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Typed workspace-relative realpath containment rejects unsafe references before persistence."
+    },
+    {
+      "at": "2026-08-11T21:28:17.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Strict production guard fails closed; no MCP, UI, remote or tracker changes."
+    },
+    {
+      "at": "2026-08-11T21:28:17.484Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-11T21:28:19.450Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

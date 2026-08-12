@@ -1,0 +1,11 @@
+[
+  {
+    "id": "F-001",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "Impossible UTC calendar timestamps pass contract validation",
+    "classification": "skill_learning_candidate",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  }
+]

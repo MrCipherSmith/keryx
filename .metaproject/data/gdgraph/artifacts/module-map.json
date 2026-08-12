@@ -126,6 +126,7 @@
     "src/commands/shell-launch.test.ts",
     "src/commands/shell-pty-launch.smoke.test.ts",
     "src/commands/shell-slash-registry.test.ts",
+    "src/commands/shell-types.ts",
     "src/commands/shell.test.ts",
     "src/commands/shell.ts",
     "src/commands/skills-route.test.ts",
@@ -139,7 +140,9 @@
     "src/commands/update.ts",
     "src/commands/version.test.ts",
     "src/commands/version.ts",
-    "src/commands/wiki.ts"
+    "src/commands/wiki.ts",
+    "src/commands/workspace.test.ts",
+    "src/commands/workspace.ts"
   ],
   "contracts": [
     "src/contracts/fixtures.test.ts",
@@ -148,6 +151,7 @@
     "src/contracts/validator.ts"
   ],
   "ctx": [
+    "src/ctx/assembly.ts",
     "src/ctx/hook-classify.ts",
     "src/ctx/hook-install.test.ts",
     "src/ctx/hook-install.ts",
@@ -556,6 +560,7 @@
     "src/mcp/tools.ts",
     "src/mcp/transport/http-sse.ts",
     "src/mcp/transport/stdio.ts",
+    "src/mcp/types.ts",
     "src/mcp/wiki-ask.test.ts"
   ],
   "memory": [
@@ -593,6 +598,7 @@
     "src/memory/templates.ts",
     "src/memory/temporal.fixture.test.ts",
     "src/memory/temporal.ts",
+    "src/memory/text.test.ts",
     "src/memory/text.ts",
     "src/memory/types.ts",
     "src/memory/typing.test.ts",
@@ -621,6 +627,30 @@
   "rules": [
     "src/rules/agent-entrypoints.ts",
     "src/rules/distill.ts"
+  ],
+  "sac": [
+    "src/sac/collaboration-service.test.ts",
+    "src/sac/collaboration-service.ts",
+    "src/sac/contracts.test.ts",
+    "src/sac/fwk-authorization.test.ts",
+    "src/sac/fwk-parity.test.ts",
+    "src/sac/fwk-service.test.ts",
+    "src/sac/fwk-service.ts",
+    "src/sac/guarded-owner-writer.test.ts",
+    "src/sac/guarded-owner-writer.ts",
+    "src/sac/index.ts",
+    "src/sac/policy-experiment.test.ts",
+    "src/sac/policy-experiment.ts",
+    "src/sac/proposal-lifecycle-parity.test.ts",
+    "src/sac/proposal-lifecycle.test.ts",
+    "src/sac/proposal-lifecycle.ts",
+    "src/sac/receipt-integrity.ts",
+    "src/sac/secure-resource-read.ts",
+    "src/sac/service.ts",
+    "src/sac/trusted-wrap-up.test.ts",
+    "src/sac/trusted-wrap-up.ts",
+    "src/sac/workspace-service.test.ts",
+    "src/sac/workspace-service.ts"
   ],
   "security": [
     "src/security/agent-hooks.coexistence.test.ts",
@@ -736,6 +766,7 @@
     "src/wiki/ask.ts",
     "src/wiki/backlinks.test.ts",
     "src/wiki/backlinks.ts",
+    "src/wiki/collect.ts",
     "src/wiki/enrich.test.ts",
     "src/wiki/enrich.ts",
     "src/wiki/security-seam.test.ts",

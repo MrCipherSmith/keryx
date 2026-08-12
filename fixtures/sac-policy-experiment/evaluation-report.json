@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "status": "pass",
+  "baselineVersion": "deterministic-context-1.0.0",
+  "baselineDigest": "cce515bd4936afca41767f10ad33d1dddc020d5b5edab3e871ae749091aba60e",
+  "candidateVersion": "candidate-1.0.0",
+  "candidateDigest": "f6de324efc35ac0602942f87d092aab6f8c01b6660f78607ee6572ed12f0c6f3",
+  "corpusVersion": "sac-policy-corpus-1.0.0",
+  "corpusDigest": "d4f29e44732f550f0174bb0263b31601b16f5d414ede9dbcf4b4eb0743f97a31",
+  "sandboxProfileDigest": "2c3e94c87ff42064841fa788657219c5144d36282cc4bb4d73ff9aab987c8207",
+  "allowedControlPassed": true,
+  "deniedEscapePassed": true,
+  "securityNonRegression": true,
+  "train": {
+    "status": "pass",
+    "cases": 1,
+    "baselineCorrect": 1,
+    "candidateCorrect": 1
+  },
+  "holdout": {
+    "status": "pass",
+    "cases": 1,
+    "baselineCorrect": 1,
+    "candidateCorrect": 1
+  },
+  "adversarial": {
+    "status": "pass",
+    "cases": 1,
+    "baselineCorrect": 1,
+    "candidateCorrect": 1
+  },
+  "candidateSelectedIds": [
+    "4b81ed6890cc368d4438099043c64879615c482ca1e073f642880c6e7a4bdf23",
+    "6f1c050992371ee3ed73bef89a7f4630027d35a2d5ff37252149270c0ab5b886",
+    "8ad3f40e019364c1caea227ade120ff4a9aa34b0dfd3bd0cac2e589e59285779"
+  ],
+  "reasons": [],
+  "reportDigest": "d485302b1e66d20e0f0aed01f4cf409da75fd78033d5cbc4176650ebcdfcd183"
+}
