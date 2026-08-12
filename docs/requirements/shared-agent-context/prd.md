@@ -113,3 +113,10 @@ runtime, но у межкомпонентной работы нет единог
 Flow-derived Work, evidence-linked Facts, accepted Know-how и read-only
 CLI/MCP parity. Затем добавить proposals и review. UI, external sync и learned
 policy допустимы только после validation gates из этого пакета.
+
+## Roadmap phase 6 (runtime opt-in readiness)
+
+Следующая обязательная фаза — безопасная runtime активация candidate-политики
+через строгий локальный конфиг с явными пинами артефактов и fail-closed
+проверкой целостности цепочки. Это детализировано в
+`docs/requirements/shared-agent-context/phase-6-runtime-opt-in-readiness.md`.

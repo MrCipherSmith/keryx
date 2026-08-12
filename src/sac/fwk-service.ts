@@ -2,9 +2,25 @@ import { createHash, randomUUID } from "node:crypto";
 import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
-import { evaluateStrictSacGuard, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
+import {
+  evaluateStrictSacGuard,
+  resolveWorkspaceReference,
+  type SacAuthorizationServer,
+  type StrictSacGuard,
+  type TrustedActorContext,
+  validateSacContract,
+} from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
 import { withFileLock } from "../lib/fs";
+import {
+  resolvePolicyExperiment,
+  verifyPolicyCorpus,
+  type PolicyCorpus,
+  type PolicyEvaluationReport,
+  type PolicyExperimentCandidate,
+  type BaselineSelection,
+  type PolicyExperimentConfig,
+} from "./policy-experiment";
 import {
   sealAccessReceipt,
   verifyAccessReceiptRecord,
@@ -30,6 +46,31 @@ const metadataOnly = (value: unknown): boolean => {
   return true;
 };
 const nowIso = (now: () => Date) => now().toISOString();
+const reportHashPattern = /^[a-f0-9]{64}$/;
+const immutableVersionPattern = /(?:^|[-_.:])(?:latest|next|head|main|develop)(?:$|[-_.:])/i;
+const workspacePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+const policyExperimentConfigPath = [".metaproject", "context-operations", "policy-experiment", "config.json"] as const;
+const stableValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, child]) => child !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, stableValue(child)]),
+    );
+  }
+  return value;
+};
+const stableJson = (value: unknown): string => JSON.stringify(stableValue(value));
+const sha256 = (value: unknown): string => createHash("sha256").update(stableJson(value), "utf8").digest("hex");
+const isImmutableVersion = (value: unknown): value is string =>
+  typeof value === "string"
+  && value.length >= 3
+  && value.length <= 256
+  && /^[A-Za-z0-9][A-Za-z0-9._:+-]*$/.test(value)
+  && /\d/.test(value)
+  && !immutableVersionPattern.test(value);
 
 type LedgerIdentity = Readonly<{ ledgerBytes: number; device: string; inode: string; modifiedNs: string; changedNs: string }>;
 type CheckpointBody = LedgerIdentity & Readonly<{ schemaVersion: "1.0"; recordCount: number; headHash: string; tailOffset: number }>;
@@ -113,6 +154,169 @@ async function resolveLedgerState(ledger: string, checkpointPath: string, verifi
   return auditLedger(ledger, checkpointPath, verifier);
 }
 
+type PolicyRuntimeSelection = Readonly<{ policyRef: string; policyRevision: string }>;
+type UnknownRecord = Record<string, unknown>;
+
+type RuntimePolicyArtifactConfig = Readonly<{
+  enabled: boolean;
+  killSwitch: boolean;
+  candidateArtifactRef?: string;
+  candidateArtifactDigest?: string;
+  candidateVersion?: string;
+  baselineArtifactRef?: string;
+  baselineArtifactDigest?: string;
+  baselineVersion?: string;
+  corpusVersion?: string;
+  corpusDigest?: string;
+  corpusRef?: string;
+  evaluationDigest?: string;
+  evaluationReportRef?: string;
+  rollbackBaselineVersion?: string;
+  rollbackReason?: string;
+  [key: string]: unknown;
+}>;
+
+const policyRefPattern = /^\.\/.+/;
+const isRecord = (value: unknown): value is UnknownRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const asString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+const isBaselineArtifact = (artifact: UnknownRecord): artifact is { schemaVersion: "1.0"; kind: "deterministic-baseline"; version: string; selection: "eligible-ids-in-input-order" } =>
+  artifact.schemaVersion === "1.0"
+  && artifact.kind === "deterministic-baseline"
+  && isImmutableVersion(artifact.version)
+  && artifact.selection === "eligible-ids-in-input-order";
+const isCandidateArtifact = (artifact: UnknownRecord): artifact is { schemaVersion: "1.0"; kind: "offline-selection-advisor"; version: string } =>
+  artifact.schemaVersion === "1.0"
+  && artifact.kind === "offline-selection-advisor"
+  && isImmutableVersion(artifact.version)
+  && asString(artifact.output)
+  && typeof artifact.mutations === "boolean";
+
+const isEvaluationReport = (report: UnknownRecord): report is PolicyEvaluationReport =>
+  report.schemaVersion === "1.0"
+  && asString(report.status)
+  && asString(report.baselineVersion)
+  && asString(report.baselineDigest) && reportHashPattern.test(report.baselineDigest)
+  && asString(report.candidateVersion)
+  && asString(report.candidateDigest) && reportHashPattern.test(report.candidateDigest)
+  && asString(report.corpusVersion)
+  && asString(report.corpusDigest) && reportHashPattern.test(report.corpusDigest)
+  && asString(report.reportDigest) && reportHashPattern.test(report.reportDigest)
+  && asString(report.sandboxProfileDigest)
+  && reportHashPattern.test(report.sandboxProfileDigest)
+  && isRecord(report.train) && typeof report.train.status === "string" && typeof report.train.cases === "number"
+  && isRecord(report.holdout) && typeof report.holdout.status === "string" && typeof report.holdout.cases === "number"
+  && isRecord(report.adversarial) && typeof report.adversarial.status === "string" && typeof report.adversarial.cases === "number"
+  && Array.isArray(report.candidateSelectedIds)
+  && Array.isArray(report.reasons);
+const isConfigRecord = (value: UnknownRecord): value is RuntimePolicyArtifactConfig =>
+  typeof value.enabled === "boolean" && typeof value.killSwitch === "boolean";
+
+async function readPinnedJson<T extends UnknownRecord>(input: { workspaceRoot: string; uri: string; digest: string; }): Promise<{ artifact: T; digest: string }> {
+  const ref = await resolveWorkspaceReference({ workspaceRoot: input.workspaceRoot, kind: "artifact", uri: input.uri });
+  const raw = await readFile(ref, "utf8");
+  const digest = createHash("sha256").update(raw).digest("hex");
+  if (digest !== input.digest) throw new Error("policy experiment pinned artifact digest mismatch");
+  return { artifact: JSON.parse(raw) as T, digest };
+}
+async function readWorkspaceJson<T extends UnknownRecord>(input: { workspaceRoot: string; uri: string; }): Promise<{ artifact: T; raw: string; }> {
+  const ref = await resolveWorkspaceReference({ workspaceRoot: input.workspaceRoot, kind: "artifact", uri: input.uri });
+  const raw = await readFile(ref, "utf8");
+  return { artifact: JSON.parse(raw) as T, raw };
+}
+
+function hasReportIntegrity(report: PolicyEvaluationReport): boolean {
+  const { reportDigest, ...body } = report;
+  return reportHashPattern.test(reportDigest) && sha256(body) === reportDigest;
+}
+
+export async function resolvePolicySelection(workspaceRoot: string, canonicalFallback: PolicyRuntimeSelection): Promise<PolicyRuntimeSelection> {
+  const configPath = path.join(workspaceRoot, ...policyExperimentConfigPath);
+  let configJson: RuntimePolicyArtifactConfig;
+  try {
+    const raw = await readFile(configPath, "utf8").catch((error) => {
+      if (isMissing(error)) return undefined;
+      throw error;
+    });
+    if (raw === undefined) return canonicalFallback;
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed) || !isConfigRecord(parsed)) return canonicalFallback;
+    configJson = parsed;
+  } catch {
+    return canonicalFallback;
+  }
+
+  if (configJson.enabled !== true || configJson.killSwitch !== false) return canonicalFallback;
+  const required = ["candidateArtifactRef", "candidateArtifactDigest", "candidateVersion", "baselineArtifactRef", "baselineArtifactDigest", "baselineVersion", "corpusRef", "corpusDigest", "corpusVersion", "evaluationReportRef", "evaluationDigest"] as const;
+  if (!required.every((name) => typeof configJson[name] === "string")) return canonicalFallback;
+
+  const candidateRef = configJson.candidateArtifactRef;
+  const candidateDigest = configJson.candidateArtifactDigest;
+  const baselineRef = configJson.baselineArtifactRef;
+  const baselineDigest = configJson.baselineArtifactDigest;
+  const corpusRef = configJson.corpusRef;
+  const corpusDigest = configJson.corpusDigest;
+  const evaluationRef = configJson.evaluationReportRef;
+  const evaluationDigest = configJson.evaluationDigest;
+  if ([candidateRef, candidateDigest, baselineRef, baselineDigest, corpusRef, corpusDigest, evaluationRef, evaluationDigest].some((value) => !asString(value))) return canonicalFallback;
+  if (!workspacePathPattern.test(candidateRef) || !workspacePathPattern.test(baselineRef) || !workspacePathPattern.test(corpusRef) || !workspacePathPattern.test(evaluationRef)) return canonicalFallback;
+  if (!validHash(candidateDigest) || !validHash(baselineDigest) || !validHash(corpusDigest) || !validHash(evaluationDigest)) return canonicalFallback;
+  if (!isImmutableVersion(configJson.candidateVersion) || !isImmutableVersion(configJson.baselineVersion) || !isImmutableVersion(configJson.corpusVersion)) return canonicalFallback;
+  if (!policyRefPattern.test(candidateRef) || !policyRefPattern.test(baselineRef)) return canonicalFallback;
+
+  try {
+    const baselineArtifact = await readPinnedJson<UnknownRecord>({ workspaceRoot, uri: baselineRef, digest: baselineDigest });
+    const candidateArtifact = await readPinnedJson<UnknownRecord>({ workspaceRoot, uri: candidateRef, digest: candidateDigest });
+    const corpusPayload = await readWorkspaceJson<PolicyCorpus>({ workspaceRoot, uri: corpusRef });
+    const evaluationPayload = await readWorkspaceJson<PolicyEvaluationReport>({ workspaceRoot, uri: evaluationRef });
+    if (!isBaselineArtifact(baselineArtifact.artifact) || !isCandidateArtifact(candidateArtifact.artifact)) return canonicalFallback;
+    if (!isCompleteCorpus(corpusPayload.artifact)) return canonicalFallback;
+    if (corpusPayload.artifact.manifest.corpusVersion !== configJson.corpusVersion || corpusPayload.artifact.manifest.corpusDigest !== corpusDigest) return canonicalFallback;
+    if (!isEvaluationReport(evaluationPayload.artifact) || !hasReportIntegrity(evaluationPayload.artifact)) return canonicalFallback;
+    if (evaluationPayload.artifact.reportDigest !== evaluationDigest) return canonicalFallback;
+    const config = {
+      ...configJson,
+      candidateArtifactDigest: candidateArtifact.digest,
+      candidateDigest: candidateArtifact.digest,
+      baselineArtifactDigest: baselineArtifact.digest,
+      baselineDigest: baselineArtifact.digest,
+      corpusDigest: corpusDigest,
+      evaluationDigest: evaluationDigest,
+      candidateVersion: configJson.candidateVersion,
+      baselineVersion: configJson.baselineVersion,
+      corpusVersion: configJson.corpusVersion,
+      rollbackBaselineVersion: configJson.rollbackBaselineVersion ?? configJson.baselineVersion,
+    } as PolicyExperimentConfig;
+    const baseline: BaselineSelection = {
+      selectedIds: evaluationPayload.artifact.candidateSelectedIds,
+      source: "deterministic-baseline",
+      version: baselineArtifact.artifact.version,
+      artifactDigest: baselineArtifact.digest,
+    };
+    const candidate: PolicyExperimentCandidate = { version: candidateArtifact.artifact.version, artifactDigest: candidateDigest };
+    const outcome = resolvePolicyExperiment({ config, evaluation: evaluationPayload.artifact, candidate, corpus: corpusPayload.artifact, baseline });
+    return outcome.source === "candidate"
+      ? { policyRef: config.candidateArtifactRef, policyRevision: outcome.candidateVersion }
+      : { policyRef: config.baselineArtifactRef, policyRevision: config.baselineVersion };
+  } catch {
+    return canonicalFallback;
+  }
+}
+
+export async function resolvePolicySelectionSafely(workspaceRoot: string, canonicalFallback: PolicyRuntimeSelection): Promise<PolicyRuntimeSelection> {
+  try {
+    return await resolvePolicySelection(workspaceRoot, canonicalFallback);
+  } catch {
+    return canonicalFallback;
+  }
+}
+
+function isCompleteCorpus(value: UnknownRecord): value is PolicyCorpus {
+  return isRecord(value) && isRecord(value.manifest) && Array.isArray(value.rows) && Array.isArray(value.quarantine) && verifyPolicyCorpus(value as PolicyCorpus);
+}
+
+const validHash = (value: string): boolean => reportHashPattern.test(value);
+
 /** Read-only SAC facade; all sources are adapters owned by their source module. */
 export class FwkReadService {
   constructor(private readonly options: {
@@ -120,6 +324,7 @@ export class FwkReadService {
     authorizationServer: SacAuthorizationServer;
     source: (input: { workspaceId: string; actorContext: TrustedActorContext }) => Promise<FwkSource>;
     canonical: { workspaceRoot: string; configurationRevision: string; policyRef: string; policyRevision: string };
+    policySelection: (() => Promise<PolicyRuntimeSelection>) | undefined;
     now?: () => Date;
     verifyReceiptLedger?: LedgerVerifier;
     refreshReceiptCheckpoint?: (checkpointPath: string, body: CheckpointBody) => Promise<void>;
@@ -136,6 +341,7 @@ export class FwkReadService {
   }
 
   private async resolve(input: { workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }, action: "overview" | "resource", itemId?: string): Promise<FwkReadResult> {
+    const policy = await (this.options.policySelection?.() ?? Promise.resolve(this.options.canonical));
     // Actor identity is intentionally absent from the public payload.  Only a
     // transport-owned authorization server may issue the WeakSet-trusted
     // context carried into source resolution.
@@ -168,7 +374,7 @@ export class FwkReadService {
       ...(work.state === "bound" && (!itemId || itemId === "work") ? [{ id: "work", required: required.has("work") || !optional.has("work"), tokens: 32 }] : []),
       ...select(acceptedKnowHow).map((item) => ({ id: item.id, required: required.has(item.id) || !optional.has(item.id), tokens: 16 })),
     ];
-    const assembly = await assembleAndRecordContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId: input.requestCorrelationId, ...input.budget, candidates, omittedOptional: withheld, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision });
+    const assembly = await assembleAndRecordContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId: input.requestCorrelationId, ...input.budget, candidates, omittedOptional: withheld, configurationRevision: this.options.canonical.configurationRevision, policyRef: policy.policyRef, policyRevision: policy.policyRevision });
     if ("code" in assembly) return assembly;
     return this.success(input.workspaceId, actor.subject, assembly, facts, work, acceptedKnowHow, now, action, itemId);
   }
@@ -189,8 +395,9 @@ export class FwkReadService {
   }
 
   private async denied(workspaceId: string, actor: string, correlationId: string): Promise<FwkResult> {
+    const policy = this.options.canonical;
     const now = this.options.now ?? (() => new Date());
-    const assembly = await recordNoContentContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId, configurationRevision: this.options.canonical.configurationRevision, policyRef: this.options.canonical.policyRef, policyRevision: this.options.canonical.policyRevision, outcome: "denied" });
+    const assembly = await recordNoContentContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId, configurationRevision: this.options.canonical.configurationRevision, policyRef: policy.policyRef, policyRevision: policy.policyRevision, outcome: "denied" });
     const receipt = await this.receipt(workspaceId, actor, "denied", assembly, now);
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
@@ -235,6 +442,7 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
     authorizationServer,
     strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
   });
+  const canonical = Object.freeze({ workspaceRoot: cwd, configurationRevision: "context-operations-v1", policyRef: "./security/policy/local", policyRevision: "local-offline-v1" });
   return new FwkReadService({
     guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
     authorizationServer,
@@ -264,7 +472,11 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
         knowHow: knowHow.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
       };
     },
-    canonical: { workspaceRoot: cwd, configurationRevision: "context-operations-v1", policyRef: "./security/policy/local", policyRevision: "local-offline-v1" },
+    canonical,
+    policySelection: async () => resolvePolicySelectionSafely(
+      cwd,
+      canonical,
+    ),
   });
 }
 

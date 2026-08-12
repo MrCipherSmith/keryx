@@ -15,7 +15,8 @@ deleted after the team confirms no further recovery is needed.
 | 2 — FWK read path | Implemented | `origin/feat/sac-phase2-fwk-read-path` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase2-fwk-read-path` |
 | 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
 | 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` | No phase-specific branch retained. |
-| 5 — Opt-in policy experiment | In progress | Flow 151; [policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
+| 5 — Opt-in policy experiment | Implemented | Flow 151; [policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
+| 6 — Runtime opt-in readiness | In progress | New phase-6 runtime PRD + runtime guard delivery | `feat/shared-agent-context` |
 
 ### Deferred branch cleanup
 
@@ -113,6 +114,24 @@ Implementation evidence is published in the
 [Phase 5 policy experiment report](phase-5-policy-experiment-report.md). The
 committed corpus is synthetic mechanism evidence only; default configuration
 keeps the learned candidate disabled and the kill switch active.
+
+## Phase 6 — Runtime opt-in readiness
+
+- Persist explicit runtime artifact pins for candidate, baseline, corpus and
+  evaluation report.
+- Enforce strict ordered integrity verification before candidate activation:
+  config → baseline artifact → candidate artifact → corpus manifest → evaluation
+  report.
+- Resolve candidate policy only under exact pin conformance and successful chain
+  checks; any malformed artifact, hash mismatch, schema mismatch or chain
+  inconsistency is fail-closed to the deterministic baseline.
+- Keep kill switch mandatory and explicit: no candidate path can run when
+  `killSwitch === true`.
+- Rollback must set `enabled: false` and `killSwitch: true`.
+
+Implementation evidence to collect: updated local policy config loading,
+runtime policy-evaluation wiring, focused regression tests and full parity/phase
+5 continuation tests.
 
 ## Rollback order
 

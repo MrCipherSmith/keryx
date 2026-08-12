@@ -160,3 +160,33 @@ Shared Agent Context — Phase 5: Opt-in policy experiment.
 Create a draft PR, perform full review and remediate findings until reviewers
 return without problems. Merge into the feature branch, close the Flow, then
 delete the worktree.
+
+## 7. Runtime opt-in readiness
+
+Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Shared Agent Context — Phase 6: Runtime opt-in readiness.
+
+### Scope
+
+- Add explicit runtime config with artifact pins for candidate, baseline, corpus
+  and evaluation report.
+- Add strict runtime integrity-chain validation: config -> baseline -> candidate
+  -> corpus -> evaluation report; no parallel checks.
+- Integrate resolved policy decision into the FWK selector with fail-closed
+  fallback to deterministic baseline.
+- Enforce `enabled` + `killSwitch` as a hard pair. Rollback is baseline +
+  kill-switch activation by default.
+
+### Acceptance criteria
+
+- Candidate policy can never become active by default.
+- Any missing pin, malformed config, digest mismatch, parse failure or chain
+  mismatch disables candidate and keeps deterministic baseline.
+- Kill switch and rollback are mandatory operational controls.
+- CLI/MCP parity and acceptance-level tests from phase 5 remain green.
+
+### Delivery protocol
+
+Create a draft PR, perform full review and remediate findings until reviewers
+return without problems. Merge into the feature branch, close the Flow, then
+delete the worktree.
