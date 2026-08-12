@@ -1,0 +1,158 @@
+{
+  "rows": [
+    {
+      "id": "4b81ed6890cc368d4438099043c64879615c482ca1e073f642880c6e7a4bdf23",
+      "scenarioPseudonym": "61d6e5f36cc55206c61a9611df827e63bc64800dcfc92acd9f04fadd4122dce3",
+      "workspacePseudonym": "4a1a7a66a232df11b3bb448171045a84530e480ce395b32fb5e9d94deb7d361e",
+      "producerPseudonym": "0d589df012f24e4ecbe64ed9815c1e857a7ef1a4e07bb1b1ba4c3f533e0852ef",
+      "receipt": {
+        "ledgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
+        "recordHash": "9429453b95f0007b066904805d4ad59dcdc135ecb0734e602a3ff5c13fe9dd79",
+        "previousRecordHash": "f122e4c9a8bab62771024437ee584d4647322bdad49bb7e1a4f7c857a67df2cd",
+        "configurationRevision": "context-r1",
+        "policyRevision": "policy-r1"
+      },
+      "outcome": {
+        "artifactRef": "./fixtures/sac-policy-experiment/outcomes/synthetic-receipt-b.json",
+        "artifactRevision": "gate-r1",
+        "artifactHash": "3507bbcab7fe50fbe33ae32840cbcb61d138d4d1222f03c7f6b9fa237b4aca6f",
+        "recordHash": "f7208d3b3978adadc8f8dc23011623a823e19e2fe6b796cd8180b7c559b8bda1",
+        "result": "pass",
+        "caseClass": "standard"
+      },
+      "features": {
+        "action": "resource",
+        "decision": "allowed",
+        "tokenBucket": 128,
+        "toolCallBucket": 2,
+        "elapsedMsBucket": 20,
+        "selectedCount": 1,
+        "omittedOptionalCount": 0
+      },
+      "expectedSelection": "select",
+      "split": "holdout"
+    },
+    {
+      "id": "6f1c050992371ee3ed73bef89a7f4630027d35a2d5ff37252149270c0ab5b886",
+      "scenarioPseudonym": "a01407452b00199a93dd65c115b9f41946476f36f463f974c08e617a57cab960",
+      "workspacePseudonym": "4a1a7a66a232df11b3bb448171045a84530e480ce395b32fb5e9d94deb7d361e",
+      "producerPseudonym": "0d589df012f24e4ecbe64ed9815c1e857a7ef1a4e07bb1b1ba4c3f533e0852ef",
+      "receipt": {
+        "ledgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
+        "recordHash": "18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a",
+        "previousRecordHash": "9429453b95f0007b066904805d4ad59dcdc135ecb0734e602a3ff5c13fe9dd79",
+        "configurationRevision": "context-r1",
+        "policyRevision": "policy-r1"
+      },
+      "outcome": {
+        "artifactRef": "./fixtures/sac-policy-experiment/outcomes/synthetic-receipt-c.json",
+        "artifactRevision": "gate-r1",
+        "artifactHash": "852dfe27f568ccb86ae9ca28b30e2179c86eda7a628028c5f00ed681c1e2b873",
+        "recordHash": "72207926dbeb87f52a2b93926272d4915cf4fbda49fe00994d5d12d88a5f9152",
+        "result": "pass",
+        "caseClass": "adversarial"
+      },
+      "features": {
+        "action": "overview",
+        "decision": "allowed",
+        "tokenBucket": 64,
+        "toolCallBucket": 2,
+        "elapsedMsBucket": 20,
+        "selectedCount": 1,
+        "omittedOptionalCount": 0
+      },
+      "expectedSelection": "select",
+      "split": "adversarial"
+    },
+    {
+      "id": "8ad3f40e019364c1caea227ade120ff4a9aa34b0dfd3bd0cac2e589e59285779",
+      "scenarioPseudonym": "ed1fea6de979ca0049732cc71c21aab902e0031e174d49a9a401cc168215a7fe",
+      "workspacePseudonym": "4a1a7a66a232df11b3bb448171045a84530e480ce395b32fb5e9d94deb7d361e",
+      "producerPseudonym": "0d589df012f24e4ecbe64ed9815c1e857a7ef1a4e07bb1b1ba4c3f533e0852ef",
+      "receipt": {
+        "ledgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
+        "recordHash": "f122e4c9a8bab62771024437ee584d4647322bdad49bb7e1a4f7c857a67df2cd",
+        "previousRecordHash": "GENESIS",
+        "configurationRevision": "context-r1",
+        "policyRevision": "policy-r1"
+      },
+      "outcome": {
+        "artifactRef": "./fixtures/sac-policy-experiment/outcomes/synthetic-receipt-a.json",
+        "artifactRevision": "gate-r1",
+        "artifactHash": "20391f8e59f9d4d2e44e8275eeada6fa7b50923370d8188e99fb17d3908db481",
+        "recordHash": "6364ed590c4c7b99322b102b9c83f62b07b2c6688630ea7f656d0453080c9a07",
+        "result": "pass",
+        "caseClass": "standard"
+      },
+      "features": {
+        "action": "overview",
+        "decision": "allowed",
+        "tokenBucket": 64,
+        "toolCallBucket": 2,
+        "elapsedMsBucket": 20,
+        "selectedCount": 1,
+        "omittedOptionalCount": 0
+      },
+      "expectedSelection": "select",
+      "split": "train"
+    }
+  ],
+  "quarantine": [],
+  "manifest": {
+    "schemaVersion": "1.0",
+    "corpusVersion": "sac-policy-corpus-1.0.0",
+    "baselineVersion": "deterministic-context-1.0.0",
+    "baselineDigest": "cce515bd4936afca41767f10ad33d1dddc020d5b5edab3e871ae749091aba60e",
+    "candidateVersion": "candidate-1.0.0",
+    "provenance": {
+      "receiptLedgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
+      "receiptHeadHash": "18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a",
+      "verifiedReceiptCount": 3,
+      "independentlyVerifiedOutcomeCount": 3
+    },
+    "selection": {
+      "independentOutcomesRequired": true,
+      "selfReportedOutcomeAccepted": false,
+      "knownConfigurationRevisions": [
+        "context-r1"
+      ],
+      "knownPolicyRevisions": [
+        "policy-r1"
+      ]
+    },
+    "redaction": {
+      "allowlistOnly": true,
+      "pseudonymizationRevision": "hmac-sha256-v1",
+      "omittedFields": [
+        "actor",
+        "workspaceId",
+        "traceRef",
+        "selectedIds",
+        "resourceRef",
+        "outcome",
+        "rawContent"
+      ]
+    },
+    "quarantine": {
+      "excludedFromAllSplits": true,
+      "count": 0,
+      "reasons": {}
+    },
+    "split": {
+      "algorithm": "sha256-modulo-v1",
+      "seed": "published-split-v1",
+      "seedDigest": "16ff87a3f32b9bbdf1216008cd9001ffc2fa49dff42eda200219641e5fc40ae9",
+      "holdoutPercent": 50,
+      "digests": {
+        "train": "14f21094d064a7a2b8c1561eded84714fd41d1212b61eb4fd0d742773bb046bb",
+        "holdout": "a604d54ce087e2a9ee806148f0ec998f5c824b9dd315933745010f2d22c876a7",
+        "adversarial": "1e48c3e1b62a1a8317d1a6552bde53ef3511c05244d15f8b2d4541e40d63e03a"
+      }
+    },
+    "adversarial": {
+      "required": true,
+      "count": 1
+    },
+    "corpusDigest": "d4f29e44732f550f0174bb0263b31601b16f5d414ede9dbcf4b4eb0743f97a31"
+  }
+}

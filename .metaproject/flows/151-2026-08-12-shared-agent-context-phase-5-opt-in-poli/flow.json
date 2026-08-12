@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 2,
+  "id": "151",
+  "slug": "shared-agent-context-phase-5-opt-in-poli",
+  "title": "Shared Agent Context — Phase 5: Opt-in policy experiment",
+  "status": "implemented",
+  "createdAt": "2026-08-12T08:15:46.740Z",
+  "updatedAt": "2026-08-12T11:08:31.280Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b93867a96df4a48534767ab16c24b13891a5f002e00a51673fbbb15d9ae45ed7",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-12T11:08:20.246Z",
+      "note": "Corpus construction verifies the complete closed AccessReceipt schema, record hashes and predecessor chain; every included row retains immutable receipt linkage, configuration/policy revisions and an owner-resolved hash-bound verifier outcome."
+    },
+    "AC2": {
+      "at": "2026-08-12T11:08:20.312Z",
+      "note": "Receipt outcome is omitted from labels; tests quarantine missing, producer-conflicted, malformed, duplicate, hash-mismatched, unresolved and unknown-revision evidence."
+    },
+    "AC3": {
+      "at": "2026-08-12T11:08:20.379Z",
+      "note": "Published corpus is allowlist-only and pseudonymized; manifest pins provenance, selection, exact redaction contract, quarantine, reproducible seeded train/holdout membership and adversarial cases; security scans found zero source/artifact findings."
+    },
+    "AC4": {
+      "at": "2026-08-12T11:08:20.445Z",
+      "note": "Evaluation executes the digest-pinned deterministic baseline twice and accepts candidate output only through owner-bound integrity-linked read-only/network-off sandbox execution receipts; published holdout/adversarial/security gates pass."
+    },
+    "AC5": {
+      "at": "2026-08-12T11:08:20.514Z",
+      "note": "Closed candidate output accepts only duplicate-free selectedIds within actual baseline authorization; protected role, ACL, security, acceptance, Flow, configuration, policy and self-modification fields fail closed."
+    },
+    "AC6": {
+      "at": "2026-08-12T11:08:20.594Z",
+      "note": "Activation recomputes the complete corpus+manifest digest and report digest, requires exact baseline/candidate/corpus/evaluation pins and explicit opt-in; kill switch, every mismatch/failure and rollback return the pinned baseline."
+    },
+    "AC7": {
+      "at": "2026-08-12T11:08:20.660Z",
+      "note": "Default config is enabled=false and killSwitch=true; no CLI/MCP learned-policy surface was added, and existing SAC authorization/Flow behavior remains authoritative."
+    },
+    "AC8": {
+      "at": "2026-08-12T11:08:20.748Z",
+      "note": "Final verification: 56 focused tests, TypeScript, build, 686 doc links, byte-for-byte fixture regeneration, Code Health 93 stable, zero changed-artifact security findings, full PR CI green on prior round and final review NO PROBLEMS; report states synthetic evidence limitations."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/273"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Verify AccessReceipt ledger integrity before corpus use and append",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Build minimized anonymized corpus, manifest, quarantine and deterministic splits",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Compare pinned candidate and baseline through fail-closed sandbox evaluation",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Gate opt-in with exact pins, kill switch, protected fields and rollback",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Publish Phase 5 corpus and evaluation evidence",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Run focused/full tests, code verifier, health and full clean review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-12T08:15:46.740Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-12T08:24:41.614Z",
+      "event": "task-added",
+      "detail": "T5: Verify AccessReceipt ledger integrity before corpus use and append"
+    },
+    {
+      "at": "2026-08-12T08:24:42.712Z",
+      "event": "task-added",
+      "detail": "T6: Build minimized anonymized corpus, manifest, quarantine and deterministic splits"
+    },
+    {
+      "at": "2026-08-12T08:24:43.806Z",
+      "event": "task-added",
+      "detail": "T7: Compare pinned candidate and baseline through fail-closed sandbox evaluation"
+    },
+    {
+      "at": "2026-08-12T08:24:44.940Z",
+      "event": "task-added",
+      "detail": "T8: Gate opt-in with exact pins, kill switch, protected fields and rollback"
+    },
+    {
+      "at": "2026-08-12T08:24:46.077Z",
+      "event": "task-added",
+      "detail": "T9: Publish Phase 5 corpus and evaluation evidence"
+    },
+    {
+      "at": "2026-08-12T08:24:47.161Z",
+      "event": "task-added",
+      "detail": "T10: Run focused/full tests, code verifier, health and full clean review"
+    },
+    {
+      "at": "2026-08-12T08:33:05.826Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-12T08:33:07.265Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-12T09:30:08.344Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-12T09:30:10.950Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-12T09:30:12.428Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-12T09:30:13.855Z",
+      "event": "task-done",
+      "detail": "T5: Verify AccessReceipt ledger integrity before corpus use and append"
+    },
+    {
+      "at": "2026-08-12T09:30:15.584Z",
+      "event": "task-done",
+      "detail": "T6: Build minimized anonymized corpus, manifest, quarantine and deterministic splits"
+    },
+    {
+      "at": "2026-08-12T09:30:16.905Z",
+      "event": "task-done",
+      "detail": "T7: Compare pinned candidate and baseline through fail-closed sandbox evaluation"
+    },
+    {
+      "at": "2026-08-12T09:30:18.371Z",
+      "event": "task-done",
+      "detail": "T8: Gate opt-in with exact pins, kill switch, protected fields and rollback"
+    },
+    {
+      "at": "2026-08-12T09:30:19.840Z",
+      "event": "task-done",
+      "detail": "T9: Publish Phase 5 corpus and evaluation evidence"
+    },
+    {
+      "at": "2026-08-12T11:08:20.119Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-12T11:08:20.182Z",
+      "event": "task-done",
+      "detail": "T10: Run focused/full tests, code verifier, health and full clean review"
+    },
+    {
+      "at": "2026-08-12T11:08:20.246Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Corpus construction verifies the complete closed AccessReceipt schema, record hashes and predecessor chain; every included row retains immutable receipt linkage, configuration/policy revisions and an owner-resolved hash-bound verifier outcome."
+    },
+    {
+      "at": "2026-08-12T11:08:20.312Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Receipt outcome is omitted from labels; tests quarantine missing, producer-conflicted, malformed, duplicate, hash-mismatched, unresolved and unknown-revision evidence."
+    },
+    {
+      "at": "2026-08-12T11:08:20.379Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Published corpus is allowlist-only and pseudonymized; manifest pins provenance, selection, exact redaction contract, quarantine, reproducible seeded train/holdout membership and adversarial cases; security scans found zero source/artifact findings."
+    },
+    {
+      "at": "2026-08-12T11:08:20.445Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Evaluation executes the digest-pinned deterministic baseline twice and accepts candidate output only through owner-bound integrity-linked read-only/network-off sandbox execution receipts; published holdout/adversarial/security gates pass."
+    },
+    {
+      "at": "2026-08-12T11:08:20.514Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Closed candidate output accepts only duplicate-free selectedIds within actual baseline authorization; protected role, ACL, security, acceptance, Flow, configuration, policy and self-modification fields fail closed."
+    },
+    {
+      "at": "2026-08-12T11:08:20.594Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Activation recomputes the complete corpus+manifest digest and report digest, requires exact baseline/candidate/corpus/evaluation pins and explicit opt-in; kill switch, every mismatch/failure and rollback return the pinned baseline."
+    },
+    {
+      "at": "2026-08-12T11:08:20.660Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Default config is enabled=false and killSwitch=true; no CLI/MCP learned-policy surface was added, and existing SAC authorization/Flow behavior remains authoritative."
+    },
+    {
+      "at": "2026-08-12T11:08:20.748Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Final verification: 56 focused tests, TypeScript, build, 686 doc links, byte-for-byte fixture regeneration, Code Health 93 stable, zero changed-artifact security findings, full PR CI green on prior round and final review NO PROBLEMS; report states synthetic evidence limitations."
+    },
+    {
+      "at": "2026-08-12T11:08:31.280Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/273 (tracker unavailable: existence not verified)"
+    }
+  ]
+}

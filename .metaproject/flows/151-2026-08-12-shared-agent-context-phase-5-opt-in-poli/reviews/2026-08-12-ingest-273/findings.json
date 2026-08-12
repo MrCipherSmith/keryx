@@ -1,0 +1,83 @@
+[
+  {
+    "id": "F-001",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "Activation trusted a stale report digest and unbounded IDs",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-002",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "Independent outcome evidence was caller-attested",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-003",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "Pseudonyms were linkable across corpus versions",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-004",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "Evaluation did not detect candidate nondeterminism",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-005",
+    "severity": "blocker",
+    "reviewer": "review-orchestrator",
+    "summary": "Baseline pin was not bound end-to-end",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-006",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "Sandbox controls were self-attested",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-007",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "Receipt append reverified the complete ledger",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-008",
+    "severity": "major",
+    "reviewer": "review-orchestrator",
+    "summary": "Candidate execution had no deadline",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": true
+  },
+  {
+    "id": "F-009",
+    "severity": "minor",
+    "reviewer": "review-orchestrator",
+    "summary": "Receipt validation duplicated the canonical schema owner",
+    "classification": "valid_followup",
+    "flow_relevance": "post_flow_feedback",
+    "class_scope_present": false
+  }
+]

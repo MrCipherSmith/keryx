@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FwkReadService } from "./fwk-service";
 import { createSacAuthorizationServer, type SacVerifiedPrincipal } from "./index";
+import { verifyAccessReceiptLedger } from "./receipt-integrity";
 
 const stamp = "2026-08-11T00:00:00Z";
 const source = async () => ({
@@ -90,4 +91,153 @@ test("allowed and denied receipts are appended with a causal integrity chain", a
   expect(receipts[1]!.integrity.previousRecordHash).toBe(receipts[0]!.integrity.recordHash);
   expect(receipts[1]!.decision).toBe("denied");
   expect(JSON.stringify(receipts)).not.toContain("verified fact");
+  const checkpointPath = path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json");
+  const checkpoint = JSON.parse(await readFile(checkpointPath, "utf8")) as {
+    ledgerBytes: number;
+    recordCount: number;
+    headHash: string;
+    integrity: { checkpointHash: string };
+  };
+  expect(checkpoint).toMatchObject({
+    ledgerBytes: (await stat(path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl"))).size,
+    recordCount: 2,
+    headHash: receipts[1]!.integrity.recordHash,
+  });
+  expect(checkpoint.integrity.checkpointHash).toMatch(/^[a-f0-9]{64}$/);
+  expect((await stat(checkpointPath)).mode & 0o777).toBe(0o600);
+});
+test("normal receipt appends use the bounded checkpoint fast path and missing checkpoints rebuild once", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-checkpoint-"));
+  let fullAudits = 0;
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+    verifyReceiptLedger: (receipts) => {
+      fullAudits += 1;
+      return verifyAccessReceiptLedger(receipts);
+    },
+  });
+  await read(service, { requestCorrelationId: "fwk-checkpoint-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-checkpoint-second-0001" });
+  await read(service, { requestCorrelationId: "fwk-checkpoint-third-0001" });
+  expect(fullAudits).toBe(0);
+
+  await unlink(path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json"));
+  await read(service, { requestCorrelationId: "fwk-checkpoint-rebuild-0001" });
+  expect(fullAudits).toBe(1);
+});
+
+test("checkpoint refresh failure after append does not fail or duplicate the committed receipt", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-checkpoint-failure-"));
+  let refreshAttempts = 0;
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+    refreshReceiptCheckpoint: async () => {
+      refreshAttempts += 1;
+      throw new Error("injected checkpoint rename failure");
+    },
+  });
+
+  const result = await read(service, { requestCorrelationId: "fwk-checkpoint-failure-0001" });
+  expect("code" in result).toBe(false);
+  expect(refreshAttempts).toBe(1);
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const receipts = (await readFile(ledger, "utf8")).trim().split("\n");
+  expect(receipts).toHaveLength(1);
+  await expect(stat(path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("live long receipt audit retains lock ownership and serializes a second writer", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-live-lock-"));
+  const canonical = { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" };
+  const bootstrap = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(), canonical, now: () => new Date(stamp),
+  });
+  await read(bootstrap, { requestCorrelationId: "fwk-live-lock-bootstrap-0001" });
+  const checkpoint = path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json");
+  await unlink(checkpoint);
+
+  let releaseAudit!: () => void;
+  const auditRelease = new Promise<void>((resolve) => { releaseAudit = resolve; });
+  let auditStarted!: () => void;
+  const started = new Promise<void>((resolve) => { auditStarted = resolve; });
+  let activeAudits = 0;
+  let maxActiveAudits = 0;
+  const verify = async (receipts: Parameters<typeof verifyAccessReceiptLedger>[0]) => {
+    activeAudits += 1;
+    maxActiveAudits = Math.max(maxActiveAudits, activeAudits);
+    auditStarted();
+    await auditRelease;
+    activeAudits -= 1;
+    return verifyAccessReceiptLedger(receipts);
+  };
+  const makeWriter = () => new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(), canonical, now: () => new Date(stamp), verifyReceiptLedger: verify,
+    receiptLockOptions: { staleMs: 10, heartbeatMs: 2, retryMs: 2, timeoutMs: 1_000 },
+  });
+
+  const first = read(makeWriter(), { requestCorrelationId: "fwk-live-lock-first-0001" });
+  await started;
+  const second = read(makeWriter(), { requestCorrelationId: "fwk-live-lock-second-0001" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  releaseAudit();
+  await Promise.all([first, second]);
+
+  expect(maxActiveAudits).toBe(1);
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const receipts = (await readFile(ledger, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  expect(receipts).toHaveLength(3);
+  expect(verifyAccessReceiptLedger(receipts)).toMatchObject({ ok: true, verifiedCount: 3 });
+  expect(JSON.parse(await readFile(checkpoint, "utf8"))).toMatchObject({ recordCount: 3, headHash: receipts[2]!.integrity.recordHash });
+});
+
+test("a corrupted receipt ledger refuses the next append", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-corrupt-ledger-"));
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+  });
+  await read(service, { requestCorrelationId: "fwk-corrupt-ledger-first-0001" });
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const first = JSON.parse((await readFile(ledger, "utf8")).trim()) as Record<string, unknown>;
+  first.cost = { tokens: 999, toolCalls: 1, elapsedMs: 0 };
+  await writeFile(ledger, `${JSON.stringify(first)}\n`);
+  await expect(read(service, { requestCorrelationId: "fwk-corrupt-ledger-second-0001" }))
+    .rejects.toThrow("invalid access receipt ledger");
+});
+test("same-size historical receipt corruption invalidates the checkpoint and refuses append", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-historical-corruption-"));
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+  });
+  await read(service, { requestCorrelationId: "fwk-historical-first-0001" });
+  await read(service, { requestCorrelationId: "fwk-historical-second-0001" });
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const lines = (await readFile(ledger, "utf8")).trimEnd().split("\n");
+  const first = JSON.parse(lines[0]!) as { cost: { tokens: number } };
+  first.cost.tokens = 9;
+  lines[0] = JSON.stringify(first);
+  const before = (await stat(ledger)).size;
+  await writeFile(ledger, `${lines.join("\n")}\n`);
+  expect((await stat(ledger)).size).toBe(before);
+  await expect(read(service, { requestCorrelationId: "fwk-historical-third-0001" }))
+    .rejects.toThrow("invalid access receipt ledger");
 });

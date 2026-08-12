@@ -1,9 +1,9 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.3.0
+Version: 1.4.0
 
 ## Delivery status
 
-As of 2026-08-12, Phases 0–3 are implemented and merged into
+As of 2026-08-12, Phases 0–4 are implemented and merged into
 `feat/shared-agent-context`. Their acceptance and review work is complete;
 the branches below are retained only as temporary merge history and may be
 deleted after the team confirms no further recovery is needed.
@@ -14,6 +14,8 @@ deleted after the team confirms no further recovery is needed.
 | 1 — Offline workspace registry | Implemented | Flow review commit `75e68cd6` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase1-offline-registry` |
 | 2 — FWK read path | Implemented | `origin/feat/sac-phase2-fwk-read-path` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase2-fwk-read-path` |
 | 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
+| 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` | No phase-specific branch retained. |
+| 5 — Opt-in policy experiment | In progress | Flow 151; [policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
 
 ### Deferred branch cleanup
 
@@ -106,6 +108,11 @@ omitted optional items.
 
 **Exit:** AC-12 plus published evaluation report. Without this exit, learned
 policy remains absent from runtime.
+
+Implementation evidence is published in the
+[Phase 5 policy experiment report](phase-5-policy-experiment-report.md). The
+committed corpus is synthetic mechanism evidence only; default configuration
+keeps the learned candidate disabled and the kill switch active.
 
 ## Rollback order
 

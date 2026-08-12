@@ -25,6 +25,7 @@ const subjectPattern = /^(?:user|team|service|agent):[a-z0-9][a-z0-9._-]{0,127}$
 const revisionPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const correlationPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$/;
 const workspacePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+const receiptHashPattern = /^[a-f0-9]{64}$/;
 const utcPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 const forbiddenPayloadKeys = new Set(["prompt", "transcript", "hiddenReasoning", "secret", "secrets", "rawContent"]);
 const normativeSchemaFiles: Record<SacSchema, string> = {
@@ -397,13 +398,38 @@ function validateReview(document: RecordValue, errors: SacValidationError[]): vo
 function validateAccess(document: RecordValue, errors: SacValidationError[]): void {
   const allowed = ["schemaVersion", "id", "workspaceId", "actor", "action", "decision", "recordedAt", "cost", "contextAssembly", "policy", "integrity", "resourceRef", "outcome"];
   closedObject(document, allowed, errors, "$"); required(document, allowed.slice(0, 11), errors, "$");
+  if (document.schemaVersion !== "1.0") error(errors, "schema_const", "$.schemaVersion", "must be 1.0");
   ["id", "workspaceId"].forEach((key) => stringMatch(document[key], idPattern, errors, `$.${key}`)); stringMatch(document.actor, subjectPattern, errors, "$.actor"); utc(document.recordedAt, errors, "$.recordedAt");
-  if (!["overview", "fwk", "resource"].includes(document.action as string) || !["allowed", "denied", "budget-exhausted", "stale"].includes(document.decision as string)) error(errors, "schema_enum", "$.action", "has invalid access values");
+  if (!["overview", "fwk", "resource"].includes(document.action as string)) error(errors, "schema_enum", "$.action", "has an invalid access action");
+  if (!["allowed", "denied", "budget-exhausted", "stale"].includes(document.decision as string)) error(errors, "schema_enum", "$.decision", "has an invalid access decision");
   if (document.action === "resource") { if (!("resourceRef" in document)) error(errors, "required", "$.resourceRef", "resource action requires a reference"); else workspaceUri(document.resourceRef, errors, "$.resourceRef"); } else if (document.resourceRef !== undefined) error(errors, "schema_conditional", "$.resourceRef", "is only allowed for resource actions");
-  if (!requireObject(document.cost, errors, "$.cost")) return; required(document.cost, ["toolCalls", "elapsedMs"], errors, "$.cost");
-  if (!requireObject(document.contextAssembly, errors, "$.contextAssembly")) return; required(document.contextAssembly, ["traceRef", "configurationRevision", "selected", "omittedOptional"], errors, "$.contextAssembly"); workspaceUri(document.contextAssembly.traceRef, errors, "$.contextAssembly.traceRef");
-  for (const key of ["selected", "omittedOptional"] as const) if (!Array.isArray(document.contextAssembly[key])) error(errors, "schema_type", `$.contextAssembly.${key}`, "must be an array"); else document.contextAssembly[key].forEach((ref, index) => workspaceUri(ref, errors, `$.contextAssembly.${key}[${index}]`));
-  if (!requireObject(document.policy, errors, "$.policy")) return; workspaceUri(document.policy.ref, errors, "$.policy.ref"); stringMatch(document.policy.revision, revisionPattern, errors, "$.policy.revision");
+  if (document.outcome !== undefined && !["unknown", "useful", "not-useful"].includes(document.outcome as string)) error(errors, "schema_enum", "$.outcome", "has an invalid receipt outcome");
+  if (requireObject(document.cost, errors, "$.cost")) {
+    closedObject(document.cost, ["tokens", "toolCalls", "elapsedMs"], errors, "$.cost"); required(document.cost, ["toolCalls", "elapsedMs"], errors, "$.cost");
+    for (const key of ["tokens", "toolCalls", "elapsedMs"] as const) if (document.cost[key] !== undefined && (!Number.isInteger(document.cost[key]) || Number(document.cost[key]) < 0)) error(errors, "schema_type", `$.cost.${key}`, "must be a non-negative integer");
+  }
+  if (requireObject(document.contextAssembly, errors, "$.contextAssembly")) {
+    closedObject(document.contextAssembly, ["traceRef", "configurationRevision", "selected", "omittedOptional"], errors, "$.contextAssembly"); required(document.contextAssembly, ["traceRef", "configurationRevision", "selected", "omittedOptional"], errors, "$.contextAssembly");
+    workspaceUri(document.contextAssembly.traceRef, errors, "$.contextAssembly.traceRef"); stringMatch(document.contextAssembly.configurationRevision, revisionPattern, errors, "$.contextAssembly.configurationRevision");
+    for (const key of ["selected", "omittedOptional"] as const) if (!Array.isArray(document.contextAssembly[key])) error(errors, "schema_type", `$.contextAssembly.${key}`, "must be an array"); else document.contextAssembly[key].forEach((ref, index) => workspaceUri(ref, errors, `$.contextAssembly.${key}[${index}]`));
+  }
+  if (requireObject(document.policy, errors, "$.policy")) {
+    closedObject(document.policy, ["ref", "revision"], errors, "$.policy"); required(document.policy, ["ref", "revision"], errors, "$.policy");
+    workspaceUri(document.policy.ref, errors, "$.policy.ref"); stringMatch(document.policy.revision, revisionPattern, errors, "$.policy.revision");
+  }
+  if (requireObject(document.integrity, errors, "$.integrity")) {
+    closedObject(document.integrity, ["recordHash", "previousRecordHash"], errors, "$.integrity"); required(document.integrity, ["recordHash", "previousRecordHash"], errors, "$.integrity");
+    stringMatch(document.integrity.recordHash, receiptHashPattern, errors, "$.integrity.recordHash");
+    if (document.integrity.previousRecordHash !== "GENESIS") stringMatch(document.integrity.previousRecordHash, receiptHashPattern, errors, "$.integrity.previousRecordHash");
+  }
+}
+
+/** Synchronous canonical AccessReceipt validation for integrity/append paths. */
+export function validateAccessReceiptDocument(document: unknown): SacValidationResult {
+  const errors: SacValidationError[] = [];
+  if (!requireObject(document, errors, "$")) return { valid: false, errors };
+  validateAccess(document, errors);
+  return { valid: errors.length === 0, errors };
 }
 
 /** Validates the five normative Draft 2020-12 SAC contracts plus their x-invariants. */
