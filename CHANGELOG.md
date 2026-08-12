@@ -4,6 +4,18 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
+## [0.2.31] — 2026-08-12
+
+### Changed
+
+- **Agent TUI now separates `/connect` and `/provider` semantics.**
+  `/connect` lists only already-configured and reachable providers, while
+  `/provider` remains the configuration/setup path (API key + endpoint + model).
+
+- **Provider selection and model discovery robustness.** Endpoint overrides are
+  persisted per provider, and rapid-mlx detection no longer falls back to
+  unrelated hardcoded models when endpoint probing fails.
+
 ## [0.2.30] — 2026-08-12
 
 ### Fixed
