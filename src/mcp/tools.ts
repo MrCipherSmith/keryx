@@ -20,7 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createLocalProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -67,6 +67,7 @@ export function buildToolRegistry(): ToolEntry[] {
   // stability (see the flow 040 journal). No name collides with a legacy adapter.
   return [
     ...toMcpTools(),
+    { name: "sac.collaboration", module: "sac", description: "Read safe SAC collaboration references and activity.", inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]), mutating: false, async invoke(cwd, params, context) { if (context?.transport === "http") return { code: "sac_transport_denied" as const }; return normalizeCollaborationResult(await createLocalCollaborationService(cwd).overview({ workspaceId: stringParam(params, "workspaceId") ?? "", request: undefined, requestCorrelationId: randomUUID() })); } },
     {
       name: "sac.overview", module: "sac", description: "Read a bounded Shared Agent Context overview.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, maxItems: { type: "number" }, maxTokens: { type: "number" } }, ["workspaceId"]),

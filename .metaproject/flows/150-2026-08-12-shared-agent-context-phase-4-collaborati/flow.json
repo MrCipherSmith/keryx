@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "150",
+  "slug": "shared-agent-context-phase-4-collaborati",
+  "title": "Shared Agent Context — Phase 4: Collaboration ergonomics",
+  "status": "implemented",
+  "createdAt": "2026-08-12T07:01:54.486Z",
+  "updatedAt": "2026-08-12T08:03:56.164Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:937caceb0859dcdc2f77f3f40a975bb7db9a2f108e061083b45eadf74459b9d3",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/272"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Record contract-based onboarding and handoff usability evaluation",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Run code verifier, health gate, fixture compatibility and full review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-12T07:01:54.486Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-12T07:04:53.079Z",
+      "event": "task-added",
+      "detail": "T5: Record contract-based onboarding and handoff usability evaluation"
+    },
+    {
+      "at": "2026-08-12T07:04:53.161Z",
+      "event": "task-added",
+      "detail": "T6: Run code verifier, health gate, fixture compatibility and full review"
+    },
+    {
+      "at": "2026-08-12T07:04:53.267Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-12T07:04:53.357Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-12T08:03:51.883Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-12T08:03:51.963Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-12T08:03:52.051Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-12T08:03:52.164Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-12T08:03:52.291Z",
+      "event": "task-done",
+      "detail": "T5: Record contract-based onboarding and handoff usability evaluation"
+    },
+    {
+      "at": "2026-08-12T08:03:52.413Z",
+      "event": "task-done",
+      "detail": "T6: Run code verifier, health gate, fixture compatibility and full review"
+    },
+    {
+      "at": "2026-08-12T08:03:56.164Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/272"
+    }
+  ]
+}

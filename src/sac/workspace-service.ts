@@ -16,7 +16,7 @@ import {
 } from "./index";
 
 export type WorkspaceMember = { subject: string; role: "owner" | "editor" | "viewer" };
-export type WorkspaceResource = { kind: Extract<WorkspaceReferenceKind, "component" | "repository" | "flow" | "wiki" | "memory" | "skill" | "evidence" | "worktree">; uri: string; revision?: string };
+export type WorkspaceResource = { kind: Extract<WorkspaceReferenceKind, "component" | "repository" | "flow" | "wiki" | "memory" | "skill" | "evidence" | "worktree" | "session">; uri: string; revision?: string };
 export type WorkspaceManifest = {
   schemaVersion: "1.0";
   id: string;

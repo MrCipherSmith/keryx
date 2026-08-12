@@ -17,3 +17,4 @@ export {
   type TargetWriteResult,
   type GuardedTargetWriter,
 } from "./proposal-lifecycle";
+export { createLocalCollaborationService, normalizeCollaborationResult, type CollaborationActivity } from "./collaboration-service";

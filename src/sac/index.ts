@@ -276,7 +276,7 @@ function validateWorkspace(document: RecordValue, errors: SacValidationError[]):
     const field = `$.resources[${index}]`;
     if (!requireObject(resource, errors, field)) return;
     closedObject(resource, ["kind", "uri", "revision"], errors, field); required(resource, ["kind", "uri"], errors, field);
-    if (!["component", "repository", "flow", "wiki", "memory", "skill", "evidence", "worktree"].includes(resource.kind as string)) error(errors, "schema_enum", `${field}.kind`, "has an invalid kind");
+    if (!["component", "repository", "flow", "wiki", "memory", "skill", "evidence", "worktree", "session"].includes(resource.kind as string)) error(errors, "schema_enum", `${field}.kind`, "has an invalid kind");
     workspaceUri(resource.uri, errors, `${field}.uri`);
     if (typeof resource.uri === "string") {
       if (resourceUris.has(resource.uri)) error(errors, "duplicate_resource_reference", `${field}.uri`, "a canonical resource URI may appear only once");
@@ -466,7 +466,7 @@ export async function validateSacLedger(input: { events: unknown[] }): Promise<S
 
 function hashSacRecord(value: unknown): string { return createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex"); }
 
-export type WorkspaceReferenceKind = "component" | "repository" | "flow" | "wiki" | "memory" | "skill" | "evidence" | "worktree" | "code" | "test" | "health" | "artifact";
+export type WorkspaceReferenceKind = "component" | "repository" | "flow" | "wiki" | "memory" | "skill" | "evidence" | "worktree" | "session" | "code" | "test" | "health" | "artifact";
 export class SacReferenceError extends Error { readonly code = "unsafe_workspace_reference" as const; }
 
 /** Resolves a typed URI only when both lexical and realpath containment hold. */

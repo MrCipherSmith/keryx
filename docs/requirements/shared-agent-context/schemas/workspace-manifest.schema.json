@@ -32,6 +32,6 @@
     "subjectId": {"type": "string", "pattern": "^(?:user|team|service|agent):[a-z0-9][a-z0-9._-]{0,127}$"},
     "member": {"type": "object", "additionalProperties": false, "required": ["subject", "role"], "properties": {"subject": {"$ref": "#/$defs/subjectId"}, "role": {"enum": ["owner", "editor", "viewer"]}}},
     "workspacePath": {"type": "string", "pattern": "^\\./(?!.*(?:^|/)\\.\\.(?:/|$))(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$", "x-canonicalize": "realpath within workspace root"},
-    "resourceRef": {"type": "object", "additionalProperties": false, "required": ["kind", "uri"], "properties": {"kind": {"enum": ["component", "repository", "flow", "wiki", "memory", "skill", "evidence", "worktree"]}, "uri": {"$ref": "#/$defs/workspacePath"}, "revision": {"type": "string", "minLength": 1, "maxLength": 256}}}
+    "resourceRef": {"type": "object", "additionalProperties": false, "required": ["kind", "uri"], "properties": {"kind": {"enum": ["component", "repository", "flow", "wiki", "memory", "skill", "evidence", "worktree", "session"]}, "uri": {"$ref": "#/$defs/workspacePath"}, "revision": {"type": "string", "minLength": 1, "maxLength": 256}}}
   }
 }
