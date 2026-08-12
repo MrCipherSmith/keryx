@@ -147,6 +147,11 @@ holds and what forking copies.
 
 - `/sessions` opens an interactive session picker in the TUI and switches the
   live shell to the chosen session.
+- `/search-provider` configures and tests web search providers for `web_search`:
+  run without args to list providers, pass `provider id` plus `key=<value>` (for
+  keyed providers) to configure and validate one.
+- `/search-connect` selects which configured and tested web search provider is active:
+  run without args to list connected providers, or pass an ID to switch.
 - `keryx shell` supports a hard stop for a running main turn via
   `/interrupt`.
 - Session history is durable during a turn: user input and tool results save

@@ -45,6 +45,8 @@ import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage } from "../harness/provider/types";
+import { createDefaultSearchProviderController } from "../harness/search";
+import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import {
   commandsForMode,
   describeUnavailableCommand,
@@ -802,6 +804,41 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
 /** Result of the API-key step: a key to save, skip (proceed keyless), or go back. */
 type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
 
+type SearchProviderConfigInput = {
+  providerId: string | undefined;
+  fields: Record<string, string>;
+  credential: string | undefined;
+};
+
+function parseSearchProviderArgs(line: string): SearchProviderConfigInput {
+  const parts = line.trim().length === 0 ? [] : line.trim().split(/\s+/);
+  const [providerId, ...tail] = parts;
+  const fields: Record<string, string> = {};
+  let credential: string | undefined;
+  for (const token of tail) {
+    const splitAt = token.indexOf("=");
+    if (splitAt <= 0) {
+      continue;
+    }
+    const key = token.slice(0, splitAt).trim();
+    const value = token.slice(splitAt + 1).trim();
+    if (key === "key" || key === "credential" || key === "token" || key === "apiKey") {
+      credential = value;
+      continue;
+    }
+    fields[key] = value;
+  }
+  return { providerId, fields, credential };
+}
+
+function describeSearchProviderList(
+  title: string,
+  providers: readonly SearchProviderDescriptor[],
+): string {
+  const rows = providers.map((provider) => `  ${provider.id} (${provider.displayName})`);
+  return `${title}${rows.length > 0 ? `\n${rows.join("\n")}` : "\n  (none)"}\n`;
+}
+
 /** Ask for a local provider endpoint, keeping its configured value editable. */
 function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -1262,6 +1299,7 @@ export async function launchTuiAgentShell(opts: {
    */
   const permissionsFingerprintAtStart = shellPermissionsFingerprint();
   let permissionTamperShown = false;
+  const searchProviderController = createDefaultSearchProviderController();
   // The chrome can only be mounted once a provider/model is chosen (the startup
   // picker runs on the bare renderer), yet `onDestroy` may fire before that —
   // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
@@ -2318,6 +2356,77 @@ export async function launchTuiAgentShell(opts: {
               `Compacted −${packed.result.removed} context msgs · archive ${liveSession.summary.archiveMessageCount} · compact×${liveSession.summary.compactCount}\n`,
             );
           }
+          return;
+        }
+        if (command.name === "/search-provider") {
+          void (async () => {
+            const args = parseSearchProviderArgs(line.slice(16));
+            const all = searchProviderController.configurable();
+            if (args.providerId === undefined) {
+              io.onSystem?.(
+                describeSearchProviderList("Search providers (use /search-provider <id> [key=...]):", all),
+              );
+              return;
+            }
+            const descriptor = all.find((candidate) => candidate.id === args.providerId);
+            if (descriptor === undefined) {
+              io.onSystem?.(`Unknown provider '${args.providerId}'. Available: ${all.map((provider) => provider.id).join(", ")}\n`);
+              return;
+            }
+            const providerId: SearchProviderId = descriptor.id;
+            searchProviderController.configure(
+              providerId,
+              { ...descriptor.defaults, ...args.fields },
+              args.credential,
+            );
+            const tested = await searchProviderController.test(providerId);
+            if (!tested.ok) {
+              const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
+              io.onSystem?.(
+                `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
+              );
+              return;
+            }
+            io.onSystem?.(
+              `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
+            );
+          })();
+          return;
+        }
+        if (command.name === "/search-connect") {
+          void (async () => {
+            const args = parseSearchProviderArgs(line.slice(15));
+            const providerId = args.providerId;
+            if (providerId === undefined) {
+              const selectable = searchProviderController.selectable();
+              io.onSystem?.(
+                describeSearchProviderList("Connected search providers (use /search-connect <id> to select):", selectable),
+              );
+              if (selectable.length === 0) {
+                io.onSystem?.("No connected search providers found. Run /search-provider first.\n");
+              }
+              return;
+            }
+            const normalizedProviderId = searchProviderController.configurable().find((candidate) => candidate.id === providerId)?.id;
+            if (normalizedProviderId === undefined) {
+              io.onSystem?.(`Unknown provider '${providerId}'.\n`);
+              return;
+            }
+            const result = await searchProviderController.select(normalizedProviderId);
+            if (!result.ok) {
+              if (result.reason === "not-configured") {
+                io.onSystem?.(`Cannot select '${providerId}': provider is not configured.\n`);
+              } else if (result.reason === "not-connected") {
+                io.onSystem?.(
+                  `Cannot select '${providerId}': provider is not connected (run /search-provider ${providerId} <params> to test).\n`,
+                );
+              } else {
+                io.onSystem?.(`Cannot select '${providerId}': ${result.reason}.\n`);
+              }
+              return;
+            }
+            io.onSystem?.(`Search provider '${providerId}' selected.\n`);
+          })();
           return;
         }
         // `/think` and `/expand` TOGGLE the newest matching block in place

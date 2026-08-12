@@ -84,6 +84,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     },
   },
   {
+    name: "/search-provider",
+    description: "Configure and test a web search provider",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/search-connect",
+    description: "Select a connected web search provider",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/provider",
     description: "Switch provider — /provider <name>, or no arg to re-select",
     // Agent mode uses the configuration picker: provider → API-key → model.
