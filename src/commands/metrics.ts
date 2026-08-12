@@ -12,11 +12,18 @@ import {
   validatePairedBenchmark,
   validateRunRecord,
   writeRunArtifacts,
+  type BenchmarkLadder,
   type ExecutionEvent,
   type ExecutionRunRecord,
   type PairedBenchmarkRun,
   type RunMode,
 } from "../metrics";
+import {
+  buildOracleManifest,
+  buildEvidenceBundle,
+  persistEvidenceBundle,
+  type OracleScoreInput,
+} from "../metrics/oracle-runner";
 
 export async function metricsCommand(
   args: string[] = [],
@@ -134,6 +141,11 @@ export async function metricsCommand(
     return;
   }
 
+  if (subcommand === "benchmark" && args[1] === "run") {
+    await benchmarkRun(projectRoot, args.slice(2));
+    return;
+  }
+
   if (subcommand === "benchmark" && args[1] === "validate") {
     const file = args[2];
     if (!file) {
@@ -152,6 +164,84 @@ export async function metricsCommand(
   console.error(`Unknown metrics command: ${subcommand}`);
   printMetricsHelp();
   process.exitCode = 1;
+}
+
+/** A `{ targets: [{ target, affected }] }` affected-set file (gold fixture or system output). */
+type AffectedSetFile = {
+  targets?: Array<{ target?: string; affected?: string[] }>;
+};
+
+/** Load an affected-set file into an ordered map of target -> affected ID list. */
+async function loadAffectedSets(projectRoot: string, file: string): Promise<Map<string, string[]>> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as AffectedSetFile;
+  const map = new Map<string, string[]>();
+  for (const entry of raw.targets ?? []) {
+    if (typeof entry.target === "string") map.set(entry.target, entry.affected ?? []);
+  }
+  return map;
+}
+
+// Run the metastore ORACLE scorer: load a gold + system affected-set file, score every gold
+// target for which the system produced an output, print the paired-3-5-v2 manifest, validate
+// it, optionally persist evidence bundles, and exit non-zero if validation fails.
+async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
+  const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
+  if (ladder !== "metastore") {
+    console.error(`Only the metastore oracle ladder is implemented for 'run'; got: ${ladder}`);
+    process.exitCode = 1;
+    return;
+  }
+  const goldPath = optionValue(args, "--gold") ?? "fixtures/benchmark/express/gold-affected-set.json";
+  const systemPath = optionValue(args, "--system") ?? "fixtures/benchmark/express/gdgraph-affected.json";
+  const outDir = optionValue(args, "--out");
+
+  let gold: Map<string, string[]>;
+  let system: Map<string, string[]>;
+  try {
+    [gold, system] = await Promise.all([
+      loadAffectedSets(projectRoot, goldPath),
+      loadAffectedSets(projectRoot, systemPath),
+    ]);
+  } catch (error) {
+    console.error(`Failed to load affected-set files: ${(error as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Score only targets present in gold; a system output with no gold counterpart has no
+  // ground truth to be scored against and is skipped rather than assumed empty.
+  const inputs: OracleScoreInput[] = [];
+  for (const [target, goldAffected] of gold) {
+    if (!system.has(target)) continue;
+    inputs.push({ target, gold: goldAffected, system: system.get(target) ?? [] });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No overlapping targets between gold and system affected-set files");
+    process.exitCode = 1;
+    return;
+  }
+
+  const manifest = buildOracleManifest(inputs, { ladder });
+  console.log(stableJson(manifest));
+
+  if (outDir) {
+    const resolvedOut = path.resolve(projectRoot, outDir);
+    for (const input of inputs) {
+      const bundle = buildEvidenceBundle(input, {
+        ladder,
+        goldReference: goldPath,
+        timestamp: new Date().toISOString(),
+      });
+      const dir = await persistEvidenceBundle(resolvedOut, bundle, ladder);
+      console.error(`bundle: ${path.relative(projectRoot, dir)}`);
+    }
+  }
+
+  const result = validatePairedBenchmark(manifest);
+  console.error(result.valid ? "valid: yes" : "valid: no");
+  for (const err of result.errors) console.error(`- ${err}`);
+  process.exitCode = result.valid ? 0 : 1;
 }
 
 async function collect(projectRoot: string, args: string[]): Promise<void> {
@@ -199,5 +289,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
+  keryx metrics benchmark run --ladder metastore [--gold <path>] [--system <path>] [--out <dir>]
 `);
 }

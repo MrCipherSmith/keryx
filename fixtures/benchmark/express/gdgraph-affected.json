@@ -1,0 +1,37 @@
+{
+  "pinned_commit": "a3714473feb3d2908add734d340e7755fd85e0a3",
+  "generated_by": "bun scripts/benchmark/run-express-oracle.ts",
+  "targets": [
+    {
+      "target": "lib/application.js",
+      "affected": [
+        "lib/express.js",
+        "lib/utils.js",
+        "lib/view.js"
+      ]
+    },
+    {
+      "target": "lib/express.js",
+      "affected": [
+        "examples/route-map/index.js",
+        "examples/route-middleware/index.js",
+        "index.js",
+        "lib/application.js",
+        "lib/request.js",
+        "lib/response.js"
+      ]
+    },
+    {
+      "target": "lib/utils.js",
+      "affected": [
+        "lib/application.js",
+        "lib/response.js",
+        "test/Route.js",
+        "test/Router.js",
+        "test/app.router.js",
+        "test/res.send.js",
+        "test/utils.js"
+      ]
+    }
+  ]
+}
