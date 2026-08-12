@@ -1,5 +1,5 @@
 # Keryx Benchmark Suite — Plan
-Version: 0.1.0
+Version: 0.2.0
 
 Three milestones. Each is separately shippable and gated by explicit exit criteria.
 No milestone publishes a comparative number before its fairness bar is met.
@@ -26,6 +26,38 @@ No milestone publishes a comparative number before its fairness bar is met.
   across seeds; safety track scores escapes as hard fails and honest refusals as
   correct.
 - An internal report renders the three ladders separately with reliability levels.
+
+**Progress (2026-08-13, branch `fix/benchmark-remediation-v3`) — deterministic slice landed:**
+
+- `paired-3-5-v2` protocol: types + backward-compatible validation, Wilson CIs,
+  judge panel, `servedModel`/`effort`, tokenizer-normalized cost — `src/metrics/benchmark.ts`.
+- IR/oracle primitives (precision/recall/f1/ndcg/recall@k/fact-preservation) —
+  `src/metrics/ir.ts`.
+- Gold-label derivation + a **real** express fixture (git co-change, pinned commit
+  `a3714473`) — `src/metrics/gold.ts`, `scripts/benchmark/generate-express-gold.ts`,
+  `fixtures/benchmark/express/`.
+- Metastore oracle runner + `keryx metrics benchmark run --ladder metastore` + a
+  first real result — `src/metrics/oracle-runner.ts`,
+  `scripts/benchmark/run-express-oracle.ts`.
+
+First oracle result (gdgraph `affected` vs git-co-change gold, express, F1):
+`lib/application.js` 0, `lib/express.js` 0, `lib/utils.js` 0.25 — reported honestly.
+
+**Open finding (correction):** the gdgraph oracle compares a *dependency* affected-set
+to a *co-change* gold — different notions, so a low F1 is expected and does not by
+itself indict gdgraph. Before any M1 metastore claim, decide the gold semantics:
+either (a) reframe the metric as "does the dependency graph predict real co-change",
+or (b) add a dependency-derived gold (import/usage closure) alongside co-change and
+report both.
+
+**Remaining in M1:**
+
+- Ablation runner (context on/off, ×3 seeds, success/token/tool-call deltas) — needs
+  the model legs, deferred with live runs.
+- Testing/TIA, memory, gdctx oracle layers; test-impact gold (needs an instrumented
+  coverage run).
+- Safety track + false-premise / bullshit-resistance case group.
+- The gdgraph-oracle gold-semantics decision above.
 
 ## M2 — Comparative: one third-party agent harness
 

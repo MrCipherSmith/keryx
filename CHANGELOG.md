@@ -4,6 +4,17 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
+
+### Added
+
+- **Benchmark suite M1 — metastore oracle slice (deterministic).** The
+  `paired-3-5-v2` protocol (backward-compatible with `paired-3-5-v1`; Wilson CIs,
+  judge panel, `servedModel`/`effort`, tokenizer-normalized cost), IR/oracle metric
+  primitives, git-co-change gold derivation with a real pinned express fixture, and a
+  metastore oracle runner exposed as `keryx metrics benchmark run --ladder metastore`.
+  Produces the first honest oracle result (gdgraph `affected` vs co-change gold).
+  Requirements: `docs/requirements/keryx-benchmark-suite`.
+
 ## [0.2.33] — 2026-08-13
 
 ### Added
