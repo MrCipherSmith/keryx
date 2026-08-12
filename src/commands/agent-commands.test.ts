@@ -18,8 +18,6 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/models",
     "/connect",
     "/provider",
-    "/search-provider",
-    "/search-connect",
     "/think",
     "/expand",
     "/copy",
@@ -49,8 +47,6 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/model",
     "/connect",
     "/provider",
-    "/search-provider",
-    "/search-connect",
     "/think",
     "/expand",
     "/copy",
@@ -83,7 +79,7 @@ test("commandsForMode: chat gets its commands and none of the agent-only trio", 
 });
 
 test("/expand, /think and /copy are agent-only; /models is chat-only; /provider is available in both modes", () => {
-  for (const name of ["/search-provider", "/search-connect", "/expand", "/think", "/copy"]) {
+  for (const name of ["/expand", "/think", "/copy"]) {
     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
     expect(command?.modes).toEqual(["agent"]);
   }
@@ -129,8 +125,6 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/model",
     "/connect",
     "/provider",
-    "/search-provider",
-    "/search-connect",
     "/think",
     "/expand",
     "/copy",
@@ -173,8 +167,6 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume"]);
   expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual(["/interrupt"]);
   expect(filterCommands("/s", "agent").map((c) => c.name)).toEqual([
-    "/search-provider",
-    "/search-connect",
     "/sessions",
   ]);
   expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
