@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FwkReadService } from "./fwk-service";
@@ -90,4 +90,22 @@ test("allowed and denied receipts are appended with a causal integrity chain", a
   expect(receipts[1]!.integrity.previousRecordHash).toBe(receipts[0]!.integrity.recordHash);
   expect(receipts[1]!.decision).toBe("denied");
   expect(JSON.stringify(receipts)).not.toContain("verified fact");
+});
+
+test("a corrupted receipt ledger refuses the next append", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-corrupt-ledger-"));
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+  });
+  await read(service, { requestCorrelationId: "fwk-corrupt-ledger-first-0001" });
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const first = JSON.parse((await readFile(ledger, "utf8")).trim()) as Record<string, unknown>;
+  first.cost = { tokens: 999, toolCalls: 1, elapsedMs: 0 };
+  await writeFile(ledger, `${JSON.stringify(first)}\n`);
+  await expect(read(service, { requestCorrelationId: "fwk-corrupt-ledger-second-0001" }))
+    .rejects.toThrow("invalid access receipt ledger");
 });

@@ -1,11 +1,11 @@
 # Shared Agent Context — Schemas and Fixtures
-Version: 1.3.0
+Version: 1.4.0
 
 ## Purpose
 
-These are normative future data contracts for SAC. They use JSON Schema Draft
-2020-12. Runtime code does not exist yet; fixtures define the minimum validator
-and integration-test corpus for the first implementation Flow. The
+These are the normative data contracts used by the implemented SAC phases.
+They use JSON Schema Draft 2020-12. Fixtures define the minimum validator and
+integration-test corpus. The
 implementation must enable format assertion and run the semantic validator for
 the declared `x-` invariants: canonical SubjectId topology, realpath/root
 containment, timestamp ordering and ledger-level idempotency.
@@ -45,6 +45,13 @@ must fail for the documented contract reason. The replay corpus is evaluated by
 the append-only ledger validator, not by an isolated JSON document. All schemas
 forbid raw transcript, prompt, hidden-reasoning and secret payload fields by
 using closed objects.
+
+Phase 5 publishes its minimized learning/evaluation fixtures separately under
+[`fixtures/sac-policy-experiment`](../../../../fixtures/sac-policy-experiment/).
+The manifest is a closed TypeScript/runtime contract rather than an extension
+of AccessReceipt: it records receipt-chain provenance, independent verifier
+artifact hashes, selection/redaction/quarantine rules and deterministic
+train/holdout/adversarial splits. Receipt self-report is never ground truth.
 
 `workspace-proposal` creation also requires minimal `wrapUp` metadata. It is
 only an audit pointer: runtime authorization requires the corresponding

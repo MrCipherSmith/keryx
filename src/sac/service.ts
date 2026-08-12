@@ -18,3 +18,29 @@ export {
   type GuardedTargetWriter,
 } from "./proposal-lifecycle";
 export { createLocalCollaborationService, normalizeCollaborationResult, type CollaborationActivity } from "./collaboration-service";
+export {
+  buildPolicyCorpus,
+  defaultPolicyExperimentConfig,
+  evaluatePolicyExperiment,
+  formatPolicyEvaluationReport,
+  hashVerifiedTaskOutcome,
+  resolvePolicyExperiment,
+  rollbackPolicyExperiment,
+  POLICY_EXPERIMENT_SANDBOX_PROFILE,
+  type CandidateSelection,
+  type PolicyCorpus,
+  type PolicyCorpusManifest,
+  type PolicyCorpusRow,
+  type PolicyEvaluationReport,
+  type PolicyExperimentCandidate,
+  type PolicyExperimentConfig,
+  type PolicyExperimentSandbox,
+  type VerifiedTaskOutcome,
+} from "./policy-experiment";
+export {
+  hashAccessReceipt,
+  sealAccessReceipt,
+  verifyAccessReceiptLedger,
+  type AccessReceiptLedgerVerification,
+  type IntegrityLinkedAccessReceipt,
+} from "./receipt-integrity";

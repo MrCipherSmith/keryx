@@ -2,40 +2,40 @@
 
 ## Stats
 
-- Source files indexed: 685
+- Source files indexed: 714
 - Imported asset files indexed: 4
-- Total nodes: 689
-- Edges: 2004
-- Import edges: 1978
+- Total nodes: 718
+- Edges: 2071
+- Import edges: 2045
 - Asset edges: 7
 - Unresolved imports: 19
-- Import resolution: 99%
-- Skipped generated/static directories: 8
+- Import resolution: 99.1%
+- Skipped generated/static directories: 7
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
 | harness | 176 |
-| commands | 81 |
+| commands | 84 |
 | lib | 72 |
 | security | 42 |
+| memory | 40 |
 | health | 39 |
-| memory | 39 |
 | gdgraph | 36 |
+| sac | 22 |
 | flow | 20 |
-| mcp | 18 |
+| mcp | 19 |
 | tui | 18 |
 | gdskills | 17 |
 | standard | 14 |
+| ctx | 12 |
 | metrics | 12 |
+| wiki | 12 |
 | fixtures | 11 |
 | capability | 11 |
-| ctx | 11 |
 | testing | 11 |
-| wiki | 11 |
 | scripts | 8 |
-| assets | 8 |
 
 ## Unresolved By Type
 
@@ -50,7 +50,6 @@
 ## Skipped Directories
 
 - `.claude`
-- `.git`
 - `.metaproject`
 - `dist`
 - `fixtures/memory-reliability-p0/.metaproject`

@@ -5,12 +5,17 @@ import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly,
 import { evaluateStrictSacGuard, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceError } from "./workspace-service";
 import { withFileLock } from "../lib/fs";
+import {
+  sealAccessReceipt,
+  verifyAccessReceiptLedger,
+  type IntegrityLinkedAccessReceipt,
+} from "./receipt-integrity";
 
 export type FwkEvidence = Readonly<{ id: string; uri: string; revision: string; observedAt: string; expiresAt: string; trust: "primary" | "accepted" | "reviewed"; visible: boolean; statement: string; status?: "fresh" | "stale" | "expired" | "denied" }>;
 export type FwkKnowHow = Readonly<{ id: string; kind: "wiki" | "memory" | "skill"; uri: string; revision: string; trust: "accepted" | "reviewed"; status: "fresh" | "stale" | "withdrawn" | "denied"; applicability?: string; accepted: boolean; visible: boolean }>;
 export type FwkWork = Readonly<{ flowRef?: { uri: string; snapshot: string; revision: string }; completed?: string[]; next?: string[]; blocked?: string[]; evidence?: FwkEvidence[] }>;
 export type FwkSource = Readonly<{ facts: readonly FwkEvidence[]; work?: FwkWork; knowHow: readonly FwkKnowHow[] }>;
-export type AccessReceipt = Readonly<{ schemaVersion: "1.0"; id: string; workspaceId: string; actor: string; action: "overview" | "fwk" | "resource"; decision: "allowed" | "denied" | "budget-exhausted" | "stale"; recordedAt: string; cost: { tokens: number; toolCalls: number; elapsedMs: number }; contextAssembly: { traceRef: string; configurationRevision: string; selected: string[]; omittedOptional: string[] }; policy: { ref: string; revision: string }; integrity: { recordHash: string; previousRecordHash: "GENESIS" }; }>;
+export type AccessReceipt = IntegrityLinkedAccessReceipt;
 export type FwkResult = Readonly<{ partial: boolean; omittedOptional: string[]; manifest: { facts: unknown[]; work: unknown; knowHow: unknown[]; freshness: "fresh" | "stale" | "partial" | "denied" }; receipt: AccessReceipt }>;
 export type FwkReadResult = FwkResult | ContextOverflow;
 
@@ -115,10 +120,12 @@ export class FwkReadService {
       let previousRecordHash: string = "GENESIS";
       try {
         const lines = (await readFile(ledger, "utf8")).trim().split("\n").filter(Boolean);
-        if (lines.length) previousRecordHash = (JSON.parse(lines.at(-1)!) as AccessReceipt).integrity.recordHash;
+        const receipts = lines.map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt);
+        const verification = verifyAccessReceiptLedger(receipts);
+        if (!verification.ok) throw new Error(`invalid access receipt ledger: ${verification.reason} at record ${verification.firstInvalidIndex}`);
+        previousRecordHash = verification.headHash;
       } catch (error) { if (!(error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT")) throw error; }
-      const integrity = { previousRecordHash: previousRecordHash as AccessReceipt["integrity"]["previousRecordHash"] };
-      const receipt = { ...base, integrity: { ...integrity, recordHash: createHash("sha256").update(JSON.stringify({ ...base, integrity })).digest("hex") } } as AccessReceipt;
+      const receipt = sealAccessReceipt(base, previousRecordHash) as AccessReceipt;
       if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
       const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
       if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
