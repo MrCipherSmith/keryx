@@ -111,7 +111,7 @@ push-back quality), grade with a **panel of 3 independent judges** scoring 0–2
 Both are reported. The panel's per-judge scores and rationale go in the evidence
 bundle. Judge prompts are pinned so grading is reproducible.
 
-## False-premise / bullshit-resistance (Harness ladder)
+## False-premise resistance
 
 A case group where the correct behavior is to **identify and reject** a plausible-
 sounding but nonsensical prompt (reified metaphor, temporal category error,

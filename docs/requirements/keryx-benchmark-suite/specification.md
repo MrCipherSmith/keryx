@@ -50,7 +50,7 @@ Score `keryx shell` on agentic tasks:
   rejection scores `correctness: 1`; engaging scores 0. May reuse the external
   [BullshitBench](https://github.com/petergpt/bullshit-benchmark) dataset pinned to a
   commit, graded by the judge panel. See
-  [metrics-and-validation](metrics-and-validation.md#false-premise--bullshit-resistance-harness-ladder).
+  [metrics-and-validation](metrics-and-validation.md#false-premise-resistance).
 
 ### 1.3 Comparative
 
