@@ -22,7 +22,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
-import { buildOracleManifest, type OracleScoreInput } from "../../src/metrics/oracle-runner";
+import {
+  buildOracleManifestsByGold,
+  GOLD_KIND_LABELS,
+  type GoldKind,
+  type MultiGoldScoreInput,
+} from "../../src/metrics/oracle-runner";
 
 const EXPRESS_REPO_URL = "https://github.com/expressjs/express.git";
 // Same pinned SHA as generate-express-gold.ts, so the system output and the gold labels
@@ -31,7 +36,8 @@ const PINNED_SHA = "a3714473feb3d2908add734d340e7755fd85e0a3";
 const TARGET_FILES = ["lib/application.js", "lib/express.js", "lib/utils.js"] as const;
 
 const fixtureRoot = new URL("../../fixtures/benchmark/express/", import.meta.url);
-const goldFixtureUrl = new URL("gold-affected-set.json", fixtureRoot);
+const coChangeGoldUrl = new URL("gold-affected-set.json", fixtureRoot);
+const dependencyGoldUrl = new URL("gold-dependency-set.json", fixtureRoot);
 const systemFixtureUrl = new URL("gdgraph-affected.json", fixtureRoot);
 
 type SpawnResult = { stdout: string; stderr: string; ok: boolean };
@@ -72,8 +78,8 @@ function keryxCli(): string[] {
   return ["keryx"];
 }
 
-async function loadGold(): Promise<Map<string, string[]>> {
-  const raw = JSON.parse(await Bun.file(goldFixtureUrl).text()) as {
+async function loadGold(url: URL): Promise<Map<string, string[]>> {
+  const raw = JSON.parse(await Bun.file(url).text()) as {
     targets: Array<{ target: string; affected: string[] }>;
   };
   return new Map(raw.targets.map((t) => [t.target, t.affected]));
@@ -117,28 +123,46 @@ async function main(): Promise<void> {
     };
     await Bun.write(systemFixtureUrl, `${JSON.stringify(systemFixture, null, 2)}\n`);
 
-    const gold = await loadGold();
-    const inputs: OracleScoreInput[] = TARGET_FILES.map((target) => ({
+    // Two-gold scoring (decision (a)+(b)): score the ONE gdgraph affected-set against BOTH
+    // the git co-change gold AND the independent transitive import-closure gold, reported
+    // separately and never averaged. See src/metrics/oracle-runner.ts.
+    const [coChangeGold, dependencyGold] = await Promise.all([
+      loadGold(coChangeGoldUrl),
+      loadGold(dependencyGoldUrl),
+    ]);
+    const inputs: MultiGoldScoreInput[] = TARGET_FILES.map((target) => ({
       target,
-      gold: gold.get(target) ?? [],
       system: system.get(target) ?? [],
+      golds: [
+        { kind: "co-change" as const, gold: coChangeGold.get(target) ?? [] },
+        { kind: "dependency" as const, gold: dependencyGold.get(target) ?? [] },
+      ],
     }));
 
-    const manifest = buildOracleManifest(inputs, { ladder: "metastore" });
-    console.log(JSON.stringify(manifest, null, 2));
-
-    console.error("# oracle IR result (system gdgraph-affected vs git-history gold)");
-    for (const run of manifest.runs) {
-      const o = run.oracle;
-      console.error(
-        `${run.task_id}: precision=${o?.precision?.value} recall=${o?.recall?.value} f1=${o?.f1?.value}`,
-      );
+    const manifests = buildOracleManifestsByGold(inputs, { ladder: "metastore" });
+    let allValid = true;
+    for (const kind of ["co-change", "dependency"] as const) {
+      const manifest = manifests[kind];
+      if (!manifest) {
+        console.error(`# gold: ${kind} — no scored targets`);
+        allValid = false;
+        continue;
+      }
+      console.log(`# gold: ${kind} (${GOLD_KIND_LABELS[kind as GoldKind]})`);
+      console.log(JSON.stringify(manifest, null, 2));
+      console.error(`# oracle IR result — gold=${kind} (${GOLD_KIND_LABELS[kind as GoldKind]})`);
+      for (const run of manifest.runs) {
+        const o = run.oracle;
+        console.error(
+          `${run.task_id}: precision=${o?.precision?.value} recall=${o?.recall?.value} f1=${o?.f1?.value}`,
+        );
+      }
+      const result = validatePairedBenchmark(manifest);
+      console.error(`# gold=${kind} manifest valid: ${result.valid ? "yes" : "no"}`);
+      for (const err of result.errors) console.error(`- ${err}`);
+      if (!result.valid) allValid = false;
     }
-
-    const result = validatePairedBenchmark(manifest);
-    console.error(result.valid ? "manifest valid: yes" : "manifest valid: no");
-    for (const err of result.errors) console.error(`- ${err}`);
-    if (!result.valid) process.exit(1);
+    if (!allValid) process.exit(1);
     console.error(`wrote fixtures/benchmark/express/gdgraph-affected.json`);
   } finally {
     cleanup?.();

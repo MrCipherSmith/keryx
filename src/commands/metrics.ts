@@ -19,10 +19,13 @@ import {
   type RunMode,
 } from "../metrics";
 import {
-  buildOracleManifest,
   buildEvidenceBundle,
+  buildOracleManifestsByGold,
+  GOLD_KIND_LABELS,
   persistEvidenceBundle,
-  type OracleScoreInput,
+  type GoldKind,
+  type MultiGoldScoreInput,
+  type NamedGold,
 } from "../metrics/oracle-runner";
 
 export async function metricsCommand(
@@ -181,9 +184,18 @@ async function loadAffectedSets(projectRoot: string, file: string): Promise<Map<
   return map;
 }
 
-// Run the metastore ORACLE scorer: load a gold + system affected-set file, score every gold
-// target for which the system produced an output, print the paired-3-5-v2 manifest, validate
-// it, optionally persist evidence bundles, and exit non-zero if validation fails.
+// Default gold fixtures for each kind (independently derived — see src/metrics/gold.ts).
+const GOLD_KIND_DEFAULT_PATH: Record<GoldKind, string> = {
+  "co-change": "fixtures/benchmark/express/gold-affected-set.json",
+  dependency: "fixtures/benchmark/express/gold-dependency-set.json",
+};
+const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
+
+// Run the metastore ORACLE scorer against ONE OR BOTH golds (co-change + dependency),
+// reported separately and never averaged. Loads the system affected-set plus the requested
+// gold(s), scores every target present in both, prints a labeled paired-3-5-v2 manifest per
+// gold kind, validates each, optionally persists evidence bundles, and exits non-zero if any
+// manifest is invalid. Select golds with `--gold co-change|dependency|all` (default all).
 async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
   const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
   if (ladder !== "metastore") {
@@ -191,29 +203,43 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
     process.exitCode = 1;
     return;
   }
-  const goldPath = optionValue(args, "--gold") ?? "fixtures/benchmark/express/gold-affected-set.json";
+
+  const selector = (optionValue(args, "--gold") ?? "all").trim();
+  if (selector !== "all" && selector !== "co-change" && selector !== "dependency") {
+    console.error("Usage: keryx metrics benchmark run --ladder metastore [--gold co-change|dependency|all]");
+    process.exitCode = 1;
+    return;
+  }
+  const kinds: GoldKind[] = selector === "all" ? [...GOLD_KIND_ORDER] : [selector];
+
   const systemPath = optionValue(args, "--system") ?? "fixtures/benchmark/express/gdgraph-affected.json";
+  const goldPathFor = (kind: GoldKind): string =>
+    optionValue(args, `--gold-${kind}`) ?? GOLD_KIND_DEFAULT_PATH[kind];
   const outDir = optionValue(args, "--out");
 
-  let gold: Map<string, string[]>;
   let system: Map<string, string[]>;
+  const goldMaps = new Map<GoldKind, Map<string, string[]>>();
   try {
-    [gold, system] = await Promise.all([
-      loadAffectedSets(projectRoot, goldPath),
-      loadAffectedSets(projectRoot, systemPath),
-    ]);
+    system = await loadAffectedSets(projectRoot, systemPath);
+    for (const kind of kinds) goldMaps.set(kind, await loadAffectedSets(projectRoot, goldPathFor(kind)));
   } catch (error) {
     console.error(`Failed to load affected-set files: ${(error as Error).message}`);
     process.exitCode = 1;
     return;
   }
 
-  // Score only targets present in gold; a system output with no gold counterpart has no
-  // ground truth to be scored against and is skipped rather than assumed empty.
-  const inputs: OracleScoreInput[] = [];
-  for (const [target, goldAffected] of gold) {
-    if (!system.has(target)) continue;
-    inputs.push({ target, gold: goldAffected, system: system.get(target) ?? [] });
+  // For each target the system produced an output for, attach every requested gold that
+  // covers it. A target with no gold counterpart has no ground truth and is skipped.
+  const targets = new Set<string>();
+  for (const gm of goldMaps.values()) for (const target of gm.keys()) if (system.has(target)) targets.add(target);
+  const inputs: MultiGoldScoreInput[] = [];
+  for (const target of [...targets].sort()) {
+    const golds: NamedGold[] = [];
+    for (const kind of kinds) {
+      const gm = goldMaps.get(kind);
+      if (gm?.has(target)) golds.push({ kind, gold: gm.get(target) ?? [] });
+    }
+    if (golds.length > 0) inputs.push({ target, system: system.get(target) ?? [], golds });
   }
 
   if (inputs.length === 0) {
@@ -222,26 +248,39 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
     return;
   }
 
-  const manifest = buildOracleManifest(inputs, { ladder });
-  console.log(stableJson(manifest));
+  const manifests = buildOracleManifestsByGold(inputs, { ladder });
 
   if (outDir) {
     const resolvedOut = path.resolve(projectRoot, outDir);
     for (const input of inputs) {
-      const bundle = buildEvidenceBundle(input, {
-        ladder,
-        goldReference: goldPath,
-        timestamp: new Date().toISOString(),
-      });
-      const dir = await persistEvidenceBundle(resolvedOut, bundle, ladder);
-      console.error(`bundle: ${path.relative(projectRoot, dir)}`);
+      for (const named of input.golds) {
+        const bundle = buildEvidenceBundle(
+          { target: input.target, system: input.system, gold: named.gold },
+          { ladder, goldReference: goldPathFor(named.kind), timestamp: new Date().toISOString() },
+        );
+        // Nest per gold kind so the two golds' bundles for one target never collide.
+        const dir = await persistEvidenceBundle(path.join(resolvedOut, named.kind), bundle, ladder);
+        console.error(`bundle[${named.kind}]: ${path.relative(projectRoot, dir)}`);
+      }
     }
   }
 
-  const result = validatePairedBenchmark(manifest);
-  console.error(result.valid ? "valid: yes" : "valid: no");
-  for (const err of result.errors) console.error(`- ${err}`);
-  process.exitCode = result.valid ? 0 : 1;
+  let allValid = true;
+  for (const kind of kinds) {
+    const manifest = manifests[kind];
+    if (!manifest) {
+      console.error(`# gold: ${kind} — no scored targets`);
+      allValid = false;
+      continue;
+    }
+    console.log(`# gold: ${kind} (${GOLD_KIND_LABELS[kind]})`);
+    console.log(stableJson(manifest));
+    const result = validatePairedBenchmark(manifest);
+    console.error(`# gold: ${kind} (${GOLD_KIND_LABELS[kind]}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+    for (const err of result.errors) console.error(`- ${err}`);
+    if (!result.valid) allValid = false;
+  }
+  process.exitCode = allValid ? 0 : 1;
 }
 
 async function collect(projectRoot: string, args: string[]): Promise<void> {
@@ -289,6 +328,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
-  keryx metrics benchmark run --ladder metastore [--gold <path>] [--system <path>] [--out <dir>]
+  keryx metrics benchmark run --ladder metastore [--gold co-change|dependency|all] [--system <path>] [--out <dir>]
 `);
 }

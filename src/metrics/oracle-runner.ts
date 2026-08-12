@@ -169,6 +169,164 @@ export function buildOracleManifest(
 }
 
 // ---------------------------------------------------------------------------
+// Multi-gold scoring (decision (a)+(b)): score ONE system affected-set against
+// SEVERAL independently-derived golds and emit a separate, labeled oracle result
+// per gold kind. The two golds measure DIFFERENT things and are NEVER averaged:
+//   - "co-change"  → reframed/labeled as "co-change prediction": does gdgraph's
+//     dependency-based affected set predict the files that REALLY change together
+//     with the target (git-history gold, goldAffectedSet in ./gold.ts).
+//   - "dependency" → "graph correctness": does gdgraph's affected set match the
+//     independent transitive import closure (goldDependencyClosure in ./gold.ts).
+//     Precision here is graph-edge correctness; see DEFAULT_DEPTH_SEMANTICS on the
+//     honest one-hop-vs-transitive depth gap.
+// ---------------------------------------------------------------------------
+
+export type GoldKind = "co-change" | "dependency";
+
+/** Human-facing label carried on every emitted oracle result for a gold kind. */
+export const GOLD_KIND_LABELS: Record<GoldKind, string> = {
+  "co-change": "co-change prediction",
+  dependency: "graph correctness",
+};
+
+// The metric `source` string records WHICH gold a result was scored against, so a
+// reader can never confuse the two independent notions of "affected".
+const GOLD_KIND_SOURCE: Record<GoldKind, string> = {
+  "co-change": "gdgraph affected <target> vs git-history co-change gold (goldAffectedSet)",
+  dependency: "gdgraph affected <target> vs transitive import-closure gold (goldDependencyClosure)",
+};
+
+// Default depth-semantics notes, emitted verbatim as `notes` on every oracle metric
+// so the comparison is never silently misleading. gdgraph's affected output is
+// ONE-HOP (its forward `dependencies` is structurally one-hop — see
+// src/gdgraph/affected.ts — and the committed gdgraph-affected fixture uses depth=1
+// dependents), while the dependency gold is the FULL transitive import closure. That
+// gap is real and cannot be closed on the forward side (gdgraph cannot emit a
+// transitive forward closure), so we report both numbers WITH this note rather than
+// fabricating a silently-aligned score.
+export const DEFAULT_DEPTH_SEMANTICS: Record<GoldKind, string> = {
+  "co-change":
+    "not depth-dependent: gold is git co-change history; the system set is gdgraph's " +
+    "one-hop dependency-based affected set. Measures whether that set predicts real co-change.",
+  dependency:
+    "depth-mismatched (honest): gdgraph affected is one-hop (forward dependencies are " +
+    "structurally one-hop; committed fixture uses depth=1 dependents) while this gold is the " +
+    "FULL transitive import closure. Precision = graph-edge correctness (are gdgraph's edges " +
+    "real closure members); recall = one-hop coverage of the transitive closure, NOT a defect " +
+    "rate. A depth-aligned score would require gdgraph to emit a transitive forward closure, or " +
+    "scoring against a maxDepth-1 closure (goldDependencyClosure({ maxDepth: 1 })).",
+};
+
+export type NamedGold = {
+  readonly kind: GoldKind;
+  /** Gold ID set for this kind (deduped internally by the scorer). */
+  readonly gold: readonly string[];
+  /** Optional label override; defaults to GOLD_KIND_LABELS[kind]. */
+  readonly label?: string;
+  /**
+   * Honest note on how the system output's depth relates to this gold's depth,
+   * emitted verbatim as `notes` on every oracle metric for this gold. Defaults to
+   * DEFAULT_DEPTH_SEMANTICS[kind] when omitted.
+   */
+  readonly depthSemantics?: string;
+};
+
+/** One target's system output plus the several named golds to score it against. */
+export type MultiGoldScoreInput = {
+  readonly target: string;
+  readonly system: readonly string[];
+  /** One entry per gold kind to score `system` against; two entries are not averaged. */
+  readonly golds: readonly NamedGold[];
+};
+
+/** Task id for a (gold-kind, target) pair — distinct per kind so both fit one report. */
+export function oracleTaskIdForGold(kind: GoldKind, target: string): string {
+  return `metastore:gdgraph-affected:${kind}:${target}`;
+}
+
+function measuredValue(value: number, source: string, notes?: string): BenchmarkValue {
+  return { value, reliability: ORACLE_RELIABILITY, source, ...(notes ? { notes } : {}) };
+}
+
+function oracleMetricsForGold(score: OracleTargetScore, source: string, notes: string): OracleMetrics {
+  return {
+    precision: measuredValue(score.precision, source, notes),
+    recall: measuredValue(score.recall, source, notes),
+    f1: measuredValue(score.f1, source, notes),
+  };
+}
+
+/** Score one target's system output against ONE named gold and build a labeled run. */
+export function scoreGoldRun(
+  input: MultiGoldScoreInput,
+  named: NamedGold,
+  options: OracleManifestOptions = {},
+): PairedBenchmarkRunV2 {
+  const kind = named.kind;
+  const score = scoreOracleTarget({ target: input.target, system: input.system, gold: named.gold });
+  const label = named.label ?? GOLD_KIND_LABELS[kind];
+  const depthSemantics = named.depthSemantics ?? DEFAULT_DEPTH_SEMANTICS[kind];
+  const source = `${GOLD_KIND_SOURCE[kind]} [gold=${kind}: ${label}]`;
+  const taskId = oracleTaskIdForGold(kind, input.target);
+  const rates = oracleRates(score);
+  return {
+    task_id: taskId,
+    variant: "baseline",
+    run_id: `${taskId}#1`,
+    ladder: options.ladder ?? "metastore",
+    model: options.model ?? DEFAULT_MODEL,
+    cacheState: options.cacheState ?? "unknown",
+    leakageAssertion: options.leakageAssertion ?? "not-applicable",
+    caseKind: "deterministic",
+    tokenCap: null,
+    seeds: [1],
+    quality: "measured",
+    oracle: oracleMetricsForGold(score, source, depthSemantics),
+    ...(rates ? { rates } : {}),
+    human_interventions: null,
+  };
+}
+
+/**
+ * Build a SEPARATE `paired-3-5-v2` manifest per gold kind from per-target multi-gold
+ * inputs. Each manifest is scored against exactly one gold kind (so its 3-5 tasks are
+ * a clean, single-notion set that passes validatePairedBenchmark) and every run's
+ * oracle metric carries the gold-kind label (in `source`) and the depth-semantics
+ * note (in `notes`). The two golds are reported side by side, never averaged.
+ *
+ * The returned object is keyed by gold kind; a kind is present only if at least one
+ * input supplied a gold of that kind. Note that validatePairedBenchmark still requires
+ * 3-5 tasks per manifest, so each requested gold kind must cover 3-5 targets.
+ */
+export function buildOracleManifestsByGold(
+  inputs: readonly MultiGoldScoreInput[],
+  options: OracleManifestOptions = {},
+): Partial<Record<GoldKind, PairedBenchmarkManifestV2>> {
+  const ladder = options.ladder ?? "metastore";
+  const byKind = new Map<GoldKind, PairedBenchmarkRunV2[]>();
+  for (const input of inputs) {
+    for (const named of input.golds) {
+      const run = scoreGoldRun(input, named, options);
+      const list = byKind.get(named.kind) ?? [];
+      list.push(run);
+      byKind.set(named.kind, list);
+    }
+  }
+  const out: Partial<Record<GoldKind, PairedBenchmarkManifestV2>> = {};
+  for (const [kind, runs] of byKind) {
+    const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
+    out[kind] = {
+      protocol: "paired-3-5-v2",
+      ladder,
+      task_ids: taskIds,
+      runs,
+      speedClaim: { claimed: false },
+    };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Evidence bundle (spec §5.1) — the on-disk audit trail for each scored target.
 // ---------------------------------------------------------------------------
 

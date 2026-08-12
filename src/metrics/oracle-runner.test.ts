@@ -7,10 +7,15 @@ import { validatePairedBenchmark } from "./benchmark";
 import {
   buildEvidenceBundle,
   buildOracleManifest,
+  buildOracleManifestsByGold,
+  DEFAULT_DEPTH_SEMANTICS,
+  GOLD_KIND_LABELS,
   oracleTaskId,
+  oracleTaskIdForGold,
   persistEvidenceBundle,
   runOracleAndPersist,
   scoreOracleTarget,
+  type MultiGoldScoreInput,
   type OracleScoreInput,
 } from "./oracle-runner";
 
@@ -138,6 +143,135 @@ describe("buildOracleManifest", () => {
   test("manifest is byte-for-byte reproducible", () => {
     const a = buildOracleManifest([PERFECT, PARTIAL, ZERO_OVERLAP]);
     const b = buildOracleManifest([PERFECT, PARTIAL, ZERO_OVERLAP]);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+});
+
+describe("buildOracleManifestsByGold (two-gold, decision (a)+(b))", () => {
+  // One system output scored against BOTH golds. Mirrors the real express shape: the
+  // dependency-based system set matches co-change poorly but is a real subset of the
+  // transitive import closure (co-change gold vs dependency gold).
+  const INPUTS: MultiGoldScoreInput[] = [
+    {
+      target: "lib/application.js",
+      system: ["lib/express.js", "lib/utils.js", "lib/view.js"],
+      golds: [
+        { kind: "co-change", gold: [] },
+        { kind: "dependency", gold: ["lib/express.js", "lib/utils.js", "lib/view.js", "index.js"] },
+      ],
+    },
+    {
+      target: "lib/express.js",
+      system: ["lib/application.js", "lib/request.js"],
+      golds: [
+        { kind: "co-change", gold: ["History.md", "package.json"] },
+        { kind: "dependency", gold: ["lib/application.js", "lib/request.js", "lib/response.js", "lib/utils.js"] },
+      ],
+    },
+    {
+      target: "lib/utils.js",
+      system: ["lib/response.js", "test/utils.js"],
+      golds: [
+        { kind: "co-change", gold: ["lib/response.js"] },
+        { kind: "dependency", gold: ["lib/response.js", "test/utils.js", "index.js", "lib/express.js"] },
+      ],
+    },
+  ];
+
+  test("yields two labeled manifests, one per gold kind, both valid", () => {
+    const manifests = buildOracleManifestsByGold(INPUTS);
+    expect(Object.keys(manifests).sort()).toEqual(["co-change", "dependency"]);
+    for (const kind of ["co-change", "dependency"] as const) {
+      const manifest = manifests[kind];
+      expect(manifest).toBeDefined();
+      const result = validatePairedBenchmark(manifest!);
+      expect(result.errors).toEqual([]);
+      expect(result.valid).toBe(true);
+      expect(manifest!.ladder).toBe("metastore");
+      expect(manifest!.runs).toHaveLength(3);
+      // Every run is a deterministic baseline whose task id and metric label carry the kind.
+      for (const run of manifest!.runs) {
+        expect(run.caseKind).toBe("deterministic");
+        expect(run.task_id).toContain(`:${kind}:`);
+        expect(run.oracle?.precision?.source).toContain(`gold=${kind}: ${GOLD_KIND_LABELS[kind]}`);
+        expect(run.oracle?.precision?.notes).toBe(DEFAULT_DEPTH_SEMANTICS[kind]);
+      }
+    }
+  });
+
+  test("the two golds are scored separately, never averaged", () => {
+    const manifests = buildOracleManifestsByGold(INPUTS);
+    const co = manifests["co-change"]!;
+    const dep = manifests["dependency"]!;
+    // lib/utils.js: perfect recall on co-change (response.js found), and on the dependency
+    // gold every system id is a real closure member => precision 1.
+    const coUtils = co.runs.find((r) => r.task_id === oracleTaskIdForGold("co-change", "lib/utils.js"));
+    const depUtils = dep.runs.find((r) => r.task_id === oracleTaskIdForGold("dependency", "lib/utils.js"));
+    expect(coUtils?.oracle?.recall?.value).toBe(1); // response.js is the only co-change gold and was found
+    expect(coUtils?.oracle?.precision?.value).toBe(0.5); // 1 of 2 system ids is a co-change gold member
+    expect(depUtils?.oracle?.precision?.value).toBe(1); // both system ids are in the dependency gold
+    // Distinct numbers per gold — a single averaged value could not equal both precisions.
+    expect(coUtils?.oracle?.precision?.value).not.toBe(depUtils?.oracle?.precision?.value);
+  });
+
+  test("perfect and zero cases per gold both validate", () => {
+    const perfectCoZeroDep: MultiGoldScoreInput = {
+      target: "t1",
+      system: ["a", "b"],
+      golds: [
+        { kind: "co-change", gold: ["a", "b"] }, // perfect
+        { kind: "dependency", gold: ["x", "y"] }, // zero overlap
+      ],
+    };
+    const zeroCoPerfectDep: MultiGoldScoreInput = {
+      target: "t2",
+      system: ["c", "d"],
+      golds: [
+        { kind: "co-change", gold: ["p", "q"] }, // zero overlap
+        { kind: "dependency", gold: ["c", "d"] }, // perfect
+      ],
+    };
+    const partial: MultiGoldScoreInput = {
+      target: "t3",
+      system: ["e", "z"],
+      golds: [
+        { kind: "co-change", gold: ["e", "f"] },
+        { kind: "dependency", gold: ["e", "f"] },
+      ],
+    };
+    const manifests = buildOracleManifestsByGold([perfectCoZeroDep, zeroCoPerfectDep, partial]);
+    const co = manifests["co-change"]!;
+    const dep = manifests["dependency"]!;
+    expect(validatePairedBenchmark(co).valid).toBe(true);
+    expect(validatePairedBenchmark(dep).valid).toBe(true);
+
+    const coPerfect = co.runs.find((r) => r.task_id === oracleTaskIdForGold("co-change", "t1"));
+    expect(coPerfect?.oracle?.f1?.value).toBe(1);
+    const depPerfect = dep.runs.find((r) => r.task_id === oracleTaskIdForGold("dependency", "t2"));
+    expect(depPerfect?.oracle?.f1?.value).toBe(1);
+    const coZero = co.runs.find((r) => r.task_id === oracleTaskIdForGold("co-change", "t2"));
+    expect(coZero?.oracle?.f1?.value).toBe(0);
+    const depZero = dep.runs.find((r) => r.task_id === oracleTaskIdForGold("dependency", "t1"));
+    expect(depZero?.oracle?.f1?.value).toBe(0);
+  });
+
+  test("a custom depthSemantics/label override flows onto every metric of that gold", () => {
+    const inputs: MultiGoldScoreInput[] = INPUTS.map((input) => ({
+      ...input,
+      golds: input.golds.map((g) =>
+        g.kind === "dependency" ? { ...g, label: "graph correctness @ depth 1", depthSemantics: "aligned to maxDepth=1" } : g,
+      ),
+    }));
+    const dep = buildOracleManifestsByGold(inputs)["dependency"]!;
+    for (const run of dep.runs) {
+      expect(run.oracle?.f1?.notes).toBe("aligned to maxDepth=1");
+      expect(run.oracle?.f1?.source).toContain("graph correctness @ depth 1");
+    }
+  });
+
+  test("byte-for-byte reproducible per gold kind", () => {
+    const a = buildOracleManifestsByGold(INPUTS);
+    const b = buildOracleManifestsByGold(INPUTS);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

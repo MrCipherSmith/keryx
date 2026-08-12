@@ -40,15 +40,30 @@ No milestone publishes a comparative number before its fairness bar is met.
   first real result — `src/metrics/oracle-runner.ts`,
   `scripts/benchmark/run-express-oracle.ts`.
 
-First oracle result (gdgraph `affected` vs git-co-change gold, express, F1):
-`lib/application.js` 0, `lib/express.js` 0, `lib/utils.js` 0.25 — reported honestly.
+**Resolved (2026-08-13): both golds reported, separately and never averaged.** The
+gdgraph oracle now scores the ONE gdgraph affected-set against BOTH golds and emits a
+labeled `paired-3-5-v2` manifest per gold kind (`src/metrics/oracle-runner.ts`
+`buildOracleManifestsByGold`; `keryx metrics benchmark run --ladder metastore
+--gold co-change|dependency|all`, default `all`). Decision (a)+(b): keep the co-change
+metric but relabel it "co-change prediction", AND add the dependency-derived
+(transitive import closure) gold labeled "graph correctness".
 
-**Open finding (correction):** the gdgraph oracle compares a *dependency* affected-set
-to a *co-change* gold — different notions, so a low F1 is expected and does not by
-itself indict gdgraph. Before any M1 metastore claim, decide the gold semantics:
-either (a) reframe the metric as "does the dependency graph predict real co-change",
-or (b) add a dependency-derived gold (import/usage closure) alongside co-change and
-report both.
+Real express result (pinned commit `a3714473`, from the committed fixtures):
+
+- **co-change prediction** (F1): `lib/application.js` 0, `lib/express.js` 0,
+  `lib/utils.js` 0.25 — as before, reported honestly (a *prediction* across two notions
+  of "affected", so a low F1 does not by itself indict the graph).
+- **graph correctness** (vs transitive import closure): precision **1.0 on all three
+  targets** (every gdgraph edge is a real closure member), recall
+  `lib/application.js` ~0.031, `lib/express.js` 0.06, `lib/utils.js` 0.07, F1 ~0.059 /
+  0.113 / 0.131.
+
+**Depth semantics (honest):** gdgraph `affected` is one-hop (forward `dependencies`
+structurally one-hop; committed fixture uses depth=1 dependents) while the dependency
+gold is the full transitive closure — so precision is graph-edge correctness and recall
+is one-hop coverage of the transitive closure, NOT a defect rate. Each dependency-gold
+oracle metric carries this as an explicit `depthSemantics` note; see
+[metrics-and-validation](metrics-and-validation.md#metastore-ladder).
 
 **Remaining in M1:**
 
@@ -57,7 +72,6 @@ report both.
 - Testing/TIA, memory, gdctx oracle layers; test-impact gold (needs an instrumented
   coverage run).
 - Safety track + false-premise / bullshit-resistance case group.
-- The gdgraph-oracle gold-semantics decision above.
 
 ## M2 — Comparative: one third-party agent harness
 

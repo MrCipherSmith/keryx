@@ -16,9 +16,15 @@ Version: 0.1.0
 Two independent sub-methods, both reported:
 
 - **Oracle / IR grading (agent-free).** Score the artifacts directly against gold:
-  - `gdgraph affected <target>` → gold affected-set derived from git history
-    ("what actually changed together" in the real commit that touched the target).
-    Metrics: precision, recall, F1.
+  - `gdgraph affected <target>` → scored against **two independent golds, reported
+    separately and never averaged** (see
+    [metrics-and-validation](metrics-and-validation.md#metastore-ladder)):
+    **(1) co-change prediction** vs the git-history co-change set ("what actually
+    changed together" in the real commits that touched the target), and **(2) graph
+    correctness** vs the independent transitive import closure. Metrics: precision,
+    recall, F1. gdgraph's affected output is one-hop while the dependency gold is the
+    full transitive closure, so each graph-correctness metric carries an explicit
+    depth-semantics note (precision = edge correctness; recall = one-hop coverage).
   - `gdwiki` grounded retrieval (`wiki ask`) → gold Q→passage mapping. Metrics:
     nDCG, recall@k, and a groundedness check (does the cited passage support the
     claim).

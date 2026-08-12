@@ -37,11 +37,36 @@ computed across mixed served-models or mixed effort is confounded and non-publis
 
 | Layer | Command under test | Gold source | Metrics |
 |-------|--------------------|-------------|---------|
-| gdgraph | `gdgraph affected <target>` | git history (real co-change set) | precision, recall, F1 |
+| gdgraph (co-change prediction) | `gdgraph affected <target>` | git history (real co-change set), `goldAffectedSet` | precision, recall, F1 |
+| gdgraph (graph correctness) | `gdgraph affected <target>` | independent transitive import closure, `goldDependencyClosure` | precision, recall, F1 |
 | gdwiki | `wiki ask <q>` | curated Q→passage | nDCG, recall@k, groundedness |
 | testing | `test related <file>` / TIA | coverage / changed tests | precision, recall |
 | memory | `memory search <q>` | curated applicable-decision | recall@k |
 | gdctx | compaction of a known output | the raw output's facts | fact-preservation rate |
+
+**gdgraph is scored against two independent golds, reported separately and never
+averaged** (`keryx metrics benchmark run --ladder metastore --gold co-change|dependency|all`,
+default `all`; scorer: `src/metrics/oracle-runner.ts`, `buildOracleManifestsByGold`):
+
+- **co-change prediction** — does gdgraph's dependency-based affected set predict the
+  files that *really change together* with the target (git co-change gold,
+  `goldAffectedSet`). A low F1 here is expected and does not by itself indict the graph:
+  it measures a *prediction* across two different notions of "affected".
+- **graph correctness** — does the affected set match the independent transitive import
+  closure (`goldDependencyClosure`, built by `scripts/benchmark/parse-imports.ts`, which
+  never calls gdgraph, so the comparison is not circular).
+
+**Depth semantics (honest, not hidden).** `gdgraph affected` is **one-hop**: its forward
+`dependencies` are structurally one-hop (`src/gdgraph/affected.ts`) and the committed
+`gdgraph-affected.json` fixture uses depth=1 dependents, while the dependency gold is the
+**full transitive** import closure. That forward gap cannot be closed (gdgraph cannot emit
+a transitive forward closure), so the two numbers are reported **with an explicit
+`depthSemantics` note** on every dependency-gold oracle metric rather than a silently
+misleading score: **precision** = graph-edge correctness (are gdgraph's edges real closure
+members), **recall** = one-hop coverage of the transitive closure (a lower bound, not a
+defect rate). A fully depth-aligned score would require gdgraph to emit a transitive
+forward closure, or scoring against a `maxDepth: 1` closure
+(`goldDependencyClosure({ maxDepth: 1 })`).
 
 ### Ablation metrics (agent outcome, stochastic, ×3 seeds)
 
