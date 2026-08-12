@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, unlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { FwkReadService } from "./fwk-service";
+import { FwkReadService, resolvePolicySelectionSafely } from "./fwk-service";
 import { createSacAuthorizationServer, type SacVerifiedPrincipal } from "./index";
 import { verifyAccessReceiptLedger } from "./receipt-integrity";
 
@@ -14,6 +14,104 @@ const source = async () => ({
 });
 const make = async (guard: import("./index").StrictSacGuard = { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" }, authenticateRequest: (request: unknown) => Promise<SacVerifiedPrincipal | undefined> = async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" })) => new FwkReadService({ guard, authorizationServer: createSacAuthorizationServer({ authenticateRequest }), source: async () => source(), canonical: { workspaceRoot: await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-service-")), configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" }, now: () => new Date(stamp) });
 const read = (service: FwkReadService, overrides: Partial<{ workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required: string[]; optional: string[] }> = {}) => service.overview({ workspaceId: "workspace-a", request: undefined, requestCorrelationId: "fwk-read-correlation-0001", budget: { maxItems: 3, maxTokens: 100 }, ...overrides });
+
+type PolicyExperimentFixtureIndex = Readonly<{
+  baselineArtifactDigest: string;
+  candidateArtifactDigest: string;
+  corpusVersion: string;
+  corpusDigest: string;
+  baselineVersion: string;
+  candidateVersion: string;
+  evaluationReportDigest: string;
+  baselineArtifactRef: string;
+  candidateArtifactRef: string;
+  corpusRef: string;
+  evaluationReportRef: string;
+}>;
+
+const policyFixtureRoot = new URL("../../fixtures/sac-policy-experiment/", import.meta.url);
+
+const readFixtureJson = async <T>(relativePath: string): Promise<T> => JSON.parse(await readFile(new URL(relativePath, policyFixtureRoot), "utf8")) as T;
+
+const copyFixtureArtifact = async (workspaceRoot: string, relativeSource: string, destination: string): Promise<void> => {
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(destination, await readFile(new URL(relativeSource, policyFixtureRoot)));
+};
+
+const seedRuntimePolicyFixtureWorkspace = async (workspaceRoot: string): Promise<PolicyExperimentFixtureIndex> => {
+  const manifest = await readFixtureJson<{
+    artifacts: Record<string, { ref: string; sha256: string }>;
+  }>("artifact-manifest.json");
+  const baselineArtifact = await readFixtureJson<{
+    version: string;
+  }>("artifacts/deterministic-baseline.json");
+  const candidateArtifact = await readFixtureJson<{
+    version: string;
+  }>("artifacts/candidate.json");
+  const corpus = await readFixtureJson<{
+    manifest: { corpusVersion: string; corpusDigest: string; baselineVersion: string; baselineDigest: string; };
+  }>("corpus.json");
+  const report = await readFixtureJson<{
+    candidateVersion: string;
+    baselineVersion: string;
+    baselineDigest: string;
+    corpusVersion: string;
+    corpusDigest: string;
+    reportDigest: string;
+  }>("evaluation-report.json");
+
+  const policyDir = path.join(workspaceRoot, ".metaproject", "context-operations", "policy-experiment");
+  const destination: Record<"baselineArtifactRef" | "candidateArtifactRef" | "corpusRef" | "evaluationReportRef", string> = {
+    baselineArtifactRef: "./policy-experiment/artifacts/deterministic-baseline.json",
+    candidateArtifactRef: "./policy-experiment/artifacts/candidate.json",
+    corpusRef: "./policy-experiment/corpus.json",
+    evaluationReportRef: "./policy-experiment/evaluation-report.json",
+  };
+  await mkdir(path.join(policyDir, "artifacts"), { recursive: true });
+  await copyFixtureArtifact(workspaceRoot, "artifacts/deterministic-baseline.json", path.join(workspaceRoot, destination.baselineArtifactRef.slice(2)));
+  await copyFixtureArtifact(workspaceRoot, "artifacts/candidate.json", path.join(workspaceRoot, destination.candidateArtifactRef.slice(2)));
+  await copyFixtureArtifact(workspaceRoot, "corpus.json", path.join(workspaceRoot, destination.corpusRef.slice(2)));
+  await copyFixtureArtifact(workspaceRoot, "evaluation-report.json", path.join(workspaceRoot, destination.evaluationReportRef.slice(2)));
+
+  return {
+    baselineArtifactDigest: manifest.artifacts.baseline!.sha256,
+    candidateArtifactDigest: manifest.artifacts.candidate!.sha256,
+    corpusVersion: corpus.manifest.corpusVersion,
+    corpusDigest: corpus.manifest.corpusDigest,
+    baselineVersion: baselineArtifact.version,
+    candidateVersion: candidateArtifact.version,
+    evaluationReportDigest: report.reportDigest,
+    baselineArtifactRef: destination.baselineArtifactRef,
+    candidateArtifactRef: destination.candidateArtifactRef,
+    corpusRef: destination.corpusRef,
+    evaluationReportRef: destination.evaluationReportRef,
+  };
+};
+
+const writeRuntimePolicyConfig = async (workspaceRoot: string, patch: (input: PolicyExperimentFixtureIndex) => Partial<PolicyExperimentFixtureIndex> = () => ({})): Promise<PolicyExperimentFixtureIndex> => {
+  const fixture = await seedRuntimePolicyFixtureWorkspace(workspaceRoot);
+  const patched = { ...fixture, ...patch(fixture) };
+  const policyDir = path.join(workspaceRoot, ".metaproject", "context-operations", "policy-experiment");
+  await mkdir(policyDir, { recursive: true });
+  const config = {
+    enabled: true,
+    killSwitch: false,
+    candidateArtifactRef: fixture.candidateArtifactRef,
+    candidateArtifactDigest: patched.candidateArtifactDigest,
+    candidateVersion: fixture.candidateVersion,
+    baselineArtifactRef: fixture.baselineArtifactRef,
+    baselineArtifactDigest: patched.baselineArtifactDigest,
+    baselineVersion: fixture.baselineVersion,
+    corpusVersion: fixture.corpusVersion,
+    corpusDigest: patched.corpusDigest,
+    corpusRef: fixture.corpusRef,
+    evaluationReportRef: fixture.evaluationReportRef,
+    evaluationDigest: patched.evaluationReportDigest,
+    rollbackBaselineVersion: fixture.baselineVersion,
+  };
+  await writeFile(path.join(policyDir, "config.json"), JSON.stringify(config, null, 2), "utf8");
+  return { ...fixture, ...patched };
+};
 
 test("mandatory budget overflow is typed and has no manifest or receipt", async () => {
   const result = await read(await make(), { budget: { maxItems: 0, maxTokens: 0 } });
@@ -240,4 +338,66 @@ test("same-size historical receipt corruption invalidates the checkpoint and ref
   expect((await stat(ledger)).size).toBe(before);
   await expect(read(service, { requestCorrelationId: "fwk-historical-third-0001" }))
     .rejects.toThrow("invalid access receipt ledger");
+});
+
+test("runtime policy experiment resolver prefers candidate when full pinned chain is valid", async () => {
+  const canonical = { workspaceRoot: await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-phase6-runtime-")), policyRef: "./security/policy/local", policyRevision: "local-offline-v1" };
+  const fixture = await writeRuntimePolicyConfig(canonical.workspaceRoot);
+  const authorizationServer = createSacAuthorizationServer({
+    authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }),
+  });
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer,
+    source: async () => source(),
+    canonical: { ...canonical, configurationRevision: "context-r1" },
+    policySelection: () => resolvePolicySelectionSafely(canonical.workspaceRoot, canonical),
+    now: () => new Date(stamp),
+  });
+  const result = await read(service, { requestCorrelationId: "fwk-phase6-0001-runtime-long" });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.receipt.policy).toEqual({ ref: fixture.candidateArtifactRef, revision: fixture.candidateVersion });
+});
+
+test("runtime policy experiment resolver returns deterministic baseline on digest mismatch", async () => {
+  const canonical = { workspaceRoot: await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-phase6-runtime-")), policyRef: "./security/policy/local", policyRevision: "local-offline-v1" };
+  const fixture = await writeRuntimePolicyConfig(canonical.workspaceRoot, (value) => ({ candidateArtifactDigest: `${value.candidateArtifactDigest.slice(0, -1)}0` }));
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({
+      authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }),
+    }),
+    source: async () => source(),
+    canonical: { ...canonical, configurationRevision: "context-r1" },
+    policySelection: () => resolvePolicySelectionSafely(canonical.workspaceRoot, canonical),
+    now: () => new Date(stamp),
+  });
+  const result = await read(service, { requestCorrelationId: "fwk-phase6-0002-runtime-long" });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.receipt.policy).toEqual({ ref: canonical.policyRef, revision: canonical.policyRevision });
+  expect(result.receipt.policy.ref).toBe(canonical.policyRef);
+  expect(fixture.candidateArtifactDigest).toBeTruthy();
+});
+
+test("runtime policy experiment resolver cannot activate with kill-switch true", async () => {
+  const canonical = { workspaceRoot: await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-phase6-runtime-")), policyRef: "./security/policy/local", policyRevision: "local-offline-v1" };
+  await writeRuntimePolicyConfig(canonical.workspaceRoot, (value) => ({ ...value, candidateArtifactDigest: value.candidateArtifactDigest }));
+  const configPath = path.join(canonical.workspaceRoot, ".metaproject", "context-operations", "policy-experiment", "config.json");
+  const raw = await readFile(configPath, "utf8");
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  await writeFile(configPath, JSON.stringify({ ...parsed, killSwitch: true }), "utf8");
+
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({
+      authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }),
+    }),
+    source: async () => source(),
+    canonical: { ...canonical, configurationRevision: "context-r1" },
+    policySelection: () => resolvePolicySelectionSafely(canonical.workspaceRoot, canonical),
+    now: () => new Date(stamp),
+  });
+  const result = await read(service, { requestCorrelationId: "fwk-phase6-0003-runtime-long" });
+  expect("code" in result).toBe(false); if ("code" in result) return;
+  expect(result.receipt.policy).toEqual({ ref: canonical.policyRef, revision: canonical.policyRevision });
 });

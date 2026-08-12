@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context
-Version: 1.3.0
+Version: 1.4.0
 
 ## Назначение
 
@@ -10,10 +10,12 @@ Version: 1.3.0
 
 ## Статус
 
-`implemented` (механизмы 0–5), плюс отдельная production-ready фаза в планировании.
-Фазы 0–5 уже влиты в `feat/shared-agent-context`; фаза 6 и дальнейший
-операционный rollout остаются в плане. Точный статус, evidence и список
-временно сохранённых веток приведены в [Implementation plan](implementation-plan.md).
+`implemented` (механизмы 0–5), плюс фаза 6, разбитая на две части: **6a** —
+runtime-guard opt-in (`resolvePolicySelection`), реализована и проверена
+(AC1–AC6, вся SAC-сюита 88/88 зелёная); **6b** — операторский процесс готовности
+для реальных данных, в плане. Фазы 0–5 влиты в `feat/shared-agent-context`;
+дальнейший операционный rollout (6b) остаётся в плане. Точный статус, evidence и
+список временно сохранённых веток приведены в [Implementation plan](implementation-plan.md).
 
 Важно: Phase 5 (policy experiment) сейчас подтверждает корректность механизма на
 synthetic offline evidence и по умолчанию не включает production эффектов.

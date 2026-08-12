@@ -1175,16 +1175,23 @@ export function formatPolicyEvaluationReport(report: PolicyEvaluationReport): st
 export type PolicyExperimentConfig = Readonly<{
   enabled: boolean;
   killSwitch: boolean;
+  candidateArtifactRef?: string;
+  candidateArtifactDigest?: string;
   candidateVersion?: string;
   candidateDigest?: string;
+  baselineArtifactRef?: string;
+  baselineArtifactDigest?: string;
   corpusVersion?: string;
   corpusDigest?: string;
+  corpusRef?: string;
   baselineVersion?: string;
   baselineDigest?: string;
+  baselineRef?: string;
   evaluationDigest?: string;
+  evaluationReportRef?: string;
   rollbackBaselineVersion?: string;
   rollbackReason?: string;
-}>;
+}>; 
 
 export function defaultPolicyExperimentConfig(): PolicyExperimentConfig {
   return Object.freeze({ enabled: false, killSwitch: true });
