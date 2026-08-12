@@ -90,11 +90,28 @@ per gold query and commits `fixtures/benchmark/keryx/memory-search-results.json`
 across queries (full-list precision is sensitive to lexical overlap with unrelated entries;
 recall@k at a small k is not). Manifest passes `keryx metrics benchmark validate`.
 
+**Landed (2026-08-13): gdctx metastore oracle (fact-preservation).** A separate metastore
+layer (`keryx metrics benchmark run --ladder metastore --layer gdctx|all`; scorer
+`src/metrics/oracle-runner.ts` `buildGdctxManifest`, never averaged with the gdgraph/testing/
+memory oracles) scores a gdctx COMPACT summary (`keryx ctx run -- <command>`) against the
+FACTS extracted from the RAW output it compacted, via `factPreservation`
+(`src/metrics/ir.ts`). Both sides are reduced to facts by one fixed, documented rule
+(`extractFacts`, `src/metrics/oracle-runner.ts`: file-path tokens with an extension, or `key:
+value` metadata/count lines — never hand-tuned per case). Dogfooded on this repo's own tree —
+`scripts/benchmark/run-gdctx-oracle.ts` runs `keryx ctx run -- <command>` for real on three
+pinned `find <dir> -type f | sort` listings and commits
+`fixtures/benchmark/keryx/gdctx-fact-preservation.json`. Real result: **`find src/metrics
+-type f`: 1.0** (18/18, short enough that gdctx's 120-line compaction budget never truncates
+it); **`find .metaproject/skills -type f`: ~0.697** (108/155, over budget); **`find docs -type
+f`: ~0.336** (110/327, well over budget) — the two sub-1.0 numbers are an honest measurement
+of gdctx's own head/tail elision on an oversized listing. Manifest passes `keryx metrics
+benchmark validate`. This was the last M1-tracked metastore oracle layer — gdgraph, testing,
+memory, and gdctx are all now landed.
+
 **Remaining in M1:**
 
 - Ablation runner (context on/off, ×3 seeds, success/token/tool-call deltas) — needs
   the model legs, deferred with live runs.
-- gdctx oracle layer (fact-preservation rate).
 - Safety track + false-premise / bullshit-resistance case group.
 
 ## M2 — Comparative: one third-party agent harness

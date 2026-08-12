@@ -120,6 +120,46 @@ spurious top-10 hits, which recall@k with a small k is robust to but full-list p
 not) — see `fixtures/benchmark/keryx/{memory-gold,memory-search-results}.json` for the
 per-query breakdown.
 
+**gdctx fact-preservation oracle** (`keryx metrics benchmark run --ladder metastore --layer
+gdctx`; scorer: `src/metrics/oracle-runner.ts`, `buildGdctxManifest`). Scores a gdctx
+**COMPACT form** — the summary `keryx ctx run -- <command>` prints — against the **FACTS
+extracted from the RAW output it compacted**, via `factPreservation` (`src/metrics/ir.ts`):
+what fraction of the raw output's discrete, verifiable facts survive into the compact form.
+This is a lossless-fidelity check on gdctx itself: compaction is allowed to drop volume,
+never to drop a fact a faithful reader would need. Metric: **fact-preservation rate**
+(plus a Wilson-CI'd `rates.factPreservation` when the raw-facts denominator is non-empty).
+Reliability `exact` — both sides are extracted from real, captured text by a fixed rule, not
+estimated. It is a SEPARATE oracle (task-id namespace `metastore:gdctx-fact-preservation:*`)
+and is never averaged with the gdgraph, testing, or memory oracles.
+
+*Fact-extraction rule (fixed, reproducible, never hand-tuned per case — `extractFacts`,
+`src/metrics/oracle-runner.ts`).* The SAME pass runs over the RAW command output and over the
+gdctx COMPACT text. A FACT is one line, trimmed, that is either **(a)** a bare relative
+file-path token — the whole trimmed line (or any individual whitespace-delimited token on the
+line, once surrounding punctuation is stripped) matches `/^[\w.][\w./-]*\.[A-Za-z0-9]+$/`
+(starts with a word character or a leading dot — so keryx's own dotdir tree, e.g.
+`.metaproject/skills/catalog.md`, counts — and ends in a `.<extension>`), e.g.
+`src/metrics/ir.ts`; or **(b)** a `key: value` metadata/count line — the whole trimmed line
+matches `/^([A-Za-z][\w -]*):\s*`?(-?\d+)`?\s*$/`, normalized to `"<lowercased key>:<value>"`
+so a fact re-wrapped in backticks by the compactor still normalizes identically (`"Exit code:
+0"` and `` "Raw lines: `18`" `` both count). Facts are deduped as a set; extra facts present
+only in the compact form (e.g. its own `Exit code:`/`Raw lines:` header) never affect the
+score — `factPreservation` only counts RAW facts recovered in the compact set.
+
+*How the fixture is produced (dogfood, no external clone, real compaction).*
+`scripts/benchmark/run-gdctx-oracle.ts` runs `keryx ctx run -- <command>` for real on three
+pinned `find <dir> -type f | sort` listings inside this repo, reads the raw log gdctx wrote
+alongside the compact summary, extracts facts from both with `extractFacts`, and commits the
+raw/compact fact sets to `fixtures/benchmark/keryx/gdctx-fact-preservation.json`. Regenerate
+with `bun scripts/benchmark/run-gdctx-oracle.ts`. Real committed result over the 3 dogfood
+inputs: **`find src/metrics -type f`: 1.0** (18/18 — short enough that gdctx's 120-line
+compaction budget never truncates it, so nothing is lost); **`find .metaproject/skills -type
+f`: ~0.697** (108/155 — over budget, the compactor's head/tail elision drops the middle);
+**`find docs -type f`: ~0.336** (110/327 — well over budget, most of a 327-line listing is
+elided). The two lossy numbers are an honest measurement of gdctx's own head/tail
+truncation policy on an oversized listing, not a defect being hidden — see
+`fixtures/benchmark/keryx/gdctx-fact-preservation.json` for the per-input fact sets.
+
 ### Ablation metrics (agent outcome, stochastic, ×3 seeds)
 
 Same agent + same model, `context-on` vs `context-off`:

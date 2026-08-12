@@ -7,11 +7,15 @@ import { validatePairedBenchmark } from "./benchmark";
 import { goldTestImpact, type CoverageMap } from "./gold";
 import {
   buildEvidenceBundle,
+  buildGdctxManifest,
   buildMemorySearchManifest,
   buildOracleManifest,
   buildOracleManifestsByGold,
   buildTestImpactManifest,
   DEFAULT_DEPTH_SEMANTICS,
+  extractFacts,
+  GDCTX_FACT_PRESERVATION_LABEL,
+  gdctxTaskId,
   GOLD_KIND_LABELS,
   MEMORY_SEARCH_LABEL,
   memorySearchTaskId,
@@ -19,11 +23,13 @@ import {
   oracleTaskIdForGold,
   persistEvidenceBundle,
   runOracleAndPersist,
+  scoreGdctxRun,
   scoreMemorySearchRun,
   scoreOracleTarget,
   scoreTestImpactRun,
   TEST_IMPACT_LABEL,
   testImpactTaskId,
+  type GdctxScoreInput,
   type MemoryScoreInput,
   type MultiGoldScoreInput,
   type OracleScoreInput,
@@ -493,6 +499,153 @@ describe("memory oracle (ranked system search vs curated gold, recall@k)", () =>
     const inputs: MemoryScoreInput[] = [PERFECT_MEM, ZERO_MEM];
     const a = inputs.map((i) => scoreMemorySearchRun(i));
     const b = inputs.map((i) => scoreMemorySearchRun(i));
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+});
+
+describe("extractFacts (gdctx fact-extraction rule)", () => {
+  test("extracts bare relative file-path lines (dot-extension required)", () => {
+    const facts = extractFacts("src/metrics/ir.ts\nsrc/metrics/gold.ts\n");
+    expect(facts).toEqual(["src/metrics/gold.ts", "src/metrics/ir.ts"]);
+  });
+
+  test("extracts a leading-dot (hidden-dir) path, e.g. keryx's own .metaproject tree", () => {
+    const facts = extractFacts(".metaproject/skills/catalog.md");
+    expect(facts).toEqual([".metaproject/skills/catalog.md"]);
+  });
+
+  test("extracts `key: value` metadata lines, normalized and backtick-insensitive", () => {
+    const facts = extractFacts("Exit code: 0\nRaw lines: `18`\nstdout bytes: 436\n");
+    expect(facts.sort()).toEqual(["exit code:0", "raw lines:18", "stdout bytes:436"]);
+  });
+
+  test("recovers a path token embedded in a longer header line", () => {
+    const facts = extractFacts("Command: `bash -c find src/metrics/ir.ts`");
+    expect(facts).toContain("src/metrics/ir.ts");
+  });
+
+  test("does not treat a bare directory (no extension) or an elision marker as a fact", () => {
+    const facts = extractFacts(
+      "Command: `bash -c find .metaproject/skills -type f`\n... omitted 35 lines ...\n```text\n```\n",
+    );
+    expect(facts).toEqual([]);
+  });
+
+  test("dedupes repeated facts across lines", () => {
+    const facts = extractFacts("src/metrics/ir.ts\nsrc/metrics/ir.ts\n");
+    expect(facts).toEqual(["src/metrics/ir.ts"]);
+  });
+
+  test("a fact preserved verbatim in a re-wrapped compact line normalizes identically", () => {
+    const raw = extractFacts("Raw lines: 18");
+    const compact = extractFacts("Raw lines: `18`");
+    expect(raw).toEqual(compact);
+  });
+});
+
+describe("gdctx fact-preservation oracle (compact form vs raw-output facts)", () => {
+  // Mirrors the real keryx dogfood slice (fixtures/benchmark/keryx/gdctx-fact-preservation.json):
+  // rawFacts/compactFacts already extracted (via extractFacts) from a real `keryx ctx run --
+  // <command>` compaction, so the oracle-runner tests here stay offline and deterministic.
+  const PERFECT_GDCTX: GdctxScoreInput = {
+    // Real committed shape: a listing short enough that gdctx's compactor never truncates it,
+    // so every raw fact survives — see fixtures/benchmark/keryx/gdctx-fact-preservation.json
+    // ("bash -c find src/metrics -type f | sort", rate 1.0, 18/18).
+    input: "bash -c find src/metrics -type f | sort",
+    rawFacts: ["src/metrics/gold.ts", "src/metrics/ir.ts", "src/metrics/oracle-runner.ts"],
+    // The compact form also carries header-only facts (exit code, raw lines) that are not in
+    // rawFacts — they must not affect the score (factPreservation only counts RAW facts found
+    // in the compact set, never penalizes or rewards extras).
+    compactFacts: ["exit code:0", "raw lines:3", "src/metrics/gold.ts", "src/metrics/ir.ts", "src/metrics/oracle-runner.ts"],
+  };
+  const LOSSY_GDCTX: GdctxScoreInput = {
+    // Real committed shape: a listing long enough that gdctx's compactor elides the middle —
+    // see fixtures/benchmark/keryx/gdctx-fact-preservation.json ("bash -c find docs -type f |
+    // sort", rate ~0.336, 110/327). Here: 2 of 4 raw facts survive => rate 0.5.
+    input: "bash -c find docs -type f | sort",
+    rawFacts: ["docs/a.md", "docs/b.md", "docs/c.md", "docs/d.md"],
+    compactFacts: ["docs/a.md", "docs/d.md", "exit code:0", "raw lines:4"],
+  };
+  const ZERO_GDCTX: GdctxScoreInput = {
+    input: "zero-preservation",
+    rawFacts: ["a.ts", "b.ts"],
+    compactFacts: ["exit code:0"],
+  };
+
+  test("perfect preservation: every raw fact survives => rate 1.0", () => {
+    const run = scoreGdctxRun(PERFECT_GDCTX);
+    expect(run.oracle?.factPreservation?.value).toBe(1);
+    expect(run.oracle?.factPreservation?.reliability).toBe("exact");
+    expect(run.rates?.factPreservation).toEqual({
+      successes: 3,
+      n: 3,
+      rate: 1,
+      ci95: { lower: expect.any(Number), upper: 1 },
+      reliability: "exact",
+    });
+  });
+
+  test("lossy case: half the raw facts survive => rate 0.5", () => {
+    const run = scoreGdctxRun(LOSSY_GDCTX);
+    expect(run.oracle?.factPreservation?.value).toBe(0.5);
+    expect(run.rates?.factPreservation?.successes).toBe(2);
+    expect(run.rates?.factPreservation?.n).toBe(4);
+  });
+
+  test("zero case: no raw fact survives => rate 0", () => {
+    const run = scoreGdctxRun(ZERO_GDCTX);
+    expect(run.oracle?.factPreservation?.value).toBe(0);
+    expect(run.rates?.factPreservation?.successes).toBe(0);
+  });
+
+  test("empty raw-facts set => rate vacuously 1 and no fabricated rate n", () => {
+    const run = scoreGdctxRun({ input: "empty-raw", rawFacts: [], compactFacts: ["a.ts"] });
+    expect(run.oracle?.factPreservation?.value).toBe(1);
+    expect(run.rates?.factPreservation).toBeUndefined();
+  });
+
+  test("task id carries the gdctx-fact-preservation namespace and metric source carries the layer label", () => {
+    const run = scoreGdctxRun(PERFECT_GDCTX);
+    expect(run.task_id).toBe(gdctxTaskId(PERFECT_GDCTX.input));
+    expect(run.task_id).toContain("metastore:gdctx-fact-preservation:");
+    expect(run.oracle?.factPreservation?.source).toContain(`layer=gdctx: ${GDCTX_FACT_PRESERVATION_LABEL}`);
+  });
+
+  test("deterministic case shape: baseline variant, single seed", () => {
+    const run = scoreGdctxRun(PERFECT_GDCTX);
+    expect(run.caseKind).toBe("deterministic");
+    expect(run.variant).toBe("baseline");
+    expect(run.seeds).toEqual([1]);
+    expect(run.ladder).toBe("metastore");
+  });
+
+  test("emitted manifest is a valid metastore paired-3-5-v2 manifest", () => {
+    const manifest = buildGdctxManifest([PERFECT_GDCTX, LOSSY_GDCTX, ZERO_GDCTX]);
+    const result = validatePairedBenchmark(manifest);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+    expect(manifest.ladder).toBe("metastore");
+    expect(manifest.runs).toHaveLength(3);
+    for (const run of manifest.runs) {
+      expect(run.caseKind).toBe("deterministic");
+      expect(run.variant).toBe("baseline");
+      expect(run.seeds).toEqual([1]);
+      expect(run.oracle?.factPreservation?.reliability).toBe("exact");
+    }
+  });
+
+  test("never averaged with the gdgraph/testing/memory oracles: distinct task-id namespace", () => {
+    const gdctxRun = scoreGdctxRun(PERFECT_GDCTX);
+    const testRun = scoreTestImpactRun({ changedFile: "src/x.ts", system: ["a"], gold: ["a"] });
+    const memRun = scoreMemorySearchRun({ query: "q", system: ["a"], gold: ["a"], k: 1 });
+    expect(gdctxRun.task_id.startsWith("metastore:gdctx-fact-preservation:")).toBe(true);
+    expect(gdctxRun.task_id).not.toBe(testRun.task_id);
+    expect(gdctxRun.task_id).not.toBe(memRun.task_id);
+  });
+
+  test("byte-for-byte reproducible", () => {
+    const a = buildGdctxManifest([PERFECT_GDCTX, LOSSY_GDCTX, ZERO_GDCTX]);
+    const b = buildGdctxManifest([PERFECT_GDCTX, LOSSY_GDCTX, ZERO_GDCTX]);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

@@ -16,4 +16,5 @@ test("metrics help exposes canonical record, latest, lightweight, and benchmark 
   expect(help).toContain("metrics plan --profile lightweight");
   expect(help).toContain("metrics benchmark validate");
   expect(help).toContain("metrics benchmark run --ladder metastore");
+  expect(help).toContain("gdctx");
 });

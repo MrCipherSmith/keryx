@@ -45,7 +45,23 @@ Two independent sub-methods, both reported:
     `scripts/benchmark/run-memory-oracle.ts`; see
     [metrics-and-validation](metrics-and-validation.md#metastore-ladder).
   - `gdctx` compaction → lossless-fidelity check: the compact form must preserve
-    the facts the raw output carried (measured, not asserted).
+    the facts the raw output carried (measured, not asserted). Metric:
+    fact-preservation rate (`factPreservation`, `src/metrics/ir.ts`). **Landed** as
+    a separate metastore layer (`keryx metrics benchmark run --ladder metastore
+    --layer gdctx`; scorer `src/metrics/oracle-runner.ts` `buildGdctxManifest`,
+    never averaged with the gdgraph/testing/memory oracles). Facts are extracted
+    from BOTH the raw command output and the gdctx compact summary by a single
+    fixed rule (`extractFacts`: file-path tokens with an extension, or `key:
+    value` metadata/count lines). Dogfooded on this repo's own tree via
+    `scripts/benchmark/run-gdctx-oracle.ts` (real `keryx ctx run -- <command>`
+    compaction); see
+    [metrics-and-validation](metrics-and-validation.md#metastore-ladder). With
+    this, every oracle layer plan.md's M1 scope tracked as landed/remaining is
+    landed (gdgraph, testing, memory, gdctx); plan.md's M1 remaining scope is now
+    only the ablation runner and the safety track (see [plan.md](plan.md)). The
+    `gdwiki` sub-method above (`wiki ask` → nDCG/recall@k/groundedness) is a
+    fourth planned Oracle/IR sub-method in this table but was never tracked as an
+    M1 remaining item in plan.md; it is untouched by this change.
 - **Ablation (outcome).** Run the same agent + same model on a task **with**
   `.metaproject` context and **without** it; report the delta in task success,
   tokens consumed and tool-calls. This is the primary value measurement.

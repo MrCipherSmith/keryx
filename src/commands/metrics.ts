@@ -20,13 +20,16 @@ import {
 } from "../metrics";
 import {
   buildEvidenceBundle,
+  buildGdctxManifest,
   buildMemorySearchManifest,
   buildOracleManifestsByGold,
   buildTestImpactManifest,
+  GDCTX_FACT_PRESERVATION_LABEL,
   GOLD_KIND_LABELS,
   MEMORY_SEARCH_LABEL,
   persistEvidenceBundle,
   TEST_IMPACT_LABEL,
+  type GdctxScoreInput,
   type GoldKind,
   type MemoryScoreInput,
   type MultiGoldScoreInput,
@@ -200,13 +203,16 @@ const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
 
 // Run the metastore ORACLE scorers, one labeled paired-3-5-v2 manifest per layer/gold,
 // reported separately and never averaged. Select layers with
-// `--layer gdgraph|testing|memory|all` (default all):
+// `--layer gdgraph|testing|memory|gdctx|all` (default all):
 //   - gdgraph: the affected-set oracle vs the co-change + dependency golds (see
 //     `--gold co-change|dependency|all`, default all).
 //   - testing: the test-impact/TIA oracle — `keryx test related` / coverage-map TIA output
 //     scored against the coverage-derived impacted-test gold (goldTestImpact).
 //   - memory: the memory-search oracle — `keryx memory search <q>` ranked results scored
 //     against a curated applicable-decision gold (recall@k, plus precision/recall).
+//   - gdctx: the fact-preservation oracle — a gdctx COMPACT summary (`keryx ctx run --
+//     <command>`) scored against the facts extracted from the RAW output it compacted
+//     (extractFacts, src/metrics/oracle-runner.ts).
 // Prints + validates every manifest and exits non-zero if any manifest is invalid.
 async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
   const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
@@ -217,9 +223,9 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
   }
 
   const layer = (optionValue(args, "--layer") ?? "all").trim();
-  if (layer !== "all" && layer !== "gdgraph" && layer !== "testing" && layer !== "memory") {
+  if (layer !== "all" && layer !== "gdgraph" && layer !== "testing" && layer !== "memory" && layer !== "gdctx") {
     console.error(
-      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|all] " +
+      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|gdctx|all] " +
         "[--gold co-change|dependency|all]",
     );
     process.exitCode = 1;
@@ -235,6 +241,9 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
   }
   if (layer === "all" || layer === "memory") {
     allValid = (await runMemoryLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "gdctx") {
+    allValid = (await runGdctxLayer(projectRoot, args, ladder)) && allValid;
   }
   process.exitCode = allValid ? 0 : 1;
 }
@@ -431,6 +440,53 @@ async function runMemoryLayer(projectRoot: string, args: string[], ladder: Bench
   return result.valid;
 }
 
+/** A committed `{ inputs: [{ input, rawFacts, compactFacts }] }` gdctx fact-set fixture. */
+type GdctxFactsFile = {
+  inputs?: Array<{ input?: string; rawFacts?: string[]; compactFacts?: string[] }>;
+};
+
+/** Load the gdctx fact-preservation fixture into the scorer's GdctxScoreInput shape. */
+async function loadGdctxFacts(projectRoot: string, file: string): Promise<GdctxScoreInput[]> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as GdctxFactsFile;
+  const inputs: GdctxScoreInput[] = [];
+  for (const entry of raw.inputs ?? []) {
+    if (typeof entry.input === "string") {
+      inputs.push({ input: entry.input, rawFacts: entry.rawFacts ?? [], compactFacts: entry.compactFacts ?? [] });
+    }
+  }
+  return inputs;
+}
+
+// gdctx fact-preservation oracle: score each committed raw-vs-compact fact-set pair
+// (captured live by scripts/benchmark/run-gdctx-oracle.ts from a real `keryx ctx run --
+// <command>` compaction, `fixtures/benchmark/keryx/gdctx-fact-preservation.json`) with
+// scoreGdctxRun/buildGdctxManifest. Prints one labeled paired-3-5-v2 manifest, validates it,
+// and returns whether it validated.
+async function runGdctxLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const fixturePath = optionValue(args, "--gdctx-fixture") ?? "fixtures/benchmark/keryx/gdctx-fact-preservation.json";
+
+  let inputs: GdctxScoreInput[];
+  try {
+    inputs = await loadGdctxFacts(projectRoot, fixturePath);
+  } catch (error) {
+    console.error(`Failed to load gdctx oracle fixture: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (inputs.length === 0) {
+    console.error("No inputs in the gdctx fact-preservation fixture");
+    return false;
+  }
+
+  const manifest = buildGdctxManifest(inputs, { ladder });
+  console.log(`# layer: gdctx (${GDCTX_FACT_PRESERVATION_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: gdctx (${GDCTX_FACT_PRESERVATION_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
 async function collect(projectRoot: string, args: string[]): Promise<void> {
   const eventFile = optionValue(args, "--events");
   if (!eventFile) {
@@ -476,6 +532,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
-  keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|all] [--gold co-change|dependency|all] [--system <path>] [--testing-system <path>] [--coverage-map <path>] [--memory-system <path>] [--memory-gold <path>] [--out <dir>]
+  keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|gdctx|all] [--gold co-change|dependency|all] [--system <path>] [--testing-system <path>] [--coverage-map <path>] [--memory-system <path>] [--memory-gold <path>] [--gdctx-fixture <path>] [--out <dir>]
 `);
 }

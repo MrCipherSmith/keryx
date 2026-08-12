@@ -24,7 +24,7 @@ import {
   type PairedBenchmarkRunV2,
   type RateWithCI,
 } from "./benchmark";
-import { f1, precision, recall, recallAtK } from "./ir";
+import { f1, factPreservation, precision, recall, recallAtK } from "./ir";
 import type { Reliability } from "./types";
 
 /** One target's system-output affected-set scored against its gold affected-set. */
@@ -508,6 +508,160 @@ export function buildMemorySearchManifest(
 ): PairedBenchmarkManifestV2 {
   const ladder = options.ladder ?? "metastore";
   const runs = inputs.map((input) => scoreMemorySearchRun(input, options));
+  const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
+  return {
+    protocol: "paired-3-5-v2",
+    ladder,
+    task_ids: taskIds,
+    runs,
+    speedClaim: { claimed: false },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// gdctx fact-preservation oracle (metrics-and-validation.md "gdctx" row; specification.md
+// §1.1). Score a gdctx COMPACT form — the summary `keryx ctx run -- <command>` prints —
+// against the FACTS extracted from the RAW output it compacted, via factPreservation
+// (./ir.ts): what fraction of the raw output's discrete, verifiable facts survive into the
+// compact form. This is a lossless-fidelity check on gdctx itself (dogfood): compaction is
+// allowed to DROP volume, never to drop a fact a faithful reader would need.
+//
+// Fact-extraction rule (fixed here so it is reproducible and never hand-tuned per case —
+// the SAME extractFacts() pass runs over the RAW command output and over the gdctx COMPACT
+// text). A FACT is one line of the given text, trimmed, that is either:
+//   (a) a bare relative file-path token: the WHOLE trimmed line matches
+//       /^[\w.][\w./-]*\.[A-Za-z0-9]+$/ (starts with a word character OR a leading dot — so
+//       keryx's own dotdir tree, e.g. ".metaproject/skills/catalog.md", counts — contains
+//       only word characters/dot/slash/hyphen, ends in a `.<extension>`) — e.g.
+//       "src/metrics/ir.ts"; OR any individual whitespace-delimited token on the line matches the same pattern
+//       once surrounding punctuation (backticks/quotes/parens/trailing `,` `.` `:` `)`) is
+//       stripped — so a path quoted inline in a header line (`` Command: `ls src/metrics` ``)
+//       is still recovered; or
+//   (b) a `key: value` metadata/count line: the WHOLE trimmed line matches
+//       /^([A-Za-z][\w -]*):\s*`?(-?\d+)`?\s*$/, normalized to the string
+//       `"<lowercased trimmed key>:<value>"` — e.g. "Exit code: 0" and "Raw lines: `18`" both
+//       normalize to "exit code:0" / "raw lines:18" so a fact preserved verbatim (even
+//       re-wrapped in backticks by the compactor) normalizes to the identical string.
+// Facts are deduped (a `Set`) and case (a) / (b) are mutually exclusive per line (whole-line
+// key:value is checked first). This rule is intentionally narrow — file paths and numeric
+// metadata lines — because it is meant to be checked by exact string match, not judged.
+// ---------------------------------------------------------------------------
+
+const FACT_PATH_RE = /^[\w.][\w./-]*\.[A-Za-z0-9]+$/;
+const FACT_KV_RE = /^([A-Za-z][\w -]*):\s*`?(-?\d+)`?\s*$/;
+
+/** Strip surrounding punctuation a compactor might add/quote a token with (backticks, quotes,
+ * parens, trailing `,`/`.`/`:`) before testing it against FACT_PATH_RE. */
+function stripTokenPunctuation(token: string): string {
+  return token.replace(/^[`"'(]+/, "").replace(/[`"'),.:]+$/, "");
+}
+
+/**
+ * Extract the fixed, reproducible fact set from a text (see module comment above for the
+ * exact rule). Used identically on the RAW command output and on the gdctx COMPACT text so
+ * `factPreservation(extractFacts(raw), extractFacts(compact))` is an exact-string-match rate,
+ * never a fuzzy one.
+ */
+export function extractFacts(text: string): string[] {
+  const facts = new Set<string>();
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+
+    const kv = line.match(FACT_KV_RE);
+    if (kv) {
+      const key = (kv[1] ?? "").trim().toLowerCase();
+      facts.add(`${key}:${kv[2]}`);
+      continue;
+    }
+
+    if (FACT_PATH_RE.test(line)) {
+      facts.add(line);
+      continue;
+    }
+
+    for (const token of line.split(/\s+/)) {
+      const cleaned = stripTokenPunctuation(token);
+      if (FACT_PATH_RE.test(cleaned)) facts.add(cleaned);
+    }
+  }
+  return [...facts].sort();
+}
+
+/** Human-facing label carried on every emitted gdctx-oracle metric. */
+export const GDCTX_FACT_PRESERVATION_LABEL = "gdctx fact-preservation";
+
+// The metric `source` records HOW both sides were produced (compaction + the shared,
+// documented extraction rule), so a reader can never confuse it with the other oracles.
+const GDCTX_SOURCE =
+  "keryx ctx run -- <command> compact summary vs raw command output, both passed through " +
+  "extractFacts (src/metrics/oracle-runner.ts) — fact-preservation rate (./ir.ts factPreservation)";
+const GDCTX_MODEL = "keryx-ctx-run";
+
+/** One compacted input's raw-vs-compact fact sets (already extracted via extractFacts). */
+export type GdctxScoreInput = {
+  /** Identifier for the scored input, e.g. the source command that was compacted. */
+  readonly input: string;
+  /** Facts extracted from the RAW output extractFacts sees before compaction (gold). */
+  readonly rawFacts: readonly string[];
+  /** Facts extracted from the gdctx COMPACT form extractFacts sees (system). */
+  readonly compactFacts: readonly string[];
+};
+
+/** Stable, collision-free task id for a gdctx-oracle target, distinct from the others. */
+export function gdctxTaskId(input: string): string {
+  return `metastore:gdctx-fact-preservation:${input}`;
+}
+
+/** Score one input's raw-vs-compact fact sets and build a labeled run. */
+export function scoreGdctxRun(
+  input: GdctxScoreInput,
+  options: OracleManifestOptions = {},
+): PairedBenchmarkRunV2 {
+  const rawSet = new Set(input.rawFacts);
+  const compactSet = new Set(input.compactFacts);
+  let preserved = 0;
+  for (const fact of rawSet) if (compactSet.has(fact)) preserved += 1;
+  const rate = factPreservation(rawSet, compactSet);
+  const taskId = gdctxTaskId(input.input);
+  const source = `${GDCTX_SOURCE} [layer=gdctx: ${GDCTX_FACT_PRESERVATION_LABEL}]`;
+  // Same "no fabricated denominator" convention as oracleRates: only report a Wilson-CI'd
+  // rate when there is a real n (a non-empty raw-facts set).
+  const rates: Record<string, RateWithCI> | undefined =
+    rawSet.size > 0 ? { factPreservation: deriveRate(preserved, rawSet.size, ORACLE_RELIABILITY) } : undefined;
+  return {
+    task_id: taskId,
+    variant: "baseline",
+    run_id: `${taskId}#1`,
+    ladder: options.ladder ?? "metastore",
+    model: options.model ?? GDCTX_MODEL,
+    cacheState: options.cacheState ?? "unknown",
+    leakageAssertion: options.leakageAssertion ?? "not-applicable",
+    caseKind: "deterministic",
+    tokenCap: null,
+    seeds: [1],
+    quality: "measured",
+    oracle: {
+      factPreservation: measuredValue(rate, source),
+    },
+    ...(rates ? { rates } : {}),
+    human_interventions: null,
+  };
+}
+
+/**
+ * Assemble a `paired-3-5-v2` manifest for the metastore ladder's gdctx layer from per-input
+ * raw-vs-compact fact-set scores. Requires 3-5 inputs (the protocol's task-count bound); the
+ * returned manifest is designed to pass validatePairedBenchmark — the fact-preservation
+ * metric is measured (`exact`), its rate carries a Wilson CI when the denominator is real,
+ * and no speed claim is made.
+ */
+export function buildGdctxManifest(
+  inputs: readonly GdctxScoreInput[],
+  options: OracleManifestOptions = {},
+): PairedBenchmarkManifestV2 {
+  const ladder = options.ladder ?? "metastore";
+  const runs = inputs.map((input) => scoreGdctxRun(input, options));
   const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
   return {
     protocol: "paired-3-5-v2",
