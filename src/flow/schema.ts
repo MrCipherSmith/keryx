@@ -128,7 +128,7 @@ export function flowStateSchema(): Record<string, unknown> {
         properties: {
           id: { type: "string", description: "Task id, e.g. T1." },
           title: { type: "string" },
-          kind: { type: "string", enum: ["context", "implement", "test", "review", "docs"] },
+          kind: { type: "string", enum: ["context", "implement", "test", "verify", "review", "docs"] },
           status: { type: "string", enum: ["todo", "in-progress", "done"] },
           dependsOn: {
             type: "array",

@@ -11,3 +11,9 @@ export {
   normalizeFwkResult,
   type FwkReadResult,
 } from "./fwk-service";
+export {
+  createLocalProposalLifecycleService,
+  normalizeProposalLifecycleResult,
+  type TargetWriteResult,
+  type GuardedTargetWriter,
+} from "./proposal-lifecycle";

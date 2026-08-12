@@ -1,4 +1,5 @@
 import { readFile, realpath } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 /**
@@ -322,14 +323,30 @@ function validateActor(value: unknown, errors: SacValidationError[], field: stri
 
 function validateProposal(document: RecordValue, errors: SacValidationError[]): void {
   if (document.recordType === "proposal-created") {
-    const allowed = ["schemaVersion", "recordType", "id", "proposalRevision", "correlationId", "workspaceId", "kind", "status", "summary", "evidence", "author", "security", "createdAt"];
+    const allowed = ["schemaVersion", "recordType", "id", "proposalRevision", "correlationId", "workspaceId", "kind", "status", "summary", "evidence", "wrapUp", "author", "security", "createdAt"];
     closedObject(document, allowed, errors, "$"); required(document, allowed, errors, "$");
     if (document.status !== "proposed") error(errors, "schema_const", "$.status", "new proposals must be proposed");
     stringMatch(document.id, idPattern, errors, "$.id"); stringMatch(document.workspaceId, idPattern, errors, "$.workspaceId"); stringMatch(document.proposalRevision, revisionPattern, errors, "$.proposalRevision"); stringMatch(document.correlationId, correlationPattern, errors, "$.correlationId"); stringMatch(document.author, subjectPattern, errors, "$.author"); utc(document.createdAt, errors, "$.createdAt");
     if (!Array.isArray(document.evidence) || document.evidence.length === 0) error(errors, "schema_min_items", "$.evidence", "must contain evidence"); else document.evidence.forEach((item, index) => validateEvidence(item, errors, `$.evidence[${index}]`, false));
+    if (!requireObject(document.wrapUp, errors, "$.wrapUp")) return;
+    closedObject(document.wrapUp, ["id", "source", "sourceRef", "sourceRevision", "issuedAt", "expiresAt"], errors, "$.wrapUp"); required(document.wrapUp, ["id", "source", "sourceRef", "sourceRevision", "issuedAt", "expiresAt"], errors, "$.wrapUp");
+    stringMatch(document.wrapUp.id, idPattern, errors, "$.wrapUp.id"); if (!["session", "flow"].includes(document.wrapUp.source as string)) error(errors, "schema_enum", "$.wrapUp.source", "must be explicit session or Flow wrap-up"); workspaceUri(document.wrapUp.sourceRef, errors, "$.wrapUp.sourceRef"); stringMatch(document.wrapUp.sourceRevision, revisionPattern, errors, "$.wrapUp.sourceRevision"); utc(document.wrapUp.issuedAt, errors, "$.wrapUp.issuedAt"); utc(document.wrapUp.expiresAt, errors, "$.wrapUp.expiresAt"); ordered(document.wrapUp.issuedAt, document.wrapUp.expiresAt, errors, "$.wrapUp.issuedAt/expiresAt");
     if (!requireObject(document.security, errors, "$.security")) return; closedObject(document.security, ["gate", "redacted", "policyRef", "policyRevision"], errors, "$.security"); required(document.security, ["gate", "redacted", "policyRef", "policyRevision"], errors, "$.security"); if (!["pass", "needs-approval"].includes(document.security.gate as string) || document.security.redacted !== true) error(errors, "schema_const", "$.security", "must be a redacted passing or approval gate"); workspaceUri(document.security.policyRef, errors, "$.security.policyRef"); stringMatch(document.security.policyRevision, revisionPattern, errors, "$.security.policyRevision");
-  } else if (document.recordType === "proposal-transition") validateTransition(document, errors);
+  } else if (document.recordType === "proposal-write-intent") validateWriteIntent(document, errors);
+  else if (document.recordType === "proposal-transition") validateTransition(document, errors);
   else error(errors, "schema_one_of", "$.recordType", "must be a proposal record type");
+}
+
+function validateWriteIntent(document: RecordValue, errors: SacValidationError[]): void {
+  const allowed = ["schemaVersion", "recordType", "intentId", "proposalId", "proposalRevision", "correlationId", "workspaceId", "sequence", "priorEventHash", "idempotencyKey", "reviewer", "approvalRef", "security", "evidence", "createdAt"];
+  closedObject(document, allowed, errors, "$"); required(document, allowed, errors, "$");
+  ["intentId", "proposalId", "workspaceId"].forEach((key) => stringMatch(document[key], idPattern, errors, `$.${key}`)); stringMatch(document.proposalRevision, revisionPattern, errors, "$.proposalRevision"); stringMatch(document.correlationId, correlationPattern, errors, "$.correlationId"); stringMatch(document.idempotencyKey, correlationPattern, errors, "$.idempotencyKey"); utc(document.createdAt, errors, "$.createdAt");
+  if (!Number.isInteger(document.sequence) || (document.sequence as number) < 1) error(errors, "schema_minimum", "$.sequence", "must be a positive integer");
+  if (typeof document.priorEventHash !== "string" || !/^[a-f0-9]{64}$/.test(document.priorEventHash)) error(errors, "schema_pattern", "$.priorEventHash", "must be a hash");
+  validateActor(document.reviewer, errors, "$.reviewer"); workspaceUri(document.approvalRef, errors, "$.approvalRef");
+  if (!requireObject(document.security, errors, "$.security") || document.security.gate !== "pass") error(errors, "security_gate_failed", "$.security.gate", "write intent requires pass");
+  if (isRecord(document.security)) { workspaceUri(document.security.policyRef, errors, "$.security.policyRef"); stringMatch(document.security.policyRevision, revisionPattern, errors, "$.security.policyRevision"); }
+  if (!Array.isArray(document.evidence) || document.evidence.length === 0) error(errors, "schema_min_items", "$.evidence", "must contain evidence"); else document.evidence.forEach((item, index) => validateEvidence(item, errors, `$.evidence[${index}]`, false));
 }
 
 function validateTransition(document: RecordValue, errors: SacValidationError[]): void {
@@ -340,15 +357,30 @@ function validateTransition(document: RecordValue, errors: SacValidationError[])
   if (document.fromStatus !== "proposed" || !["accepted", "rejected", "dismissed", "stale"].includes(document.toStatus as string)) error(errors, "schema_transition", "$.toStatus", "is invalid");
   if (document.toStatus !== "accepted") { if (typeof document.reason !== "string" || document.reason.length === 0 || document.acceptance !== undefined) error(errors, "schema_conditional", "$.reason", "non-accepted transitions require only a reason"); return; }
   if (!requireObject(document.acceptance, errors, "$.acceptance")) return;
-  const acceptance = document.acceptance; const acceptanceAllowed = ["reviewDecisionRef", "reviewer", "security", "freshness", "targetWrite", "evidence", "idempotencyKey"];
-  closedObject(acceptance, acceptanceAllowed, errors, "$.acceptance"); required(acceptance, acceptanceAllowed, errors, "$.acceptance"); workspaceUri(acceptance.reviewDecisionRef, errors, "$.acceptance.reviewDecisionRef"); validateActor(acceptance.reviewer, errors, "$.acceptance.reviewer"); stringMatch(acceptance.idempotencyKey, correlationPattern, errors, "$.acceptance.idempotencyKey");
+  const acceptance = document.acceptance; const acceptanceAllowed = ["reviewDecisionRef", "writeIntentRef", "reviewer", "security", "freshness", "targetWrite", "evidence", "idempotencyKey"];
+  closedObject(acceptance, acceptanceAllowed, errors, "$.acceptance"); required(acceptance, acceptanceAllowed, errors, "$.acceptance"); workspaceUri(acceptance.reviewDecisionRef, errors, "$.acceptance.reviewDecisionRef"); workspaceUri(acceptance.writeIntentRef, errors, "$.acceptance.writeIntentRef"); validateActor(acceptance.reviewer, errors, "$.acceptance.reviewer"); stringMatch(acceptance.idempotencyKey, correlationPattern, errors, "$.acceptance.idempotencyKey");
   if (acceptance.idempotencyKey !== document.idempotencyKey) error(errors, "idempotency_mismatch", "$.acceptance.idempotencyKey", "must match the transition key");
   if (!requireObject(acceptance.security, errors, "$.acceptance.security") || acceptance.security.gate !== "pass") error(errors, "security_gate_failed", "$.acceptance.security.gate", "acceptance requires pass");
   if (isRecord(acceptance.security)) { workspaceUri(acceptance.security.policyRef, errors, "$.acceptance.security.policyRef"); stringMatch(acceptance.security.policyRevision, revisionPattern, errors, "$.acceptance.security.policyRevision"); }
   if (!requireObject(acceptance.freshness, errors, "$.acceptance.freshness") || acceptance.freshness.state !== "fresh") error(errors, "stale_evidence", "$.acceptance.freshness.state", "acceptance requires fresh evidence");
   if (isRecord(acceptance.freshness)) utc(acceptance.freshness.verifiedAt, errors, "$.acceptance.freshness.verifiedAt");
   if (!requireObject(acceptance.targetWrite, errors, "$.acceptance.targetWrite")) error(errors, "missing_target_write", "$.acceptance.targetWrite", "acceptance requires a guarded write receipt");
-  else { workspaceUri(acceptance.targetWrite.receiptRef, errors, "$.acceptance.targetWrite.receiptRef"); workspaceUri(acceptance.targetWrite.targetRef, errors, "$.acceptance.targetWrite.targetRef"); utc(acceptance.targetWrite.completedAt, errors, "$.acceptance.targetWrite.completedAt"); }
+  else {
+    workspaceUri(acceptance.targetWrite.receiptRef, errors, "$.acceptance.targetWrite.receiptRef"); workspaceUri(acceptance.targetWrite.targetRef, errors, "$.acceptance.targetWrite.targetRef"); utc(acceptance.targetWrite.completedAt, errors, "$.acceptance.targetWrite.completedAt");
+    const binding = acceptance.targetWrite.binding;
+    if (!requireObject(binding, errors, "$.acceptance.targetWrite.binding")) error(errors, "missing_receipt_binding", "$.acceptance.targetWrite.binding", "accepted transition must retain the owner receipt binding");
+    else {
+      const allowed = ["owner", "bindingHash", "intentRef", "proposalId", "proposalRevision", "workspaceId", "correlationId", "idempotencyKey", "reviewerSubject", "reviewerAuthority", "policyRevision"];
+      closedObject(binding, allowed, errors, "$.acceptance.targetWrite.binding"); required(binding, allowed, errors, "$.acceptance.targetWrite.binding");
+      if (!["wiki", "memory", "skill"].includes(binding.owner as string)) error(errors, "schema_enum", "$.acceptance.targetWrite.binding.owner", "must name a guarded knowledge owner");
+      if (typeof binding.bindingHash !== "string" || !/^[a-f0-9]{64}$/.test(binding.bindingHash)) error(errors, "schema_pattern", "$.acceptance.targetWrite.binding.bindingHash", "must be a binding hash");
+      workspaceUri(binding.intentRef, errors, "$.acceptance.targetWrite.binding.intentRef");
+      stringMatch(binding.proposalId, idPattern, errors, "$.acceptance.targetWrite.binding.proposalId"); stringMatch(binding.proposalRevision, revisionPattern, errors, "$.acceptance.targetWrite.binding.proposalRevision"); stringMatch(binding.workspaceId, idPattern, errors, "$.acceptance.targetWrite.binding.workspaceId"); stringMatch(binding.correlationId, correlationPattern, errors, "$.acceptance.targetWrite.binding.correlationId"); stringMatch(binding.idempotencyKey, correlationPattern, errors, "$.acceptance.targetWrite.binding.idempotencyKey"); stringMatch(binding.reviewerSubject, subjectPattern, errors, "$.acceptance.targetWrite.binding.reviewerSubject"); stringMatch(binding.policyRevision, revisionPattern, errors, "$.acceptance.targetWrite.binding.policyRevision");
+      if (!["owner", "editor"].includes(binding.reviewerAuthority as string)) error(errors, "schema_enum", "$.acceptance.targetWrite.binding.reviewerAuthority", "must be owner or editor");
+      if (binding.intentRef !== acceptance.writeIntentRef || binding.proposalId !== document.proposalId || binding.proposalRevision !== document.proposalRevision || binding.workspaceId !== document.workspaceId || binding.correlationId !== document.correlationId || binding.idempotencyKey !== document.idempotencyKey || binding.reviewerSubject !== (isRecord(acceptance.reviewer) ? acceptance.reviewer.subject : undefined) || binding.reviewerAuthority !== (isRecord(acceptance.reviewer) ? acceptance.reviewer.authority : undefined) || binding.policyRevision !== (isRecord(acceptance.security) ? acceptance.security.policyRevision : undefined)) error(errors, "receipt_binding_mismatch", "$.acceptance.targetWrite.binding", "must bind this exact accepted transition");
+      else if (binding.bindingHash !== hashSacRecord({ owner: binding.owner, intentRef: binding.intentRef, proposalId: binding.proposalId, proposalRevision: binding.proposalRevision, workspaceId: binding.workspaceId, correlationId: binding.correlationId, idempotencyKey: binding.idempotencyKey, reviewerSubject: binding.reviewerSubject, reviewerAuthority: binding.reviewerAuthority, policyRevision: binding.policyRevision })) error(errors, "receipt_binding_hash_mismatch", "$.acceptance.targetWrite.binding.bindingHash", "must hash the retained owner binding");
+    }
+  }
   if (!Array.isArray(acceptance.evidence) || acceptance.evidence.length === 0) error(errors, "schema_min_items", "$.acceptance.evidence", "must contain evidence"); else acceptance.evidence.forEach((item, index) => { validateEvidence(item, errors, `$.acceptance.evidence[${index}]`, false); if (isRecord(acceptance.freshness)) ordered(isRecord(item) ? item.observedAt : undefined, acceptance.freshness.verifiedAt, errors, `$.acceptance.evidence[${index}].observedAt`); });
   if (isRecord(acceptance.freshness) && isRecord(acceptance.targetWrite)) { ordered(acceptance.freshness.verifiedAt, acceptance.targetWrite.completedAt, errors, "$.acceptance.freshness/targetWrite"); ordered(acceptance.targetWrite.completedAt, document.occurredAt, errors, "$.acceptance.targetWrite/occurredAt"); }
 }
@@ -408,22 +440,31 @@ export async function validateSacContract(input: { schema: SacSchema | string; d
 
 /** Append-only proposal transition validation, including idempotency and sequencing. */
 export async function validateSacLedger(input: { events: unknown[] }): Promise<SacValidationResult> {
-  const errors: SacValidationError[] = []; const idempotency = new Map<string, string>(); const sequences = new Map<string, number>(); const timestamps = new Map<string, StrictUtcInstant>();
+  const errors: SacValidationError[] = []; const idempotency = new Map<string, string>(); const sequences = new Map<string, number>(); const timestamps = new Map<string, StrictUtcInstant>(); const priorHashes = new Map<string, string>();
   for (const [index, value] of input.events.entries()) {
     const result = await validateSacContract({ schema: "workspace-proposal", document: value });
     errors.push(...result.errors.map((entry) => ({ ...entry, path: `$.events[${index}]${entry.path.slice(1)}` })));
-    if (!isRecord(value) || value.recordType !== "proposal-transition") continue;
-    const stream = `${value.workspaceId}:${value.proposalId}`; const key = `${stream}:${value.idempotencyKey}`; const fingerprint = JSON.stringify(value);
+    if (!isRecord(value) || (value.recordType !== "proposal-transition" && value.recordType !== "proposal-write-intent")) continue;
+    const stream = `${value.workspaceId}:${value.proposalId}`;
+    // A pending write-intent and its terminal transition intentionally share
+    // the owner idempotency key. Replay detection is per record class so that
+    // causal pair is valid while a second intent or terminal stays forbidden.
+    const key = `${stream}:${value.recordType}:${value.idempotencyKey}`; const fingerprint = JSON.stringify(value);
     if (idempotency.has(key)) error(errors, "idempotency_replay", `$.events[${index}].idempotencyKey`, idempotency.get(key) === fingerprint ? "duplicate delivery" : "conflicting replay"); else idempotency.set(key, fingerprint);
     const expected = (sequences.get(stream) ?? 0) + 1;
     if (value.sequence !== expected) error(errors, "invalid_ledger_sequence", `$.events[${index}].sequence`, "must be the next sequence in its proposal stream");
+    const expectedPriorHash = priorHashes.get(stream) ?? hashSacRecord("GENESIS");
+    if (value.priorEventHash !== expectedPriorHash) error(errors, "invalid_ledger_causality", `$.events[${index}].priorEventHash`, "must hash the preceding record in its proposal stream");
     if (typeof value.sequence === "number") sequences.set(stream, value.sequence);
-    const time = parseStrictRfc3339Utc(value.occurredAt); const previous = timestamps.get(stream);
+    const time = parseStrictRfc3339Utc(value.recordType === "proposal-write-intent" ? value.createdAt : value.occurredAt); const previous = timestamps.get(stream);
     if (previous !== undefined && time && compareStrictUtc(time, previous) < 0) error(errors, "invalid_temporal_order", `$.events[${index}].occurredAt`, "must not precede an earlier transition");
     if (time) timestamps.set(stream, time);
+    priorHashes.set(stream, hashSacRecord(value));
   }
   return { valid: errors.length === 0, errors };
 }
+
+function hashSacRecord(value: unknown): string { return createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex"); }
 
 export type WorkspaceReferenceKind = "component" | "repository" | "flow" | "wiki" | "memory" | "skill" | "evidence" | "worktree" | "code" | "test" | "health" | "artifact";
 export class SacReferenceError extends Error { readonly code = "unsafe_workspace_reference" as const; }

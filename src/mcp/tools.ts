@@ -20,7 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createLocalProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -92,6 +92,24 @@ export function buildToolRegistry(): ToolEntry[] {
         const maxItems = typeof params.maxItems === "number" ? params.maxItems : 1;
         const maxTokens = typeof params.maxTokens === "number" ? params.maxTokens : 4096;
         return normalizeFwkResult(await createLocalFwkReadService(cwd).read({ workspaceId, itemId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } }));
+      },
+    },
+    {
+      name: "sac.propose", module: "sac", description: "Create an immutable local SAC proposal from explicit wrap-up output.",
+      inputSchema: OBJECT_SCHEMA(),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        return { code: context?.transport === "http" ? "sac_transport_denied" as const : "trusted_wrap_up_required" as const };
+      },
+    },
+    {
+      name: "sac.review", module: "sac", description: "Record a terminal SAC review decision through the guarded owner-writer seam.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, proposalId: { type: "string" }, decision: { type: "string" }, reason: { type: "string" }, idempotencyKey: { type: "string" } }, ["workspaceId", "proposalId", "decision"]),
+      mutating: true,
+      async invoke(cwd, params, context) {
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID();
+        return normalizeProposalLifecycleResult(await createLocalProposalLifecycleService(cwd).review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) }));
       },
     },
     {
