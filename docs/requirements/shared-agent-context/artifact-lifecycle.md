@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Artifact Lifecycle
-Version: 1.3.0
+Version: 1.4.0
 
 ## Source of truth and derived artifacts
 
@@ -46,9 +46,11 @@ referenced Flow snapshot.
 owner. It binds the proposal revision, trusted reviewer, current security
 policy revision, fresh evidence, approval reference, correlation ID and owner
 idempotency key. An owner must treat that key as its write deduplication key.
-After a crash, recovery reuses the persisted intent and key: the owner returns
-the original write receipt or performs exactly one write. `accepted` requires
-that receipt and is appended only afterwards. Failed writes append a
+After a crash, recovery first performs an owner-side durable receipt lookup by
+intent/key: the owner returns the original write receipt or performs exactly
+one write. `accepted` retains the complete receipt binding (intent reference,
+proposal/revision/workspace, correlation/idempotency, reviewer authority and
+policy revision) and is appended only afterwards. Failed writes append a
 non-accepted typed outcome. A correction creates a linked new proposal/target
 revision; it never rewrites audit history.
 

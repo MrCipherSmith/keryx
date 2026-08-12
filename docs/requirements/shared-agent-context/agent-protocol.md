@@ -73,9 +73,12 @@ security policy and its exact version/revision pass; (3) every evidence and ACL
 revision is fresh at transition time; (4) SAC durably appends a `pending-write`
 intent containing the exact owner idempotency key; and (5) the owning target
 completes its guarded write and returns a correlation- and intent-bound
-target-write receipt. The decision, intent and write receipt must share their
-correlation ID. Recovery invokes the owner with the persisted key, so a crash
-between owner write and SAC receipt persistence cannot duplicate a mutation.
+target-write receipt. The accepted event retains the full receipt binding
+(intent, proposal/revision/workspace, correlation/idempotency, reviewer
+authority and policy revision), not a derived hash alone. The decision, intent
+and write receipt must share their correlation ID. Recovery asks the owner for
+its durable receipt by the persisted key before any mutation, so a crash between
+owner write and SAC receipt persistence cannot duplicate a mutation.
 A retry with the same key returns the original terminal result; a different key
 after a terminal result is rejected. A target-write failure appends a
 non-accepted failure transition; it never leaves an ambiguous acceptance.

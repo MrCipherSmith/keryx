@@ -9,7 +9,7 @@ import { WorkspaceService } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 
 const time = "2026-08-12T00:00:00.000Z";
-async function setup(role = "owner", writer: { owner: "wiki"; write: (input: { correlationId: string }) => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }) {
+async function setup(role = "owner", writer: { owner: "wiki"; write: (input: { correlationId: string }) => Promise<any>; recover?: () => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }) {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-proposal-"));
   await mkdir(path.join(root, "evidence"), { recursive: true }); await mkdir(path.join(root, "wiki"), { recursive: true });
   await writeFile(path.join(root, "evidence", "e.md"), "evidence"); await writeFile(path.join(root, "wiki", "accepted.md"), "accepted");
@@ -21,7 +21,8 @@ async function setup(role = "owner", writer: { owner: "wiki"; write: (input: { c
   if (role === "viewer") manifest.members = [{ subject: "user:owner", role: "owner" }, { subject: "user:reviewer", role: "viewer" }];
   await writeFile(manifestPath, JSON.stringify(manifest));
   const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async ({ sourceRef }) => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: sourceRef.includes("flow") ? "separate explicit wrap-up" : "explicit wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
-  const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { wiki: createWikiGuardedTargetWriter({ authorize: async (intent) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", persist: (intent) => writer.write({ correlationId: intent.correlationId }) }) }, wrapUpAuthority, now: () => new Date(time) });
+  const writerComposition = { authorize: async (intent: { reviewerAuthority: string }) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", persist: (intent: { correlationId: string }) => writer.write({ correlationId: intent.correlationId }), ...(writer.recover ? { recover: async () => writer.recover!() } : {}) };
+  const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { wiki: createWikiGuardedTargetWriter(writerComposition) }, wrapUpAuthority, now: () => new Date(time) });
   return { root, service, manifestPath, server, wrapUpAuthority };
 }
 
@@ -46,21 +47,24 @@ test("accepted transition requires guarded target receipt and same-key retry ret
   const first = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
   const retry = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
   expect(first).toEqual(retry); expect(first.event.toStatus).toBe("accepted");
+  const acceptance = (first.event as any).acceptance;
+  expect(acceptance.targetWrite.binding).toMatchObject({ intentRef: acceptance.writeIntentRef, proposalId: "proposal-a", proposalRevision: "r1", workspaceId: "workspace-a", correlationId: "proposal-review-correlation-0001", idempotencyKey: "proposal-review-idempotency-0001", reviewerSubject: "user:reviewer", reviewerAuthority: "owner", policyRevision: "policy-r1" });
   expect((await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl"), "utf8")).trim().split("\n")).toHaveLength(2);
 });
 
-test("crash recovery reuses a durable write intent and owner key without a duplicate mutation", async () => {
+test("crash recovery obtains a durable owner receipt without a duplicate mutation", async () => {
   let ownerCalls = 0; let mutations = 0;
+  let durableReceipt: Record<string, unknown> | undefined;
   const writer = { owner: "wiki" as const, write: async ({ correlationId }: { correlationId: string }) => {
     ownerCalls += 1;
-    if (ownerCalls === 1) { mutations += 1; throw new Error("simulated crash after owner commit"); }
+    if (ownerCalls === 1) { mutations += 1; durableReceipt = { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId }; throw new Error("simulated crash after owner commit"); }
     return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId };
-  } };
+  }, recover: async () => durableReceipt };
   const { root, service } = await setup("owner", writer as any); await propose(service);
   const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001" };
   await expect(service.review(request)).rejects.toThrow("simulated crash");
   const recovered = await service.review(request);
-  expect(recovered.event.toStatus).toBe("accepted"); expect(mutations).toBe(1); expect(ownerCalls).toBe(2);
+  expect(recovered.event.toStatus).toBe("accepted"); expect(mutations).toBe(1); expect(ownerCalls).toBe(1);
   const ledger = await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl"), "utf8");
   expect(ledger).toContain('"recordType":"proposal-write-intent"'); expect(ledger).toContain('"toStatus":"accepted"');
 });

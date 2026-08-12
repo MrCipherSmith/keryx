@@ -32,6 +32,8 @@ export type GuardedOwnerWriter = Readonly<{
   write(input: OwnerWriteIntent): Promise<OwnerWriteResult>;
 }>;
 
+export type OwnerReceipt = Readonly<{ receiptRef: string; targetRef: string; completedAt: string }>;
+
 /**
  * Creates the one operation that may cross into Wiki, Memory, or Skills.
  * The supplied `persist` belongs to that subsystem: SAC only supplies a
@@ -40,15 +42,25 @@ export type GuardedOwnerWriter = Readonly<{
 export function createGuardedOwnerWriter(input: {
   owner: KnowledgeOwner;
   authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
-  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<Readonly<{ receiptRef: string; targetRef: string; completedAt: string }> | { ok: false; code: string }>;
+  /**
+   * Owner-owned durable lookup. It must consult the owner's transaction/receipt
+   * store by intentRef/idempotencyKey before any new mutation is attempted.
+   */
+  recover?: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
+  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | { ok: false; code: string }>;
 }): GuardedOwnerWriter {
   return Object.freeze({
     owner: input.owner,
     async write(intent: OwnerWriteIntent): Promise<OwnerWriteResult> {
       if (!await input.authorize(intent)) return { ok: false, code: "owner_write_denied" };
-      const persisted = await input.persist({ ...intent, owner: input.owner });
+      const boundIntent = { ...intent, owner: input.owner } as const;
+      // Recovery is deliberately owned by Wiki/Memory/Skills, rather than a
+      // SAC write-result cache. A crash after owner commit is therefore safe:
+      // the retry obtains the original owner receipt and never invokes mutate.
+      const recovered = await input.recover?.(boundIntent);
+      const persisted = recovered ?? await input.persist(boundIntent);
       if ("ok" in persisted && persisted.ok === false) return persisted;
-      const receipt = persisted as Readonly<{ receiptRef: string; targetRef: string; completedAt: string }>;
+      const receipt = persisted as OwnerReceipt;
       const binding = Object.freeze({ ...intent, owner: input.owner, bindingHash: bindingHash(input.owner, intent) });
       return Object.freeze({ ok: true, owner: input.owner, receipt: Object.freeze({ ...receipt, binding }) });
     },

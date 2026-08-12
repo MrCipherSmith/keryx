@@ -1,5 +1,5 @@
 # Shared Agent Context — Schemas and Fixtures
-Version: 1.2.0
+Version: 1.3.0
 
 ## Purpose
 
@@ -50,3 +50,9 @@ using closed objects.
 only an audit pointer: runtime authorization requires the corresponding
 server-issued, one-time trusted provenance capability bound to its session or
 read-only Flow wrap-up source, actor, workspace, evidence and expiry.
+
+For an accepted transition, `acceptance.targetWrite.binding` is normative and
+retains the exact immutable owner receipt binding. It must repeat the proposal,
+workspace, correlation/idempotency, reviewer-authority and policy-revision
+values of that transition; implementations must not reduce it to a hash after
+verification.

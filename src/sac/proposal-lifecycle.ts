@@ -5,7 +5,7 @@ import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
-import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
+import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -130,7 +130,10 @@ export class ProposalLifecycleService {
     if (input.outcome === "accepted") {
       const write = input.targetWrite;
       if (!write?.ok) return this.transition({ ...input, outcome: "stale" });
-      Object.assign(base, { acceptance: { reviewDecisionRef: this.decisionRef(input.proposal.id, input.input.idempotencyKey), writeIntentRef: input.writeIntentRef, reviewer: { subject: input.actor.subject, authority: input.reviewerAuthority, trustedPrincipalRef: "./principals/local" }, security: { gate: "pass", policyRef: this.options.policyRef, policyRevision: this.options.policyRevision }, freshness: { state: "fresh", verifiedAt: input.freshnessVerifiedAt ?? this.timestamp(), maxEvidenceAgeSeconds: 3600 }, targetWrite: { receiptRef: write.receipt.receiptRef, targetRef: write.receipt.targetRef, completedAt: write.receipt.completedAt }, evidence: input.proposal.evidence, idempotencyKey: input.input.idempotencyKey } });
+      // Persist the full receipt binding, not merely its hash-derived summary.
+      // This keeps every terminal acceptance independently auditable after a
+      // restart and makes receipt substitution detectable from the ledger alone.
+      Object.assign(base, { acceptance: { reviewDecisionRef: this.decisionRef(input.proposal.id, input.input.idempotencyKey), writeIntentRef: input.writeIntentRef, reviewer: { subject: input.actor.subject, authority: input.reviewerAuthority, trustedPrincipalRef: "./principals/local" }, security: { gate: "pass", policyRef: this.options.policyRef, policyRevision: this.options.policyRevision }, freshness: { state: "fresh", verifiedAt: input.freshnessVerifiedAt ?? this.timestamp(), maxEvidenceAgeSeconds: 3600 }, targetWrite: { receiptRef: write.receipt.receiptRef, targetRef: write.receipt.targetRef, completedAt: write.receipt.completedAt, binding: write.receipt.binding }, evidence: input.proposal.evidence, idempotencyKey: input.input.idempotencyKey } });
     } else Object.assign(base, { reason: input.input.reason ?? (input.outcome === "stale" ? "evidence, policy, or guarded target write did not remain fresh" : "review decision" ) });
     return base as Transition;
   }
@@ -202,7 +205,7 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
   const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } });
   // Local adapters deliberately do not receive this authority. Their propose
   // command remains fail-closed; trusted Harness/session composition injects it.
-  return new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters: {}, wrapUpAuthority: createTrustedWrapUpAuthority({ now: () => new Date(0), resolveExplicitWrapUp: async () => { throw new Error("trusted wrap-up boundary unavailable"); } }) });
+  return new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters: createLocalOwnerWriterAdapters(), wrapUpAuthority: createTrustedWrapUpAuthority({ now: () => new Date(0), resolveExplicitWrapUp: async () => { throw new Error("trusted wrap-up boundary unavailable"); } }) });
 }
 
 /**
@@ -210,10 +213,31 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
  * They deliberately execute owner supplied code; SAC only verifies the owner
  * label and correlation-bound receipt and never writes source knowledge.
  */
-type OwnerWriterComposition = Readonly<{ authorize: (intent: OwnerWriteIntent) => Promise<boolean>; persist: OwnerWriteAdapter }>;
+type OwnerWriterComposition = Readonly<{
+  authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
+  /** Durable receipt lookup owned by the target subsystem. */
+  recover?: (intent: OwnerWriteIntent & { owner: TargetOwner }) => Promise<OwnerReceipt | undefined>;
+  persist: OwnerWriteAdapter;
+}>;
 export function createWikiGuardedTargetWriter(input: OwnerWriterComposition): GuardedTargetWriter { return createGuardedOwnerWriter({ owner: "wiki", ...input }); }
 export function createMemoryGuardedTargetWriter(input: OwnerWriterComposition): GuardedTargetWriter { return createGuardedOwnerWriter({ owner: "memory", ...input }); }
 export function createSkillGuardedTargetWriter(input: OwnerWriterComposition): GuardedTargetWriter { return createGuardedOwnerWriter({ owner: "skill", ...input }); }
+
+/**
+ * Local CLI/stdio deliberately registers the real owner seams instead of an
+ * empty writer map. They fail closed until each owning subsystem composes its
+ * own trusted write/recovery implementation; SAC never edits Wiki, Memory or
+ * Skills files itself.
+ */
+export function createLocalOwnerWriterAdapters(): Record<TargetOwner, GuardedTargetWriter> {
+  const unavailable = async (): Promise<{ ok: false; code: string }> => ({ ok: false, code: "owner_writer_unavailable" });
+  const denied = async (): Promise<boolean> => false;
+  return Object.freeze({
+    wiki: createWikiGuardedTargetWriter({ authorize: denied, persist: unavailable }),
+    memory: createMemoryGuardedTargetWriter({ authorize: denied, persist: unavailable }),
+    skill: createSkillGuardedTargetWriter({ authorize: denied, persist: unavailable }),
+  });
+}
 
 function ownerFor(kind: ProposalKind): TargetOwner { return kind === "wiki-update" ? "wiki" : kind === "memory-entry" ? "memory" : "skill"; }
 function authorityFor(manifest: { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> }, subject: string): ReviewerAuthority {
