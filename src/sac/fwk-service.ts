@@ -312,6 +312,138 @@ export async function resolvePolicySelectionSafely(workspaceRoot: string, canoni
   }
 }
 
+export type PolicyReadinessStep = Readonly<{ step: string; status: "pass" | "fail"; detail?: string }>;
+export type PolicyReadinessReport = Readonly<{
+  configPresent: boolean;
+  enabled: boolean;
+  killSwitch: boolean;
+  integrityReady: boolean;
+  candidateWouldActivate: boolean;
+  steps: readonly PolicyReadinessStep[];
+}>;
+
+/**
+ * Phase 6b operator readiness check for the opt-in policy guard. It mirrors the
+ * gates in `resolvePolicySelection` but records each gate's pass/fail and
+ * validates the pinned artifacts even when the experiment is disabled, so an
+ * owner can prove real-data readiness BEFORE flipping `enabled: true`. It is
+ * read-only: it never selects the candidate and never mutates anything. The
+ * activation gate is evaluated as if the flags were on, so it reports whether
+ * the evidence (security non-regression, holdout, adversarial, pins, subset)
+ * would pass independently of the operator's enable/kill-switch flags.
+ */
+export async function diagnosePolicyReadiness(workspaceRoot: string): Promise<PolicyReadinessReport> {
+  const steps: PolicyReadinessStep[] = [];
+  const msg = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+  const pass = (step: string, detail?: string): void => { steps.push(detail === undefined ? { step, status: "pass" } : { step, status: "pass", detail }); };
+  const fail = (step: string, detail: string): void => { steps.push({ step, status: "fail", detail }); };
+  const finalize = (configPresent: boolean, enabled: boolean, killSwitch: boolean): PolicyReadinessReport => {
+    const integrityReady = steps.every((entry) => entry.step === "activation-flags" || entry.status === "pass");
+    return Object.freeze({ configPresent, enabled, killSwitch, integrityReady, candidateWouldActivate: integrityReady && enabled && !killSwitch, steps: Object.freeze([...steps]) });
+  };
+
+  const configPath = path.join(workspaceRoot, ...policyExperimentConfigPath);
+  let configJson: RuntimePolicyArtifactConfig;
+  try {
+    const raw = await readFile(configPath, "utf8").catch((error) => {
+      if (isMissing(error)) return undefined;
+      throw error;
+    });
+    if (raw === undefined) { fail("config", "no policy-experiment config at .metaproject/context-operations/policy-experiment/config.json"); return finalize(false, false, true); }
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed) || !isConfigRecord(parsed)) { fail("config", "config is not a valid policy-experiment record (needs boolean enabled + killSwitch)"); return finalize(true, false, true); }
+    configJson = parsed;
+  } catch (error) {
+    fail("config", `config could not be read or parsed: ${msg(error)}`);
+    return finalize(true, false, true);
+  }
+  pass("config");
+  const enabled = configJson.enabled === true;
+  const killSwitch = configJson.killSwitch !== false;
+  if (enabled && !killSwitch) pass("activation-flags", "enabled and kill-switch released");
+  else fail("activation-flags", `candidate stays off by config: enabled=${String(configJson.enabled)}, killSwitch=${String(configJson.killSwitch)}`);
+
+  const requiredPins = ["candidateArtifactRef", "candidateArtifactDigest", "candidateVersion", "baselineArtifactRef", "baselineArtifactDigest", "baselineVersion", "corpusRef", "corpusDigest", "corpusVersion", "evaluationReportRef", "evaluationDigest"] as const;
+  const missing = requiredPins.filter((name) => typeof configJson[name] !== "string");
+  if (missing.length > 0) { fail("config-pins", `missing or non-string pins: ${missing.join(", ")}`); return finalize(true, enabled, killSwitch); }
+
+  const candidateRef = configJson.candidateArtifactRef;
+  const candidateDigest = configJson.candidateArtifactDigest;
+  const baselineRef = configJson.baselineArtifactRef;
+  const baselineDigest = configJson.baselineArtifactDigest;
+  const corpusRef = configJson.corpusRef;
+  const corpusDigest = configJson.corpusDigest;
+  const evaluationRef = configJson.evaluationReportRef;
+  const evaluationDigest = configJson.evaluationDigest;
+  if (!asString(candidateRef) || !asString(candidateDigest) || !asString(baselineRef) || !asString(baselineDigest) || !asString(corpusRef) || !asString(corpusDigest) || !asString(evaluationRef) || !asString(evaluationDigest)) { fail("config-pins", "pins are present but not non-empty strings"); return finalize(true, enabled, killSwitch); }
+  pass("config-pins");
+
+  const refsOk = workspacePathPattern.test(candidateRef) && workspacePathPattern.test(baselineRef) && workspacePathPattern.test(corpusRef) && workspacePathPattern.test(evaluationRef);
+  if (refsOk) pass("reference-paths"); else fail("reference-paths", "one or more artifact refs are not contained workspace-relative './…' paths");
+  const hashesOk = validHash(candidateDigest) && validHash(baselineDigest) && validHash(corpusDigest) && validHash(evaluationDigest);
+  if (hashesOk) pass("digest-format"); else fail("digest-format", "one or more pinned digests are not sha256 hex");
+  const versionsOk = isImmutableVersion(configJson.candidateVersion) && isImmutableVersion(configJson.baselineVersion) && isImmutableVersion(configJson.corpusVersion);
+  if (versionsOk) pass("immutable-versions"); else fail("immutable-versions", "candidate/baseline/corpus versions must be immutable (no latest/main/head/…)");
+  const policyRefsOk = policyRefPattern.test(candidateRef) && policyRefPattern.test(baselineRef);
+  if (policyRefsOk) pass("policy-refs"); else fail("policy-refs", "candidate/baseline refs must be './…' policy references");
+  if (!(refsOk && hashesOk && versionsOk && policyRefsOk)) return finalize(true, enabled, killSwitch);
+
+  let baselineArtifact: { artifact: UnknownRecord; digest: string } | undefined;
+  let candidateArtifact: { artifact: UnknownRecord; digest: string } | undefined;
+  let corpusPayload: { artifact: PolicyCorpus; raw: string } | undefined;
+  let evaluationPayload: { artifact: PolicyEvaluationReport; raw: string } | undefined;
+
+  try { baselineArtifact = await readPinnedJson<UnknownRecord>({ workspaceRoot, uri: baselineRef, digest: baselineDigest }); if (isBaselineArtifact(baselineArtifact.artifact)) pass("baseline-artifact"); else fail("baseline-artifact", "not a valid deterministic-baseline artifact"); }
+  catch (error) { fail("baseline-artifact", `unreadable or digest mismatch: ${msg(error)}`); }
+  try { candidateArtifact = await readPinnedJson<UnknownRecord>({ workspaceRoot, uri: candidateRef, digest: candidateDigest }); if (isCandidateArtifact(candidateArtifact.artifact)) pass("candidate-artifact"); else fail("candidate-artifact", "not a valid offline-selection-advisor artifact"); }
+  catch (error) { fail("candidate-artifact", `unreadable or digest mismatch: ${msg(error)}`); }
+  try {
+    corpusPayload = await readWorkspaceJson<PolicyCorpus>({ workspaceRoot, uri: corpusRef });
+    if (!isCompleteCorpus(corpusPayload.artifact)) fail("corpus", "corpus failed structural / manifest verification");
+    else if (corpusPayload.artifact.manifest.corpusVersion !== configJson.corpusVersion || corpusPayload.artifact.manifest.corpusDigest !== corpusDigest) fail("corpus", "corpus manifest version/digest does not match pins");
+    else pass("corpus");
+  } catch (error) { fail("corpus", `unreadable: ${msg(error)}`); }
+  try {
+    evaluationPayload = await readWorkspaceJson<PolicyEvaluationReport>({ workspaceRoot, uri: evaluationRef });
+    if (!isEvaluationReport(evaluationPayload.artifact) || !hasReportIntegrity(evaluationPayload.artifact)) fail("evaluation-report", "report is malformed or its recomputed digest does not match");
+    else if (evaluationPayload.artifact.reportDigest !== evaluationDigest) fail("evaluation-report", "report digest does not match pin");
+    else pass("evaluation-report");
+  } catch (error) { fail("evaluation-report", `unreadable: ${msg(error)}`); }
+
+  if (baselineArtifact && candidateArtifact && corpusPayload && evaluationPayload
+    && isBaselineArtifact(baselineArtifact.artifact) && isCandidateArtifact(candidateArtifact.artifact)
+    && isCompleteCorpus(corpusPayload.artifact) && isEvaluationReport(evaluationPayload.artifact) && hasReportIntegrity(evaluationPayload.artifact)
+    && corpusPayload.artifact.manifest.corpusVersion === configJson.corpusVersion && corpusPayload.artifact.manifest.corpusDigest === corpusDigest
+    && evaluationPayload.artifact.reportDigest === evaluationDigest) {
+    try {
+      const config = {
+        ...configJson,
+        enabled: true,
+        killSwitch: false,
+        candidateArtifactDigest: candidateArtifact.digest,
+        candidateDigest: candidateArtifact.digest,
+        baselineArtifactDigest: baselineArtifact.digest,
+        baselineDigest: baselineArtifact.digest,
+        corpusDigest,
+        evaluationDigest,
+        candidateVersion: configJson.candidateVersion,
+        baselineVersion: configJson.baselineVersion,
+        corpusVersion: configJson.corpusVersion,
+        rollbackBaselineVersion: configJson.rollbackBaselineVersion ?? configJson.baselineVersion,
+      } as PolicyExperimentConfig;
+      const baseline: BaselineSelection = { selectedIds: evaluationPayload.artifact.candidateSelectedIds, source: "deterministic-baseline", version: baselineArtifact.artifact.version, artifactDigest: baselineArtifact.digest };
+      const candidate: PolicyExperimentCandidate = { version: candidateArtifact.artifact.version, artifactDigest: candidateArtifact.digest };
+      const outcome = resolvePolicyExperiment({ config, evaluation: evaluationPayload.artifact, candidate, corpus: corpusPayload.artifact, baseline });
+      if (outcome.source === "candidate") pass("activation-gate", "evidence gates pass: security non-regression, holdout, adversarial, pins and candidate subset");
+      else fail("activation-gate", `evidence gates reject candidate; report reasons: ${evaluationPayload.artifact.reasons.join(", ") || "none"}`);
+    } catch (error) { fail("activation-gate", `activation check errored: ${msg(error)}`); }
+  } else {
+    fail("activation-gate", "skipped: one or more prerequisite artifact checks did not pass");
+  }
+
+  return finalize(true, enabled, killSwitch);
+}
+
 function isCompleteCorpus(value: UnknownRecord): value is PolicyCorpus {
   return isRecord(value) && isRecord(value.manifest) && Array.isArray(value.rows) && Array.isArray(value.quarantine) && verifyPolicyCorpus(value as PolicyCorpus);
 }

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, stat, unlink, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { FwkReadService, resolvePolicySelectionSafely } from "./fwk-service";
+import { FwkReadService, resolvePolicySelectionSafely, diagnosePolicyReadiness } from "./fwk-service";
 import { createSacAuthorizationServer, type SacVerifiedPrincipal } from "./index";
 import { verifyAccessReceiptLedger } from "./receipt-integrity";
 
@@ -400,4 +400,50 @@ test("runtime policy experiment resolver cannot activate with kill-switch true",
   const result = await read(service, { requestCorrelationId: "fwk-phase6-0003-runtime-long" });
   expect("code" in result).toBe(false); if ("code" in result) return;
   expect(result.receipt.policy).toEqual({ ref: canonical.policyRef, revision: canonical.policyRevision });
+});
+
+test("phase-6b readiness: a valid enabled config is integrity-ready and would activate", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "keryx-sac-readiness-ok-"));
+  await writeRuntimePolicyConfig(workspaceRoot);
+  const report = await diagnosePolicyReadiness(workspaceRoot);
+  expect(report.configPresent).toBe(true);
+  expect(report.integrityReady).toBe(true);
+  expect(report.candidateWouldActivate).toBe(true);
+  expect(report.steps.filter((step) => step.status === "fail")).toEqual([]);
+  expect(report.steps.some((step) => step.step === "activation-gate" && step.status === "pass")).toBe(true);
+});
+
+test("phase-6b readiness: a disabled config is still integrity-ready but would not activate", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "keryx-sac-readiness-off-"));
+  await writeRuntimePolicyConfig(workspaceRoot);
+  const configPath = path.join(workspaceRoot, ".metaproject", "context-operations", "policy-experiment", "config.json");
+  const parsed = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+  await writeFile(configPath, JSON.stringify({ ...parsed, enabled: false }), "utf8");
+  const report = await diagnosePolicyReadiness(workspaceRoot);
+  expect(report.integrityReady).toBe(true);
+  expect(report.candidateWouldActivate).toBe(false);
+  const failed = report.steps.filter((step) => step.status === "fail").map((step) => step.step);
+  expect(failed).toEqual(["activation-flags"]);
+});
+
+test("phase-6b readiness: a missing config is reported, not ready", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "keryx-sac-readiness-missing-"));
+  const report = await diagnosePolicyReadiness(workspaceRoot);
+  expect(report.configPresent).toBe(false);
+  expect(report.integrityReady).toBe(false);
+  expect(report.candidateWouldActivate).toBe(false);
+  expect(report.steps).toEqual([{ step: "config", status: "fail", detail: expect.stringContaining("no policy-experiment config") }]);
+});
+
+test("phase-6b readiness: a pinned-digest mismatch fails the artifact gate, not the format gate", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "keryx-sac-readiness-digest-"));
+  await writeRuntimePolicyConfig(workspaceRoot);
+  const configPath = path.join(workspaceRoot, ".metaproject", "context-operations", "policy-experiment", "config.json");
+  const parsed = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+  await writeFile(configPath, JSON.stringify({ ...parsed, baselineArtifactDigest: "a".repeat(64) }), "utf8");
+  const report = await diagnosePolicyReadiness(workspaceRoot);
+  expect(report.integrityReady).toBe(false);
+  expect(report.candidateWouldActivate).toBe(false);
+  expect(report.steps.some((step) => step.step === "digest-format" && step.status === "pass")).toBe(true);
+  expect(report.steps.some((step) => step.step === "baseline-artifact" && step.status === "fail")).toBe(true);
 });

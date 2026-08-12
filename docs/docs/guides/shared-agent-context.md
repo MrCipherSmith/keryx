@@ -109,7 +109,17 @@ Rules the guard enforces:
   failure or activation mismatch falls back to the baseline.
 - **Rollback.** Rolling back forces `enabled: false` and `killSwitch: true`.
 
+Before flipping `enabled: true`, verify the whole chain with the read-only
+readiness check (it validates the pinned artifacts even while the experiment is
+disabled, prints a per-gate report, and exits non-zero when not ready):
+
+```bash
+keryx workspace policy-readiness
+```
+
 This path does not change any public CLI or MCP schema and never enables the
 candidate implicitly. The operator readiness process for **real** (non-synthetic)
-artifacts is still planned — see
+artifacts is documented in the
+[Phase 6b operator playbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6b-operator-playbook.md);
+runtime re-ingestion of raw receipts/outcomes is still planned — see
 [phase-6-real-opt-in-readiness.md](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6-real-opt-in-readiness.md).

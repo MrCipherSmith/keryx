@@ -7,9 +7,11 @@ As of 2026-08-13, Phases 0–5 and Phase 6a are implemented and merged into
 `main`, released in `v0.2.32`. Phase 6 is split into **6a** — the runtime
 enforcement guard (`resolvePolicySelection`), implemented and verified
 (AC1–AC6, full SAC suite 88/88 green) — and **6b** — the real operator-data
-readiness process, still planned. All acceptance and review work for phases
-0–5 and 6a is complete; the temporary per-phase merge branches have been
-deleted now that everything is on `main`.
+readiness process, now partially implemented: a read-only readiness check
+(`keryx workspace policy-readiness`) and an operator playbook exist, while
+runtime re-ingestion of raw receipts/outcomes remains. All acceptance and review
+work for phases 0–5 and 6a is complete; the temporary per-phase merge branches
+have been deleted now that everything is on `main`.
 
 | Phase | Status | Evidence |
 | --- | --- | --- |
@@ -19,7 +21,7 @@ deleted now that everything is on `main`.
 | 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` |
 | 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` |
 | 5 — Opt-in policy experiment | Implemented | Merged via PR #273; Flow completion commit `883581a`; [phase-5 policy experiment report](phase-5-policy-experiment-report.md) |
-| 6 — Opt-in readiness (6a runtime guard / 6b real-data readiness) | 6a Implemented · 6b Planned | 6a: runtime guard `resolvePolicySelection` in `src/sac/fwk-service.ts`; AC1–AC6 met; full SAC suite 88/88 green; merged via PR #277, released in `v0.2.32`. 6b: real operator-data readiness process still planned |
+| 6 — Opt-in readiness (6a runtime guard / 6b real-data readiness) | 6a Implemented · 6b Partial | 6a: runtime guard `resolvePolicySelection` in `src/sac/fwk-service.ts`; AC1–AC6 met; full SAC suite green; merged via PR #277, released in `v0.2.32`. 6b: readiness check `diagnosePolicyReadiness` (`keryx workspace policy-readiness`) + [operator playbook](phase-6b-operator-playbook.md) implemented; runtime re-ingestion of raw receipts/outcomes remains |
 
 ## Delivery rules
 
@@ -125,15 +127,26 @@ Full detail: [phase-6-real-opt-in-readiness.md](phase-6-real-opt-in-readiness.md
 - **Exit (met):** AC1–AC6; evidence `src/sac/fwk-service.test.ts`; full SAC
   suite 88/88 green.
 
-### 6b — Real operator-data readiness — Planned
+### 6b — Real operator-data readiness — Partially implemented
 
-- Add explicit operator readiness process for non-synthetic real artifacts:
-  candidate artifact, baseline artifact, policy corpus, manifest, sandbox
-  control artifacts, independent outcome artifacts and rollup report.
-- Define exact verification order and acceptance prerequisites before any candidate
-  policy can be considered for non-default rollout.
-- Keep all default behavior unchanged until the readiness gate is explicitly passed.
-- Add reviewable rollout/rollback criteria and a documented owner-run playbook.
+Implemented:
+
+- Read-only readiness check `diagnosePolicyReadiness` (`src/sac/fwk-service.ts`),
+  exposed as `keryx workspace policy-readiness`: validates the full integrity chain
+  even while the experiment is disabled, reports each gate's pass/fail, and exits
+  non-zero when not ready — so an owner can prove readiness before flipping
+  `enabled: true`.
+- Documented owner-run playbook with reviewable rollout/rollback criteria:
+  [phase-6b-operator-playbook.md](phase-6b-operator-playbook.md).
+- Default behavior unchanged: the guard is read-only and candidate stays off by
+  default.
+
+Remaining:
+
+- Runtime re-ingestion of the raw `receipts.jsonl` hash-chain and independent
+  verifier outcome artifacts at activation time (today verified at corpus-build
+  time and bound transitively through the evaluation report digest).
+- Real, non-synthetic artifact set beyond the committed synthetic fixtures.
 
 ## Rollback order
 
