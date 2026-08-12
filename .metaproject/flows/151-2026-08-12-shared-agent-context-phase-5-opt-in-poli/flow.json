@@ -3,9 +3,9 @@
   "id": "151",
   "slug": "shared-agent-context-phase-5-opt-in-poli",
   "title": "Shared Agent Context — Phase 5: Opt-in policy experiment",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-12T08:15:46.740Z",
-  "updatedAt": "2026-08-12T11:08:31.280Z",
+  "updatedAt": "2026-08-12T11:15:29.279Z",
   "source": {
     "type": "description",
     "ref": null
@@ -338,6 +338,29 @@
       "at": "2026-08-12T11:08:31.280Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/273 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-08-12T11:14:05.941Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-12T11:14:05.995Z",
+      "event": "completion-failed",
+      "detail": "main-merge: ed5109a0a645700624a65b5866675c5eca87a7bd is not contained in origin/main"
+    },
+    {
+      "at": "2026-08-12T11:15:26.576Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/273 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-12T11:15:26.665Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-12T11:15:29.279Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
