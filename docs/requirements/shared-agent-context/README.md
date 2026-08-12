@@ -35,6 +35,8 @@ CLI, MCP tools, storage и runtime пока не реализованы данн
   rollout/rollback и измеримые gates.
 - [Implementation plan](implementation-plan.md) — последовательность будущих
   implementation flows и их exit criteria.
+- [Phase execution prompts](phase-execution-prompts.md) — утверждённые промты
+  для запуска и delivery-protocol каждой implementation phase.
 - [Design rationale](design-rationale.md) — решения и ограничения модели FWK.
 - [Schemas](schemas/README.md) — JSON Schema, semantic-validation boundary и
   полный positive/negative/replay fixture corpus.
