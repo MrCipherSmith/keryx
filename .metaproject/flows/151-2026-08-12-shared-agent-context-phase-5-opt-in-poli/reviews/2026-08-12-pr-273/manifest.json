@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-08-12-pr-273",
   "mode": "attach-review",
-  "status": "complete",
+  "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "273"
@@ -63,7 +63,7 @@
     }
   ],
   "createdAt": "2026-08-12T10:08:51.836Z",
-  "updatedAt": "2026-08-12T11:06:57Z",
+  "updatedAt": "2026-08-12T11:07:53.507Z",
   "flow": {
     "id": "151",
     "path": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli"

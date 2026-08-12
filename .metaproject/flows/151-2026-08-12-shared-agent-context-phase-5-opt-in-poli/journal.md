@@ -54,3 +54,14 @@
   TypeScript, production build, 686 documentation links, byte-for-byte fixture
   regeneration, Code Health gate (93, stable) and zero security-scan findings
   for changed source and published experiment artifacts.
+- 2026-08-12T11:08:20.119Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-12T11:08:20.182Z - task-done: T10: Run focused/full tests, code verifier, health and full clean review
+- 2026-08-12T11:08:20.246Z - ac-confirmed: AC1: Corpus construction verifies the complete closed AccessReceipt schema, record hashes and predecessor chain; every included row retains immutable receipt linkage, configuration/policy revisions and an owner-resolved hash-bound verifier outcome.
+- 2026-08-12T11:08:20.312Z - ac-confirmed: AC2: Receipt outcome is omitted from labels; tests quarantine missing, producer-conflicted, malformed, duplicate, hash-mismatched, unresolved and unknown-revision evidence.
+- 2026-08-12T11:08:20.379Z - ac-confirmed: AC3: Published corpus is allowlist-only and pseudonymized; manifest pins provenance, selection, exact redaction contract, quarantine, reproducible seeded train/holdout membership and adversarial cases; security scans found zero source/artifact findings.
+- 2026-08-12T11:08:20.445Z - ac-confirmed: AC4: Evaluation executes the digest-pinned deterministic baseline twice and accepts candidate output only through owner-bound integrity-linked read-only/network-off sandbox execution receipts; published holdout/adversarial/security gates pass.
+- 2026-08-12T11:08:20.514Z - ac-confirmed: AC5: Closed candidate output accepts only duplicate-free selectedIds within actual baseline authorization; protected role, ACL, security, acceptance, Flow, configuration, policy and self-modification fields fail closed.
+- 2026-08-12T11:08:20.594Z - ac-confirmed: AC6: Activation recomputes the complete corpus+manifest digest and report digest, requires exact baseline/candidate/corpus/evaluation pins and explicit opt-in; kill switch, every mismatch/failure and rollback return the pinned baseline.
+- 2026-08-12T11:08:20.660Z - ac-confirmed: AC7: Default config is enabled=false and killSwitch=true; no CLI/MCP learned-policy surface was added, and existing SAC authorization/Flow behavior remains authoritative.
+- 2026-08-12T11:08:20.748Z - ac-confirmed: AC8: Final verification: 56 focused tests, TypeScript, build, 686 doc links, byte-for-byte fixture regeneration, Code Health 93 stable, zero changed-artifact security findings, full PR CI green on prior round and final review NO PROBLEMS; report states synthetic evidence limitations.
+- 2026-08-12T11:08:31.280Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/273 (tracker unavailable: existence not verified)
