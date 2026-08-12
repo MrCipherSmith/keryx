@@ -155,6 +155,12 @@ function hasReceiptShape(receipt: IntegrityLinkedAccessReceipt): boolean {
   return receipt.outcome === undefined || ["unknown", "useful", "not-useful"].includes(receipt.outcome);
 }
 
+/** Verify one receipt's closed schema and record hash without assuming it is genesis. */
+export function verifyAccessReceiptRecord(receipt: IntegrityLinkedAccessReceipt): boolean {
+  return hasReceiptShape(receipt)
+    && hashAccessReceipt(bodyOf(receipt), receipt.integrity.previousRecordHash) === receipt.integrity.recordHash;
+}
+
 /** Verify the complete ordered ledger; a valid prefix is never mistaken for a valid ledger. */
 export function verifyAccessReceiptLedger(
   receipts: readonly IntegrityLinkedAccessReceipt[],
@@ -172,7 +178,7 @@ export function verifyAccessReceiptLedger(
     if (receipt.integrity.previousRecordHash !== expectedPrevious) {
       return { ok: false, firstInvalidIndex: index, validPrefixLength: index, reason: "predecessor-mismatch" };
     }
-    if (hashAccessReceipt(bodyOf(receipt), receipt.integrity.previousRecordHash) !== receipt.integrity.recordHash) {
+    if (!verifyAccessReceiptRecord(receipt)) {
       return { ok: false, firstInvalidIndex: index, validPrefixLength: index, reason: "record-hash-mismatch" };
     }
     hashes.add(receipt.integrity.recordHash);

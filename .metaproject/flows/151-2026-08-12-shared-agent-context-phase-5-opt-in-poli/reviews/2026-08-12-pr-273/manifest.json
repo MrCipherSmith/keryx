@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-12-pr-273",
+  "mode": "attach-review",
+  "status": "draft",
+  "target": {
+    "kind": "pr",
+    "ref": "273"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-pr-273/scope.md",
+    "coverage": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-pr-273/coverage.md",
+    "report": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-pr-273/report.md",
+    "findings": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-pr-273/findings.json",
+    "learning": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-pr-273/learning.md",
+    "decisions": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-pr-273/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-08-12T09:38:56.598Z",
+  "updatedAt": "2026-08-12T09:38:56.598Z",
+  "flow": {
+    "id": "151",
+    "path": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli"
+  }
+}

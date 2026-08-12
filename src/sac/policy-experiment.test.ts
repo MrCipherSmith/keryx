@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   buildPolicyCorpus,
+  createPolicyExperimentEvidenceAuthority,
   defaultPolicyExperimentConfig,
   evaluatePolicyExperiment,
   formatPolicyEvaluationReport,
@@ -14,6 +15,8 @@ import {
   type PolicyCorpus,
   type PolicyExperimentCandidate,
   type PolicyExperimentSandbox,
+  type PolicyExperimentSandboxEvidence,
+  type TrustedVerifiedTaskOutcome,
   type VerifiedTaskOutcome,
 } from "./policy-experiment";
 import {
@@ -24,6 +27,11 @@ import {
 
 const stamp = "2026-08-12T00:00:00Z";
 const hex = (character: string): string => character.repeat(64);
+const artifactFor = (linked: IntegrityLinkedAccessReceipt): string => JSON.stringify({
+  receiptHash: linked.integrity.recordHash,
+  independentlyVerified: true,
+});
+const evidenceAuthority = createPolicyExperimentEvidenceAuthority();
 
 function receipt(
   id: string,
@@ -64,7 +72,7 @@ function outcome(
       subject: "service:independent-verifier",
       artifactRef: `./verification/${linked.id}.json`,
       artifactRevision: "gate-r1",
-      artifactHash: hex("b"),
+      artifactHash: createHash("sha256").update(artifactFor(linked)).digest("hex"),
     },
     result: "pass" as const,
     expectedSelection: "select" as const,
@@ -75,9 +83,14 @@ function outcome(
   return { ...merged, integrity: { recordHash: hashVerifiedTaskOutcome(merged) } };
 }
 
+const trustOutcome = (entry: VerifiedTaskOutcome): TrustedVerifiedTaskOutcome => {
+  const linked = { integrity: { recordHash: entry.receiptHash } } as IntegrityLinkedAccessReceipt;
+  return evidenceAuthority.resolveOutcome({ outcome: entry, artifactContent: artifactFor(linked) });
+};
+
 const corpusInput = (receipts: IntegrityLinkedAccessReceipt[], outcomes: VerifiedTaskOutcome[]) => ({
   receipts,
-  outcomes,
+  outcomes: outcomes.map(trustOutcome),
   receiptLedgerRef: "./.metaproject/context-operations/access-receipts.jsonl",
   corpusVersion: "sac-policy-corpus-1.0.0",
   baselineVersion: "deterministic-context-1.0.0",
@@ -166,7 +179,7 @@ describe("offline corpus construction", () => {
       },
       outcome: {
         artifactRevision: "gate-r1",
-        artifactHash: hex("b"),
+        artifactHash: outcome(linked).verifier.artifactHash,
         result: "pass",
       },
     });
@@ -211,6 +224,32 @@ describe("offline corpus construction", () => {
     expect(corpus.quarantine).toContainEqual(expect.objectContaining({ reason: "duplicate-independent-outcome" }));
   });
 
+  test("quarantines closed-schema-invalid and independently unresolved outcomes", () => {
+    const linked = receipt("receipt-a");
+    const malformedBody = {
+      ...outcome(linked),
+      verifier: { ...outcome(linked).verifier, kind: "producer-claim" },
+      integrity: undefined,
+    };
+    const { integrity: _ignored, ...body } = malformedBody;
+    const malformed = { ...body, integrity: { recordHash: hashVerifiedTaskOutcome(body as never) } };
+    const malformedEvidence = evidenceAuthority.resolveOutcome({
+      outcome: malformed,
+      artifactContent: artifactFor(linked),
+    });
+    const unresolvedEvidence = evidenceAuthority.resolveOutcome({
+      outcome: outcome(linked),
+      artifactContent: "wrong independently resolved artifact",
+    });
+    for (const evidence of [malformedEvidence, unresolvedEvidence]) {
+      const corpus = buildPolicyCorpus({ ...corpusInput([linked], []), outcomes: [evidence] });
+      expect(corpus.rows).toEqual([]);
+      expect(corpus.quarantine).toContainEqual(expect.objectContaining({
+        reason: evidence === malformedEvidence ? "outcome-invalid-shape" : "verifier-artifact-invalid",
+      }));
+    }
+  });
+
   test("publishes an allowlisted minimized manifest and corpus-scoped pseudonyms", () => {
     const corpus = validCorpus();
     const serialized = JSON.stringify(corpus);
@@ -241,6 +280,21 @@ describe("offline corpus construction", () => {
     }
     expect(new Set(first.rows.map((row) => row.split))).toContain("adversarial");
     expect(first.manifest.split.digests.train).not.toBe(first.manifest.split.digests.holdout);
+  });
+
+  test("domain-separates pseudonyms by corpus and pseudonymization revision", () => {
+    const linked = receipt("receipt-a");
+    const first = buildPolicyCorpus(corpusInput([linked], [outcome(linked)]));
+    const nextCorpus = buildPolicyCorpus({
+      ...corpusInput([linked], [outcome(linked)]),
+      corpusVersion: "sac-policy-corpus-2.0.0",
+    });
+    const nextPseudonymizer = buildPolicyCorpus({
+      ...corpusInput([linked], [outcome(linked)]),
+      pseudonymizationRevision: "hmac-sha256-v2",
+    });
+    expect(nextCorpus.rows[0]?.workspacePseudonym).not.toBe(first.rows[0]?.workspacePseudonym);
+    expect(nextPseudonymizer.rows[0]?.workspacePseudonym).not.toBe(first.rows[0]?.workspacePseudonym);
   });
 
   test("published corpus rows resolve their receipt and independent outcome hashes", async () => {
@@ -279,10 +333,19 @@ const candidate: PolicyExperimentCandidate = {
   artifactDigest: hex("c"),
 };
 
+const sandboxEvidence = (): PolicyExperimentSandboxEvidence => evidenceAuthority.resolveSandboxControls({
+  candidateVersion: candidate.version,
+  candidateDigest: candidate.artifactDigest,
+  profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
+  evidenceRevision: "sandbox-controls-1.0.0",
+  allowedControlArtifact: "allowed control completed under containment",
+  deniedEscapeArtifact: "escape denied under containment",
+});
+
 const sandbox = (select: (ids: readonly string[]) => CandidateSelection, overrides: Partial<PolicyExperimentSandbox> = {}): PolicyExperimentSandbox => ({
   profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
-  allowedControlPassed: true,
-  deniedEscapePassed: true,
+  controlEvidence: sandboxEvidence(),
+  caseTimeoutMs: 100,
   run: async (request) => ({ kind: "completed", selection: select(request.baselineAuthorizedIds) }),
   ...overrides,
 });
@@ -337,9 +400,42 @@ describe("sandboxed candidate evaluation and activation", () => {
       corpus,
       baselineVersion: "deterministic-context-1.0.0",
       candidate,
-      sandbox: sandbox(() => ({ selectedIds: [] }), { allowedControlPassed: false }),
+      sandbox: sandbox(() => ({ selectedIds: [] }), { controlEvidence: {} as PolicyExperimentSandboxEvidence }),
     });
     expect(unavailable.status).toBe("fail");
+  });
+
+  test("fails nondeterministic and timed-out candidate executions closed", async () => {
+    const corpus = validCorpus();
+    let invocation = 0;
+    const nondeterministic = sandbox((ids) => (++invocation % 2 === 1 ? { selectedIds: ids } : { selectedIds: [] }));
+    const nondeterministicReport = await evaluatePolicyExperiment({
+      corpus, baselineVersion: corpus.manifest.baselineVersion, candidate, sandbox: nondeterministic,
+    });
+    expect(nondeterministicReport.status).toBe("fail");
+    expect(nondeterministicReport.reasons).toContainEqual(expect.stringContaining("candidate-nondeterministic"));
+
+    const timedOut = sandbox(() => ({ selectedIds: [] }), {
+      caseTimeoutMs: 1,
+      run: async () => new Promise(() => undefined),
+    });
+    const timedOutReport = await evaluatePolicyExperiment({
+      corpus, baselineVersion: corpus.manifest.baselineVersion, candidate, sandbox: timedOut,
+    });
+    expect(timedOutReport.status).toBe("fail");
+    expect(timedOutReport.reasons).toContainEqual(expect.stringContaining("candidate-timeout"));
+  });
+
+  test("binds evaluation to the corpus baseline", async () => {
+    const corpus = validCorpus();
+    const report = await evaluatePolicyExperiment({
+      corpus,
+      baselineVersion: "different-baseline-2.0.0",
+      candidate,
+      sandbox: sandbox((ids) => ({ selectedIds: ids })),
+    });
+    expect(report.status).toBe("fail");
+    expect(report.reasons).toContain("baseline-pin-mismatch");
   });
 
   test("is disabled by default and every gate/pin/kill/rollback failure selects baseline", async () => {
@@ -350,7 +446,7 @@ describe("sandboxed candidate evaluation and activation", () => {
       candidate,
       sandbox: sandbox((ids) => ({ selectedIds: ids })),
     });
-    const baseline = { selectedIds: ["baseline-a"], source: "deterministic-baseline" as const };
+    const baseline = { selectedIds: evaluation.candidateSelectedIds, source: "deterministic-baseline" as const };
     const defaults = defaultPolicyExperimentConfig();
     expect(defaults).toMatchObject({ enabled: false, killSwitch: true });
     expect(resolvePolicyExperiment({ config: defaults, evaluation, candidate, corpus, baseline })).toEqual(baseline);
@@ -371,6 +467,16 @@ describe("sandboxed candidate evaluation and activation", () => {
     expect(resolvePolicyExperiment({ config: { ...enabled, candidateDigest: hex("d") }, evaluation, candidate, corpus, baseline })).toEqual(baseline);
     expect(resolvePolicyExperiment({ config: enabled, evaluation: { ...evaluation, status: "fail" }, candidate, corpus, baseline })).toEqual(baseline);
     expect(rollbackPolicyExperiment(enabled, "operator-request")).toMatchObject({ enabled: false, killSwitch: true });
+
+    const tamperedEvaluation = { ...evaluation, candidateSelectedIds: ["outside-runtime-baseline"] };
+    expect(resolvePolicyExperiment({ config: enabled, evaluation: tamperedEvaluation, candidate, corpus, baseline })).toEqual(baseline);
+    expect(resolvePolicyExperiment({
+      config: enabled,
+      evaluation,
+      candidate,
+      corpus,
+      baseline: { selectedIds: [], source: "deterministic-baseline" },
+    })).toEqual({ selectedIds: [], source: "deterministic-baseline" });
   });
 
   test("fails closed for floating versions and non-digest activation pins", async () => {

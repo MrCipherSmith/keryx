@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
 import { evaluateStrictSacGuard, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
@@ -7,7 +7,9 @@ import { localWorkspaceAuthorizationServer, WorkspaceService, WorkspaceServiceEr
 import { withFileLock } from "../lib/fs";
 import {
   sealAccessReceipt,
+  verifyAccessReceiptRecord,
   verifyAccessReceiptLedger,
+  type AccessReceiptLedgerVerification,
   type IntegrityLinkedAccessReceipt,
 } from "./receipt-integrity";
 
@@ -29,6 +31,88 @@ const metadataOnly = (value: unknown): boolean => {
 };
 const nowIso = (now: () => Date) => now().toISOString();
 
+type LedgerIdentity = Readonly<{ ledgerBytes: number; device: string; inode: string; modifiedNs: string; changedNs: string }>;
+type CheckpointBody = LedgerIdentity & Readonly<{ schemaVersion: "1.0"; recordCount: number; headHash: string; tailOffset: number }>;
+type Checkpoint = CheckpointBody & Readonly<{ integrity: Readonly<{ checkpointHash: string }> }>;
+type LedgerState = Readonly<{ identity: LedgerIdentity; recordCount: number; headHash: string; tailOffset: number }>;
+type LedgerVerifier = (receipts: readonly IntegrityLinkedAccessReceipt[]) => AccessReceiptLedgerVerification;
+const receiptHashPattern = /^[a-f0-9]{64}$/;
+const missingIdentity: LedgerIdentity = Object.freeze({ ledgerBytes: 0, device: "0", inode: "0", modifiedNs: "0", changedNs: "0" });
+const isMissing = (error: unknown): boolean => error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
+const checkpointHash = (body: CheckpointBody): string => createHash("sha256").update(JSON.stringify(body), "utf8").digest("hex");
+
+async function ledgerIdentity(ledger: string): Promise<LedgerIdentity> {
+  const value = await stat(ledger, { bigint: true });
+  if (value.size > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("invalid access receipt ledger: ledger-too-large");
+  return { ledgerBytes: Number(value.size), device: value.dev.toString(), inode: value.ino.toString(), modifiedNs: value.mtimeNs.toString(), changedNs: value.ctimeNs.toString() };
+}
+function parseCheckpoint(value: unknown): Checkpoint | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const document = value as Record<string, unknown>;
+  const expected = ["schemaVersion", "ledgerBytes", "device", "inode", "modifiedNs", "changedNs", "recordCount", "headHash", "tailOffset", "integrity"];
+  if (Object.keys(document).length !== expected.length || !expected.every((key) => Object.hasOwn(document, key)) || document.schemaVersion !== "1.0") return undefined;
+  if (![document.ledgerBytes, document.recordCount, document.tailOffset].every((entry) => Number.isSafeInteger(entry) && Number(entry) >= 0)) return undefined;
+  if (![document.device, document.inode, document.modifiedNs, document.changedNs].every((entry) => typeof entry === "string" && /^\d+$/.test(entry))) return undefined;
+  if (typeof document.headHash !== "string" || (document.headHash !== "GENESIS" && !receiptHashPattern.test(document.headHash))) return undefined;
+  if (typeof document.integrity !== "object" || document.integrity === null || Array.isArray(document.integrity)) return undefined;
+  const integrity = document.integrity as Record<string, unknown>;
+  if (Object.keys(integrity).length !== 1 || typeof integrity.checkpointHash !== "string" || !receiptHashPattern.test(integrity.checkpointHash)) return undefined;
+  const body: CheckpointBody = { schemaVersion: "1.0", ledgerBytes: document.ledgerBytes as number, device: document.device as string, inode: document.inode as string, modifiedNs: document.modifiedNs as string, changedNs: document.changedNs as string, recordCount: document.recordCount as number, headHash: document.headHash, tailOffset: document.tailOffset as number };
+  return checkpointHash(body) === integrity.checkpointHash ? { ...body, integrity: { checkpointHash: integrity.checkpointHash } } : undefined;
+}
+async function readCheckpoint(checkpointPath: string): Promise<{ present: boolean; checkpoint?: Checkpoint }> {
+  try { const raw = await readFile(checkpointPath, "utf8"); try { const checkpoint = parseCheckpoint(JSON.parse(raw)); return checkpoint ? { present: true, checkpoint } : { present: true }; } catch { return { present: true }; } }
+  catch (error) { if (isMissing(error)) return { present: false }; throw error; }
+}
+async function writeCheckpoint(checkpointPath: string, body: CheckpointBody): Promise<void> {
+  const temporary = `${checkpointPath}.${process.pid}.${randomUUID()}.tmp`;
+  const checkpoint: Checkpoint = { ...body, integrity: { checkpointHash: checkpointHash(body) } };
+  try { await writeFile(temporary, `${JSON.stringify(checkpoint)}\n`, { mode: 0o600, flag: "wx" }); await rename(temporary, checkpointPath); }
+  catch (error) { await rm(temporary, { force: true }).catch(() => undefined); throw error; }
+}
+function identityMatches(checkpoint: Checkpoint, identity: LedgerIdentity): boolean {
+  return checkpoint.ledgerBytes === identity.ledgerBytes && checkpoint.device === identity.device && checkpoint.inode === identity.inode && checkpoint.modifiedNs === identity.modifiedNs && checkpoint.changedNs === identity.changedNs;
+}
+async function fastCheckpointState(ledger: string, checkpoint: Checkpoint, identity: LedgerIdentity): Promise<LedgerState | undefined> {
+  if (!identityMatches(checkpoint, identity)) return undefined;
+  if (checkpoint.recordCount === 0) return checkpoint.ledgerBytes === 0 && checkpoint.headHash === "GENESIS" && checkpoint.tailOffset === 0 ? { identity, recordCount: 0, headHash: "GENESIS", tailOffset: 0 } : undefined;
+  const tailBytes = checkpoint.ledgerBytes - checkpoint.tailOffset;
+  if (checkpoint.tailOffset < 0 || tailBytes <= 1 || tailBytes > 1024 * 1024) return undefined;
+  const handle = await open(ledger, "r");
+  try {
+    const buffer = Buffer.alloc(tailBytes); let offset = 0;
+    while (offset < buffer.length) { const result = await handle.read(buffer, offset, buffer.length - offset, checkpoint.tailOffset + offset); if (result.bytesRead === 0) return undefined; offset += result.bytesRead; }
+    if (buffer.at(-1) !== 0x0a || buffer.subarray(0, -1).includes(0x0a)) return undefined;
+    let receipt: IntegrityLinkedAccessReceipt;
+    try { receipt = JSON.parse(buffer.subarray(0, -1).toString("utf8")) as IntegrityLinkedAccessReceipt; } catch { return undefined; }
+    if (!verifyAccessReceiptRecord(receipt) || receipt.integrity.recordHash !== checkpoint.headHash) return undefined;
+    return { identity, recordCount: checkpoint.recordCount, headHash: checkpoint.headHash, tailOffset: checkpoint.tailOffset };
+  } finally { await handle.close(); }
+}
+async function auditLedger(ledger: string, checkpointPath: string, verifier: LedgerVerifier): Promise<LedgerState> {
+  const raw = await readFile(ledger, "utf8");
+  if (raw.length > 0 && !raw.endsWith("\n")) throw new Error("invalid access receipt ledger: unterminated-record");
+  const lines = raw.length === 0 ? [] : raw.slice(0, -1).split("\n"); let receipts: IntegrityLinkedAccessReceipt[];
+  try { receipts = lines.map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt); } catch { throw new Error("invalid access receipt ledger: malformed-json"); }
+  const verification = verifier(receipts);
+  if (!verification.ok) throw new Error(`invalid access receipt ledger: ${verification.reason} at record ${verification.firstInvalidIndex}`);
+  const identity = await ledgerIdentity(ledger); const bytes = Buffer.from(raw, "utf8");
+  const tailOffset = receipts.length === 0 ? 0 : bytes.lastIndexOf(0x0a, bytes.length - 2) + 1;
+  const state = { identity, recordCount: receipts.length, headHash: verification.headHash, tailOffset };
+  await writeCheckpoint(checkpointPath, { schemaVersion: "1.0", ...identity, recordCount: state.recordCount, headHash: state.headHash, tailOffset });
+  return state;
+}
+async function resolveLedgerState(ledger: string, checkpointPath: string, verifier: LedgerVerifier): Promise<LedgerState> {
+  const document = await readCheckpoint(checkpointPath); let identity: LedgerIdentity;
+  try { identity = await ledgerIdentity(ledger); } catch (error) {
+    if (!isMissing(error)) throw error;
+    if (document.present) throw new Error("invalid access receipt ledger: orphaned-checkpoint");
+    return { identity: missingIdentity, recordCount: 0, headHash: "GENESIS", tailOffset: 0 };
+  }
+  if (document.checkpoint) { const fast = await fastCheckpointState(ledger, document.checkpoint, identity); if (fast) return fast; }
+  return auditLedger(ledger, checkpointPath, verifier);
+}
+
 /** Read-only SAC facade; all sources are adapters owned by their source module. */
 export class FwkReadService {
   constructor(private readonly options: {
@@ -37,6 +121,7 @@ export class FwkReadService {
     source: (input: { workspaceId: string; actorContext: TrustedActorContext }) => Promise<FwkSource>;
     canonical: { workspaceRoot: string; configurationRevision: string; policyRef: string; policyRevision: string };
     now?: () => Date;
+    verifyReceiptLedger?: LedgerVerifier;
   }) {}
 
   async overview(input: { workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }): Promise<FwkReadResult> {
@@ -115,21 +200,20 @@ export class FwkReadService {
     const recordedAt = nowIso(now); const id = `receipt-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     const base = { schemaVersion: "1.0" as const, id, workspaceId, actor, action, decision, recordedAt, cost: { tokens: 0, toolCalls: 1, elapsedMs: 0 }, contextAssembly: { traceRef: assembly.traceRef, configurationRevision: assembly.configurationRevision, selected: assembly.selected.map((id) => `./ids/${id}`), omittedOptional: assembly.omittedOptional.map((id) => `./ids/${id}`) }, policy: { ref: assembly.policyRef, revision: assembly.policyRevision }, ...(action === "resource" ? { resourceRef: `./ids/${resourceId ?? "unknown"}` } : {}) };
     const ledger = path.join(this.options.canonical.workspaceRoot, ".metaproject", "context-operations", "access-receipts.jsonl");
+    const checkpointPath = path.join(path.dirname(ledger), "access-receipts.checkpoint.json");
     await mkdir(path.dirname(ledger), { recursive: true, mode: 0o700 });
     return withFileLock(`${ledger}.lock`, async () => {
-      let previousRecordHash: string = "GENESIS";
-      try {
-        const lines = (await readFile(ledger, "utf8")).trim().split("\n").filter(Boolean);
-        const receipts = lines.map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt);
-        const verification = verifyAccessReceiptLedger(receipts);
-        if (!verification.ok) throw new Error(`invalid access receipt ledger: ${verification.reason} at record ${verification.firstInvalidIndex}`);
-        previousRecordHash = verification.headHash;
-      } catch (error) { if (!(error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT")) throw error; }
-      const receipt = sealAccessReceipt(base, previousRecordHash) as AccessReceipt;
+      const state = await resolveLedgerState(ledger, checkpointPath, this.options.verifyReceiptLedger ?? verifyAccessReceiptLedger);
+      const receipt = sealAccessReceipt(base, state.headHash) as AccessReceipt;
       if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
       const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
       if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
       await appendFile(ledger, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+      const identity = await ledgerIdentity(ledger);
+      await writeCheckpoint(checkpointPath, {
+        schemaVersion: "1.0", ...identity, recordCount: state.recordCount + 1,
+        headHash: receipt.integrity.recordHash, tailOffset: state.identity.ledgerBytes,
+      });
       return receipt;
     });
   }

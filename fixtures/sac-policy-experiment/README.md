@@ -17,4 +17,3 @@ content.
 
 The corpus proves reproducibility and safety gates only. It does not authorize
 or enable a learned policy, and it is not evidence of production improvement.
-

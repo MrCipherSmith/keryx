@@ -1,7 +1,7 @@
 # Shared Agent Context — Phase 5 Policy Experiment Report
 
-Version: 1.0.0  
-Date: 2026-08-12  
+Version: 1.0.0
+Date: 2026-08-12
 Status: synthetic mechanism evaluation passed; learned policy disabled
 
 ## Result
@@ -32,7 +32,7 @@ evidence whose exact digests match the activation pins.
 ## Corpus manifest
 
 - Corpus version: `sac-policy-corpus-1.0.0`
-- Corpus digest: `06169e35b07b0858017efe74c57e64ddae4607ffaed84198257473b1c745ff6f`
+- Corpus digest: `ef9f284d001de10e2e69a889d532d94deb1ffe4a1e02e469759df58c577c63fd`
 - Receipt chain head: `18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a`
 - Baseline pin: `deterministic-context-1.0.0`
 - Candidate version pin: `candidate-1.0.0`
@@ -66,7 +66,7 @@ splits.
 
 - Candidate artifact digest: `cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
 - Sandbox profile digest: `2c3e94c87ff42064841fa788657219c5144d36282cc4bb4d73ff9aab987c8207`
-- Evaluation report digest: `7478c8119a238d6bf0963148a89b70df61d68fcd1ce7aaa0a826e17eb372c4a8`
+- Evaluation report digest: `a8d5fbc54cc1f2e562bda51ae177d020ff3677b9d6e41c40d03c01468bc02a43`
 
 The candidate can only return a subset of already baseline-authorized row IDs.
 Closed-output validation rejects unknown IDs, duplicates and fields that could
