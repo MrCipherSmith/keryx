@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Artifact Lifecycle
-Version: 1.2.0
+Version: 1.3.0
 
 ## Source of truth and derived artifacts
 
@@ -32,6 +32,15 @@ evidence revisions, target intent and idempotency key. Every outcome is an
 append-only transition event with an event ID, prior-event ID, correlation ID,
 actor/role revision, policy/version, review decision and target-write receipt
 where applicable. No record is overwritten to express a transition.
+
+Before creation, a trusted server boundary issues a one-time
+`WrapUpProvenance` only from explicit completed Session output or a read-only
+Flow wrap-up snapshot. It binds authenticated actor, workspace, source
+reference/revision, exact summarized-output digest, evidence revisions and
+expiry. SAC verifies and consumes this capability at persistence time. The
+stored proposal retains only minimal source metadata; client-provided
+session/Flow identifiers never authorize a proposal and SAC never mutates the
+referenced Flow snapshot.
 
 `pending-write` is a durable, append-only write-intent before SAC calls an
 owner. It binds the proposal revision, trusted reviewer, current security

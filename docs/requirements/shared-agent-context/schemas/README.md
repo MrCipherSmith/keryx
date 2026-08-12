@@ -1,5 +1,5 @@
 # Shared Agent Context — Schemas and Fixtures
-Version: 1.1.0
+Version: 1.2.0
 
 ## Purpose
 
@@ -45,3 +45,8 @@ must fail for the documented contract reason. The replay corpus is evaluated by
 the append-only ledger validator, not by an isolated JSON document. All schemas
 forbid raw transcript, prompt, hidden-reasoning and secret payload fields by
 using closed objects.
+
+`workspace-proposal` creation also requires minimal `wrapUp` metadata. It is
+only an audit pointer: runtime authorization requires the corresponding
+server-issued, one-time trusted provenance capability bound to its session or
+read-only Flow wrap-up source, actor, workspace, evidence and expiry.

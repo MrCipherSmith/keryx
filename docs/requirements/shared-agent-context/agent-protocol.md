@@ -57,9 +57,14 @@ or follow-up. It must include evidence IDs and target intent. It must not submit
 raw transcripts, prompts, hidden reasoning, credentials, PII, unverified web
 content or a claim that a target was updated.
 
-Creation writes one immutable `proposed` record with a proposal revision,
-evidence revisions, target intent and an idempotency key. A proposal is never
-edited into another state. A state change appends a separately identified
+Creation accepts only a server-issued, one-time `WrapUpProvenance` capability
+created from an explicit completed Session or a read-only Flow wrap-up snapshot.
+It binds the workspace, authenticated actor, source reference/revision, exact
+summary digest, evidence revisions, issue/expiry times and replay state. A CLI,
+MCP payload, prompt or environment value cannot mint or alter this capability.
+Creation writes one immutable `proposed` record with the capability's minimal
+source metadata, a proposal revision and evidence revisions. A proposal is
+never edited into another state. A state change appends a separately identified
 transition event that points to the proposal revision and prior event.
 
 An `accepted` transition is valid only when, in causal order: (1) the current

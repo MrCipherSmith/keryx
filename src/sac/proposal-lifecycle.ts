@@ -4,11 +4,12 @@ import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
+import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
 type Terminal = "accepted" | "rejected" | "dismissed" | "stale";
-type Proposal = { schemaVersion: "1.0"; recordType: "proposal-created"; id: string; proposalRevision: string; correlationId: string; workspaceId: string; kind: ProposalKind; status: "proposed"; summary: string; evidence: Evidence[]; author: string; security: { gate: "pass" | "needs-approval"; redacted: true; policyRef: string; policyRevision: string }; createdAt: string };
+type Proposal = { schemaVersion: "1.0"; recordType: "proposal-created"; id: string; proposalRevision: string; correlationId: string; workspaceId: string; kind: ProposalKind; status: "proposed"; summary: string; evidence: Evidence[]; wrapUp: { id: string; source: "session" | "flow"; sourceRef: string; sourceRevision: string; issuedAt: string; expiresAt: string }; author: string; security: { gate: "pass" | "needs-approval"; redacted: true; policyRef: string; policyRevision: string }; createdAt: string };
 type WriteIntent = Record<string, unknown> & { recordType: "proposal-write-intent"; intentId: string; proposalId: string; idempotencyKey: string };
 type Transition = Record<string, unknown> & { recordType: "proposal-transition"; eventId: string; proposalId: string; toStatus: Terminal; idempotencyKey: string };
 type LedgerRecord = WriteIntent | Transition;
@@ -19,7 +20,7 @@ export type OwnerWriteAdapter = (input: Parameters<GuardedTargetWriter["write"]>
 type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
-  constructor(readonly code: "access_denied" | "guard_denied" | "invalid_proposal" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
+  constructor(readonly code: "access_denied" | "guard_denied" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
 }
 
 /**
@@ -38,17 +39,20 @@ export class ProposalLifecycleService {
     policyRef: string;
     policyRevision: string;
     targetWriters: Partial<Record<TargetOwner, GuardedTargetWriter>>;
+    wrapUpAuthority: TrustedWrapUpAuthority;
     now?: () => Date;
     /** Test seam that simulates an evidence/ACL change immediately before write. */
     beforeTargetWrite?: () => Promise<void> | void;
   }) { this.root = path.resolve(options.workspaceRoot); this.now = options.now ?? (() => new Date()); }
 
-  async create(input: { request: unknown; requestCorrelationId: string; workspaceId: string; id: string; proposalRevision: string; kind: ProposalKind; summary: string; evidence: Evidence[] }): Promise<Proposal> {
+  async create(input: { request: unknown; requestCorrelationId: string; workspaceId: string; id: string; proposalRevision: string; kind: ProposalKind; summary: string; evidence: Evidence[]; wrapUp: TrustedWrapUpProvenance }): Promise<Proposal> {
     const actor = await this.actor(input.request, input.requestCorrelationId);
     const policyRevision = await this.strict();
     this.assertMinimizedSummary(input.summary);
+    const wrapUp = this.options.wrapUpAuthority.verify(input.wrapUp, { actor, workspaceId: input.workspaceId, summary: input.summary, evidence: input.evidence });
+    if (wrapUp !== "ok") throw new ProposalLifecycleError("trusted_wrap_up_required", `trusted wrap-up ${wrapUp}`);
     const createdAt = this.timestamp();
-    const proposal: Proposal = { schemaVersion: "1.0", recordType: "proposal-created", id: input.id, proposalRevision: input.proposalRevision, correlationId: input.requestCorrelationId, workspaceId: "", kind: input.kind, status: "proposed", summary: input.summary, evidence: input.evidence, author: actor.subject, security: { gate: "pass", redacted: true, policyRef: this.options.policyRef, policyRevision }, createdAt };
+    const proposal: Proposal = { schemaVersion: "1.0", recordType: "proposal-created", id: input.id, proposalRevision: input.proposalRevision, correlationId: input.requestCorrelationId, workspaceId: "", kind: input.kind, status: "proposed", summary: input.summary, evidence: input.evidence, wrapUp: { id: input.wrapUp.id, source: input.wrapUp.source, sourceRef: input.wrapUp.sourceRef, sourceRevision: input.wrapUp.sourceRevision, issuedAt: input.wrapUp.issuedAt, expiresAt: input.wrapUp.expiresAt }, author: actor.subject, security: { gate: "pass", redacted: true, policyRef: this.options.policyRef, policyRevision }, createdAt };
     // The workspace is derived from the caller's explicit workspace-bound evidence
     // request in v1. The public operation accepts it through a separate field to
     // keep the stored record exactly schema-shaped.
@@ -60,6 +64,8 @@ export class ProposalLifecycleService {
       const file = this.proposalPath(workspaceId, proposal.id);
       await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
       return withFileLock(`${file}.lock`, async () => {
+        const consume = this.options.wrapUpAuthority.consume(input.wrapUp, { actor, workspaceId, summary: input.summary, evidence: input.evidence });
+        if (consume !== "ok") throw new ProposalLifecycleError("trusted_wrap_up_required", `trusted wrap-up ${consume}`);
         try { await readFile(file, "utf8"); throw new ProposalLifecycleError("conflict", "proposal already exists"); }
         catch (error) { if (error instanceof ProposalLifecycleError) throw error; if (!isNotFound(error)) throw error; }
         await writeFileAtomic(file, `${JSON.stringify(proposal, null, 2)}\n`);
@@ -177,7 +183,9 @@ function isNotFound(error: unknown): boolean { return typeof error === "object" 
 export function createLocalProposalLifecycleService(cwd: string): ProposalLifecycleService {
   const authorizationServer = localWorkspaceAuthorizationServer();
   const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } });
-  return new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters: {} });
+  // Local adapters deliberately do not receive this authority. Their propose
+  // command remains fail-closed; trusted Harness/session composition injects it.
+  return new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters: {}, wrapUpAuthority: createTrustedWrapUpAuthority({ now: () => new Date(0) }) });
 }
 
 /**
