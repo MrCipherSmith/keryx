@@ -12,7 +12,8 @@ const MAX_WORKER_OUTPUT_BYTES = 192_000;
 // This source intentionally uses built-in modules only. It is passed with
 // `bun --eval`, so the child never imports code from the project worktree.
 const WORKER_SOURCE = String.raw`
-const { request } = await import("node:https");
+const { request: httpsRequest } = await import("node:https");
+const { request: httpRequest } = await import("node:http");
 const { isIP } = await import("node:net");
 const input = JSON.parse(await Bun.stdin.text());
 const fail = () => process.stdout.write(JSON.stringify({ ok: false, reason: "request failed or timed out" }));
@@ -27,6 +28,7 @@ try {
   }
   const encoded = payload ? JSON.stringify(payload) : undefined;
   if (encoded) { headers["content-type"] = "application/json"; headers["content-length"] = String(Buffer.byteLength(encoded)); }
+  const request = input.url.startsWith("http:") ? httpRequest : httpsRequest;
   const req = request(input.url, {
     method: input.method,
     lookup: (_host, options, callback) => {
@@ -37,7 +39,7 @@ try {
       if (options && options.all) callback(null, [record]);
       else callback(null, record.address, record.family);
     },
-    servername: input.hostname,
+    ...(input.url.startsWith("https:") ? { servername: input.hostname } : {}),
     headers,
   }, (res) => {
     const chunks = []; let size = 0;

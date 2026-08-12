@@ -5,6 +5,14 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.28] — 2026-08-12
+
+### Fixed
+
+- **Local SearXNG search now works through the sandbox.** The web worker selects
+  the HTTP client for loopback search endpoints while retaining HTTPS-only
+  policy for remote web fetches.
+
 ## [0.2.27] — 2026-08-12
 
 ### Fixed
