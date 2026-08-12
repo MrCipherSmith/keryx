@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 2,
+  "id": "150",
+  "slug": "shared-agent-context-phase-4-collaborati",
+  "title": "Shared Agent Context — Phase 4: Collaboration ergonomics",
+  "status": "in-progress",
+  "createdAt": "2026-08-12T07:01:54.486Z",
+  "updatedAt": "2026-08-12T07:04:53.357Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:937caceb0859dcdc2f77f3f40a975bb7db9a2f108e061083b45eadf74459b9d3",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Record contract-based onboarding and handoff usability evaluation",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Run code verifier, health gate, fixture compatibility and full review",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-12T07:01:54.486Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-12T07:04:53.079Z",
+      "event": "task-added",
+      "detail": "T5: Record contract-based onboarding and handoff usability evaluation"
+    },
+    {
+      "at": "2026-08-12T07:04:53.161Z",
+      "event": "task-added",
+      "detail": "T6: Run code verifier, health gate, fixture compatibility and full review"
+    },
+    {
+      "at": "2026-08-12T07:04:53.267Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-12T07:04:53.357Z",
+      "event": "started"
+    }
+  ]
+}
