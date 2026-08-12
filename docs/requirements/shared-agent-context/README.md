@@ -10,10 +10,13 @@ Version: 1.3.0
 
 ## Статус
 
-`partially implemented`. Фазы 0–3 реализованы и влиты в
-`feat/shared-agent-context`; дальнейшие фазы и часть описанной surface остаются
-планом. Точный статус, evidence и список временно сохранённых веток приведены
-в [Implementation plan](implementation-plan.md).
+`implemented` (механизмы 0–5), плюс отдельная production-ready фаза в планировании.
+Фазы 0–5 уже влиты в `feat/shared-agent-context`; фаза 6 и дальнейший
+операционный rollout остаются в плане. Точный статус, evidence и список
+временно сохранённых веток приведены в [Implementation plan](implementation-plan.md).
+
+Важно: Phase 5 (policy experiment) сейчас подтверждает корректность механизма на
+synthetic offline evidence и по умолчанию не включает production эффектов.
 
 ## Модель FWK
 

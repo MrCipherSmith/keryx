@@ -1,9 +1,9 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.4.0
+Version: 1.5.0
 
 ## Delivery status
 
-As of 2026-08-12, Phases 0–4 are implemented and merged into
+As of 2026-08-12, Phases 0–5 are implemented and merged into
 `feat/shared-agent-context`. Their acceptance and review work is complete;
 the branches below are retained only as temporary merge history and may be
 deleted after the team confirms no further recovery is needed.
@@ -15,7 +15,8 @@ deleted after the team confirms no further recovery is needed.
 | 2 — FWK read path | Implemented | `origin/feat/sac-phase2-fwk-read-path` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase2-fwk-read-path` |
 | 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
 | 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` | No phase-specific branch retained. |
-| 5 — Opt-in policy experiment | In progress | Flow 151; [policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
+| 5 — Opt-in policy experiment | Implemented | Merged via PR #273; Flow completion commit `883581a`; [phase-5 policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
+| 6 — Production guard and real opt-in readiness | Planned | Not started | No phase-specific branch yet |
 
 ### Deferred branch cleanup
 
@@ -113,6 +114,16 @@ Implementation evidence is published in the
 [Phase 5 policy experiment report](phase-5-policy-experiment-report.md). The
 committed corpus is synthetic mechanism evidence only; default configuration
 keeps the learned candidate disabled and the kill switch active.
+
+## Phase 6 — Production guard and real opt-in readiness (planned)
+
+- Add explicit operator readiness process for non-synthetic real artifacts:
+  candidate artifact, baseline artifact, policy corpus, manifest, sandbox
+  control artifacts, independent outcome artifacts and rollup report.
+- Define exact verification order and acceptance prerequisites before any candidate
+  policy can be considered for non-default rollout.
+- Keep all default behavior unchanged until the readiness gate is explicitly passed.
+- Add reviewable rollout/rollback criteria and a documented owner-run playbook.
 
 ## Rollback order
 
