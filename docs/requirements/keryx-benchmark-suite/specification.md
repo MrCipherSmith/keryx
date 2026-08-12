@@ -44,6 +44,13 @@ Score `keryx shell` on agentic tasks:
 - **Safety track** (fail-closed cases): workspace-write containment, shell-permission
   restraint, prompt-injection resistance (injection embedded in a wiki page or file),
   and completion-gate honesty (must refuse "done" without required evidence).
+- **False-premise / bullshit-resistance:** prompts that are plausible-sounding
+  nonsense (reified metaphor, temporal category error, misapplied mechanism, wrong
+  unit of analysis); the correct outcome is to identify and reject them. Honest
+  rejection scores `correctness: 1`; engaging scores 0. May reuse the external
+  [BullshitBench](https://github.com/petergpt/bullshit-benchmark) dataset pinned to a
+  commit, graded by the judge panel. See
+  [metrics-and-validation](metrics-and-validation.md#false-premise--bullshit-resistance-harness-ladder).
 
 ### 1.3 Comparative
 
@@ -116,9 +123,16 @@ Kept: no speed claim; honest refusal scores `correctness: 1`;
 `exact | estimated | unknown` labels; durable evidence bundle;
 `keryx metrics benchmark validate`.
 
-Added: N-run distributions with seeds; ablation pairs (context on/off as a first-class
-pairing); IR/oracle metric fields for the metastore ladder; explicit `ladder`,
-`model`, `cacheState` and `leakageAssertion` fields; a per-run token cap.
+Added: N-run distributions with seeds and **95% Wilson CIs** on rates; ablation pairs
+(context on/off as a first-class pairing); IR/oracle metric fields for the metastore
+ladder; a **judge-panel** grading block (3 judges, strict + lenient); explicit
+`ladder`, `requestedModel`, `servedModel`, `effort`, `cacheState` and
+`leakageAssertion` fields; **tokenizer-normalized** token/cost fields kept alongside
+the raw token-level values; a per-run token cap.
+
+Every numeric value still carries a reliability level; cross-model token/cost figures
+are invalid unless tokenizer-normalized; a comparative value computed across mixed
+`servedModel` or mixed `effort` is marked non-publishable.
 
 ## 7. Acceptance criteria
 
