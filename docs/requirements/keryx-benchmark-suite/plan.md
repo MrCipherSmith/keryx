@@ -65,12 +65,23 @@ is one-hop coverage of the transitive closure, NOT a defect rate. Each dependenc
 oracle metric carries this as an explicit `depthSemantics` note; see
 [metrics-and-validation](metrics-and-validation.md#metastore-ladder).
 
+**Landed (2026-08-13): Testing / TIA metastore oracle.** A separate metastore layer
+(`keryx metrics benchmark run --ladder metastore --layer testing|all`; scorer
+`src/metrics/oracle-runner.ts` `buildTestImpactManifest`, never averaged with the gdgraph
+oracle) scores the system test-impact set (`keryx test related` / coverage-map TIA) against
+the coverage-derived gold impacted-test set (`goldTestImpact`). The coverage gold is a REAL
+dogfood run — `scripts/benchmark/run-testing-oracle.ts` runs `bun test <file> --coverage`
+per test file over a bounded keryx slice (`src/metrics/{benchmark,gold,ir,oracle-runner}.ts`)
+and commits `fixtures/benchmark/keryx/{coverage-map,test-related}.json`. Real result:
+precision **1.0** on all four targets; recall `gold.ts` 1.0, `oracle-runner.ts` 1.0,
+`benchmark.ts` 0.5, `ir.ts` 0.5 (heuristic misses transitively-covering tests — an honest
+recall gap). Manifests pass `keryx metrics benchmark validate`.
+
 **Remaining in M1:**
 
 - Ablation runner (context on/off, ×3 seeds, success/token/tool-call deltas) — needs
   the model legs, deferred with live runs.
-- Testing/TIA, memory, gdctx oracle layers; test-impact gold (needs an instrumented
-  coverage run).
+- memory and gdctx oracle layers.
 - Safety track + false-premise / bullshit-resistance case group.
 
 ## M2 — Comparative: one third-party agent harness

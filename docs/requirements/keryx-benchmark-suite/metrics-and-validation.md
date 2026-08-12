@@ -40,7 +40,7 @@ computed across mixed served-models or mixed effort is confounded and non-publis
 | gdgraph (co-change prediction) | `gdgraph affected <target>` | git history (real co-change set), `goldAffectedSet` | precision, recall, F1 |
 | gdgraph (graph correctness) | `gdgraph affected <target>` | independent transitive import closure, `goldDependencyClosure` | precision, recall, F1 |
 | gdwiki | `wiki ask <q>` | curated Q→passage | nDCG, recall@k, groundedness |
-| testing | `test related <file>` / TIA | coverage / changed tests | precision, recall |
+| testing | `test related <file>` / TIA | coverage-derived impacted tests, `goldTestImpact` | precision, recall, F1 |
 | memory | `memory search <q>` | curated applicable-decision | recall@k |
 | gdctx | compaction of a known output | the raw output's facts | fact-preservation rate |
 
@@ -67,6 +67,30 @@ members), **recall** = one-hop coverage of the transitive closure (a lower bound
 defect rate). A fully depth-aligned score would require gdgraph to emit a transitive
 forward closure, or scoring against a `maxDepth: 1` closure
 (`goldDependencyClosure({ maxDepth: 1 })`).
+
+**Testing / TIA oracle** (`keryx metrics benchmark run --ladder metastore --layer testing`;
+scorer: `src/metrics/oracle-runner.ts`, `buildTestImpactManifest`). Scores the **system
+test-impact set** — the test ids `keryx test related <file>` (naming + import-graph
+heuristic, `src/testing/service.ts`) or the coverage-map TIA emit for a changed file — against
+the **gold impacted-test set** derived from a REAL coverage map via `goldTestImpact`
+(`src/metrics/gold.ts`: a test is gold-impacted iff its covered-files set intersects the
+changed files). Metrics: precision, recall, F1, reliability `exact` (coverage-derived impact
+is measured directly). It is a SEPARATE oracle from the gdgraph one (task-id namespace
+`metastore:test-impact:*`) and is never averaged with it.
+
+*How the coverage gold is produced (dogfood, no external clone).* `scripts/benchmark/run-testing-oracle.ts`
+takes a small bounded keryx slice (`src/metrics/{benchmark,gold,ir,oracle-runner}.ts` and the
+tests that exercise them), runs `bun test <testfile> --coverage --coverage-reporter=lcov` once
+per slice test file, parses the lcov `SF:` records, and keeps only covered source files inside
+the slice — yielding a real `testId → coveredFiles[]` map committed to
+`fixtures/benchmark/keryx/coverage-map.json`. The system output
+(`fixtures/benchmark/keryx/test-related.json`) is captured from `keryx test related` after
+`keryx test analyze`. Regenerate both with `bun scripts/benchmark/run-testing-oracle.ts`
+(then `git checkout -- .metaproject/data` to drop the analyze side-effect). Real committed
+result: **precision 1.0** on all four targets (every heuristic-selected test really does
+exercise the changed file), **recall** `gold.ts` 1.0, `oracle-runner.ts` 1.0, `benchmark.ts`
+0.5, `ir.ts` 0.5 — the naming/import heuristic misses tests that exercise a file only
+*transitively* (e.g. via a re-export or an intermediate import), an honest recall gap.
 
 ### Ablation metrics (agent outcome, stochastic, ×3 seeds)
 

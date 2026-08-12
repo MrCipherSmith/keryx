@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { validatePairedBenchmark } from "./benchmark";
+import { goldTestImpact, type CoverageMap } from "./gold";
 import {
   buildEvidenceBundle,
   buildOracleManifest,
   buildOracleManifestsByGold,
+  buildTestImpactManifest,
   DEFAULT_DEPTH_SEMANTICS,
   GOLD_KIND_LABELS,
   oracleTaskId,
@@ -15,8 +17,12 @@ import {
   persistEvidenceBundle,
   runOracleAndPersist,
   scoreOracleTarget,
+  scoreTestImpactRun,
+  TEST_IMPACT_LABEL,
+  testImpactTaskId,
   type MultiGoldScoreInput,
   type OracleScoreInput,
+  type TestImpactScoreInput,
 } from "./oracle-runner";
 
 // Three targets mirroring fixtures/benchmark/express (lib/application.js has an empty gold
@@ -272,6 +278,122 @@ describe("buildOracleManifestsByGold (two-gold, decision (a)+(b))", () => {
   test("byte-for-byte reproducible per gold kind", () => {
     const a = buildOracleManifestsByGold(INPUTS);
     const b = buildOracleManifestsByGold(INPUTS);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+});
+
+describe("testing / TIA oracle (system test-impact vs coverage-derived gold)", () => {
+  // Mirrors the real keryx dogfood slice (fixtures/benchmark/keryx): a per-test coverage
+  // map, from which goldTestImpact derives the impacted-test gold for each changed file,
+  // scored against the `keryx test related` naming+import heuristic system output.
+  const COVERAGE: CoverageMap = {
+    "src/metrics/gold.test.ts": ["src/metrics/gold.ts"],
+    "src/metrics/ir.test.ts": ["src/metrics/ir.ts"],
+    "src/metrics/oracle-runner.test.ts": [
+      "src/metrics/benchmark.ts",
+      "src/metrics/gold.ts",
+      "src/metrics/ir.ts",
+      "src/metrics/oracle-runner.ts",
+    ],
+    "src/metrics/service.test.ts": ["src/metrics/benchmark.ts"],
+  };
+  // System output = `keryx test related <changedFile>` per target (naming + direct-import).
+  const SYSTEM: Record<string, string[]> = {
+    "src/metrics/benchmark.ts": ["src/metrics/oracle-runner.test.ts"],
+    "src/metrics/gold.ts": ["src/metrics/gold.test.ts", "src/metrics/oracle-runner.test.ts"],
+    "src/metrics/ir.ts": ["src/metrics/ir.test.ts"],
+    "src/metrics/oracle-runner.ts": ["src/metrics/oracle-runner.test.ts"],
+  };
+  const inputsFor = (changedFiles: readonly string[]): TestImpactScoreInput[] =>
+    changedFiles.map((changedFile) => ({
+      changedFile,
+      system: SYSTEM[changedFile] ?? [],
+      gold: goldTestImpact(COVERAGE, [changedFile]),
+    }));
+
+  test("perfect case: system == coverage-derived gold => precision/recall/f1 all 1", () => {
+    // gold.ts is covered only by gold.test.ts, which is exactly what the heuristic finds.
+    const run = scoreTestImpactRun(inputsFor(["src/metrics/gold.ts"])[0]!);
+    expect(run.oracle?.precision?.value).toBe(1);
+    expect(run.oracle?.recall?.value).toBe(1);
+    expect(run.oracle?.f1?.value).toBe(1);
+    expect(run.oracle?.precision?.reliability).toBe("exact");
+  });
+
+  test("recall gap: heuristic misses a transitively-covering test", () => {
+    // ir.ts is covered by ir.test.ts AND oracle-runner.test.ts (which imports oracle-runner,
+    // not ir, so `test related` misses it): precision 1, recall 0.5, f1 ~0.667.
+    const run = scoreTestImpactRun(inputsFor(["src/metrics/ir.ts"])[0]!);
+    expect(run.oracle?.precision?.value).toBe(1);
+    expect(run.oracle?.recall?.value).toBe(0.5);
+    expect(run.oracle?.f1?.value).toBeCloseTo(2 / 3, 10);
+  });
+
+  test("zero case: system finds a test the coverage gold does not include", () => {
+    const run = scoreTestImpactRun({
+      changedFile: "src/metrics/orphan.ts",
+      system: ["src/metrics/wrong.test.ts"],
+      gold: goldTestImpact(COVERAGE, ["src/metrics/orphan.ts"]), // no coverage => empty gold
+    });
+    // Empty gold => recall vacuously 1 (ir.ts convention), but the spurious system id is a
+    // false positive so precision is 0.
+    expect(run.oracle?.recall?.value).toBe(1);
+    expect(run.oracle?.precision?.value).toBe(0);
+  });
+
+  test("task ids carry the test-impact namespace and metric source carries the layer label", () => {
+    const run = scoreTestImpactRun(inputsFor(["src/metrics/ir.ts"])[0]!);
+    expect(run.task_id).toBe(testImpactTaskId("src/metrics/ir.ts"));
+    expect(run.task_id).toContain("metastore:test-impact:");
+    expect(run.oracle?.precision?.source).toContain(`layer=testing: ${TEST_IMPACT_LABEL}`);
+  });
+
+  test("emitted manifest is a valid metastore paired-3-5-v2 manifest", () => {
+    const manifest = buildTestImpactManifest(
+      inputsFor([
+        "src/metrics/benchmark.ts",
+        "src/metrics/gold.ts",
+        "src/metrics/ir.ts",
+        "src/metrics/oracle-runner.ts",
+      ]),
+    );
+    const result = validatePairedBenchmark(manifest);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+    expect(manifest.ladder).toBe("metastore");
+    expect(manifest.runs).toHaveLength(4);
+    for (const run of manifest.runs) {
+      expect(run.caseKind).toBe("deterministic");
+      expect(run.variant).toBe("baseline");
+      expect(run.seeds).toEqual([1]);
+    }
+  });
+
+  test("full-slice numbers match the committed dogfood result (precision 1; recall 1/1/0.5/0.5)", () => {
+    const manifest = buildTestImpactManifest(
+      inputsFor([
+        "src/metrics/benchmark.ts",
+        "src/metrics/gold.ts",
+        "src/metrics/ir.ts",
+        "src/metrics/oracle-runner.ts",
+      ]),
+    );
+    const byId = new Map(manifest.runs.map((run) => [run.task_id, run]));
+    const recall = (f: string): number | null | undefined =>
+      byId.get(testImpactTaskId(f))?.oracle?.recall?.value;
+    const precision = (f: string): number | null | undefined =>
+      byId.get(testImpactTaskId(f))?.oracle?.precision?.value;
+    for (const f of Object.keys(SYSTEM)) expect(precision(f)).toBe(1);
+    expect(recall("src/metrics/gold.ts")).toBe(1);
+    expect(recall("src/metrics/oracle-runner.ts")).toBe(1);
+    expect(recall("src/metrics/ir.ts")).toBe(0.5);
+    expect(recall("src/metrics/benchmark.ts")).toBe(0.5);
+  });
+
+  test("byte-for-byte reproducible", () => {
+    const files = ["src/metrics/benchmark.ts", "src/metrics/gold.ts", "src/metrics/ir.ts"];
+    const a = buildTestImpactManifest(inputsFor(files));
+    const b = buildTestImpactManifest(inputsFor(files));
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

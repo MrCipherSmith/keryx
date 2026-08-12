@@ -327,6 +327,99 @@ export function buildOracleManifestsByGold(
 }
 
 // ---------------------------------------------------------------------------
+// Testing / TIA oracle (metrics-and-validation.md "testing" row; specification.md §1.1).
+// Score a SYSTEM test-impact set — the test ids `keryx test related <file>` (naming +
+// import heuristic) or the coverage-map TIA emit for a changed file, parsed into an id
+// set — against the GOLD impacted-test set derived from a REAL coverage map via
+// goldTestImpact (src/metrics/gold.ts: a test is gold-impacted iff its covered-files set
+// intersects the changed files). Emits precision/recall/f1 in a labeled paired-3-5-v2
+// manifest for ladder "metastore", layer "testing".
+//
+// This is a SEPARATE oracle from the gdgraph one above: different task-id namespace
+// (metastore:test-impact:*), different metric source label, and it is NEVER averaged with
+// the gdgraph co-change / dependency numbers. Reliability is `exact` — the gold is
+// coverage-derived impact (metrics-and-validation.md reliability ladder: "coverage-derived
+// impact" is measured directly).
+// ---------------------------------------------------------------------------
+
+/** Human-facing label carried on every emitted testing-oracle metric. */
+export const TEST_IMPACT_LABEL = "test-impact analysis";
+
+// The metric `source` records HOW the system set was produced and WHICH gold it was
+// scored against, so a reader can never confuse it with the gdgraph affected-set oracle.
+const TEST_IMPACT_SOURCE =
+  "keryx test related <file> / coverage-map TIA vs coverage-derived impacted-test gold (goldTestImpact)";
+const TEST_IMPACT_MODEL = "keryx-test-related";
+
+/** One changed file's system test-impact set scored against its gold impacted-test set. */
+export type TestImpactScoreInput = {
+  /** The changed source file whose impacted tests are predicted, e.g. "src/metrics/ir.ts". */
+  readonly changedFile: string;
+  /** System output: the impacted-test id set the tool produced (deduped internally). */
+  readonly system: readonly string[];
+  /** Gold: coverage-derived impacted-test id set (goldTestImpact), deduped internally. */
+  readonly gold: readonly string[];
+};
+
+/** Stable, collision-free task id for a testing-oracle target, distinct from the gdgraph one. */
+export function testImpactTaskId(changedFile: string): string {
+  return `metastore:test-impact:${changedFile}`;
+}
+
+/** Score one changed file's system test-impact set against its gold and build a labeled run. */
+export function scoreTestImpactRun(
+  input: TestImpactScoreInput,
+  options: OracleManifestOptions = {},
+): PairedBenchmarkRunV2 {
+  const score = scoreOracleTarget({ target: input.changedFile, system: input.system, gold: input.gold });
+  const taskId = testImpactTaskId(input.changedFile);
+  const source = `${TEST_IMPACT_SOURCE} [layer=testing: ${TEST_IMPACT_LABEL}]`;
+  const rates = oracleRates(score);
+  return {
+    task_id: taskId,
+    variant: "baseline",
+    run_id: `${taskId}#1`,
+    ladder: options.ladder ?? "metastore",
+    model: options.model ?? TEST_IMPACT_MODEL,
+    cacheState: options.cacheState ?? "unknown",
+    leakageAssertion: options.leakageAssertion ?? "not-applicable",
+    caseKind: "deterministic",
+    tokenCap: null,
+    seeds: [1],
+    quality: "measured",
+    oracle: {
+      precision: measuredValue(score.precision, source),
+      recall: measuredValue(score.recall, source),
+      f1: measuredValue(score.f1, source),
+    },
+    ...(rates ? { rates } : {}),
+    human_interventions: null,
+  };
+}
+
+/**
+ * Assemble a `paired-3-5-v2` manifest for the metastore ladder's testing/TIA layer from
+ * per-changed-file scores. Requires 3-5 changed files (the protocol's task-count bound);
+ * the returned manifest is designed to pass validatePairedBenchmark — every oracle metric
+ * is measured (`exact`), each rate carries its Wilson CI, and no speed claim is made.
+ */
+export function buildTestImpactManifest(
+  inputs: readonly TestImpactScoreInput[],
+  options: OracleManifestOptions = {},
+): PairedBenchmarkManifestV2 {
+  const ladder = options.ladder ?? "metastore";
+  const runs = inputs.map((input) => scoreTestImpactRun(input, options));
+  const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
+  return {
+    protocol: "paired-3-5-v2",
+    ladder,
+    task_ids: taskIds,
+    runs,
+    speedClaim: { claimed: false },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Evidence bundle (spec §5.1) — the on-disk audit trail for each scored target.
 // ---------------------------------------------------------------------------
 

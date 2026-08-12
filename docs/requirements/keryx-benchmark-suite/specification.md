@@ -29,7 +29,13 @@ Two independent sub-methods, both reported:
     nDCG, recall@k, and a groundedness check (does the cited passage support the
     claim).
   - `testing` test-impact (`test related` / TIA) → gold impacted-test set derived
-    from coverage / the tests that actually changed. Metrics: precision, recall.
+    from a real coverage map via `goldTestImpact` (a test is impacted iff it covers a
+    changed file). Metrics: precision, recall, F1. **Landed** as a separate metastore
+    layer (`keryx metrics benchmark run --ladder metastore --layer testing`; scorer
+    `src/metrics/oracle-runner.ts` `buildTestImpactManifest`, never averaged with the
+    gdgraph oracle). The coverage gold is dogfooded on a bounded keryx slice via
+    `scripts/benchmark/run-testing-oracle.ts` (real `bun --coverage` per test file); see
+    [metrics-and-validation](metrics-and-validation.md#metastore-ladder).
   - `memory` recall → gold "which past decision applies" for a curated task.
     Metrics: recall@k.
   - `gdctx` compaction → lossless-fidelity check: the compact form must preserve

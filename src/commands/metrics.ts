@@ -21,12 +21,16 @@ import {
 import {
   buildEvidenceBundle,
   buildOracleManifestsByGold,
+  buildTestImpactManifest,
   GOLD_KIND_LABELS,
   persistEvidenceBundle,
+  TEST_IMPACT_LABEL,
   type GoldKind,
   type MultiGoldScoreInput,
   type NamedGold,
+  type TestImpactScoreInput,
 } from "../metrics/oracle-runner";
+import { goldTestImpact, type CoverageMap } from "../metrics/gold";
 
 export async function metricsCommand(
   args: string[] = [],
@@ -191,11 +195,14 @@ const GOLD_KIND_DEFAULT_PATH: Record<GoldKind, string> = {
 };
 const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
 
-// Run the metastore ORACLE scorer against ONE OR BOTH golds (co-change + dependency),
-// reported separately and never averaged. Loads the system affected-set plus the requested
-// gold(s), scores every target present in both, prints a labeled paired-3-5-v2 manifest per
-// gold kind, validates each, optionally persists evidence bundles, and exits non-zero if any
-// manifest is invalid. Select golds with `--gold co-change|dependency|all` (default all).
+// Run the metastore ORACLE scorers, one labeled paired-3-5-v2 manifest per layer/gold,
+// reported separately and never averaged. Select layers with
+// `--layer gdgraph|testing|all` (default all):
+//   - gdgraph: the affected-set oracle vs the co-change + dependency golds (see
+//     `--gold co-change|dependency|all`, default all).
+//   - testing: the test-impact/TIA oracle — `keryx test related` / coverage-map TIA output
+//     scored against the coverage-derived impacted-test gold (goldTestImpact).
+// Prints + validates every manifest and exits non-zero if any manifest is invalid.
 async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
   const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
   if (ladder !== "metastore") {
@@ -204,11 +211,33 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
     return;
   }
 
+  const layer = (optionValue(args, "--layer") ?? "all").trim();
+  if (layer !== "all" && layer !== "gdgraph" && layer !== "testing") {
+    console.error(
+      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|all] " +
+        "[--gold co-change|dependency|all]",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  let allValid = true;
+  if (layer === "all" || layer === "gdgraph") {
+    allValid = (await runGdgraphLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "testing") {
+    allValid = (await runTestingLayer(projectRoot, args, ladder)) && allValid;
+  }
+  process.exitCode = allValid ? 0 : 1;
+}
+
+// gdgraph affected-set oracle vs the co-change + dependency golds (reported separately,
+// never averaged). Returns whether every emitted manifest validated.
+async function runGdgraphLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
   const selector = (optionValue(args, "--gold") ?? "all").trim();
   if (selector !== "all" && selector !== "co-change" && selector !== "dependency") {
     console.error("Usage: keryx metrics benchmark run --ladder metastore [--gold co-change|dependency|all]");
-    process.exitCode = 1;
-    return;
+    return false;
   }
   const kinds: GoldKind[] = selector === "all" ? [...GOLD_KIND_ORDER] : [selector];
 
@@ -224,8 +253,7 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
     for (const kind of kinds) goldMaps.set(kind, await loadAffectedSets(projectRoot, goldPathFor(kind)));
   } catch (error) {
     console.error(`Failed to load affected-set files: ${(error as Error).message}`);
-    process.exitCode = 1;
-    return;
+    return false;
   }
 
   // For each target the system produced an output for, attach every requested gold that
@@ -244,8 +272,7 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
 
   if (inputs.length === 0) {
     console.error("No overlapping targets between gold and system affected-set files");
-    process.exitCode = 1;
-    return;
+    return false;
   }
 
   const manifests = buildOracleManifestsByGold(inputs, { ladder });
@@ -280,7 +307,63 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
     for (const err of result.errors) console.error(`- ${err}`);
     if (!result.valid) allValid = false;
   }
-  process.exitCode = allValid ? 0 : 1;
+  return allValid;
+}
+
+/** A coverage-map fixture: `{ coverageMap: { <testId>: [<coveredFile>] } }` plus metadata. */
+type CoverageMapFile = { coverageMap?: Record<string, string[]> };
+
+// Load the coverage-map fixture and return the bare test-id -> covered-files map
+// (the src/metrics/gold.ts CoverageMap shape) that goldTestImpact consumes.
+async function loadCoverageMap(projectRoot: string, file: string): Promise<CoverageMap> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as CoverageMapFile;
+  return raw.coverageMap ?? {};
+}
+
+// Testing / TIA oracle: score the SYSTEM test-impact set (`keryx test related` /
+// coverage-map TIA output) against the coverage-derived GOLD impacted-test set
+// (goldTestImpact over the coverage map) for each changed file. Prints one labeled
+// paired-3-5-v2 manifest, validates it, and returns whether it validated. The two inputs
+// are: the system output (`--testing-system`, a `{ targets:[{target, affected}] }` file)
+// and the coverage map (`--coverage-map`); the gold is DERIVED at runtime from the
+// coverage map so it is reproducible from its pinned input (never hand-copied).
+async function runTestingLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const systemPath = optionValue(args, "--testing-system") ?? "fixtures/benchmark/keryx/test-related.json";
+  const coverageMapPath = optionValue(args, "--coverage-map") ?? "fixtures/benchmark/keryx/coverage-map.json";
+
+  let system: Map<string, string[]>;
+  let coverageMap: CoverageMap;
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    coverageMap = await loadCoverageMap(projectRoot, coverageMapPath);
+  } catch (error) {
+    console.error(`Failed to load testing oracle inputs: ${(error as Error).message}`);
+    return false;
+  }
+
+  // Each changed file the system produced an output for is a scored target; its gold is
+  // the coverage-derived impacted-test set for that one changed file.
+  const inputs: TestImpactScoreInput[] = [];
+  for (const changedFile of [...system.keys()].sort()) {
+    inputs.push({
+      changedFile,
+      system: system.get(changedFile) ?? [],
+      gold: goldTestImpact(coverageMap, [changedFile]),
+    });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No changed files in the testing system-output file");
+    return false;
+  }
+
+  const manifest = buildTestImpactManifest(inputs, { ladder });
+  console.log(`# layer: testing (${TEST_IMPACT_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: testing (${TEST_IMPACT_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
 }
 
 async function collect(projectRoot: string, args: string[]): Promise<void> {
@@ -328,6 +411,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
-  keryx metrics benchmark run --ladder metastore [--gold co-change|dependency|all] [--system <path>] [--out <dir>]
+  keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|all] [--gold co-change|dependency|all] [--system <path>] [--testing-system <path>] [--coverage-map <path>] [--out <dir>]
 `);
 }
