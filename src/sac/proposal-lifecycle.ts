@@ -216,7 +216,7 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
 type OwnerWriterComposition = Readonly<{
   authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
   /** Durable receipt lookup owned by the target subsystem. */
-  recover?: (intent: OwnerWriteIntent & { owner: TargetOwner }) => Promise<OwnerReceipt | undefined>;
+  recover: (intent: OwnerWriteIntent & { owner: TargetOwner }) => Promise<OwnerReceipt | undefined>;
   persist: OwnerWriteAdapter;
 }>;
 export function createWikiGuardedTargetWriter(input: OwnerWriterComposition): GuardedTargetWriter { return createGuardedOwnerWriter({ owner: "wiki", ...input }); }
@@ -232,10 +232,11 @@ export function createSkillGuardedTargetWriter(input: OwnerWriterComposition): G
 export function createLocalOwnerWriterAdapters(): Record<TargetOwner, GuardedTargetWriter> {
   const unavailable = async (): Promise<{ ok: false; code: string }> => ({ ok: false, code: "owner_writer_unavailable" });
   const denied = async (): Promise<boolean> => false;
+  const noReceipt = async (): Promise<OwnerReceipt | undefined> => undefined;
   return Object.freeze({
-    wiki: createWikiGuardedTargetWriter({ authorize: denied, persist: unavailable }),
-    memory: createMemoryGuardedTargetWriter({ authorize: denied, persist: unavailable }),
-    skill: createSkillGuardedTargetWriter({ authorize: denied, persist: unavailable }),
+    wiki: createWikiGuardedTargetWriter({ authorize: denied, recover: noReceipt, persist: unavailable }),
+    memory: createMemoryGuardedTargetWriter({ authorize: denied, recover: noReceipt, persist: unavailable }),
+    skill: createSkillGuardedTargetWriter({ authorize: denied, recover: noReceipt, persist: unavailable }),
   });
 }
 

@@ -18,6 +18,7 @@ test("owner writer derives a receipt structurally bound to the immutable intent"
   const writer = createGuardedOwnerWriter({
     owner: "wiki",
     authorize: async (received) => received.reviewerAuthority === "editor",
+    recover: async () => undefined,
     persist: async () => { mutations += 1; return { receiptRef: "./receipts/wiki-a.json", targetRef: "./wiki/a.md", completedAt: "2026-08-12T00:00:00.000Z" }; },
   });
   const result = await writer.write(intent);
@@ -30,7 +31,7 @@ test("owner writer derives a receipt structurally bound to the immutable intent"
 
 test("denied owner authority prevents target mutation", async () => {
   let mutations = 0;
-  const writer = createGuardedOwnerWriter({ owner: "memory", authorize: async () => false, persist: async () => { mutations += 1; return { receiptRef: "./receipts/a", targetRef: "./memory/a.md", completedAt: "2026-08-12T00:00:00.000Z" }; } });
+  const writer = createGuardedOwnerWriter({ owner: "memory", authorize: async () => false, recover: async () => undefined, persist: async () => { mutations += 1; return { receiptRef: "./receipts/a", targetRef: "./memory/a.md", completedAt: "2026-08-12T00:00:00.000Z" }; } });
   await expect(writer.write(intent)).resolves.toEqual({ ok: false, code: "owner_write_denied" });
   expect(mutations).toBe(0);
 });

@@ -77,7 +77,7 @@ target-write receipt. The accepted event retains the full receipt binding
 (intent, proposal/revision/workspace, correlation/idempotency, reviewer
 authority and policy revision), not a derived hash alone. The decision, intent
 and write receipt must share their correlation ID. Recovery asks the owner for
-its durable receipt by the persisted key before any mutation, so a crash between
+its mandatory durable receipt lookup by the persisted key before any mutation, so a crash between
 owner write and SAC receipt persistence cannot duplicate a mutation.
 A retry with the same key returns the original terminal result; a different key
 after a terminal result is rejected. A target-write failure appends a

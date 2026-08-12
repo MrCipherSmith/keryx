@@ -46,7 +46,7 @@ export function createGuardedOwnerWriter(input: {
    * Owner-owned durable lookup. It must consult the owner's transaction/receipt
    * store by intentRef/idempotencyKey before any new mutation is attempted.
    */
-  recover?: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
+  recover: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
   persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | { ok: false; code: string }>;
 }): GuardedOwnerWriter {
   return Object.freeze({
@@ -57,7 +57,7 @@ export function createGuardedOwnerWriter(input: {
       // Recovery is deliberately owned by Wiki/Memory/Skills, rather than a
       // SAC write-result cache. A crash after owner commit is therefore safe:
       // the retry obtains the original owner receipt and never invokes mutate.
-      const recovered = await input.recover?.(boundIntent);
+      const recovered = await input.recover(boundIntent);
       const persisted = recovered ?? await input.persist(boundIntent);
       if ("ok" in persisted && persisted.ok === false) return persisted;
       const receipt = persisted as OwnerReceipt;
