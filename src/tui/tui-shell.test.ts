@@ -27,6 +27,7 @@ import {
   onKeypress,
   pickShellApproval,
   selectBoxHeight,
+  filterConnectedDetectedProviders,
   shortenCwd,
   type BlockSink,
 } from "./tui-shell";
@@ -47,6 +48,7 @@ import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedEvent, ProviderDescription } from "../harness/provider/types";
+import type { DetectedProvider } from "../commands/select";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -120,6 +122,25 @@ function scriptedProvider(scripts: Partial<NormalizedEvent>[][]): AgentDeps["pro
       })();
     },
   };
+}
+
+function jsonResponse(data: unknown, ok = true, status = ok ? 200 : 400): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function createMockFetch(
+  impl: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => Promise<Response>,
+): typeof fetch {
+  const mocked: typeof fetch = Object.assign(
+    (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => impl(input, init),
+    {
+      preconnect: async () => {},
+    },
+  );
+  return mocked;
 }
 
 let idCounter = 0;
@@ -277,6 +298,55 @@ test("selectBoxHeight: described items need 2 rows each so all stay visible (flo
   // Never returns 0 rows for an empty list.
   expect(selectBoxHeight(0, true)).toBe(2);
   expect(selectBoxHeight(0, false)).toBe(1);
+});
+
+test("filterConnectedDetectedProviders: keeps only providers with valid, successful credentials", async () => {
+  const detected: DetectedProvider[] = [
+    { name: "deepseek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY", baseUrl: "https://api.deepseek.com" },
+    { name: "rapid-mlx", models: ["qwen3.5-9b-4bit"], baseUrl: "http://127.0.0.1:8010" },
+    { name: "openrouter", models: ["openai/gpt-4o-mini"], envKey: "OPENROUTER_API_KEY", baseUrl: "https://openrouter.ai/api" },
+  ];
+
+  const connected = await filterConnectedDetectedProviders(detected, {
+    env: { DEEPSEEK_API_KEY: "good", OPENROUTER_API_KEY: "also-good" },
+    fetch: createMockFetch((input) => {
+      const hasDeepseek = `${input}`.includes("deepseek");
+      const liveModels = hasDeepseek ? ["deepseek-reasoner"] : ["openrouter/gpt-4o"];
+      return Promise.resolve(jsonResponse({ data: liveModels.map((id) => ({ id })) }));
+    }),
+  });
+
+  expect(connected.map((provider) => provider.name).sort()).toEqual(["deepseek", "openrouter", "rapid-mlx"]);
+});
+
+test("filterConnectedDetectedProviders: excludes key-required providers when key is missing", async () => {
+  const detected: DetectedProvider[] = [
+    { name: "deepseek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY", baseUrl: "https://api.deepseek.com" },
+  ];
+
+  const connected = await filterConnectedDetectedProviders(detected, {
+    env: {},
+    fetch: createMockFetch(() => {
+      return Promise.resolve(jsonResponse({ data: [{ id: "deepseek-chat" }] }));
+    }),
+  });
+
+  expect(connected).toEqual([]);
+});
+
+test("filterConnectedDetectedProviders: excludes key-required providers when live models fail", async () => {
+  const detected: DetectedProvider[] = [
+    { name: "deepseek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY", baseUrl: "https://api.deepseek.com" },
+  ];
+
+  const connected = await filterConnectedDetectedProviders(detected, {
+    env: { DEEPSEEK_API_KEY: "bad" },
+    fetch: createMockFetch(() => {
+      return Promise.resolve(jsonResponse({ error: "invalid key" }, false, 401));
+    }),
+  });
+
+  expect(connected).toEqual([]);
 });
 
 // --- gap G-2: the working directory is visible on the default surface --------

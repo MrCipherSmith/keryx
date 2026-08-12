@@ -79,30 +79,20 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     description: "Switch provider / API key",
     modes: BOTH,
     modeDescriptions: {
-      agent: "Switch connected provider (interactive picker)",
+      agent: "Connect to an already configured provider (interactive picker)",
       chat: "Show how to set a provider API key in the environment",
     },
   },
   {
     name: "/provider",
     description: "Switch provider — /provider <name>, or no arg to re-select",
-    // Agent mode uses the same provider → API-key → model picker as `/connect`.
+    // Agent mode uses the configuration picker: provider → API-key → model.
     // Keep `/provider` available there too: it is the discoverable, conventional
     // command users expect when changing the active provider mid-session.
     modes: BOTH,
     modeDescriptions: {
-      agent: "Add or configure a provider (interactive picker)",
+      agent: "Switch provider / API key (interactive picker)",
     },
-  },
-  {
-    name: "/search-provider",
-    description: "Configure or edit a web search provider",
-    modes: AGENT_ONLY,
-  },
-  {
-    name: "/search-connect",
-    description: "Select an active tested web search provider",
-    modes: AGENT_ONLY,
   },
   { name: "/think", description: "Expand the last reasoning block", modes: AGENT_ONLY },
   { name: "/expand", description: "Expand the last tool output block", modes: AGENT_ONLY },

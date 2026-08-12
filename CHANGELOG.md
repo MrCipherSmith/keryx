@@ -5,6 +5,15 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.29] — 2026-08-12
+
+### Changed
+
+- **Split `/connect` and `/provider` semantics in agent TUI.** `/connect` now
+  selects only already-configured providers (with required keys and successful live
+  `/models` checks). `/provider` remains the configuration command for provider
+  credentials and model setup.
+
 ## [0.2.28] — 2026-08-12
 
 ### Fixed
