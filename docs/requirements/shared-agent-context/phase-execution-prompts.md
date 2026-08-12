@@ -2,7 +2,7 @@
 
 This file preserves the approved prompts for executing the Shared Agent Context
 implementation roadmap. Each phase is a separate managed Flow. Phases 1–5 run
-in a worktree created from `feat/shared-agent-context`; Phase 5 is optional and
+in a worktree created from `main`; Phase 5 is optional and
 may start only after Phases 1–4 are complete.
 
 ## 1. Foundation
@@ -32,7 +32,7 @@ Implement against:
 
 ## 2. Offline registry
 
-Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Create a worktree from `main`. Run `flow-orchestrator` for
 Shared Agent Context — Phase 1: Offline workspace registry.
 
 ### Scope
@@ -59,7 +59,7 @@ delete the worktree.
 
 ## 3. FWK read path
 
-Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Create a worktree from `main`. Run `flow-orchestrator` for
 Shared Agent Context — Phase 2: FWK read path.
 
 ### Scope
@@ -87,7 +87,7 @@ delete the worktree.
 
 ## 4. Proposal and review lifecycle
 
-Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Create a worktree from `main`. Run `flow-orchestrator` for
 Shared Agent Context — Phase 3: Proposal and review lifecycle.
 
 ### Scope
@@ -113,7 +113,7 @@ delete the worktree.
 
 ## 5. Collaboration ergonomics
 
-Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Create a worktree from `main`. Run `flow-orchestrator` for
 Shared Agent Context — Phase 4: Collaboration ergonomics.
 
 ### Scope
@@ -137,7 +137,7 @@ delete the worktree.
 
 ## 6. Policy experiment — optional, only after 1–5
 
-Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Create a worktree from `main`. Run `flow-orchestrator` for
 Shared Agent Context — Phase 5: Opt-in policy experiment.
 
 ### Scope
@@ -163,7 +163,7 @@ delete the worktree.
 
 ## 7. Production guard and real opt-in readiness
 
-Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Create a worktree from `main`. Run `flow-orchestrator` for
 Shared Agent Context — Production guard and real opt-in data readiness.
 
 ### Scope

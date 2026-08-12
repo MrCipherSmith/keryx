@@ -13,9 +13,9 @@ Version: 1.4.0
 `implemented` (механизмы 0–5), плюс фаза 6, разбитая на две части: **6a** —
 runtime-guard opt-in (`resolvePolicySelection`), реализована и проверена
 (AC1–AC6, вся SAC-сюита 88/88 зелёная); **6b** — операторский процесс готовности
-для реальных данных, в плане. Фазы 0–5 влиты в `feat/shared-agent-context`;
-дальнейший операционный rollout (6b) остаётся в плане. Точный статус, evidence и
-список временно сохранённых веток приведены в [Implementation plan](implementation-plan.md).
+для реальных данных, в плане. Фазы 0–5 и 6a влиты в `main` и выпущены в `v0.2.32`;
+дальнейший операционный rollout (6b) остаётся в плане. Точный статус и evidence
+приведены в [Implementation plan](implementation-plan.md).
 
 Важно: Phase 5 (policy experiment) сейчас подтверждает корректность механизма на
 synthetic offline evidence и по умолчанию не включает production эффектов.
