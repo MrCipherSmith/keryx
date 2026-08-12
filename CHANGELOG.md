@@ -4,6 +4,7 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
+## [0.2.33] — 2026-08-13
 
 ### Added
 
