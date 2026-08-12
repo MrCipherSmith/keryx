@@ -39,6 +39,7 @@ import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
 import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
 import { createDefaultSearchProviderController } from "../harness/search";
+import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
@@ -121,6 +122,8 @@ const HELP_TEXT = [
 const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/help",
   "/expand",
+  "/search-provider",
+  "/search-connect",
   "/new",
   "/clear",
   "/compact",
@@ -686,6 +689,40 @@ function turnSeparator(): string {
   return style.dim("─".repeat(24));
 }
 
+type SearchProviderConfigInput = {
+  providerId: string | undefined;
+  fields: Record<string, string>;
+  credential: string | undefined;
+};
+
+function parseSearchProviderArgs(tokens: string[]): SearchProviderConfigInput {
+  const [providerId, ...tail] = tokens;
+  const fields: Record<string, string> = {};
+  let credential: string | undefined;
+  for (const token of tail) {
+    const splitAt = token.indexOf("=");
+    if (splitAt <= 0) {
+      continue;
+    }
+    const key = token.slice(0, splitAt).trim();
+    const value = token.slice(splitAt + 1).trim();
+    if (key === "key" || key === "credential" || key === "token" || key === "apiKey") {
+      credential = value;
+      continue;
+    }
+    fields[key] = value;
+  }
+  return { providerId, fields, credential };
+}
+
+function describeSearchProviders(
+  title: string,
+  providers: readonly SearchProviderDescriptor[],
+): string {
+  const rows = providers.map((provider) => `${provider.id} (${provider.displayName})`);
+  return `${title}\n${rows.length > 0 ? rows.join("\n") : "  (none configured)"}\n`;
+}
+
 /** A dim `↑in ↓out tokens` summary, or "" when the provider reported nothing. */
 function formatUsage(usage: NormalizedUsage | undefined): string {
   if (usage === undefined) {
@@ -744,6 +781,7 @@ async function runAgentRepl(
       out(clearLine);
     }
   };
+  const searchProviderController = createDefaultSearchProviderController();
 
   // A SINGLE line consumer shared by the main loop and the approval prompt, so an
   // approval read (mid-turn, while the main loop is suspended) never races it.
@@ -1031,6 +1069,67 @@ async function runAgentRepl(
             );
           }
         }
+      } else if (command === "/search-provider") {
+        const args = parseSearchProviderArgs(parts.slice(1));
+        const all = searchProviderController.configurable();
+        if (args.providerId === undefined) {
+          agentIo.onSystem?.(
+            describeSearchProviders("Search providers (use /search-provider <id> [key=...]):", all),
+          );
+          continue;
+        }
+        const descriptor = all.find((candidate) => candidate.id === args.providerId);
+        if (descriptor === undefined) {
+          agentIo.onSystem?.(
+            `Unknown provider '${args.providerId}'. Available: ${all.map((provider) => provider.id).join(", ")}\n`,
+          );
+          continue;
+        }
+        const providerId: SearchProviderId = descriptor.id;
+        searchProviderController.configure(providerId, { ...descriptor.defaults, ...args.fields }, args.credential);
+        const tested = await searchProviderController.test(providerId);
+        if (!tested.ok) {
+          const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
+          agentIo.onSystem?.(
+            `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
+          );
+          continue;
+        }
+        agentIo.onSystem?.(
+          `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
+        );
+      } else if (command === "/search-connect") {
+        const providerId = parts[1];
+        if (providerId === undefined) {
+          const selectable = searchProviderController.selectable();
+          agentIo.onSystem?.(
+            describeSearchProviders("Connected search providers (use /search-connect <id> to select):", selectable),
+          );
+          if (selectable.length === 0) {
+            agentIo.onSystem?.("No connected search providers found. Run /search-provider first.\n");
+          }
+          continue;
+        }
+        const available = searchProviderController.configurable();
+        const normalizedProviderId = available.find((candidate) => candidate.id === providerId)?.id;
+        if (normalizedProviderId === undefined) {
+          agentIo.onSystem?.(`Unknown provider '${providerId}'.\n`);
+          continue;
+        }
+        const result = await searchProviderController.select(normalizedProviderId);
+        if (!result.ok) {
+          if (result.reason === "not-configured") {
+            agentIo.onSystem?.(`Cannot select '${providerId}': provider is not configured.\n`);
+          } else if (result.reason === "not-connected") {
+            agentIo.onSystem?.(
+              `Cannot select '${providerId}': provider is not connected (run /search-provider ${providerId} <params> to test).\n`,
+            );
+          } else {
+            agentIo.onSystem?.(`Cannot select '${providerId}': ${result.reason}.\n`);
+          }
+          continue;
+        }
+        agentIo.onSystem?.(`Search provider '${providerId}' selected.\n`);
       } else {
         // `/models` / `/provider` are chat-mode commands: say so instead of
         // calling them unknown. Anything else falls back to the old message.

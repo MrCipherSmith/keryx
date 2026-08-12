@@ -17,6 +17,8 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/model",
     "/models",
     "/connect",
+    "/search-provider",
+    "/search-connect",
     "/provider",
     "/think",
     "/expand",
@@ -46,6 +48,8 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/help",
     "/model",
     "/connect",
+    "/search-provider",
+    "/search-connect",
     "/provider",
     "/think",
     "/expand",
@@ -124,6 +128,8 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/help",
     "/model",
     "/connect",
+    "/search-provider",
+    "/search-connect",
     "/provider",
     "/think",
     "/expand",
@@ -167,6 +173,8 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume"]);
   expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual(["/interrupt"]);
   expect(filterCommands("/s", "agent").map((c) => c.name)).toEqual([
+    "/search-provider",
+    "/search-connect",
     "/sessions",
   ]);
   expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
