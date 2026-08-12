@@ -1,35 +1,25 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.6.0
+Version: 1.7.0
 
 ## Delivery status
 
-As of 2026-08-12, Phases 0–5 are implemented and merged into
-`feat/shared-agent-context`. Phase 6 is split into **6a** — the runtime
+As of 2026-08-13, Phases 0–5 and Phase 6a are implemented and merged into
+`main`, released in `v0.2.32`. Phase 6 is split into **6a** — the runtime
 enforcement guard (`resolvePolicySelection`), implemented and verified
-(AC1–AC6, full SAC suite 88/88 green) on `feat/sac-phase6-runtime` — and
-**6b** — the real operator-data readiness process, still planned. Acceptance
-and review work for phases 0–5 and 6a is complete; the branches below are
-retained only as temporary merge history and may be deleted after the team
-confirms no further recovery is needed.
+(AC1–AC6, full SAC suite 88/88 green) — and **6b** — the real operator-data
+readiness process, still planned. All acceptance and review work for phases
+0–5 and 6a is complete; the temporary per-phase merge branches have been
+deleted now that everything is on `main`.
 
-| Phase | Status | Evidence | Branch retained for cleanup |
-| --- | --- | --- | --- |
-| 0 — Contract alignment | Implemented | Merged via PR #265; Flow completion commit `9b22203a` | No phase-specific branch remains. |
-| 1 — Offline workspace registry | Implemented | Flow review commit `75e68cd6` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase1-offline-registry` |
-| 2 — FWK read path | Implemented | `origin/feat/sac-phase2-fwk-read-path` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase2-fwk-read-path` |
-| 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
-| 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` | No phase-specific branch retained. |
-| 5 — Opt-in policy experiment | Implemented | Merged via PR #273; Flow completion commit `883581a`; [phase-5 policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
-| 6 — Opt-in readiness (6a runtime guard / 6b real-data readiness) | 6a Implemented · 6b Planned | 6a: runtime guard `resolvePolicySelection` in `src/sac/fwk-service.ts`; AC1–AC6 met; full SAC suite 88/88 green. 6b: real operator-data readiness process still planned | `feat/sac-phase6-runtime` (6a) |
-
-### Deferred branch cleanup
-
-Do not delete these branches before confirming that the merged history and
-release/recovery requirements are no longer needed. Once confirmed, delete:
-
-- `origin/feat/sac-phase1-offline-registry` — Phase 1.
-- `origin/feat/sac-phase2-fwk-read-path` — Phase 2.
-- `origin/feat/sac-phase3-proposal-lifecycle` — Phase 3.
+| Phase | Status | Evidence |
+| --- | --- | --- |
+| 0 — Contract alignment | Implemented | Merged via PR #265; Flow completion commit `9b22203a` |
+| 1 — Offline workspace registry | Implemented | Flow review commit `75e68cd6`; on `main` |
+| 2 — FWK read path | Implemented | Merged via PR #269; on `main` |
+| 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` |
+| 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` |
+| 5 — Opt-in policy experiment | Implemented | Merged via PR #273; Flow completion commit `883581a`; [phase-5 policy experiment report](phase-5-policy-experiment-report.md) |
+| 6 — Opt-in readiness (6a runtime guard / 6b real-data readiness) | 6a Implemented · 6b Planned | 6a: runtime guard `resolvePolicySelection` in `src/sac/fwk-service.ts`; AC1–AC6 met; full SAC suite 88/88 green; merged via PR #277, released in `v0.2.32`. 6b: real operator-data readiness process still planned |
 
 ## Delivery rules
 
