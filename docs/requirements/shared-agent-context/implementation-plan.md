@@ -1,5 +1,28 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.1.0
+Version: 1.3.0
+
+## Delivery status
+
+As of 2026-08-12, Phases 0–3 are implemented and merged into
+`feat/shared-agent-context`. Their acceptance and review work is complete;
+the branches below are retained only as temporary merge history and may be
+deleted after the team confirms no further recovery is needed.
+
+| Phase | Status | Evidence | Branch retained for cleanup |
+| --- | --- | --- | --- |
+| 0 — Contract alignment | Implemented | Merged via PR #265; Flow completion commit `9b22203a` | No phase-specific branch remains. |
+| 1 — Offline workspace registry | Implemented | Flow review commit `75e68cd6` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase1-offline-registry` |
+| 2 — FWK read path | Implemented | `origin/feat/sac-phase2-fwk-read-path` is an ancestor of `feat/shared-agent-context` | `origin/feat/sac-phase2-fwk-read-path` |
+| 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
+
+### Deferred branch cleanup
+
+Do not delete these branches before confirming that the merged history and
+release/recovery requirements are no longer needed. Once confirmed, delete:
+
+- `origin/feat/sac-phase1-offline-registry` — Phase 1.
+- `origin/feat/sac-phase2-fwk-read-path` — Phase 2.
+- `origin/feat/sac-phase3-proposal-lifecycle` — Phase 3.
 
 ## Delivery rules
 
@@ -8,7 +31,7 @@ fixtures, security review and health verification. No phase may claim runtime
 delivery before its tests and target-module owners accept the contracts. UI,
 remote sync and learned policy cannot bypass earlier exit gates.
 
-## Phase 0 — Contract alignment
+## Phase 0 — Contract alignment — Implemented
 
 - Confirm ownership boundaries with Context Operations, Flow, Harness, Wiki,
   Memory, MCP and Security maintainers.
@@ -24,7 +47,7 @@ remote sync and learned policy cannot bypass earlier exit gates.
 creates a parallel Flow or bypasses guarded writes; actor spoofing,
 cross-workspace, revoked-role and TOCTOU test scenarios are approved.
 
-## Phase 1 — Offline workspace registry
+## Phase 1 — Offline workspace registry — Implemented
 
 - Implement future `WorkspaceService`: manifest CRUD, atomic persistence,
   activity events, typed resources and role checks.
@@ -33,7 +56,7 @@ cross-workspace, revoked-role and TOCTOU test scenarios are approved.
 
 **Exit:** AC-1, AC-7 (mutation portion) and AC-10 pass offline.
 
-## Phase 2 — FWK read path
+## Phase 2 — FWK read path — Implemented
 
 - Implement Facts resolver, Flow-derived Work projection and accepted
   Know-how resolver through existing source facades.
@@ -48,7 +71,7 @@ receipts or derived context storage; missing mandatory context yields typed
 `context_overflow` with no successful manifest, while partial results name only
 omitted optional items.
 
-## Phase 3 — Proposal and review lifecycle
+## Phase 3 — Proposal and review lifecycle — Implemented
 
 - Implement proposal construction from explicit session/Flow wrap-up output.
 - Persist immutable `proposed` records and append-only transition events with

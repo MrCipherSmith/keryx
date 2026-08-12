@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context
-Version: 1.1.0
+Version: 1.3.0
 
 ## Назначение
 
@@ -10,8 +10,10 @@ Version: 1.1.0
 
 ## Статус
 
-`specification ready — future implementation`. Это requirements-пакет: описанные
-CLI, MCP tools, storage и runtime пока не реализованы данным пакетом.
+`partially implemented`. Фазы 0–3 реализованы и влиты в
+`feat/shared-agent-context`; дальнейшие фазы и часть описанной surface остаются
+планом. Точный статус, evidence и список временно сохранённых веток приведены
+в [Implementation plan](implementation-plan.md).
 
 ## Модель FWK
 
