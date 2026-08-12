@@ -1,12 +1,16 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.5.0
+Version: 1.6.0
 
 ## Delivery status
 
 As of 2026-08-12, Phases 0–5 are implemented and merged into
-`feat/shared-agent-context`. Their acceptance and review work is complete;
-the branches below are retained only as temporary merge history and may be
-deleted after the team confirms no further recovery is needed.
+`feat/shared-agent-context`. Phase 6 is split into **6a** — the runtime
+enforcement guard (`resolvePolicySelection`), implemented and verified
+(AC1–AC6, full SAC suite 88/88 green) on `feat/sac-phase6-runtime` — and
+**6b** — the real operator-data readiness process, still planned. Acceptance
+and review work for phases 0–5 and 6a is complete; the branches below are
+retained only as temporary merge history and may be deleted after the team
+confirms no further recovery is needed.
 
 | Phase | Status | Evidence | Branch retained for cleanup |
 | --- | --- | --- | --- |
@@ -16,7 +20,7 @@ deleted after the team confirms no further recovery is needed.
 | 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
 | 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` | No phase-specific branch retained. |
 | 5 — Opt-in policy experiment | Implemented | Merged via PR #273; Flow completion commit `883581a`; [phase-5 policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
-| 6 — Production guard and real opt-in readiness | Planned | Not started | No phase-specific branch yet |
+| 6 — Opt-in readiness (6a runtime guard / 6b real-data readiness) | 6a Implemented · 6b Planned | 6a: runtime guard `resolvePolicySelection` in `src/sac/fwk-service.ts`; AC1–AC6 met; full SAC suite 88/88 green. 6b: real operator-data readiness process still planned | `feat/sac-phase6-runtime` (6a) |
 
 ### Deferred branch cleanup
 
@@ -115,7 +119,23 @@ Implementation evidence is published in the
 committed corpus is synthetic mechanism evidence only; default configuration
 keeps the learned candidate disabled and the kill switch active.
 
-## Phase 6 — Production guard and real opt-in readiness (planned)
+## Phase 6 — Opt-in readiness (6a runtime guard / 6b real-data readiness)
+
+Full detail: [phase-6-real-opt-in-readiness.md](phase-6-real-opt-in-readiness.md).
+
+### 6a — Runtime enforcement guard — Implemented
+
+- Runtime binding `resolvePolicySelection` in `src/sac/fwk-service.ts` switches
+  from deterministic baseline to candidate policy only when explicit config pins
+  and the full fixed-order integrity chain (baseline → candidate → corpus →
+  evaluation report → deterministic activation) succeed.
+- Fail-closed to baseline on any error/mismatch; candidate off-by-default;
+  kill-switch and `rollbackPolicyExperiment` enforced; no public CLI/MCP schema
+  change.
+- **Exit (met):** AC1–AC6; evidence `src/sac/fwk-service.test.ts`; full SAC
+  suite 88/88 green.
+
+### 6b — Real operator-data readiness — Planned
 
 - Add explicit operator readiness process for non-synthetic real artifacts:
   candidate artifact, baseline artifact, policy corpus, manifest, sandbox

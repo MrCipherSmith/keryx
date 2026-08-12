@@ -300,6 +300,11 @@ Grouped by what you are trying to do, not by internal module layout.
 - **mcp** — an opt-in [Model Context Protocol](https://modelcontextprotocol.io)
   server exposing read-only module services to agents, plus one report-writing
   security scan.
+- **shared agent context** *(experimental)* — a local-first, off-by-default layer
+  for a reproducible entry into a piece of work: a bounded FWK
+  (Facts / Work / Know-how) overview, evidence-linked wrap-up proposals with owner
+  review, and a fail-closed runtime policy guard. See the
+  [Shared Agent Context guide](docs/docs/guides/shared-agent-context.md).
 
 **Run agents inside boundaries**
 
@@ -476,6 +481,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[CLI reference](docs/docs/cli-reference.md)** — the command surface: subcommands, flags and exit codes.
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
+- **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 
 Run `keryx <command> --help` for the live flag surface of any command.

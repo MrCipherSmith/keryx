@@ -4,6 +4,30 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
+## [0.2.32] — 2026-08-12
+
+### Added
+
+- **Shared Agent Context — phase-6 runtime opt-in policy guard.** The FWK read
+  path now switches from the deterministic baseline to the experimental learned
+  candidate policy only through `resolvePolicySelection`
+  (`src/sac/fwk-service.ts`): a strict, fixed-order integrity chain over explicit
+  config pins (candidate → baseline → corpus → evaluation report → deterministic
+  activation). It is fail-closed to baseline on any error, off by default, and
+  gated by a kill-switch and rollback. No public CLI or MCP schema changes; the
+  candidate is never enabled implicitly. Acceptance criteria AC1–AC6 met; full
+  SAC suite 88/88 green.
+
+### Documentation
+
+- **New docsite guide: "Shared Agent Context (experimental)"** covering the FWK
+  model, the `keryx workspace` workflow (create / add-resource / overview / read /
+  propose / review) and the phase-6 runtime opt-in config, linked from the README.
+- **SAC requirements package reconciled.** Phase 6 is documented as one phase with
+  two parts — 6a runtime enforcement guard (implemented) and 6b real operator-data
+  readiness (planned) — across the package README, implementation plan and the
+  phase-6 readiness document.
+
 ## [0.2.31] — 2026-08-12
 
 ### Changed
