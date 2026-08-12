@@ -1,4 +1,5 @@
 import { readFile, realpath } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 /**
@@ -377,6 +378,7 @@ function validateTransition(document: RecordValue, errors: SacValidationError[])
       stringMatch(binding.proposalId, idPattern, errors, "$.acceptance.targetWrite.binding.proposalId"); stringMatch(binding.proposalRevision, revisionPattern, errors, "$.acceptance.targetWrite.binding.proposalRevision"); stringMatch(binding.workspaceId, idPattern, errors, "$.acceptance.targetWrite.binding.workspaceId"); stringMatch(binding.correlationId, correlationPattern, errors, "$.acceptance.targetWrite.binding.correlationId"); stringMatch(binding.idempotencyKey, correlationPattern, errors, "$.acceptance.targetWrite.binding.idempotencyKey"); stringMatch(binding.reviewerSubject, subjectPattern, errors, "$.acceptance.targetWrite.binding.reviewerSubject"); stringMatch(binding.policyRevision, revisionPattern, errors, "$.acceptance.targetWrite.binding.policyRevision");
       if (!["owner", "editor"].includes(binding.reviewerAuthority as string)) error(errors, "schema_enum", "$.acceptance.targetWrite.binding.reviewerAuthority", "must be owner or editor");
       if (binding.intentRef !== acceptance.writeIntentRef || binding.proposalId !== document.proposalId || binding.proposalRevision !== document.proposalRevision || binding.workspaceId !== document.workspaceId || binding.correlationId !== document.correlationId || binding.idempotencyKey !== document.idempotencyKey || binding.reviewerSubject !== (isRecord(acceptance.reviewer) ? acceptance.reviewer.subject : undefined) || binding.reviewerAuthority !== (isRecord(acceptance.reviewer) ? acceptance.reviewer.authority : undefined) || binding.policyRevision !== (isRecord(acceptance.security) ? acceptance.security.policyRevision : undefined)) error(errors, "receipt_binding_mismatch", "$.acceptance.targetWrite.binding", "must bind this exact accepted transition");
+      else if (binding.bindingHash !== hashSacRecord({ owner: binding.owner, intentRef: binding.intentRef, proposalId: binding.proposalId, proposalRevision: binding.proposalRevision, workspaceId: binding.workspaceId, correlationId: binding.correlationId, idempotencyKey: binding.idempotencyKey, reviewerSubject: binding.reviewerSubject, reviewerAuthority: binding.reviewerAuthority, policyRevision: binding.policyRevision })) error(errors, "receipt_binding_hash_mismatch", "$.acceptance.targetWrite.binding.bindingHash", "must hash the retained owner binding");
     }
   }
   if (!Array.isArray(acceptance.evidence) || acceptance.evidence.length === 0) error(errors, "schema_min_items", "$.acceptance.evidence", "must contain evidence"); else acceptance.evidence.forEach((item, index) => { validateEvidence(item, errors, `$.acceptance.evidence[${index}]`, false); if (isRecord(acceptance.freshness)) ordered(isRecord(item) ? item.observedAt : undefined, acceptance.freshness.verifiedAt, errors, `$.acceptance.evidence[${index}].observedAt`); });
@@ -438,22 +440,31 @@ export async function validateSacContract(input: { schema: SacSchema | string; d
 
 /** Append-only proposal transition validation, including idempotency and sequencing. */
 export async function validateSacLedger(input: { events: unknown[] }): Promise<SacValidationResult> {
-  const errors: SacValidationError[] = []; const idempotency = new Map<string, string>(); const sequences = new Map<string, number>(); const timestamps = new Map<string, StrictUtcInstant>();
+  const errors: SacValidationError[] = []; const idempotency = new Map<string, string>(); const sequences = new Map<string, number>(); const timestamps = new Map<string, StrictUtcInstant>(); const priorHashes = new Map<string, string>();
   for (const [index, value] of input.events.entries()) {
     const result = await validateSacContract({ schema: "workspace-proposal", document: value });
     errors.push(...result.errors.map((entry) => ({ ...entry, path: `$.events[${index}]${entry.path.slice(1)}` })));
     if (!isRecord(value) || (value.recordType !== "proposal-transition" && value.recordType !== "proposal-write-intent")) continue;
-    const stream = `${value.workspaceId}:${value.proposalId}`; const key = `${stream}:${value.idempotencyKey}`; const fingerprint = JSON.stringify(value);
+    const stream = `${value.workspaceId}:${value.proposalId}`;
+    // A pending write-intent and its terminal transition intentionally share
+    // the owner idempotency key. Replay detection is per record class so that
+    // causal pair is valid while a second intent or terminal stays forbidden.
+    const key = `${stream}:${value.recordType}:${value.idempotencyKey}`; const fingerprint = JSON.stringify(value);
     if (idempotency.has(key)) error(errors, "idempotency_replay", `$.events[${index}].idempotencyKey`, idempotency.get(key) === fingerprint ? "duplicate delivery" : "conflicting replay"); else idempotency.set(key, fingerprint);
     const expected = (sequences.get(stream) ?? 0) + 1;
     if (value.sequence !== expected) error(errors, "invalid_ledger_sequence", `$.events[${index}].sequence`, "must be the next sequence in its proposal stream");
+    const expectedPriorHash = priorHashes.get(stream) ?? hashSacRecord("GENESIS");
+    if (value.priorEventHash !== expectedPriorHash) error(errors, "invalid_ledger_causality", `$.events[${index}].priorEventHash`, "must hash the preceding record in its proposal stream");
     if (typeof value.sequence === "number") sequences.set(stream, value.sequence);
     const time = parseStrictRfc3339Utc(value.recordType === "proposal-write-intent" ? value.createdAt : value.occurredAt); const previous = timestamps.get(stream);
     if (previous !== undefined && time && compareStrictUtc(time, previous) < 0) error(errors, "invalid_temporal_order", `$.events[${index}].occurredAt`, "must not precede an earlier transition");
     if (time) timestamps.set(stream, time);
+    priorHashes.set(stream, hashSacRecord(value));
   }
   return { valid: errors.length === 0, errors };
 }
+
+function hashSacRecord(value: unknown): string { return createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex"); }
 
 export type WorkspaceReferenceKind = "component" | "repository" | "flow" | "wiki" | "memory" | "skill" | "evidence" | "worktree" | "code" | "test" | "health" | "artifact";
 export class SacReferenceError extends Error { readonly code = "unsafe_workspace_reference" as const; }

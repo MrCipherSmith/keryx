@@ -98,7 +98,7 @@ export class ProposalLifecycleService {
         const outcome: Terminal = input.decision === "accepted" ? (targetWrite?.ok ? "accepted" : "stale") : input.decision;
         const decision = outcome === "stale" ? undefined : await this.reviewDecision(proposal, actor, reviewerAuthority, input, outcome, targetWrite, policyRevision);
         if (decision) await this.writeImmutable(this.decisionPath(input.workspaceId, proposal.id, input.idempotencyKey), decision);
-        const event = await this.transition({ proposal, actor, input, events, outcome, ...(targetWrite ? { targetWrite } : {}), ...(intent ? { writeIntentRef: intent.intentRef } : {}), ...(targetAttempt?.freshnessVerifiedAt ? { freshnessVerifiedAt: targetAttempt.freshnessVerifiedAt } : {}), reviewerAuthority });
+        const event = await this.transition({ proposal, actor, input, records: await this.records(ledger).then((all) => all.filter((record) => record.proposalId === proposal.id)), outcome, ...(targetWrite ? { targetWrite } : {}), ...(intent ? { writeIntentRef: intent.intentRef } : {}), ...(targetAttempt?.freshnessVerifiedAt ? { freshnessVerifiedAt: targetAttempt.freshnessVerifiedAt } : {}), reviewerAuthority });
         await this.validateTransition(event);
         await appendFile(ledger, `${JSON.stringify(event)}\n`, { mode: 0o600 });
         return { event };
@@ -125,8 +125,8 @@ export class ProposalLifecycleService {
     return { freshnessVerifiedAt, result };
   }
 
-  private async transition(input: { proposal: Proposal; actor: TrustedActorContext; input: { requestCorrelationId: string; idempotencyKey: string; reason?: string }; events: Transition[]; outcome: Terminal; targetWrite?: TargetWriteResult; writeIntentRef?: string; freshnessVerifiedAt?: string; reviewerAuthority: "owner" | "editor" }): Promise<Transition> {
-    const previous = input.events.at(-1); const base: Record<string, unknown> = { schemaVersion: "1.0", recordType: "proposal-transition", eventId: `event-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalId: input.proposal.id, proposalRevision: input.proposal.proposalRevision, correlationId: input.input.requestCorrelationId, workspaceId: input.proposal.workspaceId, sequence: input.events.length + 1, priorEventHash: previous ? eventHash(previous) : hash("GENESIS"), fromStatus: "proposed", toStatus: input.outcome, occurredAt: this.timestamp(), idempotencyKey: input.input.idempotencyKey };
+  private async transition(input: { proposal: Proposal; actor: TrustedActorContext; input: { requestCorrelationId: string; idempotencyKey: string; reason?: string }; records: LedgerRecord[]; outcome: Terminal; targetWrite?: TargetWriteResult; writeIntentRef?: string; freshnessVerifiedAt?: string; reviewerAuthority: "owner" | "editor" }): Promise<Transition> {
+    const previous = input.records.at(-1); const base: Record<string, unknown> = { schemaVersion: "1.0", recordType: "proposal-transition", eventId: `event-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalId: input.proposal.id, proposalRevision: input.proposal.proposalRevision, correlationId: input.input.requestCorrelationId, workspaceId: input.proposal.workspaceId, sequence: input.records.length + 1, priorEventHash: previous ? recordHash(previous) : hash("GENESIS"), fromStatus: "proposed", toStatus: input.outcome, occurredAt: this.timestamp(), idempotencyKey: input.input.idempotencyKey };
     if (input.outcome === "accepted") {
       const write = input.targetWrite;
       if (!write?.ok) return this.transition({ ...input, outcome: "stale" });

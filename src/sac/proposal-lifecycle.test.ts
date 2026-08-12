@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { ProposalLifecycleService, createWikiGuardedTargetWriter } from "./proposal-lifecycle";
-import { createSacAuthorizationServer } from "./index";
+import { createSacAuthorizationServer, validateSacLedger } from "./index";
 import { WorkspaceService } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 
@@ -49,7 +49,9 @@ test("accepted transition requires guarded target receipt and same-key retry ret
   expect(first).toEqual(retry); expect(first.event.toStatus).toBe("accepted");
   const acceptance = (first.event as any).acceptance;
   expect(acceptance.targetWrite.binding).toMatchObject({ intentRef: acceptance.writeIntentRef, proposalId: "proposal-a", proposalRevision: "r1", workspaceId: "workspace-a", correlationId: "proposal-review-correlation-0001", idempotencyKey: "proposal-review-idempotency-0001", reviewerSubject: "user:reviewer", reviewerAuthority: "owner", policyRevision: "policy-r1" });
-  expect((await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl"), "utf8")).trim().split("\n")).toHaveLength(2);
+  const ledgerRecords = (await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  expect(ledgerRecords).toHaveLength(2); expect(ledgerRecords.map((record) => record.sequence)).toEqual([1, 2]);
+  await expect(validateSacLedger({ events: ledgerRecords })).resolves.toMatchObject({ valid: true });
 });
 
 test("crash recovery obtains a durable owner receipt without a duplicate mutation", async () => {
