@@ -1,5 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { type CoChangeCommit, goldAffectedSet, goldTestImpact, parseGitLogNameOnly } from "./gold";
+import {
+  buildImportGraph,
+  parseImportSpecifiers,
+  resolveImportSpecifier,
+} from "../../scripts/benchmark/parse-imports";
+import {
+  type CoChangeCommit,
+  type ImportGraph,
+  goldAffectedSet,
+  goldDependencyClosure,
+  goldTestImpact,
+  parseGitLogNameOnly,
+} from "./gold";
 
 describe("goldAffectedSet", () => {
   test("threshold rule: file above both minSupport and minCoChanges is gold-affected", () => {
@@ -86,6 +98,95 @@ describe("goldAffectedSet", () => {
   });
 });
 
+describe("goldDependencyClosure", () => {
+  test("linear chain: dependencies and dependents follow the transitive chain in each direction", () => {
+    // a -> b -> c -> d. Target b: dependencies = {c, d} (transitive forward), dependents = {a}.
+    const graph: ImportGraph = {
+      "a.js": ["b.js"],
+      "b.js": ["c.js"],
+      "c.js": ["d.js"],
+      "d.js": [],
+    };
+    const result = goldDependencyClosure(graph, "b.js");
+    expect(result.dependencies).toEqual(["c.js", "d.js"]);
+    expect(result.dependents).toEqual(["a.js"]);
+    expect(result.affected).toEqual(["a.js", "c.js", "d.js"]);
+    expect(result.target).toBe("b.js");
+  });
+
+  test("diamond: two independent paths converge without duplicating the shared node", () => {
+    // top imports left and right, both of which import bottom.
+    const graph: ImportGraph = {
+      "top.js": ["left.js", "right.js"],
+      "left.js": ["bottom.js"],
+      "right.js": ["bottom.js"],
+      "bottom.js": [],
+    };
+    const top = goldDependencyClosure(graph, "top.js");
+    expect(top.dependencies).toEqual(["bottom.js", "left.js", "right.js"]);
+    expect(top.dependents).toEqual([]);
+
+    const bottom = goldDependencyClosure(graph, "bottom.js");
+    expect(bottom.dependencies).toEqual([]);
+    // top reaches bottom via two paths but must appear exactly once.
+    expect(bottom.dependents).toEqual(["left.js", "right.js", "top.js"]);
+    expect(bottom.affected).toEqual(["left.js", "right.js", "top.js"]);
+  });
+
+  test("cycle: mutual imports terminate the walk instead of looping, and exclude the target itself", () => {
+    // a -> b -> c -> a (cycle). Target a's forward closure reaches b and c but never re-adds a.
+    const graph: ImportGraph = {
+      "a.js": ["b.js"],
+      "b.js": ["c.js"],
+      "c.js": ["a.js"],
+    };
+    const result = goldDependencyClosure(graph, "a.js");
+    expect(result.dependencies).toEqual(["b.js", "c.js"]);
+    expect(result.dependencies).not.toContain("a.js");
+    expect(result.dependents).toEqual(["b.js", "c.js"]);
+    expect(result.dependents).not.toContain("a.js");
+  });
+
+  test("isolated node: no edges in or out yields empty dependencies, dependents, and affected", () => {
+    const graph: ImportGraph = {
+      "lonely.js": [],
+      "other.js": ["another.js"],
+      "another.js": [],
+    };
+    const result = goldDependencyClosure(graph, "lonely.js");
+    expect(result).toEqual({
+      target: "lonely.js",
+      dependencies: [],
+      dependents: [],
+      affected: [],
+    });
+  });
+
+  test("maxDepth bounds the closure independently in each direction", () => {
+    const graph: ImportGraph = {
+      "a.js": ["b.js"],
+      "b.js": ["c.js"],
+      "c.js": ["d.js"],
+      "d.js": [],
+    };
+    const result = goldDependencyClosure(graph, "a.js", { maxDepth: 1 });
+    expect(result.dependencies).toEqual(["b.js"]);
+    expect(result.dependents).toEqual([]);
+  });
+
+  test("a file referenced as an edge target with no entry of its own terminates the walk, not an error", () => {
+    const graph: ImportGraph = {
+      "a.js": ["external-leaf.js"],
+    };
+    const result = goldDependencyClosure(graph, "a.js");
+    expect(result.dependencies).toEqual(["external-leaf.js"]);
+    // external-leaf.js has no key in the graph, so its own dependencies are empty, not an error.
+    const leaf = goldDependencyClosure(graph, "external-leaf.js");
+    expect(leaf.dependencies).toEqual([]);
+    expect(leaf.dependents).toEqual(["a.js"]);
+  });
+});
+
 describe("parseGitLogNameOnly", () => {
   test("parses multiple commits with changed files", () => {
     const output = [
@@ -156,5 +257,137 @@ describe("goldTestImpact", () => {
   test("duplicate changed-file entries do not change the result", () => {
     const coverage = { "test/a.test.ts": ["src/a.ts"] };
     expect(goldTestImpact(coverage, ["src/a.ts", "src/a.ts"])).toEqual(["test/a.test.ts"]);
+  });
+});
+
+describe("parseImportSpecifiers", () => {
+  test("extracts a require() call", () => {
+    const source = `const utils = require('./utils');`;
+    expect(parseImportSpecifiers(source)).toEqual([{ specifier: "./utils", kind: "require" }]);
+  });
+
+  test("extracts a dynamic import() call", () => {
+    const source = `const mod = await import('./lazy-module');`;
+    expect(parseImportSpecifiers(source)).toEqual([{ specifier: "./lazy-module", kind: "dynamic-import" }]);
+  });
+
+  test("extracts a static import ... from '...' with named bindings", () => {
+    const source = `import { Router } from './router';`;
+    expect(parseImportSpecifiers(source)).toEqual([{ specifier: "./router", kind: "import" }]);
+  });
+
+  test("extracts a default import and a namespace import", () => {
+    const source = [`import App from './app';`, `import * as utils from '../utils';`].join("\n");
+    expect(parseImportSpecifiers(source)).toEqual([
+      { specifier: "./app", kind: "import" },
+      { specifier: "../utils", kind: "import" },
+    ]);
+  });
+
+  test("extracts a bare/package specifier the same as a relative one (resolution decides internal vs external)", () => {
+    const source = `const debug = require('debug');`;
+    expect(parseImportSpecifiers(source)).toEqual([{ specifier: "debug", kind: "require" }]);
+  });
+
+  test("ignores require.resolve and other property access on require", () => {
+    // Not a direct call — `require.resolve(...)` calls a different function. The regex only
+    // matches `require(<string>)` (word immediately followed by a parenthesized call).
+    const source = `const p = require.resolve('./x');`;
+    expect(parseImportSpecifiers(source)).toEqual([]);
+  });
+
+  test("source with no imports yields an empty list", () => {
+    expect(parseImportSpecifiers("const x = 1;\nfunction f() { return x; }")).toEqual([]);
+  });
+
+  test("multiple mixed requires and imports in one file are all extracted", () => {
+    const source = [
+      `const a = require('./a');`,
+      `import { b } from './b';`,
+      `const c = require('c-package');`,
+    ].join("\n");
+    const result = parseImportSpecifiers(source);
+    expect(result).toContainEqual({ specifier: "./a", kind: "require" });
+    expect(result).toContainEqual({ specifier: "./b", kind: "import" });
+    expect(result).toContainEqual({ specifier: "c-package", kind: "require" });
+    expect(result).toHaveLength(3);
+  });
+});
+
+describe("resolveImportSpecifier", () => {
+  test("resolves a relative specifier with an explicit .js extension", () => {
+    const known = new Set(["lib/application.js", "lib/utils.js"]);
+    expect(resolveImportSpecifier("lib/application.js", "./utils.js", known)).toBe("lib/utils.js");
+  });
+
+  test("resolves a relative specifier by appending .js when omitted", () => {
+    const known = new Set(["lib/application.js", "lib/utils.js"]);
+    expect(resolveImportSpecifier("lib/application.js", "./utils", known)).toBe("lib/utils.js");
+  });
+
+  test("resolves a directory specifier to its index.js", () => {
+    const known = new Set(["lib/application.js", "lib/router/index.js"]);
+    expect(resolveImportSpecifier("lib/application.js", "./router", known)).toBe("lib/router/index.js");
+  });
+
+  test("resolves a parent-directory (../) specifier", () => {
+    const known = new Set(["lib/application.js", "test/support/utils.js"]);
+    // fromFile's directory is "test/sub"; "../support/utils" steps up to "test", then into
+    // "support/utils" -> "test/support/utils".
+    expect(resolveImportSpecifier("test/sub/app.test.js", "../support/utils", known)).toBe("test/support/utils.js");
+  });
+
+  test("excludes a bare/package specifier as external", () => {
+    const known = new Set(["node_modules/debug/index.js"]);
+    expect(resolveImportSpecifier("lib/application.js", "debug", known)).toBeNull();
+  });
+
+  test("excludes a node:-prefixed builtin as external", () => {
+    const known = new Set<string>();
+    expect(resolveImportSpecifier("lib/application.js", "node:fs", known)).toBeNull();
+  });
+
+  test("returns null when no candidate exists in the known-files set", () => {
+    const known = new Set(["lib/application.js"]);
+    expect(resolveImportSpecifier("lib/application.js", "./missing", known)).toBeNull();
+  });
+
+  test("returns null for a specifier that escapes the repo root", () => {
+    const known = new Set(["outside.js"]);
+    expect(resolveImportSpecifier("lib/application.js", "../../outside", known)).toBeNull();
+  });
+});
+
+describe("buildImportGraph", () => {
+  test("builds a graph from an in-memory source corpus, resolving relatives and dropping externals", () => {
+    const sources = {
+      "lib/application.js": [`const utils = require('./utils');`, `const debug = require('debug');`].join("\n"),
+      "lib/utils.js": `module.exports = {};`,
+    };
+    const graph = buildImportGraph(sources);
+    expect(graph).toEqual({
+      "lib/application.js": ["lib/utils.js"],
+      "lib/utils.js": [],
+    });
+  });
+
+  test("the built graph feeds goldDependencyClosure directly", () => {
+    const sources = {
+      "a.js": `require('./b');`,
+      "b.js": `require('./c');`,
+      "c.js": `module.exports = {};`,
+    };
+    const graph = buildImportGraph(sources);
+    const result = goldDependencyClosure(graph, "a.js");
+    expect(result.dependencies).toEqual(["b.js", "c.js"]);
+  });
+
+  test("a self-reference (require of one's own path) is excluded from its own edge list", () => {
+    const sources = {
+      "a.js": [`require('./a');`, `require('./b');`].join("\n"),
+      "b.js": `module.exports = {};`,
+    };
+    const graph = buildImportGraph(sources);
+    expect(graph["a.js"]).toEqual(["b.js"]);
   });
 });

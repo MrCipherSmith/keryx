@@ -160,6 +160,125 @@ export function parseGitLogNameOnly(gitLogOutput: string): CoChangeCommit[] {
 }
 
 /**
+ * Direct-import graph: repo-relative file id -> the repo-relative file ids it directly
+ * imports (already resolved — see scripts/benchmark/parse-imports.ts for the producer
+ * that turns JS source into this shape). No implied direction of traversal is baked into
+ * the type; `goldDependencyClosure` walks it forward for dependencies and in reverse for
+ * dependents.
+ */
+export type ImportGraph = Readonly<Record<string, readonly string[]>>;
+
+export type GoldDependencyClosureOptions = {
+  /**
+   * Maximum BFS hop distance to include, applied independently in each direction (the
+   * forward walk for `dependencies`, the reverse walk for `dependents`). Default:
+   * unbounded — the full transitive closure, matching the "dependency-closure" rule this
+   * gold is named for. Pass the same N a bounded system output used (e.g. gdgraph's
+   * `affected --depth N`) to compare against an apples-to-apples gold instead of the full
+   * closure.
+   */
+  readonly maxDepth?: number;
+};
+
+export type GoldDependencyClosureResult = {
+  readonly target: string;
+  /** Files `target` transitively imports (forward edges), self and cycles excluded. */
+  readonly dependencies: string[];
+  /** Files that transitively import `target` (reverse edges), self and cycles excluded. */
+  readonly dependents: string[];
+  /** `dependencies` ∪ `dependents`, sorted — matches the shape gdgraph's `affected` uses. */
+  readonly affected: string[];
+};
+
+/**
+ * Derive the gold "dependency-closure affected set" for `target` from an already-parsed,
+ * already-resolved import graph, per specification.md §4 and metrics-and-validation.md's
+ * gdgraph row. This is a SECOND, independent notion of "affected" from `goldAffectedSet`
+ * above (which is git co-change): here gold-affected means "structurally reachable via
+ * imports", not "historically changed together". Scoring gdgraph's own affected-set
+ * output against THIS gold measures whether gdgraph's dependency graph is structurally
+ * correct — which only works if this gold is derived independently of gdgraph. It is:
+ * `importGraph` must come from a parser that reads and resolves JS source itself (see
+ * scripts/benchmark/parse-imports.ts), never from `keryx gdgraph` output.
+ *
+ * Rule (documented so it is reproducible):
+ * 1. `dependencies` = the transitive closure of forward edges starting at `target`: `target`'s
+ *    direct imports, their direct imports, and so on. `target` itself is never included,
+ *    and a cycle back to an already-visited file does not revisit it (cycle-safe via a
+ *    visited set, so a cycle terminates the walk down that branch rather than looping).
+ * 2. `dependents` = the same transitive closure computed over the REVERSE graph (edges
+ *    flipped: `f` is adjacent to every file whose import list contains `f`) — i.e. every
+ *    file that transitively imports `target`, directly or through intermediates.
+ * 3. Both walks respect `options.maxDepth` (default unbounded) as an independent hop cap.
+ * 4. `affected` = `dependencies` ∪ `dependents`, deduplicated and sorted.
+ * 5. All three arrays are sorted lexicographically for a stable, order-independent gold
+ *    ID list (matches the array-of-stable-string-IDs shape `precision`/`recall` in ./ir.ts
+ *    expect).
+ *
+ * A file id that appears in an edge list but has no entry of its own in `importGraph`
+ * (e.g. a leaf file, or an external file the caller chose to include as a node without its
+ * own edges) is treated as having zero outgoing edges — it simply terminates that branch
+ * of the walk, it is not an error.
+ */
+export function goldDependencyClosure(
+  importGraph: ImportGraph,
+  target: string,
+  options: GoldDependencyClosureOptions = {},
+): GoldDependencyClosureResult {
+  const maxDepth = normalizeMaxDepth(options.maxDepth);
+
+  const reverse = new Map<string, string[]>();
+  for (const [file, imports] of Object.entries(importGraph)) {
+    for (const imported of imports) {
+      const bucket = reverse.get(imported);
+      if (bucket) bucket.push(file);
+      else reverse.set(imported, [file]);
+    }
+  }
+
+  const forwardAdjacency = (file: string): readonly string[] => importGraph[file] ?? [];
+  const reverseAdjacency = (file: string): readonly string[] => reverse.get(file) ?? [];
+
+  const dependencies = bfsClosure(forwardAdjacency, target, maxDepth).sort();
+  const dependents = bfsClosure(reverseAdjacency, target, maxDepth).sort();
+  const affected = [...new Set([...dependencies, ...dependents])].sort();
+
+  return { target, dependencies, dependents, affected };
+}
+
+/** BFS over `adjacency` starting at `start`, up to `maxDepth` hops. Cycle-safe, self excluded. */
+function bfsClosure(
+  adjacency: (file: string) => readonly string[],
+  start: string,
+  maxDepth: number,
+): string[] {
+  const visited = new Set<string>([start]);
+  const result: string[] = [];
+  let frontier: string[] = [start];
+
+  for (let hop = 0; hop < maxDepth && frontier.length > 0; hop += 1) {
+    const next: string[] = [];
+    for (const current of frontier) {
+      for (const neighbor of adjacency(current)) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        result.push(neighbor);
+        next.push(neighbor);
+      }
+    }
+    frontier = next;
+  }
+
+  return result;
+}
+
+function normalizeMaxDepth(maxDepth: number | undefined): number {
+  if (maxDepth === undefined || !Number.isFinite(maxDepth)) return Number.POSITIVE_INFINITY;
+  const floored = Math.floor(maxDepth);
+  return floored < 1 ? 1 : floored;
+}
+
+/**
  * Coverage map as extracted from a coverage report: test id -> the files that test
  * exercised. Shape matches "coverage map (test id -> covered files)" from the task spec
  * and the testing ladder's TIA gold source in metrics-and-validation.md ("coverage /
