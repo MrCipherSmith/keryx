@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 2,
+  "id": "152",
+  "slug": "shared-agent-context-production-guard-an",
+  "title": "Shared Agent Context — Production guard and real opt-in data readiness",
+  "status": "in-progress",
+  "createdAt": "2026-08-12T11:35:48.514Z",
+  "updatedAt": "2026-08-12T11:38:24.780Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:84b395a6096cb044fa213e5dd5f15590bc8eeb502187b70c35b077b0d85e6237",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-12T11:38:24.524Z",
+      "note": "implementation-plan.md updated to versions 1.5.0, phases 0–5 marked implemented, phase 6 added"
+    },
+    "AC2": {
+      "at": "2026-08-12T11:38:24.588Z",
+      "note": "added phase-6-real-opt-in-readiness.md with operator prerequisites, artifact set, verification order, fail-closed and rollback"
+    },
+    "AC3": {
+      "at": "2026-08-12T11:38:24.654Z",
+      "note": "phase-execution-prompts.md now includes Phase 7 production guard and real opt-in readiness flow template"
+    },
+    "AC4": {
+      "at": "2026-08-12T11:38:24.718Z",
+      "note": "README.md and metrics-and-validation.md explicitly call out synthetic phase-5 limitation and no production claim"
+    },
+    "AC5": {
+      "at": "2026-08-12T11:38:24.780Z",
+      "note": "no code-path changes introduced: default still disabled/killSwitch true and docs preserve default-off posture"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-12T11:35:48.514Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-12T11:38:14.475Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-12T11:38:14.543Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-12T11:38:22.205Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-12T11:38:22.269Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-12T11:38:22.361Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-12T11:38:22.429Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-12T11:38:24.524Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: implementation-plan.md updated to versions 1.5.0, phases 0–5 marked implemented, phase 6 added"
+    },
+    {
+      "at": "2026-08-12T11:38:24.588Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: added phase-6-real-opt-in-readiness.md with operator prerequisites, artifact set, verification order, fail-closed and rollback"
+    },
+    {
+      "at": "2026-08-12T11:38:24.654Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: phase-execution-prompts.md now includes Phase 7 production guard and real opt-in readiness flow template"
+    },
+    {
+      "at": "2026-08-12T11:38:24.718Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: README.md and metrics-and-validation.md explicitly call out synthetic phase-5 limitation and no production claim"
+    },
+    {
+      "at": "2026-08-12T11:38:24.780Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: no code-path changes introduced: default still disabled/killSwitch true and docs preserve default-off posture"
+    }
+  ]
+}

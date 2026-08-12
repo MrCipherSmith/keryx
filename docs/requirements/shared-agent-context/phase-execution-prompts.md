@@ -160,3 +160,34 @@ Shared Agent Context — Phase 5: Opt-in policy experiment.
 Create a draft PR, perform full review and remediate findings until reviewers
 return without problems. Merge into the feature branch, close the Flow, then
 delete the worktree.
+
+## 7. Production guard and real opt-in readiness
+
+Create a worktree from `feat/shared-agent-context`. Run `flow-orchestrator` for
+Shared Agent Context — Production guard and real opt-in data readiness.
+
+### Scope
+
+- Document operator-ready readiness for real artifacts after Phase 5:
+  candidate, baseline and corpus/evaluation artifacts, independent outcome proofs,
+  sandbox control and containment evidence.
+- Define verification order and gate failures before any opt-in path is considered
+  for runtime exposure.
+- Add rollback criteria and ownership responsibilities that preserve current default
+  deny/kill-switch posture.
+
+### Acceptance criteria
+
+- Phase 5 synthetic limitation is explicit: mechanism proof is complete, but no real
+  production effectiveness is claimed.
+- Real-opt-in readiness documentation exists for operator artifact prep, pin matching,
+  manifest/corpus verification and rollback.
+- Required controls prevent default policy exposure when verification is incomplete,
+  gates fail, kill-switch is active, or pins are mismatched.
+- Existing behavior remains unchanged without explicit opt-in and review sign-off.
+
+### Delivery protocol
+
+Create a draft PR, perform full review and remediate findings until reviewers
+return without problems. Merge into the feature branch, close the Flow, then
+close the readiness checklist.

@@ -64,11 +64,14 @@ flag, owner, test evidence and documented rollback described in the
 [implementation plan](implementation-plan.md). Default enablement requires all
 mandatory acceptance criteria and no security regression.
 
-Phase 5 remains blocked until the learning-fixture row is implemented and the
-offline corpus has independently verifiable outcomes, hash/immutable receipt
-links, policy versions, corpus selection/redaction/provenance manifest,
-holdout/adversarial evaluation and quarantine handling. AccessReceipt `outcome`
-alone is never sufficient learning ground truth.
+Phase 5 remains blocked for production claims until the learning-fixture phase is
+separated from production rollout. A real opt-in requires additional
+production-readiness gates: operator artifact checklist, explicit hash and pin
+matching, verification sequencing, and rollback ownership.
+
+For production claims specifically:
+the current Phase 5 artifacts are synthetic mechanism proof only; no real
+task-performance benefit is inferred until Phase 6 readiness gates are implemented.
 
 ## Rollback and incident triggers
 
