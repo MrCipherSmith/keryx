@@ -5,6 +5,15 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.30] — 2026-08-12
+
+### Fixed
+
+- **Agent TUI launch regression fix.** Removed stale `searchController` option from the
+  `launchTuiAgentShell` call path to match its current signature after `/connect`
+  / `/provider` picker refactoring. This unblocks the release pipeline type check and keeps
+  the shell launch API consistent.
+
 ## [0.2.29] — 2026-08-12
 
 ### Changed

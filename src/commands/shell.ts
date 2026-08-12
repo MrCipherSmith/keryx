@@ -1399,7 +1399,6 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
       await (runtime.launchAgent ?? launchTuiAgentShell)({
         detected: tuiDetected,
         makeAgentDeps,
-        searchController: searchProviderController,
         // `/connect` and `/model` re-probe providers fresh.
         redetect,
         ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
