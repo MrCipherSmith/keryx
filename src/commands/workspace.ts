@@ -1,7 +1,7 @@
 import { optionValue } from "../lib/args";
 import { randomUUID } from "node:crypto";
 import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
-import { createLocalFwkReadService, normalizeFwkResult } from "../sac/fwk-service";
+import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
 import { createLocalProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/proposal-lifecycle";
 import { createLocalCollaborationService } from "../sac/collaboration-service";
 
@@ -69,6 +69,13 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       if (!workspaceId) throw new Error("Usage: keryx workspace collaboration <workspace-id>");
       console.log(JSON.stringify(await createLocalCollaborationService(process.cwd()).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID() }), null, 2)); return;
     }
+    if (subcommand === "policy-readiness") {
+      rejectUnknownOptions(args.slice(1), new Set());
+      const report = await diagnosePolicyReadiness(process.cwd());
+      console.log(JSON.stringify(report, null, 2));
+      if (!report.integrityReady) process.exitCode = 1;
+      return;
+    }
     throw new Error(`Unknown workspace command: ${subcommand}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1;
@@ -84,5 +91,5 @@ function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\nkeryx workspace propose <workspace-id> --kind <kind> --summary <explicit-summary> --evidence <workspace-relative-ref> [--revision <revision>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\nkeryx workspace propose <workspace-id> --kind <kind> --summary <explicit-summary> --evidence <workspace-relative-ref> [--revision <revision>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
 }

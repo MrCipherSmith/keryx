@@ -4,6 +4,17 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
+
+### Added
+
+- **Shared Agent Context — phase-6b operator readiness check.** New read-only
+  `keryx workspace policy-readiness` (backed by `diagnosePolicyReadiness`) validates
+  the full opt-in policy integrity chain **before** enabling — even while the
+  experiment is disabled — reporting each gate's pass/fail and exiting non-zero when
+  not ready, so an owner can prove real-data readiness before flipping
+  `enabled: true`. Read-only; the runtime guard and default-off posture are
+  unchanged. Documented in the new Phase 6b operator playbook.
+
 ## [0.2.32] — 2026-08-12
 
 ### Added

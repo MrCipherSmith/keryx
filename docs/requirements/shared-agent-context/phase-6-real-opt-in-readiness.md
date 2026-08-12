@@ -7,8 +7,11 @@ Partially implemented.
 - **Part A — Runtime enforcement guard:** implemented in the runtime surface
   (`src/sac/fwk-service.ts` → `resolvePolicySelection`). AC1–AC6 met; full SAC
   suite `bun test src/sac/` → 88 pass / 0 fail.
-- **Part B — Real operator-data readiness:** planned. Governs enabling the same
-  mechanism with real, non-synthetic operator-supplied artifacts.
+- **Part B — Real operator-data readiness:** partially implemented. A read-only
+  readiness check (`keryx workspace policy-readiness` → `diagnosePolicyReadiness`)
+  and an [operator playbook](phase-6b-operator-playbook.md) exist; runtime
+  re-ingestion of the raw receipts hash-chain and independent verifier outcome
+  artifacts at activation time remains.
 
 ## Purpose
 
@@ -65,6 +68,12 @@ Evidence: `src/sac/fwk-service.test.ts`; full SAC suite `bun test src/sac/` →
 Part A enforces the runtime integrity chain on whatever artifacts are pinned.
 Part B governs what must be true of the **real, non-synthetic** artifacts and the
 operator process before that path is enabled outside synthetic evidence.
+
+Operator tooling (implemented): `keryx workspace policy-readiness`
+(`diagnosePolicyReadiness`) is a read-only check that validates the full integrity
+chain **before** enabling — even while the experiment is disabled — and reports each
+gate's pass/fail, exiting non-zero when not ready. The owner-run process is in the
+[Phase 6b operator playbook](phase-6b-operator-playbook.md).
 
 ### Readiness prerequisites
 
