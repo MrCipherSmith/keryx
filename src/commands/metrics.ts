@@ -20,12 +20,15 @@ import {
 } from "../metrics";
 import {
   buildEvidenceBundle,
+  buildMemorySearchManifest,
   buildOracleManifestsByGold,
   buildTestImpactManifest,
   GOLD_KIND_LABELS,
+  MEMORY_SEARCH_LABEL,
   persistEvidenceBundle,
   TEST_IMPACT_LABEL,
   type GoldKind,
+  type MemoryScoreInput,
   type MultiGoldScoreInput,
   type NamedGold,
   type TestImpactScoreInput,
@@ -197,11 +200,13 @@ const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
 
 // Run the metastore ORACLE scorers, one labeled paired-3-5-v2 manifest per layer/gold,
 // reported separately and never averaged. Select layers with
-// `--layer gdgraph|testing|all` (default all):
+// `--layer gdgraph|testing|memory|all` (default all):
 //   - gdgraph: the affected-set oracle vs the co-change + dependency golds (see
 //     `--gold co-change|dependency|all`, default all).
 //   - testing: the test-impact/TIA oracle — `keryx test related` / coverage-map TIA output
 //     scored against the coverage-derived impacted-test gold (goldTestImpact).
+//   - memory: the memory-search oracle — `keryx memory search <q>` ranked results scored
+//     against a curated applicable-decision gold (recall@k, plus precision/recall).
 // Prints + validates every manifest and exits non-zero if any manifest is invalid.
 async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
   const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
@@ -212,9 +217,9 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
   }
 
   const layer = (optionValue(args, "--layer") ?? "all").trim();
-  if (layer !== "all" && layer !== "gdgraph" && layer !== "testing") {
+  if (layer !== "all" && layer !== "gdgraph" && layer !== "testing" && layer !== "memory") {
     console.error(
-      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|all] " +
+      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|all] " +
         "[--gold co-change|dependency|all]",
     );
     process.exitCode = 1;
@@ -227,6 +232,9 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
   }
   if (layer === "all" || layer === "testing") {
     allValid = (await runTestingLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "memory") {
+    allValid = (await runMemoryLayer(projectRoot, args, ladder)) && allValid;
   }
   process.exitCode = allValid ? 0 : 1;
 }
@@ -366,6 +374,63 @@ async function runTestingLayer(projectRoot: string, args: string[], ladder: Benc
   return result.valid;
 }
 
+// The curated memory-oracle gold: shape matches AffectedSetFile (`target` is the query,
+// `affected` is the gold memory-id list) plus a top-level `k` for recall@k. Reuses
+// loadAffectedSets for the per-query gold ids; `k` is read separately since AffectedSetFile
+// has no such field.
+type MemoryGoldFile = { k?: number; targets?: Array<{ target?: string; affected?: string[] }> };
+
+async function loadMemoryGoldK(projectRoot: string, file: string): Promise<number> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as MemoryGoldFile;
+  return typeof raw.k === "number" && raw.k > 0 ? raw.k : 3;
+}
+
+// Memory-search oracle: score the SYSTEM ranked memory-id list (`keryx memory search <q>`,
+// captured to a fixture by scripts/benchmark/run-memory-oracle.ts) against the curated GOLD
+// relevant-id set for that query (fixtures/benchmark/keryx/memory-gold.json, hand-labeled —
+// never derived at runtime, unlike the testing layer's coverage-derived gold). Prints one
+// labeled paired-3-5-v2 manifest, validates it, and returns whether it validated. Both
+// inputs share the AffectedSetFile shape (`{ targets: [{ target, affected }] }`) so they
+// reuse loadAffectedSets: `target` is the query, `affected` is the ranked system list or the
+// gold id list respectively.
+async function runMemoryLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const systemPath = optionValue(args, "--memory-system") ?? "fixtures/benchmark/keryx/memory-search-results.json";
+  const goldPath = optionValue(args, "--memory-gold") ?? "fixtures/benchmark/keryx/memory-gold.json";
+
+  let system: Map<string, string[]>;
+  let gold: Map<string, string[]>;
+  let k: number;
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    gold = await loadAffectedSets(projectRoot, goldPath);
+    k = await loadMemoryGoldK(projectRoot, goldPath);
+  } catch (error) {
+    console.error(`Failed to load memory oracle inputs: ${(error as Error).message}`);
+    return false;
+  }
+
+  // Each curated gold query that the system also produced a ranked list for is a scored
+  // target; a gold query the system has no output for has nothing to score against.
+  const inputs: MemoryScoreInput[] = [];
+  for (const query of [...gold.keys()].sort()) {
+    if (!system.has(query)) continue;
+    inputs.push({ query, system: system.get(query) ?? [], gold: gold.get(query) ?? [], k });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No overlapping queries between memory gold and system-output files");
+    return false;
+  }
+
+  const manifest = buildMemorySearchManifest(inputs, { ladder });
+  console.log(`# layer: memory (${MEMORY_SEARCH_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: memory (${MEMORY_SEARCH_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
 async function collect(projectRoot: string, args: string[]): Promise<void> {
   const eventFile = optionValue(args, "--events");
   if (!eventFile) {
@@ -411,6 +476,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
-  keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|all] [--gold co-change|dependency|all] [--system <path>] [--testing-system <path>] [--coverage-map <path>] [--out <dir>]
+  keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|all] [--gold co-change|dependency|all] [--system <path>] [--testing-system <path>] [--coverage-map <path>] [--memory-system <path>] [--memory-gold <path>] [--out <dir>]
 `);
 }

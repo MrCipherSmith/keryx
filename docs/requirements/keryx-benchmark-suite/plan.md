@@ -77,11 +77,24 @@ precision **1.0** on all four targets; recall `gold.ts` 1.0, `oracle-runner.ts` 
 `benchmark.ts` 0.5, `ir.ts` 0.5 (heuristic misses transitively-covering tests — an honest
 recall gap). Manifests pass `keryx metrics benchmark validate`.
 
+**Landed (2026-08-13): Memory metastore oracle (recall@k).** A separate metastore layer
+(`keryx metrics benchmark run --ladder metastore --layer memory|all`; scorer
+`src/metrics/oracle-runner.ts` `buildMemorySearchManifest`, never averaged with the gdgraph
+or testing oracles) scores the ranked `keryx memory search <query>` system output against a
+curated gold set of relevant memory ids per query (`fixtures/benchmark/keryx/memory-gold.json`
+— 5 queries, hand-labeled: a query is included only when its relevant entry is an OBVIOUS
+match, one line of justification each, k=3). Dogfooded on this repo's own
+`.metaproject/memory/` corpus — `scripts/benchmark/run-memory-oracle.ts` runs the live search
+per gold query and commits `fixtures/benchmark/keryx/memory-search-results.json`. Real result:
+**recall@k 1.0 on all five curated queries** (k=3); unranked precision ranges `0.2`–`1.0`
+across queries (full-list precision is sensitive to lexical overlap with unrelated entries;
+recall@k at a small k is not). Manifest passes `keryx metrics benchmark validate`.
+
 **Remaining in M1:**
 
 - Ablation runner (context on/off, ×3 seeds, success/token/tool-call deltas) — needs
   the model legs, deferred with live runs.
-- memory and gdctx oracle layers.
+- gdctx oracle layer (fact-preservation rate).
 - Safety track + false-premise / bullshit-resistance case group.
 
 ## M2 — Comparative: one third-party agent harness

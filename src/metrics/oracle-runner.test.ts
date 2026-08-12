@@ -7,19 +7,24 @@ import { validatePairedBenchmark } from "./benchmark";
 import { goldTestImpact, type CoverageMap } from "./gold";
 import {
   buildEvidenceBundle,
+  buildMemorySearchManifest,
   buildOracleManifest,
   buildOracleManifestsByGold,
   buildTestImpactManifest,
   DEFAULT_DEPTH_SEMANTICS,
   GOLD_KIND_LABELS,
+  MEMORY_SEARCH_LABEL,
+  memorySearchTaskId,
   oracleTaskId,
   oracleTaskIdForGold,
   persistEvidenceBundle,
   runOracleAndPersist,
+  scoreMemorySearchRun,
   scoreOracleTarget,
   scoreTestImpactRun,
   TEST_IMPACT_LABEL,
   testImpactTaskId,
+  type MemoryScoreInput,
   type MultiGoldScoreInput,
   type OracleScoreInput,
   type TestImpactScoreInput,
@@ -394,6 +399,100 @@ describe("testing / TIA oracle (system test-impact vs coverage-derived gold)", (
     const files = ["src/metrics/benchmark.ts", "src/metrics/gold.ts", "src/metrics/ir.ts"];
     const a = buildTestImpactManifest(inputsFor(files));
     const b = buildTestImpactManifest(inputsFor(files));
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+});
+
+describe("memory oracle (ranked system search vs curated gold, recall@k)", () => {
+  // Mirrors the real keryx dogfood slice (fixtures/benchmark/keryx/memory-{gold,search-results}.json):
+  // a curated gold relevant-id per query, scored against the ranked `keryx memory search`
+  // system output.
+  const PERFECT_MEM: MemoryScoreInput = {
+    query: "flow ids allocated per clone worktree",
+    system: ["constraints/flow-ids-allocated-per-clone.md", "lessons/allowlist-not-a-boundary.md"],
+    gold: ["constraints/flow-ids-allocated-per-clone.md"],
+    k: 2,
+  };
+  const ZERO_MEM: MemoryScoreInput = {
+    query: "an unrelated query with no match",
+    system: ["lessons/tui-alignself-height-collapse.md", "lessons/regex-guards-lose-to-spellings.md"],
+    gold: ["constraints/code-blanks-string-literals.md"],
+    k: 2,
+  };
+  // k-boundary: the sole gold id sits at rank 3, so k=2 excludes it (recall@2 = 0) while
+  // k=3 includes it (recall@3 = 1) — same system/gold, only k differs.
+  const BOUNDARY_SYSTEM = [
+    "lessons/allowlist-not-a-boundary.md",
+    "lessons/tui-alignself-height-collapse.md",
+    "lessons/regex-guards-lose-to-spellings.md",
+    "constraints/stale-installed-keryx-binary.md",
+  ];
+  const BOUNDARY_GOLD = ["lessons/regex-guards-lose-to-spellings.md"];
+
+  test("perfect case: gold id found within k => recall@k 1, unranked recall 1", () => {
+    const run = scoreMemorySearchRun(PERFECT_MEM);
+    expect(run.oracle?.recallAtK?.value).toBe(1);
+    expect(run.oracle?.recall?.value).toBe(1);
+    expect(run.oracle?.precision?.value).toBe(0.5); // 1 of 2 system ids is gold
+    expect(run.oracle?.recallAtK?.reliability).toBe("exact");
+  });
+
+  test("zero case: gold id absent from the ranked list => recall@k 0, unranked recall 0", () => {
+    const run = scoreMemorySearchRun(ZERO_MEM);
+    expect(run.oracle?.recallAtK?.value).toBe(0);
+    expect(run.oracle?.recall?.value).toBe(0);
+    expect(run.oracle?.precision?.value).toBe(0);
+  });
+
+  test("k-boundary: same system/gold, only k differs, flips recall@k between 0 and 1", () => {
+    const atK2 = scoreMemorySearchRun({ query: "boundary", system: BOUNDARY_SYSTEM, gold: BOUNDARY_GOLD, k: 2 });
+    const atK3 = scoreMemorySearchRun({ query: "boundary", system: BOUNDARY_SYSTEM, gold: BOUNDARY_GOLD, k: 3 });
+    expect(atK2.oracle?.recallAtK?.value).toBe(0);
+    expect(atK3.oracle?.recallAtK?.value).toBe(1);
+    // Unranked recall is k-independent: the gold id is present in the full system list either way.
+    expect(atK2.oracle?.recall?.value).toBe(1);
+    expect(atK3.oracle?.recall?.value).toBe(1);
+  });
+
+  test("task id carries the memory-search namespace and metric source carries the layer label + k", () => {
+    const run = scoreMemorySearchRun(PERFECT_MEM);
+    expect(run.task_id).toBe(memorySearchTaskId(PERFECT_MEM.query));
+    expect(run.task_id).toContain("metastore:memory-search:");
+    expect(run.oracle?.recallAtK?.source).toContain(`layer=memory: ${MEMORY_SEARCH_LABEL}, k=${PERFECT_MEM.k}`);
+  });
+
+  test("emitted manifest is a valid metastore paired-3-5-v2 manifest", () => {
+    const inputs: MemoryScoreInput[] = [
+      PERFECT_MEM,
+      ZERO_MEM,
+      { query: "boundary-2", system: BOUNDARY_SYSTEM, gold: BOUNDARY_GOLD, k: 3 },
+    ];
+    const manifest = buildMemorySearchManifest(inputs);
+    const result = validatePairedBenchmark(manifest);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+    expect(manifest.ladder).toBe("metastore");
+    expect(manifest.runs).toHaveLength(3);
+    for (const run of manifest.runs) {
+      expect(run.caseKind).toBe("deterministic");
+      expect(run.variant).toBe("baseline");
+      expect(run.seeds).toEqual([1]);
+      expect(run.oracle?.recallAtK?.reliability).toBe("exact");
+    }
+  });
+
+  test("never averaged with the gdgraph/testing oracles: distinct task-id namespace", () => {
+    const memRun = scoreMemorySearchRun(PERFECT_MEM);
+    const testRun = scoreTestImpactRun({ changedFile: "src/x.ts", system: ["a"], gold: ["a"] });
+    expect(memRun.task_id.startsWith("metastore:memory-search:")).toBe(true);
+    expect(testRun.task_id.startsWith("metastore:test-impact:")).toBe(true);
+    expect(memRun.task_id).not.toBe(testRun.task_id);
+  });
+
+  test("byte-for-byte reproducible", () => {
+    const inputs: MemoryScoreInput[] = [PERFECT_MEM, ZERO_MEM];
+    const a = inputs.map((i) => scoreMemorySearchRun(i));
+    const b = inputs.map((i) => scoreMemorySearchRun(i));
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

@@ -1,0 +1,43 @@
+{
+  "note": "Curated GOLD for the metastore MEMORY oracle (recall@k), dogfooded on keryx's OWN .metaproject/memory/ corpus (8 content entries at capture time, listed under repo below). Each query paraphrases one entry's title/summary closely enough that its relevance is OBVIOUS and no other entry in the corpus is about the same fact; only that one entry is hand-labeled relevant per query. No relevance is inferred from shared tags or topical adjacency (e.g. the allowlist and stale-binary entries share no gold overlap with each other even though they both score highly under some queries in memory-search-results.json). Shape matches the AffectedSetFile the CLI already loads: `target` is the query, `affected` is the gold id list (memory entry `relativePath`s), plus a `justification` field carried for audit (not consumed by the loader).",
+  "repo": "keryx (dogfood, this repository)",
+  "corpus": ".metaproject/memory/**/*.md",
+  "corpus_entries_at_capture": [
+    "constraints/code-blanks-string-literals.md",
+    "constraints/flow-ids-allocated-per-clone.md",
+    "constraints/stale-installed-keryx-binary.md",
+    "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+    "lessons/allowlist-not-a-boundary.md",
+    "lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md",
+    "lessons/regex-guards-lose-to-spellings.md",
+    "lessons/tui-alignself-height-collapse.md"
+  ],
+  "k": 3,
+  "targets": [
+    {
+      "target": "flow ids allocated per clone worktree",
+      "affected": ["constraints/flow-ids-allocated-per-clone.md"],
+      "justification": "Query paraphrases the entry title verbatim (\"Flow ids are allocated per clone, not per checkout\"); no other corpus entry concerns flow id allocation."
+    },
+    {
+      "target": "stale installed keryx binary review pipeline",
+      "affected": ["constraints/stale-installed-keryx-binary.md"],
+      "justification": "Query paraphrases the entry title verbatim (\"The keryx on PATH is a stale build; the review pipeline does not exercise the code under review\"); no other corpus entry concerns a stale installed binary."
+    },
+    {
+      "target": "shell allowlist not a security boundary",
+      "affected": ["lessons/allowlist-not-a-boundary.md"],
+      "justification": "Query paraphrases the entry title verbatim (\"A shell allowlist matched against the raw command string is not a security boundary\"); no other corpus entry concerns shell allowlists."
+    },
+    {
+      "target": "alignSelf collapses intrinsic height opentui scrollbox",
+      "affected": ["lessons/tui-alignself-height-collapse.md"],
+      "justification": "Query paraphrases the entry title/summary verbatim (\"OpenTUI: alignSelf on a transcript box collapses its intrinsic height\"); no other corpus entry concerns OpenTUI layout."
+    },
+    {
+      "target": "regex source guard loses spelling AST rewrite",
+      "affected": ["lessons/regex-guards-lose-to-spellings.md"],
+      "justification": "Query paraphrases the entry title verbatim (\"A source guard loses one spelling per round — and matching the AST only slows it down\"); the related entry code-blanks-string-literals.md is deliberately NOT included in gold — it is a distinct, narrower fact (string-literal blanking) that this query does not name, so labeling it relevant would be inventing relevance rather than reading it off the query."
+    }
+  ]
+}

@@ -36,8 +36,14 @@ Two independent sub-methods, both reported:
     gdgraph oracle). The coverage gold is dogfooded on a bounded keryx slice via
     `scripts/benchmark/run-testing-oracle.ts` (real `bun --coverage` per test file); see
     [metrics-and-validation](metrics-and-validation.md#metastore-ladder).
-  - `memory` recall → gold "which past decision applies" for a curated task.
-    Metrics: recall@k.
+  - `memory` recall (`memory search <q>`) → gold "which past decision applies" for a
+    curated task, hand-labeled per query. Metrics: recall@k (plus precision, recall).
+    **Landed** as a separate metastore layer (`keryx metrics benchmark run --ladder
+    metastore --layer memory`; scorer `src/metrics/oracle-runner.ts`
+    `buildMemorySearchManifest`, never averaged with the gdgraph or testing oracles).
+    Dogfooded on this repo's own `.metaproject/memory/` corpus via
+    `scripts/benchmark/run-memory-oracle.ts`; see
+    [metrics-and-validation](metrics-and-validation.md#metastore-ladder).
   - `gdctx` compaction → lossless-fidelity check: the compact form must preserve
     the facts the raw output carried (measured, not asserted).
 - **Ablation (outcome).** Run the same agent + same model on a task **with**

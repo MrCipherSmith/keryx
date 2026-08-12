@@ -24,7 +24,7 @@ import {
   type PairedBenchmarkRunV2,
   type RateWithCI,
 } from "./benchmark";
-import { f1, precision, recall } from "./ir";
+import { f1, precision, recall, recallAtK } from "./ir";
 import type { Reliability } from "./types";
 
 /** One target's system-output affected-set scored against its gold affected-set. */
@@ -409,6 +409,105 @@ export function buildTestImpactManifest(
 ): PairedBenchmarkManifestV2 {
   const ladder = options.ladder ?? "metastore";
   const runs = inputs.map((input) => scoreTestImpactRun(input, options));
+  const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
+  return {
+    protocol: "paired-3-5-v2",
+    ladder,
+    task_ids: taskIds,
+    runs,
+    speedClaim: { claimed: false },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Memory oracle (metrics-and-validation.md "memory" row; specification.md §1.1).
+// Score a SYSTEM ranked memory-id list — the ranked `path` order `keryx memory search <q>`
+// returns (highest score first) — against a curated GOLD set of relevant memory ids for
+// that query (hand-labeled, fixtures/benchmark/keryx/memory-gold.json, one line of
+// justification per query). Emits recall@k, the row's headline metric (via ./ir.ts
+// recallAtK), plus the unranked precision/recall over the full retrieved set (via
+// scoreOracleTarget, reusing the same set-arithmetic every other oracle here uses) in a
+// labeled paired-3-5-v2 manifest for ladder "metastore", layer "memory".
+//
+// This is a SEPARATE oracle from the gdgraph and testing ones above: different task-id
+// namespace (metastore:memory-search:*), different metric source label, and it is NEVER
+// averaged with them. Reliability is `exact` — the gold is a direct human label of
+// applicable-decision relevance for a query (metrics-and-validation.md reliability ladder:
+// "exact" covers a directly-measured value; a hand-curated, per-query relevance label,
+// unlike an LLM judge score, is not a derived estimate).
+// ---------------------------------------------------------------------------
+
+/** Human-facing label carried on every emitted memory-oracle metric. */
+export const MEMORY_SEARCH_LABEL = "memory recall@k";
+
+// The metric `source` records HOW the system list was produced, WHICH gold it was scored
+// against, and the k used, so a reader can never confuse it with the other two oracles.
+const MEMORY_SEARCH_SOURCE =
+  "keryx memory search <query> (ranked path list) vs curated applicable-decision gold " +
+  "(fixtures/benchmark/keryx/memory-gold.json)";
+const MEMORY_SEARCH_MODEL = "keryx-memory-search";
+
+/** One query's ranked system memory-id list scored against its curated gold id set. */
+export type MemoryScoreInput = {
+  /** The search query, e.g. "shell allowlist not a security boundary". */
+  readonly query: string;
+  /** System output: `keryx memory search <query>` results, ranked best-first (`path`s). */
+  readonly system: readonly string[];
+  /** Gold: curated relevant memory id(s) for this query (deduped internally). */
+  readonly gold: readonly string[];
+  /** Cutoff for recall@k, fixed per query in the gold fixture. */
+  readonly k: number;
+};
+
+/** Stable, collision-free task id for a memory-oracle target, distinct from the others. */
+export function memorySearchTaskId(query: string): string {
+  return `metastore:memory-search:${query}`;
+}
+
+/** Score one query's ranked system output against its gold and build a labeled run. */
+export function scoreMemorySearchRun(
+  input: MemoryScoreInput,
+  options: OracleManifestOptions = {},
+): PairedBenchmarkRunV2 {
+  const score = scoreOracleTarget({ target: input.query, system: input.system, gold: input.gold });
+  const atK = recallAtK(input.system, input.gold, input.k);
+  const taskId = memorySearchTaskId(input.query);
+  const source = `${MEMORY_SEARCH_SOURCE} [layer=memory: ${MEMORY_SEARCH_LABEL}, k=${input.k}]`;
+  const rates = oracleRates(score);
+  return {
+    task_id: taskId,
+    variant: "baseline",
+    run_id: `${taskId}#1`,
+    ladder: options.ladder ?? "metastore",
+    model: options.model ?? MEMORY_SEARCH_MODEL,
+    cacheState: options.cacheState ?? "unknown",
+    leakageAssertion: options.leakageAssertion ?? "not-applicable",
+    caseKind: "deterministic",
+    tokenCap: null,
+    seeds: [1],
+    quality: "measured",
+    oracle: {
+      precision: measuredValue(score.precision, source),
+      recall: measuredValue(score.recall, source),
+      recallAtK: measuredValue(atK, source),
+    },
+    ...(rates ? { rates } : {}),
+    human_interventions: null,
+  };
+}
+
+/**
+ * Assemble a `paired-3-5-v2` manifest for the metastore ladder's memory layer from
+ * per-query scores. Requires 3-5 queries (the protocol's task-count bound); the returned
+ * manifest is designed to pass validatePairedBenchmark — every oracle metric is measured
+ * (`exact`), each rate carries its Wilson CI, and no speed claim is made.
+ */
+export function buildMemorySearchManifest(
+  inputs: readonly MemoryScoreInput[],
+  options: OracleManifestOptions = {},
+): PairedBenchmarkManifestV2 {
+  const ladder = options.ladder ?? "metastore";
+  const runs = inputs.map((input) => scoreMemorySearchRun(input, options));
   const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
   return {
     protocol: "paired-3-5-v2",

@@ -41,7 +41,7 @@ computed across mixed served-models or mixed effort is confounded and non-publis
 | gdgraph (graph correctness) | `gdgraph affected <target>` | independent transitive import closure, `goldDependencyClosure` | precision, recall, F1 |
 | gdwiki | `wiki ask <q>` | curated Q→passage | nDCG, recall@k, groundedness |
 | testing | `test related <file>` / TIA | coverage-derived impacted tests, `goldTestImpact` | precision, recall, F1 |
-| memory | `memory search <q>` | curated applicable-decision | recall@k |
+| memory | `memory search <q>` | curated applicable-decision | recall@k (plus precision, recall) |
 | gdctx | compaction of a known output | the raw output's facts | fact-preservation rate |
 
 **gdgraph is scored against two independent golds, reported separately and never
@@ -91,6 +91,34 @@ result: **precision 1.0** on all four targets (every heuristic-selected test rea
 exercise the changed file), **recall** `gold.ts` 1.0, `oracle-runner.ts` 1.0, `benchmark.ts`
 0.5, `ir.ts` 0.5 — the naming/import heuristic misses tests that exercise a file only
 *transitively* (e.g. via a re-export or an intermediate import), an honest recall gap.
+
+**Memory oracle** (`keryx metrics benchmark run --ladder metastore --layer memory`; scorer:
+`src/metrics/oracle-runner.ts`, `buildMemorySearchManifest`). Scores the **system ranked
+memory-id list** — the `path`s `keryx memory search <query> --json` returns, best match
+first — against a **curated gold set** of relevant memory ids for that query
+(`fixtures/benchmark/keryx/memory-gold.json`, hand-labeled offline: a query is included only
+when the relevant entry is an OBVIOUS match, one line of justification each; k=3). Metrics:
+**recall@k** (`src/metrics/ir.ts` `recallAtK`, the row's headline metric), plus unranked
+precision/recall over the full retrieved set (same `scoreOracleTarget` set-arithmetic the
+other two oracles use). Reliability `exact` — a hand-curated per-query relevance label is a
+direct measurement, not a formula. It is a SEPARATE oracle (task-id namespace
+`metastore:memory-search:*`) and is never averaged with the gdgraph or testing oracles.
+
+*How the gold and system output are produced (dogfood, no external clone).*
+`scripts/benchmark/run-memory-oracle.ts` reads the curated gold queries from
+`memory-gold.json` (never regenerates the gold itself), runs `keryx memory search <query>
+--json --limit 10` for each — this repo's own `.metaproject/memory/` corpus, no
+`keryx memory index`/`analyze` side effect required, since search scans canonical Markdown
+directly — and commits the captured ranked lists to
+`fixtures/benchmark/keryx/memory-search-results.json`. Regenerate with
+`bun scripts/benchmark/run-memory-oracle.ts`. Real committed result over the 5 curated
+queries (k=3): **recall@k 1.0 on all five** (the gold entry is always found within the top 3
+results — every query was built as a close paraphrase of its target entry's own title), with
+unranked precision `0.2`–`1.0` (a query that matches only its gold entry's vocabulary scores
+precision 1.0; a query whose terms also lexically overlap other entries' titles/tags pulls in
+spurious top-10 hits, which recall@k with a small k is robust to but full-list precision is
+not) — see `fixtures/benchmark/keryx/{memory-gold,memory-search-results}.json` for the
+per-query breakdown.
 
 ### Ablation metrics (agent outcome, stochastic, ×3 seeds)
 
