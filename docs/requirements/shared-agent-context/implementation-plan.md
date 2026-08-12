@@ -3,10 +3,11 @@ Version: 1.4.0
 
 ## Delivery status
 
-As of 2026-08-12, Phases 0–4 are implemented and merged into
-`feat/shared-agent-context`. Their acceptance and review work is complete;
-the branches below are retained only as temporary merge history and may be
-deleted after the team confirms no further recovery is needed.
+As of 2026-08-12, Phases 0–6 are implemented and merged into
+`feat/shared-agent-context` (full SAC suite — 88 tests — green). Their
+acceptance and review work is complete; the branches below are retained only
+as temporary merge history and may be deleted after the team confirms no
+further recovery is needed.
 
 | Phase | Status | Evidence | Branch retained for cleanup |
 | --- | --- | --- | --- |
@@ -16,7 +17,7 @@ deleted after the team confirms no further recovery is needed.
 | 3 — Proposal and review lifecycle | Implemented | Merged via PR #271; Flow completion commit `17cca58f` | `origin/feat/sac-phase3-proposal-lifecycle` |
 | 4 — Collaboration ergonomics | Implemented | Merged via PR #272; Flow completion commit `09769ef` | No phase-specific branch retained. |
 | 5 — Opt-in policy experiment | Implemented | Flow 151; [policy experiment report](phase-5-policy-experiment-report.md) | `feat/shared-agent-context-phase-5` |
-| 6 — Runtime opt-in readiness | In progress | New phase-6 runtime PRD + runtime guard delivery | `feat/shared-agent-context` |
+| 6 — Runtime opt-in readiness | Implemented | Runtime guard in `src/sac/fwk-service.ts` (`resolvePolicySelection`) + fail-closed pins/kill-switch/rollback; AC1–AC6 met; full SAC suite 88/88 green | Merged into `feat/shared-agent-context`. |
 
 ### Deferred branch cleanup
 
@@ -115,7 +116,7 @@ Implementation evidence is published in the
 committed corpus is synthetic mechanism evidence only; default configuration
 keeps the learned candidate disabled and the kill switch active.
 
-## Phase 6 — Runtime opt-in readiness
+## Phase 6 — Runtime opt-in readiness — Implemented
 
 - Persist explicit runtime artifact pins for candidate, baseline, corpus and
   evaluation report.

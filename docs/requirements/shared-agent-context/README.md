@@ -10,10 +10,10 @@ Version: 1.3.0
 
 ## Статус
 
-`partially implemented`. Фазы 0–3 реализованы и влиты в
-`feat/shared-agent-context`; дальнейшие фазы и часть описанной surface остаются
-планом. Точный статус, evidence и список временно сохранённых веток приведены
-в [Implementation plan](implementation-plan.md).
+`partially implemented`. Фазы 0–6 реализованы и влиты в
+`feat/shared-agent-context` (вся SAC-сюита — 88 тестов — зелёная). Оставшаяся
+surface остаётся планом. Точный статус, evidence и список временно сохранённых
+веток приведены в [Implementation plan](implementation-plan.md).
 
 ## Модель FWK
 
