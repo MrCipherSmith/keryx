@@ -1,1 +1,39 @@
-{"schemaVersion":"1.0","status":"pass","baselineVersion":"deterministic-context-1.0.0","candidateVersion":"candidate-1.0.0","candidateDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","corpusVersion":"sac-policy-corpus-1.0.0","corpusDigest":"ef9f284d001de10e2e69a889d532d94deb1ffe4a1e02e469759df58c577c63fd","sandboxProfileDigest":"2c3e94c87ff42064841fa788657219c5144d36282cc4bb4d73ff9aab987c8207","allowedControlPassed":true,"deniedEscapePassed":true,"securityNonRegression":true,"train":{"status":"pass","cases":1,"baselineCorrect":1,"candidateCorrect":1},"holdout":{"status":"pass","cases":1,"baselineCorrect":1,"candidateCorrect":1},"adversarial":{"status":"pass","cases":1,"baselineCorrect":1,"candidateCorrect":1},"candidateSelectedIds":["4b81ed6890cc368d4438099043c64879615c482ca1e073f642880c6e7a4bdf23","6f1c050992371ee3ed73bef89a7f4630027d35a2d5ff37252149270c0ab5b886","8ad3f40e019364c1caea227ade120ff4a9aa34b0dfd3bd0cac2e589e59285779"],"reasons":[],"reportDigest":"a8d5fbc54cc1f2e562bda51ae177d020ff3677b9d6e41c40d03c01468bc02a43"}
+{
+  "schemaVersion": "1.0",
+  "status": "pass",
+  "baselineVersion": "deterministic-context-1.0.0",
+  "baselineDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidateVersion": "candidate-1.0.0",
+  "candidateDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "corpusVersion": "sac-policy-corpus-1.0.0",
+  "corpusDigest": "e111d55d33fa2753ebac47e598cf7a089d0d74bfbdb1481a85a61478a62241a6",
+  "sandboxProfileDigest": "2c3e94c87ff42064841fa788657219c5144d36282cc4bb4d73ff9aab987c8207",
+  "allowedControlPassed": true,
+  "deniedEscapePassed": true,
+  "securityNonRegression": true,
+  "train": {
+    "status": "pass",
+    "cases": 1,
+    "baselineCorrect": 1,
+    "candidateCorrect": 1
+  },
+  "holdout": {
+    "status": "pass",
+    "cases": 1,
+    "baselineCorrect": 1,
+    "candidateCorrect": 1
+  },
+  "adversarial": {
+    "status": "pass",
+    "cases": 1,
+    "baselineCorrect": 1,
+    "candidateCorrect": 1
+  },
+  "candidateSelectedIds": [
+    "4b81ed6890cc368d4438099043c64879615c482ca1e073f642880c6e7a4bdf23",
+    "6f1c050992371ee3ed73bef89a7f4630027d35a2d5ff37252149270c0ab5b886",
+    "8ad3f40e019364c1caea227ade120ff4a9aa34b0dfd3bd0cac2e589e59285779"
+  ],
+  "reasons": [],
+  "reportDigest": "99c62c20f4004aa031616c1a115882527a8535716009ab58fc4e2498b3b822af"
+}

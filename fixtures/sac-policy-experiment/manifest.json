@@ -1,1 +1,56 @@
-{"schemaVersion":"1.0","corpusVersion":"sac-policy-corpus-1.0.0","corpusDigest":"ef9f284d001de10e2e69a889d532d94deb1ffe4a1e02e469759df58c577c63fd","baselineVersion":"deterministic-context-1.0.0","candidateVersion":"candidate-1.0.0","provenance":{"receiptLedgerRef":"./fixtures/sac-policy-experiment/receipts.jsonl","receiptHeadHash":"18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a","verifiedReceiptCount":3,"independentlyVerifiedOutcomeCount":3},"selection":{"independentOutcomesRequired":true,"selfReportedOutcomeAccepted":false,"knownConfigurationRevisions":["context-r1"],"knownPolicyRevisions":["policy-r1"]},"redaction":{"allowlistOnly":true,"pseudonymizationRevision":"hmac-sha256-v1","omittedFields":["actor","workspaceId","traceRef","selectedIds","resourceRef","outcome","rawContent"]},"quarantine":{"excludedFromAllSplits":true,"count":0,"reasons":{}},"split":{"algorithm":"sha256-modulo-v1","seedDigest":"16ff87a3f32b9bbdf1216008cd9001ffc2fa49dff42eda200219641e5fc40ae9","holdoutPercent":50,"digests":{"train":"14f21094d064a7a2b8c1561eded84714fd41d1212b61eb4fd0d742773bb046bb","holdout":"a604d54ce087e2a9ee806148f0ec998f5c824b9dd315933745010f2d22c876a7","adversarial":"1e48c3e1b62a1a8317d1a6552bde53ef3511c05244d15f8b2d4541e40d63e03a"}},"adversarial":{"required":true,"count":1}}
+{
+  "schemaVersion": "1.0",
+  "corpusVersion": "sac-policy-corpus-1.0.0",
+  "corpusDigest": "e111d55d33fa2753ebac47e598cf7a089d0d74bfbdb1481a85a61478a62241a6",
+  "baselineVersion": "deterministic-context-1.0.0",
+  "baselineDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidateVersion": "candidate-1.0.0",
+  "provenance": {
+    "receiptLedgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
+    "receiptHeadHash": "18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a",
+    "verifiedReceiptCount": 3,
+    "independentlyVerifiedOutcomeCount": 3
+  },
+  "selection": {
+    "independentOutcomesRequired": true,
+    "selfReportedOutcomeAccepted": false,
+    "knownConfigurationRevisions": [
+      "context-r1"
+    ],
+    "knownPolicyRevisions": [
+      "policy-r1"
+    ]
+  },
+  "redaction": {
+    "allowlistOnly": true,
+    "pseudonymizationRevision": "hmac-sha256-v1",
+    "omittedFields": [
+      "actor",
+      "workspaceId",
+      "traceRef",
+      "selectedIds",
+      "resourceRef",
+      "outcome",
+      "rawContent"
+    ]
+  },
+  "quarantine": {
+    "excludedFromAllSplits": true,
+    "count": 0,
+    "reasons": {}
+  },
+  "split": {
+    "algorithm": "sha256-modulo-v1",
+    "seedDigest": "16ff87a3f32b9bbdf1216008cd9001ffc2fa49dff42eda200219641e5fc40ae9",
+    "holdoutPercent": 50,
+    "digests": {
+      "train": "14f21094d064a7a2b8c1561eded84714fd41d1212b61eb4fd0d742773bb046bb",
+      "holdout": "a604d54ce087e2a9ee806148f0ec998f5c824b9dd315933745010f2d22c876a7",
+      "adversarial": "1e48c3e1b62a1a8317d1a6552bde53ef3511c05244d15f8b2d4541e40d63e03a"
+    }
+  },
+  "adversarial": {
+    "required": true,
+    "count": 1
+  }
+}

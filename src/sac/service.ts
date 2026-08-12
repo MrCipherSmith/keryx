@@ -32,6 +32,7 @@ export {
   type PolicyCorpusManifest,
   type PolicyCorpusRow,
   type PolicyEvaluationReport,
+  type PolicyExperimentBaseline,
   type PolicyExperimentCandidate,
   type PolicyExperimentConfig,
   type PolicyExperimentSandbox,

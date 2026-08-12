@@ -130,6 +130,78 @@ test("normal receipt appends use the bounded checkpoint fast path and missing ch
   expect(fullAudits).toBe(1);
 });
 
+test("checkpoint refresh failure after append does not fail or duplicate the committed receipt", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-checkpoint-failure-"));
+  let refreshAttempts = 0;
+  const service = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(),
+    canonical: { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" },
+    now: () => new Date(stamp),
+    refreshReceiptCheckpoint: async () => {
+      refreshAttempts += 1;
+      throw new Error("injected checkpoint rename failure");
+    },
+  });
+
+  const result = await read(service, { requestCorrelationId: "fwk-checkpoint-failure-0001" });
+  expect("code" in result).toBe(false);
+  expect(refreshAttempts).toBe(1);
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const receipts = (await readFile(ledger, "utf8")).trim().split("\n");
+  expect(receipts).toHaveLength(1);
+  await expect(stat(path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("live long receipt audit retains lock ownership and serializes a second writer", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-live-lock-"));
+  const canonical = { workspaceRoot: root, configurationRevision: "context-r1", policyRef: "./security/policy", policyRevision: "policy-r1" };
+  const bootstrap = new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(), canonical, now: () => new Date(stamp),
+  });
+  await read(bootstrap, { requestCorrelationId: "fwk-live-lock-bootstrap-0001" });
+  const checkpoint = path.join(root, ".metaproject", "context-operations", "access-receipts.checkpoint.json");
+  await unlink(checkpoint);
+
+  let releaseAudit!: () => void;
+  const auditRelease = new Promise<void>((resolve) => { releaseAudit = resolve; });
+  let auditStarted!: () => void;
+  const started = new Promise<void>((resolve) => { auditStarted = resolve; });
+  let activeAudits = 0;
+  let maxActiveAudits = 0;
+  const verify = async (receipts: Parameters<typeof verifyAccessReceiptLedger>[0]) => {
+    activeAudits += 1;
+    maxActiveAudits = Math.max(maxActiveAudits, activeAudits);
+    auditStarted();
+    await auditRelease;
+    activeAudits -= 1;
+    return verifyAccessReceiptLedger(receipts);
+  };
+  const makeWriter = () => new FwkReadService({
+    guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "guard-r1" },
+    authorizationServer: createSacAuthorizationServer({ authenticateRequest: async () => ({ subject: "user:owner", authenticationMethod: "local-os", roleRevision: "roles-r1" }) }),
+    source: async () => source(), canonical, now: () => new Date(stamp), verifyReceiptLedger: verify,
+    receiptLockOptions: { staleMs: 10, heartbeatMs: 2, retryMs: 2, timeoutMs: 1_000 },
+  });
+
+  const first = read(makeWriter(), { requestCorrelationId: "fwk-live-lock-first-0001" });
+  await started;
+  const second = read(makeWriter(), { requestCorrelationId: "fwk-live-lock-second-0001" });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  releaseAudit();
+  await Promise.all([first, second]);
+
+  expect(maxActiveAudits).toBe(1);
+  const ledger = path.join(root, ".metaproject", "context-operations", "access-receipts.jsonl");
+  const receipts = (await readFile(ledger, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  expect(receipts).toHaveLength(3);
+  expect(verifyAccessReceiptLedger(receipts)).toMatchObject({ ok: true, verifiedCount: 3 });
+  expect(JSON.parse(await readFile(checkpoint, "utf8"))).toMatchObject({ recordCount: 3, headHash: receipts[2]!.integrity.recordHash });
+});
+
 test("a corrupted receipt ledger refuses the next append", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-fwk-corrupt-ledger-"));
   const service = new FwkReadService({

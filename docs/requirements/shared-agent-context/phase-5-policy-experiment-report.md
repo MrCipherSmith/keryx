@@ -32,9 +32,10 @@ evidence whose exact digests match the activation pins.
 ## Corpus manifest
 
 - Corpus version: `sac-policy-corpus-1.0.0`
-- Corpus digest: `ef9f284d001de10e2e69a889d532d94deb1ffe4a1e02e469759df58c577c63fd`
+- Corpus digest: `e111d55d33fa2753ebac47e598cf7a089d0d74bfbdb1481a85a61478a62241a6`
 - Receipt chain head: `18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a`
 - Baseline pin: `deterministic-context-1.0.0`
+- Baseline artifact digest: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
 - Candidate version pin: `candidate-1.0.0`
 - Verified receipt/outcome rows: 3
 - Quarantined fixture rows: 0
@@ -66,9 +67,11 @@ splits.
 
 - Candidate artifact digest: `cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
 - Sandbox profile digest: `2c3e94c87ff42064841fa788657219c5144d36282cc4bb4d73ff9aab987c8207`
-- Evaluation report digest: `a8d5fbc54cc1f2e562bda51ae177d020ff3677b9d6e41c40d03c01468bc02a43`
+- Evaluation report digest: `99c62c20f4004aa031616c1a115882527a8535716009ab58fc4e2498b3b822af`
 
-The candidate can only return a subset of already baseline-authorized row IDs.
+The pinned deterministic baseline is executed twice for each canonical case;
+nondeterministic or invalid baseline output fails closed. The candidate can
+only return a subset of the baseline's actual authorized row IDs.
 Closed-output validation rejects unknown IDs, duplicates and fields that could
 express roles, ACLs, security gates, Flow state/acceptance criteria, policy or
 candidate configuration. The deterministic baseline remains authoritative.
@@ -88,7 +91,7 @@ Flow acceptance criteria/state or accepted knowledge.
 
 ## Verification evidence
 
-- Focused policy/FWK suite: 22 passed, 0 failed.
+- Focused policy/FWK suite: 36 passed, 0 failed.
 - TypeScript: `tsc --noEmit` passed.
 - Fixture tests recompute the complete receipt chain and every referenced
   verifier artifact digest.

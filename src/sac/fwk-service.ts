@@ -35,7 +35,7 @@ type LedgerIdentity = Readonly<{ ledgerBytes: number; device: string; inode: str
 type CheckpointBody = LedgerIdentity & Readonly<{ schemaVersion: "1.0"; recordCount: number; headHash: string; tailOffset: number }>;
 type Checkpoint = CheckpointBody & Readonly<{ integrity: Readonly<{ checkpointHash: string }> }>;
 type LedgerState = Readonly<{ identity: LedgerIdentity; recordCount: number; headHash: string; tailOffset: number }>;
-type LedgerVerifier = (receipts: readonly IntegrityLinkedAccessReceipt[]) => AccessReceiptLedgerVerification;
+type LedgerVerifier = (receipts: readonly IntegrityLinkedAccessReceipt[]) => AccessReceiptLedgerVerification | Promise<AccessReceiptLedgerVerification>;
 const receiptHashPattern = /^[a-f0-9]{64}$/;
 const missingIdentity: LedgerIdentity = Object.freeze({ ledgerBytes: 0, device: "0", inode: "0", modifiedNs: "0", changedNs: "0" });
 const isMissing = (error: unknown): boolean => error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
@@ -94,7 +94,7 @@ async function auditLedger(ledger: string, checkpointPath: string, verifier: Led
   if (raw.length > 0 && !raw.endsWith("\n")) throw new Error("invalid access receipt ledger: unterminated-record");
   const lines = raw.length === 0 ? [] : raw.slice(0, -1).split("\n"); let receipts: IntegrityLinkedAccessReceipt[];
   try { receipts = lines.map((line) => JSON.parse(line) as IntegrityLinkedAccessReceipt); } catch { throw new Error("invalid access receipt ledger: malformed-json"); }
-  const verification = verifier(receipts);
+  const verification = await verifier(receipts);
   if (!verification.ok) throw new Error(`invalid access receipt ledger: ${verification.reason} at record ${verification.firstInvalidIndex}`);
   const identity = await ledgerIdentity(ledger); const bytes = Buffer.from(raw, "utf8");
   const tailOffset = receipts.length === 0 ? 0 : bytes.lastIndexOf(0x0a, bytes.length - 2) + 1;
@@ -122,6 +122,8 @@ export class FwkReadService {
     canonical: { workspaceRoot: string; configurationRevision: string; policyRef: string; policyRevision: string };
     now?: () => Date;
     verifyReceiptLedger?: LedgerVerifier;
+    refreshReceiptCheckpoint?: (checkpointPath: string, body: CheckpointBody) => Promise<void>;
+    receiptLockOptions?: { timeoutMs?: number; retryMs?: number; staleMs?: number; heartbeatMs?: number };
   }) {}
 
   async overview(input: { workspaceId: string; request: unknown; requestCorrelationId: string; budget: { maxItems: number; maxTokens: number }; required?: string[]; optional?: string[] }): Promise<FwkReadResult> {
@@ -209,13 +211,19 @@ export class FwkReadService {
       const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
       if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
       await appendFile(ledger, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
-      const identity = await ledgerIdentity(ledger);
-      await writeCheckpoint(checkpointPath, {
-        schemaVersion: "1.0", ...identity, recordCount: state.recordCount + 1,
-        headHash: receipt.integrity.recordHash, tailOffset: state.identity.ledgerBytes,
-      });
+      try {
+        const identity = await ledgerIdentity(ledger);
+        await (this.options.refreshReceiptCheckpoint ?? writeCheckpoint)(checkpointPath, {
+          schemaVersion: "1.0", ...identity, recordCount: state.recordCount + 1,
+          headHash: receipt.integrity.recordHash, tailOffset: state.identity.ledgerBytes,
+        });
+      } catch {
+        // The ledger append is the commit point. A checkpoint is only a bounded
+        // verification cache, so invalidate it and rebuild under the next lock.
+        await rm(checkpointPath, { force: true }).catch(() => undefined);
+      }
       return receipt;
-    });
+    }, this.options.receiptLockOptions);
   }
 }
 

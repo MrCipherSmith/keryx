@@ -13,7 +13,8 @@ content.
 - `manifest.json` publishes provenance, selection, redaction, quarantine,
   deterministic split and adversarial metadata.
 - `evaluation-report.json` records the exact candidate/baseline/corpus/sandbox
-  pins and passing synthetic holdout/adversarial gates.
+  pins, the baseline's executed results, paired harness-owned containment
+  controls and passing synthetic holdout/adversarial gates.
 
 The corpus proves reproducibility and safety gates only. It does not authorize
 or enable a learned policy, and it is not evidence of production improvement.
