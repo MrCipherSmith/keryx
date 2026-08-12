@@ -3,9 +3,9 @@
   "id": "152",
   "slug": "shared-agent-context-production-guard-an",
   "title": "Shared Agent Context — Production guard and real opt-in data readiness",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-12T11:35:48.514Z",
-  "updatedAt": "2026-08-12T11:38:24.780Z",
+  "updatedAt": "2026-08-12T11:47:27.795Z",
   "source": {
     "type": "description",
     "ref": null
@@ -34,7 +34,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/275"
   },
   "tasks": [
     {
@@ -156,6 +156,11 @@
       "at": "2026-08-12T11:38:24.780Z",
       "event": "ac-confirmed",
       "detail": "AC5: no code-path changes introduced: default still disabled/killSwitch true and docs preserve default-off posture"
+    },
+    {
+      "at": "2026-08-12T11:47:27.795Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/275 (warning: PR is not a draft)"
     }
   ]
 }

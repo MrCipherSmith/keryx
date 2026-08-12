@@ -12,3 +12,4 @@
 - 2026-08-12T11:38:24.654Z - ac-confirmed: AC3: phase-execution-prompts.md now includes Phase 7 production guard and real opt-in readiness flow template
 - 2026-08-12T11:38:24.718Z - ac-confirmed: AC4: README.md and metrics-and-validation.md explicitly call out synthetic phase-5 limitation and no production claim
 - 2026-08-12T11:38:24.780Z - ac-confirmed: AC5: no code-path changes introduced: default still disabled/killSwitch true and docs preserve default-off posture
+- 2026-08-12T11:47:27.795Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/275 (warning: PR is not a draft)
