@@ -3,9 +3,9 @@
   "id": "152",
   "slug": "shared-agent-context-production-guard-an",
   "title": "Shared Agent Context — Production guard and real opt-in data readiness",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-12T11:35:48.514Z",
-  "updatedAt": "2026-08-12T11:47:27.795Z",
+  "updatedAt": "2026-08-12T11:51:24.544Z",
   "source": {
     "type": "description",
     "ref": null
@@ -161,6 +161,20 @@
       "at": "2026-08-12T11:47:27.795Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/275 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-08-12T11:51:24.511Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-12T11:51:24.544Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "790beb9d",
+    "ref": "origin/main",
+    "at": "2026-08-12T11:51:24.544Z"
+  }
 }
