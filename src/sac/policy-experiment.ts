@@ -82,6 +82,10 @@ export type PolicyExperimentSandboxEvidence = Readonly<{
   kind: "trusted-policy-sandbox-evidence";
 }>;
 
+export type PolicyExperimentSandboxExecutionCapability = Readonly<{
+  kind: "trusted-policy-sandbox-execution";
+}>;
+
 type OutcomeEvidenceRecord = Readonly<{
   receiptHash?: string;
   outcome?: VerifiedTaskOutcome;
@@ -89,6 +93,7 @@ type OutcomeEvidenceRecord = Readonly<{
 }>;
 
 type SandboxEvidenceRecord = Readonly<{
+  authorityIdentity: object;
   allowedControlPassed: boolean;
   deniedEscapePassed: boolean;
   candidateVersion: string;
@@ -96,10 +101,25 @@ type SandboxEvidenceRecord = Readonly<{
   profileDigest: string;
   evidenceRevision: string;
   deadlineMs: number;
+  allowedArtifactHash: string;
+  deniedArtifactHash: string;
+}>;
+
+type SandboxExecutionCapabilityRecord = Readonly<{
+  authorityIdentity: object;
+  owner: PolicyExperimentEvidenceOwner;
+  candidateVersion: string;
+  candidateDigest: string;
+  profileDigest: string;
+  evidenceRevision: string;
+  deadlineMs: number;
+  allowedArtifactHash: string;
+  deniedArtifactHash: string;
 }>;
 
 const trustedOutcomes = new WeakMap<object, OutcomeEvidenceRecord>();
 const trustedSandboxEvidence = new WeakMap<object, SandboxEvidenceRecord>();
+const trustedSandboxExecutions = new WeakMap<object, SandboxExecutionCapabilityRecord>();
 
 function isStrictUtcTimestamp(value: unknown): value is string {
   return typeof value === "string"
@@ -153,6 +173,14 @@ export type PolicyExperimentEvidenceAuthority = Readonly<{
     evidenceRevision: string;
     deadlineMs: number;
   }>): PolicyExperimentSandboxEvidence;
+  createSandboxExecutionCapability(input: Readonly<{
+    candidateVersion: string;
+    candidateDigest: string;
+    profile: Readonly<SandboxProfile>;
+    evidenceRevision: string;
+    deadlineMs: number;
+    controlEvidence: PolicyExperimentSandboxEvidence;
+  }>): PolicyExperimentSandboxExecutionCapability;
 }>;
 
 export type OwnerResolvedOutcomeArtifact = Readonly<{
@@ -197,6 +225,32 @@ export type OwnerResolvedSandboxControls = Readonly<{
   denied: OwnerSandboxControlObservation;
 }>;
 
+export type PolicyExperimentSandboxObservation = Readonly<{
+  kind: "completed" | "blocked" | "failed";
+  selection?: CandidateSelection;
+}>;
+
+export type PolicySandboxExecutionReceiptBody = Readonly<{
+  candidateVersion: string;
+  candidateDigest: string;
+  profileDigest: string;
+  requestDigest: string;
+  evidenceRevision: string;
+  deadlineMs: number;
+  allowedControlArtifactHash: string;
+  deniedControlArtifactHash: string;
+  observation: PolicyExperimentSandboxObservation;
+  observationDigest: string;
+  termination: "not-requested";
+  artifactHash: string;
+}>;
+
+export type OwnerResolvedSandboxExecution = PolicySandboxExecutionReceiptBody & Readonly<{
+  authenticated: boolean;
+  artifactContent: string | Uint8Array;
+  integrity: Readonly<{ recordHash: string }>;
+}>;
+
 export type PolicyExperimentEvidenceOwner = Readonly<{
   resolveOutcome(reference: OutcomeArtifactReference): OwnerResolvedOutcomeArtifact | undefined;
   resolveSandboxControls(input: Readonly<{
@@ -206,13 +260,39 @@ export type PolicyExperimentEvidenceOwner = Readonly<{
     evidenceRevision: string;
     deadlineMs: number;
   }>): OwnerResolvedSandboxControls | undefined;
+  executeSandbox(input: Readonly<{
+    candidateVersion: string;
+    candidateDigest: string;
+    profileDigest: string;
+    request: PolicyExperimentSandboxRequest;
+    requestDigest: string;
+    evidenceRevision: string;
+    deadlineMs: number;
+    allowedControlArtifactHash: string;
+    deniedControlArtifactHash: string;
+    signal: AbortSignal;
+  }>): Promise<OwnerResolvedSandboxExecution | undefined>;
+  terminateSandbox(input: Readonly<{
+    candidateVersion: string;
+    candidateDigest: string;
+    requestDigest: string;
+  }>): Promise<void>;
 }>;
+
+export function hashPolicySandboxExecutionReceipt(body: PolicySandboxExecutionReceiptBody): string {
+  return sha256(body);
+}
+
+export function hashPolicySandboxObservation(observation: PolicyExperimentSandboxObservation): string {
+  return sha256(observation);
+}
 
 /**
  * Create the owner-side evidence mint. Returned evidence is recognized through
  * module-private WeakMaps, so copying its public marker cannot forge trust.
  */
 export function createPolicyExperimentEvidenceAuthority(owner: PolicyExperimentEvidenceOwner): PolicyExperimentEvidenceAuthority {
+  const authorityIdentity = Object.freeze({});
   return Object.freeze({
     resolveOutcome(input): TrustedVerifiedTaskOutcome {
       const snapshot = cloneJsonValue(input.outcome);
@@ -290,6 +370,7 @@ export function createPolicyExperimentEvidenceAuthority(owner: PolicyExperimentE
         && Number.isInteger(input.deadlineMs)
         && input.deadlineMs > 0;
       const record: SandboxEvidenceRecord = {
+        authorityIdentity,
         allowedControlPassed: Boolean(inputValid && bindingValid
           && allowedHashValid
           && resolved?.allowed.control === "allowed-control"
@@ -309,10 +390,39 @@ export function createPolicyExperimentEvidenceAuthority(owner: PolicyExperimentE
         profileDigest,
         evidenceRevision: input.evidenceRevision,
         deadlineMs: input.deadlineMs,
+        allowedArtifactHash: resolved?.allowed.artifactHash ?? "",
+        deniedArtifactHash: resolved?.denied.artifactHash ?? "",
       };
       const evidence = Object.freeze({ kind: "trusted-policy-sandbox-evidence" as const });
       trustedSandboxEvidence.set(evidence, record);
       return evidence;
+    },
+    createSandboxExecutionCapability(input): PolicyExperimentSandboxExecutionCapability {
+      const controls = trustedSandboxEvidence.get(input.controlEvidence);
+      const profileDigest = sha256(input.profile);
+      const capability = Object.freeze({ kind: "trusted-policy-sandbox-execution" as const });
+      if (controls
+        && controls.authorityIdentity === authorityIdentity
+        && controls.allowedControlPassed
+        && controls.deniedEscapePassed
+        && controls.candidateVersion === input.candidateVersion
+        && controls.candidateDigest === input.candidateDigest
+        && controls.profileDigest === profileDigest
+        && controls.evidenceRevision === input.evidenceRevision
+        && controls.deadlineMs === input.deadlineMs) {
+        trustedSandboxExecutions.set(capability, {
+          authorityIdentity,
+          owner,
+          candidateVersion: input.candidateVersion,
+          candidateDigest: input.candidateDigest,
+          profileDigest,
+          evidenceRevision: input.evidenceRevision,
+          deadlineMs: input.deadlineMs,
+          allowedArtifactHash: controls.allowedArtifactHash,
+          deniedArtifactHash: controls.deniedArtifactHash,
+        });
+      }
+      return capability;
     },
   });
 }
@@ -343,6 +453,7 @@ export type PolicyCorpusRow = Readonly<{
     artifactHash: string;
     recordHash: string;
     result: "pass" | "fail";
+    caseClass: "standard" | "adversarial";
   }>;
   features: Readonly<{
     action: IntegrityLinkedAccessReceipt["action"];
@@ -405,6 +516,7 @@ export type PolicyCorpusManifest = Readonly<{
   }>;
   split: Readonly<{
     algorithm: "sha256-modulo-v1";
+    seed: string;
     seedDigest: string;
     holdoutPercent: number;
     digests: Readonly<Record<PolicyCorpusSplit, string>>;
@@ -417,6 +529,19 @@ export type PolicyCorpus = Readonly<{
   quarantine: readonly PolicyCorpusQuarantine[];
   manifest: PolicyCorpusManifest;
 }>;
+
+type PolicyCorpusManifestBody = Omit<PolicyCorpusManifest, "corpusDigest">;
+const policyCorpusOmittedFields = Object.freeze([
+  "actor", "workspaceId", "traceRef", "selectedIds", "resourceRef", "outcome", "rawContent",
+] as const);
+
+function policyCorpusDigest(
+  manifest: PolicyCorpusManifestBody,
+  rows: readonly PolicyCorpusRow[],
+  quarantine: readonly PolicyCorpusQuarantine[],
+): string {
+  return sha256({ manifest, rows, quarantine });
+}
 
 export type BuildPolicyCorpusInput = Readonly<{
   receipts: readonly IntegrityLinkedAccessReceipt[];
@@ -442,7 +567,7 @@ const bucket = (value: number | undefined, width: number): number =>
 
 function splitFor(
   receiptHash: string,
-  outcome: VerifiedTaskOutcome,
+  outcome: Pick<VerifiedTaskOutcome, "caseClass">,
   split: BuildPolicyCorpusInput["split"],
 ): PolicyCorpusSplit {
   if (outcome.caseClass === "adversarial") return "adversarial";
@@ -539,6 +664,7 @@ export function buildPolicyCorpus(input: BuildPolicyCorpusInput): PolicyCorpus {
         artifactHash: verified.verifier.artifactHash,
         recordHash: verified.integrity.recordHash,
         result: verified.result,
+        caseClass: verified.caseClass,
       },
       features: {
         action: receipt.action,
@@ -560,20 +686,12 @@ export function buildPolicyCorpus(input: BuildPolicyCorpusInput): PolicyCorpus {
       sha256(rows.filter((row) => row.split === split).map((row) => row.id)),
     ]),
   ) as Record<PolicyCorpusSplit, string>;
-  const corpusDigest = sha256({
-    corpusVersion: input.corpusVersion,
-    baselineVersion: input.baselineVersion,
-    baselineDigest: input.baselineDigest,
-    candidateVersion: input.candidateVersion,
-    rows,
-  });
   const headHash = ledger.ok ? ledger.headHash : validCount === 0
     ? "GENESIS"
     : input.receipts[validCount - 1]!.integrity.recordHash;
-  const manifest: PolicyCorpusManifest = {
+  const manifestBody: PolicyCorpusManifestBody = {
     schemaVersion: "1.0",
     corpusVersion: input.corpusVersion,
-    corpusDigest,
     baselineVersion: input.baselineVersion,
     baselineDigest: input.baselineDigest,
     candidateVersion: input.candidateVersion,
@@ -592,7 +710,7 @@ export function buildPolicyCorpus(input: BuildPolicyCorpusInput): PolicyCorpus {
     redaction: {
       allowlistOnly: true,
       pseudonymizationRevision: input.pseudonymizationRevision,
-      omittedFields: ["actor", "workspaceId", "traceRef", "selectedIds", "resourceRef", "outcome", "rawContent"],
+      omittedFields: policyCorpusOmittedFields,
     },
     quarantine: {
       excludedFromAllSplits: true,
@@ -601,13 +719,100 @@ export function buildPolicyCorpus(input: BuildPolicyCorpusInput): PolicyCorpus {
     },
     split: {
       algorithm: input.split.algorithm,
+      seed: input.split.seed,
       seedDigest: sha256(input.split.seed),
       holdoutPercent: input.split.holdoutPercent,
       digests: splitDigests,
     },
     adversarial: { required: true, count: rows.filter((row) => row.split === "adversarial").length },
   };
+  const manifest: PolicyCorpusManifest = {
+    ...manifestBody,
+    corpusDigest: policyCorpusDigest(manifestBody, rows, quarantine),
+  };
   return { rows, quarantine, manifest };
+}
+
+/** Recompute every locally verifiable corpus and manifest invariant. */
+function verifyPolicyCorpusUnchecked(corpus: PolicyCorpus): boolean {
+  const { manifest, rows, quarantine } = corpus;
+  if (manifest.schemaVersion !== "1.0"
+    || !isImmutableVersion(manifest.corpusVersion)
+    || !hashPattern.test(manifest.corpusDigest)
+    || !isImmutableVersion(manifest.baselineVersion)
+    || !hashPattern.test(manifest.baselineDigest)
+    || !isImmutableVersion(manifest.candidateVersion)
+    || !workspacePathPattern.test(manifest.provenance.receiptLedgerRef)
+    || (manifest.provenance.receiptHeadHash !== "GENESIS" && !hashPattern.test(manifest.provenance.receiptHeadHash))
+    || !isImmutableVersion(manifest.redaction.pseudonymizationRevision)
+    || manifest.selection.knownConfigurationRevisions.some((revision) => !isImmutableVersion(revision))
+    || manifest.selection.knownPolicyRevisions.some((revision) => !isImmutableVersion(revision))
+    || manifest.selection.independentOutcomesRequired !== true
+    || manifest.selection.selfReportedOutcomeAccepted !== false
+    || manifest.redaction.allowlistOnly !== true
+    || stableJson(manifest.redaction.omittedFields) !== stableJson(policyCorpusOmittedFields)
+    || manifest.quarantine.excludedFromAllSplits !== true
+    || manifest.adversarial.required !== true
+    || manifest.split.algorithm !== "sha256-modulo-v1"
+    || typeof manifest.split.seed !== "string"
+    || manifest.split.seed.length === 0
+    || sha256(manifest.split.seed) !== manifest.split.seedDigest
+    || !hashPattern.test(manifest.split.seedDigest)
+    || !Number.isFinite(manifest.split.holdoutPercent)
+    || manifest.split.holdoutPercent < 0
+    || manifest.split.holdoutPercent > 100
+    || !Number.isSafeInteger(manifest.provenance.verifiedReceiptCount)
+    || !Number.isSafeInteger(manifest.provenance.independentlyVerifiedOutcomeCount)
+    || manifest.provenance.verifiedReceiptCount < rows.length
+    || manifest.provenance.independentlyVerifiedOutcomeCount !== rows.length
+    || manifest.quarantine.count !== quarantine.length
+    || manifest.adversarial.count !== rows.filter((row) => row.split === "adversarial").length) return false;
+
+  const ids = rows.map((row) => row.id);
+  const knownConfigurationRevisions = new Set(manifest.selection.knownConfigurationRevisions);
+  const knownPolicyRevisions = new Set(manifest.selection.knownPolicyRevisions);
+  if (new Set(ids).size !== ids.length
+    || ids.some((id) => !hashPattern.test(id))
+    || stableJson(ids) !== stableJson([...ids].sort())
+    || rows.some((row) => !["train", "holdout", "adversarial"].includes(row.split)
+      || !workspacePathPattern.test(row.receipt.ledgerRef)
+      || row.receipt.ledgerRef !== manifest.provenance.receiptLedgerRef
+      || !hashPattern.test(row.receipt.recordHash)
+      || (row.receipt.previousRecordHash !== "GENESIS" && !hashPattern.test(row.receipt.previousRecordHash))
+      || !hashPattern.test(row.outcome.artifactHash)
+      || !hashPattern.test(row.outcome.recordHash)
+      || !["standard", "adversarial"].includes(row.outcome.caseClass)
+      || !workspacePathPattern.test(row.outcome.artifactRef)
+      || !isImmutableVersion(row.outcome.artifactRevision)
+      || !isImmutableVersion(row.receipt.configurationRevision)
+      || !isImmutableVersion(row.receipt.policyRevision)
+      || !knownConfigurationRevisions.has(row.receipt.configurationRevision)
+      || !knownPolicyRevisions.has(row.receipt.policyRevision)
+      || row.split !== splitFor(row.receipt.recordHash, { caseClass: row.outcome.caseClass }, {
+        algorithm: manifest.split.algorithm,
+        seed: manifest.split.seed,
+        holdoutPercent: manifest.split.holdoutPercent,
+      }))) return false;
+
+  const splitDigests = Object.fromEntries(
+    (["train", "holdout", "adversarial"] as const).map((split) => [
+      split,
+      sha256(rows.filter((row) => row.split === split).map((row) => row.id)),
+    ]),
+  ) as Record<PolicyCorpusSplit, string>;
+  if (stableJson(splitDigests) !== stableJson(manifest.split.digests)
+    || stableJson(quarantineCounts(quarantine)) !== stableJson(manifest.quarantine.reasons)) return false;
+
+  const { corpusDigest, ...manifestBody } = manifest;
+  return policyCorpusDigest(manifestBody, rows, quarantine) === corpusDigest;
+}
+
+export function verifyPolicyCorpus(corpus: PolicyCorpus): boolean {
+  try {
+    return verifyPolicyCorpusUnchecked(corpus);
+  } catch {
+    return false;
+  }
 }
 
 export const POLICY_EXPERIMENT_SANDBOX_PROFILE: Readonly<SandboxProfile> = Object.freeze({
@@ -659,12 +864,9 @@ export type PolicyExperimentSandboxRequest = Readonly<{
 export type PolicyExperimentSandbox = Readonly<{
   profile: Readonly<SandboxProfile>;
   controlEvidence: PolicyExperimentSandboxEvidence;
+  executionCapability: PolicyExperimentSandboxExecutionCapability;
   caseTimeoutMs: number;
-  run: (request: PolicyExperimentSandboxRequest, signal: AbortSignal) => Promise<Readonly<{
-    kind: "completed" | "blocked" | "failed";
-    selection?: CandidateSelection;
-  }>>;
-  terminate: () => Promise<void>;
+  terminationAckTimeoutMs: number;
 }>;
 
 export type PolicyPartitionEvaluation = Readonly<{
@@ -700,15 +902,26 @@ function sandboxControlStatus(
   candidate: PolicyExperimentCandidate,
 ): Readonly<{ allowed: boolean; denied: boolean }> {
   const evidence = trustedSandboxEvidence.get(sandbox.controlEvidence);
+  const execution = trustedSandboxExecutions.get(sandbox.executionCapability);
   const bindingValid = evidence !== undefined
+    && execution !== undefined
+    && evidence.authorityIdentity === execution.authorityIdentity
     && stableJson(sandbox.profile) === stableJson(POLICY_EXPERIMENT_SANDBOX_PROFILE)
     && Number.isInteger(sandbox.caseTimeoutMs)
     && sandbox.caseTimeoutMs > 0
     && sandbox.caseTimeoutMs <= 60_000
+    && Number.isInteger(sandbox.terminationAckTimeoutMs)
+    && sandbox.terminationAckTimeoutMs > 0
+    && sandbox.terminationAckTimeoutMs <= 10_000
     && evidence.candidateVersion === candidate.version
     && evidence.candidateDigest === candidate.artifactDigest
     && evidence.profileDigest === sha256(sandbox.profile)
-    && evidence.deadlineMs === sandbox.caseTimeoutMs;
+    && evidence.deadlineMs === sandbox.caseTimeoutMs
+    && execution.candidateVersion === evidence.candidateVersion
+    && execution.candidateDigest === evidence.candidateDigest
+    && execution.profileDigest === evidence.profileDigest
+    && execution.evidenceRevision === evidence.evidenceRevision
+    && execution.deadlineMs === evidence.deadlineMs;
   return {
     allowed: Boolean(bindingValid && evidence?.allowedControlPassed),
     denied: Boolean(bindingValid && evidence?.deniedEscapePassed),
@@ -723,13 +936,39 @@ function validSelection(selection: CandidateSelection, authorized: readonly stri
     && selection.selectedIds.every((id) => allowed.has(id));
 }
 
-type SandboxObservation = Awaited<ReturnType<PolicyExperimentSandbox["run"]>>;
+type SandboxObservation = PolicyExperimentSandboxObservation;
 type CandidateRunResult = Readonly<{ timedOut: boolean; observation: SandboxObservation }>;
+
+async function boundedTermination(
+  execution: SandboxExecutionCapabilityRecord,
+  requestDigest: string,
+  acknowledgementMs: number,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const acknowledgementDeadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, acknowledgementMs);
+  });
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => execution.owner.terminateSandbox({
+        candidateVersion: execution.candidateVersion,
+        candidateDigest: execution.candidateDigest,
+        requestDigest,
+      })).catch(() => undefined),
+      acknowledgementDeadline,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 async function runCandidateWithDeadline(
   sandbox: PolicyExperimentSandbox,
   request: PolicyExperimentSandboxRequest,
 ): Promise<Readonly<{ timedOut: boolean; observation: SandboxObservation }>> {
+  const executionCapability = trustedSandboxExecutions.get(sandbox.executionCapability);
+  if (!executionCapability) return { timedOut: false, observation: { kind: "failed" } };
+  const requestDigest = sha256(request);
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let deadlineTriggered = false;
@@ -737,17 +976,44 @@ async function runCandidateWithDeadline(
     timeout = setTimeout(() => {
       deadlineTriggered = true;
       controller.abort();
-      void sandbox.terminate()
-        .catch(() => undefined)
+      void boundedTermination(executionCapability, requestDigest, sandbox.terminationAckTimeoutMs)
         .then(() => resolve({ timedOut: true, observation: { kind: "failed" } }));
     }, sandbox.caseTimeoutMs);
   });
   const execution = Promise.resolve()
-    .then(() => sandbox.run(request, controller.signal))
+    .then(() => executionCapability.owner.executeSandbox({
+      candidateVersion: executionCapability.candidateVersion,
+      candidateDigest: executionCapability.candidateDigest,
+      profileDigest: executionCapability.profileDigest,
+      request,
+      requestDigest,
+      evidenceRevision: executionCapability.evidenceRevision,
+      deadlineMs: executionCapability.deadlineMs,
+      allowedControlArtifactHash: executionCapability.allowedArtifactHash,
+      deniedControlArtifactHash: executionCapability.deniedArtifactHash,
+      signal: controller.signal,
+    }))
     .then<CandidateRunResult, CandidateRunResult>(
-      (observation) => deadlineTriggered
-        ? new Promise<CandidateRunResult>(() => undefined)
-        : { timedOut: false, observation },
+      (receipt) => {
+        if (deadlineTriggered) return new Promise<CandidateRunResult>(() => undefined);
+        if (!receipt) return { timedOut: false, observation: { kind: "failed" } };
+        const { authenticated: _authenticated, artifactContent, integrity, ...body } = receipt;
+        const valid = receipt.authenticated === true
+          && receipt.candidateVersion === executionCapability.candidateVersion
+          && receipt.candidateDigest === executionCapability.candidateDigest
+          && receipt.profileDigest === executionCapability.profileDigest
+          && receipt.requestDigest === requestDigest
+          && receipt.evidenceRevision === executionCapability.evidenceRevision
+          && receipt.deadlineMs === sandbox.caseTimeoutMs
+          && receipt.allowedControlArtifactHash === executionCapability.allowedArtifactHash
+          && receipt.deniedControlArtifactHash === executionCapability.deniedArtifactHash
+          && receipt.observationDigest === hashPolicySandboxObservation(receipt.observation)
+          && receipt.termination === "not-requested"
+          && hashPattern.test(receipt.artifactHash)
+          && sha256Content(artifactContent) === receipt.artifactHash
+          && hashPolicySandboxExecutionReceipt(body) === integrity.recordHash;
+        return { timedOut: false, observation: valid ? receipt.observation : { kind: "failed" } };
+      },
       () => deadlineTriggered
         ? new Promise<CandidateRunResult>(() => undefined)
         : { timedOut: false, observation: { kind: "failed" } },
@@ -769,12 +1035,18 @@ export async function evaluatePolicyExperiment(input: Readonly<{
   const outcomes = new Map<string, { baseline: boolean; candidate: boolean }>();
   const selected = new Set<string>();
   const controls = sandboxControlStatus(input.sandbox, input.candidate);
+  const corpusValid = verifyPolicyCorpus(input.corpus);
   const baselineBound = input.baseline.version === input.corpus.manifest.baselineVersion
     && input.baseline.artifactDigest === input.corpus.manifest.baselineDigest
     && isImmutableVersion(input.baseline.version)
     && hashPattern.test(input.baseline.artifactDigest);
-  let securityNonRegression = controls.allowed && controls.denied && baselineBound;
+  const candidateBound = input.candidate.version === input.corpus.manifest.candidateVersion
+    && isImmutableVersion(input.candidate.version)
+    && hashPattern.test(input.candidate.artifactDigest);
+  let securityNonRegression = controls.allowed && controls.denied && baselineBound && candidateBound && corpusValid;
+  if (!corpusValid) reasons.push("corpus-integrity-failed");
   if (!baselineBound) reasons.push("baseline-pin-mismatch");
+  if (!candidateBound) reasons.push("candidate-pin-mismatch");
   if (!controls.allowed || !controls.denied) reasons.push("sandbox-controls-failed");
 
   if (securityNonRegression) {
@@ -953,6 +1225,7 @@ export function resolvePolicyExperiment(input: Readonly<{
     && hashPattern.test(candidate.artifactDigest)
     && isImmutableVersion(corpus.manifest.corpusVersion)
     && hashPattern.test(corpus.manifest.corpusDigest)
+    && verifyPolicyCorpus(corpus)
     && isImmutableVersion(evaluation.baselineVersion)
     && hasValidEvaluationDigest(evaluation)
     && evaluation.status === "pass"
@@ -968,6 +1241,7 @@ export function resolvePolicyExperiment(input: Readonly<{
     && config.rollbackBaselineVersion === evaluation.baselineVersion
     && config.evaluationDigest === evaluation.reportDigest
     && evaluation.candidateVersion === candidate.version
+    && corpus.manifest.candidateVersion === candidate.version
     && evaluation.candidateDigest === candidate.artifactDigest
     && evaluation.corpusVersion === corpus.manifest.corpusVersion
     && evaluation.corpusDigest === corpus.manifest.corpusDigest

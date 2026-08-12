@@ -1,9 +1,8 @@
 {
   "schemaVersion": "1.0",
   "corpusVersion": "sac-policy-corpus-1.0.0",
-  "corpusDigest": "e111d55d33fa2753ebac47e598cf7a089d0d74bfbdb1481a85a61478a62241a6",
   "baselineVersion": "deterministic-context-1.0.0",
-  "baselineDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "baselineDigest": "cce515bd4936afca41767f10ad33d1dddc020d5b5edab3e871ae749091aba60e",
   "candidateVersion": "candidate-1.0.0",
   "provenance": {
     "receiptLedgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
@@ -41,6 +40,7 @@
   },
   "split": {
     "algorithm": "sha256-modulo-v1",
+    "seed": "published-split-v1",
     "seedDigest": "16ff87a3f32b9bbdf1216008cd9001ffc2fa49dff42eda200219641e5fc40ae9",
     "holdoutPercent": 50,
     "digests": {
@@ -52,5 +52,6 @@
   "adversarial": {
     "required": true,
     "count": 1
-  }
+  },
+  "corpusDigest": "d4f29e44732f550f0174bb0263b31601b16f5d414ede9dbcf4b4eb0743f97a31"
 }

@@ -7,6 +7,7 @@ import {
   createSacAuthorizationServer,
   evaluateStrictSacGuard,
   resolveWorkspaceReference,
+  validateAccessReceiptDocument,
   validateSacContract,
   validateSacLedger,
 } from "./index";
@@ -114,6 +115,31 @@ test("SAC UTC validation rejects impossible calendar dates and accepts valid lea
   await expect(
     validateSacContract({ schema: "workspace-manifest", document: validLeapDay }),
   ).resolves.toMatchObject({ valid: true, errors: [] });
+});
+
+test("synchronous AccessReceipt validation stays in parity with the normative async contract", async () => {
+  const valid = await fixture("valid-access-receipt.json") as Record<string, unknown>;
+  const cases: Array<readonly [string, unknown, boolean]> = [
+    ["valid", valid, true],
+    ["closed top-level schema", { ...valid, unexpected: true }, false],
+    ["impossible timestamp", { ...valid, recordedAt: "2026-02-30T00:00:00Z" }, false],
+    ["unsafe resource path", { ...valid, resourceRef: "../outside" }, false],
+    ["action enum", { ...valid, action: "write" }, false],
+    ["decision enum", { ...valid, decision: "approved" }, false],
+    ["outcome enum", { ...valid, outcome: "producer-says-good" }, false],
+    ["closed nested cost", { ...valid, cost: { ...(valid.cost as Record<string, unknown>), rawContent: "forbidden" } }, false],
+    ["closed nested context", { ...valid, contextAssembly: { ...(valid.contextAssembly as Record<string, unknown>), roles: ["owner"] } }, false],
+    ["closed nested policy", { ...valid, policy: { ...(valid.policy as Record<string, unknown>), enabled: true } }, false],
+    ["closed nested integrity", { ...valid, integrity: { ...(valid.integrity as Record<string, unknown>), algorithm: "sha256" } }, false],
+  ];
+
+  for (const [name, document, expected] of cases) {
+    const synchronous = validateAccessReceiptDocument(document);
+    const normative = await validateSacContract({ schema: "access-receipt", document });
+    expect(synchronous.valid, `${name}: synchronous`).toBe(expected);
+    expect(normative.valid, `${name}: normative`).toBe(expected);
+    expect(synchronous.valid, `${name}: parity`).toBe(normative.valid);
+  }
 });
 
 test("SAC resolves only realpath-contained workspace-relative typed references", async () => {

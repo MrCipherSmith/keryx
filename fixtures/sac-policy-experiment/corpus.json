@@ -17,7 +17,8 @@
         "artifactRevision": "gate-r1",
         "artifactHash": "3507bbcab7fe50fbe33ae32840cbcb61d138d4d1222f03c7f6b9fa237b4aca6f",
         "recordHash": "f7208d3b3978adadc8f8dc23011623a823e19e2fe6b796cd8180b7c559b8bda1",
-        "result": "pass"
+        "result": "pass",
+        "caseClass": "standard"
       },
       "features": {
         "action": "resource",
@@ -48,7 +49,8 @@
         "artifactRevision": "gate-r1",
         "artifactHash": "852dfe27f568ccb86ae9ca28b30e2179c86eda7a628028c5f00ed681c1e2b873",
         "recordHash": "72207926dbeb87f52a2b93926272d4915cf4fbda49fe00994d5d12d88a5f9152",
-        "result": "pass"
+        "result": "pass",
+        "caseClass": "adversarial"
       },
       "features": {
         "action": "overview",
@@ -79,7 +81,8 @@
         "artifactRevision": "gate-r1",
         "artifactHash": "20391f8e59f9d4d2e44e8275eeada6fa7b50923370d8188e99fb17d3908db481",
         "recordHash": "6364ed590c4c7b99322b102b9c83f62b07b2c6688630ea7f656d0453080c9a07",
-        "result": "pass"
+        "result": "pass",
+        "caseClass": "standard"
       },
       "features": {
         "action": "overview",
@@ -98,9 +101,8 @@
   "manifest": {
     "schemaVersion": "1.0",
     "corpusVersion": "sac-policy-corpus-1.0.0",
-    "corpusDigest": "e111d55d33fa2753ebac47e598cf7a089d0d74bfbdb1481a85a61478a62241a6",
     "baselineVersion": "deterministic-context-1.0.0",
-    "baselineDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baselineDigest": "cce515bd4936afca41767f10ad33d1dddc020d5b5edab3e871ae749091aba60e",
     "candidateVersion": "candidate-1.0.0",
     "provenance": {
       "receiptLedgerRef": "./fixtures/sac-policy-experiment/receipts.jsonl",
@@ -138,6 +140,7 @@
     },
     "split": {
       "algorithm": "sha256-modulo-v1",
+      "seed": "published-split-v1",
       "seedDigest": "16ff87a3f32b9bbdf1216008cd9001ffc2fa49dff42eda200219641e5fc40ae9",
       "holdoutPercent": 50,
       "digests": {
@@ -149,6 +152,7 @@
     "adversarial": {
       "required": true,
       "count": 1
-    }
+    },
+    "corpusDigest": "d4f29e44732f550f0174bb0263b31601b16f5d414ede9dbcf4b4eb0743f97a31"
   }
 }

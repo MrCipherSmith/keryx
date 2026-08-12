@@ -7,6 +7,8 @@ import {
   defaultPolicyExperimentConfig,
   evaluatePolicyExperiment,
   formatPolicyEvaluationReport,
+  hashPolicySandboxExecutionReceipt,
+  hashPolicySandboxObservation,
   hashVerifiedTaskOutcome,
   resolvePolicyExperiment,
   rollbackPolicyExperiment,
@@ -16,6 +18,7 @@ import {
   type PolicyExperimentCandidate,
   type PolicyExperimentBaseline,
   type PolicyExperimentEvidenceOwner,
+  type OwnerResolvedSandboxExecution,
   type PolicyExperimentSandbox,
   type PolicyExperimentSandboxEvidence,
   type TrustedVerifiedTaskOutcome,
@@ -71,6 +74,8 @@ const evidenceOwner: PolicyExperimentEvidenceOwner = {
       },
     };
   },
+  executeSandbox: async () => undefined,
+  terminateSandbox: async () => undefined,
 };
 const evidenceAuthority = createPolicyExperimentEvidenceAuthority(evidenceOwner);
 
@@ -393,23 +398,69 @@ const deterministicBaseline: PolicyExperimentBaseline = {
   select: (request) => ({ selectedIds: request.eligibleIds }),
 };
 
-const sandboxEvidence = (deadlineMs = 100): PolicyExperimentSandboxEvidence => evidenceAuthority.resolveSandboxControls({
-  candidateVersion: candidate.version,
-  candidateDigest: candidate.artifactDigest,
-  profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
-  evidenceRevision: "sandbox-controls-1.0.0",
-  deadlineMs,
-});
+type SandboxTestOverrides = Readonly<{
+  caseTimeoutMs?: number;
+  terminationAckTimeoutMs?: number;
+  controlEvidence?: PolicyExperimentSandboxEvidence;
+  run?: (request: Parameters<PolicyExperimentEvidenceOwner["executeSandbox"]>[0]) => Promise<Readonly<{
+    kind: "completed" | "blocked" | "failed";
+    selection?: CandidateSelection;
+  }>>;
+  terminate?: () => Promise<void>;
+  mutateExecutionReceipt?: (receipt: OwnerResolvedSandboxExecution) => OwnerResolvedSandboxExecution;
+}>;
 
-const sandbox = (select: (ids: readonly string[]) => CandidateSelection, overrides: Partial<PolicyExperimentSandbox> = {}): PolicyExperimentSandbox => {
+const sandbox = (select: (ids: readonly string[]) => CandidateSelection, overrides: SandboxTestOverrides = {}): PolicyExperimentSandbox => {
   const caseTimeoutMs = overrides.caseTimeoutMs ?? 100;
+  const evidenceRevision = "sandbox-controls-1.0.0";
+  const owner: PolicyExperimentEvidenceOwner = {
+    ...evidenceOwner,
+    executeSandbox: async (request) => {
+      const observation = await (overrides.run
+        ? overrides.run(request)
+        : Promise.resolve({ kind: "completed" as const, selection: select(request.request.baselineAuthorizedIds) }));
+      const artifactContent = JSON.stringify({ requestDigest: request.requestDigest, observation });
+      const body = {
+        candidateVersion: request.candidateVersion,
+        candidateDigest: request.candidateDigest,
+        profileDigest: request.profileDigest,
+        requestDigest: request.requestDigest,
+        evidenceRevision: request.evidenceRevision,
+        deadlineMs: request.deadlineMs,
+        allowedControlArtifactHash: request.allowedControlArtifactHash,
+        deniedControlArtifactHash: request.deniedControlArtifactHash,
+        observation,
+        observationDigest: hashPolicySandboxObservation(observation),
+        termination: "not-requested" as const,
+        artifactHash: artifactHash(artifactContent),
+      };
+      const receipt = { authenticated: true, artifactContent, ...body, integrity: { recordHash: hashPolicySandboxExecutionReceipt(body) } };
+      return overrides.mutateExecutionReceipt?.(receipt) ?? receipt;
+    },
+    terminateSandbox: async () => { await (overrides.terminate?.() ?? Promise.resolve()); },
+  };
+  const authority = createPolicyExperimentEvidenceAuthority(owner);
+  const controlEvidence = overrides.controlEvidence ?? authority.resolveSandboxControls({
+    candidateVersion: candidate.version,
+    candidateDigest: candidate.artifactDigest,
+    profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
+    evidenceRevision,
+    deadlineMs: caseTimeoutMs,
+  });
+  const executionCapability = authority.createSandboxExecutionCapability({
+    candidateVersion: candidate.version,
+    candidateDigest: candidate.artifactDigest,
+    profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
+    evidenceRevision,
+    deadlineMs: caseTimeoutMs,
+    controlEvidence,
+  });
   return {
     profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
     caseTimeoutMs,
-    run: async (request) => ({ kind: "completed", selection: select(request.baselineAuthorizedIds) }),
-    terminate: async () => undefined,
-    ...overrides,
-    controlEvidence: overrides.controlEvidence ?? sandboxEvidence(caseTimeoutMs),
+    terminationAckTimeoutMs: overrides.terminationAckTimeoutMs ?? 25,
+    controlEvidence,
+    executionCapability,
   };
 };
 
@@ -440,6 +491,64 @@ describe("sandboxed candidate evaluation and activation", () => {
     expect(formatPolicyEvaluationReport(report)).toBe(formatPolicyEvaluationReport(report));
   });
 
+  test("rejects corpus row and manifest mutations before evaluation", async () => {
+    const corpus = validCorpus();
+    const mutatedRow = {
+      ...corpus,
+      rows: corpus.rows.map((row, index) => index === 0
+        ? { ...row, features: { ...row.features, selectedCount: row.features.selectedCount + 1 } }
+        : row),
+    };
+    const rowReport = await evaluatePolicyExperiment({
+      corpus: mutatedRow,
+      baseline: deterministicBaseline,
+      candidate,
+      sandbox: sandbox((ids) => ({ selectedIds: ids })),
+    });
+    expect(rowReport.status).toBe("fail");
+    expect(rowReport.reasons).toContain("corpus-integrity-failed");
+
+    const mutatedManifest = {
+      ...corpus,
+      manifest: {
+        ...corpus.manifest,
+        split: { ...corpus.manifest.split, digests: { ...corpus.manifest.split.digests, holdout: hex("f") } },
+      },
+    };
+    const manifestReport = await evaluatePolicyExperiment({
+      corpus: mutatedManifest,
+      baseline: deterministicBaseline,
+      candidate,
+      sandbox: sandbox((ids) => ({ selectedIds: ids })),
+    });
+    expect(manifestReport.status).toBe("fail");
+    expect(manifestReport.reasons).toContain("corpus-integrity-failed");
+
+    for (const manifestMutation of [
+      {
+        ...corpus.manifest,
+        redaction: { ...corpus.manifest.redaction, omittedFields: [] },
+      },
+      {
+        ...corpus.manifest,
+        selection: { ...corpus.manifest.selection, knownConfigurationRevisions: ["unrelated-r9"] },
+      },
+      {
+        ...corpus.manifest,
+        provenance: { ...corpus.manifest.provenance, verifiedReceiptCount: 99 },
+      },
+    ]) {
+      const report = await evaluatePolicyExperiment({
+        corpus: { ...corpus, manifest: manifestMutation },
+        baseline: deterministicBaseline,
+        candidate,
+        sandbox: sandbox((ids) => ({ selectedIds: ids })),
+      });
+      expect(report.status).toBe("fail");
+      expect(report.reasons).toContain("corpus-integrity-failed");
+    }
+  });
+
   test("rejects protected fields, unknown IDs and sandbox/control failure", async () => {
     const corpus = validCorpus();
     for (const selection of [
@@ -466,6 +575,89 @@ describe("sandboxed candidate evaluation and activation", () => {
       sandbox: sandbox(() => ({ selectedIds: [] }), { controlEvidence: {} as PolicyExperimentSandboxEvidence }),
     });
     expect(unavailable.status).toBe("fail");
+  });
+
+  test("accepts output only from an owner-issued request-bound execution receipt", async () => {
+    const corpus = validCorpus();
+    const forged = sandbox((ids) => ({ selectedIds: ids }), {
+      mutateExecutionReceipt: (receipt) => ({ ...receipt, requestDigest: hex("e") }),
+    });
+    const report = await evaluatePolicyExperiment({ corpus, baseline: deterministicBaseline, candidate, sandbox: forged });
+    expect(report.status).toBe("fail");
+    expect(report.reasons).toContainEqual(expect.stringContaining("invalid-candidate-output"));
+
+    const noCapability = { ...sandbox((ids) => ({ selectedIds: ids })), executionCapability: {} as never };
+    const capabilityReport = await evaluatePolicyExperiment({ corpus, baseline: deterministicBaseline, candidate, sandbox: noCapability });
+    expect(capabilityReport.status).toBe("fail");
+    expect(capabilityReport.reasons).toContain("sandbox-controls-failed");
+  });
+
+  test("rejects cross-authority controls and execution-capability substitution", async () => {
+    const corpus = validCorpus();
+    const trusted = sandbox((ids) => ({ selectedIds: ids }));
+    const otherAuthority = createPolicyExperimentEvidenceAuthority(evidenceOwner);
+    const reusedControlsCapability = otherAuthority.createSandboxExecutionCapability({
+      candidateVersion: candidate.version,
+      candidateDigest: candidate.artifactDigest,
+      profile: trusted.profile,
+      evidenceRevision: "sandbox-controls-1.0.0",
+      deadlineMs: trusted.caseTimeoutMs,
+      controlEvidence: trusted.controlEvidence,
+    });
+    const reused = await evaluatePolicyExperiment({
+      corpus,
+      baseline: deterministicBaseline,
+      candidate,
+      sandbox: { ...trusted, executionCapability: reusedControlsCapability },
+    });
+    expect(reused.status).toBe("fail");
+    expect(reused.reasons).toContain("sandbox-controls-failed");
+
+    const otherTrusted = sandbox((ids) => ({ selectedIds: ids }));
+    const substituted = await evaluatePolicyExperiment({
+      corpus,
+      baseline: deterministicBaseline,
+      candidate,
+      sandbox: { ...trusted, executionCapability: otherTrusted.executionCapability },
+    });
+    expect(substituted.status).toBe("fail");
+    expect(substituted.reasons).toContain("sandbox-controls-failed");
+  });
+
+  test("rejects a capability and controls pinned to another candidate", async () => {
+    const corpus = validCorpus();
+    const otherCandidate = { version: "candidate-2.0.0", artifactDigest: hex("d") };
+    const caseTimeoutMs = 100;
+    const authority = createPolicyExperimentEvidenceAuthority(evidenceOwner);
+    const controlEvidence = authority.resolveSandboxControls({
+      candidateVersion: otherCandidate.version,
+      candidateDigest: otherCandidate.artifactDigest,
+      profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
+      evidenceRevision: "sandbox-controls-1.0.0",
+      deadlineMs: caseTimeoutMs,
+    });
+    const executionCapability = authority.createSandboxExecutionCapability({
+      candidateVersion: otherCandidate.version,
+      candidateDigest: otherCandidate.artifactDigest,
+      profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
+      evidenceRevision: "sandbox-controls-1.0.0",
+      deadlineMs: caseTimeoutMs,
+      controlEvidence,
+    });
+    const report = await evaluatePolicyExperiment({
+      corpus,
+      baseline: deterministicBaseline,
+      candidate,
+      sandbox: {
+        profile: POLICY_EXPERIMENT_SANDBOX_PROFILE,
+        controlEvidence,
+        executionCapability,
+        caseTimeoutMs,
+        terminationAckTimeoutMs: 25,
+      },
+    });
+    expect(report.status).toBe("fail");
+    expect(report.reasons).toContain("sandbox-controls-failed");
   });
   test("requires harness-owned paired control outcomes and reports each axis separately", async () => {
     const corpus = validCorpus();
@@ -545,6 +737,22 @@ describe("sandboxed candidate evaluation and activation", () => {
     expect(activeExecutions).toBe(0);
   });
 
+  test("bounds a noncooperative termination acknowledgement", async () => {
+    const corpus = validCorpus();
+    const noncooperative = sandbox(() => ({ selectedIds: [] }), {
+      caseTimeoutMs: 1,
+      terminationAckTimeoutMs: 2,
+      run: async () => new Promise(() => undefined),
+      terminate: async () => new Promise(() => undefined),
+    });
+    const result = await Promise.race([
+      evaluatePolicyExperiment({ corpus, baseline: deterministicBaseline, candidate, sandbox: noncooperative }),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+    ]);
+    expect(result).not.toBe("hung");
+    expect(result).toMatchObject({ status: "fail", reasons: expect.arrayContaining([expect.stringContaining("candidate-timeout")]) });
+  });
+
   test("binds evaluation to the corpus baseline", async () => {
     const corpus = validCorpus();
     const report = await evaluatePolicyExperiment({
@@ -611,6 +819,11 @@ describe("sandboxed candidate evaluation and activation", () => {
 
     const tamperedEvaluation = { ...evaluation, candidateSelectedIds: ["outside-runtime-baseline"] };
     expect(resolvePolicyExperiment({ config: enabled, evaluation: tamperedEvaluation, candidate, corpus, baseline })).toEqual(baseline);
+    const mutatedCorpus = {
+      ...corpus,
+      manifest: { ...corpus.manifest, adversarial: { ...corpus.manifest.adversarial, count: 0 } },
+    };
+    expect(resolvePolicyExperiment({ config: enabled, evaluation, candidate, corpus: mutatedCorpus, baseline })).toEqual(baseline);
     expect(resolvePolicyExperiment({
       config: enabled,
       evaluation,

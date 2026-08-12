@@ -32,10 +32,10 @@ evidence whose exact digests match the activation pins.
 ## Corpus manifest
 
 - Corpus version: `sac-policy-corpus-1.0.0`
-- Corpus digest: `e111d55d33fa2753ebac47e598cf7a089d0d74bfbdb1481a85a61478a62241a6`
+- Corpus digest: `d4f29e44732f550f0174bb0263b31601b16f5d414ede9dbcf4b4eb0743f97a31`
 - Receipt chain head: `18908e776a405d4678bfc02b912debcd6313da83bffb62e0742c00616d2b0b5a`
 - Baseline pin: `deterministic-context-1.0.0`
-- Baseline artifact digest: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
+- Baseline artifact digest: `cce515bd4936afca41767f10ad33d1dddc020d5b5edab3e871ae749091aba60e`
 - Candidate version pin: `candidate-1.0.0`
 - Verified receipt/outcome rows: 3
 - Quarantined fixture rows: 0
@@ -65,9 +65,9 @@ splits.
 | Allowed sandbox control | pass | 1 |
 | Denied sandbox escape | pass | 1 |
 
-- Candidate artifact digest: `cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
+- Candidate artifact digest: `f6de324efc35ac0602942f87d092aab6f8c01b6660f78607ee6572ed12f0c6f3`
 - Sandbox profile digest: `2c3e94c87ff42064841fa788657219c5144d36282cc4bb4d73ff9aab987c8207`
-- Evaluation report digest: `99c62c20f4004aa031616c1a115882527a8535716009ab58fc4e2498b3b822af`
+- Evaluation report digest: `d485302b1e66d20e0f0aed01f4cf409da75fd78033d5cbc4176650ebcdfcd183`
 
 The pinned deterministic baseline is executed twice for each canonical case;
 nondeterministic or invalid baseline output fails closed. The candidate can
@@ -91,7 +91,7 @@ Flow acceptance criteria/state or accepted knowledge.
 
 ## Verification evidence
 
-- Focused policy/FWK suite: 36 passed, 0 failed.
+- Focused Phase 5, FWK and contract suite: 56 passed, 0 failed.
 - TypeScript: `tsc --noEmit` passed.
 - Fixture tests recompute the complete receipt chain and every referenced
   verifier artifact digest.
