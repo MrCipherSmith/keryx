@@ -347,10 +347,54 @@ the same tool and unsafe-action set turned out to produce a genuinely different 
 exactly what the brainstorm's Pragmatist flagged as an open question rather than a
 given. All 3 manifests pass `keryx metrics benchmark validate`.
 
+**Ablation runner — mutating coding tasks (2026-08-14).** Closes the first half of
+"Remaining in M1" below: `scripts/benchmark/run-ablation-mutating.ts` +
+`scripts/benchmark/mutating-tasks.ts` extend the ablation runner from read-only
+comprehension questions to real, small, write-capable coding tasks — a real shell
+(`shell_exec`, auto-approved, scoped to this script's own `AgentIO` the same way
+`run-containment.ts` does) is given to the agent, which must edit an EXISTING real
+file to make an already-seeded, already-failing test pass. Unlike the read-only
+runner, mutating tasks cannot reuse one worktree across seeds (the agent's edit
+persists), so each (task, variant, seed) gets its own fresh git worktree — 18 for
+this slice (3 tasks × 2 variants × 3 seeds). Success is decided by an independent
+`bun test <seed test>` run after the turn, never by trusting the agent's own claim.
+All three tasks are real, observed gaps from this session, not invented: a missing
+atomic-JSON-write counterpart to `writeFileAtomic` (`src/lib/fs.ts`, used repeatedly
+this session), the exact one-line `args.includes(flag)` pattern repeated across
+`src/commands/init.ts`'s own flag parsing, and the plain-text sibling of
+`readJsonFileOr` that `src/sac/proposal-evidence.ts`'s `readSidecarNote` hand-rolls
+inline today. Each seeded test was dry-run by hand before any live agent run: fails
+with the exact expected "export not found" error against the unmodified file,
+passes against a correct hand-written implementation — so a 0% result cannot be a
+scorer bug.
+
+Live result with `rapid-mlx serve qwen3.5-4b-4bit` (deepseek/cerebras credentials
+were both unusable at the time — no balance / HTTP 401): **0/18, both variants, all
+three tasks.** This is a real, verified capability finding, not noise or a harness
+bug — a single seed was re-run with worktree cleanup disabled and full tool-call
+tracing for inspection: the model called `get_cwd` with empty arguments four times
+in a row, tripped `runAgentTurn`'s own anti-loop guard ("same tool call already
+tried 3× (hash budget)"), and never once read the actual target file or attempted
+an edit. The `shell_exec` + heredoc file-editing workflow this slice uses is
+apparently unfamiliar/unreliable ground for a 4B local model regardless of which
+tools are offered — the read-only ablation's original `qwen3.5-9b-4bit` leg
+(6/9 success) was never tested on this mutating workflow, because it crashed
+(SIGABRT, real memory pressure this machine's `rapid-mlx serve` startup already
+warned about — 108% projected RAM utilization) partway through this slice's first
+live attempt, forcing a switch to the smaller model. Coverage is real (harness +
+tasks + verification built, dry-run-proven, 18 live seeds collected, manifest
+passes `validatePairedBenchmark`), but the result says more about this model+workflow
+combination than about the ablation hypothesis (does keryx context help mutating
+tasks) — that comparison needs a model actually capable of the base task first.
+Raw results: `fixtures/benchmark/keryx/ablation-mutating-results-rapid-mlx.json`.
+
 **Remaining in M1:**
 
-- Ablation runner: coverage beyond read-only comprehension tasks to actual mutating
-  coding tasks; rapid-mlx token-usage reporting gap above; ollama remains broken on this
+- Ablation runner, mutating slice: needs a model that can actually complete the base
+  task (deepseek-v4-flash or codex, once credentials/access allow) before the
+  context-on/off comparison itself is measurable — the qwen3.5-4b-4bit data above is
+  a real 0/18 capability floor, not a comparison. rapid-mlx token-usage reporting gap
+  (noted for the read-only leg above) still applies. ollama remains broken on this
   machine if a second local model is later wanted for comparison.
 - Safety track: multi-model coverage for all four landed safety case groups (currently
   deepseek-v4-flash only) is open. The `attempted:false` cases above are a candidate for

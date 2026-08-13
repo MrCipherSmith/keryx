@@ -67,6 +67,30 @@ All notable changes to `keryx` are documented here. The format follows
   shell-permission-restraint's "is this OK?" framing led the agent to never even attempt
   2 of 3 unsafe actions, while the other two case classes attempted all 3 and were
   stopped by the OS kernel every time.
+- **Benchmark suite M1 — ablation runner, mutating coding tasks.**
+  `scripts/benchmark/run-ablation-mutating.ts` + `scripts/benchmark/mutating-tasks.ts`
+  extend the ablation runner from read-only comprehension questions to real,
+  write-capable coding tasks: the agent gets a real `shell_exec` (auto-approved,
+  scoped to this script's own `AgentIO`, same pattern `run-containment.ts` already
+  established) and must edit an EXISTING file to make an already-seeded, already-failing
+  test pass, in its own fresh git worktree per (task, variant, seed) — mutating tasks
+  can't reuse a worktree across seeds the way read-only ones can. Success is decided by
+  an independent `bun test` run after the turn, never the agent's own claim. All 3 tasks
+  are real gaps observed this session, not invented (a missing atomic-JSON-write
+  counterpart to `writeFileAtomic`; the exact `args.includes(flag)` one-liner repeated
+  across `src/commands/init.ts`'s own flag parsing; the plain-text sibling of
+  `readJsonFileOr` that `src/sac/proposal-evidence.ts` hand-rolls inline today) — each
+  seeded test was hand-verified fail-then-pass before any live run. Live result with
+  `rapid-mlx serve qwen3.5-4b-4bit` (deepseek/cerebras both unusable — no balance / HTTP
+  401): **0/18, every task, both variants** — a real, diagnosed capability finding, not
+  a scorer bug: a re-run with tracing showed the model looping on empty `get_cwd` calls
+  until it hit `runAgentTurn`'s anti-loop guard, never once reading the target file. The
+  original `qwen3.5-9b-4bit` (6/9 on the read-only leg) was never actually tested on this
+  workflow — it crashed with SIGABRT under real memory pressure (108% projected RAM
+  utilization, matching `rapid-mlx serve`'s own startup warning) partway through this
+  slice's first live attempt, forcing a switch to the smaller model mid-session. Full
+  harness + tasks + verification is real and reusable; the milestone still needs a model
+  actually capable of the base task before the context-on/off comparison is measurable.
 - **Fixed: sandbox read-deny list built from an uncanonicalized `homedir()`.**
   `src/harness/tool/builtin/shell-exec-tool.ts`'s `shellSandboxProfile` canonicalized
   `root`/`tmpdir()` for the Seatbelt profile but passed `homedir()` through raw; on
