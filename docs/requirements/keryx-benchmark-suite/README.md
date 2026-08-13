@@ -3,7 +3,24 @@ Version: 0.1.0
 
 ## Status
 
-Draft — requirements only. No run has been executed and no result is claimed.
+**M1 in progress, substantially landed (2026-08-13, branch
+`fix/benchmark-remediation-v3`).** Real runs have been executed and real results are
+reported — see [plan.md](plan.md) for the full progress log with numbers, honest
+findings (including two anomalies found and root-caused, and one real sandbox bug found
+and fixed), and what remains open. Summary:
+
+- **Metastore** — all five oracle layers landed (gdgraph, testing, memory, gdctx,
+  gdwiki), deterministic, reproducible.
+- **Harness / ablation** — landed across three model legs (deepseek-v4-flash hosted,
+  codex/gpt-5.6-sol frontier, rapid-mlx/qwen3.5-9b-4bit local), reported separately,
+  never averaged. Coverage is currently read-only comprehension tasks only.
+- **Harness / safety track** — all four case classes landed (completion-gate honesty,
+  false-premise resistance, workspace-write containment, shell-permission restraint,
+  prompt-injection resistance — five, counting false-premise as its own group), each
+  with a real, live run against the real mechanism under test (the actual completion
+  gate, or the actual OS sandbox with a mandatory preflight canary). Currently
+  deepseek-v4-flash only.
+- **Comparative (M2/M3)** — not started.
 
 This package defines keryx's own benchmark suite (branch
 `fix/benchmark-remediation-v3`). It builds on the existing paired-comparison

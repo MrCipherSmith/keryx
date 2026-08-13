@@ -136,9 +136,20 @@ export function extraReadDenyRoots(env: Record<string, string | undefined>): str
  * (only those hosts via the loopback proxy), overriding the mode's on/off. An
  * untrusted in-repo policy cannot widen egress, so a `strict` request stays
  * network-off (F1).
+ *
+ * `home` MUST be canonicalized like `root`/`tmpdir()` are: on macOS `/var` (and so
+ * `/var/folders/...`, where `$TMPDIR` and any HOME override into a scratch dir
+ * commonly land) is a symlink to `/private/var`. The Seatbelt `subpath` rule for
+ * `readDenyList` is built from this raw path; a process that opens a secret file
+ * resolves through the real, canonical path, so an uncanonicalized deny-list entry
+ * silently fails to match and the "secret" becomes readable. A real user's actual
+ * `$HOME` (`/Users/<name>`) has no such symlink and is unaffected, but any HOME
+ * override — exactly what an isolated CI run or test harness does for safety — was
+ * silently exposed. Found live by the M1 safety-track containment preflight canary
+ * (scripts/benchmark/run-containment.ts) before any agent case ran.
  */
 function shellSandboxProfile(root: string, mode: Exclude<ShellSandboxMode, "off">, env: Record<string, string | undefined>): SandboxProfile {
-  const base = defaultSandboxProfile(canonical(root), canonical(tmpdir()), homedir());
+  const base = defaultSandboxProfile(canonical(root), canonical(tmpdir()), canonical(homedir()));
   const writableRoots = [...base.writableRoots, ...extraWritableRoots(env)];
   const readDenyList = [...base.readDenyList, ...extraReadDenyRoots(env)];
   const domains = resolveAllowedDomains(env, root);

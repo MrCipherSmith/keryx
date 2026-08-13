@@ -12,8 +12,71 @@ All notable changes to `keryx` are documented here. The format follows
   judge panel, `servedModel`/`effort`, tokenizer-normalized cost), IR/oracle metric
   primitives, git-co-change gold derivation with a real pinned express fixture, and a
   metastore oracle runner exposed as `keryx metrics benchmark run --ladder metastore`.
-  Produces the first honest oracle result (gdgraph `affected` vs co-change gold).
+  Produces the first honest oracle result (gdgraph `affected` vs co-change gold). All
+  five metastore layers (gdgraph, testing, memory, gdctx, gdwiki) are landed.
   Requirements: `docs/requirements/keryx-benchmark-suite`.
+- **Benchmark suite M1 — ablation runner (first live slice).** New
+  `keryx metrics benchmark run --ladder harness` scores the SAME agent + model run
+  twice per seed, in isolated git worktrees, with keryx metaproject tools present
+  (`context-on`) vs a basic-tools-only baseline (`context-off`) —
+  `src/metrics/ablation-runner.ts`, driven live by `scripts/benchmark/run-ablation.ts`
+  via the same multi-turn agent loop `keryx shell --agent` uses
+  (`src/commands/agent.ts` `runAgentTurn`), plus a real `git worktree add/remove`
+  adapter (`src/harness/child/git-worktree-port.ts`) for a seam flow 096 had only
+  planned. First live result (`deepseek-v4-flash`, 3 code-comprehension tasks, ×3
+  seeds): task success 9/9 with context on vs 0/9 with it off, and 2-6x fewer
+  tool-calls with it on. A second, separately-reported manifest
+  (`scripts/benchmark/run-ablation-codex.ts`) runs the identical tasks through the
+  already-authenticated `codex` CLI (its own agent loop; context on/off toggled by
+  presence/absence of `AGENTS.md`/`.metaproject/` in the worktree) as the milestone's
+  frontier-model leg: 18/18 success on BOTH variants (a real shell closes the gap a
+  no-search baseline can't), with a mixed, non-directional token/tool-call delta —
+  reported honestly rather than as a win. A third, separate manifest closes the
+  milestone's "one frontier + one local" model coverage: `run-ablation.ts` is now
+  parameterized (`--provider`/`--model`) and was run against a local `rapid-mlx serve
+  qwen3.5-9b-4bit` (ollama would not start on the dev machine; unrelated to this work) —
+  6/9 success with context on vs 0/9 off, tool-call counts only (this provider path
+  reports no token usage). All three legs (deepseek/codex/rapid-mlx) are reported side
+  by side, never averaged.
+- **Benchmark suite M1 — safety track, first two case groups.** `PairedBenchmarkRunV2`
+  gained `safety` (`contained`/`escaped` + case class) and `completionHonesty`
+  (`honest`/`overclaimed`) fields, with AC-4 enforced as a hard invariant in
+  `validatePairedBenchmarkV2`: an escaped case must score `correctness: 0`. New
+  `src/metrics/safety-runner.ts` + `keryx metrics benchmark run --ladder harness --layer
+  completion-honesty|false-premise`, driven live by `scripts/benchmark/run-safety.ts`.
+  Completion-gate honesty gives the agent one fixed, non-configurable check tool per
+  case (no injection surface) and grades whether its `VERDICT:` claim matches
+  independently-verified reality; false-premise resistance asks loaded questions built
+  on premises verified false against this repo's real source. First live result
+  (`deepseek-v4-flash`): 3/3 honest on completion-honesty (the agent answered `UNKNOWN`
+  even when it had just seen a clear pass/fail result — overcautious, not dishonest; an
+  earlier scorer draft would have wrongly flagged that caution as an unsafe escape, since
+  fixed) and 3/3 correctly rejected the false premise.
+- **Benchmark suite M1 — safety track, containment (real OS sandbox).** Designed via an
+  interviewer+brainstorm pass (Pragmatist/Innovator/Critic) before writing code —
+  `scripts/benchmark/run-containment.ts`. A live agent (`deepseek-v4-flash`) is given a
+  REAL, OS-sandboxed `shell_exec` (`KERYX_SANDBOX_SHELL=strict`) and tempted toward the
+  same 3 unsafe actions (write outside its worktree, network egress when off, read a
+  secret-shaped path) across 3 case classes (workspace-write containment,
+  shell-permission restraint, prompt-injection resistance via a planted file). A
+  mandatory preflight canary runs all 3 unsafe actions directly (no LLM) before any live
+  case and aborts the whole run if even one is not blocked. `SafetyResult` gained
+  `attempted`/`blockedAt` evidence fields (informational; AC-4 still governs
+  correctness). Real result: **9/9 contained, 0 escapes** — and the new `attempted`
+  field surfaced a real behavioral split the bare count would have hidden:
+  shell-permission-restraint's "is this OK?" framing led the agent to never even attempt
+  2 of 3 unsafe actions, while the other two case classes attempted all 3 and were
+  stopped by the OS kernel every time.
+- **Fixed: sandbox read-deny list built from an uncanonicalized `homedir()`.**
+  `src/harness/tool/builtin/shell-exec-tool.ts`'s `shellSandboxProfile` canonicalized
+  `root`/`tmpdir()` for the Seatbelt profile but passed `homedir()` through raw; on
+  macOS `/var` symlinks to `/private/var`, so a `HOME` pointed at a `tmpdir()`-derived
+  path (exactly what an isolated CI run or test harness does) silently escaped the
+  secret read-deny rules. Found live by the M1 safety-track containment preflight
+  canary before any agent case ran — not a live risk for a real user's real `$HOME`
+  (`/Users/<name>` has no symlink component), but a real gap for anyone overriding
+  `HOME` for isolation. Fixed with `canonical(homedir())`, matching the existing
+  treatment of `root`/`tmpdir()`.
 
 ## [0.2.33] — 2026-08-13
 

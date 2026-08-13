@@ -1,0 +1,156 @@
+{
+  "note": "RAW per-seed ablation results: the SAME agent (src/commands/agent.ts runAgentTurn) and model run on THIS repository, twice per seed — context-on (basic tools + keryx metaproject tools) vs context-off (basic tools only) — in isolated git worktrees. Captured live, no fabricated samples.",
+  "model": "deepseek-v4-flash",
+  "provider": "deepseek",
+  "generated_by": "bun scripts/benchmark/run-ablation.ts",
+  "captured": "2026-08-13",
+  "tasks": [
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 10579,
+            "toolCalls": 3
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 23262,
+            "toolCalls": 4
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 10463,
+            "toolCalls": 3
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": false,
+            "tokens": 15050,
+            "toolCalls": 14
+          },
+          {
+            "seed": 2,
+            "success": false,
+            "tokens": 13893,
+            "toolCalls": 14
+          },
+          {
+            "seed": 3,
+            "success": false,
+            "tokens": 48118,
+            "toolCalls": 21
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 89752,
+            "toolCalls": 10
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 70532,
+            "toolCalls": 9
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 70119,
+            "toolCalls": 8
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": false,
+            "tokens": 17313,
+            "toolCalls": 16
+          },
+          {
+            "seed": 2,
+            "success": false,
+            "tokens": 26896,
+            "toolCalls": 15
+          },
+          {
+            "seed": 3,
+            "success": false,
+            "tokens": 17181,
+            "toolCalls": 19
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 8398,
+            "toolCalls": 3
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 8585,
+            "toolCalls": 3
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 8767,
+            "toolCalls": 4
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": false,
+            "tokens": 31065,
+            "toolCalls": 23
+          },
+          {
+            "seed": 2,
+            "success": false,
+            "tokens": 11757,
+            "toolCalls": 14
+          },
+          {
+            "seed": 3,
+            "success": false,
+            "tokens": 24692,
+            "toolCalls": 28
+          }
+        ]
+      }
+    }
+  ]
+}

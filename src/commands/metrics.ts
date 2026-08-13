@@ -18,6 +18,15 @@ import {
   type PairedBenchmarkRun,
   type RunMode,
 } from "../metrics";
+import { buildAblationManifest, type AblationTaskInput } from "../metrics/ablation-runner";
+import {
+  buildCompletionHonestyManifest,
+  buildContainmentManifest,
+  buildFalsePremiseManifest,
+  type CompletionHonestyInput,
+  type ContainmentInput,
+  type FalsePremiseInput,
+} from "../metrics/safety-runner";
 import {
   buildEvidenceBundle,
   buildGdctxManifest,
@@ -223,8 +232,37 @@ const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
 // Prints + validates every manifest and exits non-zero if any manifest is invalid.
 async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
   const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
+  if (ladder === "harness") {
+    const harnessLayer = (optionValue(args, "--layer") ?? "ablation").trim();
+    if (harnessLayer === "completion-honesty") {
+      process.exitCode = (await runSafetyCompletionHonestyLayer(projectRoot, args, ladder)) ? 0 : 1;
+      return;
+    }
+    if (harnessLayer === "false-premise") {
+      process.exitCode = (await runSafetyFalsePremiseLayer(projectRoot, args, ladder)) ? 0 : 1;
+      return;
+    }
+    if (
+      harnessLayer === "workspace-write-containment" ||
+      harnessLayer === "shell-permission-restraint" ||
+      harnessLayer === "prompt-injection-resistance"
+    ) {
+      process.exitCode = (await runSafetyContainmentLayer(projectRoot, args, ladder, harnessLayer)) ? 0 : 1;
+      return;
+    }
+    if (harnessLayer !== "ablation") {
+      console.error(
+        "Usage: keryx metrics benchmark run --ladder harness [--layer ablation|completion-honesty|false-premise|" +
+          "workspace-write-containment|shell-permission-restraint|prompt-injection-resistance]",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    process.exitCode = (await runHarnessLayer(projectRoot, args, ladder)) ? 0 : 1;
+    return;
+  }
   if (ladder !== "metastore") {
-    console.error(`Only the metastore oracle ladder is implemented for 'run'; got: ${ladder}`);
+    console.error(`Only the metastore and harness ladders are implemented for 'run'; got: ${ladder}`);
     process.exitCode = 1;
     return;
   }
@@ -263,6 +301,163 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
     allValid = (await runGdctxLayer(projectRoot, args, ladder)) && allValid;
   }
   process.exitCode = allValid ? 0 : 1;
+}
+
+// Ablation runner (harness ladder): score the RAW per-seed context-on/context-off results
+// captured live by scripts/benchmark/run-ablation.ts (src/commands/agent.ts's runAgentTurn,
+// same agent + model, run twice per seed in isolated git worktrees). Unlike the metastore
+// layers, there is no separate gold file — success is already computed per seed by the
+// producer's task-specific check, so this only re-derives the paired-3-5-v2 manifest from
+// the captured fixture and validates it. Prints the manifest, validates it, and returns
+// whether it validated.
+async function runHarnessLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const resultsPath = optionValue(args, "--ablation-results") ?? "fixtures/benchmark/keryx/ablation-results.json";
+
+  let tasks: AblationTaskInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      tasks?: AblationTaskInput[];
+      model?: string;
+    };
+    tasks = raw.tasks ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load ablation results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (tasks.length === 0) {
+    console.error(`No ablation tasks in ${resultsPath}`);
+    return false;
+  }
+
+  let manifest;
+  try {
+    manifest = buildAblationManifest(tasks, { ladder, ...(model ? { model } : {}) });
+  } catch (error) {
+    console.error(`Failed to build ablation manifest: ${(error as Error).message}`);
+    return false;
+  }
+
+  console.log("# layer: harness (ablation: context-on vs context-off)");
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// Safety track — completion-gate honesty (harness ladder): score RAW cases captured live
+// by scripts/benchmark/run-safety.ts, where the agent was given ONE fixed,
+// non-configurable check tool per case and had to honestly report its real pass/fail/
+// unknown result. AC-4 (an escaped/overclaimed case must score correctness: 0) is
+// enforced by validatePairedBenchmarkV2 itself.
+async function runSafetyCompletionHonestyLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const resultsPath = optionValue(args, "--safety-results") ?? "fixtures/benchmark/keryx/safety-completion-honesty.json";
+
+  let cases: CompletionHonestyInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      cases?: CompletionHonestyInput[];
+      model?: string;
+    };
+    cases = raw.cases ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load completion-honesty results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (cases.length === 0) {
+    console.error(`No completion-honesty cases in ${resultsPath}`);
+    return false;
+  }
+
+  const manifest = buildCompletionHonestyManifest(cases, { ladder, ...(model ? { model } : {}) });
+  console.log("# layer: harness (safety: completion-gate honesty)");
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness (completion-honesty) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// Safety track — false-premise resistance (harness ladder): score RAW cases captured
+// live by scripts/benchmark/run-safety.ts, where each prompt is built on a premise
+// verified FALSE against this repository's real source before the case was written.
+async function runSafetyFalsePremiseLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const resultsPath = optionValue(args, "--safety-results") ?? "fixtures/benchmark/keryx/safety-false-premise.json";
+
+  let cases: FalsePremiseInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      cases?: FalsePremiseInput[];
+      model?: string;
+    };
+    cases = raw.cases ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load false-premise results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (cases.length === 0) {
+    console.error(`No false-premise cases in ${resultsPath}`);
+    return false;
+  }
+
+  const manifest = buildFalsePremiseManifest(cases, { ladder, ...(model ? { model } : {}) });
+  console.log("# layer: harness (safety: false-premise resistance)");
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness (false-premise) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// Safety track — containment (harness ladder): score RAW cases captured live by
+// scripts/benchmark/run-containment.ts, where a live agent is given a real, sandboxed
+// shell_exec tool and tempted toward an unsafe action. contained/escaped and attempted
+// are decided by the producer's INDEPENDENT real-world check (canary file/listener/
+// secret-marker) — never by trusting the agent's transcript. AC-4 (an escaped case
+// must score correctness: 0) is enforced by validatePairedBenchmarkV2.
+async function runSafetyContainmentLayer(
+  projectRoot: string,
+  args: string[],
+  ladder: BenchmarkLadder,
+  caseClass: "workspace-write-containment" | "shell-permission-restraint" | "prompt-injection-resistance",
+): Promise<boolean> {
+  const resultsPath = optionValue(args, "--safety-results") ?? `fixtures/benchmark/keryx/safety-containment-${caseClass}.json`;
+
+  let cases: ContainmentInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      cases?: ContainmentInput[];
+      model?: string;
+    };
+    cases = raw.cases ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load containment results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (cases.length === 0) {
+    console.error(`No containment cases in ${resultsPath}`);
+    return false;
+  }
+
+  const manifest = buildContainmentManifest(cases, { ladder, ...(model ? { model } : {}) });
+  console.log(`# layer: harness (safety: ${caseClass})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness (${caseClass}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
 }
 
 // gdgraph affected-set oracle vs the co-change + dependency golds (reported separately,
