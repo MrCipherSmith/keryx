@@ -1,28 +1,86 @@
-# Module src/harness/provider
-
+---
+Title: Module src/harness/provider
 Version: 0.1.0
 Type: component
-Status: draft
+Status: accepted
+Summary: "`src/harness/provider` groups 9 file(s). Depends on `src/harness/provider/anthropic`, `src/harness/provider/ollama`, `src/commands`. Exposes 20 public symbol(s)."
+---
+# Module src/harness/provider
 
 ## Summary
 
-`src/harness/provider` groups 9 file(s). Depends on `src/harness/provider/anthropic`, `src/harness/provider/ollama`, `src/commands`. Exposes 20 public symbol(s).
+`src/harness/provider` groups 9 file(s). It is the provider-abstraction layer of the
+harness: it defines the normalized model vocabulary, the `ProviderPort` contract, a
+factory for concrete providers, and a fake provider for tests. It depends on the
+`anthropic` and `ollama` adapters and on `src/commands`, and exposes 20 public
+symbol(s).
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+`src/harness/provider` owns the contracts and plumbing that let the harness talk to
+LLM backends through a single interface. It defines the provider-agnostic request and
+response vocabulary (`NormalizedRequest`, `NormalizedEvent`, `NormalizedUsage`, ...),
+the `ProviderPort` interface that concrete adapters implement, and the factory
+(`make-provider`) that wires up adapters for specific backends such as Anthropic and
+Ollama. It also ships an in-memory `FakeProvider` so consumers can be developed and
+tested without a live model endpoint.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The module is organized as a small ports-and-adapters stack with a dependency-free
+core:
+
+- **`types.ts`** — the core vocabulary. Defines the normalized model
+  (`NormalizedRequest`, `NormalizedEvent`, `NormalizedUsage`, ...), `ProviderErrorKind`,
+  attempt/outcome types, and provider metadata. It imports nothing, which is why it is
+  the most widely imported file in the module (50 import sites).
+- **`provider-port.ts`** — the seam. Declares `ProviderPort`, the interface every
+  concrete provider must implement.
+- **`make-provider.ts`** — the factory. Given a provider descriptor, selects the
+  matching adapter (from `anthropic` or `ollama`) and returns it as a `ProviderPort`.
+- **`single-turn.ts`** — convenience orchestration for a single request/response cycle
+  over the port.
+- **`fake-provider.ts`** — a scripted, in-memory provider driven by
+  `FakeProviderTranscript`, plus `requestHashOf` to correlate requests with transcript
+  entries.
+
+Consumers such as `src/commands`, `src/harness/run`, and `src/harness/tool/builtin`
+program against `ProviderPort` and the normalized types, so vendor SDK details stay
+behind the port.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **Provider** — a model backend reachable through the harness; concretely, the
+  adapters under `src/harness/provider/anthropic` and `src/harness/provider/ollama`.
+- **ProviderPort** — the interface that decouples the harness from vendor SDKs; all
+  request/response flows go through it.
+- **Normalized types** — provider-agnostic shapes that hide vendor differences:
+  `NormalizedRequest` / `NormalizedRequestOptions`, `NormalizedBudget`,
+  `NormalizedMessage`, `NormalizedToolDefinition`, `NormalizedUsage`,
+  `NormalizedEvent` / `NormalizedEventKind`, `NormalizedError`, and `StreamOptions`.
+- **Provider metadata** — `ProviderDescription`, `ProviderDescriptorSummary`, and
+  `ProviderCapabilities` describe a provider and what it supports; the factory uses
+  these to choose and configure an adapter.
+- **Attempt / AttemptOutcome** — a single call attempt to a provider and its result,
+  including streamed events and usage.
+- **ProviderErrorKind** — normalized classification of provider failures.
+- **FakeProvider / FakeProviderTranscript** — a deterministic test double and its
+  scripted interaction log.
+- **requestHashOf** — produces a stable hash of a normalized request, used to
+  correlate incoming requests with scripted transcript entries.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+1. **Creating a provider.** A caller passes a provider descriptor to
+   `make-provider.ts`. The factory matches it to the Anthropic or Ollama adapter and
+   returns a `ProviderPort`.
+2. **Single-turn request.** The harness builds a `NormalizedRequest` and sends it
+   through the `ProviderPort`; `single-turn.ts` encapsulates the one-shot cycle,
+   streaming back `NormalizedEvent`s and completing with an `AttemptOutcome` and
+   `NormalizedUsage`. Failures surface as `NormalizedError` with a `ProviderErrorKind`.
+3. **Simulating a provider in tests.** Tests construct a `FakeProvider` from a
+   `FakeProviderTranscript`; `requestHashOf` lets the transcript match an incoming
+   request to the scripted response — no network or vendor SDK required.
 
 ---
 
@@ -96,3 +154,4 @@ exist are linked; when enriching, add new links only to pages you have verified.
 ## Changelog
 
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-08-11T07:37:30.932Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 - Prose sections enriched by documentation pass; status set to accepted.

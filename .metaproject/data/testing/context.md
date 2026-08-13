@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-08-04T07:28:21.807Z
+generatedAt: 2026-08-13T11:45:26.026Z
 
 ## Frameworks
 
@@ -37,6 +37,7 @@ generatedAt: 2026-08-04T07:28:21.807Z
 - src/capability/wiring.test.ts
 - src/cli.test.ts
 - src/commands/agent-approval-binding.test.ts
+- src/commands/agent-approval-context-p0.test.ts
 - src/commands/agent-approval-context.test.ts
 - src/commands/agent-commands.test.ts
 - src/commands/agent-destructive-gate.test.ts
@@ -49,14 +50,19 @@ generatedAt: 2026-08-04T07:28:21.807Z
 - src/commands/harness-exec-restricted.smoke.test.ts
 - src/commands/harness-exec.smoke.test.ts
 - src/commands/harness-network-posture.test.ts
+- src/commands/harness.replay.test.ts
 - src/commands/harness.test.ts
 - src/commands/init-mcp-offer.test.ts
 - src/commands/init.escape.test.ts
+- src/commands/init.no-git.test.ts
 - src/commands/init.test.ts
 - src/commands/mcp-install.test.ts
+- src/commands/memory-p0.test.ts
+- src/commands/memory-report.test.ts
 - src/commands/metrics.test.ts
 - src/commands/module-commands.test.ts
 - src/commands/modules.test.ts
+- src/commands/orient.dry-run.test.ts
 - src/commands/projects.escape.test.ts
 - src/commands/providers.test.ts
 - src/commands/rules.test.ts
@@ -67,12 +73,16 @@ generatedAt: 2026-08-04T07:28:21.807Z
 - src/commands/serve.escape.test.ts
 - src/commands/serve.process.test.ts
 - src/commands/serve.recovery.test.ts
+- src/commands/sessions.fork.test.ts
 - src/commands/shell-launch.test.ts
 - src/commands/shell-pty-launch.smoke.test.ts
 - src/commands/shell-slash-registry.test.ts
 - src/commands/shell.test.ts
 - src/commands/skills-route.test.ts
+- src/commands/status.help.test.ts
 - src/commands/update.test.ts
+- src/commands/version.test.ts
+- src/commands/workspace.test.ts
 - src/contracts/fixtures.test.ts
 - src/ctx/hook-install.test.ts
 - src/ctx/hook.test.ts
@@ -83,24 +93,14 @@ generatedAt: 2026-08-04T07:28:21.807Z
 - src/eval/corpus.test.ts
 - src/flow/allocation.test.ts
 - src/flow/context-inject.test.ts
+- src/flow/context-p0.test.ts
 - src/flow/disposition.test.ts
 - src/flow/duplicate-ids.test.ts
 - src/flow/machine.test.ts
 - src/flow/migration.test.ts
 - src/flow/schema.test.ts
-- src/flow/security-gate.test.ts
-- src/flow/service.test.ts
-- src/flow/tracker/github.test.ts
-- src/gdgraph/affected.test.ts
-- src/gdgraph/build-integrity.test.ts
-- src/gdgraph/build-lang.test.ts
-- src/gdgraph/build.test.ts
-- src/gdgraph/config.test.ts
-- src/gdgraph/core-sources.test.ts
-- src/gdgraph/fallback.test.ts
-- src/gdgraph/find.test.ts
 
-- ... 215 more
+- ... 265 more
 
 ## CI
 

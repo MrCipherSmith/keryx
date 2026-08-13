@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-10T23:34:29.953Z",
+  "updatedAt": "2026-08-13T11:49:22.386Z",
   "provider": "deepseek",
   "model": "deepseek-v4-flash",
   "completed": [
@@ -19,7 +19,12 @@
     "components/src-security-detect.md",
     "components/src-testing.md",
     "components/src-wiki.md",
-    "architecture/project-map.md"
+    "architecture/project-map.md",
+    "components/scripts-benchmark.md",
+    "components/src-harness-child.md",
+    "components/src-harness-provider.md",
+    "components/src-harness-tool-builtin.md",
+    "components/src-metrics.md"
   ],
   "failed": [
     {
