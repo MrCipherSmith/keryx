@@ -163,6 +163,33 @@ into a real per-owner prefix map first. Neither was done in this pass; the
 user explicitly chose to stop at the guard fix and leave the owner-writer for
 a separate future task.
 
+**2026-08-13 addendum 4 — skill's real owner-writer, and the targetRef fix it
+needed.** Fixed the blocker addendum 3 stopped at:
+`targetWriteOrStale`'s literal `./${owner}` assumption is now
+`ownerTargetPrefix(owner)`, a real per-owner map
+(`memory→./memory`, `wiki→./wiki`, `skill→./project-skills`). Two new
+regression tests in `proposal-lifecycle.test.ts` prove this enforces the
+correct prefix rather than merely "always pass": a skill receipt shaped
+`./skill/...` (what the OLD check would have accepted) still lands as
+`stale`; one shaped `./project-skills/...` (the real location) is accepted.
+`src/sac/skill-owner-writer.ts` (`createRealSkillOwnerWriter`) is skill's
+real `GuardedOwnerWriter` — all three owners (memory, wiki, skill) now have
+real compositions, none left `unavailable`. It reuses `createProjectSkill`
+itself rather than writing `.metaproject/project-skills/` a second way;
+every SAC-derived skill lands under a fixed `sac` module
+(`.metaproject/project-skills/sac/<proposalId>/SKILL.md`). `keryx workspace
+propose --kind <kind>` now accepts all six `ProposalKind` values (not just
+`memory-entry`/`wiki-update`), since every kind routes to a real owner via
+the existing `ownerFor`. Verified live end-to-end (real session →
+hash-verified evidence → accepted `decision` proposal → real
+`.metaproject/project-skills/sac/<id>/SKILL.md`, `metaproject.json` skill
+registry and `skills/catalog.md` correctly updated, then cleanly reverted
+after verification) plus 7 new unit tests including one proving the
+addendum-3 security guard genuinely blocks a skill write end-to-end (planted
+secret refused in `enforced` mode, nothing written). Full suite green:
+typecheck clean; `src/sac`+`src/gdskills`+`src/security`+
+`src/commands/security`+`src/commands/workspace` 309/309.
+
 ## Phase 4 — Collaboration ergonomics
 
 - Add worktree/session references, local activity feed and owner operations.

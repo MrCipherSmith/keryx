@@ -9,6 +9,7 @@ import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter
 import { resolveSessionWrapUp } from "./session-wrap-up";
 import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
 import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
+import { createRealSkillOwnerWriter } from "./skill-owner-writer";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -124,7 +125,7 @@ export class ProposalLifecycleService {
     const result = await writer.write(intent);
     if (result.ok && !receiptMatchesIntent({ owner, receipt: result.receipt, intent })) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     await this.writeImmutable(this.writeResultPath(proposal.workspaceId, proposal.id, input.idempotencyKey), result);
-    if (result.ok && (!result.receipt.targetRef.startsWith(`./${owner}`) || result.owner !== owner)) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
+    if (result.ok && (!result.receipt.targetRef.startsWith(`${ownerTargetPrefix(owner)}/`) || result.owner !== owner)) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     return { freshnessVerifiedAt, result };
   }
 
@@ -222,18 +223,15 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
  * new` uses. `wiki-update` is likewise real (src/sac/wiki-owner-writer.ts): it
  * lands a "decision" page in `.metaproject/wiki/decisions/`, guarded by the same
  * security scan `keryx wiki collect` runs before publishing a generated page.
- * `skill` remains `unavailable` (see below).
+ * `skill` is likewise real (src/sac/skill-owner-writer.ts): it composes
+ * `createProjectSkill` (`keryx skills create`'s own write path, itself now
+ * guarded by `guardOutput({ target: "skill" })`) into a `sac`-module project
+ * skill under `.metaproject/project-skills/sac/<proposalId>/`.
  *
  * `workspaceId` is bound at construction because `resolveExplicitWrapUp` must
  * return a `workspaceId` it did not receive on the request (see trusted-wrap-up.ts)
  * — the CLI/caller already knows which workspace it is proposing into, so it is
  * captured here rather than trusted from caller-suppliable request fields.
- *
- * `skill` remains `unavailable` — there is no `SecurityTarget` for it in
- * src/security/types.ts and `createProjectSkill` (src/gdskills/project-skills.ts)
- * runs no security scan at all today. Writing SAC-derived content into skills
- * (which are read as agent routing instructions) without the same guard
- * memory/wiki get would be a real safety regression, not a shortcut.
  */
 export function createHarnessProposalLifecycleService(
   cwd: string,
@@ -252,6 +250,7 @@ export function createHarnessProposalLifecycleService(
     ...createLocalOwnerWriterAdapters(),
     memory: createMemoryGuardedTargetWriter(createRealMemoryOwnerWriter(cwd, noteOpt)),
     wiki: createWikiGuardedTargetWriter(createRealWikiOwnerWriter(cwd, noteOpt)),
+    skill: createSkillGuardedTargetWriter(createRealSkillOwnerWriter(cwd, noteOpt)),
   };
   const service = new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters, wrapUpAuthority });
   return { service, wrapUpAuthority, authorizationServer };
@@ -290,6 +289,21 @@ export function createLocalOwnerWriterAdapters(): Record<TargetOwner, GuardedTar
 }
 
 function ownerFor(kind: ProposalKind): TargetOwner { return kind === "wiki-update" ? "wiki" : kind === "memory-entry" ? "memory" : "skill"; }
+
+/**
+ * The real workspace-relative folder each owner's receipt `targetRef` must
+ * live under. NOT simply `./${owner}` — that literal assumption happened to
+ * hold for memory (`.metaproject/memory/`) and wiki (`.metaproject/wiki/`)
+ * but is false for skill: `keryx skills create` stores real skills under
+ * `.metaproject/project-skills/`, not `.metaproject/skill/`. A receipt whose
+ * `targetRef` doesn't start with its owner's real prefix is rejected as
+ * `invalid_owner_receipt` either way — this only fixes WHICH prefix is
+ * required per owner, not whether the check still defends against a
+ * substituted/cross-owner receipt.
+ */
+function ownerTargetPrefix(owner: TargetOwner): string {
+  return owner === "skill" ? "./project-skills" : `./${owner}`;
+}
 function authorityFor(manifest: { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> }, subject: string): ReviewerAuthority {
   const role = manifest.members.find((member) => member.subject === subject)?.role;
   if (role === "owner" || role === "editor") return role;

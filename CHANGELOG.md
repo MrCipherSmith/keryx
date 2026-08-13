@@ -193,6 +193,41 @@ All notable changes to `keryx` are documented here. The format follows
   building it — so it wasn't built. Fixing this needs a decision on the check
   itself (e.g. a per-owner prefix map instead of a literal `./${owner}`
   assumption) before a real skill writer can be composed honestly.
+- **Shared Agent Context — the skill owner-writer, and the targetRef fix it
+  needed.** `ProposalLifecycleService.targetWriteOrStale`
+  (`src/sac/proposal-lifecycle.ts`) assumed every owner's receipt `targetRef`
+  starts with the literal `./${owner}` — true by coincidence for memory/wiki,
+  false for skill (real skills live under `.metaproject/project-skills/`, not
+  `.metaproject/skill/`). Replaced with `ownerTargetPrefix(owner)`, a real
+  per-owner map (`memory→./memory`, `wiki→./wiki`, `skill→./project-skills`).
+  Two new regression tests in `proposal-lifecycle.test.ts` prove the fix
+  actually enforces the correct prefix rather than just "always pass": a skill
+  receipt with the OLD, buggy `./skill/...` shape (exactly what the previous
+  check would have accepted) is still rejected and the accept lands as
+  `stale`; one with the real `./project-skills/...` shape is accepted.
+  `src/sac/skill-owner-writer.ts` (`createRealSkillOwnerWriter`) is skill's
+  real `GuardedOwnerWriter` — the third and last, alongside memory and wiki.
+  It reuses `createProjectSkill` itself (`keryx skills create`'s own write
+  path, now guarded from the previous change) rather than writing
+  `.metaproject/project-skills/` files a second, parallel way: every
+  SAC-derived skill lands under the fixed `sac` module
+  (`.metaproject/project-skills/sac/<proposalId>/SKILL.md`), so it's always
+  distinguishable from a skill a person created directly. `keryx workspace
+  propose --kind <kind>` now accepts all six real proposal kinds (`decision`,
+  `wiki-update`, `memory-entry`, `follow-up`, `contract-change`, `risk`) — not
+  just the two that had writers before — since every kind now routes (via the
+  existing `ownerFor`) to a real owner. Verified live end-to-end: real
+  session → hash-verified evidence → accepted `decision` proposal → real
+  `.metaproject/project-skills/sac/<id>/SKILL.md`, with `metaproject.json`'s
+  skill registry and `skills/catalog.md` correctly updated by
+  `createProjectSkill`'s own bookkeeping (and cleanly reverted after
+  verification, along with the demo skill directory). 7 new tests in
+  `skill-owner-writer.test.ts`, including one proving the security gate from
+  the previous change genuinely blocks a skill write end-to-end (not just
+  wired) — a planted secret in the derived skill content is refused in
+  `enforced` mode with nothing written to disk. Full suite green after this
+  change (typecheck clean; `src/sac`+`src/gdskills`+`src/security`+
+  `src/commands/security`+`src/commands/workspace`: 309/309).
 
 ## [0.2.33] — 2026-08-13
 

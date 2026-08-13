@@ -9,6 +9,10 @@ import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
 import { findSession } from "../session/store";
 
+// Every kind a real writer now exists for: wiki-update -> wiki, memory-entry
+// -> memory, everything else -> skill (see ownerFor in proposal-lifecycle.ts).
+const PROPOSAL_KINDS = ["decision", "wiki-update", "memory-entry", "follow-up", "contract-change", "risk"] as const;
+
 function service(): WorkspaceService {
   return new WorkspaceService({
     workspaceRoot: process.cwd(),
@@ -65,8 +69,8 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const sessionRef = optionValue(args, "--session");
       const note = optionValue(args, "--note");
       const proposalRevision = optionValue(args, "--proposal-revision") ?? "1";
-      if (!workspaceId || !kind || !sessionRef) throw new Error("Usage: keryx workspace propose <workspace-id> --kind <memory-entry|wiki-update> --session <session-id> [--note <one-line note>]");
-      if (kind !== "memory-entry" && kind !== "wiki-update") throw new Error(`Only --kind memory-entry and wiki-update have a real writer today (skill is not yet composed); got "${kind}"`);
+      if (!workspaceId || !kind || !sessionRef) throw new Error(`Usage: keryx workspace propose <workspace-id> --kind <${PROPOSAL_KINDS.join("|")}> --session <session-id> [--note <one-line note>]`);
+      if (!(PROPOSAL_KINDS as readonly string[]).includes(kind)) throw new Error(`Unknown --kind "${kind}" — expected one of: ${PROPOSAL_KINDS.join(", ")}`);
       const cwd = process.cwd();
       // Resolve the human-friendly id/prefix to a canonical session id ONLY to build
       // a schema-valid `sourceRef` path — resolveSessionWrapUp independently re-looks
@@ -89,8 +93,8 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key"]));
       const workspaceId = args[1]; const proposalId = args[2]; const decision = optionValue(args, "--decision") as "accepted" | "rejected" | "dismissed" | undefined; const reason = optionValue(args, "--reason"); const idempotencyKey = optionValue(args, "--idempotency-key") ?? randomUUID();
       if (!workspaceId || !proposalId || !decision) throw new Error("Usage: keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]");
-      // Same composition as `propose`: an accept for a memory-entry or
-      // wiki-update proposal must see the real owner writer, or it lands in
+      // Same composition as `propose`: an accept for any proposal kind must
+      // see the real owner writer (memory/wiki/skill), or it lands in
       // "stale" for no real reason.
       const result = await createHarnessProposalLifecycleService(process.cwd(), { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) });
       console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
@@ -122,5 +126,5 @@ function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\nkeryx workspace propose <workspace-id> --kind <memory-entry|wiki-update> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
 }
