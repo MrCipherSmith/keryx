@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.2
+Version: 1.7.3
 
 ## Delivery status
 
@@ -69,6 +69,29 @@ cross-workspace, revoked-role and TOCTOU test scenarios are approved.
 receipts or derived context storage; missing mandatory context yields typed
 `context_overflow` with no successful manifest, while partial results name only
 omitted optional items.
+
+**2026-08-13 addendum — live agent shell adapter.** The CLI and MCP (`sac.overview`/
+`sac.read`) adapters this phase's exit already covered were both one-shot,
+out-of-process readers. A running `keryx shell` agent turn had no way to reach
+SAC at all — a real gap given SAC's whole point is giving an agent curated
+context. Two new read-only tools, `workspace_overview`/`workspace_read`
+(`src/harness/tool/builtin/workspace-context-tool.ts`, `risk: "read"`, same
+shape as `read_file`/`list_dir`), wrap `createLocalFwkReadService` and are now
+in both of `src/commands/shell.ts`'s tool arrays (TUI and readline surfaces).
+No session↔workspace linkage exists anywhere in keryx, so the agent must pass
+an explicit `workspaceId` on every call, same as the CLI/MCP adapters.
+Confirmed local-only: `keryx serve`'s HTTP handler never touches this tool
+array, so unlike the MCP `sac.*` tools (which explicitly refuse HTTP transport
+— the local auth server derives its actor from the OS user, with no verified
+per-request principal) this never needed that guard; it was already on the
+same local-process trust boundary `shell_exec` operates under. Verified with 6
+offline unit tests plus one live round-trip: a local model
+(`rapid-mlx serve qwen3.5-9b-4bit`, since DeepSeek/Cerebras credentials were
+both unusable at verification time) driven through the real `runAgentTurn`
+loop actually called `workspace_overview`, got back a real signed access
+receipt, and correctly reported the result. This closes the "read-path" gap
+named as explicitly out of scope in the 2026-08-13 addenda under Phase 3
+below.
 
 ## Phase 3 — Proposal and review lifecycle — Implemented
 

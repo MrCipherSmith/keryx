@@ -135,6 +135,30 @@ All notable changes to `keryx` are documented here. The format follows
   SAC-derived content into skills (read as agent routing instructions every turn)
   without the same guard memory/wiki get would be a real safety regression, not a
   shortcut, and was deliberately not done.
+- **Shared Agent Context — FWK read-path wired into the live agent shell.** A
+  running `keryx shell` agent turn can now read SAC workspace context directly:
+  two new read-only tools, `workspace_overview` and `workspace_read`
+  (`src/harness/tool/builtin/workspace-context-tool.ts`), wrap
+  `createLocalFwkReadService` (previously reachable only from a separate CLI
+  process via `keryx workspace overview`/`read`, or over MCP as `sac.overview`/
+  `sac.read`) and are added to both the TUI and readline tool arrays in
+  `src/commands/shell.ts`, `risk: "read"` like `read_file`/`list_dir`. There is
+  no session↔workspace linkage anywhere in keryx (no `--workspace` flag, no
+  workspace field on `SessionSummary`), so the agent must be told which
+  workspace to read via an explicit `workspaceId` on every call, same as the
+  CLI. Confirmed this can't become HTTP-reachable: `keryx serve`'s handler
+  never touches `shell.ts`'s `AgentDeps`/tool-array construction, so this stays
+  on the same local-only trust boundary `shell_exec` already operates under —
+  unlike the MCP `sac.*` tools, which explicitly refuse HTTP transport because
+  SAC's local auth server derives its actor from the OS user with no verified
+  per-request principal. Verified two ways: 6 offline unit tests calling the
+  tools directly against a real (but resource-less) workspace, AND one fully
+  live round-trip — a real local model (`rapid-mlx serve qwen3.5-9b-4bit`)
+  driven through the actual `runAgentTurn` loop `keryx shell` uses, calling
+  `workspace_overview` for real, getting back a real signed access receipt, and
+  correctly reporting the result. (DeepSeek and Cerebras credentials were both
+  unusable at verification time — no balance / 401 — so the live check ran
+  against a local model instead of the usual `deepseek-v4-flash`.)
 
 ## [0.2.33] — 2026-08-13
 
