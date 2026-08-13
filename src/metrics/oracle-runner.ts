@@ -15,16 +15,19 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   deriveRate,
+  judgePanel,
   type BenchmarkLadder,
   type BenchmarkValue,
   type CacheState,
+  type JudgePanel,
+  type JudgeScore,
   type LeakageAssertion,
   type OracleMetrics,
   type PairedBenchmarkManifestV2,
   type PairedBenchmarkRunV2,
   type RateWithCI,
 } from "./benchmark";
-import { f1, factPreservation, precision, recall, recallAtK } from "./ir";
+import { f1, factPreservation, ndcg, precision, recall, recallAtK } from "./ir";
 import type { Reliability } from "./types";
 
 /** One target's system-output affected-set scored against its gold affected-set. */
@@ -662,6 +665,128 @@ export function buildGdctxManifest(
 ): PairedBenchmarkManifestV2 {
   const ladder = options.ladder ?? "metastore";
   const runs = inputs.map((input) => scoreGdctxRun(input, options));
+  const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
+  return {
+    protocol: "paired-3-5-v2",
+    ladder,
+    task_ids: taskIds,
+    runs,
+    speedClaim: { claimed: false },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// gdwiki oracle (metrics-and-validation.md "gdwiki" row; specification.md §1.1).
+// Score a SYSTEM ranked passage list — the ranked citation `path`s `keryx wiki ask <q>`
+// returns (best match first; src/wiki/ask.ts wikiAsk → WikiAskResult.citations) — against a
+// curated GOLD set of relevant passage ids for that query (hand-labeled,
+// fixtures/benchmark/keryx/wiki-gold.json, one line of justification per query). Emits
+// **nDCG** and **recall@k** (both via ./ir.ts, the gdwiki row's retrieval metrics) in a
+// labeled paired-3-5-v2 manifest for ladder "metastore", layer "gdwiki".
+//
+// GROUNDEDNESS ("does the cited passage support the answer") is represented by a 3-judge
+// panel scoring 0-2 (benchmark.ts judgePanel → strict = all three score 2, lenient = at
+// least two). Since a LIVE-LLM judge is out of scope here, the three scores are a
+// HAND-LABELED, per-query groundedness fixture (fixtures/benchmark/keryx/wiki-groundedness.json,
+// one line of justification each) — deterministic and auditable. A live-LLM judge panel is a
+// documented follow-up; the panel shape is identical, so swapping in real judge scores later
+// is a fixture change, not a scorer change.
+//
+// This is a SEPARATE oracle from the gdgraph, testing, memory, and gdctx ones above:
+// different task-id namespace (metastore:gdwiki-ask:*), different metric source label, and it
+// is NEVER averaged with them. Reliability of nDCG/recall@k is `exact` — the gold is a direct
+// human label of passage relevance for a query (same argument as the memory oracle: a
+// hand-curated, per-query relevance label is a direct measurement, not a derived estimate).
+// The groundedness judge scores are hand-labeled and carried on the run's `judge` panel (with
+// per-panel rationale), NOT presented as a measured BenchmarkValue.
+// ---------------------------------------------------------------------------
+
+/** Human-facing label carried on every emitted gdwiki-oracle metric. */
+export const GDWIKI_ASK_LABEL = "gdwiki nDCG/recall@k";
+
+// The metric `source` records HOW the ranked list was produced, WHICH gold it was scored
+// against, and the k used, so a reader can never confuse it with the other oracles.
+const GDWIKI_ASK_SOURCE =
+  "keryx wiki ask <query> (ranked citation path list) vs curated Q→passage gold " +
+  "(fixtures/benchmark/keryx/wiki-gold.json)";
+const GDWIKI_ASK_MODEL = "keryx-wiki-ask";
+
+/** A hand-labeled 3-judge groundedness panel for one query (0-2 each) + one-line rationale. */
+export type WikiGroundedness = {
+  /** Exactly three hand-labeled judge scores (0-2). */
+  readonly scores: readonly [JudgeScore, JudgeScore, JudgeScore];
+  /** One-line justification for the hand label (carried on the emitted judge panel). */
+  readonly rationale?: string;
+};
+
+/** One query's ranked system passage list scored against its curated gold passage set. */
+export type WikiScoreInput = {
+  /** The wiki question, e.g. "how does the OS sandbox contain a running process". */
+  readonly query: string;
+  /** System output: `keryx wiki ask <query>` ranked citation `path`s, best match first. */
+  readonly system: readonly string[];
+  /** Gold: curated relevant passage id(s) for this query (deduped internally). */
+  readonly gold: readonly string[];
+  /** Cutoff for nDCG@k and recall@k, fixed per query in the gold fixture. */
+  readonly k: number;
+  /** Hand-labeled groundedness judge panel for this query (3 scores 0-2 + rationale). */
+  readonly groundedness: WikiGroundedness;
+};
+
+/** Stable, collision-free task id for a gdwiki-oracle target, distinct from the others. */
+export function wikiAskTaskId(query: string): string {
+  return `metastore:gdwiki-ask:${query}`;
+}
+
+/** Score one query's ranked system output against its gold and build a labeled run. */
+export function scoreWikiAskRun(
+  input: WikiScoreInput,
+  options: OracleManifestOptions = {},
+): PairedBenchmarkRunV2 {
+  const nd = ndcg(input.system, input.gold, input.k);
+  const atK = recallAtK(input.system, input.gold, input.k);
+  const taskId = wikiAskTaskId(input.query);
+  const source = `${GDWIKI_ASK_SOURCE} [layer=gdwiki: ${GDWIKI_ASK_LABEL}, k=${input.k}]`;
+  // Groundedness: a HAND-LABELED 3-judge panel (strict = all three score 2, lenient = >= two).
+  // A live-LLM judge panel is a documented follow-up; the shape here is identical.
+  const panel: JudgePanel = judgePanel(
+    [input.groundedness.scores[0], input.groundedness.scores[1], input.groundedness.scores[2]],
+    input.groundedness.rationale,
+  );
+  return {
+    task_id: taskId,
+    variant: "baseline",
+    run_id: `${taskId}#1`,
+    ladder: options.ladder ?? "metastore",
+    model: options.model ?? GDWIKI_ASK_MODEL,
+    cacheState: options.cacheState ?? "unknown",
+    leakageAssertion: options.leakageAssertion ?? "not-applicable",
+    caseKind: "deterministic",
+    tokenCap: null,
+    seeds: [1],
+    quality: "measured",
+    oracle: {
+      ndcg: measuredValue(nd, source),
+      recallAtK: measuredValue(atK, source),
+    },
+    judge: panel,
+    human_interventions: null,
+  };
+}
+
+/**
+ * Assemble a `paired-3-5-v2` manifest for the metastore ladder's gdwiki layer from per-query
+ * scores. Requires 3-5 queries (the protocol's task-count bound); the returned manifest is
+ * designed to pass validatePairedBenchmark — nDCG/recall@k are measured (`exact`), the
+ * hand-labeled groundedness rides on each run's `judge` panel with strict/lenient derived,
+ * and no speed claim is made.
+ */
+export function buildWikiAskManifest(
+  inputs: readonly WikiScoreInput[],
+  options: OracleManifestOptions = {},
+): PairedBenchmarkManifestV2 {
+  const ladder = options.ladder ?? "metastore";
+  const runs = inputs.map((input) => scoreWikiAskRun(input, options));
   const taskIds = [...new Set(runs.map((run) => run.task_id))].sort();
   return {
     protocol: "paired-3-5-v2",

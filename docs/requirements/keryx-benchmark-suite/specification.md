@@ -27,7 +27,9 @@ Two independent sub-methods, both reported:
     depth-semantics note (precision = edge correctness; recall = one-hop coverage).
   - `gdwiki` grounded retrieval (`wiki ask`) → gold Q→passage mapping. Metrics:
     nDCG, recall@k, and a groundedness check (does the cited passage support the
-    claim).
+    claim). **Landed** as a separate metastore layer (`--layer gdwiki`; scorer
+    `buildWikiAskManifest`) with nDCG/recall@k against a curated Q→passage gold and a
+    hand-labeled 3-judge groundedness panel (a live-LLM judge panel is a follow-up).
   - `testing` test-impact (`test related` / TIA) → gold impacted-test set derived
     from a real coverage map via `goldTestImpact` (a test is impacted iff it covers a
     changed file). Metrics: precision, recall, F1. **Landed** as a separate metastore

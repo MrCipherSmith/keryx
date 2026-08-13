@@ -105,8 +105,22 @@ pinned `find <dir> -type f | sort` listings and commits
 it); **`find .metaproject/skills -type f`: ~0.697** (108/155, over budget); **`find docs -type
 f`: ~0.336** (110/327, well over budget) — the two sub-1.0 numbers are an honest measurement
 of gdctx's own head/tail elision on an oversized listing. Manifest passes `keryx metrics
-benchmark validate`. This was the last M1-tracked metastore oracle layer — gdgraph, testing,
-memory, and gdctx are all now landed.
+benchmark validate`.
+
+**Landed (2026-08-13): gdwiki metastore oracle (nDCG / recall@k + groundedness).** A separate
+metastore layer (`keryx metrics benchmark run --ladder metastore --layer gdwiki|all`; scorer
+`src/metrics/oracle-runner.ts` `buildWikiAskManifest`, never averaged) scores the ranked
+`keryx wiki ask <query>` citation list against a curated Q→passage gold
+(`fixtures/benchmark/keryx/wiki-gold.json`, 5 hand-labeled queries over this repo's own
+`.metaproject/wiki/`, k=5) with **nDCG** and **recall@k** (`src/metrics/ir.ts`). Groundedness
+("does the cited passage support the answer") is a 3-judge panel (`benchmark.ts` `judgePanel`,
+strict = all three score 2) fed by a HAND-LABELED per-query fixture
+(`fixtures/benchmark/keryx/wiki-groundedness.json`); a live-LLM judge panel is a documented
+follow-up with the identical shape. Producer `scripts/benchmark/run-gdwiki-oracle.ts`; captured
+results `fixtures/benchmark/keryx/wiki-ask-results.json`. Real result: nDCG 1.0 on clear hits
+(e.g. the OS-sandbox query), with honest sub-1.0 groundedness where the answer leads with an
+off-topic citation. Manifest passes `keryx metrics benchmark validate`. **All five M1 metastore
+oracle layers — gdgraph, testing, memory, gdctx, gdwiki — are now landed.**
 
 **Remaining in M1:**
 

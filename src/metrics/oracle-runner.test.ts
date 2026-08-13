@@ -34,6 +34,11 @@ import {
   type MultiGoldScoreInput,
   type OracleScoreInput,
   type TestImpactScoreInput,
+  buildWikiAskManifest,
+  scoreWikiAskRun,
+  wikiAskTaskId,
+  GDWIKI_ASK_LABEL,
+  type WikiScoreInput,
 } from "./oracle-runner";
 
 // Three targets mirroring fixtures/benchmark/express (lib/application.js has an empty gold
@@ -406,6 +411,77 @@ describe("testing / TIA oracle (system test-impact vs coverage-derived gold)", (
     const a = buildTestImpactManifest(inputsFor(files));
     const b = buildTestImpactManifest(inputsFor(files));
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+});
+
+describe("gdwiki oracle (ranked passages vs curated Q→passage gold, nDCG/recall@k + groundedness)", () => {
+  const G_STRICT = { scores: [2, 2, 2] as const, rationale: "all judges: cited passage grounds the answer" };
+  const PERFECT_WIKI: WikiScoreInput = {
+    query: "how does the OS sandbox contain a process",
+    system: ["architecture/os-sandbox.md", "architecture/project-map.md"],
+    gold: ["architecture/os-sandbox.md"],
+    k: 5,
+    groundedness: G_STRICT,
+  };
+  const ZERO_WIKI: WikiScoreInput = {
+    query: "an unrelated question with no relevant passage",
+    system: ["architecture/project-map.md", "architecture/testing-map.md"],
+    gold: ["architecture/quality-map.md"],
+    k: 5,
+    groundedness: { scores: [0, 0, 0] as const, rationale: "no cited passage grounds the answer" },
+  };
+  const BOUNDARY_SYSTEM = ["a.md", "b.md", "c.md", "d.md"];
+  const BOUNDARY_GOLD = ["c.md"];
+
+  test("perfect case: gold passage at rank 1 => nDCG 1 and recall@k 1", () => {
+    const run = scoreWikiAskRun(PERFECT_WIKI);
+    expect(run.oracle?.ndcg?.value).toBe(1);
+    expect(run.oracle?.recallAtK?.value).toBe(1);
+    expect(run.oracle?.ndcg?.reliability).toBe("exact");
+  });
+
+  test("zero case: gold passage absent from citations => nDCG 0 and recall@k 0", () => {
+    const run = scoreWikiAskRun(ZERO_WIKI);
+    expect(run.oracle?.ndcg?.value).toBe(0);
+    expect(run.oracle?.recallAtK?.value).toBe(0);
+  });
+
+  test("k-boundary: same ranking, only k differs, flips recall@k between 0 and 1", () => {
+    const atK2 = scoreWikiAskRun({ query: "b", system: BOUNDARY_SYSTEM, gold: BOUNDARY_GOLD, k: 2, groundedness: G_STRICT });
+    const atK3 = scoreWikiAskRun({ query: "b", system: BOUNDARY_SYSTEM, gold: BOUNDARY_GOLD, k: 3, groundedness: G_STRICT });
+    expect(atK2.oracle?.recallAtK?.value).toBe(0);
+    expect(atK3.oracle?.recallAtK?.value).toBe(1);
+  });
+
+  test("groundedness judge panel: strict = all three score 2, lenient = at least two", () => {
+    const strict = scoreWikiAskRun({ ...PERFECT_WIKI, groundedness: { scores: [2, 2, 2] as const } });
+    const lenient = scoreWikiAskRun({ ...PERFECT_WIKI, groundedness: { scores: [2, 2, 1] as const } });
+    const fail = scoreWikiAskRun({ ...PERFECT_WIKI, groundedness: { scores: [2, 1, 1] as const } });
+    expect(strict.judge?.strict).toBe(true);
+    expect(strict.judge?.lenient).toBe(true);
+    expect(lenient.judge?.strict).toBe(false);
+    expect(lenient.judge?.lenient).toBe(true);
+    expect(fail.judge?.lenient).toBe(false);
+  });
+
+  test("task id carries the gdwiki namespace and metric source carries the layer label + k", () => {
+    const run = scoreWikiAskRun(PERFECT_WIKI);
+    expect(run.task_id).toBe(wikiAskTaskId(PERFECT_WIKI.query));
+    expect(run.task_id).toContain("metastore:gdwiki-ask:");
+    expect(run.oracle?.ndcg?.source).toContain(`layer=gdwiki: ${GDWIKI_ASK_LABEL}, k=${PERFECT_WIKI.k}`);
+  });
+
+  test("emitted manifest is a valid metastore paired-3-5-v2 manifest", () => {
+    const manifest = buildWikiAskManifest([
+      PERFECT_WIKI,
+      ZERO_WIKI,
+      { query: "third", system: BOUNDARY_SYSTEM, gold: BOUNDARY_GOLD, k: 3, groundedness: G_STRICT },
+    ]);
+    const result = validatePairedBenchmark(manifest);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
+    expect(manifest.ladder).toBe("metastore");
+    expect(manifest.runs).toHaveLength(3);
   });
 });
 

@@ -24,7 +24,9 @@ import {
   buildMemorySearchManifest,
   buildOracleManifestsByGold,
   buildTestImpactManifest,
+  buildWikiAskManifest,
   GDCTX_FACT_PRESERVATION_LABEL,
+  GDWIKI_ASK_LABEL,
   GOLD_KIND_LABELS,
   MEMORY_SEARCH_LABEL,
   persistEvidenceBundle,
@@ -35,7 +37,9 @@ import {
   type MultiGoldScoreInput,
   type NamedGold,
   type TestImpactScoreInput,
+  type WikiScoreInput,
 } from "../metrics/oracle-runner";
+import type { JudgeScore } from "../metrics/benchmark";
 import { goldTestImpact, type CoverageMap } from "../metrics/gold";
 
 export async function metricsCommand(
@@ -203,9 +207,12 @@ const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
 
 // Run the metastore ORACLE scorers, one labeled paired-3-5-v2 manifest per layer/gold,
 // reported separately and never averaged. Select layers with
-// `--layer gdgraph|testing|memory|gdctx|all` (default all):
+// `--layer gdgraph|gdwiki|testing|memory|gdctx|all` (default all):
 //   - gdgraph: the affected-set oracle vs the co-change + dependency golds (see
 //     `--gold co-change|dependency|all`, default all).
+//   - gdwiki: the grounded-retrieval oracle — `keryx wiki ask <q>` ranked citation paths
+//     scored against a curated Q→passage gold (nDCG + recall@k), plus a hand-labeled
+//     3-judge groundedness panel (strict/lenient).
 //   - testing: the test-impact/TIA oracle — `keryx test related` / coverage-map TIA output
 //     scored against the coverage-derived impacted-test gold (goldTestImpact).
 //   - memory: the memory-search oracle — `keryx memory search <q>` ranked results scored
@@ -223,9 +230,16 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
   }
 
   const layer = (optionValue(args, "--layer") ?? "all").trim();
-  if (layer !== "all" && layer !== "gdgraph" && layer !== "testing" && layer !== "memory" && layer !== "gdctx") {
+  if (
+    layer !== "all" &&
+    layer !== "gdgraph" &&
+    layer !== "gdwiki" &&
+    layer !== "testing" &&
+    layer !== "memory" &&
+    layer !== "gdctx"
+  ) {
     console.error(
-      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|gdctx|all] " +
+      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|gdwiki|testing|memory|gdctx|all] " +
         "[--gold co-change|dependency|all]",
     );
     process.exitCode = 1;
@@ -235,6 +249,9 @@ async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> 
   let allValid = true;
   if (layer === "all" || layer === "gdgraph") {
     allValid = (await runGdgraphLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "gdwiki") {
+    allValid = (await runWikiLayer(projectRoot, args, ladder)) && allValid;
   }
   if (layer === "all" || layer === "testing") {
     allValid = (await runTestingLayer(projectRoot, args, ladder)) && allValid;
@@ -440,6 +457,94 @@ async function runMemoryLayer(projectRoot: string, args: string[], ladder: Bench
   return result.valid;
 }
 
+// The curated gdwiki gold: same AffectedSetFile shape (`target` is the query, `affected` is
+// the gold passage id list) plus a top-level `k` for nDCG@k / recall@k. Reuses
+// loadAffectedSets for the per-query gold ids; `k` is read separately since AffectedSetFile
+// has no such field (reusing the memory layer's `MemoryGoldFile` reader shape).
+async function loadWikiGoldK(projectRoot: string, file: string): Promise<number> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as MemoryGoldFile;
+  return typeof raw.k === "number" && raw.k > 0 ? raw.k : 5;
+}
+
+/** A hand-labeled `{ targets: [{ target, scores:[0-2,0-2,0-2] }] }` groundedness fixture. */
+type WikiGroundednessFile = {
+  targets?: Array<{ target?: string; scores?: number[]; justification?: string }>;
+};
+
+/** Load the hand-labeled groundedness panels into a query -> {scores, rationale} map. */
+async function loadWikiGroundedness(
+  projectRoot: string,
+  file: string,
+): Promise<Map<string, { scores: [JudgeScore, JudgeScore, JudgeScore]; rationale?: string }>> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as WikiGroundednessFile;
+  const map = new Map<string, { scores: [JudgeScore, JudgeScore, JudgeScore]; rationale?: string }>();
+  for (const entry of raw.targets ?? []) {
+    if (typeof entry.target !== "string" || !Array.isArray(entry.scores) || entry.scores.length !== 3) continue;
+    const scores = entry.scores.map((s) => (s === 0 || s === 1 || s === 2 ? s : 0)) as [JudgeScore, JudgeScore, JudgeScore];
+    map.set(entry.target, { scores, ...(entry.justification ? { rationale: entry.justification } : {}) });
+  }
+  return map;
+}
+
+// gdwiki grounded-retrieval oracle: score the SYSTEM ranked passage list (the ranked citation
+// `path`s `keryx wiki ask <q>` cites, captured to a fixture by
+// scripts/benchmark/run-gdwiki-oracle.ts) against the curated GOLD relevant-passage set for
+// that query (fixtures/benchmark/keryx/wiki-gold.json, hand-labeled — never derived at
+// runtime), emitting nDCG + recall@k. GROUNDEDNESS rides on each run's judge panel from a
+// separate HAND-LABELED fixture (fixtures/benchmark/keryx/wiki-groundedness.json; a live-LLM
+// judge panel is a documented follow-up). Prints one labeled paired-3-5-v2 manifest, validates
+// it, and returns whether it validated. The gold + system files share the AffectedSetFile
+// shape (`target` is the query, `affected` is the ranked/gold path list) so they reuse
+// loadAffectedSets.
+async function runWikiLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const systemPath = optionValue(args, "--wiki-system") ?? "fixtures/benchmark/keryx/wiki-ask-results.json";
+  const goldPath = optionValue(args, "--wiki-gold") ?? "fixtures/benchmark/keryx/wiki-gold.json";
+  const groundPath = optionValue(args, "--wiki-groundedness") ?? "fixtures/benchmark/keryx/wiki-groundedness.json";
+
+  let system: Map<string, string[]>;
+  let gold: Map<string, string[]>;
+  let ground: Map<string, { scores: [JudgeScore, JudgeScore, JudgeScore]; rationale?: string }>;
+  let k: number;
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    gold = await loadAffectedSets(projectRoot, goldPath);
+    ground = await loadWikiGroundedness(projectRoot, groundPath);
+    k = await loadWikiGoldK(projectRoot, goldPath);
+  } catch (error) {
+    console.error(`Failed to load gdwiki oracle inputs: ${(error as Error).message}`);
+    return false;
+  }
+
+  // Each curated gold query that the system also produced a ranked list AND a hand-labeled
+  // groundedness panel for is a scored target; a query missing either is skipped.
+  const inputs: WikiScoreInput[] = [];
+  for (const query of [...gold.keys()].sort()) {
+    if (!system.has(query)) continue;
+    const g = ground.get(query);
+    if (!g) continue;
+    inputs.push({
+      query,
+      system: system.get(query) ?? [],
+      gold: gold.get(query) ?? [],
+      k,
+      groundedness: g,
+    });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No overlapping queries across gdwiki gold, system-output, and groundedness files");
+    return false;
+  }
+
+  const manifest = buildWikiAskManifest(inputs, { ladder });
+  console.log(`# layer: gdwiki (${GDWIKI_ASK_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: gdwiki (${GDWIKI_ASK_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
 /** A committed `{ inputs: [{ input, rawFacts, compactFacts }] }` gdctx fact-set fixture. */
 type GdctxFactsFile = {
   inputs?: Array<{ input?: string; rawFacts?: string[]; compactFacts?: string[] }>;
@@ -532,6 +637,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
-  keryx metrics benchmark run --ladder metastore [--layer gdgraph|testing|memory|gdctx|all] [--gold co-change|dependency|all] [--system <path>] [--testing-system <path>] [--coverage-map <path>] [--memory-system <path>] [--memory-gold <path>] [--gdctx-fixture <path>] [--out <dir>]
+  keryx metrics benchmark run --ladder metastore [--layer gdgraph|gdwiki|testing|memory|gdctx|all] [--gold co-change|dependency|all] [--system <path>] [--wiki-system <path>] [--wiki-gold <path>] [--wiki-groundedness <path>] [--testing-system <path>] [--coverage-map <path>] [--memory-system <path>] [--memory-gold <path>] [--gdctx-fixture <path>] [--out <dir>]
 `);
 }
