@@ -6,6 +6,8 @@ import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract,
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
+import { resolveSessionWrapUp } from "./session-wrap-up";
+import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -206,6 +208,39 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
   // Local adapters deliberately do not receive this authority. Their propose
   // command remains fail-closed; trusted Harness/session composition injects it.
   return new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters: createLocalOwnerWriterAdapters(), wrapUpAuthority: createTrustedWrapUpAuthority({ now: () => new Date(0), resolveExplicitWrapUp: async () => { throw new Error("trusted wrap-up boundary unavailable"); } }) });
+}
+
+/**
+ * The "trusted Harness/session composition" the comment above points to. Unlike
+ * `createLocalProposalLifecycleService`, this one is real and NOT fail-closed for
+ * `source: "session"`: `resolveSessionWrapUp` (src/sac/session-wrap-up.ts) exports a
+ * real, already-completed keryx shell session's archive into the workspace and
+ * returns a hash-verified pointer to it, and the `memory-entry` target owner is a
+ * real writer (src/sac/memory-owner-writer.ts) that lands an accepted proposal in
+ * `.metaproject/memory/` through the SAME guarded canonical writer `keryx memory
+ * new` uses. `wiki`/`skill` targets remain `unavailable` — only `memory-entry`
+ * proposals can be accepted through this composition today.
+ *
+ * `workspaceId` is bound at construction because `resolveExplicitWrapUp` must
+ * return a `workspaceId` it did not receive on the request (see trusted-wrap-up.ts)
+ * — the CLI/caller already knows which workspace it is proposing into, so it is
+ * captured here rather than trusted from caller-suppliable request fields.
+ */
+export function createHarnessProposalLifecycleService(
+  cwd: string,
+  opts: { workspaceId: string; note?: string },
+): { service: ProposalLifecycleService; wrapUpAuthority: TrustedWrapUpAuthority; authorizationServer: SacAuthorizationServer } {
+  const authorizationServer = localWorkspaceAuthorizationServer();
+  const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } });
+  const wrapUpAuthority = createTrustedWrapUpAuthority({
+    resolveExplicitWrapUp: async (request) => {
+      if (request.source !== "session") throw new Error(`this composition only resolves "session" wrap-ups, got "${request.source}"`);
+      return resolveSessionWrapUp({ cwd, workspaceId: opts.workspaceId, sourceRef: request.sourceRef });
+    },
+  });
+  const targetWriters = { ...createLocalOwnerWriterAdapters(), memory: createMemoryGuardedTargetWriter(createRealMemoryOwnerWriter(cwd, opts.note !== undefined ? { note: opts.note } : {})) };
+  const service = new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters, wrapUpAuthority });
+  return { service, wrapUpAuthority, authorizationServer };
 }
 
 /**

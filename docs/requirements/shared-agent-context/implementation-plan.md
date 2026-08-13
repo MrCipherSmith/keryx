@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.0
+Version: 1.7.1
 
 ## Delivery status
 
@@ -82,6 +82,22 @@ omitted optional items.
   spoofing, cross-workspace access, revoked role and TOCTOU paths.
 
 **Exit:** AC-8 and AC-9 pass end-to-end with secret/PII/redaction fixtures.
+
+**2026-08-13 addendum — real memory write-path composition.** The phase's exit
+criteria were originally proven only against `createLocalProposalLifecycleService`,
+whose owner writers all ship `unavailable` by design (fail-closed until each owning
+subsystem composes a trusted implementation — SAC never edits Wiki, Memory or Skills
+files itself). `createHarnessProposalLifecycleService`
+(`src/sac/proposal-lifecycle.ts`) now composes a real session-based wrap-up resolver
+(`src/sac/session-wrap-up.ts`) and memory's first real `GuardedOwnerWriter`
+(`src/sac/memory-owner-writer.ts`), wired into `keryx workspace propose --session
+<id>` / `review --decision accepted`. Verified live end-to-end (real keryx shell
+session → hash-verified evidence export → accepted proposal → real file in
+`.metaproject/memory/`) and with the full `src/sac/` suite green (103/103, 14
+files). Wiki and skill owner writers remain `unavailable`/fail-closed — only memory
+has a real composition today. The FWK read-path integration (an agent reading
+workspace context live inside `keryx shell`) is a separate, larger piece of work and
+was explicitly not started in this slice.
 
 ## Phase 4 — Collaboration ergonomics
 

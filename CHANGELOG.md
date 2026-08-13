@@ -77,6 +77,37 @@ All notable changes to `keryx` are documented here. The format follows
   (`/Users/<name>` has no symlink component), but a real gap for anyone overriding
   `HOME` for isolation. Fixed with `canonical(homedir())`, matching the existing
   treatment of `root`/`tmpdir()`.
+- **Shared Agent Context — real harness composition for the memory-entry write path.**
+  `keryx workspace propose --kind memory-entry --session <id>` and
+  `keryx workspace review ... --decision accepted` now land a real file in
+  `.metaproject/memory/` end-to-end, closing the gap the Phase 3 exit note left open:
+  SAC's write path was intentionally fail-closed (`createLocalProposalLifecycleService`
+  ships every owner writer as `unavailable` — "SAC never edits Wiki, Memory or Skills
+  files itself" until each owning subsystem composes a trusted implementation). New
+  `createHarnessProposalLifecycleService` (`src/sac/proposal-lifecycle.ts`) composes two
+  new real modules: `src/sac/session-wrap-up.ts` (`resolveSessionWrapUp`) turns a real
+  keryx shell session into a `TrustedWrapUpResolution` by exporting its full archive
+  (`src/session/store.ts` `exportSessionMarkdown`, every role/message verbatim) into the
+  target workspace and hashing that export — never the agent's own summary; and
+  `src/sac/memory-owner-writer.ts` (`createRealMemoryOwnerWriter`) is memory's first real
+  `GuardedOwnerWriter`: it reads the proposal's evidence pointer, re-verifies the
+  evidence file's hash against what was recorded at propose time, and writes a
+  schema-valid entry via the same canonical `src/memory/write.ts` `writeCanonicalEntry`
+  path (and its security guard scan) `keryx memory new` uses. Verified live end-to-end
+  (real session, real hash-verified evidence chain, real written memory file) and with
+  103/103 `src/sac/` tests green (14 files). Wiki/skill owner writers remain
+  `unavailable`/fail-closed — only memory has a real composition today. Two real bugs
+  found and fixed along the way: (1) `TrustedWrapUpProvenance.sourceRef` is schema-typed
+  as a workspace-relative `path` (no bare IDs, no `#` fragments) —
+  `resolveSessionWrapUp` now encodes the session id in the path itself
+  (`sessionEvidenceRef`) and independently re-derives+re-verifies it rather than
+  trusting the caller's resolution (defends against a spoofed workspace segment); (2) an
+  optional `--note` passed at `propose` time was captured in a service-composition
+  closure that does not survive into a separate `review`-time process — fixed with a
+  sidecar `<proposalId>.note.txt` file (`proposalNotePath`), written at propose time and
+  read back at accept time, mirroring the approval/intent/decision sidecar pattern
+  `proposal-lifecycle.ts` already used. The read-path (an agent reading FWK context
+  live inside `keryx shell`) remains unwired — out of scope for this slice.
 
 ## [0.2.33] — 2026-08-13
 
