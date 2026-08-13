@@ -68,6 +68,7 @@ const TARGETS: SecurityTarget[] = [
   "model",
   "memory",
   "wiki",
+  "skill",
   "report",
   "external",
   "task",

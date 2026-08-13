@@ -159,6 +159,40 @@ All notable changes to `keryx` are documented here. The format follows
   correctly reporting the result. (DeepSeek and Cerebras credentials were both
   unusable at verification time — no balance / 401 — so the live check ran
   against a local model instead of the usual `deepseek-v4-flash`.)
+- **Fixed: `keryx skills create` ran zero security scanning.** Unlike
+  `keryx wiki collect` (`guardOutput({ target: "wiki" })`) and `keryx memory new`
+  (`writeCanonicalEntry`'s guard), `createProjectSkill`
+  (`src/gdskills/project-skills.ts`) wrote `SKILL.md` — content read as agent
+  routing instructions every turn — with no scan at all. `SecurityTarget`
+  (`src/security/types.ts`) gained a `"skill"` member (also added to
+  `src/security/schemas.ts`'s finding-schema enum and `src/commands/security.ts`'s
+  `--target` validation list — both closed allow-lists, found and updated
+  together so `--target skill`/a finding with `target: "skill"` don't fail
+  closed for unrelated reasons); `writeProjectSkillPackage` now renders
+  `SKILL.md`'s content and runs it through `guardOutput({ target: "skill",
+  source: "generated" })` **before** any `mkdir`/write happens, throwing if the
+  strict/enforced gate blocks it. New `src/gdskills/project-skills.test.ts`
+  (this function had no test coverage at all before) proves all three real
+  behaviors: unaffected by default (security module disabled), a planted
+  secret genuinely blocked end-to-end in `enforced` mode with **nothing**
+  written to disk, and the same content allowed through in `advisory` mode
+  (report-only, matching every other target's documented behavior). Found
+  while investigating why `skill` — the third `GuardedOwnerWriter` owner
+  alongside `memory`/`wiki` — was still `unavailable`/fail-closed in SAC; this
+  was the actual blocker (no target, no scan), not laziness. 190/190
+  `src/gdskills`+`src/security`+`src/commands/security` tests green.
+  **A real skill owner-writer is still not composed**: while wiring this,
+  found that `ProposalLifecycleService.targetWriteOrStale`
+  (`src/sac/proposal-lifecycle.ts:127`) requires an owner's receipt
+  `targetRef` to literally start with `./${owner}` — `./memory/...` and
+  `./wiki/...` both genuinely match where those owners store files under
+  `.metaproject/`, but `keryx skills create` stores real skills under
+  `.metaproject/project-skills/`, not `.metaproject/skill/`. A skill
+  owner-writer built today would have to fake a `targetRef` that doesn't
+  match the real file location to pass that check, which is worse than not
+  building it — so it wasn't built. Fixing this needs a decision on the check
+  itself (e.g. a per-owner prefix map instead of a literal `./${owner}`
+  assumption) before a real skill writer can be composed honestly.
 
 ## [0.2.33] — 2026-08-13
 

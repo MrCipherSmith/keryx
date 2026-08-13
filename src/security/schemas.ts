@@ -88,7 +88,7 @@ export const SECURITY_FINDING_SCHEMA: JsonSchema = {
     },
     target: {
       type: "string",
-      enum: ["model", "memory", "wiki", "report", "external", "task", "unknown"],
+      enum: ["model", "memory", "wiki", "skill", "report", "external", "task", "unknown"],
     },
     action: {
       type: "string",

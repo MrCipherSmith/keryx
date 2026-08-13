@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.3
+Version: 1.7.4
 
 ## Delivery status
 
@@ -137,6 +137,31 @@ security scan at all today — composing a real skill owner writer without first
 giving it the same guard would be a real safety regression (skills are read as
 agent routing instructions every turn), not a shortcut worth taking silently.
 Full `src/sac/` suite green (115/115, 16 files) after this addendum.
+
+**2026-08-13 addendum 3 — skill got its real security guard, but not a real
+owner-writer yet.** `SecurityTarget` gained `"skill"` (`src/security/types.ts`,
+plus the two other closed allow-lists that had to move with it:
+`src/security/schemas.ts`'s finding-schema enum, `src/commands/security.ts`'s
+`--target` list) and `createProjectSkill` (`src/gdskills/project-skills.ts`)
+now runs `guardOutput({ target: "skill" })` on `SKILL.md`'s rendered content
+before any write, exactly like memory/wiki. Verified genuinely blocking (not
+just wired) with 3 new tests in the previously-nonexistent
+`src/gdskills/project-skills.test.ts`: default (disabled) unaffected, a
+planted secret actually refused with nothing written to disk in `enforced`
+mode, the same content allowed through in `advisory` mode. This closes the
+stated prerequisite from addendum 2 above. **A real skill owner-writer is
+still not composed** — a second, independent blocker surfaced while
+attempting it: `ProposalLifecycleService.targetWriteOrStale`
+(`src/sac/proposal-lifecycle.ts:127`) requires a receipt's `targetRef` to
+literally start with `./${owner}`. For memory/wiki this genuinely matches
+where those owners store files (`.metaproject/memory/`,
+`.metaproject/wiki/`); for `skill` it would not — real skills live under
+`.metaproject/project-skills/`, not `.metaproject/skill/`. Building a skill
+owner-writer today means either faking a `targetRef` that lies about the real
+file location, or fixing `targetWriteOrStale`'s literal-prefix assumption
+into a real per-owner prefix map first. Neither was done in this pass; the
+user explicitly chose to stop at the guard fix and leave the owner-writer for
+a separate future task.
 
 ## Phase 4 — Collaboration ergonomics
 
