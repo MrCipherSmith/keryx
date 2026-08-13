@@ -13,10 +13,14 @@ export {
 } from "./fwk-service";
 export {
   createLocalProposalLifecycleService,
+  createHarnessProposalLifecycleService,
   normalizeProposalLifecycleResult,
   type TargetWriteResult,
   type GuardedTargetWriter,
 } from "./proposal-lifecycle";
+export { sessionEvidenceRef } from "./session-wrap-up";
+export { proposalNotePath } from "./proposal-evidence";
+export { findSession } from "../session/store";
 export { createLocalCollaborationService, normalizeCollaborationResult, type CollaborationActivity } from "./collaboration-service";
 export {
   buildPolicyCorpus,

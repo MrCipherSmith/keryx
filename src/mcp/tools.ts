@@ -17,10 +17,10 @@ import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
 import { createFlowService } from "../flow/service";
 import { runValidate } from "../standard/service";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -96,11 +96,34 @@ export function buildToolRegistry(): ToolEntry[] {
       },
     },
     {
-      name: "sac.propose", module: "sac", description: "Create an immutable local SAC proposal from explicit wrap-up output.",
-      inputSchema: OBJECT_SCHEMA(),
+      name: "sac.propose", module: "sac", description: "Create a real SAC proposal from a completed keryx session, for a reviewer to accept via sac.review.",
+      inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" }, kind: { type: "string", description: "decision | wiki-update | memory-entry | follow-up | contract-change | risk" }, sessionId: { type: "string" }, note: { type: "string" }, proposalRevision: { type: "string" } }, ["workspaceId", "kind", "sessionId"]),
       mutating: true,
       async invoke(cwd, params, context) {
-        return { code: context?.transport === "http" ? "sac_transport_denied" as const : "trusted_wrap_up_required" as const };
+        if (context?.transport === "http") return { code: "sac_transport_denied" as const };
+        const workspaceId = stringParam(params, "workspaceId") ?? "";
+        const kind = stringParam(params, "kind") ?? "";
+        const sessionRef = stringParam(params, "sessionId") ?? "";
+        const note = stringParam(params, "note");
+        const proposalRevision = stringParam(params, "proposalRevision") ?? "1";
+        // Resolve the human-friendly id/prefix to a canonical session id ONLY to
+        // build a schema-valid `sourceRef` path — resolveSessionWrapUp (inside
+        // wrapUpAuthority.issue below) independently re-looks this session up
+        // itself and never trusts this resolution as evidence. Mirrors
+        // src/commands/workspace.ts's `propose` handler exactly.
+        const session = findSession(cwd, sessionRef);
+        if (!session) throw new Error(`no session matching "${sessionRef}" in this project`);
+        const { service, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(note ? { note } : {}) });
+        const requestCorrelationId = randomUUID();
+        const actor = await authorizationServer.actorContextFor(undefined, requestCorrelationId);
+        if (!actor) throw new Error("trusted ActorContext is required");
+        const wrapUp = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: sessionEvidenceRef(workspaceId, session.id) });
+        const proposal = await service.create({ request: undefined, requestCorrelationId, workspaceId, id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalRevision, kind: kind as never, wrapUp });
+        // The note is not part of the frozen proposal schema — it lives in a
+        // sidecar the memory/wiki/skill owner-writers read back at accept time,
+        // since accept may happen in a different process/reviewer session.
+        if (note) await writeFile(proposalNotePath(cwd, workspaceId, proposal.id), note, "utf8");
+        return normalizeProposalLifecycleResult(proposal);
       },
     },
     {
@@ -110,7 +133,10 @@ export function buildToolRegistry(): ToolEntry[] {
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const workspaceId = stringParam(params, "workspaceId") ?? ""; const proposalId = stringParam(params, "proposalId") ?? ""; const decision = stringParam(params, "decision") as "accepted" | "rejected" | "dismissed"; const reason = stringParam(params, "reason"); const idempotencyKey = stringParam(params, "idempotencyKey") ?? randomUUID();
-        return normalizeProposalLifecycleResult(await createLocalProposalLifecycleService(cwd).review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) }));
+        // Same composition as sac.propose: an accept must see the real owner
+        // writer (memory/wiki/skill), or it lands in "stale" for no real reason.
+        const result = await createHarnessProposalLifecycleService(cwd, { workspaceId }).service.review({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, proposalId, decision, idempotencyKey, ...(reason ? { reason } : {}) });
+        return normalizeProposalLifecycleResult(result);
       },
     },
     {

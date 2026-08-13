@@ -228,6 +228,44 @@ All notable changes to `keryx` are documented here. The format follows
   `enforced` mode with nothing written to disk. Full suite green after this
   change (typecheck clean; `src/sac`+`src/gdskills`+`src/security`+
   `src/commands/security`+`src/commands/workspace`: 309/309).
+- **Fixed: `sac.propose`/`sac.review` over MCP were never actually wired.**
+  `src/mcp/tools.ts`'s `sac.propose` unconditionally returned
+  `trusted_wrap_up_required` (empty input schema — it could not have worked),
+  and `sac.review` called the fail-closed `createLocalProposalLifecycleService`
+  instead of the real `createHarnessProposalLifecycleService` composition the
+  CLI/keryx-shell paths already use. Both now compose the real thing: `sac.propose`
+  takes `{ workspaceId, kind, sessionId, note?, proposalRevision? }`, resolves the
+  session via `findSession`, issues a real wrap-up, and creates a real proposal
+  (with the same propose-time note sidecar the CLI uses); `sac.review` runs the
+  same review path the CLI does. `src/sac/service.ts` (the facade `src/mcp/`
+  is architecturally restricted to — enforced by `boundary.test.ts`'s M-3 guard)
+  gained the needed exports: `createHarnessProposalLifecycleService`,
+  `sessionEvidenceRef`, `proposalNotePath`, `findSession`. A SECOND, independent
+  bug surfaced while live-verifying this: `sac.*` tools were entirely invisible
+  over MCP regardless of the fix — `buildMcpModuleEntry()`'s default
+  `expose.modules` allowlist (`src/mcp/client-config.ts`) never included
+  `"sac"`, so `tools/list` never returned them. Both fixed together; verified
+  with a real MCP SDK `Client`/`Server` round-trip (`InMemoryTransport`, real
+  protocol serialization, not just in-process function calls) against a real
+  session and a real workspace: `tools/list` now returns all 5 `sac.*` tools,
+  `sac.propose` creates a real proposal over the wire, `sac.review` accepts it
+  and a real file lands in `.metaproject/memory/task-notes/`. New
+  `src/mcp/sac-tools.test.ts` (3 tests, previously zero coverage for these two
+  tools). Also documented `keryx mcp install`/`uninstall` in the mcp module's
+  own manifest doc (`renderMcpManifest`) — it only mentioned `serve` before,
+  so nothing told an agent reading `.metaproject/modules/mcp.md` that
+  `mcp install --runtime <runtime>` is the real, complete way to connect a
+  project when asked to "enable MCP", short of hand-editing a client config.
+  Connected this repo for real (`keryx mcp install --runtime claude`) after
+  confirming it was safe to run from this dev checkout: `enableMcpModule` is a
+  surgical read-parse-patch-write on just `modules.mcp` in the existing
+  manifest, unlike `keryx modules enable <name>`'s full `initCommand()`
+  reconciliation (which regenerates every enabled module's files and, earlier
+  this session, was found to silently regress this repo's real
+  `.metaproject/` content when run from a dev checkout whose generators have
+  diverged from the separately-installed global `keryx` binary that actually
+  wrote it). 246/246 across `src/mcp`+`src/sac`+`src/commands/security`+
+  `src/gdskills` after this change, typecheck clean.
 
 ## [0.2.33] — 2026-08-13
 

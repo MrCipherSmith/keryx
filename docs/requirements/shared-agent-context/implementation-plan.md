@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.4
+Version: 1.7.5
 
 ## Delivery status
 
@@ -189,6 +189,32 @@ addendum-3 security guard genuinely blocks a skill write end-to-end (planted
 secret refused in `enforced` mode, nothing written). Full suite green:
 typecheck clean; `src/sac`+`src/gdskills`+`src/security`+
 `src/commands/security`+`src/commands/workspace` 309/309.
+
+**2026-08-13 addendum 5 — the MCP transport now actually exposes the real SAC
+write path.** Two independent, pre-existing bugs meant `sac.propose`/
+`sac.review` (`src/mcp/tools.ts`) never worked over MCP, unrelated to
+anything built earlier this session: (1) `sac.propose` had an empty input
+schema and unconditionally returned `trusted_wrap_up_required`; `sac.review`
+called the fail-closed `createLocalProposalLifecycleService` instead of the
+real `createHarnessProposalLifecycleService` the CLI/keryx-shell paths use —
+fixed by composing the real thing, adding the needed exports
+(`createHarnessProposalLifecycleService`, `sessionEvidenceRef`,
+`proposalNotePath`, `findSession`) to `src/sac/service.ts`, the one facade
+`src/mcp/` is allowed to import from (`boundary.test.ts`'s M-3 guard). (2)
+even with that fixed, `sac.*` tools were entirely invisible over MCP:
+`buildMcpModuleEntry()`'s default `expose.modules` allowlist
+(`src/mcp/client-config.ts`) never included `"sac"`. Verified with a real
+`@modelcontextprotocol/sdk` `Client`/`Server` round-trip (`InMemoryTransport`,
+real protocol serialization) against a real session and workspace:
+`tools/list` returns all 5 `sac.*` tools, `sac.propose`/`sac.review` land a
+real file over the wire. New `src/mcp/sac-tools.test.ts` (3 tests — zero
+prior coverage). Also connected this repo for real
+(`keryx mcp install --runtime claude`) — confirmed safe first, since
+`enableMcpModule` is a surgical patch of just `modules.mcp`, unlike
+`keryx modules enable <name>`'s full-reconciliation `initCommand()` path
+that regressed real content earlier in this session when run from this dev
+checkout. 246/246 across `src/mcp`+`src/sac`+`src/commands/security`+
+`src/gdskills`, typecheck clean.
 
 ## Phase 4 — Collaboration ergonomics
 
