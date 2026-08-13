@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.1
+Version: 1.7.2
 
 ## Delivery status
 
@@ -98,6 +98,22 @@ files). Wiki and skill owner writers remain `unavailable`/fail-closed — only m
 has a real composition today. The FWK read-path integration (an agent reading
 workspace context live inside `keryx shell`) is a separate, larger piece of work and
 was explicitly not started in this slice.
+
+**2026-08-13 addendum 2 — real wiki write-path composition.** `wiki-update`
+proposals are now real too: `src/sac/wiki-owner-writer.ts`
+(`createRealWikiOwnerWriter`) lands an accepted proposal as a `Type: decision`
+page under `.metaproject/wiki/decisions/`, guarded by the same `guardOutput({
+target: "wiki" })` seam `keryx wiki collect` runs before publishing a generated
+page. The proposal-read + evidence-hash-verification logic shared by memory and
+wiki was pulled into `src/sac/proposal-evidence.ts`; `memory-owner-writer.ts` was
+refactored onto it with no behavioral change. Verified live end-to-end the same
+way as the memory path. **`skill` stays deliberately `unavailable`**: unlike
+memory and wiki, it has no `SecurityTarget` in `src/security/types.ts` and its
+write path (`createProjectSkill`, `src/gdskills/project-skills.ts`) runs no
+security scan at all today — composing a real skill owner writer without first
+giving it the same guard would be a real safety regression (skills are read as
+agent routing instructions every turn), not a shortcut worth taking silently.
+Full `src/sac/` suite green (115/115, 16 files) after this addendum.
 
 ## Phase 4 — Collaboration ergonomics
 

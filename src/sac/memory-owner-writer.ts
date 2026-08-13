@@ -15,35 +15,15 @@
 // real, schema-valid entry into .metaproject/memory/ via the SAME canonical writer
 // (src/memory/write.ts writeCanonicalEntry) `keryx memory new` uses — including its
 // security guard scan. Nothing here bypasses that path or invents a second one.
-import { createHash } from "node:crypto";
+// The proposal-record read + evidence hash re-verification is shared with
+// wiki-owner-writer.ts via proposal-evidence.ts.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { writeCanonicalEntry } from "../memory/write";
 import type { KnowledgeOwner, OwnerReceipt, OwnerWriteIntent } from "./guarded-owner-writer";
+import { ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence } from "./proposal-evidence";
 
-type ProposalRecord = {
-  id: string;
-  workspaceId: string;
-  evidence: readonly { kind: string; uri: string; revision: string; observedAt: string }[];
-};
-
-function proposalPath(cwd: string, workspaceId: string, proposalId: string): string {
-  // Must match ProposalLifecycleService's own private `proposalPath` exactly —
-  // this writer reads a record SAC already wrote, never a second source of truth.
-  return path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.json`);
-}
-
-function receiptPath(cwd: string, workspaceId: string, idempotencyKey: string): string {
-  return path.join(cwd, ".metaproject", "workspaces", workspaceId, "memory-write-receipts", `${idempotencyKey}.json`);
-}
-
-/** Sidecar path for a proposal's optional caller-supplied note — written at propose
- * time (see workspace.ts), read back here at accept time. Not part of the frozen
- * `workspace-proposal` JSON schema, so it lives beside the record rather than in it,
- * the same way approval/intent/decision records already do. */
-export function proposalNotePath(cwd: string, workspaceId: string, proposalId: string): string {
-  return path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.note.txt`);
-}
+export { proposalNotePath } from "./proposal-evidence";
 
 /** Build a schema-valid memory entry (src/memory/write.ts validateNextEntry's rules)
  * from real, hash-verified evidence — never from unverified prose. */
@@ -119,7 +99,7 @@ export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string;
 
     async recover(intent) {
       try {
-        const raw = await readFile(receiptPath(cwd, intent.workspaceId, intent.idempotencyKey), "utf8");
+        const raw = await readFile(ownerReceiptPath(cwd, "memory", intent.workspaceId, intent.idempotencyKey), "utf8");
         return JSON.parse(raw) as OwnerReceipt;
       } catch {
         return undefined;
@@ -127,24 +107,9 @@ export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string;
     },
 
     async persist(intent) {
-      let proposal: ProposalRecord;
-      try {
-        proposal = JSON.parse(await readFile(proposalPath(cwd, intent.workspaceId, intent.proposalId), "utf8")) as ProposalRecord;
-      } catch {
-        return { ok: false, code: "proposal_record_unreadable" };
-      }
-      const evidence = proposal.evidence[0];
-      if (evidence === undefined) return { ok: false, code: "no_evidence_to_write" };
-
-      let evidenceContent: string;
-      try {
-        evidenceContent = await readFile(path.join(cwd, evidence.uri), "utf8");
-      } catch {
-        return { ok: false, code: "evidence_file_unreadable" };
-      }
-      if (createHash("sha256").update(evidenceContent).digest("hex") !== evidence.revision) {
-        return { ok: false, code: "evidence_revision_mismatch" };
-      }
+      const verified = await readVerifiedProposalEvidence(cwd, intent.workspaceId, intent.proposalId);
+      if (!("proposal" in verified)) return verified;
+      const { proposal, evidence, content: evidenceContent } = verified;
 
       const titleLine = evidenceContent.split("\n").find((line) => line.startsWith("# "));
       const title = titleLine ? titleLine.slice(2).trim() : `SAC wrap-up ${proposal.id}`;
@@ -153,7 +118,7 @@ export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string;
       // (possibly a different process/reviewer) — read it back from the sidecar
       // `workspace.ts` wrote at propose time; `opts.note` remains a direct-call
       // fallback for callers that already hold the writer.
-      const sidecarNote = await readFile(proposalNotePath(cwd, intent.workspaceId, intent.proposalId), "utf8").catch(() => undefined);
+      const sidecarNote = await readSidecarNote(cwd, intent.workspaceId, intent.proposalId);
       const content = renderWrapUpMemoryEntry({
         title: `SAC: ${title}`,
         evidenceUri: evidence.uri,
@@ -176,8 +141,8 @@ export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string;
         targetRef: `./memory/${result.path}`,
         completedAt: now().toISOString(),
       };
-      await mkdir(path.dirname(receiptPath(cwd, intent.workspaceId, intent.idempotencyKey)), { recursive: true });
-      await writeFile(receiptPath(cwd, intent.workspaceId, intent.idempotencyKey), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+      await mkdir(path.dirname(ownerReceiptPath(cwd, "memory", intent.workspaceId, intent.idempotencyKey)), { recursive: true });
+      await writeFile(ownerReceiptPath(cwd, "memory", intent.workspaceId, intent.idempotencyKey), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
       return receipt;
     },
   };

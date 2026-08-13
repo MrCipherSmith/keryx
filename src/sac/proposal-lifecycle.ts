@@ -8,6 +8,7 @@ import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type Trusted
 import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
 import { resolveSessionWrapUp } from "./session-wrap-up";
 import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
+import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -218,13 +219,21 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
  * returns a hash-verified pointer to it, and the `memory-entry` target owner is a
  * real writer (src/sac/memory-owner-writer.ts) that lands an accepted proposal in
  * `.metaproject/memory/` through the SAME guarded canonical writer `keryx memory
- * new` uses. `wiki`/`skill` targets remain `unavailable` — only `memory-entry`
- * proposals can be accepted through this composition today.
+ * new` uses. `wiki-update` is likewise real (src/sac/wiki-owner-writer.ts): it
+ * lands a "decision" page in `.metaproject/wiki/decisions/`, guarded by the same
+ * security scan `keryx wiki collect` runs before publishing a generated page.
+ * `skill` remains `unavailable` (see below).
  *
  * `workspaceId` is bound at construction because `resolveExplicitWrapUp` must
  * return a `workspaceId` it did not receive on the request (see trusted-wrap-up.ts)
  * — the CLI/caller already knows which workspace it is proposing into, so it is
  * captured here rather than trusted from caller-suppliable request fields.
+ *
+ * `skill` remains `unavailable` — there is no `SecurityTarget` for it in
+ * src/security/types.ts and `createProjectSkill` (src/gdskills/project-skills.ts)
+ * runs no security scan at all today. Writing SAC-derived content into skills
+ * (which are read as agent routing instructions) without the same guard
+ * memory/wiki get would be a real safety regression, not a shortcut.
  */
 export function createHarnessProposalLifecycleService(
   cwd: string,
@@ -238,7 +247,12 @@ export function createHarnessProposalLifecycleService(
       return resolveSessionWrapUp({ cwd, workspaceId: opts.workspaceId, sourceRef: request.sourceRef });
     },
   });
-  const targetWriters = { ...createLocalOwnerWriterAdapters(), memory: createMemoryGuardedTargetWriter(createRealMemoryOwnerWriter(cwd, opts.note !== undefined ? { note: opts.note } : {})) };
+  const noteOpt = opts.note !== undefined ? { note: opts.note } : {};
+  const targetWriters = {
+    ...createLocalOwnerWriterAdapters(),
+    memory: createMemoryGuardedTargetWriter(createRealMemoryOwnerWriter(cwd, noteOpt)),
+    wiki: createWikiGuardedTargetWriter(createRealWikiOwnerWriter(cwd, noteOpt)),
+  };
   const service = new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters, wrapUpAuthority });
   return { service, wrapUpAuthority, authorizationServer };
 }

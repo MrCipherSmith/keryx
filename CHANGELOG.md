@@ -108,6 +108,33 @@ All notable changes to `keryx` are documented here. The format follows
   read back at accept time, mirroring the approval/intent/decision sidecar pattern
   `proposal-lifecycle.ts` already used. The read-path (an agent reading FWK context
   live inside `keryx shell`) remains unwired — out of scope for this slice.
+- **Shared Agent Context — real harness composition for the wiki-update write path.**
+  `keryx workspace propose --kind wiki-update --session <id>` +
+  `review --decision accepted` now lands a real "decision" page (`WIKI_PAGE_TYPES` —
+  "known decisions and ADR-like records", `.metaproject/wiki/decisions/`) end-to-end,
+  the same shape of gap the memory-entry path closed above. New
+  `src/sac/wiki-owner-writer.ts` (`createRealWikiOwnerWriter`) is wiki's first real
+  `GuardedOwnerWriter`, guarded by the SAME security write seam
+  `keryx wiki collect` runs before publishing a generated page
+  (`src/wiki/service.ts`, `guardOutput({ target: "wiki" })`) — a blocked write is
+  refused, not silently sent. Unlike memory, there is no canonical "write real body
+  content" helper to reuse here: `keryx wiki new` (`wikiCreatePage`) only scaffolds a
+  blank title/type template with no content field, so this writes directly via the
+  same `writeFileAtomic` helper `proposal-lifecycle.ts` already uses elsewhere. The
+  proposal-record read + evidence hash re-verification that memory and wiki both need
+  was pulled out into shared `src/sac/proposal-evidence.ts` (`readVerifiedProposalEvidence`,
+  `ownerReceiptPath`, `proposalNotePath` + the sidecar-note fix from above) rather than
+  duplicated a second time; `memory-owner-writer.ts` was refactored onto the same
+  seam with no behavioral change (same receipt paths, same tests, still 115/115 green
+  across `src/sac/` + the session-reader caller guard). Verified live end-to-end (real
+  session → hash-verified evidence → accepted `wiki-update` proposal → real
+  `.metaproject/wiki/decisions/sac-<id>.md`, note included). **`skill` stays
+  `unavailable`/fail-closed on purpose**: `src/security/types.ts`'s `SecurityTarget`
+  union has no `"skill"` member and `createProjectSkill`
+  (`src/gdskills/project-skills.ts`) runs no security scan at all today — writing
+  SAC-derived content into skills (read as agent routing instructions every turn)
+  without the same guard memory/wiki get would be a real safety regression, not a
+  shortcut, and was deliberately not done.
 
 ## [0.2.33] — 2026-08-13
 
