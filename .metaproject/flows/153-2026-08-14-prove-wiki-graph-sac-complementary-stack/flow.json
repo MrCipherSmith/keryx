@@ -3,9 +3,9 @@
   "id": "153",
   "slug": "prove-wiki-graph-sac-complementary-stack",
   "title": "Prove wiki+graph+SAC complementary stack with reproducible runbook",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-14T20:17:17.724Z",
-  "updatedAt": "2026-08-14T20:41:05.334Z",
+  "updatedAt": "2026-08-14T20:43:38.957Z",
   "source": {
     "type": "description",
     "ref": null
@@ -245,6 +245,15 @@
       "at": "2026-08-14T20:41:05.334Z",
       "event": "ac-confirmed",
       "detail": "AC6: Claims cited to src/sac/fwk-service.ts, proposal-lifecycle.ts, single-turn.ts, make-provider.ts, and named tests plus live CLI JSON."
+    },
+    {
+      "at": "2026-08-14T20:43:36.330Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-14T20:43:38.957Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
