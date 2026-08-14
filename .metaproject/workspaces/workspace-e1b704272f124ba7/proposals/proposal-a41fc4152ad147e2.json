@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "recordType": "proposal-created",
+  "id": "proposal-a41fc4152ad147e2",
+  "proposalRevision": "1",
+  "correlationId": "d1f564f2-ab8b-4a3f-a44b-04e13bfa8982",
+  "workspaceId": "workspace-e1b704272f124ba7",
+  "kind": "wiki-update",
+  "status": "proposed",
+  "summary": "trusted wrap-up reference",
+  "evidence": [
+    {
+      "kind": "session",
+      "uri": "./.metaproject/workspaces/workspace-e1b704272f124ba7/session-evidence/77720896-3aa2-4cc6-84c5-5694efdc4c01.md",
+      "revision": "aad88101313f79c3306cfc9be51c66c94686e5dedadb4c704af7bf56f80dc60e",
+      "observedAt": "2026-08-14T20:28:26.060Z"
+    }
+  ],
+  "wrapUp": {
+    "id": "wrapup-994079b90a8647f9",
+    "source": "session",
+    "sourceRef": "./.metaproject/workspaces/workspace-e1b704272f124ba7/session-evidence/77720896-3aa2-4cc6-84c5-5694efdc4c01.md",
+    "sourceRevision": "2026-08-13T12:39:20.275Z",
+    "issuedAt": "2026-08-14T20:28:26.060Z",
+    "expiresAt": "2026-08-14T21:28:26.060Z"
+  },
+  "author": "user:local-502",
+  "security": {
+    "gate": "pass",
+    "redacted": true,
+    "policyRef": "./security/policy/local",
+    "policyRevision": "local-offline-v1"
+  },
+  "createdAt": "2026-08-14T20:28:26.061Z"
+}

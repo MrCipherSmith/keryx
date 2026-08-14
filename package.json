@@ -45,6 +45,7 @@
   },
   "files": [
     "dist",
+    "docs/requirements/shared-agent-context/schemas",
     "src/gdgraph",
     "src/gdskills/bundled",
     "src/gdskills/contracts",

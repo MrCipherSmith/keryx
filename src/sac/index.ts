@@ -1,6 +1,7 @@
-import { readFile, realpath } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Phase 0 Shared Agent Context contracts.  This module deliberately has no
@@ -36,6 +37,39 @@ const normativeSchemaFiles: Record<SacSchema, string> = {
   "review-decision": "review-decision.schema.json",
 };
 const normativeSchemas = new Map<SacSchema, Promise<JsonSchema>>();
+const NORMATIVE_SCHEMA_DIR = path.join("docs", "requirements", "shared-agent-context", "schemas");
+
+/**
+ * Find a SAC JSON Schema on disk from either the source tree (`src/sac` →
+ * `../../docs/...`) or a bundled CLI (`dist/cli.js` → walk up to the package
+ * or project root). The previous `new URL("../../docs/...", import.meta.url)`
+ * only worked when this file was loaded from `src/sac/`; the installed
+ * `dist/cli.js` resolved it to the *parent of the package* and ENOENT'd.
+ */
+export async function resolveSacNormativeSchemaPath(
+  fileName: string,
+  searchFrom: readonly string[] = [fileURLToPath(new URL(".", import.meta.url)), process.cwd()],
+): Promise<string> {
+  const seen = new Set<string>();
+  for (const start of searchFrom) {
+    let dir = path.resolve(start);
+    for (let i = 0; i < 10; i++) {
+      if (seen.has(dir)) break;
+      seen.add(dir);
+      const candidate = path.join(dir, NORMATIVE_SCHEMA_DIR, fileName);
+      try {
+        await access(candidate);
+        return candidate;
+      } catch {
+        // keep walking
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  throw new Error(`SAC normative schema not found: ${fileName}`);
+}
 
 type StrictUtcInstant = Readonly<{ epochSeconds: number; fractionalDigits: string }>;
 
@@ -80,7 +114,8 @@ function isRecord(value: unknown): value is RecordValue {
 async function loadNormativeSchema(schema: SacSchema): Promise<JsonSchema> {
   let pending = normativeSchemas.get(schema);
   if (!pending) {
-    pending = readFile(new URL(`../../docs/requirements/shared-agent-context/schemas/${normativeSchemaFiles[schema]}`, import.meta.url), "utf8")
+    pending = resolveSacNormativeSchemaPath(normativeSchemaFiles[schema])
+      .then((file) => readFile(file, "utf8"))
       .then((source) => JSON.parse(source) as JsonSchema);
     normativeSchemas.set(schema, pending);
   }

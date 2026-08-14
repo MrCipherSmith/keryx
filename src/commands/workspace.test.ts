@@ -9,6 +9,21 @@ async function invoke(cwd: string, args: string[]) {
   return { exitCode: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() };
 }
 
+test("workspace overview --explain keeps JSON on stdout and FWK labels on stderr", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-explain-"));
+  await mkdir(path.join(cwd, "src"));
+  await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
+  const created = await invoke(cwd, ["create", "--title", "Explain workspace", "--component", "./src/a.ts"]);
+  expect(created.exitCode).toBe(0);
+  const manifest = JSON.parse(created.stdout) as { id: string };
+  const overview = await invoke(cwd, ["overview", manifest.id, "--explain"]);
+  expect(overview.exitCode).toBe(0);
+  expect(JSON.parse(overview.stdout)).toHaveProperty("manifest");
+  expect(overview.stderr).toContain("SAC explain (FWK — Facts / Work / Know-how)");
+  expect(overview.stderr).toContain("Know-how");
+  expect(overview.stderr).toContain("graph nodes/edges (navigation only)");
+});
+
 test("workspace CLI exposes only offline create/list/show/add-resource and guarded read operations", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-workspace-cli-")); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
   const created = await invoke(cwd, ["create", "--title", "CLI workspace", "--component", "./src/a.ts"]);

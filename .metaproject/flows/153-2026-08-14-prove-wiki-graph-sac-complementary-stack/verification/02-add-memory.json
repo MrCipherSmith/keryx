@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "id": "workspace-e1b704272f124ba7",
+  "title": "Wiki-graph-SAC proof (flow 153)",
+  "status": "active",
+  "members": [
+    {
+      "subject": "user:local-502",
+      "role": "owner"
+    }
+  ],
+  "resources": [
+    {
+      "kind": "component",
+      "uri": "./src/sac/service.ts"
+    },
+    {
+      "kind": "wiki",
+      "uri": "./.metaproject/wiki/architecture/wiki-graph-sac.md"
+    },
+    {
+      "kind": "memory",
+      "uri": "./.metaproject/memory/constraints/stale-installed-keryx-binary.md"
+    }
+  ],
+  "createdAt": "2026-08-14T20:27:25.140Z",
+  "updatedAt": "2026-08-14T20:27:40.241Z"
+}

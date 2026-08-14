@@ -1,0 +1,17 @@
+{
+  "provider": "anthropic",
+  "model": "deepseek-v4-flash",
+  "credentialAvailable": false,
+  "concurrency": 1,
+  "pages": [
+    {
+      "path": "architecture/os-sandbox.md",
+      "action": "skipped",
+      "reason": "no credential for provider \"anthropic\" (set its API key env var or enter it in keryx shell)"
+    }
+  ],
+  "enriched": 0,
+  "dryRun": 0,
+  "skipped": 1,
+  "failed": 0
+}

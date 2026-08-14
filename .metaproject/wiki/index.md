@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-13T11:49:38.566Z | pages: 44 -->
+<!-- generated: 2026-08-14T20:30:14.108Z | pages: 46 -->
 
 ### Architecture
 
@@ -39,6 +39,7 @@ keryx wiki index
 - [Project Map](architecture/project-map.md) (accepted) - This page is the deterministic architecture map for the project. It captures the repository as a graph of code files and assets, including import relationships between top-level modules.
 - [Quality Map](architecture/quality-map.md) (accepted)
 - [Testing Map](architecture/testing-map.md) (accepted) - This page provides a high-level map of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
+- [Wiki, Graph, and Shared Agent Context](architecture/wiki-graph-sac.md) (accepted) - The project wiki, the code graph, and Shared Agent Context (SAC) are one connected stack with three owners. Graph answers structural questions. Wiki stores curated long-lived understanding. SAC is a reviewed collaboration entry point: it references those owners, projects Flow as Work, and never becomes a second wiki.
 
 ### Domain Model
 
@@ -105,5 +106,5 @@ _No pages yet._
 
 ### Decision
 
-_No pages yet._
+- [SAC: SAC harness integration demo](decisions/sac-proposal-a41fc4152ad147e2.md) (draft) - SAC complements wiki and graph; it does not replace them.
 <!-- keryx:wiki-index:end -->

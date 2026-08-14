@@ -1,0 +1,11 @@
+{
+  "provider": "anthropic",
+  "model": "deepseek-v4-flash",
+  "credentialAvailable": false,
+  "concurrency": 1,
+  "pages": [],
+  "enriched": 0,
+  "dryRun": 0,
+  "skipped": 0,
+  "failed": 0
+}

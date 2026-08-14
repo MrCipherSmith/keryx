@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 2,
+  "id": "153",
+  "slug": "prove-wiki-graph-sac-complementary-stack",
+  "title": "Prove wiki+graph+SAC complementary stack with reproducible runbook",
+  "status": "in-progress",
+  "createdAt": "2026-08-14T20:17:17.724Z",
+  "updatedAt": "2026-08-14T20:30:30.707Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a9aa57113f722fafde153c3d59fe70a7c0cf013405e92d6ca6f33015c3fc8edd",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Add workspace --explain FWK trace",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Write wiki-graph-SAC proof runbook",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Run fallback + e2e scenario and record expected/actual",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-14T20:17:17.724Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-14T20:23:53.553Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-14T20:23:53.627Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-14T20:23:53.693Z",
+      "event": "task-added",
+      "detail": "T5: Add workspace --explain FWK trace"
+    },
+    {
+      "at": "2026-08-14T20:23:53.763Z",
+      "event": "task-added",
+      "detail": "T6: Write wiki-graph-SAC proof runbook"
+    },
+    {
+      "at": "2026-08-14T20:23:53.834Z",
+      "event": "task-added",
+      "detail": "T7: Run fallback + e2e scenario and record expected/actual"
+    },
+    {
+      "at": "2026-08-14T20:30:30.331Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-14T20:30:30.402Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-14T20:30:30.476Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-14T20:30:30.554Z",
+      "event": "task-done",
+      "detail": "T5: Add workspace --explain FWK trace"
+    },
+    {
+      "at": "2026-08-14T20:30:30.632Z",
+      "event": "task-done",
+      "detail": "T6: Write wiki-graph-SAC proof runbook"
+    },
+    {
+      "at": "2026-08-14T20:30:30.707Z",
+      "event": "task-done",
+      "detail": "T7: Run fallback + e2e scenario and record expected/actual"
+    }
+  ]
+}

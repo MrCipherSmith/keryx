@@ -6,6 +6,7 @@ import {
   authorizeSacUse,
   createSacAuthorizationServer,
   evaluateStrictSacGuard,
+  resolveSacNormativeSchemaPath,
   resolveWorkspaceReference,
   validateAccessReceiptDocument,
   validateSacContract,
@@ -332,4 +333,17 @@ test("SAC production eligibility fails closed unless a strict enforced guard pas
       operation: "read",
     }),
   ).resolves.toMatchObject({ allowed: true, disclose: true, allowWrite: false });
+});
+
+test("normative schema path walks up from a dist-like folder, not a sibling of the package", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-schema-"));
+  const schemaDir = path.join(root, "docs", "requirements", "shared-agent-context", "schemas");
+  await mkdir(schemaDir, { recursive: true });
+  const file = path.join(schemaDir, "workspace-manifest.schema.json");
+  await writeFile(file, "{}\n");
+  const distDir = path.join(root, "dist");
+  await mkdir(distDir);
+  const found = await resolveSacNormativeSchemaPath("workspace-manifest.schema.json", [distDir]);
+  expect(found).toBe(file);
+  await expect(resolveSacNormativeSchemaPath("missing.schema.json", [distDir])).rejects.toThrow(/not found/);
 });

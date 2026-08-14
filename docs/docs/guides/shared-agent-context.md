@@ -61,12 +61,15 @@ append-only transition guarded by freshness, reviewer authority, the security
 policy and an idempotent target-write receipt.
 
 ```bash
-keryx workspace propose <workspace-id> --kind decision \
-  --summary "Retry uses capped exponential backoff" \
-  --evidence ./src/payments/retry.ts
+# Wrap-up is bound to a real completed session (≥2 archived messages).
+# `--note` is a one-line gist stored beside the proposal; it is not evidence.
+keryx workspace propose <workspace-id> --kind wiki-update \
+  --session <session-id> \
+  --note "Retry uses capped exponential backoff"
 keryx workspace review <workspace-id> <proposal-id> --decision accepted \
   --idempotency-key <key>
 keryx workspace collaboration <workspace-id>
+keryx workspace overview <workspace-id> --explain
 ```
 
 ## Advanced: phase-6 runtime opt-in policy (off by default)
