@@ -634,6 +634,9 @@ would change.
   only the harness leg's data changes; the adapter/report machinery above needs
   no rework.
 
+**Paused (2026-08-14):** deliberately on hold pending model/credential prep on the
+user's side before resuming the same-model-harness search.
+
 ## M3 — Comparative: context/RAG tool + model matrix expansion
 
 **Scope**
