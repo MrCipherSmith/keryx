@@ -83,7 +83,10 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
  * tested one while THIS one — the only live caller — went unguarded).
  */
 export const COMPOSER_MIN_ROWS = 1;
+/** Fallback cap when the viewport height is unknown (tests / no renderer). */
 export const COMPOSER_MAX_ROWS = 6;
+/** Rounded border adds one row above and below the textarea. */
+const COMPOSER_BORDER_ROWS = 2;
 /** Rows the `/` dropdown occupies when open (a described option costs two). */
 const MENU_HEIGHT = 10;
 /** Sidebar is a fixed column so the transcript width does not jump. */
@@ -121,11 +124,39 @@ const TOAST_MS = 5000;
 /**
  * Pure: clamp visual line count into the composer height band. Exported so the
  * clamp {@link ShellChrome.syncComposerHeight} actually calls is the one under
- * test.
+ * test. `maxRows` defaults to {@link COMPOSER_MAX_ROWS}; the live chrome passes
+ * one third of the viewport.
  */
-export function composerHeightForLines(visualLines: number): number {
+export function composerHeightForLines(visualLines: number, maxRows: number = COMPOSER_MAX_ROWS): number {
+  const cap =
+    Number.isFinite(maxRows) && maxRows >= COMPOSER_MIN_ROWS ? Math.floor(maxRows) : COMPOSER_MAX_ROWS;
   const n = Number.isFinite(visualLines) ? Math.floor(visualLines) : COMPOSER_MIN_ROWS;
-  return Math.min(COMPOSER_MAX_ROWS, Math.max(COMPOSER_MIN_ROWS, n < 1 ? COMPOSER_MIN_ROWS : n));
+  return Math.min(cap, Math.max(COMPOSER_MIN_ROWS, n < 1 ? COMPOSER_MIN_ROWS : n));
+}
+
+/** Live composer cap: at least one row, at most one third of the terminal. */
+export function composerMaxRowsForViewport(viewportRows: number): number {
+  if (!Number.isFinite(viewportRows) || viewportRows < 1) {
+    return COMPOSER_MAX_ROWS;
+  }
+  return Math.max(COMPOSER_MIN_ROWS, Math.floor(viewportRows / 3));
+}
+
+/**
+ * Soft-wrap estimate for a single paragraph at `width` columns (char wrap).
+ * Used when OpenTUI's `virtualLineCount` has not yet seen a finite width.
+ */
+export function wrappedLineCount(text: string, width: number): number {
+  const inner = Number.isFinite(width) ? Math.floor(width) : 0;
+  const paragraphs = text.length === 0 ? [""] : text.split("\n");
+  if (inner < 1) {
+    return Math.max(COMPOSER_MIN_ROWS, paragraphs.length);
+  }
+  let total = 0;
+  for (const paragraph of paragraphs) {
+    total += Math.max(1, Math.ceil(Math.max(paragraph.length, 1) / inner));
+  }
+  return total;
 }
 
 /**
@@ -510,11 +541,16 @@ export async function createShellChrome(
   });
   main.add(menu);
 
-  // Bordered composer: multi-line wrap, grows 1→6 rows, then scrolls vertically.
-  // Enter submits (Shift/Alt+Enter insert a newline). Not a single-line Input.
+  // Bordered composer: wrap at the column width, grow up to 1/3 of the
+  // viewport, then scroll. Enter submits (Shift/Alt+Enter insert a newline).
+  // minWidth: 0 is load-bearing — without it Yoga sizes the textarea to the
+  // unwrapped text and wrap never fires, so the cursor scrolls off to the left.
   const composer = new otui.BoxRenderable(r, {
     id: "composer",
     flexShrink: 0,
+    minWidth: 0,
+    width: "100%",
+    flexDirection: "column",
     borderStyle: "rounded",
     border: true,
     paddingLeft: 1,
@@ -524,10 +560,12 @@ export async function createShellChrome(
     id: "prompt",
     placeholder: opts.placeholder,
     wrapMode: "word",
-    minHeight: COMPOSER_MIN_ROWS,
-    maxHeight: COMPOSER_MAX_ROWS,
-    height: COMPOSER_MIN_ROWS,
+    minWidth: 0,
     width: "100%",
+    minHeight: COMPOSER_MIN_ROWS,
+    height: COMPOSER_MIN_ROWS,
+    flexShrink: 0,
+    overflow: "scroll",
     // Enter = submit; Shift/Meta+Enter = newline (the default Textarea bindings
     // are inverted).
     keyBindings: [
@@ -544,18 +582,34 @@ export async function createShellChrome(
   composer.add(textarea);
   main.add(composer);
 
+  const viewportRows = (): number => {
+    const h = (r as { height?: number }).height;
+    return typeof h === "number" && h > 0 ? h : COMPOSER_MAX_ROWS * 3;
+  };
+
   const syncComposerHeight = (): void => {
+    const cap = composerMaxRowsForViewport(viewportRows());
     let lines = 1;
     try {
-      // Prefer visual (wrapped) lines so long single-line text grows vertically.
-      lines = Math.max(textarea.virtualLineCount || 0, textarea.lineCount || 0, 1);
+      const wrapWidth = typeof textarea.width === "number" && textarea.width > 0 ? textarea.width : 0;
+      lines = Math.max(
+        textarea.virtualLineCount || 0,
+        textarea.lineCount || 0,
+        wrappedLineCount(textarea.plainText, wrapWidth),
+        1,
+      );
     } catch {
-      lines = Math.max(1, (textarea.plainText.match(/\n/g)?.length ?? 0) + 1);
+      lines = wrappedLineCount(textarea.plainText, 0);
     }
-    const h = composerHeightForLines(lines);
+    const h = composerHeightForLines(lines, cap);
     if (textarea.height !== h) {
       textarea.height = h;
     }
+    const boxH = h + COMPOSER_BORDER_ROWS;
+    if (composer.height !== boxH) {
+      composer.height = boxH;
+    }
+    textarea.maxHeight = cap;
   };
 
   /** Adapter so callers keep using `.value` / `.focus()` over the Textarea. */
@@ -714,6 +768,10 @@ export async function createShellChrome(
     syncComposerHeight();
     refilter();
   };
+  const onComposerResized = (): void => {
+    syncComposerHeight();
+  };
+  textarea.on(otui.LayoutEvents.RESIZED, onComposerResized);
   textarea.focus();
   syncComposerHeight();
 
@@ -836,6 +894,11 @@ export async function createShellChrome(
       clearBusyTimer();
       clearToastTimer();
       unsubscribeMenuKeys();
+      try {
+        textarea.off(otui.LayoutEvents.RESIZED, onComposerResized);
+      } catch {
+        // best-effort teardown
+      }
       try {
         r.off(otui.CliRenderEvents.SELECTION, onSelection);
       } catch {

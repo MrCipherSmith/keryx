@@ -271,12 +271,13 @@ test("fmtTokens: compact K formatting", () => {
 // The clamp under test is `shell-chrome.ts`'s — the one the shipped chrome's
 // `syncComposerHeight` calls. A duplicate used to live in `tui-shell.ts` with no
 // production caller left, so this test guarded an orphan.
-test("composerHeightForLines: grow 1..6 then clamp (vertical scroll above max)", () => {
+test("composerHeightForLines: grow then clamp (vertical scroll above max)", () => {
   expect(composerHeightForLines(0)).toBe(COMPOSER_MIN_ROWS);
   expect(composerHeightForLines(1)).toBe(1);
   expect(composerHeightForLines(3)).toBe(3);
   expect(composerHeightForLines(6)).toBe(COMPOSER_MAX_ROWS);
   expect(composerHeightForLines(20)).toBe(COMPOSER_MAX_ROWS);
+  expect(composerHeightForLines(20, 8)).toBe(8);
   expect(composerHeightForLines(NaN)).toBe(COMPOSER_MIN_ROWS);
 });
 

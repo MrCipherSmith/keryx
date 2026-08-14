@@ -17,9 +17,12 @@
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import {
+  composerHeightForLines,
+  composerMaxRowsForViewport,
   createShellChrome,
   formatSidebarVersionUpdateAdvisory,
   SIDEBAR_TEXT_WIDTH,
+  wrappedLineCount,
   type ShellChrome,
   type ShellChromeOptions,
 } from "./shell-chrome";
@@ -648,6 +651,40 @@ otuiTest("AC1: composer submissions and `/`-menu selections both reach the submi
   expect(h.chrome.menu.visible).toBe(false);
   expect(h.chrome.textarea.focused).toBe(true);
   expect(h.chrome.input.value).toBe("");
+  h.destroy();
+});
+
+test("composerMaxRowsForViewport: one third of the terminal, at least one row", () => {
+  expect(composerMaxRowsForViewport(24)).toBe(8);
+  expect(composerMaxRowsForViewport(9)).toBe(3);
+  expect(composerMaxRowsForViewport(2)).toBe(1);
+  expect(composerMaxRowsForViewport(0)).toBe(6);
+});
+
+test("wrappedLineCount: long lines become extra visual rows", () => {
+  expect(wrappedLineCount("", 10)).toBe(1);
+  expect(wrappedLineCount("abc", 10)).toBe(1);
+  expect(wrappedLineCount("a".repeat(25), 10)).toBe(3);
+  expect(wrappedLineCount("one\ntwo", 10)).toBe(2);
+  expect(composerHeightForLines(wrappedLineCount("a".repeat(80), 20), 8)).toBe(4);
+});
+
+otuiTest("composer grows with wrapped text up to one third of the viewport", async () => {
+  const otui = requireOtui();
+  const height = 24;
+  const h = await mountChrome(otui, { width: 90, height });
+  const cap = composerMaxRowsForViewport(height);
+
+  h.chrome.input.value = "a".repeat(200);
+  h.chrome.syncComposerHeight();
+  await h.flush();
+  expect(h.chrome.textarea.height).toBeGreaterThan(1);
+  expect(h.chrome.textarea.height).toBeLessThanOrEqual(cap);
+
+  h.chrome.input.value = Array.from({ length: 20 }, () => "line").join("\n");
+  h.chrome.syncComposerHeight();
+  await h.flush();
+  expect(h.chrome.textarea.height).toBe(cap);
   h.destroy();
 });
 
