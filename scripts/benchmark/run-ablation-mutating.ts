@@ -29,13 +29,14 @@ import { join } from "node:path";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
 import { buildAblationManifest, computeAblationDelta, type AblationSeedSample, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
+import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
 import { builtinMetaprojectTools } from "../../src/harness/tool/builtin/metaproject-tools";
 import { builtinReadOnlyTools, type InteractiveTool } from "../../src/harness/tool/builtin/interactive-tools";
 import { shellExecTool } from "../../src/harness/tool/builtin/shell-exec-tool";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
-import { MUTATING_TASKS, type MutatingTask } from "./mutating-tasks";
+import { MUTATING_GOLD_ARTIFACT_PATH, MUTATING_TASKS, type MutatingTask } from "./mutating-tasks";
 
 const SEEDS = [1, 2, 3] as const;
 
@@ -87,6 +88,14 @@ async function runSeed(
   const created = await port.create(worktreeId);
   const root = created.path;
   try {
+    // AC-5: strip this repo's own gold artifact (mutating-tasks.ts, which contains
+    // every task's exact solution spec) before the agent ever sees this worktree, then
+    // verify the strip worked — never trust a live case on an unverified worktree.
+    await rm(join(root, MUTATING_GOLD_ARTIFACT_PATH), { force: true });
+    const leakage = checkGoldLeakage(root, [MUTATING_GOLD_ARTIFACT_PATH]);
+    if (leakage.assertion === "failed") {
+      throw new Error(`AC-5: gold artifact still reachable in worktree after strip: ${leakage.reachablePaths.join(", ")}`);
+    }
     // Seed the failing test BEFORE the agent runs — it is what defines "done".
     await writeFile(join(root, task.seedTestFile), task.seedTestContent, "utf8");
 
@@ -185,7 +194,7 @@ async function main(): Promise<void> {
     const resultsUrl = new URL(`../../fixtures/benchmark/keryx/${RESULTS_FILENAME}`, import.meta.url);
     await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
 
-    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL });
+    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL, leakageAssertion: "passed" });
     console.log(JSON.stringify(manifest, null, 2));
 
     console.error("\n# deltas (context-on vs context-off, informational — not a speed claim)");

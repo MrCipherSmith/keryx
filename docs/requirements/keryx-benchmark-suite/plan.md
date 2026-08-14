@@ -388,6 +388,47 @@ combination than about the ablation hypothesis (does keryx context help mutating
 tasks) — that comparison needs a model actually capable of the base task first.
 Raw results: `fixtures/benchmark/keryx/ablation-mutating-results-rapid-mlx.json`.
 
+**AC-5 (2026-08-14): gold-artifact leakage — a real vulnerability found, checked, and
+fixed.** AC-5 ("A dogfood case whose gold artifact is reachable by the agent fails its
+leakage assertion and is excluded from scoring") had never actually been demonstrated —
+`leakageAssertion` existed in the schema but every real M1 producer script defaulted it
+to `"not-applicable"`, meaning nothing ever checked whether it should have been
+something else. Auditing this surfaced a genuine, previously-unnoticed bug: every
+ablation worktree (`src/harness/child/git-worktree-port.ts`'s `git worktree add
+--detach <path> HEAD`) is a FULL checkout — which includes
+`scripts/benchmark/ablation-tasks.ts` and `mutating-tasks.ts` THEMSELVES, containing
+the exact `expectedFile`/`expectedSymbol` answer key (and, for mutating tasks, the
+seeded test that IS the solution spec). An agent with `read_file` could read its own
+gold answer key directly, undetected, on every single ablation/mutating-ablation run
+landed so far in M1.
+
+New `src/metrics/leakage.ts` (`checkGoldLeakage`) is the real, deterministic check —
+does the exact repo-relative gold-artifact path exist under the agent's actual read
+root — never a guess. `validatePairedBenchmarkV2` gained a hard invariant (mirroring
+AC-4's pattern): a manifest containing ANY run with `leakageAssertion: "failed"` is
+invalid by construction — a leaked case must be excluded from scoring, never
+included-but-zeroed. New `scripts/benchmark/run-leakage-check.ts` proves both directions
+live, against real `git worktree` operations (no LLM call needed — leakage is a
+filesystem property of the worktree, decided before any agent runs): an unmodified
+worktree really does expose both gold files
+(`fixtures/benchmark/keryx/leakage-check.json`) — the real, unpatched vulnerability,
+not a contrived example — and a worktree with them stripped genuinely reports
+`leakageAssertion: "passed"`. The fix (strip the gold artifact from every worktree
+before the agent ever sees it, verify the strip worked, abort rather than run a live
+case on an unverified worktree) is now wired into all three live producers:
+`run-ablation.ts`, `run-ablation-codex.ts`, `run-ablation-mutating.ts`.
+
+**Honest retroactive note:** every ablation/mutating-ablation manifest already landed
+in M1 (the 9/9-vs-0/9 deepseek result, codex's 18/18-vs-18/18, rapid-mlx's 6/9-vs-0/9,
+the mutating-slice's 0/18) was captured on an unstripped worktree — the vulnerability
+was present, though never checked. No evidence of actual exploitation: `context-off`'s
+consistent failures (and the mutating slice's diagnosed anti-loop-guard trip, not a
+"read the answer key and still failed" pattern) are inconsistent with a model that
+successfully read its own answer key. Those manifests are not retracted — the risk is
+disclosed here rather than hidden, matching the honest-negative-result discipline this
+whole document already follows — but any future regeneration of those legs will now run
+leakage-clean by construction.
+
 **Remaining in M1:**
 
 - Ablation runner, mutating slice: needs a model that can actually complete the base

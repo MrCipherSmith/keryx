@@ -36,12 +36,13 @@ import { join } from "node:path";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
 import { buildAblationManifest, computeAblationDelta, type AblationSeedSample, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
+import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
 import { builtinMetaprojectTools } from "../../src/harness/tool/builtin/metaproject-tools";
 import { builtinReadOnlyTools, type InteractiveTool } from "../../src/harness/tool/builtin/interactive-tools";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
-import { ABLATION_TASKS, ANSWER_FORMAT, checkAblationAnswer, type AblationTask } from "./ablation-tasks";
+import { ABLATION_GOLD_ARTIFACT_PATH, ABLATION_TASKS, ANSWER_FORMAT, checkAblationAnswer, type AblationTask } from "./ablation-tasks";
 
 const SEEDS = [1, 2, 3] as const;
 
@@ -136,6 +137,14 @@ async function main(): Promise<void> {
       const created = await port.create(`ablation-${PROVIDER_NAME}-${variant}`);
       worktreePaths.set(variant, created.path);
       console.error(`worktree[${variant}]: ${created.path}`);
+      // AC-5: strip the gold artifact (this repo's own answer key) BEFORE the agent
+      // ever sees this worktree, then verify the strip actually worked — never trust
+      // a live case on an unverified worktree.
+      await rm(join(created.path, ABLATION_GOLD_ARTIFACT_PATH), { force: true });
+      const leakage = checkGoldLeakage(created.path, [ABLATION_GOLD_ARTIFACT_PATH]);
+      if (leakage.assertion === "failed") {
+        throw new Error(`AC-5: gold artifact still reachable in ${variant} worktree after strip: ${leakage.reachablePaths.join(", ")}`);
+      }
     }
 
     const taskInputs: AblationTaskInput[] = [];
@@ -176,7 +185,7 @@ async function main(): Promise<void> {
     const resultsUrl = new URL(`../../fixtures/benchmark/keryx/${RESULTS_FILENAME}`, import.meta.url);
     await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
 
-    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL });
+    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL, leakageAssertion: "passed" });
     console.log(JSON.stringify(manifest, null, 2));
 
     console.error("\n# deltas (context-on vs context-off, informational — not a speed claim)");

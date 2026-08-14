@@ -593,6 +593,12 @@ export function validatePairedBenchmarkV2(manifest: PairedBenchmarkManifestV2): 
     if (run.effort !== undefined && (typeof run.effort !== "string" || run.effort.length === 0)) errors.push(`runs[${index}].effort: must be a non-empty string`);
     if (!CACHE_STATES.has(run.cacheState)) errors.push(`runs[${index}].cacheState: invalid`);
     if (!LEAKAGE.has(run.leakageAssertion)) errors.push(`runs[${index}].leakageAssertion: invalid`);
+    // AC-5: a case whose gold artifact was found reachable must never appear in a
+    // scored manifest at all — it is excluded at the producer, not included-but-zeroed.
+    // A manifest containing a "failed" leakage run is invalid by construction.
+    if (run.leakageAssertion === "failed") {
+      errors.push(`runs[${index}]: leakageAssertion "failed" (gold artifact reachable) must be excluded from scoring, not included in the manifest — AC-5`);
+    }
     if (!CASE_KINDS.has(run.caseKind)) errors.push(`runs[${index}].caseKind: invalid`);
     if (run.tokenCap !== null && typeof run.tokenCap !== "number") errors.push(`runs[${index}].tokenCap: must be a number or null`);
     if (!Array.isArray(run.seeds)) {

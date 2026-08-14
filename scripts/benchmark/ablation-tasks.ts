@@ -14,6 +14,15 @@ export type AblationTask = {
   readonly expectedSymbol: string;
 };
 
+// AC-5 (specification.md §7): this file is the gold artifact for every ablation task
+// below (expectedFile/expectedSymbol IS the answer key) — and it is a real, tracked
+// file, so a `git worktree add HEAD` checkout (src/harness/child/git-worktree-port.ts,
+// what every ablation producer script uses) includes it. An agent with `read_file`
+// could read its own answer key directly. Every ablation producer script strips this
+// exact path from every worktree before the agent ever sees it, and verifies that with
+// src/metrics/leakage.ts's checkGoldLeakage before trusting a live case.
+export const ABLATION_GOLD_ARTIFACT_PATH = "scripts/benchmark/ablation-tasks.ts";
+
 export const ANSWER_FORMAT = "Reply on one line in EXACTLY this format: FILE: <path> SYMBOL: <name>";
 
 export const ABLATION_TASKS: readonly AblationTask[] = [

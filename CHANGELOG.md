@@ -126,6 +126,33 @@ All notable changes to `keryx` are documented here. The format follows
   held constant) — AC-6 passes as a mechanism, but M2's `fairness: met` exit bar
   is honestly not reached with codex; the milestone stays open pending a
   same-model headless-capable harness.
+- **Benchmark suite AC-5 — real gold-artifact leakage found and fixed.** AC-5 ("A
+  dogfood case whose gold artifact is reachable by the agent fails its leakage
+  assertion and is excluded from scoring") had never been demonstrated —
+  `leakageAssertion` defaulted to `not-applicable` in every real M1 producer. Auditing
+  it surfaced a genuine bug: every ablation worktree is a full `git worktree add
+  --detach <path> HEAD` checkout (`src/harness/child/git-worktree-port.ts`), which
+  includes `scripts/benchmark/ablation-tasks.ts`/`mutating-tasks.ts` THEMSELVES —
+  containing the exact `expectedFile`/`expectedSymbol` answer key (and, for mutating
+  tasks, the seeded test that IS the solution spec). An agent with `read_file` could
+  read its own gold answer key directly, undetected, on every ablation run landed so
+  far. New `src/metrics/leakage.ts` (`checkGoldLeakage`) is the real, deterministic
+  reachability check; `validatePairedBenchmarkV2` gained a hard invariant mirroring
+  AC-4's pattern — a manifest containing any `leakageAssertion: "failed"` run is
+  invalid by construction. New `scripts/benchmark/run-leakage-check.ts` proves both
+  directions live against real `git worktree` operations (no LLM call needed — leakage
+  is a worktree filesystem property, decided before any agent runs): an unmodified
+  worktree really does expose both gold files
+  (`fixtures/benchmark/keryx/leakage-check.json` — the real, unpatched vulnerability),
+  a stripped one genuinely reports `passed`. The fix — strip the gold artifact from
+  every worktree before the agent ever sees it, verify the strip worked, abort rather
+  than run a live case on an unverified worktree — is now wired into all three live
+  producers (`run-ablation.ts`, `run-ablation-codex.ts`, `run-ablation-mutating.ts`).
+  Every ablation manifest already landed in M1 was captured on an unstripped worktree;
+  disclosed honestly rather than retracted — no evidence of actual exploitation
+  (`context-off`'s consistent failures and the mutating slice's diagnosed anti-loop
+  trip are inconsistent with a model that read its own answer key), but future
+  regenerations now run leakage-clean by construction.
 - **Fixed: two real MCP exposure gaps found while auditing keryx-shell/MCP capability
   parity.** (1) `buildMcpModuleEntry()`'s default `expose.modules`
   (`src/mcp/client-config.ts`) was missing `"gdctx"` and `"testing"` — `search_code` and

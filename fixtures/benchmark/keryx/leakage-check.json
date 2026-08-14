@@ -1,0 +1,24 @@
+{
+  "note": "AC-5 dogfood demonstration (specification.md §7): a REAL git worktree checkout of this repository at HEAD genuinely exposes its own ablation gold artifacts (scripts/benchmark/ablation-tasks.ts, mutating-tasks.ts) to an agent's read_file tool — this is the real vulnerability every M1 ablation producer had before this fix, not a contrived example. checkGoldLeakage (src/metrics/leakage.ts) correctly flags it as leakageAssertion: failed on the unmodified worktree, and correctly reports leakageAssertion: passed once the gold artifacts are stripped (the fix now wired into run-ablation.ts, run-ablation-codex.ts, run-ablation-mutating.ts). No live case is run against the leaked worktree — per AC-5 it is excluded from scoring, not scored and zeroed. validatePairedBenchmarkV2's own hard invariant (a manifest containing any leakageAssertion: failed run is invalid) is separately unit-tested in src/metrics/benchmark.test.ts.",
+  "generated_by": "bun scripts/benchmark/run-leakage-check.ts",
+  "captured": "2026-08-14",
+  "goldArtifactPaths": [
+    "scripts/benchmark/ablation-tasks.ts",
+    "scripts/benchmark/mutating-tasks.ts"
+  ],
+  "findings": [
+    {
+      "case": "unmodified-worktree",
+      "assertion": "failed",
+      "reachablePaths": [
+        "scripts/benchmark/ablation-tasks.ts",
+        "scripts/benchmark/mutating-tasks.ts"
+      ]
+    },
+    {
+      "case": "stripped-worktree",
+      "assertion": "passed",
+      "reachablePaths": []
+    }
+  ]
+}

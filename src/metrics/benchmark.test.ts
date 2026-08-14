@@ -66,3 +66,34 @@ describe("validatePairedBenchmarkV2 — paired-cell invariant", () => {
     expect(result.errors.some((e) => e.includes("not paired"))).toBe(true);
   });
 });
+
+describe("validatePairedBenchmarkV2 — AC-5 leakage exclusion", () => {
+  test("a manifest containing any run with leakageAssertion: failed is invalid", () => {
+    const result = validatePairedBenchmarkV2(
+      manifest([
+        baseRun({ task_id: "t1", variant: "context-on", leakageAssertion: "failed" }),
+        baseRun({ task_id: "t1", variant: "context-off" }),
+        baseRun({ task_id: "t2", variant: "context-on" }),
+        baseRun({ task_id: "t2", variant: "context-off" }),
+        baseRun({ task_id: "t3", variant: "context-on" }),
+        baseRun({ task_id: "t3", variant: "context-off" }),
+      ]),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes("AC-5"))).toBe(true);
+  });
+
+  test("leakageAssertion: passed is valid and unaffected", () => {
+    const result = validatePairedBenchmarkV2(
+      manifest([
+        baseRun({ task_id: "t1", variant: "context-on", leakageAssertion: "passed" }),
+        baseRun({ task_id: "t1", variant: "context-off", leakageAssertion: "passed" }),
+        baseRun({ task_id: "t2", variant: "context-on", leakageAssertion: "passed" }),
+        baseRun({ task_id: "t2", variant: "context-off", leakageAssertion: "passed" }),
+        baseRun({ task_id: "t3", variant: "context-on", leakageAssertion: "passed" }),
+        baseRun({ task_id: "t3", variant: "context-off", leakageAssertion: "passed" }),
+      ]),
+    );
+    expect(result.valid).toBe(true);
+  });
+});

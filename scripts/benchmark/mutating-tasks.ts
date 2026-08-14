@@ -19,6 +19,13 @@
 // hand-rolls inline (`readFile(...).catch(() => undefined)`) rather than
 // reusing a shared helper, because src/lib/fs.ts has no such helper today.
 
+// AC-5 (specification.md §7): this file's seedTestContent IS each task's solution
+// spec (the exact behavior the agent's edit must satisfy) — a real gold artifact, and
+// (like ablation-tasks.ts) a tracked file that a `git worktree add HEAD` checkout
+// includes. Every mutating-ablation producer strips this exact path from every
+// worktree before the agent ever sees it.
+export const MUTATING_GOLD_ARTIFACT_PATH = "scripts/benchmark/mutating-tasks.ts";
+
 export type MutatingTask = {
   readonly name: string;
   /** The prompt given to the agent. */

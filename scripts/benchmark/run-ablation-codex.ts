@@ -40,8 +40,9 @@ import {
   type AblationTaskInput,
   type AblationVariant,
 } from "../../src/metrics/ablation-runner";
+import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
-import { ABLATION_TASKS, checkAblationAnswer, type AblationTask } from "./ablation-tasks";
+import { ABLATION_GOLD_ARTIFACT_PATH, ABLATION_TASKS, checkAblationAnswer, type AblationTask } from "./ablation-tasks";
 
 const SEEDS = [1, 2, 3] as const;
 // codex CLI resolves its own default model under the active ChatGPT auth
@@ -110,6 +111,14 @@ async function main(): Promise<void> {
       const created = await port.create(`ablation-codex-${variant}`);
       worktreePaths.set(variant, created.path);
       console.error(`worktree[${variant}]: ${created.path}`);
+      // AC-5: strip the gold artifact (this repo's own answer key) from BOTH variants
+      // BEFORE codex ever sees this worktree — codex has a real shell in both variants,
+      // so context-off's routing-file strip below is not sufficient on its own here.
+      await rm(join(created.path, ABLATION_GOLD_ARTIFACT_PATH), { force: true });
+      const leakage = checkGoldLeakage(created.path, [ABLATION_GOLD_ARTIFACT_PATH]);
+      if (leakage.assertion === "failed") {
+        throw new Error(`AC-5: gold artifact still reachable in ${variant} worktree after strip: ${leakage.reachablePaths.join(", ")}`);
+      }
     }
 
     // context-off: strip the routing files BEFORE codex ever sees this worktree, so it
@@ -165,7 +174,7 @@ async function main(): Promise<void> {
     const resultsUrl = new URL("../../fixtures/benchmark/keryx/ablation-results-codex.json", import.meta.url);
     await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
 
-    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL });
+    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL, leakageAssertion: "passed" });
     console.log(JSON.stringify(manifest, null, 2));
 
     console.error("\n# deltas (context-on vs context-off, informational — not a speed claim)");
