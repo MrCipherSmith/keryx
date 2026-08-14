@@ -285,7 +285,10 @@ export interface ChatShellOptions {
    * consuming the next composer submissions as text-menu answers. `undefined`
    * from the picker = cancelled: the current selection is kept.
    */
-  pickSelection?: (opts?: { onlyProvider?: string }) => Promise<TuiSelection | undefined>;
+  pickSelection?: (opts?: {
+    onlyProvider?: string;
+    onlyConnected?: boolean;
+  }) => Promise<TuiSelection | undefined>;
   /** Persist the provider/model chosen mid-session (opencode-style). Default on. */
   persistSelection?: boolean;
   /** `/exit`: the caller tears the renderer down. */
@@ -533,11 +536,16 @@ export async function launchTuiChatShell(opts: {
     handle = await mountChatShell(otui, r, {
       deps: opts.makeShellDeps(sel),
       runShell: opts.runShell,
-      // `/models` → the model picker for the current provider; `/provider` →
-      // the full provider→model→key wizard. Both are the agent shell's pickers,
-      // so the two surfaces prompt identically.
+      // `/models` → model picker; `/provider` → configure wizard; `/connect` →
+      // already-connected providers only. Same pickers as the agent shell.
       pickSelection: async (pickOpts) => {
         const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+        if (pickOpts?.onlyConnected === true) {
+          return await selectProviderModelInTui(otui, r, detected, {
+            onlyConnected: true,
+            env: process.env,
+          });
+        }
         const only = pickOpts?.onlyProvider;
         if (only === undefined) {
           return await selectProviderModelInTui(otui, r, detected);

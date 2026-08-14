@@ -456,7 +456,7 @@ describe("AC2 — slash commands + provider_error resilience", () => {
 /** Local alias for the pinned, additive `ShellDeps.selectProviderModel` seam (see file header). */
 type SelectProviderModel = (
   io: ShellIO,
-  opts?: { onlyProvider?: string },
+  opts?: { onlyProvider?: string; onlyConnected?: boolean },
 ) => Promise<{ provider: string; model: string; baseUrl?: string }>;
 
 describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", () => {
@@ -578,6 +578,35 @@ describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", 
     await expect(runShell(io, deps)).resolves.toBeUndefined();
     expect(streamCalls.count).toBe(0);
     expect(writes.join("")).toMatch(/not available/i);
+  });
+
+  test("/connect with a selector switches among connected providers only", async () => {
+    const turn = textTranscript("after-connect-switch", ["ok"]);
+    const { provider, captured } = capturingFakeProvider([turn]);
+    const selectCalls: Array<{ onlyProvider?: string; onlyConnected?: boolean } | undefined> = [];
+    const selectProviderModel: SelectProviderModel = async (_io, opts) => {
+      selectCalls.push(opts);
+      return { provider: "deepseek", model: "deepseek-chat" };
+    };
+
+    const io: ShellIO = {
+      lines: linesFrom("/connect", "hello after connect", "/exit"),
+      write: () => {},
+    };
+    const deps: ShellDeps = {
+      makeProvider: () => provider,
+      clock: fixedClock(),
+      idSeq: fixedIdSeq(),
+      initial: { provider: "fake", model: "fixture-model" },
+      selectProviderModel,
+    };
+
+    await runShell(io, deps);
+
+    expect(selectCalls).toEqual([{ onlyConnected: true }]);
+    expect(captured.length).toBe(1);
+    expect(at(captured, 0).providerId).toBe("deepseek");
+    expect(at(captured, 0).modelId).toBe("deepseek-chat");
   });
 
   test("/connect writes ANTHROPIC_API_KEY guidance and never echoes/stores a credential value", async () => {

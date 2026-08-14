@@ -319,7 +319,12 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         continue;
       }
       if (command === "/connect") {
-        system(CONNECT_GUIDANCE);
+        if (deps.selectProviderModel === undefined) {
+          system(CONNECT_GUIDANCE);
+          continue;
+        }
+        const picked = await deps.selectProviderModel(io, { onlyConnected: true });
+        applySelection(picked);
         continue;
       }
       // A real command that belongs to the OTHER mode (`/expand`, `/think`,

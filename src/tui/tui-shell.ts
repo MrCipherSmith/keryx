@@ -238,9 +238,9 @@ export interface SelectProviderModelOptions {
 
 /**
  * Keep only already-connected providers for `/connect`:
- * - providers without an env var requirement are kept as-is;
- * - providers with a required key are kept only when the configured key is
- *   present AND the live `/models` probe succeeds (not fallback).
+ * - hosted providers need a configured key AND a live `/models` list;
+ * - local OpenAI-compat providers (no key) need a successful live probe;
+ * - non-registry entries (ollama/anthropic/fake) stay as detection left them.
  */
 export async function filterConnectedDetectedProviders(
   detected: readonly DetectedProvider[],
@@ -259,13 +259,8 @@ export async function filterConnectedDetectedProviders(
 
     const requiresApiKey = registry.requiresApiKey ?? true;
     const envKey = prov.envKey ?? registry.envKey;
-    if (!requiresApiKey || envKey === undefined) {
-      connected.push(prov);
-      continue;
-    }
-
-    const raw = env[envKey];
-    if (raw === undefined || raw.length === 0) {
+    const raw = envKey !== undefined ? env[envKey] : undefined;
+    if (requiresApiKey && (raw === undefined || raw.length === 0)) {
       continue;
     }
 
@@ -275,14 +270,14 @@ export async function filterConnectedDetectedProviders(
       ...(prov.chatPath !== undefined ? { chatPath: prov.chatPath } : {}),
       ...(prov.modelsPath !== undefined ? { modelsPath: prov.modelsPath } : {}),
     };
-    const result = await fetchOpenAiCompatModelsDetailed(fetchFn, compat, raw, {
+    const result = await fetchOpenAiCompatModelsDetailed(fetchFn, compat, raw ?? "", {
       timeoutMs: MODELS_FETCH_TIMEOUT_MS,
     });
     if (result.source !== "live" || result.models.length === 0) {
       continue;
     }
 
-    connected.push(prov);
+    connected.push({ ...prov, models: result.models });
   }
   return connected;
 }
@@ -950,12 +945,10 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
 }
 
 /**
- * In-TUI provider → model → key wizard with BACK navigation: Esc at the provider step
- * cancels; Esc at the model step returns to the provider list; Esc at the key step
- * returns to the model list. Registered providers (OpenRouter, DeepSeek, Z.AI GLM,
- * Cerebras, Groq, Moonshot, …) fetch their LIVE model list and prompt + persist a key
- * when missing. Absolute overlay (works at startup AND for `/connect`). Resolves the
- * selection or `undefined`.
+ * In-TUI provider → model → key wizard with BACK navigation. `/provider` and
+ * startup prompt + persist a key and may edit a local endpoint. `/connect`
+ * (`onlyConnected`) only lists live providers and their live `/models` list —
+ * no key or URL setup. Absolute overlay. Resolves the selection or `undefined`.
  *
  * Exported since flow 112 so the CHAT shell injects this very wizard as
  * `ShellDeps.selectProviderModel`: `/provider` must open an overlay instead of
@@ -999,13 +992,15 @@ export function selectProviderModelInTui(
           return;
         }
 
-        const selectedBaseUrl = prov.baseUrl !== undefined
-          ? await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl)
-          : prov.baseUrl;
-        if (prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
+        // `/connect` only switches: never edit the endpoint or collect a key.
+        const selectedBaseUrl =
+          options.onlyConnected || prov.baseUrl === undefined
+            ? prov.baseUrl
+            : await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl);
+        if (!options.onlyConnected && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
           continue;
         }
-        if (selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl);
+        if (!options.onlyConnected && selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl);
         const selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
 
         const envKey = prov.envKey;

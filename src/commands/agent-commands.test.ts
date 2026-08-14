@@ -108,8 +108,8 @@ test("/model and /connect carry PER-MODE descriptions, not one flattened entry (
   // chat's /model takes an argument and opens no picker; the TUI's opens one.
   expect(describeCommand(model, "chat")).toContain("<name>");
   expect(describeCommand(model, "agent")).toContain("picker");
-  // chat's /connect is static env guidance; the TUI's is a picker + key entry.
-  expect(describeCommand(connect, "chat")).toContain("environment");
+  // chat's /connect is a connected-only switch; agent wording names the picker.
+  expect(describeCommand(connect, "chat")).toContain("connected");
   expect(describeCommand(connect, "agent")).toContain("picker");
 });
 

@@ -334,6 +334,19 @@ test("filterConnectedDetectedProviders: excludes key-required providers when key
   expect(connected).toEqual([]);
 });
 
+test("filterConnectedDetectedProviders: excludes local providers when the live probe fails", async () => {
+  const detected: DetectedProvider[] = [
+    { name: "rapid-mlx", models: ["qwen3.5-9b-4bit"], baseUrl: "http://127.0.0.1:8010" },
+  ];
+
+  const connected = await filterConnectedDetectedProviders(detected, {
+    env: {},
+    fetch: createMockFetch(() => Promise.resolve(jsonResponse({ error: "down" }, false, 503))),
+  });
+
+  expect(connected).toEqual([]);
+});
+
 test("filterConnectedDetectedProviders: excludes key-required providers when live models fail", async () => {
   const detected: DetectedProvider[] = [
     { name: "deepseek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY", baseUrl: "https://api.deepseek.com" },

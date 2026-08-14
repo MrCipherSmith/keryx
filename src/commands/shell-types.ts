@@ -32,15 +32,15 @@ export interface ShellDeps {
   idSeq: () => string;
   initial: { provider: string; model: string; baseUrl?: string };
   /**
-   * Bundled detect+pick selector for the `/models` and `/provider` (no-arg)
-   * slash commands. `/models` passes `{ onlyProvider: <current provider> }` to
-   * offer only the current provider's models; `/provider` passes no opts (a
-   * full re-selection across all providers). When omitted, both commands
-   * write a "not available" message and no-op (they NEVER crash the loop).
+   * Bundled detect+pick selector for `/models`, `/provider`, and `/connect`.
+   * `/models` passes `{ onlyProvider }`; `/provider` passes no opts (configure);
+   * `/connect` passes `{ onlyConnected: true }` (switch among live providers).
+   * When omitted, `/models`/`/provider` write "not available"; `/connect` falls
+   * back to static env guidance. They NEVER crash the loop.
    */
   selectProviderModel?: (
     io: ShellIO,
-    opts?: { onlyProvider?: string },
+    opts?: { onlyProvider?: string; onlyConnected?: boolean },
   ) => Promise<{ provider: string; model: string; baseUrl?: string }>;
   /** When set, persist chat turns to a per-project session. */
   session?: ShellSessionOpts;

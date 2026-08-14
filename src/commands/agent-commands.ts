@@ -80,7 +80,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: BOTH,
     modeDescriptions: {
       agent: "Connect to an already configured provider (interactive picker)",
-      chat: "Show how to set a provider API key in the environment",
+      chat: "Switch to a connected provider (picker when available)",
     },
   },
   {
