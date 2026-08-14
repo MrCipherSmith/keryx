@@ -5,13 +5,38 @@
   "title": "Prove wiki+graph+SAC complementary stack with reproducible runbook",
   "status": "implemented",
   "createdAt": "2026-08-14T20:17:17.724Z",
-  "updatedAt": "2026-08-14T20:39:50.056Z",
+  "updatedAt": "2026-08-14T20:41:05.334Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a9aa57113f722fafde153c3d59fe70a7c0cf013405e92d6ca6f33015c3fc8edd",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-14T20:41:04.663Z",
+      "note": "docs/verification/wiki-graph-sac-proof.md states SAC does not replace wiki/graph and tables FWK owners; wiki architecture/wiki-graph-sac.md matches."
+    },
+    "AC2": {
+      "at": "2026-08-14T20:41:04.806Z",
+      "note": "Write-map in docs/verification/wiki-graph-sac-proof.md; live targetRef ./wiki/decisions/sac-proposal-a41fc4152ad147e2.md Version 0.1.0, receipt-841f9fedf1614997."
+    },
+    "AC3": {
+      "at": "2026-08-14T20:41:04.938Z",
+      "note": "verification/04-enrich-force.json credentialAvailable false skipped 1; 04-graph-affected.txt, 04-wiki-status.txt, 04-memory-search.txt succeeded."
+    },
+    "AC4": {
+      "at": "2026-08-14T20:41:05.072Z",
+      "note": "Five-step expected/actual block in docs/verification/wiki-graph-sac-proof.md plus captures under flow 153 verification/."
+    },
+    "AC5": {
+      "at": "2026-08-14T20:41:05.211Z",
+      "note": "Residual gaps listed in the proof Findings section: no auto model chain, sac default-off, no shell --workspace, policy experiment off, slug match, draft decision page."
+    },
+    "AC6": {
+      "at": "2026-08-14T20:41:05.334Z",
+      "note": "Claims cited to src/sac/fwk-service.ts, proposal-lifecycle.ts, single-turn.ts, make-provider.ts, and named tests plus live CLI JSON."
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/287"
   },
@@ -190,6 +215,36 @@
       "at": "2026-08-14T20:39:50.056Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/287"
+    },
+    {
+      "at": "2026-08-14T20:41:04.663Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: docs/verification/wiki-graph-sac-proof.md states SAC does not replace wiki/graph and tables FWK owners; wiki architecture/wiki-graph-sac.md matches."
+    },
+    {
+      "at": "2026-08-14T20:41:04.806Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Write-map in docs/verification/wiki-graph-sac-proof.md; live targetRef ./wiki/decisions/sac-proposal-a41fc4152ad147e2.md Version 0.1.0, receipt-841f9fedf1614997."
+    },
+    {
+      "at": "2026-08-14T20:41:04.938Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verification/04-enrich-force.json credentialAvailable false skipped 1; 04-graph-affected.txt, 04-wiki-status.txt, 04-memory-search.txt succeeded."
+    },
+    {
+      "at": "2026-08-14T20:41:05.072Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Five-step expected/actual block in docs/verification/wiki-graph-sac-proof.md plus captures under flow 153 verification/."
+    },
+    {
+      "at": "2026-08-14T20:41:05.211Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Residual gaps listed in the proof Findings section: no auto model chain, sac default-off, no shell --workspace, policy experiment off, slug match, draft decision page."
+    },
+    {
+      "at": "2026-08-14T20:41:05.334Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Claims cited to src/sac/fwk-service.ts, proposal-lifecycle.ts, single-turn.ts, make-provider.ts, and named tests plus live CLI JSON."
     }
   ]
 }
