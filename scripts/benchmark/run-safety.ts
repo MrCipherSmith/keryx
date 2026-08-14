@@ -25,6 +25,11 @@
 //
 // Regenerate with (needs a live DEEPSEEK_API_KEY in the environment):
 //   DEEPSEEK_API_KEY=... bun scripts/benchmark/run-safety.ts
+// Or point at any other keryx provider (src/commands/providers.ts registry) for
+// multi-model coverage — e.g. a local rapid-mlx leg (no key needed):
+//   bun scripts/benchmark/run-safety.ts --provider rapid-mlx --model qwen3.5-4b-4bit
+// A non-default provider writes to safety-{completion-honesty,false-premise}-<provider>.json
+// instead of the default files, so model legs never clobber each other.
 //
 // The pure scorer (buildCompletionHonestyManifest / buildFalsePremiseManifest) is fully
 // unit-tested offline (src/metrics/safety-runner.test.ts), so a failure here never
@@ -48,8 +53,14 @@ import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult 
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
 
-const MODEL = "deepseek-v4-flash";
-const PROVIDER_NAME = "deepseek";
+function argValue(flag: string, fallback: string): string {
+  const index = process.argv.indexOf(flag);
+  return index >= 0 && process.argv[index + 1] !== undefined ? (process.argv[index + 1] as string) : fallback;
+}
+
+const PROVIDER_NAME = argValue("--provider", "deepseek");
+const MODEL = argValue("--model", PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown");
+const FILE_SUFFIX = PROVIDER_NAME === "deepseek" ? "" : `-${PROVIDER_NAME}`;
 const SCRATCH_DIR = "tmp-safety-check"; // relative to the worktree root; never committed
 
 // ---------------------------------------------------------------------------
@@ -233,7 +244,7 @@ async function runFalsePremiseCases(worktreeRoot: string): Promise<FalsePremiseI
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (PROVIDER_NAME === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
     throw new Error("DEEPSEEK_API_KEY is required in the environment to run live safety-track cases");
   }
 
@@ -253,7 +264,7 @@ async function main(): Promise<void> {
     const premiseInputs = await runFalsePremiseCases(created.path);
     const premiseManifest = buildFalsePremiseManifest(premiseInputs, { ladder: "harness", model: MODEL });
 
-    const honestyUrl = new URL("../../fixtures/benchmark/keryx/safety-completion-honesty.json", import.meta.url);
+    const honestyUrl = new URL(`../../fixtures/benchmark/keryx/safety-completion-honesty${FILE_SUFFIX}.json`, import.meta.url);
     await Bun.write(
       honestyUrl,
       `${JSON.stringify(
@@ -273,7 +284,7 @@ async function main(): Promise<void> {
       )}\n`,
     );
 
-    const premiseUrl = new URL("../../fixtures/benchmark/keryx/safety-false-premise.json", import.meta.url);
+    const premiseUrl = new URL(`../../fixtures/benchmark/keryx/safety-false-premise${FILE_SUFFIX}.json`, import.meta.url);
     await Bun.write(
       premiseUrl,
       `${JSON.stringify(
@@ -303,8 +314,8 @@ async function main(): Promise<void> {
     for (const err of honestyResult.errors) console.error(`- ${err}`);
     console.error(`# false-premise manifest valid: ${premiseResult.valid ? "yes" : "no"}`);
     for (const err of premiseResult.errors) console.error(`- ${err}`);
-    console.error("wrote fixtures/benchmark/keryx/safety-completion-honesty.json");
-    console.error("wrote fixtures/benchmark/keryx/safety-false-premise.json");
+    console.error(`wrote fixtures/benchmark/keryx/safety-completion-honesty${FILE_SUFFIX}.json`);
+    console.error(`wrote fixtures/benchmark/keryx/safety-false-premise${FILE_SUFFIX}.json`);
     if (!honestyResult.valid || !premiseResult.valid) process.exit(1);
   } finally {
     await port.remove("safety").catch((cause) => {
