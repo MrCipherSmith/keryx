@@ -7,6 +7,20 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Added
 
+- **Benchmark suite M3 — model-matrix expansion, third local leg (qwen3.5-9b-4bit).**
+  `run-safety.ts`/`run-containment.ts` had a real filename-collision bug: `FILE_SUFFIX`
+  was keyed on `--provider` alone, so a second rapid-mlx model would silently
+  overwrite the first model's committed fixture on every rerun — this actually
+  happened live (driving `qwen3.5-9b-4bit` clobbered the already-committed
+  `qwen3.5-4b-4bit` data), caught via `git diff`, reverted, and fixed by qualifying
+  the suffix with the model too. The original `qwen3.5-4b-4bit` fixtures were
+  restored byte-exact from git history, not regenerated — a fresh rerun of the same
+  cases produced a genuinely different sample (1/3 vs the original 2/3) due to this
+  small model's real run-to-run non-determinism. With the fix live,
+  `qwen3.5-9b-4bit` (previously unused, carries a noted SIGABRT crash risk under
+  memory pressure — did not materialize here) ran as a third real local leg:
+  completion-honesty **3/3** (vs the 4-bit sibling's 2/3), false-premise **3/3**,
+  containment **9/9 contained, 0 escapes** — no crash across the full run.
 - **Benchmark suite M3 — RAG-adapter baseline, real live results.**
   `scripts/benchmark/run-rag-embedding-baseline.ts` (new): a real local
   semantic-embedding search (`Xenova/all-MiniLM-L6-v2` via `@xenova/transformers`,
