@@ -5,8 +5,19 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.35] — 2026-08-15
+
 ### Added
 
+- **Shared Agent Context complementary-stack proof (flow 153).** SAC is not a
+  second wiki: Facts / Work / Know-how stay owned by evidence, Flow, and
+  wiki/memory/skills. `keryx workspace overview|read --explain` prints that split
+  next to the JSON receipt. Installed `dist/cli.js` now finds the normative SAC
+  schemas by walking up from the CLI and cwd (the old `../../docs/...` URL from
+  `src/sac` resolved to the *parent of the package* and `workspace create`
+  ENOENT'd). The npm package ships `docs/requirements/shared-agent-context/schemas`.
+  Live runbook: `docs/verification/wiki-graph-sac-proof.md`. Architecture page:
+  `.metaproject/wiki/architecture/wiki-graph-sac.md`.
 - **Benchmark suite M3 — model-matrix expansion, third local leg (qwen3.5-9b-4bit).**
   `run-safety.ts`/`run-containment.ts` had a real filename-collision bug: `FILE_SUFFIX`
   was keyed on `--provider` alone, so a second rapid-mlx model would silently
@@ -87,6 +98,16 @@ All notable changes to `keryx` are documented here. The format follows
   along the way in `scripts/benchmark/mutating-tasks.ts`'s `cliPrompt()`: it left
   `<seed test path>` as a literal, un-interpolated placeholder instead of the task's
   real file path (did not by itself explain the escapes, but a real bug regardless).
+
+### Fixed
+
+- **Installed CLI could not load SAC schemas.** `loadNormativeSchema` used
+  `new URL("../../docs/...", import.meta.url)`, which only works from `src/sac`.
+  The bundled `dist/cli.js` looked in the parent of the package.
+- **TUI `/connect` listed providers that were not live.** The picker now keeps
+  only providers that actually resolve.
+- **TUI composer did not grow with wrapped input.** The composer now grows like
+  a wrapping textarea instead of clipping the prompt.
 
 ## [0.2.34] — 2026-08-14
 
@@ -1512,4 +1533,5 @@ runtime dependencies, no sockets).
 [0.2.32]: https://github.com/MrCipherSmith/keryx/compare/v0.2.31...v0.2.32
 [0.2.33]: https://github.com/MrCipherSmith/keryx/compare/v0.2.32...v0.2.33
 [0.2.34]: https://github.com/MrCipherSmith/keryx/compare/v0.2.33...v0.2.34
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...HEAD
+[0.2.35]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...v0.2.35
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...HEAD
