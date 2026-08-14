@@ -6,6 +6,10 @@ import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract,
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
+import { resolveSessionWrapUp } from "./session-wrap-up";
+import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
+import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
+import { createRealSkillOwnerWriter } from "./skill-owner-writer";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -121,7 +125,7 @@ export class ProposalLifecycleService {
     const result = await writer.write(intent);
     if (result.ok && !receiptMatchesIntent({ owner, receipt: result.receipt, intent })) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     await this.writeImmutable(this.writeResultPath(proposal.workspaceId, proposal.id, input.idempotencyKey), result);
-    if (result.ok && (!result.receipt.targetRef.startsWith(`./${owner}`) || result.owner !== owner)) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
+    if (result.ok && (!result.receipt.targetRef.startsWith(`${ownerTargetPrefix(owner)}/`) || result.owner !== owner)) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     return { freshnessVerifiedAt, result };
   }
 
@@ -209,6 +213,50 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
 }
 
 /**
+ * The "trusted Harness/session composition" the comment above points to. Unlike
+ * `createLocalProposalLifecycleService`, this one is real and NOT fail-closed for
+ * `source: "session"`: `resolveSessionWrapUp` (src/sac/session-wrap-up.ts) exports a
+ * real, already-completed keryx shell session's archive into the workspace and
+ * returns a hash-verified pointer to it, and the `memory-entry` target owner is a
+ * real writer (src/sac/memory-owner-writer.ts) that lands an accepted proposal in
+ * `.metaproject/memory/` through the SAME guarded canonical writer `keryx memory
+ * new` uses. `wiki-update` is likewise real (src/sac/wiki-owner-writer.ts): it
+ * lands a "decision" page in `.metaproject/wiki/decisions/`, guarded by the same
+ * security scan `keryx wiki collect` runs before publishing a generated page.
+ * `skill` is likewise real (src/sac/skill-owner-writer.ts): it composes
+ * `createProjectSkill` (`keryx skills create`'s own write path, itself now
+ * guarded by `guardOutput({ target: "skill" })`) into a `sac`-module project
+ * skill under `.metaproject/project-skills/sac/<proposalId>/`.
+ *
+ * `workspaceId` is bound at construction because `resolveExplicitWrapUp` must
+ * return a `workspaceId` it did not receive on the request (see trusted-wrap-up.ts)
+ * — the CLI/caller already knows which workspace it is proposing into, so it is
+ * captured here rather than trusted from caller-suppliable request fields.
+ */
+export function createHarnessProposalLifecycleService(
+  cwd: string,
+  opts: { workspaceId: string; note?: string },
+): { service: ProposalLifecycleService; wrapUpAuthority: TrustedWrapUpAuthority; authorizationServer: SacAuthorizationServer } {
+  const authorizationServer = localWorkspaceAuthorizationServer();
+  const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } });
+  const wrapUpAuthority = createTrustedWrapUpAuthority({
+    resolveExplicitWrapUp: async (request) => {
+      if (request.source !== "session") throw new Error(`this composition only resolves "session" wrap-ups, got "${request.source}"`);
+      return resolveSessionWrapUp({ cwd, workspaceId: opts.workspaceId, sourceRef: request.sourceRef });
+    },
+  });
+  const noteOpt = opts.note !== undefined ? { note: opts.note } : {};
+  const targetWriters = {
+    ...createLocalOwnerWriterAdapters(),
+    memory: createMemoryGuardedTargetWriter(createRealMemoryOwnerWriter(cwd, noteOpt)),
+    wiki: createWikiGuardedTargetWriter(createRealWikiOwnerWriter(cwd, noteOpt)),
+    skill: createSkillGuardedTargetWriter(createRealSkillOwnerWriter(cwd, noteOpt)),
+  };
+  const service = new ProposalLifecycleService({ workspaceRoot: cwd, workspaces, authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" }, policyRef: "./security/policy/local", policyRevision: "local-offline-v1", targetWriters, wrapUpAuthority });
+  return { service, wrapUpAuthority, authorizationServer };
+}
+
+/**
  * Concrete composition seams for the owning Wiki, Memory and Skills writers.
  * They deliberately execute owner supplied code; SAC only verifies the owner
  * label and correlation-bound receipt and never writes source knowledge.
@@ -241,6 +289,21 @@ export function createLocalOwnerWriterAdapters(): Record<TargetOwner, GuardedTar
 }
 
 function ownerFor(kind: ProposalKind): TargetOwner { return kind === "wiki-update" ? "wiki" : kind === "memory-entry" ? "memory" : "skill"; }
+
+/**
+ * The real workspace-relative folder each owner's receipt `targetRef` must
+ * live under. NOT simply `./${owner}` — that literal assumption happened to
+ * hold for memory (`.metaproject/memory/`) and wiki (`.metaproject/wiki/`)
+ * but is false for skill: `keryx skills create` stores real skills under
+ * `.metaproject/project-skills/`, not `.metaproject/skill/`. A receipt whose
+ * `targetRef` doesn't start with its owner's real prefix is rejected as
+ * `invalid_owner_receipt` either way — this only fixes WHICH prefix is
+ * required per owner, not whether the check still defends against a
+ * substituted/cross-owner receipt.
+ */
+function ownerTargetPrefix(owner: TargetOwner): string {
+  return owner === "skill" ? "./project-skills" : `./${owner}`;
+}
 function authorityFor(manifest: { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> }, subject: string): ReviewerAuthority {
   const role = manifest.members.find((member) => member.subject === subject)?.role;
   if (role === "owner" || role === "editor") return role;

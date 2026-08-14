@@ -43,7 +43,10 @@ export interface MetaprojectOperation {
   /** Stable operation name exposed to the model (e.g. graph_affected). */
   name: string;
   /** Owning metaproject module (facade backing the operation). */
-  module: "gdgraph" | "gdctx" | "gdwiki" | "memory" | "health" | "testing" | "flow";
+  // Note: the wiki facade is "gdwiki" internally but this tag deliberately uses the MCP
+  // discovery layer's alias "wiki" (src/mcp/discovery.ts MODULE_MANIFEST_KEY, mirroring
+  // "flow" -> "tasks") — the same convention every wiki-related MCP tool already follows.
+  module: "gdgraph" | "gdctx" | "wiki" | "memory" | "health" | "testing" | "flow";
   /** Human/model-facing summary of what the operation does. */
   description: string;
   /** Metaproject reads are always `read`. */
@@ -478,7 +481,7 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
   {
     name: "read_wiki",
     risk: "read",
-    module: "gdwiki",
+    module: "wiki",
     description:
       "Read a project wiki page (architecture, domain, decisions) under .metaproject/wiki/. Input: { path: string } relative to the wiki root.",
     inputSchema: {
@@ -610,7 +613,7 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
   {
     name: "wiki_ask",
     risk: "read",
-    module: "gdwiki",
+    module: "wiki",
     description:
       "Ask a question answered deterministically from the project's own wiki + memory with citations (`keryx wiki ask`). Input: { question: string }.",
     inputSchema: {
@@ -634,7 +637,7 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
   {
     name: "wiki_backlinks",
     risk: "read",
-    module: "gdwiki",
+    module: "wiki",
     description:
       "List the wiki pages that reference a repo file — the reverse \"documented in\" lookup (`keryx wiki backlinks`). Input: { file: string } relative to the project root.",
     inputSchema: {

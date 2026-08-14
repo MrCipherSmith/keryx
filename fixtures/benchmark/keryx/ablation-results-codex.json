@@ -1,0 +1,156 @@
+{
+  "note": "RAW per-seed ablation results, codex CLI leg: codex exec (its own built-in agent loop, sandbox=read-only) run on THIS repository, twice per seed — context-on (an unmodified worktree, AGENTS.md + .metaproject/ present so codex self-discovers keryx tooling) vs context-off (AGENTS.md/CLAUDE.md/.metaproject stripped before codex ever sees the worktree) — in isolated git worktrees. Captured live via an already-authenticated `codex` CLI (ChatGPT account, no API key). Reported SEPARATELY from run-ablation.ts's deepseek-v4-flash leg — never averaged: codex is a structurally different agent (its own tool loop, not the injectable InteractiveTool[] src/commands/agent.ts's runAgentTurn takes), and context-off here still has a working shell (grep/sed/find), unlike the deepseek leg's no-search-tool baseline.",
+  "model": "gpt-5.6-sol",
+  "provider": "codex-cli",
+  "generated_by": "bun scripts/benchmark/run-ablation-codex.ts",
+  "captured": "2026-08-13",
+  "tasks": [
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 241668,
+            "toolCalls": 6
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 239628,
+            "toolCalls": 9
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 279255,
+            "toolCalls": 10
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 235733,
+            "toolCalls": 6
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 84021,
+            "toolCalls": 2
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 236433,
+            "toolCalls": 6
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 419286,
+            "toolCalls": 14
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 242294,
+            "toolCalls": 6
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 244187,
+            "toolCalls": 6
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 133006,
+            "toolCalls": 3
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 261294,
+            "toolCalls": 6
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 262303,
+            "toolCalls": 6
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 245717,
+            "toolCalls": 10
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 207238,
+            "toolCalls": 9
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 241854,
+            "toolCalls": 9
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 249487,
+            "toolCalls": 6
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 252068,
+            "toolCalls": 6
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 253939,
+            "toolCalls": 6
+          }
+        ]
+      }
+    }
+  ]
+}

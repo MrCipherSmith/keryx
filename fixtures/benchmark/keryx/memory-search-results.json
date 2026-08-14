@@ -1,0 +1,53 @@
+{
+  "note": "SYSTEM output: `keryx memory search \"<query>\" --json --limit 10` ranked `results[].path` per gold query in memory-gold.json, captured live against this repo's own .metaproject/memory/ corpus (no fabricated ranking). Shape matches the AffectedSetFile the CLI already loads: `target` is the query, `affected` is the ranked path list, best match first.",
+  "repo": "keryx (dogfood, this repository)",
+  "generated_by": "bun scripts/benchmark/run-memory-oracle.ts (keryx memory search \"<query>\" --json --limit 10 per gold query)",
+  "captured": "2026-08-12",
+  "targets": [
+    {
+      "target": "flow ids allocated per clone worktree",
+      "affected": [
+        "constraints/flow-ids-allocated-per-clone.md",
+        "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "lessons/allowlist-not-a-boundary.md",
+        "lessons/tui-alignself-height-collapse.md",
+        "lessons/regex-guards-lose-to-spellings.md"
+      ]
+    },
+    {
+      "target": "stale installed keryx binary review pipeline",
+      "affected": [
+        "constraints/stale-installed-keryx-binary.md",
+        "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "constraints/flow-ids-allocated-per-clone.md",
+        "lessons/allowlist-not-a-boundary.md",
+        "lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md"
+      ]
+    },
+    {
+      "target": "shell allowlist not a security boundary",
+      "affected": [
+        "lessons/allowlist-not-a-boundary.md",
+        "constraints/flow-ids-allocated-per-clone.md",
+        "lessons/tui-alignself-height-collapse.md",
+        "constraints/stale-installed-keryx-binary.md",
+        "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md"
+      ]
+    },
+    {
+      "target": "alignSelf collapses intrinsic height opentui scrollbox",
+      "affected": [
+        "lessons/tui-alignself-height-collapse.md"
+      ]
+    },
+    {
+      "target": "regex source guard loses spelling AST rewrite",
+      "affected": [
+        "lessons/regex-guards-lose-to-spellings.md",
+        "constraints/stale-installed-keryx-binary.md",
+        "lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "constraints/code-blanks-string-literals.md"
+      ]
+    }
+  ]
+}

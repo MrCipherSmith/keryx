@@ -1,0 +1,74 @@
+{
+  "note": "SYSTEM output: the ranked citation `path`s `keryx wiki ask \"<query>\"` cites (best match first) per gold query in wiki-gold.json, captured against this repo's own .metaproject/wiki/ corpus by invoking the working-tree wikiAsk retrieval directly (src/wiki/ask.ts, the exact function the CLI's `keryx wiki ask` runs) — not by spawning the stale installed binary. No fabricated ranking. Shape matches the AffectedSetFile the CLI already loads: `target` is the query, `affected` is the ranked passage id list, best match first.",
+  "repo": "keryx (dogfood, this repository)",
+  "corpus": ".metaproject/wiki/**/*.md",
+  "generated_by": "bun scripts/benchmark/run-gdwiki-oracle.ts (wikiAsk({ question, k: max(k,8) }) per gold query, ranked citations[].path)",
+  "captured": "2026-08-12",
+  "targets": [
+    {
+      "target": "OS sandbox kernel-enforced containment refuses a run when it cannot contain the process",
+      "affected": [
+        "wiki/architecture/os-sandbox.md",
+        "memory/lessons/regex-guards-lose-to-spellings.md",
+        "wiki/components/src-security-detect.md",
+        "wiki/architecture/project-map.md",
+        "memory/lessons/tui-alignself-height-collapse.md",
+        "wiki/architecture/testing-map.md",
+        "memory/lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md",
+        "memory/constraints/stale-installed-keryx-binary.md"
+      ]
+    },
+    {
+      "target": "macOS Seatbelt and Linux bubblewrap constrain which paths secrets and network a running process can reach",
+      "affected": [
+        "wiki/architecture/os-sandbox.md",
+        "memory/constraints/code-blanks-string-literals.md",
+        "memory/constraints/stale-installed-keryx-binary.md",
+        "memory/lessons/regex-guards-lose-to-spellings.md",
+        "wiki/components/src-testing.md",
+        "memory/lessons/allowlist-not-a-boundary.md",
+        "wiki/architecture/project-map.md",
+        "wiki/components/src-security-detect.md"
+      ]
+    },
+    {
+      "target": "deterministic architecture map of the repository as a graph of code files and assets with import relationships between top-level modules",
+      "affected": [
+        "wiki/architecture/project-map.md",
+        "wiki/architecture/testing-map.md",
+        "wiki/components/src-security-detect.md",
+        "memory/lessons/regex-guards-lose-to-spellings.md",
+        "wiki/components/src-testing.md",
+        "memory/lessons/tui-alignself-height-collapse.md",
+        "memory/constraints/stale-installed-keryx-binary.md",
+        "wiki/architecture/quality-map.md"
+      ]
+    },
+    {
+      "target": "high-level map of the project's testing infrastructure framework test scripts and configuration files",
+      "affected": [
+        "wiki/architecture/testing-map.md",
+        "wiki/architecture/project-map.md",
+        "wiki/components/src-testing.md",
+        "wiki/components/src-security-detect.md",
+        "memory/lessons/regex-guards-lose-to-spellings.md",
+        "wiki/architecture/quality-map.md",
+        "memory/lessons/tui-alignself-height-collapse.md",
+        "wiki/components/fixtures-change-impacted-test-src.md"
+      ]
+    },
+    {
+      "target": "architecture-level quality map generated from a Code Health scan snapshot of codebase health risk and findings",
+      "affected": [
+        "wiki/architecture/project-map.md",
+        "wiki/architecture/quality-map.md",
+        "wiki/architecture/testing-map.md",
+        "wiki/components/src-testing.md",
+        "wiki/components/src-health.md",
+        "wiki/components/src-health-metrics.md",
+        "memory/constraints/code-blanks-string-literals.md",
+        "memory/constraints/stale-installed-keryx-binary.md"
+      ]
+    }
+  ]
+}

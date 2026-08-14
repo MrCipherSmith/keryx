@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-08-11T07:37:31.324Z | pages: 40 -->
+<!-- generated: 2026-08-13T11:49:38.566Z | pages: 44 -->
 
 ### Architecture
 
@@ -56,6 +56,7 @@ _No pages yet._
 
   - [fixtures/change-impacted-test/src](components/fixtures-change-impacted-test-src.md) (accepted)
   - [fixtures/churn-complexity/src](components/fixtures-churn-complexity-src.md) (accepted)
+- [scripts/benchmark](components/scripts-benchmark.md) (accepted)
 - [src](components/src.md) (accepted)
 - [src/agents](components/src-agents.md) (accepted)
 - [src/assets](components/src-assets.md) (accepted)
@@ -68,7 +69,9 @@ _No pages yet._
   - [src/gdgraph/treesitter](components/src-gdgraph-treesitter.md) (accepted)
 - [src/gdskills](components/src-gdskills.md) (accepted)
 - [src/harness](components/src-harness.md) (accepted)
-  - [src/harness/provider](components/src-harness-provider.md) (draft)
+  - [src/harness/child](components/src-harness-child.md) (accepted)
+  - [src/harness/provider](components/src-harness-provider.md) (accepted)
+    - [src/harness/tool/builtin](components/src-harness-tool-builtin.md) (accepted)
 - [src/health](components/src-health.md) (accepted)
   - [src/health/metrics](components/src-health-metrics.md) (accepted)
   - [src/health/sources](components/src-health-sources.md) (accepted)
@@ -77,6 +80,7 @@ _No pages yet._
   - [src/mcp/transport](components/src-mcp-transport.md) (accepted)
 - [src/memory](components/src-memory.md) (accepted)
   - [src/memory/embedding](components/src-memory-embedding.md) (accepted)
+- [src/metrics](components/src-metrics.md) (accepted)
 - [src/review](components/src-review.md) (accepted)
 - [src/rules](components/src-rules.md) (accepted)
 - [src/security](components/src-security.md) (accepted)

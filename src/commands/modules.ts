@@ -57,6 +57,13 @@ const MODULES: ModuleDef[] = [
     defaultEnabled: false,
     enableFlag: "--mcp",
   },
+  {
+    name: "sac",
+    flag: "--no-sac",
+    desc: "shared agent context: cross-session workspace propose/review (opt-in, off by default)",
+    defaultEnabled: false,
+    enableFlag: "--sac",
+  },
 ];
 
 /** The module table, for tests that assert its coverage. */

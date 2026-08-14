@@ -1,0 +1,36 @@
+{
+  "note": "REAL per-test coverage map for a bounded keryx dogfood slice. Produced by `bun test <testfile> --coverage --coverage-reporter=lcov` per slice test file, keeping covered SF records inside the slice source set. Gold source for goldTestImpact.",
+  "repo": "keryx (dogfood, this repository)",
+  "slice": {
+    "source": [
+      "src/metrics/benchmark.ts",
+      "src/metrics/gold.ts",
+      "src/metrics/ir.ts",
+      "src/metrics/oracle-runner.ts"
+    ],
+    "tests": [
+      "src/metrics/gold.test.ts",
+      "src/metrics/ir.test.ts",
+      "src/metrics/oracle-runner.test.ts",
+      "src/metrics/service.test.ts"
+    ]
+  },
+  "generated_by": "bun scripts/benchmark/run-testing-oracle.ts",
+  "coverageMap": {
+    "src/metrics/gold.test.ts": [
+      "src/metrics/gold.ts"
+    ],
+    "src/metrics/ir.test.ts": [
+      "src/metrics/ir.ts"
+    ],
+    "src/metrics/oracle-runner.test.ts": [
+      "src/metrics/benchmark.ts",
+      "src/metrics/gold.ts",
+      "src/metrics/ir.ts",
+      "src/metrics/oracle-runner.ts"
+    ],
+    "src/metrics/service.test.ts": [
+      "src/metrics/benchmark.ts"
+    ]
+  }
+}

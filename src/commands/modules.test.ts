@@ -171,6 +171,7 @@ describe("D1 — modules must know every module, in both directions", () => {
       "tasks",
       "security",
       "mcp",
+      "sac",
     ]) {
       expect(names.has(expected)).toBe(true);
     }

@@ -12,11 +12,44 @@ import {
   validatePairedBenchmark,
   validateRunRecord,
   writeRunArtifacts,
+  type BenchmarkLadder,
   type ExecutionEvent,
   type ExecutionRunRecord,
   type PairedBenchmarkRun,
   type RunMode,
 } from "../metrics";
+import { buildAblationManifest, type AblationTaskInput } from "../metrics/ablation-runner";
+import {
+  buildCompletionHonestyManifest,
+  buildContainmentManifest,
+  buildFalsePremiseManifest,
+  type CompletionHonestyInput,
+  type ContainmentInput,
+  type FalsePremiseInput,
+} from "../metrics/safety-runner";
+import {
+  buildEvidenceBundle,
+  buildGdctxManifest,
+  buildMemorySearchManifest,
+  buildOracleManifestsByGold,
+  buildTestImpactManifest,
+  buildWikiAskManifest,
+  GDCTX_FACT_PRESERVATION_LABEL,
+  GDWIKI_ASK_LABEL,
+  GOLD_KIND_LABELS,
+  MEMORY_SEARCH_LABEL,
+  persistEvidenceBundle,
+  TEST_IMPACT_LABEL,
+  type GdctxScoreInput,
+  type GoldKind,
+  type MemoryScoreInput,
+  type MultiGoldScoreInput,
+  type NamedGold,
+  type TestImpactScoreInput,
+  type WikiScoreInput,
+} from "../metrics/oracle-runner";
+import type { JudgeScore } from "../metrics/benchmark";
+import { goldTestImpact, type CoverageMap } from "../metrics/gold";
 
 export async function metricsCommand(
   args: string[] = [],
@@ -134,6 +167,11 @@ export async function metricsCommand(
     return;
   }
 
+  if (subcommand === "benchmark" && args[1] === "run") {
+    await benchmarkRun(projectRoot, args.slice(2));
+    return;
+  }
+
   if (subcommand === "benchmark" && args[1] === "validate") {
     const file = args[2];
     if (!file) {
@@ -152,6 +190,601 @@ export async function metricsCommand(
   console.error(`Unknown metrics command: ${subcommand}`);
   printMetricsHelp();
   process.exitCode = 1;
+}
+
+/** A `{ targets: [{ target, affected }] }` affected-set file (gold fixture or system output). */
+type AffectedSetFile = {
+  targets?: Array<{ target?: string; affected?: string[] }>;
+};
+
+/** Load an affected-set file into an ordered map of target -> affected ID list. */
+async function loadAffectedSets(projectRoot: string, file: string): Promise<Map<string, string[]>> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as AffectedSetFile;
+  const map = new Map<string, string[]>();
+  for (const entry of raw.targets ?? []) {
+    if (typeof entry.target === "string") map.set(entry.target, entry.affected ?? []);
+  }
+  return map;
+}
+
+// Default gold fixtures for each kind (independently derived — see src/metrics/gold.ts).
+const GOLD_KIND_DEFAULT_PATH: Record<GoldKind, string> = {
+  "co-change": "fixtures/benchmark/express/gold-affected-set.json",
+  dependency: "fixtures/benchmark/express/gold-dependency-set.json",
+};
+const GOLD_KIND_ORDER: readonly GoldKind[] = ["co-change", "dependency"];
+
+// Run the metastore ORACLE scorers, one labeled paired-3-5-v2 manifest per layer/gold,
+// reported separately and never averaged. Select layers with
+// `--layer gdgraph|gdwiki|testing|memory|gdctx|all` (default all):
+//   - gdgraph: the affected-set oracle vs the co-change + dependency golds (see
+//     `--gold co-change|dependency|all`, default all).
+//   - gdwiki: the grounded-retrieval oracle — `keryx wiki ask <q>` ranked citation paths
+//     scored against a curated Q→passage gold (nDCG + recall@k), plus a hand-labeled
+//     3-judge groundedness panel (strict/lenient).
+//   - testing: the test-impact/TIA oracle — `keryx test related` / coverage-map TIA output
+//     scored against the coverage-derived impacted-test gold (goldTestImpact).
+//   - memory: the memory-search oracle — `keryx memory search <q>` ranked results scored
+//     against a curated applicable-decision gold (recall@k, plus precision/recall).
+//   - gdctx: the fact-preservation oracle — a gdctx COMPACT summary (`keryx ctx run --
+//     <command>`) scored against the facts extracted from the RAW output it compacted
+//     (extractFacts, src/metrics/oracle-runner.ts).
+// Prints + validates every manifest and exits non-zero if any manifest is invalid.
+async function benchmarkRun(projectRoot: string, args: string[]): Promise<void> {
+  const ladder = (optionValue(args, "--ladder") ?? "metastore") as BenchmarkLadder;
+  if (ladder === "harness") {
+    const harnessLayer = (optionValue(args, "--layer") ?? "ablation").trim();
+    if (harnessLayer === "completion-honesty") {
+      process.exitCode = (await runSafetyCompletionHonestyLayer(projectRoot, args, ladder)) ? 0 : 1;
+      return;
+    }
+    if (harnessLayer === "false-premise") {
+      process.exitCode = (await runSafetyFalsePremiseLayer(projectRoot, args, ladder)) ? 0 : 1;
+      return;
+    }
+    if (
+      harnessLayer === "workspace-write-containment" ||
+      harnessLayer === "shell-permission-restraint" ||
+      harnessLayer === "prompt-injection-resistance"
+    ) {
+      process.exitCode = (await runSafetyContainmentLayer(projectRoot, args, ladder, harnessLayer)) ? 0 : 1;
+      return;
+    }
+    if (harnessLayer !== "ablation") {
+      console.error(
+        "Usage: keryx metrics benchmark run --ladder harness [--layer ablation|completion-honesty|false-premise|" +
+          "workspace-write-containment|shell-permission-restraint|prompt-injection-resistance]",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    process.exitCode = (await runHarnessLayer(projectRoot, args, ladder)) ? 0 : 1;
+    return;
+  }
+  if (ladder !== "metastore") {
+    console.error(`Only the metastore and harness ladders are implemented for 'run'; got: ${ladder}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const layer = (optionValue(args, "--layer") ?? "all").trim();
+  if (
+    layer !== "all" &&
+    layer !== "gdgraph" &&
+    layer !== "gdwiki" &&
+    layer !== "testing" &&
+    layer !== "memory" &&
+    layer !== "gdctx"
+  ) {
+    console.error(
+      "Usage: keryx metrics benchmark run --ladder metastore [--layer gdgraph|gdwiki|testing|memory|gdctx|all] " +
+        "[--gold co-change|dependency|all]",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  let allValid = true;
+  if (layer === "all" || layer === "gdgraph") {
+    allValid = (await runGdgraphLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "gdwiki") {
+    allValid = (await runWikiLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "testing") {
+    allValid = (await runTestingLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "memory") {
+    allValid = (await runMemoryLayer(projectRoot, args, ladder)) && allValid;
+  }
+  if (layer === "all" || layer === "gdctx") {
+    allValid = (await runGdctxLayer(projectRoot, args, ladder)) && allValid;
+  }
+  process.exitCode = allValid ? 0 : 1;
+}
+
+// Ablation runner (harness ladder): score the RAW per-seed context-on/context-off results
+// captured live by scripts/benchmark/run-ablation.ts (src/commands/agent.ts's runAgentTurn,
+// same agent + model, run twice per seed in isolated git worktrees). Unlike the metastore
+// layers, there is no separate gold file — success is already computed per seed by the
+// producer's task-specific check, so this only re-derives the paired-3-5-v2 manifest from
+// the captured fixture and validates it. Prints the manifest, validates it, and returns
+// whether it validated.
+async function runHarnessLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const resultsPath = optionValue(args, "--ablation-results") ?? "fixtures/benchmark/keryx/ablation-results.json";
+
+  let tasks: AblationTaskInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      tasks?: AblationTaskInput[];
+      model?: string;
+    };
+    tasks = raw.tasks ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load ablation results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (tasks.length === 0) {
+    console.error(`No ablation tasks in ${resultsPath}`);
+    return false;
+  }
+
+  let manifest;
+  try {
+    manifest = buildAblationManifest(tasks, { ladder, ...(model ? { model } : {}) });
+  } catch (error) {
+    console.error(`Failed to build ablation manifest: ${(error as Error).message}`);
+    return false;
+  }
+
+  console.log("# layer: harness (ablation: context-on vs context-off)");
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// Safety track — completion-gate honesty (harness ladder): score RAW cases captured live
+// by scripts/benchmark/run-safety.ts, where the agent was given ONE fixed,
+// non-configurable check tool per case and had to honestly report its real pass/fail/
+// unknown result. AC-4 (an escaped/overclaimed case must score correctness: 0) is
+// enforced by validatePairedBenchmarkV2 itself.
+async function runSafetyCompletionHonestyLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const resultsPath = optionValue(args, "--safety-results") ?? "fixtures/benchmark/keryx/safety-completion-honesty.json";
+
+  let cases: CompletionHonestyInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      cases?: CompletionHonestyInput[];
+      model?: string;
+    };
+    cases = raw.cases ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load completion-honesty results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (cases.length === 0) {
+    console.error(`No completion-honesty cases in ${resultsPath}`);
+    return false;
+  }
+
+  const manifest = buildCompletionHonestyManifest(cases, { ladder, ...(model ? { model } : {}) });
+  console.log("# layer: harness (safety: completion-gate honesty)");
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness (completion-honesty) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// Safety track — false-premise resistance (harness ladder): score RAW cases captured
+// live by scripts/benchmark/run-safety.ts, where each prompt is built on a premise
+// verified FALSE against this repository's real source before the case was written.
+async function runSafetyFalsePremiseLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const resultsPath = optionValue(args, "--safety-results") ?? "fixtures/benchmark/keryx/safety-false-premise.json";
+
+  let cases: FalsePremiseInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      cases?: FalsePremiseInput[];
+      model?: string;
+    };
+    cases = raw.cases ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load false-premise results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (cases.length === 0) {
+    console.error(`No false-premise cases in ${resultsPath}`);
+    return false;
+  }
+
+  const manifest = buildFalsePremiseManifest(cases, { ladder, ...(model ? { model } : {}) });
+  console.log("# layer: harness (safety: false-premise resistance)");
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness (false-premise) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// Safety track — containment (harness ladder): score RAW cases captured live by
+// scripts/benchmark/run-containment.ts, where a live agent is given a real, sandboxed
+// shell_exec tool and tempted toward an unsafe action. contained/escaped and attempted
+// are decided by the producer's INDEPENDENT real-world check (canary file/listener/
+// secret-marker) — never by trusting the agent's transcript. AC-4 (an escaped case
+// must score correctness: 0) is enforced by validatePairedBenchmarkV2.
+async function runSafetyContainmentLayer(
+  projectRoot: string,
+  args: string[],
+  ladder: BenchmarkLadder,
+  caseClass: "workspace-write-containment" | "shell-permission-restraint" | "prompt-injection-resistance",
+): Promise<boolean> {
+  const resultsPath = optionValue(args, "--safety-results") ?? `fixtures/benchmark/keryx/safety-containment-${caseClass}.json`;
+
+  let cases: ContainmentInput[];
+  let model: string | undefined;
+  try {
+    const raw = JSON.parse(await readFile(path.resolve(projectRoot, resultsPath), "utf8")) as {
+      cases?: ContainmentInput[];
+      model?: string;
+    };
+    cases = raw.cases ?? [];
+    model = raw.model;
+  } catch (error) {
+    console.error(`Failed to load containment results: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (cases.length === 0) {
+    console.error(`No containment cases in ${resultsPath}`);
+    return false;
+  }
+
+  const manifest = buildContainmentManifest(cases, { ladder, ...(model ? { model } : {}) });
+  console.log(`# layer: harness (safety: ${caseClass})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: harness (${caseClass}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// gdgraph affected-set oracle vs the co-change + dependency golds (reported separately,
+// never averaged). Returns whether every emitted manifest validated.
+async function runGdgraphLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const selector = (optionValue(args, "--gold") ?? "all").trim();
+  if (selector !== "all" && selector !== "co-change" && selector !== "dependency") {
+    console.error("Usage: keryx metrics benchmark run --ladder metastore [--gold co-change|dependency|all]");
+    return false;
+  }
+  const kinds: GoldKind[] = selector === "all" ? [...GOLD_KIND_ORDER] : [selector];
+
+  const systemPath = optionValue(args, "--system") ?? "fixtures/benchmark/express/gdgraph-affected.json";
+  const goldPathFor = (kind: GoldKind): string =>
+    optionValue(args, `--gold-${kind}`) ?? GOLD_KIND_DEFAULT_PATH[kind];
+  const outDir = optionValue(args, "--out");
+
+  let system: Map<string, string[]>;
+  const goldMaps = new Map<GoldKind, Map<string, string[]>>();
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    for (const kind of kinds) goldMaps.set(kind, await loadAffectedSets(projectRoot, goldPathFor(kind)));
+  } catch (error) {
+    console.error(`Failed to load affected-set files: ${(error as Error).message}`);
+    return false;
+  }
+
+  // For each target the system produced an output for, attach every requested gold that
+  // covers it. A target with no gold counterpart has no ground truth and is skipped.
+  const targets = new Set<string>();
+  for (const gm of goldMaps.values()) for (const target of gm.keys()) if (system.has(target)) targets.add(target);
+  const inputs: MultiGoldScoreInput[] = [];
+  for (const target of [...targets].sort()) {
+    const golds: NamedGold[] = [];
+    for (const kind of kinds) {
+      const gm = goldMaps.get(kind);
+      if (gm?.has(target)) golds.push({ kind, gold: gm.get(target) ?? [] });
+    }
+    if (golds.length > 0) inputs.push({ target, system: system.get(target) ?? [], golds });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No overlapping targets between gold and system affected-set files");
+    return false;
+  }
+
+  const manifests = buildOracleManifestsByGold(inputs, { ladder });
+
+  if (outDir) {
+    const resolvedOut = path.resolve(projectRoot, outDir);
+    for (const input of inputs) {
+      for (const named of input.golds) {
+        const bundle = buildEvidenceBundle(
+          { target: input.target, system: input.system, gold: named.gold },
+          { ladder, goldReference: goldPathFor(named.kind), timestamp: new Date().toISOString() },
+        );
+        // Nest per gold kind so the two golds' bundles for one target never collide.
+        const dir = await persistEvidenceBundle(path.join(resolvedOut, named.kind), bundle, ladder);
+        console.error(`bundle[${named.kind}]: ${path.relative(projectRoot, dir)}`);
+      }
+    }
+  }
+
+  let allValid = true;
+  for (const kind of kinds) {
+    const manifest = manifests[kind];
+    if (!manifest) {
+      console.error(`# gold: ${kind} — no scored targets`);
+      allValid = false;
+      continue;
+    }
+    console.log(`# gold: ${kind} (${GOLD_KIND_LABELS[kind]})`);
+    console.log(stableJson(manifest));
+    const result = validatePairedBenchmark(manifest);
+    console.error(`# gold: ${kind} (${GOLD_KIND_LABELS[kind]}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+    for (const err of result.errors) console.error(`- ${err}`);
+    if (!result.valid) allValid = false;
+  }
+  return allValid;
+}
+
+/** A coverage-map fixture: `{ coverageMap: { <testId>: [<coveredFile>] } }` plus metadata. */
+type CoverageMapFile = { coverageMap?: Record<string, string[]> };
+
+// Load the coverage-map fixture and return the bare test-id -> covered-files map
+// (the src/metrics/gold.ts CoverageMap shape) that goldTestImpact consumes.
+async function loadCoverageMap(projectRoot: string, file: string): Promise<CoverageMap> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as CoverageMapFile;
+  return raw.coverageMap ?? {};
+}
+
+// Testing / TIA oracle: score the SYSTEM test-impact set (`keryx test related` /
+// coverage-map TIA output) against the coverage-derived GOLD impacted-test set
+// (goldTestImpact over the coverage map) for each changed file. Prints one labeled
+// paired-3-5-v2 manifest, validates it, and returns whether it validated. The two inputs
+// are: the system output (`--testing-system`, a `{ targets:[{target, affected}] }` file)
+// and the coverage map (`--coverage-map`); the gold is DERIVED at runtime from the
+// coverage map so it is reproducible from its pinned input (never hand-copied).
+async function runTestingLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const systemPath = optionValue(args, "--testing-system") ?? "fixtures/benchmark/keryx/test-related.json";
+  const coverageMapPath = optionValue(args, "--coverage-map") ?? "fixtures/benchmark/keryx/coverage-map.json";
+
+  let system: Map<string, string[]>;
+  let coverageMap: CoverageMap;
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    coverageMap = await loadCoverageMap(projectRoot, coverageMapPath);
+  } catch (error) {
+    console.error(`Failed to load testing oracle inputs: ${(error as Error).message}`);
+    return false;
+  }
+
+  // Each changed file the system produced an output for is a scored target; its gold is
+  // the coverage-derived impacted-test set for that one changed file.
+  const inputs: TestImpactScoreInput[] = [];
+  for (const changedFile of [...system.keys()].sort()) {
+    inputs.push({
+      changedFile,
+      system: system.get(changedFile) ?? [],
+      gold: goldTestImpact(coverageMap, [changedFile]),
+    });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No changed files in the testing system-output file");
+    return false;
+  }
+
+  const manifest = buildTestImpactManifest(inputs, { ladder });
+  console.log(`# layer: testing (${TEST_IMPACT_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: testing (${TEST_IMPACT_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// The curated memory-oracle gold: shape matches AffectedSetFile (`target` is the query,
+// `affected` is the gold memory-id list) plus a top-level `k` for recall@k. Reuses
+// loadAffectedSets for the per-query gold ids; `k` is read separately since AffectedSetFile
+// has no such field.
+type MemoryGoldFile = { k?: number; targets?: Array<{ target?: string; affected?: string[] }> };
+
+async function loadMemoryGoldK(projectRoot: string, file: string): Promise<number> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as MemoryGoldFile;
+  return typeof raw.k === "number" && raw.k > 0 ? raw.k : 3;
+}
+
+// Memory-search oracle: score the SYSTEM ranked memory-id list (`keryx memory search <q>`,
+// captured to a fixture by scripts/benchmark/run-memory-oracle.ts) against the curated GOLD
+// relevant-id set for that query (fixtures/benchmark/keryx/memory-gold.json, hand-labeled —
+// never derived at runtime, unlike the testing layer's coverage-derived gold). Prints one
+// labeled paired-3-5-v2 manifest, validates it, and returns whether it validated. Both
+// inputs share the AffectedSetFile shape (`{ targets: [{ target, affected }] }`) so they
+// reuse loadAffectedSets: `target` is the query, `affected` is the ranked system list or the
+// gold id list respectively.
+async function runMemoryLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const systemPath = optionValue(args, "--memory-system") ?? "fixtures/benchmark/keryx/memory-search-results.json";
+  const goldPath = optionValue(args, "--memory-gold") ?? "fixtures/benchmark/keryx/memory-gold.json";
+
+  let system: Map<string, string[]>;
+  let gold: Map<string, string[]>;
+  let k: number;
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    gold = await loadAffectedSets(projectRoot, goldPath);
+    k = await loadMemoryGoldK(projectRoot, goldPath);
+  } catch (error) {
+    console.error(`Failed to load memory oracle inputs: ${(error as Error).message}`);
+    return false;
+  }
+
+  // Each curated gold query that the system also produced a ranked list for is a scored
+  // target; a gold query the system has no output for has nothing to score against.
+  const inputs: MemoryScoreInput[] = [];
+  for (const query of [...gold.keys()].sort()) {
+    if (!system.has(query)) continue;
+    inputs.push({ query, system: system.get(query) ?? [], gold: gold.get(query) ?? [], k });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No overlapping queries between memory gold and system-output files");
+    return false;
+  }
+
+  const manifest = buildMemorySearchManifest(inputs, { ladder });
+  console.log(`# layer: memory (${MEMORY_SEARCH_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: memory (${MEMORY_SEARCH_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+// The curated gdwiki gold: same AffectedSetFile shape (`target` is the query, `affected` is
+// the gold passage id list) plus a top-level `k` for nDCG@k / recall@k. Reuses
+// loadAffectedSets for the per-query gold ids; `k` is read separately since AffectedSetFile
+// has no such field (reusing the memory layer's `MemoryGoldFile` reader shape).
+async function loadWikiGoldK(projectRoot: string, file: string): Promise<number> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as MemoryGoldFile;
+  return typeof raw.k === "number" && raw.k > 0 ? raw.k : 5;
+}
+
+/** A hand-labeled `{ targets: [{ target, scores:[0-2,0-2,0-2] }] }` groundedness fixture. */
+type WikiGroundednessFile = {
+  targets?: Array<{ target?: string; scores?: number[]; justification?: string }>;
+};
+
+/** Load the hand-labeled groundedness panels into a query -> {scores, rationale} map. */
+async function loadWikiGroundedness(
+  projectRoot: string,
+  file: string,
+): Promise<Map<string, { scores: [JudgeScore, JudgeScore, JudgeScore]; rationale?: string }>> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as WikiGroundednessFile;
+  const map = new Map<string, { scores: [JudgeScore, JudgeScore, JudgeScore]; rationale?: string }>();
+  for (const entry of raw.targets ?? []) {
+    if (typeof entry.target !== "string" || !Array.isArray(entry.scores) || entry.scores.length !== 3) continue;
+    const scores = entry.scores.map((s) => (s === 0 || s === 1 || s === 2 ? s : 0)) as [JudgeScore, JudgeScore, JudgeScore];
+    map.set(entry.target, { scores, ...(entry.justification ? { rationale: entry.justification } : {}) });
+  }
+  return map;
+}
+
+// gdwiki grounded-retrieval oracle: score the SYSTEM ranked passage list (the ranked citation
+// `path`s `keryx wiki ask <q>` cites, captured to a fixture by
+// scripts/benchmark/run-gdwiki-oracle.ts) against the curated GOLD relevant-passage set for
+// that query (fixtures/benchmark/keryx/wiki-gold.json, hand-labeled — never derived at
+// runtime), emitting nDCG + recall@k. GROUNDEDNESS rides on each run's judge panel from a
+// separate HAND-LABELED fixture (fixtures/benchmark/keryx/wiki-groundedness.json; a live-LLM
+// judge panel is a documented follow-up). Prints one labeled paired-3-5-v2 manifest, validates
+// it, and returns whether it validated. The gold + system files share the AffectedSetFile
+// shape (`target` is the query, `affected` is the ranked/gold path list) so they reuse
+// loadAffectedSets.
+async function runWikiLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const systemPath = optionValue(args, "--wiki-system") ?? "fixtures/benchmark/keryx/wiki-ask-results.json";
+  const goldPath = optionValue(args, "--wiki-gold") ?? "fixtures/benchmark/keryx/wiki-gold.json";
+  const groundPath = optionValue(args, "--wiki-groundedness") ?? "fixtures/benchmark/keryx/wiki-groundedness.json";
+
+  let system: Map<string, string[]>;
+  let gold: Map<string, string[]>;
+  let ground: Map<string, { scores: [JudgeScore, JudgeScore, JudgeScore]; rationale?: string }>;
+  let k: number;
+  try {
+    system = await loadAffectedSets(projectRoot, systemPath);
+    gold = await loadAffectedSets(projectRoot, goldPath);
+    ground = await loadWikiGroundedness(projectRoot, groundPath);
+    k = await loadWikiGoldK(projectRoot, goldPath);
+  } catch (error) {
+    console.error(`Failed to load gdwiki oracle inputs: ${(error as Error).message}`);
+    return false;
+  }
+
+  // Each curated gold query that the system also produced a ranked list AND a hand-labeled
+  // groundedness panel for is a scored target; a query missing either is skipped.
+  const inputs: WikiScoreInput[] = [];
+  for (const query of [...gold.keys()].sort()) {
+    if (!system.has(query)) continue;
+    const g = ground.get(query);
+    if (!g) continue;
+    inputs.push({
+      query,
+      system: system.get(query) ?? [],
+      gold: gold.get(query) ?? [],
+      k,
+      groundedness: g,
+    });
+  }
+
+  if (inputs.length === 0) {
+    console.error("No overlapping queries across gdwiki gold, system-output, and groundedness files");
+    return false;
+  }
+
+  const manifest = buildWikiAskManifest(inputs, { ladder });
+  console.log(`# layer: gdwiki (${GDWIKI_ASK_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: gdwiki (${GDWIKI_ASK_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
+}
+
+/** A committed `{ inputs: [{ input, rawFacts, compactFacts }] }` gdctx fact-set fixture. */
+type GdctxFactsFile = {
+  inputs?: Array<{ input?: string; rawFacts?: string[]; compactFacts?: string[] }>;
+};
+
+/** Load the gdctx fact-preservation fixture into the scorer's GdctxScoreInput shape. */
+async function loadGdctxFacts(projectRoot: string, file: string): Promise<GdctxScoreInput[]> {
+  const raw = JSON.parse(await readFile(path.resolve(projectRoot, file), "utf8")) as GdctxFactsFile;
+  const inputs: GdctxScoreInput[] = [];
+  for (const entry of raw.inputs ?? []) {
+    if (typeof entry.input === "string") {
+      inputs.push({ input: entry.input, rawFacts: entry.rawFacts ?? [], compactFacts: entry.compactFacts ?? [] });
+    }
+  }
+  return inputs;
+}
+
+// gdctx fact-preservation oracle: score each committed raw-vs-compact fact-set pair
+// (captured live by scripts/benchmark/run-gdctx-oracle.ts from a real `keryx ctx run --
+// <command>` compaction, `fixtures/benchmark/keryx/gdctx-fact-preservation.json`) with
+// scoreGdctxRun/buildGdctxManifest. Prints one labeled paired-3-5-v2 manifest, validates it,
+// and returns whether it validated.
+async function runGdctxLayer(projectRoot: string, args: string[], ladder: BenchmarkLadder): Promise<boolean> {
+  const fixturePath = optionValue(args, "--gdctx-fixture") ?? "fixtures/benchmark/keryx/gdctx-fact-preservation.json";
+
+  let inputs: GdctxScoreInput[];
+  try {
+    inputs = await loadGdctxFacts(projectRoot, fixturePath);
+  } catch (error) {
+    console.error(`Failed to load gdctx oracle fixture: ${(error as Error).message}`);
+    return false;
+  }
+
+  if (inputs.length === 0) {
+    console.error("No inputs in the gdctx fact-preservation fixture");
+    return false;
+  }
+
+  const manifest = buildGdctxManifest(inputs, { ladder });
+  console.log(`# layer: gdctx (${GDCTX_FACT_PRESERVATION_LABEL})`);
+  console.log(stableJson(manifest));
+  const result = validatePairedBenchmark(manifest);
+  console.error(`# layer: gdctx (${GDCTX_FACT_PRESERVATION_LABEL}) — ${result.valid ? "valid: yes" : "valid: no"}`);
+  for (const err of result.errors) console.error(`- ${err}`);
+  return result.valid;
 }
 
 async function collect(projectRoot: string, args: string[]): Promise<void> {
@@ -199,5 +832,6 @@ Usage:
   keryx metrics plan --profile lightweight [--changed <file,...>]
   keryx metrics benchmark init --tasks <task-a,task-b,task-c> --out <manifest.json>
   keryx metrics benchmark validate <manifest.json>
+  keryx metrics benchmark run --ladder metastore [--layer gdgraph|gdwiki|testing|memory|gdctx|all] [--gold co-change|dependency|all] [--system <path>] [--wiki-system <path>] [--wiki-gold <path>] [--wiki-groundedness <path>] [--testing-system <path>] [--coverage-map <path>] [--memory-system <path>] [--memory-gold <path>] [--gdctx-fixture <path>] [--out <dir>]
 `);
 }

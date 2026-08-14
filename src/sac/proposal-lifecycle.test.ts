@@ -3,13 +3,14 @@ import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { ProposalLifecycleService, createWikiGuardedTargetWriter } from "./proposal-lifecycle";
+import { ProposalLifecycleService } from "./proposal-lifecycle";
+import { createGuardedOwnerWriter } from "./guarded-owner-writer";
 import { createSacAuthorizationServer, validateSacLedger } from "./index";
 import { WorkspaceService } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
 
 const time = "2026-08-12T00:00:00.000Z";
-async function setup(role = "owner", writer: { owner: "wiki"; write: (input: { correlationId: string }) => Promise<any>; recover?: () => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }) {
+async function setup(role = "owner", writer: { owner: string; write: (input: { correlationId: string }) => Promise<any>; recover?: () => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }) {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-proposal-"));
   await mkdir(path.join(root, "evidence"), { recursive: true }); await mkdir(path.join(root, "wiki"), { recursive: true });
   await writeFile(path.join(root, "evidence", "e.md"), "evidence"); await writeFile(path.join(root, "wiki", "accepted.md"), "accepted");
@@ -22,7 +23,7 @@ async function setup(role = "owner", writer: { owner: "wiki"; write: (input: { c
   await writeFile(manifestPath, JSON.stringify(manifest));
   const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async ({ sourceRef }) => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: sourceRef.includes("flow") ? "separate explicit wrap-up" : "explicit wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
   const writerComposition = { authorize: async (intent: { reviewerAuthority: string }) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", recover: async () => writer.recover ? writer.recover() : undefined, persist: (intent: { correlationId: string }) => writer.write({ correlationId: intent.correlationId }) };
-  const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { wiki: createWikiGuardedTargetWriter(writerComposition) }, wrapUpAuthority, now: () => new Date(time) });
+  const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { [writer.owner]: createGuardedOwnerWriter({ owner: writer.owner as any, ...writerComposition }) } as any, wrapUpAuthority, now: () => new Date(time) });
   return { root, service, manifestPath, server, wrapUpAuthority };
 }
 
@@ -123,4 +124,32 @@ test("stale evidence is denied at owner-use after approval and never invokes wri
   (service as any).options.beforeTargetWrite = async () => { await writeFile(path.join(root, "evidence", "e.md"), "changed"); };
   const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
   expect(result.event.toStatus).toBe("stale"); expect(writes).toBe(0);
+});
+
+// The `skill` owner's real storage folder is `.metaproject/project-skills/`,
+// not `.metaproject/skill/` (unlike memory/wiki, where the owner name and the
+// real folder happen to match) — targetWriteOrStale's owner-prefix check has
+// to know that, via a real per-owner prefix map (ownerTargetPrefix in
+// proposal-lifecycle.ts), or every skill accept silently lands as "stale".
+test("a skill owner receipt is accepted when targetRef matches the real ./project-skills prefix", async () => {
+  const { service } = await setup("owner", {
+    owner: "skill",
+    write: async ({ correlationId }) => ({ ok: true as const, owner: "skill" as const, receiptRef: "./project-skills/sac/x.receipt.json", targetRef: "./project-skills/sac/x/SKILL.md", completedAt: time, correlationId }),
+  });
+  await propose(service, { kind: "decision" }); // any non-wiki-update/non-memory-entry kind routes to "skill" (ownerFor)
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  expect(result.event.toStatus).toBe("accepted");
+});
+
+test("a skill owner receipt is REJECTED (lands as stale) when targetRef uses the wrong ./skill prefix, not the real ./project-skills one", async () => {
+  const { service } = await setup("owner", {
+    owner: "skill",
+    // This is exactly what the old, buggy `startsWith('./' + owner)` check
+    // would have accepted — proving the fix enforces the REAL prefix, not
+    // merely "any string starting with the owner's name".
+    write: async ({ correlationId }) => ({ ok: true as const, owner: "skill" as const, receiptRef: "./skill/x.receipt.json", targetRef: "./skill/x/SKILL.md", completedAt: time, correlationId }),
+  });
+  await propose(service, { kind: "decision" });
+  const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
+  expect(result.event.toStatus).toBe("stale");
 });

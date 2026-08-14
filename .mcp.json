@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "keryx": {
+      "command": "keryx",
+      "args": [
+        "mcp",
+        "serve",
+        "--cwd",
+        "/Users/tsaitler.aleksandr/goodea/keryx"
+      ],
+      "_keryxManaged": "mcp-client-config"
+    }
+  }
+}

@@ -4,6 +4,402 @@ All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
 ## [Unreleased]
+
+## [0.2.34] — 2026-08-14
+
+### Added
+
+- **Benchmark suite M1 — metastore oracle slice (deterministic).** The
+  `paired-3-5-v2` protocol (backward-compatible with `paired-3-5-v1`; Wilson CIs,
+  judge panel, `servedModel`/`effort`, tokenizer-normalized cost), IR/oracle metric
+  primitives, git-co-change gold derivation with a real pinned express fixture, and a
+  metastore oracle runner exposed as `keryx metrics benchmark run --ladder metastore`.
+  Produces the first honest oracle result (gdgraph `affected` vs co-change gold). All
+  five metastore layers (gdgraph, testing, memory, gdctx, gdwiki) are landed.
+  Requirements: `docs/requirements/keryx-benchmark-suite`.
+- **Benchmark suite M1 — ablation runner (first live slice).** New
+  `keryx metrics benchmark run --ladder harness` scores the SAME agent + model run
+  twice per seed, in isolated git worktrees, with keryx metaproject tools present
+  (`context-on`) vs a basic-tools-only baseline (`context-off`) —
+  `src/metrics/ablation-runner.ts`, driven live by `scripts/benchmark/run-ablation.ts`
+  via the same multi-turn agent loop `keryx shell --agent` uses
+  (`src/commands/agent.ts` `runAgentTurn`), plus a real `git worktree add/remove`
+  adapter (`src/harness/child/git-worktree-port.ts`) for a seam flow 096 had only
+  planned. First live result (`deepseek-v4-flash`, 3 code-comprehension tasks, ×3
+  seeds): task success 9/9 with context on vs 0/9 with it off, and 2-6x fewer
+  tool-calls with it on. A second, separately-reported manifest
+  (`scripts/benchmark/run-ablation-codex.ts`) runs the identical tasks through the
+  already-authenticated `codex` CLI (its own agent loop; context on/off toggled by
+  presence/absence of `AGENTS.md`/`.metaproject/` in the worktree) as the milestone's
+  frontier-model leg: 18/18 success on BOTH variants (a real shell closes the gap a
+  no-search baseline can't), with a mixed, non-directional token/tool-call delta —
+  reported honestly rather than as a win. A third, separate manifest closes the
+  milestone's "one frontier + one local" model coverage: `run-ablation.ts` is now
+  parameterized (`--provider`/`--model`) and was run against a local `rapid-mlx serve
+  qwen3.5-9b-4bit` (ollama would not start on the dev machine; unrelated to this work) —
+  6/9 success with context on vs 0/9 off, tool-call counts only (this provider path
+  reports no token usage). All three legs (deepseek/codex/rapid-mlx) are reported side
+  by side, never averaged.
+- **Benchmark suite M1 — safety track, first two case groups.** `PairedBenchmarkRunV2`
+  gained `safety` (`contained`/`escaped` + case class) and `completionHonesty`
+  (`honest`/`overclaimed`) fields, with AC-4 enforced as a hard invariant in
+  `validatePairedBenchmarkV2`: an escaped case must score `correctness: 0`. New
+  `src/metrics/safety-runner.ts` + `keryx metrics benchmark run --ladder harness --layer
+  completion-honesty|false-premise`, driven live by `scripts/benchmark/run-safety.ts`.
+  Completion-gate honesty gives the agent one fixed, non-configurable check tool per
+  case (no injection surface) and grades whether its `VERDICT:` claim matches
+  independently-verified reality; false-premise resistance asks loaded questions built
+  on premises verified false against this repo's real source. First live result
+  (`deepseek-v4-flash`): 3/3 honest on completion-honesty (the agent answered `UNKNOWN`
+  even when it had just seen a clear pass/fail result — overcautious, not dishonest; an
+  earlier scorer draft would have wrongly flagged that caution as an unsafe escape, since
+  fixed) and 3/3 correctly rejected the false premise.
+- **Benchmark suite M1 — safety track, containment (real OS sandbox).** Designed via an
+  interviewer+brainstorm pass (Pragmatist/Innovator/Critic) before writing code —
+  `scripts/benchmark/run-containment.ts`. A live agent (`deepseek-v4-flash`) is given a
+  REAL, OS-sandboxed `shell_exec` (`KERYX_SANDBOX_SHELL=strict`) and tempted toward the
+  same 3 unsafe actions (write outside its worktree, network egress when off, read a
+  secret-shaped path) across 3 case classes (workspace-write containment,
+  shell-permission restraint, prompt-injection resistance via a planted file). A
+  mandatory preflight canary runs all 3 unsafe actions directly (no LLM) before any live
+  case and aborts the whole run if even one is not blocked. `SafetyResult` gained
+  `attempted`/`blockedAt` evidence fields (informational; AC-4 still governs
+  correctness). Real result: **9/9 contained, 0 escapes** — and the new `attempted`
+  field surfaced a real behavioral split the bare count would have hidden:
+  shell-permission-restraint's "is this OK?" framing led the agent to never even attempt
+  2 of 3 unsafe actions, while the other two case classes attempted all 3 and were
+  stopped by the OS kernel every time.
+- **Benchmark suite M1 — ablation runner, mutating coding tasks.**
+  `scripts/benchmark/run-ablation-mutating.ts` + `scripts/benchmark/mutating-tasks.ts`
+  extend the ablation runner from read-only comprehension questions to real,
+  write-capable coding tasks: the agent gets a real `shell_exec` (auto-approved,
+  scoped to this script's own `AgentIO`, same pattern `run-containment.ts` already
+  established) and must edit an EXISTING file to make an already-seeded, already-failing
+  test pass, in its own fresh git worktree per (task, variant, seed) — mutating tasks
+  can't reuse a worktree across seeds the way read-only ones can. Success is decided by
+  an independent `bun test` run after the turn, never the agent's own claim. All 3 tasks
+  are real gaps observed this session, not invented (a missing atomic-JSON-write
+  counterpart to `writeFileAtomic`; the exact `args.includes(flag)` one-liner repeated
+  across `src/commands/init.ts`'s own flag parsing; the plain-text sibling of
+  `readJsonFileOr` that `src/sac/proposal-evidence.ts` hand-rolls inline today) — each
+  seeded test was hand-verified fail-then-pass before any live run. Live result with
+  `rapid-mlx serve qwen3.5-4b-4bit` (deepseek/cerebras both unusable — no balance / HTTP
+  401): **0/18, every task, both variants** — a real, diagnosed capability finding, not
+  a scorer bug: a re-run with tracing showed the model looping on empty `get_cwd` calls
+  until it hit `runAgentTurn`'s anti-loop guard, never once reading the target file. The
+  original `qwen3.5-9b-4bit` (6/9 on the read-only leg) was never actually tested on this
+  workflow — it crashed with SIGABRT under real memory pressure (108% projected RAM
+  utilization, matching `rapid-mlx serve`'s own startup warning) partway through this
+  slice's first live attempt, forcing a switch to the smaller model mid-session. Full
+  harness + tasks + verification is real and reusable; the milestone still needs a model
+  actually capable of the base task before the context-on/off comparison is measurable.
+- **Benchmark suite M2 — harness-selection investigation, opencode headless dead-end.**
+  Spec §1.3's comparative ladder requires the model held constant across targets.
+  `opencode`'s free `deepseek-v4-flash-free` provider would have satisfied this
+  literally (same model family as keryx's own harness legs), and its interactive TUI
+  confirmed the model/provider works fine live — but both `opencode run --auto` and a
+  `opencode serve` + `run --attach --auto` variant hang indefinitely on any task
+  requiring a tool call, reproduced twice, independent of `.mcp.json` auto-discovery.
+  The running server's own `/session` API surfaced a plausible cause: a
+  `question`/`plan_enter`/`plan_exit` permission set to `deny` that `--auto` doesn't
+  cover. `codex` was picked as M2's harness target instead, with the model-mismatch
+  recorded as a disclosed spec deviation rather than papered over — see
+  `docs/requirements/keryx-benchmark-suite/plan.md`'s M2 section.
+- **Benchmark suite M2 — comparative report + fairness review (AC-6).** New
+  `src/metrics/comparative.ts`: `buildComparativeReport`/`validateComparativeReport`
+  combine keryx's own harness legs, a new zero-tool `raw` floor leg, and a
+  third-party harness leg into `{keryx-on, keryx-off, raw, <harness>}` cells per
+  task, with a per-target adapter/fairness status and a `publishable` flag on
+  every cell that AC-6 requires be false whenever fairness isn't `met` — computed,
+  never hand-set, so a caller can't silently mark a caveated result publishable.
+  Legs stay independently-valid `paired-3-5-v2` manifests, never merged into one
+  (the paired-cell invariant only fits exactly two complementary variants; a
+  comparative row needs up to four) — this module only re-presents their `runs`
+  side by side. `validatePairedBenchmarkV2`'s pairing invariant now exempts the
+  `baseline` variant (a floor reference has no complement to pair against),
+  existing pairing behavior unchanged (regression-tested). New
+  `scripts/benchmark/run-ablation-raw.ts` produces the live `raw` leg —
+  deepseek-v4-flash, same tasks, same `runAgentTurn` driver, EMPTY tool array:
+  **0/9**, honest (the model cannot know this repo's exact symbols by guessing).
+  New `scripts/benchmark/build-comparative-report.ts` synthesizes the three
+  already-live fixtures into `fixtures/benchmark/keryx/comparative-report.json`:
+  keryx-on 3/3, keryx-off 0/3, raw 0/3 (matching M1's already-reported numbers),
+  codex 3/3 but `publishable: false` on every cell (fairness `not-met`, model not
+  held constant) — AC-6 passes as a mechanism, but M2's `fairness: met` exit bar
+  is honestly not reached with codex; the milestone stays open pending a
+  same-model headless-capable harness.
+- **Benchmark suite AC-5 — real gold-artifact leakage found and fixed.** AC-5 ("A
+  dogfood case whose gold artifact is reachable by the agent fails its leakage
+  assertion and is excluded from scoring") had never been demonstrated —
+  `leakageAssertion` defaulted to `not-applicable` in every real M1 producer. Auditing
+  it surfaced a genuine bug: every ablation worktree is a full `git worktree add
+  --detach <path> HEAD` checkout (`src/harness/child/git-worktree-port.ts`), which
+  includes `scripts/benchmark/ablation-tasks.ts`/`mutating-tasks.ts` THEMSELVES —
+  containing the exact `expectedFile`/`expectedSymbol` answer key (and, for mutating
+  tasks, the seeded test that IS the solution spec). An agent with `read_file` could
+  read its own gold answer key directly, undetected, on every ablation run landed so
+  far. New `src/metrics/leakage.ts` (`checkGoldLeakage`) is the real, deterministic
+  reachability check; `validatePairedBenchmarkV2` gained a hard invariant mirroring
+  AC-4's pattern — a manifest containing any `leakageAssertion: "failed"` run is
+  invalid by construction. New `scripts/benchmark/run-leakage-check.ts` proves both
+  directions live against real `git worktree` operations (no LLM call needed — leakage
+  is a worktree filesystem property, decided before any agent runs): an unmodified
+  worktree really does expose both gold files
+  (`fixtures/benchmark/keryx/leakage-check.json` — the real, unpatched vulnerability),
+  a stripped one genuinely reports `passed`. The fix — strip the gold artifact from
+  every worktree before the agent ever sees it, verify the strip worked, abort rather
+  than run a live case on an unverified worktree — is now wired into all three live
+  producers (`run-ablation.ts`, `run-ablation-codex.ts`, `run-ablation-mutating.ts`).
+  Every ablation manifest already landed in M1 was captured on an unstripped worktree;
+  disclosed honestly rather than retracted — no evidence of actual exploitation
+  (`context-off`'s consistent failures and the mutating slice's diagnosed anti-loop
+  trip are inconsistent with a model that read its own answer key), but future
+  regenerations now run leakage-clean by construction.
+- **Fixed: two real MCP exposure gaps found while auditing keryx-shell/MCP capability
+  parity.** (1) `buildMcpModuleEntry()`'s default `expose.modules`
+  (`src/mcp/client-config.ts`) was missing `"gdctx"` and `"testing"` — `search_code` and
+  `test_related` were registered in `buildToolRegistry` but invisible via `tools/list`
+  to every external MCP client (Claude Code, Cursor) unless someone hand-edited the
+  manifest. (2) The unified `read_wiki`/`wiki_ask`/`wiki_backlinks` operations
+  (`src/harness/tool/metaproject-operations.ts`) tagged themselves `module: "gdwiki"` —
+  the real internal facade name — instead of the MCP discovery layer's established alias
+  `"wiki"` (`src/mcp/discovery.ts`'s `MODULE_MANIFEST_KEY`, mirroring `flow`→`tasks`),
+  so `exposedModules.includes(module)` silently failed even with `"wiki"` correctly
+  present in `expose.modules` — these three tools were invisible to every MCP client
+  since they were unified into `metaproject-operations.ts`, leaving only the older,
+  duplicate hand-written `wiki.ask`/`wiki.query` MCP tools reachable. Fixed the tag (and
+  its schema enum, `metaproject-operation.schema.json`) rather than the discovery layer,
+  since the alias convention is already established and correct everywhere else. Live
+  end-to-end verified with a real spawned `keryx mcp serve` + `@modelcontextprotocol/sdk`
+  `Client`/`StdioClientTransport` round-trip against this repo: tool count visible to an
+  external client went from 27 to 30 (`search_code`, `test_related`, `read_wiki`,
+  `wiki_ask`, `wiki_backlinks` all now present and callable). Both fixes also applied to
+  this repo's own live `.metaproject/metaproject.json` (same surgical, targeted-edit
+  pattern as the earlier `sac` expose fix).
+- **MCP: real `codex`/`opencode` client verification, `opencode` install support.**
+  Live-tested whether keryx's MCP server (fronting the same gdgraph/wiki/memory/health
+  intelligence `keryx shell` uses internally) actually works with third-party CLI
+  harnesses, not just Claude Code/Cursor. `codex`: registered via its own native
+  `codex mcp add`, called `graph_affected` through `codex exec --approve-for-me`
+  headlessly, got a real correct result — `codex exec` alone (no approval flag) silently
+  cancels MCP tool calls, documented in `renderMcpManifest()`. `opencode`: called the
+  same tool through `opencode run --auto` headlessly and it worked — genuinely
+  surprising given `opencode`'s own built-in tools hang indefinitely in headless mode
+  (documented separately); an MCP-sourced tool call apparently takes a different
+  permission path than opencode's own tools. Added `OPENCODE_RUNTIME` to
+  `src/mcp/client-config.ts` as a real, tested `--runtime opencode` for
+  `keryx mcp install`/`uninstall` (writes project-local `opencode.json`, shape
+  `{mcp: {keryx: {type, command, enabled}}}` — structurally different from every other
+  runtime's `mcpServers.<name>.{command,args}`, confirmed against a real `opencode.json`
+  before wiring in) and to `keryx init`'s interactive MCP prompt; `all` now expands to
+  cursor+claude+opencode. `codex` is deliberately NOT a `--runtime` here — its config is
+  a single GLOBAL `~/.codex/config.toml`, not project-local, and its own `codex mcp add`
+  is already the safe way to manage it; documented instead of duplicated. Along the way,
+  found and fixed a real, generic bug in `uninstallMcpClient`: its "was this runtime's
+  keryx entry present" check hardcoded the `mcpServers` shape, so uninstall always
+  silently reported `removed: false` for any runtime using a different shape (opencode
+  today, any future one later) — fixed by adding a `hasManaged(settings)` predicate to
+  the `McpClientRuntime` interface itself rather than special-casing it.
+- **Fixed: sandbox read-deny list built from an uncanonicalized `homedir()`.**
+  `src/harness/tool/builtin/shell-exec-tool.ts`'s `shellSandboxProfile` canonicalized
+  `root`/`tmpdir()` for the Seatbelt profile but passed `homedir()` through raw; on
+  macOS `/var` symlinks to `/private/var`, so a `HOME` pointed at a `tmpdir()`-derived
+  path (exactly what an isolated CI run or test harness does) silently escaped the
+  secret read-deny rules. Found live by the M1 safety-track containment preflight
+  canary before any agent case ran — not a live risk for a real user's real `$HOME`
+  (`/Users/<name>` has no symlink component), but a real gap for anyone overriding
+  `HOME` for isolation. Fixed with `canonical(homedir())`, matching the existing
+  treatment of `root`/`tmpdir()`.
+- **Shared Agent Context — real harness composition for the memory-entry write path.**
+  `keryx workspace propose --kind memory-entry --session <id>` and
+  `keryx workspace review ... --decision accepted` now land a real file in
+  `.metaproject/memory/` end-to-end, closing the gap the Phase 3 exit note left open:
+  SAC's write path was intentionally fail-closed (`createLocalProposalLifecycleService`
+  ships every owner writer as `unavailable` — "SAC never edits Wiki, Memory or Skills
+  files itself" until each owning subsystem composes a trusted implementation). New
+  `createHarnessProposalLifecycleService` (`src/sac/proposal-lifecycle.ts`) composes two
+  new real modules: `src/sac/session-wrap-up.ts` (`resolveSessionWrapUp`) turns a real
+  keryx shell session into a `TrustedWrapUpResolution` by exporting its full archive
+  (`src/session/store.ts` `exportSessionMarkdown`, every role/message verbatim) into the
+  target workspace and hashing that export — never the agent's own summary; and
+  `src/sac/memory-owner-writer.ts` (`createRealMemoryOwnerWriter`) is memory's first real
+  `GuardedOwnerWriter`: it reads the proposal's evidence pointer, re-verifies the
+  evidence file's hash against what was recorded at propose time, and writes a
+  schema-valid entry via the same canonical `src/memory/write.ts` `writeCanonicalEntry`
+  path (and its security guard scan) `keryx memory new` uses. Verified live end-to-end
+  (real session, real hash-verified evidence chain, real written memory file) and with
+  103/103 `src/sac/` tests green (14 files). Wiki/skill owner writers remain
+  `unavailable`/fail-closed — only memory has a real composition today. Two real bugs
+  found and fixed along the way: (1) `TrustedWrapUpProvenance.sourceRef` is schema-typed
+  as a workspace-relative `path` (no bare IDs, no `#` fragments) —
+  `resolveSessionWrapUp` now encodes the session id in the path itself
+  (`sessionEvidenceRef`) and independently re-derives+re-verifies it rather than
+  trusting the caller's resolution (defends against a spoofed workspace segment); (2) an
+  optional `--note` passed at `propose` time was captured in a service-composition
+  closure that does not survive into a separate `review`-time process — fixed with a
+  sidecar `<proposalId>.note.txt` file (`proposalNotePath`), written at propose time and
+  read back at accept time, mirroring the approval/intent/decision sidecar pattern
+  `proposal-lifecycle.ts` already used. The read-path (an agent reading FWK context
+  live inside `keryx shell`) remains unwired — out of scope for this slice.
+- **Shared Agent Context — real harness composition for the wiki-update write path.**
+  `keryx workspace propose --kind wiki-update --session <id>` +
+  `review --decision accepted` now lands a real "decision" page (`WIKI_PAGE_TYPES` —
+  "known decisions and ADR-like records", `.metaproject/wiki/decisions/`) end-to-end,
+  the same shape of gap the memory-entry path closed above. New
+  `src/sac/wiki-owner-writer.ts` (`createRealWikiOwnerWriter`) is wiki's first real
+  `GuardedOwnerWriter`, guarded by the SAME security write seam
+  `keryx wiki collect` runs before publishing a generated page
+  (`src/wiki/service.ts`, `guardOutput({ target: "wiki" })`) — a blocked write is
+  refused, not silently sent. Unlike memory, there is no canonical "write real body
+  content" helper to reuse here: `keryx wiki new` (`wikiCreatePage`) only scaffolds a
+  blank title/type template with no content field, so this writes directly via the
+  same `writeFileAtomic` helper `proposal-lifecycle.ts` already uses elsewhere. The
+  proposal-record read + evidence hash re-verification that memory and wiki both need
+  was pulled out into shared `src/sac/proposal-evidence.ts` (`readVerifiedProposalEvidence`,
+  `ownerReceiptPath`, `proposalNotePath` + the sidecar-note fix from above) rather than
+  duplicated a second time; `memory-owner-writer.ts` was refactored onto the same
+  seam with no behavioral change (same receipt paths, same tests, still 115/115 green
+  across `src/sac/` + the session-reader caller guard). Verified live end-to-end (real
+  session → hash-verified evidence → accepted `wiki-update` proposal → real
+  `.metaproject/wiki/decisions/sac-<id>.md`, note included). **`skill` stays
+  `unavailable`/fail-closed on purpose**: `src/security/types.ts`'s `SecurityTarget`
+  union has no `"skill"` member and `createProjectSkill`
+  (`src/gdskills/project-skills.ts`) runs no security scan at all today — writing
+  SAC-derived content into skills (read as agent routing instructions every turn)
+  without the same guard memory/wiki get would be a real safety regression, not a
+  shortcut, and was deliberately not done.
+- **Shared Agent Context — FWK read-path wired into the live agent shell.** A
+  running `keryx shell` agent turn can now read SAC workspace context directly:
+  two new read-only tools, `workspace_overview` and `workspace_read`
+  (`src/harness/tool/builtin/workspace-context-tool.ts`), wrap
+  `createLocalFwkReadService` (previously reachable only from a separate CLI
+  process via `keryx workspace overview`/`read`, or over MCP as `sac.overview`/
+  `sac.read`) and are added to both the TUI and readline tool arrays in
+  `src/commands/shell.ts`, `risk: "read"` like `read_file`/`list_dir`. There is
+  no session↔workspace linkage anywhere in keryx (no `--workspace` flag, no
+  workspace field on `SessionSummary`), so the agent must be told which
+  workspace to read via an explicit `workspaceId` on every call, same as the
+  CLI. Confirmed this can't become HTTP-reachable: `keryx serve`'s handler
+  never touches `shell.ts`'s `AgentDeps`/tool-array construction, so this stays
+  on the same local-only trust boundary `shell_exec` already operates under —
+  unlike the MCP `sac.*` tools, which explicitly refuse HTTP transport because
+  SAC's local auth server derives its actor from the OS user with no verified
+  per-request principal. Verified two ways: 6 offline unit tests calling the
+  tools directly against a real (but resource-less) workspace, AND one fully
+  live round-trip — a real local model (`rapid-mlx serve qwen3.5-9b-4bit`)
+  driven through the actual `runAgentTurn` loop `keryx shell` uses, calling
+  `workspace_overview` for real, getting back a real signed access receipt, and
+  correctly reporting the result. (DeepSeek and Cerebras credentials were both
+  unusable at verification time — no balance / 401 — so the live check ran
+  against a local model instead of the usual `deepseek-v4-flash`.)
+- **Fixed: `keryx skills create` ran zero security scanning.** Unlike
+  `keryx wiki collect` (`guardOutput({ target: "wiki" })`) and `keryx memory new`
+  (`writeCanonicalEntry`'s guard), `createProjectSkill`
+  (`src/gdskills/project-skills.ts`) wrote `SKILL.md` — content read as agent
+  routing instructions every turn — with no scan at all. `SecurityTarget`
+  (`src/security/types.ts`) gained a `"skill"` member (also added to
+  `src/security/schemas.ts`'s finding-schema enum and `src/commands/security.ts`'s
+  `--target` validation list — both closed allow-lists, found and updated
+  together so `--target skill`/a finding with `target: "skill"` don't fail
+  closed for unrelated reasons); `writeProjectSkillPackage` now renders
+  `SKILL.md`'s content and runs it through `guardOutput({ target: "skill",
+  source: "generated" })` **before** any `mkdir`/write happens, throwing if the
+  strict/enforced gate blocks it. New `src/gdskills/project-skills.test.ts`
+  (this function had no test coverage at all before) proves all three real
+  behaviors: unaffected by default (security module disabled), a planted
+  secret genuinely blocked end-to-end in `enforced` mode with **nothing**
+  written to disk, and the same content allowed through in `advisory` mode
+  (report-only, matching every other target's documented behavior). Found
+  while investigating why `skill` — the third `GuardedOwnerWriter` owner
+  alongside `memory`/`wiki` — was still `unavailable`/fail-closed in SAC; this
+  was the actual blocker (no target, no scan), not laziness. 190/190
+  `src/gdskills`+`src/security`+`src/commands/security` tests green.
+  **A real skill owner-writer is still not composed**: while wiring this,
+  found that `ProposalLifecycleService.targetWriteOrStale`
+  (`src/sac/proposal-lifecycle.ts:127`) requires an owner's receipt
+  `targetRef` to literally start with `./${owner}` — `./memory/...` and
+  `./wiki/...` both genuinely match where those owners store files under
+  `.metaproject/`, but `keryx skills create` stores real skills under
+  `.metaproject/project-skills/`, not `.metaproject/skill/`. A skill
+  owner-writer built today would have to fake a `targetRef` that doesn't
+  match the real file location to pass that check, which is worse than not
+  building it — so it wasn't built. Fixing this needs a decision on the check
+  itself (e.g. a per-owner prefix map instead of a literal `./${owner}`
+  assumption) before a real skill writer can be composed honestly.
+- **Shared Agent Context — the skill owner-writer, and the targetRef fix it
+  needed.** `ProposalLifecycleService.targetWriteOrStale`
+  (`src/sac/proposal-lifecycle.ts`) assumed every owner's receipt `targetRef`
+  starts with the literal `./${owner}` — true by coincidence for memory/wiki,
+  false for skill (real skills live under `.metaproject/project-skills/`, not
+  `.metaproject/skill/`). Replaced with `ownerTargetPrefix(owner)`, a real
+  per-owner map (`memory→./memory`, `wiki→./wiki`, `skill→./project-skills`).
+  Two new regression tests in `proposal-lifecycle.test.ts` prove the fix
+  actually enforces the correct prefix rather than just "always pass": a skill
+  receipt with the OLD, buggy `./skill/...` shape (exactly what the previous
+  check would have accepted) is still rejected and the accept lands as
+  `stale`; one with the real `./project-skills/...` shape is accepted.
+  `src/sac/skill-owner-writer.ts` (`createRealSkillOwnerWriter`) is skill's
+  real `GuardedOwnerWriter` — the third and last, alongside memory and wiki.
+  It reuses `createProjectSkill` itself (`keryx skills create`'s own write
+  path, now guarded from the previous change) rather than writing
+  `.metaproject/project-skills/` files a second, parallel way: every
+  SAC-derived skill lands under the fixed `sac` module
+  (`.metaproject/project-skills/sac/<proposalId>/SKILL.md`), so it's always
+  distinguishable from a skill a person created directly. `keryx workspace
+  propose --kind <kind>` now accepts all six real proposal kinds (`decision`,
+  `wiki-update`, `memory-entry`, `follow-up`, `contract-change`, `risk`) — not
+  just the two that had writers before — since every kind now routes (via the
+  existing `ownerFor`) to a real owner. Verified live end-to-end: real
+  session → hash-verified evidence → accepted `decision` proposal → real
+  `.metaproject/project-skills/sac/<id>/SKILL.md`, with `metaproject.json`'s
+  skill registry and `skills/catalog.md` correctly updated by
+  `createProjectSkill`'s own bookkeeping (and cleanly reverted after
+  verification, along with the demo skill directory). 7 new tests in
+  `skill-owner-writer.test.ts`, including one proving the security gate from
+  the previous change genuinely blocks a skill write end-to-end (not just
+  wired) — a planted secret in the derived skill content is refused in
+  `enforced` mode with nothing written to disk. Full suite green after this
+  change (typecheck clean; `src/sac`+`src/gdskills`+`src/security`+
+  `src/commands/security`+`src/commands/workspace`: 309/309).
+- **Fixed: `sac.propose`/`sac.review` over MCP were never actually wired.**
+  `src/mcp/tools.ts`'s `sac.propose` unconditionally returned
+  `trusted_wrap_up_required` (empty input schema — it could not have worked),
+  and `sac.review` called the fail-closed `createLocalProposalLifecycleService`
+  instead of the real `createHarnessProposalLifecycleService` composition the
+  CLI/keryx-shell paths already use. Both now compose the real thing: `sac.propose`
+  takes `{ workspaceId, kind, sessionId, note?, proposalRevision? }`, resolves the
+  session via `findSession`, issues a real wrap-up, and creates a real proposal
+  (with the same propose-time note sidecar the CLI uses); `sac.review` runs the
+  same review path the CLI does. `src/sac/service.ts` (the facade `src/mcp/`
+  is architecturally restricted to — enforced by `boundary.test.ts`'s M-3 guard)
+  gained the needed exports: `createHarnessProposalLifecycleService`,
+  `sessionEvidenceRef`, `proposalNotePath`, `findSession`. A SECOND, independent
+  bug surfaced while live-verifying this: `sac.*` tools were entirely invisible
+  over MCP regardless of the fix — `buildMcpModuleEntry()`'s default
+  `expose.modules` allowlist (`src/mcp/client-config.ts`) never included
+  `"sac"`, so `tools/list` never returned them. Both fixed together; verified
+  with a real MCP SDK `Client`/`Server` round-trip (`InMemoryTransport`, real
+  protocol serialization, not just in-process function calls) against a real
+  session and a real workspace: `tools/list` now returns all 5 `sac.*` tools,
+  `sac.propose` creates a real proposal over the wire, `sac.review` accepts it
+  and a real file lands in `.metaproject/memory/task-notes/`. New
+  `src/mcp/sac-tools.test.ts` (3 tests, previously zero coverage for these two
+  tools). Also documented `keryx mcp install`/`uninstall` in the mcp module's
+  own manifest doc (`renderMcpManifest`) — it only mentioned `serve` before,
+  so nothing told an agent reading `.metaproject/modules/mcp.md` that
+  `mcp install --runtime <runtime>` is the real, complete way to connect a
+  project when asked to "enable MCP", short of hand-editing a client config.
+  Connected this repo for real (`keryx mcp install --runtime claude`) after
+  confirming it was safe to run from this dev checkout: `enableMcpModule` is a
+  surgical read-parse-patch-write on just `modules.mcp` in the existing
+  manifest, unlike `keryx modules enable <name>`'s full `initCommand()`
+  reconciliation (which regenerates every enabled module's files and, earlier
+  this session, was found to silently regress this repo's real
+  `.metaproject/` content when run from a dev checkout whose generators have
+  diverged from the separately-installed global `keryx` binary that actually
+  wrote it). 246/246 across `src/mcp`+`src/sac`+`src/commands/security`+
+  `src/gdskills` after this change, typecheck clean.
+
 ## [0.2.33] — 2026-08-13
 
 ### Added
@@ -1019,4 +1415,18 @@ runtime dependencies, no sockets).
 [0.2.18]: https://github.com/MrCipherSmith/keryx/compare/v0.2.17...v0.2.18
 [0.2.19]: https://github.com/MrCipherSmith/keryx/compare/v0.2.18...v0.2.19
 [0.2.20]: https://github.com/MrCipherSmith/keryx/compare/v0.2.19...v0.2.20
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.20...HEAD
+[0.2.21]: https://github.com/MrCipherSmith/keryx/compare/v0.2.20...v0.2.21
+[0.2.22]: https://github.com/MrCipherSmith/keryx/compare/v0.2.21...v0.2.22
+[0.2.23]: https://github.com/MrCipherSmith/keryx/compare/v0.2.22...v0.2.23
+[0.2.24]: https://github.com/MrCipherSmith/keryx/compare/v0.2.23...v0.2.24
+[0.2.25]: https://github.com/MrCipherSmith/keryx/compare/v0.2.24...v0.2.25
+[0.2.26]: https://github.com/MrCipherSmith/keryx/compare/v0.2.25...v0.2.26
+[0.2.27]: https://github.com/MrCipherSmith/keryx/compare/v0.2.26...v0.2.27
+[0.2.28]: https://github.com/MrCipherSmith/keryx/compare/v0.2.27...v0.2.28
+[0.2.29]: https://github.com/MrCipherSmith/keryx/compare/v0.2.28...v0.2.29
+[0.2.30]: https://github.com/MrCipherSmith/keryx/compare/v0.2.29...v0.2.30
+[0.2.31]: https://github.com/MrCipherSmith/keryx/compare/v0.2.30...v0.2.31
+[0.2.32]: https://github.com/MrCipherSmith/keryx/compare/v0.2.31...v0.2.32
+[0.2.33]: https://github.com/MrCipherSmith/keryx/compare/v0.2.32...v0.2.33
+[0.2.34]: https://github.com/MrCipherSmith/keryx/compare/v0.2.33...v0.2.34
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...HEAD

@@ -130,11 +130,12 @@ import {
   renderMcpCoreReadme,
   renderMcpManifest,
 } from "../mcp/client-config";
+import { renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 
 // Runtime a user can opt into wiring during interactive init; `skip` writes no
 // client config (the manifest still enables the module).
-type McpInitRuntime = "cursor" | "claude" | "generic" | "skip";
-const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "generic", "skip"];
+type McpInitRuntime = "cursor" | "claude" | "opencode" | "generic" | "skip";
+const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "opencode", "generic", "skip"];
 
 type InitOptions = {
   help: boolean;
@@ -158,6 +159,8 @@ type InitOptions = {
   noSecurityAgentHook: boolean;
   mcp: boolean;
   noMcp: boolean;
+  sac: boolean;
+  noSac: boolean;
   treesitter: boolean;
   noTreesitter: boolean;
   testingTia: boolean;
@@ -358,7 +361,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableMcp = true;
   } else if (!options.yes) {
     enableMcp = await confirm(
-      "Enable the MCP server (expose this project to Cursor / Claude Code)?",
+      "Enable the MCP server (expose this project to Cursor / Claude Code / opencode)?",
       false,
     );
     if (enableMcp) {
@@ -368,6 +371,21 @@ export async function initCommand(args: string[]): Promise<void> {
         "skip",
       );
     }
+  }
+
+  // SAC (Shared Agent Context) is an opt-in cross-cutting module, same shape as
+  // MCP above: default OFF so the default `init` manifest + output stay
+  // byte-identical (golden rule). `--sac`/`--no-sac` set it non-interactively.
+  let enableSac = false;
+  if (options.noSac) {
+    enableSac = false;
+  } else if (options.sac) {
+    enableSac = true;
+  } else if (!options.yes) {
+    enableSac = await confirm(
+      "Enable the SAC module (shared agent context: cross-session workspace propose/review, opt-in)?",
+      false,
+    );
   }
 
   if (
@@ -558,6 +576,10 @@ export async function initCommand(args: string[]): Promise<void> {
     await createMcpStructure(metaprojectRoot);
   }
 
+  if (enableSac) {
+    await createSacStructure(metaprojectRoot);
+  }
+
   // Reconcile disabled security hooks with on-disk reality. When a hook is now
   // off (module disabled via --no-security, or --no-security-agent-hook /
   // --no-security-hook) but was previously installed, remove the managed
@@ -598,6 +620,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableTestingPrePushHook,
     enableSecurityPrePushHook,
     enableSecurityAgentHook,
+    enableSac,
     agentRuleSources,
     existingManifest,
   });
@@ -893,6 +916,17 @@ export async function initCommand(args: string[]): Promise<void> {
     );
   }
 
+  if (enableSac) {
+    await writeTextIfMissing(
+      path.join(metaprojectRoot, "modules", "sac.md"),
+      renderSacManifest(),
+    );
+    await writeTextIfChanged(
+      path.join(metaprojectRoot, "skills", "sac", "SKILL.md"),
+      renderSacSkillReadme(),
+    );
+  }
+
   // Interactive-only: write the chosen runtime's MCP client config. Never under
   // `--yes`/non-interactive (`mcpInitRuntime` stays "skip" there), so the
   // non-interactive `init` output writes no client config (golden rule).
@@ -940,6 +974,9 @@ export async function initCommand(args: string[]): Promise<void> {
   statusLine("security", enableSecurity, "scanning, redaction, guardrails, audit");
   if (enableMcp) {
     statusLine("mcp", true, "Model Context Protocol server (opt-in)");
+  }
+  if (enableSac) {
+    statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
   }
 
   // `installManagedHook` no-ops when there is no git hooks root, so reporting
@@ -1048,6 +1085,8 @@ function parseInitArgs(args: string[]): InitOptions {
     noSecurityAgentHook: args.includes("--no-security-agent-hook"),
     mcp: args.includes("--mcp"),
     noMcp: args.includes("--no-mcp"),
+    sac: args.includes("--sac"),
+    noSac: args.includes("--no-sac"),
     treesitter: args.includes("--treesitter"),
     noTreesitter: args.includes("--no-treesitter"),
     testingTia: args.includes("--testing-tia"),
@@ -1079,6 +1118,8 @@ function printInitHelp(): void {
     { flag: "--no-security-agent-hook", desc: "Do not install the .claude/settings.json security agent hooks." },
     { flag: "--mcp", desc: "Enable the opt-in MCP server module (default off)." },
     { flag: "--no-mcp", desc: "Do not enable the MCP server module (default)." },
+    { flag: "--sac", desc: "Enable the opt-in SAC (shared agent context) module (default off)." },
+    { flag: "--no-sac", desc: "Do not enable the SAC module (default)." },
     { flag: "--treesitter", desc: "Enable the opt-in gdgraph tree-sitter symbol layer (default off)." },
     { flag: "--no-treesitter", desc: "Do not enable the gdgraph tree-sitter symbol layer (default)." },
     { flag: "--testing-tia", desc: "Enable the opt-in testing coverage-map TIA (default off)." },
@@ -1198,6 +1239,15 @@ async function createMcpStructure(root: string): Promise<void> {
     path.join(root, "core", "mcp"),
     path.join(root, "data", "mcp", "artifacts"),
   ];
+  await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
+}
+
+// SAC's actual data (.metaproject/workspaces/, .metaproject/context-operations/)
+// is created lazily by WorkspaceService/FwkReadService at runtime — only the
+// skills dir is scaffolded here, matching createTasksStructure's pattern of
+// not pre-creating what is otherwise lazily created.
+async function createSacStructure(root: string): Promise<void> {
+  const dirs = [path.join(root, "skills", "sac")];
   await Promise.all(dirs.map((dir) => mkdir(dir, { recursive: true })));
 }
 
@@ -1453,6 +1503,7 @@ function buildManifest({
   enableTestingPrePushHook,
   enableSecurityPrePushHook,
   enableSecurityAgentHook,
+  enableSac,
   agentRuleSources,
   existingManifest,
 }: {
@@ -1474,6 +1525,7 @@ function buildManifest({
   enableTestingPrePushHook: boolean;
   enableSecurityPrePushHook: boolean;
   enableSecurityAgentHook: boolean;
+  enableSac: boolean;
   agentRuleSources: string[];
   existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
@@ -1653,6 +1705,34 @@ function buildManifest({
                   },
                 }
               : {}),
+          }
+        : {
+            enabled: false,
+          },
+      sac: enableSac
+        ? {
+            enabled: true,
+            core: ".metaproject/core/sac",
+            data: ".metaproject/data/sac",
+            manifest: ".metaproject/modules/sac.md",
+            // The CLI namespace is `workspace`, not `sac` — moduleCommands()
+            // is keyed by src/commands/<module>.ts router names (see
+            // module-commands.ts), and there is no src/commands/sac.ts, so
+            // this list is hand-written here, mirroring how mcp's manifest
+            // entry hardcodes `commands: ["serve"]` in buildMcpModuleEntry()
+            // instead of going through moduleCommands().
+            commands: [
+              "create",
+              "list",
+              "show",
+              "add-resource",
+              "overview",
+              "read",
+              "propose",
+              "review",
+              "collaboration",
+              "policy-readiness",
+            ],
           }
         : {
             enabled: false,

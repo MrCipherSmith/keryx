@@ -1,0 +1,21 @@
+{
+  "repo": "https://github.com/expressjs/express.git",
+  "pinned_commit": "a3714473feb3d2908add734d340e7755fd85e0a3",
+  "pinned_branch": "master",
+  "target_files": [
+    "lib/application.js",
+    "lib/express.js",
+    "lib/utils.js"
+  ],
+  "derivation": {
+    "method": "goldAffectedSet (src/metrics/gold.ts)",
+    "rule": "A file f is gold-affected for target iff, among commits (first-parent history up to the pinned commit) that touched target, f co-occurs in at least minCoChanges commits AND co-occurs in at least minSupport of them (coChanges(f) / commitsWithTarget). Both defaults below. See goldAffectedSet's doc comment in src/metrics/gold.ts for the full rule.",
+    "minCoChanges": 2,
+    "minSupport": 0.34,
+    "history_window": "git log --first-parent (linear ancestry of the pinned commit, full repo history)",
+    "first_parent_commit_count": 3888,
+    "parsed_commit_count": 3888
+  },
+  "regenerate_command": "bun scripts/benchmark/generate-express-gold.ts",
+  "generated_at": "2026-08-12"
+}

@@ -202,7 +202,7 @@ Usage:
   keryx mcp serve [--http] [--cwd <project-root>]
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
-  keryx mcp install|uninstall --runtime <cursor|claude|generic|all> [--dry-run]
+  keryx mcp install|uninstall --runtime <cursor|claude|opencode|generic|all> [--dry-run]
   keryx --version
 
 Commands:

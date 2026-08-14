@@ -1,0 +1,32 @@
+{
+  "note": "SYSTEM test-impact set: `keryx test related <target>` (naming + import-graph heuristic) per changed file, after `keryx test analyze`. Scored against the coverage-derived gold.",
+  "repo": "keryx (dogfood, this repository)",
+  "generated_by": "keryx test analyze && keryx test related <target>",
+  "targets": [
+    {
+      "target": "src/metrics/benchmark.ts",
+      "affected": [
+        "src/metrics/oracle-runner.test.ts"
+      ]
+    },
+    {
+      "target": "src/metrics/gold.ts",
+      "affected": [
+        "src/metrics/gold.test.ts",
+        "src/metrics/oracle-runner.test.ts"
+      ]
+    },
+    {
+      "target": "src/metrics/ir.ts",
+      "affected": [
+        "src/metrics/ir.test.ts"
+      ]
+    },
+    {
+      "target": "src/metrics/oracle-runner.ts",
+      "affected": [
+        "src/metrics/oracle-runner.test.ts"
+      ]
+    }
+  ]
+}

@@ -213,6 +213,36 @@
         "prePush": ".git/hooks/pre-push",
         "agent": ".claude/settings.json"
       }
+    },
+    "mcp": {
+      "enabled": true,
+      "core": ".metaproject/core/mcp",
+      "data": ".metaproject/data/mcp",
+      "manifest": ".metaproject/modules/mcp.md",
+      "config": ".metaproject/core/mcp/mcp.config.json",
+      "commands": [
+        "serve"
+      ],
+      "capabilities": [],
+      "http": {
+        "enabled": false
+      },
+      "expose": {
+        "tools": true,
+        "resources": true,
+        "modules": [
+          "gdgraph",
+          "gdctx",
+          "security",
+          "flow",
+          "memory",
+          "health",
+          "testing",
+          "wiki",
+          "standard",
+          "sac"
+        ]
+      }
     }
   },
   "agentEntrypoints": {

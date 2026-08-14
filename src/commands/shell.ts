@@ -38,6 +38,7 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
 import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
+import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builtin/workspace-context-tool";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -1430,6 +1431,8 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           webFetchTool(),
           webSearchTool(searchProviderController),
           shellExecTool(cwd),
+          workspaceOverviewTool(cwd),
+          workspaceReadTool(cwd),
           createAskUserTool(invokeAskUserHost),
           spawnTool,
         ],
@@ -1612,6 +1615,8 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
           ...builtinMetaprojectTools(agentCwd, makeKeryxRunner(agentCwd), metaprojectPort),
           webSearchTool(searchProviderController),
           shellExecTool(agentCwd),
+          workspaceOverviewTool(agentCwd),
+          workspaceReadTool(agentCwd),
           createAskUserTool(invokeAskUserHost),
           spawnTool,
         ],

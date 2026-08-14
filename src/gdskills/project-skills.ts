@@ -2,6 +2,7 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, toPosix, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { guardOutput } from "../security/guard";
 
 export type ProjectSkillFormat = "auto" | "single" | "package";
 
@@ -73,6 +74,7 @@ export async function createProjectSkill(
   if (!options.dryRun) {
     await withFileLock(path.join(metaprojectRoot, "data", "gdskills", "project-skills.lock"), async () => {
       await writeProjectSkillPackage({
+        projectRoot,
         packageRoot,
         moduleName,
         skillName,
@@ -114,6 +116,7 @@ export function normalizeProjectSkillFormat(value: string | undefined): ProjectS
 }
 
 async function writeProjectSkillPackage({
+  projectRoot,
   packageRoot,
   moduleName,
   skillName,
@@ -121,6 +124,7 @@ async function writeProjectSkillPackage({
   evidence,
   format,
 }: {
+  projectRoot: string;
   packageRoot: string;
   moduleName: string;
   skillName: string;
@@ -129,19 +133,24 @@ async function writeProjectSkillPackage({
   format: ProjectSkillFormat;
 }): Promise<void> {
   const packageFormat = format === "single" ? "single" : "package";
+  const skillContent = renderProjectSkill({ moduleName, skillName, target, evidence, packageFormat });
+
+  // Security write seam, mirroring `keryx wiki collect`'s guard before publishing
+  // a generated page (src/wiki/service.ts) and `keryx memory new`'s
+  // writeCanonicalEntry (src/memory/write.ts): SKILL.md is read as agent routing
+  // instructions, so its content is scanned BEFORE anything reaches disk. A
+  // blocked write refuses outright rather than landing unscanned content that
+  // would steer every future agent turn that reads this skill.
+  const relativeSkillMdPath = toPosix(path.join(path.relative(projectRoot, packageRoot), "SKILL.md"));
+  const guard = await guardOutput({ cwd: projectRoot, content: skillContent, target: "skill", source: "generated", path: relativeSkillMdPath });
+  if (!guard.allowed) {
+    throw new Error(`Project skill blocked by the security gate: ${guard.reason ?? "policy violation"}`);
+  }
+
   await mkdir(packageRoot, { recursive: true });
 
   const skillPath = path.join(packageRoot, "SKILL.md");
-  await writeFileAtomic(
-    skillPath,
-    renderProjectSkill({
-      moduleName,
-      skillName,
-      target,
-      evidence,
-      packageFormat,
-    }),
-  );
+  await writeFileAtomic(skillPath, skillContent);
 
   const changelogPath = path.join(packageRoot, "skill-changelog.md");
   if (!(await pathExists(changelogPath))) {

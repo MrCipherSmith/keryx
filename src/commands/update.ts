@@ -51,6 +51,7 @@ import {
   renderGdwikiSkillReadme,
   renderWikiPageTemplate,
 } from "../wiki/templates";
+import { renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import {
@@ -203,6 +204,9 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   statusLine("memory", summary.modules.memory);
   statusLine("tasks", summary.modules.tasks);
   statusLine("security", summary.modules.security);
+  if (summary.modules.sac) {
+    statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
+  }
 
   const steps: string[] = [];
   if (options.hooks) {
@@ -225,6 +229,7 @@ type RefreshSummary = {
     memory: boolean;
     tasks: boolean;
     security: boolean;
+    sac: boolean;
   };
   gdskillsProfile: GdskillsProfile;
   backfilledTasks: boolean;
@@ -247,6 +252,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const enableTesting = moduleEnabled(manifest, "testing");
   const enableMemory = moduleEnabled(manifest, "memory");
   const enableSecurity = moduleEnabled(manifest, "security");
+  const enableSac = moduleEnabled(manifest, "sac");
 
   // Task Manager backfill: projects initialized before the tasks module have a
   // bare `tasks: { enabled: false }` stub. `update` enables and scaffolds it
@@ -276,6 +282,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     enableMemory,
     enableTasks,
     enableSecurity,
+    enableSac,
   });
 
   await writeTextIfChanged(path.join(metaprojectRoot, "core", "README.md"), renderMetaprojectCoreReadme());
@@ -356,6 +363,11 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     if (manifest.modules?.gdgraph?.hooks?.gitPostCommit) {
       await installManagedHook(projectRoot, "post-commit", "gdwiki-post-commit", renderGdwikiPostCommitHook());
     }
+  }
+
+  if (enableSac) {
+    await writeTextIfMissing(path.join(metaprojectRoot, "modules", "sac.md"), renderSacManifest());
+    await writeTextIfChanged(path.join(metaprojectRoot, "skills", "sac", "SKILL.md"), renderSacSkillReadme());
   }
 
   if (enableGdskills) {
@@ -467,6 +479,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableMemory,
       enableTasks,
       enableSecurity,
+      enableSac,
     });
   } else if (backfillTasks) {
     await enableTasksInManifest(metaprojectRoot);
@@ -490,6 +503,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       memory: enableMemory,
       tasks: enableTasks,
       security: enableSecurity,
+      sac: enableSac,
     },
     gdskillsProfile,
     backfilledTasks: backfillTasks,
@@ -659,6 +673,7 @@ async function collectDashboardDocs(
     "skills/gdgraph/SKILL.md",
     "skills/gdctx/SKILL.md",
     "skills/gdwiki/SKILL.md",
+    "skills/sac/SKILL.md",
     "skills/health/SKILL.md",
     "skills/testing/SKILL.md",
     "skills/memory/SKILL.md",
@@ -1020,6 +1035,7 @@ async function writeRecoveredManifest(
     enableMemory: boolean;
     enableTasks: boolean;
     enableSecurity: boolean;
+    enableSac: boolean;
   },
 ): Promise<void> {
   const enabledModuleKeys = Object.entries(modules)
@@ -1121,6 +1137,30 @@ async function writeRecoveredManifest(
             config: ".metaproject/security.config.json",
             commands: moduleCommands("security"),
             capabilities: securityCapabilities(),
+          }
+        : { enabled: false },
+      sac: modules.enableSac
+        ? {
+            enabled: true,
+            core: ".metaproject/core/sac",
+            data: ".metaproject/data/sac",
+            manifest: ".metaproject/modules/sac.md",
+            // See the matching comment in src/commands/init.ts buildManifest:
+            // no src/commands/sac.ts router exists (the CLI namespace is
+            // `workspace`), so this list is hand-written rather than sourced
+            // from moduleCommands().
+            commands: [
+              "create",
+              "list",
+              "show",
+              "add-resource",
+              "overview",
+              "read",
+              "propose",
+              "review",
+              "collaboration",
+              "policy-readiness",
+            ],
           }
         : { enabled: false },
     },
@@ -1234,6 +1274,7 @@ async function createServiceDirs(
     enableMemory: boolean;
     enableTasks: boolean;
     enableSecurity: boolean;
+    enableSac: boolean;
   },
 ): Promise<void> {
   const dirs = [
@@ -1274,6 +1315,9 @@ async function createServiceDirs(
     // Only the committable core dir; data/security is never created/touched here.
     ...(modules.enableSecurity ? [
       path.join(metaprojectRoot, "core", "security"),
+    ] : []),
+    ...(modules.enableSac ? [
+      path.join(metaprojectRoot, "skills", "sac"),
     ] : []),
   ];
 
@@ -1437,6 +1481,7 @@ async function inferManifestFromExistingMetaproject(metaprojectRoot: string): Pr
     memory: ["core/memory", "memory", "data/memory", "memory.config.json", "modules/memory.md", "skills/memory"],
     tasks: ["flows", "data/tasks", "modules/tasks.md", "skills/flow"],
     security: ["core/security", "data/security", "security.config.json", "modules/security.md"],
+    sac: ["skills/sac", "modules/sac.md"],
   };
 
   for (const [moduleName, candidates] of Object.entries(checks)) {

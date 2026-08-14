@@ -1,0 +1,334 @@
+{
+  "pinned_commit": "a3714473feb3d2908add734d340e7755fd85e0a3",
+  "targets": [
+    {
+      "target": "lib/application.js",
+      "commitsWithTarget": 164,
+      "affected": [],
+      "totalCoChangingFiles": 241,
+      "topCoChanges": [
+        {
+          "file": "History.md",
+          "coChanges": 45,
+          "support": 0.27439024390243905
+        },
+        {
+          "file": "lib/response.js",
+          "coChanges": 41,
+          "support": 0.25
+        },
+        {
+          "file": "package.json",
+          "coChanges": 29,
+          "support": 0.17682926829268292
+        },
+        {
+          "file": "lib/utils.js",
+          "coChanges": 27,
+          "support": 0.16463414634146342
+        },
+        {
+          "file": "lib/express.js",
+          "coChanges": 18,
+          "support": 0.10975609756097561
+        },
+        {
+          "file": "lib/router/index.js",
+          "coChanges": 18,
+          "support": 0.10975609756097561
+        },
+        {
+          "file": "test/app.router.js",
+          "coChanges": 18,
+          "support": 0.10975609756097561
+        },
+        {
+          "file": "lib/request.js",
+          "coChanges": 17,
+          "support": 0.10365853658536585
+        },
+        {
+          "file": "lib/view.js",
+          "coChanges": 13,
+          "support": 0.07926829268292683
+        },
+        {
+          "file": "test/res.send.js",
+          "coChanges": 13,
+          "support": 0.07926829268292683
+        },
+        {
+          "file": "Readme.md",
+          "coChanges": 12,
+          "support": 0.07317073170731707
+        },
+        {
+          "file": "lib/middleware.js",
+          "coChanges": 11,
+          "support": 0.06707317073170732
+        },
+        {
+          "file": "test/app.use.js",
+          "coChanges": 11,
+          "support": 0.06707317073170732
+        },
+        {
+          "file": "test/Router.js",
+          "coChanges": 10,
+          "support": 0.06097560975609756
+        },
+        {
+          "file": "lib/router/route.js",
+          "coChanges": 9,
+          "support": 0.054878048780487805
+        },
+        {
+          "file": "test/app.render.js",
+          "coChanges": 9,
+          "support": 0.054878048780487805
+        },
+        {
+          "file": "test/res.json.js",
+          "coChanges": 9,
+          "support": 0.054878048780487805
+        },
+        {
+          "file": ".travis.yml",
+          "coChanges": 8,
+          "support": 0.04878048780487805
+        },
+        {
+          "file": "appveyor.yml",
+          "coChanges": 8,
+          "support": 0.04878048780487805
+        },
+        {
+          "file": "test/res.cookie.js",
+          "coChanges": 8,
+          "support": 0.04878048780487805
+        }
+      ]
+    },
+    {
+      "target": "lib/express.js",
+      "commitsWithTarget": 143,
+      "affected": [
+        "History.md",
+        "package.json"
+      ],
+      "totalCoChangingFiles": 252,
+      "topCoChanges": [
+        {
+          "file": "History.md",
+          "coChanges": 72,
+          "support": 0.5034965034965035
+        },
+        {
+          "file": "package.json",
+          "coChanges": 72,
+          "support": 0.5034965034965035
+        },
+        {
+          "file": "bin/express",
+          "coChanges": 25,
+          "support": 0.17482517482517482
+        },
+        {
+          "file": "lib/application.js",
+          "coChanges": 18,
+          "support": 0.1258741258741259
+        },
+        {
+          "file": "lib/response.js",
+          "coChanges": 17,
+          "support": 0.11888111888111888
+        },
+        {
+          "file": "lib/request.js",
+          "coChanges": 15,
+          "support": 0.1048951048951049
+        },
+        {
+          "file": "lib/express/core.js",
+          "coChanges": 13,
+          "support": 0.09090909090909091
+        },
+        {
+          "file": "lib/utils.js",
+          "coChanges": 10,
+          "support": 0.06993006993006994
+        },
+        {
+          "file": "lib/router/index.js",
+          "coChanges": 9,
+          "support": 0.06293706293706294
+        },
+        {
+          "file": "Readme.md",
+          "coChanges": 9,
+          "support": 0.06293706293706294
+        },
+        {
+          "file": ".gitmodules",
+          "coChanges": 8,
+          "support": 0.055944055944055944
+        },
+        {
+          "file": "lib/view.js",
+          "coChanges": 8,
+          "support": 0.055944055944055944
+        },
+        {
+          "file": "test/exports.js",
+          "coChanges": 8,
+          "support": 0.055944055944055944
+        },
+        {
+          "file": "lib/router/route.js",
+          "coChanges": 7,
+          "support": 0.04895104895104895
+        },
+        {
+          "file": "test/app.router.js",
+          "coChanges": 7,
+          "support": 0.04895104895104895
+        },
+        {
+          "file": ".travis.yml",
+          "coChanges": 5,
+          "support": 0.03496503496503497
+        },
+        {
+          "file": "appveyor.yml",
+          "coChanges": 5,
+          "support": 0.03496503496503497
+        },
+        {
+          "file": "examples/chat/app.js",
+          "coChanges": 5,
+          "support": 0.03496503496503497
+        },
+        {
+          "file": "examples/route-separation/index.js",
+          "coChanges": 5,
+          "support": 0.03496503496503497
+        },
+        {
+          "file": "examples/upload/app.js",
+          "coChanges": 5,
+          "support": 0.03496503496503497
+        }
+      ]
+    },
+    {
+      "target": "lib/utils.js",
+      "commitsWithTarget": 86,
+      "affected": [
+        "lib/response.js"
+      ],
+      "totalCoChangingFiles": 265,
+      "topCoChanges": [
+        {
+          "file": "lib/response.js",
+          "coChanges": 37,
+          "support": 0.43023255813953487
+        },
+        {
+          "file": "package.json",
+          "coChanges": 29,
+          "support": 0.3372093023255814
+        },
+        {
+          "file": "History.md",
+          "coChanges": 27,
+          "support": 0.313953488372093
+        },
+        {
+          "file": "lib/application.js",
+          "coChanges": 27,
+          "support": 0.313953488372093
+        },
+        {
+          "file": "lib/request.js",
+          "coChanges": 21,
+          "support": 0.2441860465116279
+        },
+        {
+          "file": "test/utils.js",
+          "coChanges": 20,
+          "support": 0.23255813953488372
+        },
+        {
+          "file": "test/res.send.js",
+          "coChanges": 15,
+          "support": 0.1744186046511628
+        },
+        {
+          "file": "test/app.router.js",
+          "coChanges": 13,
+          "support": 0.1511627906976744
+        },
+        {
+          "file": "lib/view.js",
+          "coChanges": 12,
+          "support": 0.13953488372093023
+        },
+        {
+          "file": "lib/express.js",
+          "coChanges": 10,
+          "support": 0.11627906976744186
+        },
+        {
+          "file": "lib/router/index.js",
+          "coChanges": 10,
+          "support": 0.11627906976744186
+        },
+        {
+          "file": "lib/router/route.js",
+          "coChanges": 9,
+          "support": 0.10465116279069768
+        },
+        {
+          "file": "test/res.attachment.js",
+          "coChanges": 9,
+          "support": 0.10465116279069768
+        },
+        {
+          "file": "test/res.download.js",
+          "coChanges": 9,
+          "support": 0.10465116279069768
+        },
+        {
+          "file": ".travis.yml",
+          "coChanges": 8,
+          "support": 0.09302325581395349
+        },
+        {
+          "file": "appveyor.yml",
+          "coChanges": 8,
+          "support": 0.09302325581395349
+        },
+        {
+          "file": "Readme.md",
+          "coChanges": 8,
+          "support": 0.09302325581395349
+        },
+        {
+          "file": "test/app.param.js",
+          "coChanges": 8,
+          "support": 0.09302325581395349
+        },
+        {
+          "file": "test/res.sendFile.js",
+          "coChanges": 8,
+          "support": 0.09302325581395349
+        },
+        {
+          "file": "test/res.cookie.js",
+          "coChanges": 7,
+          "support": 0.08139534883720931
+        }
+      ]
+    }
+  ]
+}

@@ -123,6 +123,15 @@ export interface McpClientRuntime {
   merge(settings: Settings, projectRoot: string): Settings;
   strip(settings: Settings): Settings;
   validate(settings: Settings): string[];
+  // Whether `settings` currently carries THIS runtime's managed keryx entry —
+  // runtime-specific because each runtime keys its servers under a different
+  // top-level field (mcpServers vs mcp). Used by uninstallMcpClient to report
+  // an accurate `removed` outcome; never hardcode a single shape here.
+  hasManaged(settings: Settings): boolean;
+}
+
+function mcpHasManaged(settings: Settings): boolean {
+  return isManagedEntry(readServers(settings)[MCP_SERVER_NAME]);
 }
 
 function fileRuntime(id: string, relativePath: string): McpClientRuntime {
@@ -132,29 +141,117 @@ function fileRuntime(id: string, relativePath: string): McpClientRuntime {
     merge: mcpMerge,
     strip: mcpStrip,
     validate: mcpValidate(id),
+    hasManaged: mcpHasManaged,
   };
 }
 
 export const CURSOR_RUNTIME: McpClientRuntime = fileRuntime("cursor", ".cursor/mcp.json");
 export const CLAUDE_RUNTIME: McpClientRuntime = fileRuntime("claude", ".mcp.json");
+
+// opencode's client config is project-local `opencode.json`, but its MCP server
+// shape differs from the `mcpServers.<name>.{command,args}` convention every
+// other runtime here shares: a single top-level `mcp` object keyed by server
+// name, one combined `command` array (binary + args, not split), and a required
+// `type`/`enabled` pair. Confirmed against a real `opencode.json` on this
+// machine and a live `opencode run --auto` MCP round-trip before wiring this in
+// (docs/requirements/keryx-benchmark-suite's opencode investigation covers the
+// headless-hang finding for opencode's OWN tools — that is unrelated: an MCP
+// tool call is a different code path and was verified working headlessly).
+function readOpencodeMcp(settings: Settings): Settings {
+  return typeof settings.mcp === "object" && settings.mcp !== null && !Array.isArray(settings.mcp)
+    ? { ...(settings.mcp as Settings) }
+    : {};
+}
+
+function opencodeManagedEntry(projectRoot: string): Record<string, unknown> {
+  const args = projectRoot ? [...MCP_SERVER_ARGS, "--cwd", projectRoot] : [...MCP_SERVER_ARGS];
+  return {
+    type: "local",
+    command: [MCP_SERVER_COMMAND, ...args],
+    enabled: true,
+    [MCP_MANAGED_KEY]: MCP_MANAGED_SENTINEL,
+  };
+}
+
+function opencodeMerge(settings: Settings, projectRoot: string): Settings {
+  const servers = readOpencodeMcp(settings);
+  servers[MCP_SERVER_NAME] = opencodeManagedEntry(projectRoot);
+  settings.mcp = servers;
+  return settings;
+}
+
+function opencodeStrip(settings: Settings): Settings {
+  if (typeof settings.mcp !== "object" || settings.mcp === null || Array.isArray(settings.mcp)) {
+    return settings;
+  }
+  const servers = { ...(settings.mcp as Settings) };
+  if (isManagedEntry(servers[MCP_SERVER_NAME])) {
+    delete servers[MCP_SERVER_NAME];
+  }
+  if (Object.keys(servers).length > 0) settings.mcp = servers;
+  else delete settings.mcp;
+  return settings;
+}
+
+function opencodeValidate(settings: Settings): string[] {
+  const errors: string[] = [];
+  const servers = settings.mcp;
+  if (typeof servers !== "object" || servers === null || Array.isArray(servers)) {
+    errors.push("opencode: mcp is missing or not an object");
+    return errors;
+  }
+  const entry = (servers as Settings)[MCP_SERVER_NAME] as Record<string, unknown> | undefined;
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    errors.push(`opencode: missing mcp.${MCP_SERVER_NAME} entry`);
+    return errors;
+  }
+  if (!Array.isArray(entry.command) || entry.command[0] !== MCP_SERVER_COMMAND) {
+    errors.push(`opencode: mcp.${MCP_SERVER_NAME}.command[0] must be "${MCP_SERVER_COMMAND}"`);
+  }
+  if (entry.type !== "local") {
+    errors.push(`opencode: mcp.${MCP_SERVER_NAME}.type must be "local"`);
+  }
+  return errors;
+}
+
+function opencodeHasManaged(settings: Settings): boolean {
+  return isManagedEntry(readOpencodeMcp(settings)[MCP_SERVER_NAME]);
+}
+
+export const OPENCODE_RUNTIME: McpClientRuntime = {
+  id: "opencode",
+  settingsPath: (root) => path.join(root, "opencode.json"),
+  merge: opencodeMerge,
+  strip: opencodeStrip,
+  validate: opencodeValidate,
+  hasManaged: opencodeHasManaged,
+};
+
 export const GENERIC_RUNTIME: McpClientRuntime = {
   id: "generic",
   settingsPath: () => null,
   merge: mcpMerge,
   strip: mcpStrip,
   validate: mcpValidate("generic"),
+  hasManaged: mcpHasManaged,
 };
 
 export const MCP_CLIENT_RUNTIMES: McpClientRuntime[] = [
   CURSOR_RUNTIME,
   CLAUDE_RUNTIME,
+  OPENCODE_RUNTIME,
   GENERIC_RUNTIME,
 ];
 
-// `all` expands to the file-backed, project-scoped runtimes (cursor + claude).
-// `generic` is deliberately excluded — it writes no file, so bundling it into
-// `all` would be a no-op surprise.
-const ALL_RUNTIME_IDS: readonly string[] = ["cursor", "claude"];
+// `all` expands to the file-backed, project-scoped runtimes. `generic` is
+// deliberately excluded — it writes no file, so bundling it into `all` would be
+// a no-op surprise. `codex` is deliberately NOT a runtime here: its client
+// config is a single GLOBAL `~/.codex/config.toml` (not a project-local JSON
+// file), and codex already ships its own safe, native installer for it —
+// `codex mcp add keryx -- keryx mcp serve --cwd <projectRoot>` (verified live).
+// Building a parallel TOML writer here would duplicate that without adding
+// safety; `renderMcpManifest()` documents the real command instead.
+const ALL_RUNTIME_IDS: readonly string[] = ["cursor", "claude", "opencode"];
 
 export function mcpRuntimeIds(): string[] {
   return MCP_CLIENT_RUNTIMES.map((r) => r.id);
@@ -261,7 +358,7 @@ export function buildMcpModuleEntry(): Record<string, unknown> {
     expose: {
       tools: true,
       resources: true,
-      modules: ["gdgraph", "security", "flow", "memory", "health", "wiki", "standard"],
+      modules: ["gdgraph", "gdctx", "security", "flow", "memory", "health", "testing", "wiki", "standard", "sac"],
     },
   };
 }
@@ -290,6 +387,26 @@ protocol adapter — it defines no new module logic.
   requires \`http.enabled=true\` in this module's manifest entry).
 - \`keryx mcp serve --cwd <project-root>\` — expose a specific project,
   independent of the MCP client's launch directory.
+- \`keryx mcp install --runtime <cursor|claude|opencode|generic|all> [--dry-run]\` —
+  wire this project into an editor/agent: writes a project-local client
+  config (cursor → \`.cursor/mcp.json\`, claude → \`.mcp.json\`, opencode →
+  \`opencode.json\`) and sets \`modules.mcp.enabled=true\`. \`--dry-run\`
+  prints the change without writing anything. This is the command to run
+  when a user asks to "connect" or "enable" MCP for this project — it is
+  the full, real setup step; hand-editing a client config file directly is
+  unnecessary and skips setting \`modules.mcp.enabled\`. \`all\` expands to
+  cursor + claude + opencode.
+- \`keryx mcp uninstall --runtime <cursor|claude|opencode|generic|all>\` —
+  remove the managed client config again.
+- **codex CLI**: not a \`--runtime\` here — codex's client config is a single
+  GLOBAL \`~/.codex/config.toml\`, not a project-local file, and it already
+  ships its own safe, native installer for it. Run
+  \`codex mcp add keryx -- keryx mcp serve --cwd <project-root>\` once
+  (verified live: codex successfully discovers and calls this server's
+  tools headlessly with \`codex exec --approve-for-me\`); \`codex mcp remove
+  keryx\` to undo. \`modules.mcp.enabled=true\` still needs
+  \`keryx mcp install --runtime generic\` (or any other runtime) run once,
+  since codex's own installer has no notion of the keryx manifest.
 
 ## Notes
 
@@ -512,7 +629,7 @@ export async function uninstallMcpClient(
       continue;
     }
     const settings = await readSettings(file);
-    const hadManaged = isManagedEntry(readServers(settings)[MCP_SERVER_NAME]);
+    const hadManaged = runtime.hasManaged(settings);
     const stripped = runtime.strip(settings);
     await writeSettings(file, stripped);
     outcomes.push({ id: runtime.id, filePath: file, removed: hadManaged });

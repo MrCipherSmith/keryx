@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.0
+Version: 1.7.5
 
 ## Delivery status
 
@@ -70,6 +70,29 @@ receipts or derived context storage; missing mandatory context yields typed
 `context_overflow` with no successful manifest, while partial results name only
 omitted optional items.
 
+**2026-08-13 addendum — live agent shell adapter.** The CLI and MCP (`sac.overview`/
+`sac.read`) adapters this phase's exit already covered were both one-shot,
+out-of-process readers. A running `keryx shell` agent turn had no way to reach
+SAC at all — a real gap given SAC's whole point is giving an agent curated
+context. Two new read-only tools, `workspace_overview`/`workspace_read`
+(`src/harness/tool/builtin/workspace-context-tool.ts`, `risk: "read"`, same
+shape as `read_file`/`list_dir`), wrap `createLocalFwkReadService` and are now
+in both of `src/commands/shell.ts`'s tool arrays (TUI and readline surfaces).
+No session↔workspace linkage exists anywhere in keryx, so the agent must pass
+an explicit `workspaceId` on every call, same as the CLI/MCP adapters.
+Confirmed local-only: `keryx serve`'s HTTP handler never touches this tool
+array, so unlike the MCP `sac.*` tools (which explicitly refuse HTTP transport
+— the local auth server derives its actor from the OS user, with no verified
+per-request principal) this never needed that guard; it was already on the
+same local-process trust boundary `shell_exec` operates under. Verified with 6
+offline unit tests plus one live round-trip: a local model
+(`rapid-mlx serve qwen3.5-9b-4bit`, since DeepSeek/Cerebras credentials were
+both unusable at verification time) driven through the real `runAgentTurn`
+loop actually called `workspace_overview`, got back a real signed access
+receipt, and correctly reported the result. This closes the "read-path" gap
+named as explicitly out of scope in the 2026-08-13 addenda under Phase 3
+below.
+
 ## Phase 3 — Proposal and review lifecycle — Implemented
 
 - Implement proposal construction from explicit session/Flow wrap-up output.
@@ -82,6 +105,116 @@ omitted optional items.
   spoofing, cross-workspace access, revoked role and TOCTOU paths.
 
 **Exit:** AC-8 and AC-9 pass end-to-end with secret/PII/redaction fixtures.
+
+**2026-08-13 addendum — real memory write-path composition.** The phase's exit
+criteria were originally proven only against `createLocalProposalLifecycleService`,
+whose owner writers all ship `unavailable` by design (fail-closed until each owning
+subsystem composes a trusted implementation — SAC never edits Wiki, Memory or Skills
+files itself). `createHarnessProposalLifecycleService`
+(`src/sac/proposal-lifecycle.ts`) now composes a real session-based wrap-up resolver
+(`src/sac/session-wrap-up.ts`) and memory's first real `GuardedOwnerWriter`
+(`src/sac/memory-owner-writer.ts`), wired into `keryx workspace propose --session
+<id>` / `review --decision accepted`. Verified live end-to-end (real keryx shell
+session → hash-verified evidence export → accepted proposal → real file in
+`.metaproject/memory/`) and with the full `src/sac/` suite green (103/103, 14
+files). Wiki and skill owner writers remain `unavailable`/fail-closed — only memory
+has a real composition today. The FWK read-path integration (an agent reading
+workspace context live inside `keryx shell`) is a separate, larger piece of work and
+was explicitly not started in this slice.
+
+**2026-08-13 addendum 2 — real wiki write-path composition.** `wiki-update`
+proposals are now real too: `src/sac/wiki-owner-writer.ts`
+(`createRealWikiOwnerWriter`) lands an accepted proposal as a `Type: decision`
+page under `.metaproject/wiki/decisions/`, guarded by the same `guardOutput({
+target: "wiki" })` seam `keryx wiki collect` runs before publishing a generated
+page. The proposal-read + evidence-hash-verification logic shared by memory and
+wiki was pulled into `src/sac/proposal-evidence.ts`; `memory-owner-writer.ts` was
+refactored onto it with no behavioral change. Verified live end-to-end the same
+way as the memory path. **`skill` stays deliberately `unavailable`**: unlike
+memory and wiki, it has no `SecurityTarget` in `src/security/types.ts` and its
+write path (`createProjectSkill`, `src/gdskills/project-skills.ts`) runs no
+security scan at all today — composing a real skill owner writer without first
+giving it the same guard would be a real safety regression (skills are read as
+agent routing instructions every turn), not a shortcut worth taking silently.
+Full `src/sac/` suite green (115/115, 16 files) after this addendum.
+
+**2026-08-13 addendum 3 — skill got its real security guard, but not a real
+owner-writer yet.** `SecurityTarget` gained `"skill"` (`src/security/types.ts`,
+plus the two other closed allow-lists that had to move with it:
+`src/security/schemas.ts`'s finding-schema enum, `src/commands/security.ts`'s
+`--target` list) and `createProjectSkill` (`src/gdskills/project-skills.ts`)
+now runs `guardOutput({ target: "skill" })` on `SKILL.md`'s rendered content
+before any write, exactly like memory/wiki. Verified genuinely blocking (not
+just wired) with 3 new tests in the previously-nonexistent
+`src/gdskills/project-skills.test.ts`: default (disabled) unaffected, a
+planted secret actually refused with nothing written to disk in `enforced`
+mode, the same content allowed through in `advisory` mode. This closes the
+stated prerequisite from addendum 2 above. **A real skill owner-writer is
+still not composed** — a second, independent blocker surfaced while
+attempting it: `ProposalLifecycleService.targetWriteOrStale`
+(`src/sac/proposal-lifecycle.ts:127`) requires a receipt's `targetRef` to
+literally start with `./${owner}`. For memory/wiki this genuinely matches
+where those owners store files (`.metaproject/memory/`,
+`.metaproject/wiki/`); for `skill` it would not — real skills live under
+`.metaproject/project-skills/`, not `.metaproject/skill/`. Building a skill
+owner-writer today means either faking a `targetRef` that lies about the real
+file location, or fixing `targetWriteOrStale`'s literal-prefix assumption
+into a real per-owner prefix map first. Neither was done in this pass; the
+user explicitly chose to stop at the guard fix and leave the owner-writer for
+a separate future task.
+
+**2026-08-13 addendum 4 — skill's real owner-writer, and the targetRef fix it
+needed.** Fixed the blocker addendum 3 stopped at:
+`targetWriteOrStale`'s literal `./${owner}` assumption is now
+`ownerTargetPrefix(owner)`, a real per-owner map
+(`memory→./memory`, `wiki→./wiki`, `skill→./project-skills`). Two new
+regression tests in `proposal-lifecycle.test.ts` prove this enforces the
+correct prefix rather than merely "always pass": a skill receipt shaped
+`./skill/...` (what the OLD check would have accepted) still lands as
+`stale`; one shaped `./project-skills/...` (the real location) is accepted.
+`src/sac/skill-owner-writer.ts` (`createRealSkillOwnerWriter`) is skill's
+real `GuardedOwnerWriter` — all three owners (memory, wiki, skill) now have
+real compositions, none left `unavailable`. It reuses `createProjectSkill`
+itself rather than writing `.metaproject/project-skills/` a second way;
+every SAC-derived skill lands under a fixed `sac` module
+(`.metaproject/project-skills/sac/<proposalId>/SKILL.md`). `keryx workspace
+propose --kind <kind>` now accepts all six `ProposalKind` values (not just
+`memory-entry`/`wiki-update`), since every kind routes to a real owner via
+the existing `ownerFor`. Verified live end-to-end (real session →
+hash-verified evidence → accepted `decision` proposal → real
+`.metaproject/project-skills/sac/<id>/SKILL.md`, `metaproject.json` skill
+registry and `skills/catalog.md` correctly updated, then cleanly reverted
+after verification) plus 7 new unit tests including one proving the
+addendum-3 security guard genuinely blocks a skill write end-to-end (planted
+secret refused in `enforced` mode, nothing written). Full suite green:
+typecheck clean; `src/sac`+`src/gdskills`+`src/security`+
+`src/commands/security`+`src/commands/workspace` 309/309.
+
+**2026-08-13 addendum 5 — the MCP transport now actually exposes the real SAC
+write path.** Two independent, pre-existing bugs meant `sac.propose`/
+`sac.review` (`src/mcp/tools.ts`) never worked over MCP, unrelated to
+anything built earlier this session: (1) `sac.propose` had an empty input
+schema and unconditionally returned `trusted_wrap_up_required`; `sac.review`
+called the fail-closed `createLocalProposalLifecycleService` instead of the
+real `createHarnessProposalLifecycleService` the CLI/keryx-shell paths use —
+fixed by composing the real thing, adding the needed exports
+(`createHarnessProposalLifecycleService`, `sessionEvidenceRef`,
+`proposalNotePath`, `findSession`) to `src/sac/service.ts`, the one facade
+`src/mcp/` is allowed to import from (`boundary.test.ts`'s M-3 guard). (2)
+even with that fixed, `sac.*` tools were entirely invisible over MCP:
+`buildMcpModuleEntry()`'s default `expose.modules` allowlist
+(`src/mcp/client-config.ts`) never included `"sac"`. Verified with a real
+`@modelcontextprotocol/sdk` `Client`/`Server` round-trip (`InMemoryTransport`,
+real protocol serialization) against a real session and workspace:
+`tools/list` returns all 5 `sac.*` tools, `sac.propose`/`sac.review` land a
+real file over the wire. New `src/mcp/sac-tools.test.ts` (3 tests — zero
+prior coverage). Also connected this repo for real
+(`keryx mcp install --runtime claude`) — confirmed safe first, since
+`enableMcpModule` is a surgical patch of just `modules.mcp`, unlike
+`keryx modules enable <name>`'s full-reconciliation `initCommand()` path
+that regressed real content earlier in this session when run from this dev
+checkout. 246/246 across `src/mcp`+`src/sac`+`src/commands/security`+
+`src/gdskills`, typecheck clean.
 
 ## Phase 4 — Collaboration ergonomics
 

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   CLAUDE_RUNTIME,
   CURSOR_RUNTIME,
+  OPENCODE_RUNTIME,
   MCP_MANAGED_KEY,
   MCP_MANAGED_SENTINEL,
   MCP_SDK_HINT,
@@ -86,9 +87,9 @@ test("AC1: --runtime claude writes .mcp.json at the project root", async () => {
   expect(config.mcpServers?.[MCP_SERVER_NAME]?.command).toBe("keryx");
 });
 
-test("AC1: resolveMcpRuntimes('all') targets cursor + claude only", () => {
+test("AC1: resolveMcpRuntimes('all') targets cursor + claude + opencode", () => {
   const { runtimes, unknown } = resolveMcpRuntimes(["all"]);
-  expect(runtimes.map((r) => r.id)).toEqual(["cursor", "claude"]);
+  expect(runtimes.map((r) => r.id)).toEqual(["cursor", "claude", "opencode"]);
   expect(unknown).toEqual([]);
 });
 
@@ -249,6 +250,94 @@ test("AC4: --dry-run writes no client file and no manifest change", async () => 
   expect(manifest.modules.mcp).toBeUndefined();
 });
 
+// opencode's client config shape differs from every other runtime here:
+// `{ mcp: { <name>: { type, command: [...], enabled } } }`, not
+// `mcpServers.<name>.{command,args}` — confirmed live against a real
+// `opencode.json` on this machine and a real `opencode run --auto` MCP
+// tool-call round-trip before this runtime was wired in.
+type OpencodeConfig = {
+  mcp?: Record<string, { type?: string; command?: string[]; enabled?: boolean; [k: string]: unknown }>;
+  [key: string]: unknown;
+};
+
+async function readOpencodeConfig(file: string): Promise<OpencodeConfig> {
+  return JSON.parse(await readFile(file, "utf8")) as OpencodeConfig;
+}
+
+test("AC1: --runtime opencode writes opencode.json with the combined command array", async () => {
+  const report = await installMcpClient(root, ["opencode"]);
+  const file = OPENCODE_RUNTIME.settingsPath(root) as string;
+  expect(file).toBe(path.join(root, "opencode.json"));
+
+  const config = await readOpencodeConfig(file);
+  const entry = config.mcp?.[MCP_SERVER_NAME];
+  expect(entry?.type).toBe("local");
+  expect(entry?.command).toEqual(["keryx", "mcp", "serve", "--cwd", root]);
+  expect(entry?.enabled).toBe(true);
+  expect((entry as Record<string, unknown>)?.[MCP_MANAGED_KEY]).toBe(MCP_MANAGED_SENTINEL);
+  expect(report.outcomes[0]?.errors).toEqual([]);
+});
+
+test("AC2: opencode merge preserves pre-existing servers and unrelated top-level keys", async () => {
+  const file = OPENCODE_RUNTIME.settingsPath(root) as string;
+  await writeFile(
+    file,
+    `${JSON.stringify(
+      {
+        $schema: "https://opencode.ai/config.json",
+        mcp: { other: { type: "local", command: ["other-server"], enabled: true } },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  await installMcpClient(root, ["opencode"]);
+  const config = await readOpencodeConfig(file);
+
+  expect(config.mcp?.other?.command).toEqual(["other-server"]);
+  expect(config.$schema).toBe("https://opencode.ai/config.json");
+  expect(config.mcp?.[MCP_SERVER_NAME]?.command?.[0]).toBe("keryx");
+});
+
+test("AC2: opencode re-install is idempotent (byte-identical second run)", async () => {
+  const file = OPENCODE_RUNTIME.settingsPath(root) as string;
+  await installMcpClient(root, ["opencode"]);
+  const first = await readFile(file, "utf8");
+  await installMcpClient(root, ["opencode"]);
+  const second = await readFile(file, "utf8");
+  expect(second).toBe(first);
+});
+
+test("AC3: opencode uninstall removes ONLY the managed entry", async () => {
+  await installMcpClient(root, ["opencode"]);
+  const file = OPENCODE_RUNTIME.settingsPath(root) as string;
+  const config = await readOpencodeConfig(file);
+  config.mcp = { ...config.mcp, other: { type: "local", command: ["other-server"], enabled: true } };
+  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  const report = await uninstallMcpClient(root, ["opencode"]);
+  expect(report.outcomes[0]?.removed).toBe(true);
+
+  const after = await readOpencodeConfig(file);
+  expect(after.mcp?.[MCP_SERVER_NAME]).toBeUndefined();
+  expect(after.mcp?.other?.command).toEqual(["other-server"]);
+});
+
+test("AC3: opencode uninstall does not remove an unmanaged user keryx entry", async () => {
+  const file = OPENCODE_RUNTIME.settingsPath(root) as string;
+  await writeFile(
+    file,
+    `${JSON.stringify({ mcp: { [MCP_SERVER_NAME]: { type: "local", command: ["custom"], enabled: true } } }, null, 2)}\n`,
+    "utf8",
+  );
+  const report = await uninstallMcpClient(root, ["opencode"]);
+  expect(report.outcomes[0]?.removed).toBe(false);
+  const config = await readOpencodeConfig(file);
+  expect(config.mcp?.[MCP_SERVER_NAME]?.command).toEqual(["custom"]);
+});
+
 test("AC5: probeMcpSdk returns an actionable hint when the SDK is absent", async () => {
   const absent = await probeMcpSdk(() => Promise.reject(new Error("ERR_MODULE_NOT_FOUND")));
   expect(absent.available).toBe(false);
@@ -275,7 +364,7 @@ test("AC5/no-network: install opens no socket and makes no network call", async 
   } as typeof net.Socket.prototype.connect;
 
   try {
-    await installMcpClient(root, ["cursor", "claude", "generic"]);
+    await installMcpClient(root, ["cursor", "claude", "opencode", "generic"]);
     await uninstallMcpClient(root, ["all"]);
   } finally {
     globalThis.fetch = originalFetch;
