@@ -28,7 +28,9 @@ export const MUTATING_GOLD_ARTIFACT_PATH = "scripts/benchmark/mutating-tasks.ts"
 
 export type MutatingTask = {
   readonly name: string;
-  /** The prompt given to the agent. */
+  /** The task-specific ask, with no harness-specific tool instructions appended. */
+  readonly description: string;
+  /** The prompt given to keryx's own agent (description + shell_exec-specific instructions). */
   readonly prompt: string;
   /** Real, existing file the agent must edit (never create a new file). */
   readonly targetFile: string;
@@ -44,17 +46,43 @@ const SHELL_INSTRUCTIONS =
   "to use sed/patch. Run `bun test <seed test path>` yourself to check your work before " +
   "answering. When the test passes, reply with exactly: DONE";
 
+// For third-party CLI harnesses (codex/opencode/grok) driven through their own built-in
+// tools, not keryx's injectable InteractiveTool[] — they each have their own file-edit
+// tool, so the shell_exec-specific heredoc instruction above doesn't apply to them.
+/** Build a task's prompt for a third-party CLI harness (description + real seedTestFile path). */
+export function cliPrompt(task: MutatingTask): string {
+  return (
+    `${task.description} Use your own file-editing and shell tools directly. Run ` +
+    `\`bun test ${task.seedTestFile}\` yourself to check your work before answering. ` +
+    "When the test passes, reply with exactly: DONE"
+  );
+}
+
+const ATOMIC_JSON_WRITE_DESCRIPTION =
+  `In this repository, there is a FAILING test at src/lib/json.ablation-task.test.ts. ` +
+  `It imports \`writeJsonFileAtomic\` from ./json (src/lib/json.ts), which does not exist ` +
+  `yet. Read the failing test to see the exact required behavior, then add a new EXPORTED ` +
+  `function to the EXISTING src/lib/json.ts (do not create a new file) that makes it pass.`;
+
+const FLAG_PRESENT_DESCRIPTION =
+  `In this repository, there is a FAILING test at src/lib/args.ablation-task.test.ts. ` +
+  `It imports \`flagPresent\` from ./args (src/lib/args.ts), which does not exist yet. ` +
+  `Read the failing test to see the exact required behavior, then add a new EXPORTED ` +
+  `function to the EXISTING src/lib/args.ts (do not create a new file) that makes it pass.`;
+
+const READ_TEXT_FILE_OR_DESCRIPTION =
+  `In this repository, there is a FAILING test at src/lib/fs.ablation-task.test.ts. ` +
+  `It imports \`readTextFileOr\` from ./fs (src/lib/fs.ts), which does not exist yet. ` +
+  `Read the failing test to see the exact required behavior, then add a new EXPORTED ` +
+  `function to the EXISTING src/lib/fs.ts (do not create a new file) that makes it pass.`;
+
 export const MUTATING_TASKS: readonly MutatingTask[] = [
   {
     name: "atomic-json-write",
     targetFile: "src/lib/json.ts",
     seedTestFile: "src/lib/json.ablation-task.test.ts",
-    prompt:
-      `In this repository, there is a FAILING test at src/lib/json.ablation-task.test.ts. ` +
-      `It imports \`writeJsonFileAtomic\` from ./json (src/lib/json.ts), which does not exist ` +
-      `yet. Read the failing test to see the exact required behavior, then add a new EXPORTED ` +
-      `function to the EXISTING src/lib/json.ts (do not create a new file) that makes it pass. ` +
-      `${SHELL_INSTRUCTIONS}`,
+    description: ATOMIC_JSON_WRITE_DESCRIPTION,
+    prompt: `${ATOMIC_JSON_WRITE_DESCRIPTION} ${SHELL_INSTRUCTIONS}`,
     seedTestContent: `import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -92,12 +120,8 @@ describe("writeJsonFileAtomic (ablation task)", () => {
     name: "flag-present",
     targetFile: "src/lib/args.ts",
     seedTestFile: "src/lib/args.ablation-task.test.ts",
-    prompt:
-      `In this repository, there is a FAILING test at src/lib/args.ablation-task.test.ts. ` +
-      `It imports \`flagPresent\` from ./args (src/lib/args.ts), which does not exist yet. ` +
-      `Read the failing test to see the exact required behavior, then add a new EXPORTED ` +
-      `function to the EXISTING src/lib/args.ts (do not create a new file) that makes it ` +
-      `pass. ${SHELL_INSTRUCTIONS}`,
+    description: FLAG_PRESENT_DESCRIPTION,
+    prompt: `${FLAG_PRESENT_DESCRIPTION} ${SHELL_INSTRUCTIONS}`,
     seedTestContent: `import { describe, expect, test } from "bun:test";
 import { flagPresent } from "./args";
 
@@ -118,12 +142,8 @@ describe("flagPresent (ablation task)", () => {
     name: "read-text-file-or",
     targetFile: "src/lib/fs.ts",
     seedTestFile: "src/lib/fs.ablation-task.test.ts",
-    prompt:
-      `In this repository, there is a FAILING test at src/lib/fs.ablation-task.test.ts. ` +
-      `It imports \`readTextFileOr\` from ./fs (src/lib/fs.ts), which does not exist yet. ` +
-      `Read the failing test to see the exact required behavior, then add a new EXPORTED ` +
-      `function to the EXISTING src/lib/fs.ts (do not create a new file) that makes it ` +
-      `pass. ${SHELL_INSTRUCTIONS}`,
+    description: READ_TEXT_FILE_OR_DESCRIPTION,
+    prompt: `${READ_TEXT_FILE_OR_DESCRIPTION} ${SHELL_INSTRUCTIONS}`,
     seedTestContent: `import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

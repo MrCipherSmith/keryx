@@ -1,0 +1,156 @@
+{
+  "note": "RAW per-seed MUTATING-ablation results, Grok Build CLI leg: `grok -p ... --always-approve` (its own built-in agent loop, grok-4.6) makes a real code edit to make a seeded failing test pass, twice per seed — context-on (unmodified worktree) vs context-off (AGENTS.md/.metaproject stripped) — each seed in its own fresh git worktree. Success is decided by an independent `bun test` run after grok's turn, never by trusting its own claim. toolCalls is grok's own reported num_turns (closest available signal — grok's --output-format json has no per-tool-call event stream to count exactly). Captured live, no fabricated samples.",
+  "model": "grok-4.6",
+  "provider": "grok-cli",
+  "generated_by": "bun scripts/benchmark/run-ablation-mutating-grok.ts",
+  "captured": "2026-08-14",
+  "tasks": [
+    {
+      "taskId": "harness:ablation-mutating:atomic-json-write",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 254353,
+            "toolCalls": 7
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 303041,
+            "toolCalls": 8
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 299380,
+            "toolCalls": 8
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 196188,
+            "toolCalls": 7
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 206836,
+            "toolCalls": 7
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 218304,
+            "toolCalls": 7
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:flag-present",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 238647,
+            "toolCalls": 7
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 237083,
+            "toolCalls": 7
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 210814,
+            "toolCalls": 6
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 148271,
+            "toolCalls": 6
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 119191,
+            "toolCalls": 5
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 136456,
+            "toolCalls": 5
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:read-text-file-or",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 162101,
+            "toolCalls": 5
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 403770,
+            "toolCalls": 9
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 230489,
+            "toolCalls": 7
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 165387,
+            "toolCalls": 6
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 130141,
+            "toolCalls": 5
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 195675,
+            "toolCalls": 7
+          }
+        ]
+      }
+    }
+  ]
+}

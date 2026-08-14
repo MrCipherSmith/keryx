@@ -1,0 +1,156 @@
+{
+  "note": "RAW per-seed MUTATING-ablation results, opencode CLI leg: `opencode run --auto` (its own built-in agent loop, free OpenCode Zen deepseek-v4-flash-free provider — the SAME model family keryx's own harness legs use) makes a real code edit to make a seeded failing test pass, twice per seed — context-on (unmodified checkout) vs context-off (AGENTS.md/.metaproject stripped) — each seed in its own fresh, FULLY INDEPENDENT git clone (src/harness/child/git-clone-port.ts), not a linked git worktree — a real, reproduced finding found opencode resolves project root via a linked worktree's shared .git and writes into the MAIN checkout instead, confirmed and reverted; a real clone has no shared .git to walk past. Success is decided by an independent `bun test` run after opencode's turn, never by trusting its own claim. Captured live, no fabricated samples.",
+  "model": "opencode/deepseek-v4-flash-free",
+  "provider": "opencode-cli",
+  "generated_by": "bun scripts/benchmark/run-ablation-mutating-opencode.ts",
+  "captured": "2026-08-14",
+  "tasks": [
+    {
+      "taskId": "harness:ablation-mutating:atomic-json-write",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 173348,
+            "toolCalls": 7
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 143339,
+            "toolCalls": 6
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 202694,
+            "toolCalls": 7
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 147628,
+            "toolCalls": 6
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 147851,
+            "toolCalls": 6
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 148840,
+            "toolCalls": 6
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:flag-present",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 113897,
+            "toolCalls": 5
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 112715,
+            "toolCalls": 5
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 141054,
+            "toolCalls": 5
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 97340,
+            "toolCalls": 4
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 97510,
+            "toolCalls": 4
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 97350,
+            "toolCalls": 4
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:read-text-file-or",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 115990,
+            "toolCalls": 5
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 116783,
+            "toolCalls": 5
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 116016,
+            "toolCalls": 5
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 100453,
+            "toolCalls": 4
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 100505,
+            "toolCalls": 4
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 100443,
+            "toolCalls": 4
+          }
+        ]
+      }
+    }
+  ]
+}
