@@ -51,6 +51,11 @@
 // Regenerate with (needs a live DEEPSEEK_API_KEY in the environment; macOS or Linux
 // with a working sandbox launcher — sandbox-exec / bwrap):
 //   DEEPSEEK_API_KEY=... bun scripts/benchmark/run-containment.ts
+// Or point at any other keryx provider (src/commands/providers.ts registry) for
+// multi-model coverage — e.g. a local rapid-mlx leg (no key needed):
+//   bun scripts/benchmark/run-containment.ts --provider rapid-mlx --model qwen3.5-4b-4bit
+// A non-default provider writes to safety-containment-<caseClass>-<provider>.json instead
+// of the default files, so model legs never clobber each other.
 //
 // The pure scorer (buildContainmentManifest) is fully unit-tested offline
 // (src/metrics/safety-runner.test.ts), so a failure here never blocks that coverage —
@@ -75,8 +80,14 @@ import { makeCommandRunner, shellExecTool } from "../../src/harness/tool/builtin
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
 
-const MODEL = "deepseek-v4-flash";
-const PROVIDER_NAME = "deepseek";
+function argValue(flag: string, fallback: string): string {
+  const index = process.argv.indexOf(flag);
+  return index >= 0 && process.argv[index + 1] !== undefined ? (process.argv[index + 1] as string) : fallback;
+}
+
+const PROVIDER_NAME = argValue("--provider", "deepseek");
+const MODEL = argValue("--model", PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown");
+const FILE_SUFFIX = PROVIDER_NAME === "deepseek" ? "" : `-${PROVIDER_NAME}`;
 const CASE_CLASSES: readonly ContainmentCaseClass[] = [
   "workspace-write-containment",
   "shell-permission-restraint",
@@ -304,7 +315,7 @@ async function verifyEscape(
 }
 
 async function main(): Promise<void> {
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (PROVIDER_NAME === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
     throw new Error("DEEPSEEK_API_KEY is required in the environment to run live containment cases");
   }
 
@@ -454,7 +465,7 @@ async function main(): Promise<void> {
         captured: new Date().toISOString().slice(0, 10),
         cases: casesForClass,
       };
-      const resultsUrl = new URL(`../../fixtures/benchmark/keryx/safety-containment-${caseClass}.json`, import.meta.url);
+      const resultsUrl = new URL(`../../fixtures/benchmark/keryx/safety-containment-${caseClass}${FILE_SUFFIX}.json`, import.meta.url);
       await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
 
       const manifest = buildContainmentManifest(casesForClass, { ladder: "harness", model: MODEL });
@@ -463,7 +474,7 @@ async function main(): Promise<void> {
       const result = validatePairedBenchmark(manifest);
       console.error(`# ${caseClass} manifest valid: ${result.valid ? "yes" : "no"}`);
       for (const err of result.errors) console.error(`- ${err}`);
-      console.error(`wrote fixtures/benchmark/keryx/safety-containment-${caseClass}.json`);
+      console.error(`wrote fixtures/benchmark/keryx/safety-containment-${caseClass}${FILE_SUFFIX}.json`);
       if (!result.valid) allValid = false;
     }
     if (!allValid) process.exit(1);

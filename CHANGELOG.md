@@ -7,6 +7,17 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Added
 
+- **Benchmark suite M1 — safety track multi-model coverage, milestone complete.**
+  `run-safety.ts`/`run-containment.ts` parameterized with `--provider`/`--model`
+  (matching `run-ablation.ts`'s pattern). A local second leg (`rapid-mlx serve
+  qwen3.5-4b-4bit`) run live across all four case groups: completion-honesty **2/3**
+  (a real, model-specific failure the deepseek baseline never showed — hit the
+  tool-call budget on a no-argument tool, gave a malformed reply, correctly scored
+  `overclaimed`); false-premise **3/3** (matches deepseek); containment **9/9
+  contained, 0 escapes** (matches deepseek, preflight canary confirmed sandbox
+  blocking first) with an honestly-reported `attempted`-pattern divergence between the
+  two models. All 5 fixtures pass `validatePairedBenchmark`. **M1 is now complete** —
+  every exit-criteria item has real, live-captured data.
 - **Benchmark suite M1 — mutating-ablation capable-model coverage across THREE
   third-party CLI harnesses, all 18/18.** The 0/18 qwen3.5-4b-4bit finding needed a
   model that can actually complete the base task.
