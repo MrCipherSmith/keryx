@@ -3,9 +3,9 @@
   "id": "153",
   "slug": "prove-wiki-graph-sac-complementary-stack",
   "title": "Prove wiki+graph+SAC complementary stack with reproducible runbook",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-14T20:17:17.724Z",
-  "updatedAt": "2026-08-14T20:30:30.707Z",
+  "updatedAt": "2026-08-14T20:39:50.056Z",
   "source": {
     "type": "description",
     "ref": null
@@ -13,7 +13,7 @@
   "acChecksum": "sha256:a9aa57113f722fafde153c3d59fe70a7c0cf013405e92d6ca6f33015c3fc8edd",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/287"
   },
   "tasks": [
     {
@@ -65,7 +65,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +73,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -179,6 +180,16 @@
       "at": "2026-08-14T20:30:30.707Z",
       "event": "task-done",
       "detail": "T7: Run fallback + e2e scenario and record expected/actual"
+    },
+    {
+      "at": "2026-08-14T20:39:47.369Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-14T20:39:50.056Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/287"
     }
   ]
 }

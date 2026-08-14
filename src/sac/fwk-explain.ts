@@ -1,6 +1,7 @@
 import type { FwkReadResult } from "./fwk-service";
+import type { ContextOverflow } from "../ctx/assembly";
 
-function isOverflow(result: FwkReadResult): result is { code: string } {
+function isOverflow(result: FwkReadResult): result is ContextOverflow {
   return "code" in result;
 }
 
