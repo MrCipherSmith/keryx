@@ -56,7 +56,7 @@ export async function mcpCommand(
   process.exitCode = 1;
 }
 
-const RUNTIME_USAGE = `<cursor|claude|generic|all>`;
+const RUNTIME_USAGE = `<cursor|claude|opencode|generic|all>`;
 
 function parseRequestedRuntimes(args: string[], fallback: string): string[] {
   const runtimeArg = optionValue(args, "--runtime") ?? fallback;
@@ -66,7 +66,7 @@ function parseRequestedRuntimes(args: string[], fallback: string): string[] {
     .filter(Boolean);
 }
 
-// `mcp install [--runtime <cursor|claude|generic|all>] [--dry-run]`. Default
+// `mcp install [--runtime <cursor|claude|opencode|generic|all>] [--dry-run]`. Default
 // runtime is `all` (cursor + claude), mirroring `security hooks`. `--dry-run`
 // prints the planned change and writes NOTHING.
 async function handleInstall(cwd: string, args: string[]): Promise<void> {
@@ -119,7 +119,7 @@ async function handleInstall(cwd: string, args: string[]): Promise<void> {
   }
 }
 
-// `mcp uninstall [--runtime <cursor|claude|generic|all>]`. Removes ONLY the
+// `mcp uninstall [--runtime <cursor|claude|opencode|generic|all>]`. Removes ONLY the
 // managed keryx entry, leaving other servers + user content intact.
 async function handleUninstall(cwd: string, args: string[]): Promise<void> {
   const requested = parseRequestedRuntimes(args, "all");
@@ -158,13 +158,13 @@ export function printMcpHelp(): void {
     { flag: "--cwd", desc: "Project root whose .metaproject workspace should be exposed. Defaults to the process cwd." },
     {
       flag: "--runtime",
-      desc: `Target client(s) for install/uninstall: ${mcpRuntimeIds().join(", ")}, or all (=cursor,claude). Comma-separated. Default: all.`,
+      desc: `Target client(s) for install/uninstall: ${mcpRuntimeIds().join(", ")}, or all (=cursor,claude,opencode). Comma-separated. Default: all.`,
     },
     { flag: "--dry-run", desc: "install only: print the planned change and write nothing." },
   ]);
   heading("Notes");
   console.log(
-    `  ${style.dim("`install` writes a project-local MCP client config (cursor → .cursor/mcp.json, claude → .mcp.json), sets modules.mcp.enabled=true, and prints a snippet for `generic`.")}`,
+    `  ${style.dim("`install` writes a project-local MCP client config (cursor → .cursor/mcp.json, claude → .mcp.json, opencode → opencode.json), sets modules.mcp.enabled=true, and prints a snippet for `generic`.")}`,
   );
   console.log(
     `  ${style.dim("Requires the optional @modelcontextprotocol/sdk to serve. Disabled by default (modules.mcp.enabled=false). `install` only probes the SDK — it never installs it or opens a network connection.")}`,

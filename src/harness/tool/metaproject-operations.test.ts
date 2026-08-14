@@ -352,7 +352,7 @@ test("wiki_backlinks formats the structured port result when the method is prese
 
 test("wiki_backlinks is a wiki-module read op present in all three projections (agent/harness/MCP)", () => {
   const descriptor = METAPROJECT_OPERATIONS.find((o) => o.name === "wiki_backlinks");
-  expect(descriptor?.module).toBe("gdwiki");
+  expect(descriptor?.module).toBe("wiki");
   expect(descriptor?.risk).toBe("read");
 
   const { port } = recordingPort();

@@ -232,10 +232,12 @@
         "resources": true,
         "modules": [
           "gdgraph",
+          "gdctx",
           "security",
           "flow",
           "memory",
           "health",
+          "testing",
           "wiki",
           "standard",
           "sac"

@@ -14,7 +14,7 @@
     },
     "module": {
       "type": "string",
-      "enum": ["gdgraph", "gdctx", "gdwiki", "memory", "health", "testing", "flow"],
+      "enum": ["gdgraph", "gdctx", "wiki", "memory", "health", "testing", "flow"],
       "description": "Owning metaproject module (facade backing the operation)."
     },
     "description": {

@@ -1,0 +1,16 @@
+{
+  "mcp": {
+    "keryx": {
+      "type": "local",
+      "command": [
+        "keryx",
+        "mcp",
+        "serve",
+        "--cwd",
+        "/Users/tsaitler.aleksandr/goodea/keryx"
+      ],
+      "enabled": true,
+      "_keryxManaged": "mcp-client-config"
+    }
+  }
+}

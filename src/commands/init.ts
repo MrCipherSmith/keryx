@@ -134,8 +134,8 @@ import { renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 
 // Runtime a user can opt into wiring during interactive init; `skip` writes no
 // client config (the manifest still enables the module).
-type McpInitRuntime = "cursor" | "claude" | "generic" | "skip";
-const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "generic", "skip"];
+type McpInitRuntime = "cursor" | "claude" | "opencode" | "generic" | "skip";
+const MCP_INIT_RUNTIMES: readonly McpInitRuntime[] = ["cursor", "claude", "opencode", "generic", "skip"];
 
 type InitOptions = {
   help: boolean;
@@ -361,7 +361,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableMcp = true;
   } else if (!options.yes) {
     enableMcp = await confirm(
-      "Enable the MCP server (expose this project to Cursor / Claude Code)?",
+      "Enable the MCP server (expose this project to Cursor / Claude Code / opencode)?",
       false,
     );
     if (enableMcp) {
