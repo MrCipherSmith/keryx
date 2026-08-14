@@ -1,0 +1,75 @@
+{
+  "note": "SYSTEM output: the ranked wiki page `path`s a LOCAL, LIVE Xenova/all-MiniLM-L6-v2 embedding search returns (cosine similarity, best match first) per gold query in wiki-gold.json, over the SAME .metaproject/wiki/ corpus keryx's own wikiCandidates() builds (title + summary text per page). No fabricated ranking; not wikiAsk's own lexical retrieval — this is the independent RAG-adapter comparison leg (M3). Groundedness is intentionally not scored here (see module header comment); only nDCG/recall@k are reported, never averaged with the gdwiki lexical oracle's numbers.",
+  "repo": "keryx (dogfood, this repository)",
+  "corpus": ".metaproject/wiki/**/*.md",
+  "model": "embedding-baseline (Xenova/all-MiniLM-L6-v2, local ONNX, mean-pooled + normalized)",
+  "generated_by": "bun scripts/benchmark/run-rag-embedding-baseline.ts",
+  "captured": "2026-08-14",
+  "targets": [
+    {
+      "target": "OS sandbox kernel-enforced containment refuses a run when it cannot contain the process",
+      "affected": [
+        "wiki/architecture/os-sandbox.md",
+        "wiki/components/src-security-detect-pii.md",
+        "wiki/components/src-security-detect.md",
+        "wiki/components/src-flow.md",
+        "wiki/components/src-harness-tool-builtin.md",
+        "wiki/components/src-security-detect-injection.md",
+        "wiki/components/src-mcp-transport.md",
+        "wiki/components/src-security.md"
+      ]
+    },
+    {
+      "target": "macOS Seatbelt and Linux bubblewrap constrain which paths secrets and network a running process can reach",
+      "affected": [
+        "wiki/architecture/os-sandbox.md",
+        "wiki/components/src-security-detect-pii.md",
+        "wiki/components/src-security-detect.md",
+        "wiki/components/src-harness-tool-builtin.md",
+        "wiki/architecture/project-map.md",
+        "wiki/components/src-mcp-transport.md",
+        "wiki/components/src-harness-child.md",
+        "wiki/components/src-harness-provider.md"
+      ]
+    },
+    {
+      "target": "deterministic architecture map of the repository as a graph of code files and assets with import relationships between top-level modules",
+      "affected": [
+        "wiki/architecture/project-map.md",
+        "wiki/components/src-metrics.md",
+        "wiki/components/src-harness-child.md",
+        "wiki/components/scripts-benchmark.md",
+        "wiki/components/src-agents.md",
+        "wiki/components/src-memory.md",
+        "wiki/components/src-security-detect.md",
+        "wiki/architecture/testing-map.md"
+      ]
+    },
+    {
+      "target": "high-level map of the project's testing infrastructure framework test scripts and configuration files",
+      "affected": [
+        "wiki/architecture/testing-map.md",
+        "wiki/architecture/project-map.md",
+        "wiki/components/src-testing.md",
+        "wiki/components/scripts-benchmark.md",
+        "wiki/components/fixtures-change-impacted-test-src.md",
+        "wiki/components/src-metrics.md",
+        "wiki/components/src-health-sources.md",
+        "wiki/components/src-security-detect.md"
+      ]
+    },
+    {
+      "target": "architecture-level quality map generated from a Code Health scan snapshot of codebase health risk and findings",
+      "affected": [
+        "wiki/components/src-health-metrics.md",
+        "wiki/architecture/quality-map.md",
+        "wiki/architecture/project-map.md",
+        "wiki/architecture/testing-map.md",
+        "wiki/components/src-health.md",
+        "wiki/components/src-health-sources.md",
+        "wiki/components/src-testing.md",
+        "wiki/components/src-harness.md"
+      ]
+    }
+  ]
+}

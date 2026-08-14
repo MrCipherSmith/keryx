@@ -7,6 +7,37 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Added
 
+- **Benchmark suite M3 — RAG-adapter baseline, real live results.**
+  `scripts/benchmark/run-rag-embedding-baseline.ts` (new): a real local
+  semantic-embedding search (`Xenova/all-MiniLM-L6-v2` via `@xenova/transformers`,
+  a `devDependency` scoped only to this benchmark tooling — never the shipped
+  CLI's runtime or `src/memory`'s core capability seam) over the same
+  `.metaproject/wiki/` corpus and the same 5 gold queries as the gdwiki metastore
+  oracle, reported side by side and never averaged
+  (`wiki-ask-results-embedding-baseline.json` vs `wiki-ask-results.json`).
+  rapid-mlx (the originally-preferred local server) was tried first and confirmed
+  unable to serve this model (`ModuleNotFoundError: No module named
+  'mlx_lm.models.bert'` — rapid-mlx only supports causal-LM architectures);
+  keryx's own dormant `@xenova/transformers` embedding path was investigated next
+  but is unresolvable as-is in this repo (no `memory-embed-default` entry in
+  `.metaproject/assets.lock.json`; wiring one up needs a pinned asset + an ADR,
+  out of scope here). Getting the dependency working itself needed a real fix:
+  `@xenova/transformers`'s `sharp@^0.32.0` dependency failed to load under bun
+  (`Cannot find module '.../build/Release/sharp-darwin-arm64v8.node'`) — root
+  cause was running the smoke-test script from outside the repo tree, where bun
+  resolves packages from its global cache directly instead of the project's own
+  `node_modules` (where `sharp`'s postinstall had already built the binary); an
+  in-repo script resolved correctly once `sharp`'s install script was trusted
+  (`bun pm trust sharp`). Real live results (k=5, all 5 gold queries): nDCG@5 and
+  recall@5 match the lexical gdwiki oracle exactly on 4/5 queries (1.000/1.0);
+  both systems land the `quality-map.md` query at rank 2 for an identical
+  nDCG@5=0.631, for different reasons (lexical's distractor is `project-map.md`
+  via "map" token overlap, the embedding's is `src-health-metrics.md` via
+  semantic proximity to "Code Health scan") — corroborating that page's known
+  gap (no `## Summary` block) is a corpus-content weakness, not a single
+  retrieval method's artifact. Groundedness intentionally not scored for this
+  leg (the existing hand-labeled panel describes wikiAsk's own citation order,
+  not this system's).
 - **Benchmark suite M1 — safety track multi-model coverage, milestone complete.**
   `run-safety.ts`/`run-containment.ts` parameterized with `--provider`/`--model`
   (matching `run-ablation.ts`'s pattern). A local second leg (`rapid-mlx serve
