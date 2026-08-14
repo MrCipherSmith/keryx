@@ -649,6 +649,63 @@ would change.
 - Model matrix expanded without breaking the decision rule.
 - CI replay fixtures catch an injected regression.
 
+**RAG-adapter baseline — real, live results (2026-08-14).**
+`scripts/benchmark/run-rag-embedding-baseline.ts` (new) is the adapter: a real,
+local semantic-embedding search (`Xenova/all-MiniLM-L6-v2`, ONNX, run via
+`@xenova/transformers` — a `devDependency` scoped only to this benchmark
+tooling, never part of the shipped CLI's runtime or `src/memory`'s core
+capability seam) over the SAME `.metaproject/wiki/**/*.md` corpus and the SAME
+5 curated gold queries as the gdwiki metastore oracle
+(`fixtures/benchmark/keryx/wiki-gold.json`), reported side by side and NEVER
+averaged with the lexical oracle's numbers
+(`fixtures/benchmark/keryx/wiki-ask-results-embedding-baseline.json` vs
+`wiki-ask-results.json`).
+
+rapid-mlx (the originally-preferred local model server) was tried first and
+confirmed unable to serve this model: `ModuleNotFoundError: No module named
+'mlx_lm.models.bert'` — rapid-mlx/mlx_lm only supports causal-LM chat
+architectures, not BERT-family encoders. keryx's own dormant
+`@xenova/transformers` embedding path (`src/memory/embedding/adapter.ts`) was
+investigated next but is unresolvable in this environment as-is: this repo's
+`.metaproject/assets.lock.json` has no `memory-embed-default` entry, and
+wiring one up for real would need a pinned asset URL/sha256 plus an ADR for
+the optional dependency it requires — out of scope for a benchmark script. The
+adapter therefore runs its own independent, self-contained embedding pipeline.
+
+Real, live numbers (all 5 gold queries, k=5):
+
+| query (gold page) | lexical (gdwiki) nDCG@5 | embedding baseline nDCG@5 | recall@5 (both) |
+|---|---|---|---|
+| os-sandbox (containment) | 1.000 | 1.000 | 1.0 / 1.0 |
+| os-sandbox (Seatbelt/bubblewrap) | 1.000 | 1.000 | 1.0 / 1.0 |
+| project-map | 1.000 | 1.000 | 1.0 / 1.0 |
+| testing-map | 1.000 | 1.000 | 1.0 / 1.0 |
+| quality-map | 0.631 | 0.631 | 1.0 / 1.0 |
+
+An honest, non-obvious finding: BOTH retrieval systems land `quality-map.md`
+at rank 2 (never rank 1) for the identical nDCG@5=0.631, for genuinely
+different reasons — lexical's rank-1 lead is `project-map.md` (token overlap
+on "map"), the embedding baseline's rank-1 lead is `src-health-metrics.md` (a
+component page, semantically close to "Code Health scan"). This corroborates
+`wiki-gold.json`'s own note that `quality-map.md` has no `## Summary` block
+(only its title is scored), so the weakness is a corpus-content gap, not an
+artifact of one retrieval method — a real, useful, cross-checked signal
+neither oracle alone would have established with the same confidence.
+
+Groundedness is intentionally NOT scored for the embedding-baseline leg:
+`wiki-groundedness.json`'s hand labels describe wikiAsk's own specific
+citation order per query (one justification literally says "the answer LEADS
+with project-map.md"), so reusing those scores for a different system's
+ranking would misattribute another system's judgment. Only nDCG/recall@k are
+reported for this leg (`PairedBenchmarkRunV2.judge` is optional and left
+unset).
+
+Candidate-pool caveat, disclosed not hidden: the baseline searches
+`.metaproject/wiki/**/*.md` only, while `wikiAsk` also considers current
+memory entries. Regenerate with `bun scripts/benchmark/run-rag-embedding-baseline.ts`.
+
+**Remaining in M3:** model matrix expansion; optional CI trace-replay fixtures.
+
 ## Cross-cutting, every milestone
 
 - Every run emits a reproducible evidence bundle (inputs, target, model, seed, cache
