@@ -1,0 +1,249 @@
+{
+  "ladder": "comparative",
+  "referenceModel": "deepseek-v4-flash",
+  "targets": [
+    {
+      "target": "keryx",
+      "adapter": "native-reviewed",
+      "fairness": "met",
+      "model": "deepseek-v4-flash"
+    },
+    {
+      "target": "codex",
+      "model": "gpt-5.6-sol",
+      "adapter": "native-reviewed",
+      "fairness": "not-met",
+      "fairnessNote": "model not held constant: codex resolves its own default (gpt-5.6-sol) under the active ChatGPT account, with no known way to pin it to keryx's own roster (deepseek-v4-flash) — a documented spec §1.3 deviation, see plan.md M2 harness-selection investigation"
+    }
+  ],
+  "cells": [
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "cell": "keryx-on",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 3,
+        "n": 3,
+        "rate": 1,
+        "ci95": {
+          "lower": 0.43850296824495455,
+          "upper": 1
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 9,
+      "medianTokens": 70532,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "cell": "keryx-off",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 0,
+        "n": 3,
+        "rate": 0,
+        "ci95": {
+          "lower": 0,
+          "upper": 0.5614970317550455
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 16,
+      "medianTokens": 17313,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "cell": "raw",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 0,
+        "n": 3,
+        "rate": 0,
+        "ci95": {
+          "lower": 0,
+          "upper": 0.5614970317550455
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 0,
+      "medianTokens": null,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "cell": "harness",
+      "target": "codex",
+      "model": "gpt-5.6-sol",
+      "successRate": {
+        "successes": 3,
+        "n": 3,
+        "rate": 1,
+        "ci95": {
+          "lower": 0.43850296824495455,
+          "upper": 1
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 6,
+      "medianTokens": 244187,
+      "publishable": false
+    },
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "cell": "keryx-on",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 3,
+        "n": 3,
+        "rate": 1,
+        "ci95": {
+          "lower": 0.43850296824495455,
+          "upper": 1
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 3,
+      "medianTokens": 10579,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "cell": "keryx-off",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 0,
+        "n": 3,
+        "rate": 0,
+        "ci95": {
+          "lower": 0,
+          "upper": 0.5614970317550455
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 14,
+      "medianTokens": 15050,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "cell": "raw",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 0,
+        "n": 3,
+        "rate": 0,
+        "ci95": {
+          "lower": 0,
+          "upper": 0.5614970317550455
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 0,
+      "medianTokens": null,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "cell": "harness",
+      "target": "codex",
+      "model": "gpt-5.6-sol",
+      "successRate": {
+        "successes": 3,
+        "n": 3,
+        "rate": 1,
+        "ci95": {
+          "lower": 0.43850296824495455,
+          "upper": 1
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 9,
+      "medianTokens": 241668,
+      "publishable": false
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "cell": "keryx-on",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 3,
+        "n": 3,
+        "rate": 1,
+        "ci95": {
+          "lower": 0.43850296824495455,
+          "upper": 1
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 3,
+      "medianTokens": 8585,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "cell": "keryx-off",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 0,
+        "n": 3,
+        "rate": 0,
+        "ci95": {
+          "lower": 0,
+          "upper": 0.5614970317550455
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 23,
+      "medianTokens": 24692,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "cell": "raw",
+      "target": "keryx",
+      "model": "deepseek-v4-flash",
+      "successRate": {
+        "successes": 0,
+        "n": 3,
+        "rate": 0,
+        "ci95": {
+          "lower": 0,
+          "upper": 0.5614970317550455
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 0,
+      "medianTokens": null,
+      "publishable": true
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "cell": "harness",
+      "target": "codex",
+      "model": "gpt-5.6-sol",
+      "successRate": {
+        "successes": 3,
+        "n": 3,
+        "rate": 1,
+        "ci95": {
+          "lower": 0.43850296824495455,
+          "upper": 1
+        },
+        "reliability": "exact"
+      },
+      "medianToolCalls": 9,
+      "medianTokens": 241854,
+      "publishable": false
+    }
+  ]
+}

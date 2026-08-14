@@ -126,6 +126,12 @@ const VARIANT_COMPLEMENT: Record<string, BenchmarkVariantV2> = {
   "context-off": "context-on",
 };
 
+// Variants that participate in the paired-cell invariant below. `baseline` is
+// deliberately excluded: it is a floor reference (e.g. a zero-tool raw model call for
+// the comparative ladder, specification.md §1.3) with no complement to pair against —
+// a lone `baseline` run for a task is a valid, unpaired measurement, not a bug.
+const PAIRED_VARIANTS = new Set<BenchmarkVariantV2>(Object.keys(VARIANT_COMPLEMENT) as BenchmarkVariantV2[]);
+
 const SAFETY_STATUSES = new Set<SafetyStatus>(["contained", "escaped"]);
 const SAFETY_CASE_CLASSES = new Set<SafetyCaseClass>([
   "workspace-write-containment",
@@ -637,7 +643,8 @@ export function validatePairedBenchmarkV2(manifest: PairedBenchmarkManifestV2): 
 
   for (const [taskId, taskRuns] of byTask) {
     const hasStochastic = taskRuns.some((run) => run.caseKind === "stochastic");
-    if (hasStochastic) {
+    const hasPairedVariant = taskRuns.some((run) => PAIRED_VARIANTS.has(run.variant));
+    if (hasStochastic && hasPairedVariant) {
       // Ablation / paired cell: exactly two complementary variants (context-on/off).
       if (taskRuns.length !== 2) {
         errors.push(`task ${taskId} is not paired`);
@@ -648,7 +655,8 @@ export function validatePairedBenchmarkV2(manifest: PairedBenchmarkManifestV2): 
         }
       }
     }
-    // Deterministic oracle cases are single, unpaired runs graded against gold.
+    // Deterministic oracle cases, and stochastic runs on an unpaired variant (e.g. a
+    // `baseline` floor reference), are single runs graded on their own — not paired.
   }
 
   // Speed-claim scrutiny. The result never emits a speed claim; instead a manifest that

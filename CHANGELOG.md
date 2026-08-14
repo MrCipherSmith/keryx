@@ -91,6 +91,86 @@ All notable changes to `keryx` are documented here. The format follows
   slice's first live attempt, forcing a switch to the smaller model mid-session. Full
   harness + tasks + verification is real and reusable; the milestone still needs a model
   actually capable of the base task before the context-on/off comparison is measurable.
+- **Benchmark suite M2 — harness-selection investigation, opencode headless dead-end.**
+  Spec §1.3's comparative ladder requires the model held constant across targets.
+  `opencode`'s free `deepseek-v4-flash-free` provider would have satisfied this
+  literally (same model family as keryx's own harness legs), and its interactive TUI
+  confirmed the model/provider works fine live — but both `opencode run --auto` and a
+  `opencode serve` + `run --attach --auto` variant hang indefinitely on any task
+  requiring a tool call, reproduced twice, independent of `.mcp.json` auto-discovery.
+  The running server's own `/session` API surfaced a plausible cause: a
+  `question`/`plan_enter`/`plan_exit` permission set to `deny` that `--auto` doesn't
+  cover. `codex` was picked as M2's harness target instead, with the model-mismatch
+  recorded as a disclosed spec deviation rather than papered over — see
+  `docs/requirements/keryx-benchmark-suite/plan.md`'s M2 section.
+- **Benchmark suite M2 — comparative report + fairness review (AC-6).** New
+  `src/metrics/comparative.ts`: `buildComparativeReport`/`validateComparativeReport`
+  combine keryx's own harness legs, a new zero-tool `raw` floor leg, and a
+  third-party harness leg into `{keryx-on, keryx-off, raw, <harness>}` cells per
+  task, with a per-target adapter/fairness status and a `publishable` flag on
+  every cell that AC-6 requires be false whenever fairness isn't `met` — computed,
+  never hand-set, so a caller can't silently mark a caveated result publishable.
+  Legs stay independently-valid `paired-3-5-v2` manifests, never merged into one
+  (the paired-cell invariant only fits exactly two complementary variants; a
+  comparative row needs up to four) — this module only re-presents their `runs`
+  side by side. `validatePairedBenchmarkV2`'s pairing invariant now exempts the
+  `baseline` variant (a floor reference has no complement to pair against),
+  existing pairing behavior unchanged (regression-tested). New
+  `scripts/benchmark/run-ablation-raw.ts` produces the live `raw` leg —
+  deepseek-v4-flash, same tasks, same `runAgentTurn` driver, EMPTY tool array:
+  **0/9**, honest (the model cannot know this repo's exact symbols by guessing).
+  New `scripts/benchmark/build-comparative-report.ts` synthesizes the three
+  already-live fixtures into `fixtures/benchmark/keryx/comparative-report.json`:
+  keryx-on 3/3, keryx-off 0/3, raw 0/3 (matching M1's already-reported numbers),
+  codex 3/3 but `publishable: false` on every cell (fairness `not-met`, model not
+  held constant) — AC-6 passes as a mechanism, but M2's `fairness: met` exit bar
+  is honestly not reached with codex; the milestone stays open pending a
+  same-model headless-capable harness.
+- **Fixed: two real MCP exposure gaps found while auditing keryx-shell/MCP capability
+  parity.** (1) `buildMcpModuleEntry()`'s default `expose.modules`
+  (`src/mcp/client-config.ts`) was missing `"gdctx"` and `"testing"` — `search_code` and
+  `test_related` were registered in `buildToolRegistry` but invisible via `tools/list`
+  to every external MCP client (Claude Code, Cursor) unless someone hand-edited the
+  manifest. (2) The unified `read_wiki`/`wiki_ask`/`wiki_backlinks` operations
+  (`src/harness/tool/metaproject-operations.ts`) tagged themselves `module: "gdwiki"` —
+  the real internal facade name — instead of the MCP discovery layer's established alias
+  `"wiki"` (`src/mcp/discovery.ts`'s `MODULE_MANIFEST_KEY`, mirroring `flow`→`tasks`),
+  so `exposedModules.includes(module)` silently failed even with `"wiki"` correctly
+  present in `expose.modules` — these three tools were invisible to every MCP client
+  since they were unified into `metaproject-operations.ts`, leaving only the older,
+  duplicate hand-written `wiki.ask`/`wiki.query` MCP tools reachable. Fixed the tag (and
+  its schema enum, `metaproject-operation.schema.json`) rather than the discovery layer,
+  since the alias convention is already established and correct everywhere else. Live
+  end-to-end verified with a real spawned `keryx mcp serve` + `@modelcontextprotocol/sdk`
+  `Client`/`StdioClientTransport` round-trip against this repo: tool count visible to an
+  external client went from 27 to 30 (`search_code`, `test_related`, `read_wiki`,
+  `wiki_ask`, `wiki_backlinks` all now present and callable). Both fixes also applied to
+  this repo's own live `.metaproject/metaproject.json` (same surgical, targeted-edit
+  pattern as the earlier `sac` expose fix).
+- **MCP: real `codex`/`opencode` client verification, `opencode` install support.**
+  Live-tested whether keryx's MCP server (fronting the same gdgraph/wiki/memory/health
+  intelligence `keryx shell` uses internally) actually works with third-party CLI
+  harnesses, not just Claude Code/Cursor. `codex`: registered via its own native
+  `codex mcp add`, called `graph_affected` through `codex exec --approve-for-me`
+  headlessly, got a real correct result — `codex exec` alone (no approval flag) silently
+  cancels MCP tool calls, documented in `renderMcpManifest()`. `opencode`: called the
+  same tool through `opencode run --auto` headlessly and it worked — genuinely
+  surprising given `opencode`'s own built-in tools hang indefinitely in headless mode
+  (documented separately); an MCP-sourced tool call apparently takes a different
+  permission path than opencode's own tools. Added `OPENCODE_RUNTIME` to
+  `src/mcp/client-config.ts` as a real, tested `--runtime opencode` for
+  `keryx mcp install`/`uninstall` (writes project-local `opencode.json`, shape
+  `{mcp: {keryx: {type, command, enabled}}}` — structurally different from every other
+  runtime's `mcpServers.<name>.{command,args}`, confirmed against a real `opencode.json`
+  before wiring in) and to `keryx init`'s interactive MCP prompt; `all` now expands to
+  cursor+claude+opencode. `codex` is deliberately NOT a `--runtime` here — its config is
+  a single GLOBAL `~/.codex/config.toml`, not project-local, and its own `codex mcp add`
+  is already the safe way to manage it; documented instead of duplicated. Along the way,
+  found and fixed a real, generic bug in `uninstallMcpClient`: its "was this runtime's
+  keryx entry present" check hardcoded the `mcpServers` shape, so uninstall always
+  silently reported `removed: false` for any runtime using a different shape (opencode
+  today, any future one later) — fixed by adding a `hasManaged(settings)` predicate to
+  the `McpClientRuntime` interface itself rather than special-casing it.
 - **Fixed: sandbox read-deny list built from an uncanonicalized `homedir()`.**
   `src/harness/tool/builtin/shell-exec-tool.ts`'s `shellSandboxProfile` canonicalized
   `root`/`tmpdir()` for the Seatbelt profile but passed `homedir()` through raw; on

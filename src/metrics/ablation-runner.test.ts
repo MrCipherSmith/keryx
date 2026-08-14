@@ -4,9 +4,12 @@ import {
   ablationTaskId,
   buildAblationManifest,
   buildAblationRun,
+  buildRawBaselineManifest,
+  buildRawBaselineRun,
   computeAblationDelta,
   type AblationSeedSample,
   type AblationTaskInput,
+  type RawBaselineSeedSample,
 } from "./ablation-runner";
 
 function samples(...values: Array<[boolean, number | null, number]>): AblationSeedSample[] {
@@ -141,5 +144,57 @@ describe("computeAblationDelta", () => {
     const delta = computeAblationDelta(noTokens);
     expect(delta.medianTokensOn).toBeNull();
     expect(delta.medianTokensOff).not.toBeNull();
+  });
+});
+
+describe("buildRawBaselineRun", () => {
+  const SAMPLES: RawBaselineSeedSample[] = [
+    { seed: 1, success: false, tokens: null },
+    { seed: 2, success: false, tokens: null },
+    { seed: 3, success: true, tokens: null },
+  ];
+
+  test("variant is the unpaired `baseline`, with a real (trivially-zero) tool-call distribution", () => {
+    const run = buildRawBaselineRun(ablationTaskId("wilson-interval"), SAMPLES, { model: "deepseek-v4-flash" });
+    expect(run.variant).toBe("baseline");
+    expect(run.ladder).toBe("comparative");
+    expect(run.distribution?.samples.every((s) => s.value === 0)).toBe(true);
+    expect(run.distribution?.median).toBe(0);
+    expect(run.rates?.taskSuccess?.successes).toBe(1);
+    expect(run.rates?.taskSuccess?.n).toBe(3);
+  });
+
+  test("omits cost.tokens rather than fabricating a value when the provider reported no usage", () => {
+    const run = buildRawBaselineRun(ablationTaskId("wilson-interval"), SAMPLES);
+    expect(run.cost).toBeUndefined();
+  });
+
+  test("includes cost.tokens (median) when usage WAS reported", () => {
+    const withTokens: RawBaselineSeedSample[] = [
+      { seed: 1, success: false, tokens: 200 },
+      { seed: 2, success: false, tokens: 220 },
+      { seed: 3, success: true, tokens: 210 },
+    ];
+    const run = buildRawBaselineRun(ablationTaskId("wilson-interval"), withTokens);
+    expect(run.cost?.tokens?.raw.value).toBe(210);
+  });
+});
+
+describe("buildRawBaselineManifest", () => {
+  test("assembles a valid, unpaired comparative-ladder manifest", () => {
+    const manifest = buildRawBaselineManifest(
+      [
+        { taskId: ablationTaskId("a"), samples: [{ seed: 1, success: true, tokens: null }, { seed: 2, success: true, tokens: null }, { seed: 3, success: false, tokens: null }] },
+        { taskId: ablationTaskId("b"), samples: [{ seed: 1, success: false, tokens: null }, { seed: 2, success: false, tokens: null }, { seed: 3, success: false, tokens: null }] },
+        { taskId: ablationTaskId("c"), samples: [{ seed: 1, success: false, tokens: null }, { seed: 2, success: true, tokens: null }, { seed: 3, success: false, tokens: null }] },
+      ],
+      { model: "deepseek-v4-flash" },
+    );
+    expect(manifest.ladder).toBe("comparative");
+    expect(manifest.runs).toHaveLength(3);
+    expect(manifest.runs.every((r) => r.variant === "baseline")).toBe(true);
+    const result = validatePairedBenchmark(manifest);
+    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(true);
   });
 });

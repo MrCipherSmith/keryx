@@ -190,6 +190,68 @@ export function buildAblationManifest(
   };
 }
 
+/** One seed's realized outcome for a zero-tool `baseline` (raw model, no agent loop) run. */
+export type RawBaselineSeedSample = {
+  readonly seed: number;
+  readonly success: boolean;
+  readonly tokens: number | null;
+};
+
+/**
+ * Build the single, unpaired `baseline` `PairedBenchmarkRunV2` for the M2 comparative
+ * ladder's raw floor leg (scripts/benchmark/run-ablation-raw.ts) — a zero-tool model call
+ * with no agent loop at all. Tool-call count is trivially 0 for every seed (a real,
+ * measured fact, not "unmeasured"); token cost is included only when the provider
+ * actually reported usage for this call shape (omitted, never fabricated as zero,
+ * otherwise).
+ */
+export function buildRawBaselineRun(taskId: string, samples: readonly RawBaselineSeedSample[], options: AblationManifestOptions = {}): PairedBenchmarkRunV2 {
+  const known = samples.map((s) => s.tokens).filter((t): t is number => t !== null);
+  const run: PairedBenchmarkRunV2 = {
+    task_id: taskId,
+    variant: "baseline",
+    run_id: `${taskId}:baseline#1`,
+    ladder: options.ladder ?? "comparative",
+    model: options.model ?? "unknown",
+    cacheState: options.cacheState ?? "unknown",
+    leakageAssertion: options.leakageAssertion ?? "not-applicable",
+    caseKind: "stochastic",
+    tokenCap: options.tokenCap ?? null,
+    seeds: samples.map((s) => s.seed),
+    quality: "measured",
+    distribution: {
+      samples: samples.map((s) => ({ seed: s.seed, value: 0, reliability: ABLATION_RELIABILITY })),
+      median: 0,
+      spread: 0,
+      reliability: ABLATION_RELIABILITY,
+    },
+    rates: { taskSuccess: deriveRate(samples.filter((s) => s.success).length, samples.length, ABLATION_RELIABILITY) },
+    human_interventions: null,
+  };
+  if (known.length > 0) {
+    run.cost = { tokens: { raw: measured(median(known) as number, "raw-leg median tokens across seeds") } };
+  }
+  return run;
+}
+
+/** One task's raw seed samples, keyed by task id — the unit `buildRawBaselineManifest` scores. */
+export type RawBaselineTaskInput = {
+  readonly taskId: string;
+  readonly samples: readonly RawBaselineSeedSample[];
+};
+
+/** Assemble a `paired-3-5-v2` / `comparative`-ladder manifest from 3-5 tasks' raw baseline seed results. */
+export function buildRawBaselineManifest(inputs: readonly RawBaselineTaskInput[], options: AblationManifestOptions = {}): PairedBenchmarkManifestV2 {
+  const runs = inputs.map((input) => buildRawBaselineRun(input.taskId, input.samples, options));
+  return {
+    protocol: "paired-3-5-v2",
+    ladder: options.ladder ?? "comparative",
+    task_ids: runs.map((run) => run.task_id).sort(),
+    runs,
+    speedClaim: { claimed: false },
+  };
+}
+
 /**
  * Per-task delta summary (context-on vs context-off), for human-readable reporting
  * alongside the manifest — NOT part of the schema-validated manifest itself (the

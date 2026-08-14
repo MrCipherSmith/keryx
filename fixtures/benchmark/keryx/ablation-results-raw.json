@@ -1,0 +1,69 @@
+{
+  "note": "RAW per-seed comparative-ladder floor results: deepseek-v4-flash answers the SAME ablation questions run-ablation.ts/run-ablation-codex.ts use, through the SAME runAgentTurn driver, but with an EMPTY tool array — no file access, no repository context of any kind. This is the zero-tool floor the comparative report's `raw` cell measures, distinct from keryx-off (still an agent loop with basic filesystem tools). Token usage was not reported by the provider for this zero-tool call shape (a real gap, not fabricated as zero) — cost.tokens is omitted rather than invented.",
+  "model": "deepseek-v4-flash",
+  "provider": "deepseek",
+  "generated_by": "bun scripts/benchmark/run-ablation-raw.ts",
+  "captured": "2026-08-13",
+  "tasks": [
+    {
+      "taskId": "harness:ablation:wilson-interval",
+      "samples": [
+        {
+          "seed": 1,
+          "success": false,
+          "tokens": null
+        },
+        {
+          "seed": 2,
+          "success": false,
+          "tokens": null
+        },
+        {
+          "seed": 3,
+          "success": false,
+          "tokens": null
+        }
+      ]
+    },
+    {
+      "taskId": "harness:ablation:extract-facts",
+      "samples": [
+        {
+          "seed": 1,
+          "success": false,
+          "tokens": null
+        },
+        {
+          "seed": 2,
+          "success": false,
+          "tokens": null
+        },
+        {
+          "seed": 3,
+          "success": false,
+          "tokens": null
+        }
+      ]
+    },
+    {
+      "taskId": "harness:ablation:worktree-port",
+      "samples": [
+        {
+          "seed": 1,
+          "success": false,
+          "tokens": null
+        },
+        {
+          "seed": 2,
+          "success": false,
+          "tokens": null
+        },
+        {
+          "seed": 3,
+          "success": false,
+          "tokens": null
+        }
+      ]
+    }
+  ]
+}

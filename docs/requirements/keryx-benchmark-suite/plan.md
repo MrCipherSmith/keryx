@@ -403,6 +403,48 @@ Raw results: `fixtures/benchmark/keryx/ablation-mutating-results-rapid-mlx.json`
 
 ## M2 — Comparative: one third-party agent harness
 
+**Harness-selection investigation (2026-08-14).** Spec §1.3 says the comparative
+ladder holds the "model held constant" — literally, not just in spirit. Two
+candidates were tried live before picking a target:
+
+- `codex` CLI (`scripts/benchmark/run-ablation-codex.ts`, already landed in M1):
+  headless-capable (`codex exec -s read-only --json`), authenticated, reliable —
+  but it resolves its OWN default model under the active ChatGPT account
+  (`gpt-5.6-sol`, confirmed via `codex doctor`) and there is no known way to point
+  it at an arbitrary third-party model matching keryx's own roster
+  (deepseek-v4-flash / rapid-mlx locals). Cannot hold the model constant.
+- `opencode` CLI: has an OpenCode Zen free `deepseek-v4-flash-free` provider — the
+  SAME model family already driving keryx's own harness legs, which would have
+  satisfied "model held constant" literally. Its interactive TUI mode works fine
+  with this provider (confirmed live: the user ran a real Wilson-interval lookup
+  task through the TUI, succeeded in under 600ms). Its headless mode does not:
+  both `opencode run --auto <prompt>` (direct) and a `opencode serve` +
+  `opencode run --attach <server-url> --auto` variant (an explicit second attempt,
+  to rule out one-shot-invocation-specific issues) hang indefinitely on any task
+  requiring a tool call — trivial no-tool prompts return in ~1s, but the moment a
+  real task needs `read_file`/`shell_exec`-equivalents the process produces zero
+  further output and never returns, confirmed independently of `.mcp.json`
+  auto-discovery (removing it changed only the trivial-case latency, not the real
+  hang). Querying the running server's own `/session` API surfaced a plausible
+  root cause without fully confirming it: an earlier throwaway opencode session's
+  `"permission"` array had `question`/`plan_enter`/`plan_exit` all set to
+  `"deny"` — i.e. `--auto` covers destructive-action approval but not every
+  permission gate opencode's TUI silently resolves through UI, so headless mode
+  can hit an unanswerable approval deadlock. Not proven, but consistent with
+  every observation. No further opencode variant was attempted after this second,
+  reproduced failure.
+
+**Decision:** proceed with `codex` as M2's harness target. This is a documented
+deviation from spec §1.3's literal "model held constant" — recorded, not hidden.
+Per AC-6 ("an unreviewed adapter's numbers are marked non-publishable"), the
+codex leg's fairness review is recorded as `not-met` (model differs:
+`gpt-5.6-sol` vs `deepseek-v4-flash`) and its comparative numbers are marked
+`non-publishable` rather than presented as a clean apples-to-apples result. If a
+same-model headless-capable third-party harness is found later (a different
+opencode invocation mode, a different tool entirely), this can be revisited
+without redoing the adapter/report machinery — only the harness leg's data
+would change.
+
 **Scope**
 
 - Adapter interface + a `native-reviewed` adapter for one other agent harness,
@@ -417,6 +459,58 @@ Raw results: `fixtures/benchmark/keryx/ablation-mutating-results-rapid-mlx.json`
 - AC-6 passes; the harness adapter is `native-reviewed`, fairness `met`.
 - A comparative section is produced with per-target adapter/fairness status; any
   `pending` cell is marked non-publishable.
+
+**Progress (2026-08-14).** All the real machinery is built and live-verified; the
+`fairness: met` exit bar is honestly NOT reached — see the last paragraph.
+
+- New `src/metrics/comparative.ts`: `ComparativeTargetStatus` (adapter status
+  `native-reviewed`/`pending`, fairness status `met`/`caveat`/`not-met` + a
+  required `fairnessNote` when not `met`), `ComparativeCellResult` (one target's
+  result on one task, `publishable` computed — never hand-set), and
+  `buildComparativeReport`/`validateComparativeReport`. Deliberately does NOT
+  merge legs into one `PairedBenchmarkManifestV2`: `validatePairedBenchmarkV2`'s
+  paired-cell invariant is built around exactly two complementary variants per
+  task, and a comparative row needs up to four (`keryx-on`, `keryx-off`, `raw`,
+  `<harness>`); each leg stays independently valid, this module only reads their
+  `runs` and re-presents them side by side — the same "reported separately, never
+  averaged" discipline every prior ablation leg in this project already follows.
+- `src/metrics/benchmark.ts`'s `validatePairedBenchmarkV2` pairing invariant now
+  exempts the `baseline` variant (`PAIRED_VARIANTS`): a raw floor reference has no
+  complement to pair against, so a lone `baseline` run per task is valid, not a
+  bug. Existing `with-keryx`/`without-keryx`/`context-on`/`context-off` pairing is
+  completely unchanged (regression-tested).
+- New `scripts/benchmark/run-ablation-raw.ts`: the `raw` cell — deepseek-v4-flash
+  answers the SAME `./ablation-tasks.ts` questions through the SAME `runAgentTurn`
+  driver as the other legs, but with an EMPTY tool array (`maxToolCalls: 0`) — no
+  file access, no repository context at all. This is the true floor `keryx-off`
+  (still an agent loop with basic filesystem tools) is measured against. New
+  `buildRawBaselineRun`/`buildRawBaselineManifest` in `src/metrics/ablation-runner.ts`
+  (unit-tested) build its `paired-3-5-v2`/`baseline` manifest — tool-call count is
+  correctly reported as a real, measured 0 for every seed (not "unmeasured");
+  token cost is omitted rather than fabricated, because the provider did not
+  report usage for this zero-tool call shape (a real gap, same category as the
+  rapid-mlx token-reporting gap noted earlier in M1). Live result:
+  **0/9 — every task, every seed** — expected and honest: the model has no way to
+  know this repository's exact internal symbol names beyond a lucky guess.
+- New `scripts/benchmark/build-comparative-report.ts`: pure synthesis over the
+  three already-live fixtures (`ablation-results.json` — keryx-on/off,
+  `ablation-results-raw.json` — raw, `ablation-results-codex.json` — harness),
+  never runs an agent itself. Live output (`fixtures/benchmark/keryx/comparative-report.json`):
+  keryx-on 3/3 tasks (9/9 seeds), keryx-off 0/3, raw 0/3 — matching M1's already-
+  reported numbers exactly, now re-presented as comparative cells — and codex
+  (harness) 3/3 tasks, but with `publishable: false` on every harness cell,
+  correctly enforced by `validateComparativeReport` per AC-6 (fairness `not-met`,
+  model differs).
+- **Honest conclusion:** M2's exit bar as written ("fairness `met`") is not
+  reached with `codex` as the harness target — this was accepted deliberately at
+  the harness-selection decision above, not discovered late. AC-6 itself DOES
+  pass — the report correctly marks every non-fairness-met cell non-publishable,
+  which is exactly what AC-6 requires when fairness is not met, rather than
+  silently hiding the caveat or refusing to produce a report at all. The
+  milestone stays open pending a same-model, headless-capable third-party harness
+  (a fixed opencode invocation mode, or a different tool) — when one is found,
+  only the harness leg's data changes; the adapter/report machinery above needs
+  no rework.
 
 ## M3 — Comparative: context/RAG tool + model matrix expansion
 
