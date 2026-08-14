@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.13.2
+Version: 0.14.0
 
 ## Status
 
@@ -7,6 +7,12 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.0** — Truth-synced the implemented Shared Agent Context core and
+>   added twelve future improvement packages plus the SAC Improvements Program.
+>   The new packages define dependency-ordered requirements, validation,
+>   rollback, phase prompts, and progress statistics; they claim no new runtime
+>   implementation. RP-12 is split into pre-runtime truth coverage (12a) and
+>   post-RP-09 registry-derived operation documentation (12b).
 > - **0.13.2** — Added `shared-agent-context` as a specification-ready,
 >   requirements-only package: local-first Facts, Flow-derived Work and reviewed
 >   Know-how; trusted identity, append-only proposals, bounded retrieval,
@@ -119,7 +125,20 @@ state. Runtime claims must be backed by source, tests, or a verification report.
 | Package | Status | Summary |
 |---|---|---|
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
-| [Keryx Shared Agent Context](shared-agent-context/README.md) | specification ready (future) | A local-first collaborative context layer: workspace registry and explicit FWK — evidence-linked Facts, Flow-derived Work and reviewed Know-how — with deterministic cost-aware retrieval, guarded proposals and future CLI/MCP contracts. It reuses Context Operations, Harness and security gates; no runtime is claimed. |
+| [Keryx Shared Agent Context](shared-agent-context/README.md) | implemented phases 0–5 and 6a; 6b planned | Local-first FWK context, bounded reads, proposals, policy experiment guard, and CLI/MCP surfaces shipped through v0.2.32; synthetic experiment readiness is verified, while operational real-data rollout remains planned. |
+| [SAC RP-01 Runtime Truth](shared-agent-context-runtime-truth/README.md) | future / spec-ready | Make the deterministic retrieval plan independent and output-effective, with stable identities and honest freshness, detail, omissions, and cost. |
+| [SAC RP-02 Source-owned Projections](shared-agent-context-source-projections/README.md) | future / spec-ready | Replace raw/heuristic source interpretation with typed Flow, Evidence, Wiki, Memory, and Skills owner ports and canonical guarded writes. |
+| [SAC RP-03 Lifecycle Binding](shared-agent-context-lifecycle-binding/README.md) | future / spec-ready | Add explicit Session–workspace–Flow binding, discovery, derivation preview, and receipt-bound owner-accepted-to-accepted link-back. |
+| [SAC RP-04 Promotion Integrity](shared-agent-context-promotion-integrity/README.md) | future / spec-ready | Bind preview, independent review, target write, recovery, and SAC link-back to one immutable proposal intent and receipt chain. |
+| [SAC RP-05 Secure Minimal Evidence](shared-agent-context-secure-evidence/README.md) | future / spec-ready | Admit only sealed, schema-closed, scanned/minimised evidence with exact pre-commit binding, monotonic sensitivity, retention, and deletion. |
+| [SAC RP-06 Identity and Capabilities](shared-agent-context-identity-capabilities/README.md) | future / spec-ready | Define explicit local modes, live strict policy, execution identity, narrow authorize-at-use capabilities, and remote abuse gates without enabling remote mode. |
+| [SAC RP-07 Generational Memory](shared-agent-context-generational-memory/README.md) | future / spec-ready | Define explicit observation, TTL working-set, and owner-accepted durable generations with contradiction, abstention, and deletion propagation. |
+| [SAC RP-08 Collaboration and Worktrees](shared-agent-context-collaboration-worktrees/README.md) | future / spec-ready | Define causal metadata-only handoffs, advisory reservations, Project/Clone/Checkout identity, private overlays, and portable reference bundles. |
+| [SAC RP-09 Unified Operations](shared-agent-context-unified-operations/README.md) | future / spec-ready | Establish one operation registry and parity across CLI, MCP, Harness, help, docs, errors, risk, auth, and transport behavior. |
+| [SAC RP-10 Receipts and Provenance](shared-agent-context-receipts-provenance/README.md) | future / spec-ready | Add metadata-only capsules, replay/drift reasons, durability classes, retention/repair/quota controls, and measured read SLOs. |
+| [SAC RP-11 Evaluation and Orchestration](shared-agent-context-evaluation-orchestration/README.md) | future / spec-ready | Evaluate deterministic/candidate shadow baselines, causal ablations, topology, outcome/security/overhead, and retain/remove/defer decisions. |
+| [SAC RP-12 Documentation Truth](shared-agent-context-documentation-truth/README.md) | future / spec-ready | Enforce source-pinned current-behavior claims, taxonomy, graph/wiki coverage, then registry-derived operation docs/examples after RP-09. |
+| [SAC Improvements Program](shared-agent-context-improvements-program/README.md) | future / spec-ready | Coordinate all twelve packages with dependency waves, integration checkpoints, copy-ready phase prompts, dashboard statistics, evidence, stop, and rollback gates. |
 | [Managed Review Feedback Loop](managed-review-feedback-loop/README.md) | implemented (initial runtime slice) | Low-level managed review persistence supports standalone/attached packages, ingest, coverage, findings, decisions, learning, and structural completion. Target orchestration ownership moves to Flow Reviewer. |
 | [Flow Reviewer](flow-reviewer/README.md) | specification ready (future) | Task Manager-aware review orchestrator above stateless Review Orchestrator, with one task and durable history per reviewer, adaptive model routing, compact shared context, resume, schemas, and Gherkin acceptance scenarios. |
 | [gdgraph Java/Python Import Resolution](gdgraph-java-import-resolution/README.md) | implemented | Language-aware import resolver so Java (Maven/Gradle) and Python source produce real dependency edges instead of nodes-only graphs; fixes the `0/0 = 100%` resolution-metric bug and seeds Java/Python grammars. Verified on example-backend: 0 → 47,984 edges, 94% in-repo resolution. |

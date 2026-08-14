@@ -27,6 +27,14 @@ intent, implementation plans, and release evidence do not get mixed together.
 
 ## Plans and reports
 
+- [Shared Agent Context Improvements Program](requirements/shared-agent-context-improvements-program/README.md)
+  — dependency-ordered implementation waves for twelve SAC improvement
+  packages, with copy-ready phase prompts, evidence gates, rollback, and a
+  live progress/statistics dashboard.
+- [Keryx Improvements 1 — SAC, memory, and orchestration analysis](analysis/keryx-improvements-1/2026-08-14/report/en/report.md)
+  — integrated audit of Shared Agent Context and its Context Operations, Flow,
+  Harness/session, MCP, Security, knowledge-owner, worktree, and policy seams;
+  includes twelve independently deliverable future requirement packages.
 - [Implementation plans](plans/) — bounded plans that may become cleanup
   candidates after their acceptance criteria are implemented and verified.
 - [Release readiness — 2026-07-10](report/release-readiness-2026-07-10/release-readiness.md)
