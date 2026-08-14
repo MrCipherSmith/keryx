@@ -5,6 +5,8 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.34] — 2026-08-14
+
 ### Added
 
 - **Benchmark suite M1 — metastore oracle slice (deterministic).** The
@@ -1413,4 +1415,18 @@ runtime dependencies, no sockets).
 [0.2.18]: https://github.com/MrCipherSmith/keryx/compare/v0.2.17...v0.2.18
 [0.2.19]: https://github.com/MrCipherSmith/keryx/compare/v0.2.18...v0.2.19
 [0.2.20]: https://github.com/MrCipherSmith/keryx/compare/v0.2.19...v0.2.20
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.20...HEAD
+[0.2.21]: https://github.com/MrCipherSmith/keryx/compare/v0.2.20...v0.2.21
+[0.2.22]: https://github.com/MrCipherSmith/keryx/compare/v0.2.21...v0.2.22
+[0.2.23]: https://github.com/MrCipherSmith/keryx/compare/v0.2.22...v0.2.23
+[0.2.24]: https://github.com/MrCipherSmith/keryx/compare/v0.2.23...v0.2.24
+[0.2.25]: https://github.com/MrCipherSmith/keryx/compare/v0.2.24...v0.2.25
+[0.2.26]: https://github.com/MrCipherSmith/keryx/compare/v0.2.25...v0.2.26
+[0.2.27]: https://github.com/MrCipherSmith/keryx/compare/v0.2.26...v0.2.27
+[0.2.28]: https://github.com/MrCipherSmith/keryx/compare/v0.2.27...v0.2.28
+[0.2.29]: https://github.com/MrCipherSmith/keryx/compare/v0.2.28...v0.2.29
+[0.2.30]: https://github.com/MrCipherSmith/keryx/compare/v0.2.29...v0.2.30
+[0.2.31]: https://github.com/MrCipherSmith/keryx/compare/v0.2.30...v0.2.31
+[0.2.32]: https://github.com/MrCipherSmith/keryx/compare/v0.2.31...v0.2.32
+[0.2.33]: https://github.com/MrCipherSmith/keryx/compare/v0.2.32...v0.2.33
+[0.2.34]: https://github.com/MrCipherSmith/keryx/compare/v0.2.33...v0.2.34
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...HEAD

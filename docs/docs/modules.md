@@ -913,14 +913,14 @@ scaffolded only via `init --mcp`.
 | `mcp` / `mcp serve` | run the stdio JSON-RPC MCP server (default) |
 | `mcp serve --http` | use the isolated localhost HTTP/SSE transport (requires `http.enabled`) |
 | `mcp serve --cwd <project-root>` | expose a specific project regardless of the MCP client's launch directory |
-| `mcp install --runtime <cursor\|claude\|generic\|all>` | write project-scoped client config with `--cwd <project-root>` |
-| `mcp uninstall --runtime <cursor\|claude\|generic\|all>` | remove only the managed keryx client entry |
+| `mcp install --runtime <cursor\|claude\|opencode\|generic\|all>` | write project-scoped client config with `--cwd <project-root>` |
+| `mcp uninstall --runtime <cursor\|claude\|opencode\|generic\|all>` | remove only the managed keryx client entry |
 | `mcp --help` / `-h` | usage |
 
 **Key files.**
 - `src/commands/mcp.ts` — thin handler; parses `serve`/`--http`, never imports the SDK.
 - `src/mcp/server.ts` — stdio-first server loop; lazy-loads `@modelcontextprotocol/sdk` via `await import()` and hard-fails with an actionable message when it is absent (the sanctioned opt-in exception).
-- `src/mcp/tools.ts` — the Tool registry over the gdgraph/security/memory/health/wiki/flow/standard facades.
+- `src/mcp/tools.ts` — the Tool registry over the gdgraph/gdctx/security/memory/health/testing/wiki/flow/standard/sac facades.
 - `src/mcp/resources.ts` — the read-only `metaproject://<class>/<relpath>` Resource registry (`artifacts`/`wiki`/`memory`), path-confined to each class root.
 - `src/mcp/dispatch.ts`, `discovery.ts`, `config.ts`, `redact-seam.ts`, `transport/{stdio,http-sse}.ts`.
 
