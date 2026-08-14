@@ -514,10 +514,10 @@ groups:
   deepseek fell for). Two data points is not enough to claim a trend, but the
   divergence itself is real and worth having captured rather than assumed away.
 
-All 5 fixtures (`safety-completion-honesty-rapid-mlx.json`,
-`safety-false-premise-rapid-mlx.json`,
+All 5 fixtures (`safety-completion-honesty-rapid-mlx-qwen3.5-4b-4bit.json`,
+`safety-false-premise-rapid-mlx-qwen3.5-4b-4bit.json`,
 `safety-containment-{workspace-write-containment,shell-permission-restraint,
-prompt-injection-resistance}-rapid-mlx.json`) pass `validatePairedBenchmark`.
+prompt-injection-resistance}-rapid-mlx-qwen3.5-4b-4bit.json`) pass `validatePairedBenchmark`.
 
 **Remaining in M1:** none. Every M1 exit-criteria item has real, live-captured,
 honestly-reported data — including honest negative/mixed results where that is what
@@ -704,7 +704,47 @@ Candidate-pool caveat, disclosed not hidden: the baseline searches
 `.metaproject/wiki/**/*.md` only, while `wikiAsk` also considers current
 memory entries. Regenerate with `bun scripts/benchmark/run-rag-embedding-baseline.ts`.
 
-**Remaining in M3:** model matrix expansion; optional CI trace-replay fixtures.
+**Model-matrix expansion — third local leg, qwen3.5-9b-4bit (2026-08-14).** Both
+`run-safety.ts` and `run-containment.ts` had a real filename-collision bug: their
+`FILE_SUFFIX` was keyed on `--provider` alone (`-rapid-mlx`), so a second rapid-mlx
+model would silently overwrite the first model's fixture on every rerun — confirmed
+live: driving `qwen3.5-9b-4bit` through the (then-unfixed) script clobbered the
+already-committed `qwen3.5-4b-4bit` fixtures on disk. Caught immediately via
+`git diff`, reverted, and fixed by qualifying the suffix with the model too
+(`-rapid-mlx-<model>`); the original `qwen3.5-4b-4bit` fixtures were restored
+byte-exact from git history under the corrected filenames (verified via `diff`), not
+regenerated — a fresh rerun of the same cases produced a *different* honest sample
+(completion-honesty 1/3 instead of the original 2/3) due to this small model's real
+run-to-run non-determinism, which would have silently invalidated every prose number
+already published about the 2/3 result had it been used to overwrite the fixture
+instead.
+
+With the collision fixed, `qwen3.5-9b-4bit` (the model's own bigger, previously-unused
+sibling — noted earlier in this document as carrying a SIGABRT crash risk under memory
+pressure) was run live as a third local leg across all four case groups:
+
+- **completion-gate honesty**: 3/3 honest (all three cases correctly claimed
+  `unknown` rather than overclaiming) — unlike the 4-bit sibling's 2/3, no malformed
+  reply this time.
+- **false-premise resistance**: 3/3 correctly rejected — matches both other legs.
+- **containment**: preflight canary confirmed the sandbox blocking before any live
+  case; real result **9/9 contained, 0 escapes** — matches both other legs. No
+  SIGABRT crash was observed across the full 9-case run (the noted risk did not
+  materialize here, which is not the same as it being ruled out).
+
+Fixtures: `safety-completion-honesty-rapid-mlx-qwen3.5-9b-4bit.json`,
+`safety-false-premise-rapid-mlx-qwen3.5-9b-4bit.json`,
+`safety-containment-{workspace-write-containment,shell-permission-restraint,
+prompt-injection-resistance}-rapid-mlx-qwen3.5-9b-4bit.json` — all pass
+`validatePairedBenchmark`. Regenerate either model with
+`bun scripts/benchmark/run-safety.ts --provider rapid-mlx --model <qwen3.5-4b-4bit|qwen3.5-9b-4bit>`
+(same for `run-containment.ts`); `rapid-mlx serve <model> --port 8010` must be running
+first, and only one model can be served on that port at a time.
+
+**Remaining in M3:** a cross-vendor (non-rapid-mlx) model leg remains blocked on a
+real API key — `CEREBRAS_API_KEY` in this environment's stored config is a
+placeholder value, not a working credential. Optional CI trace-replay fixtures are
+not started.
 
 ## Cross-cutting, every milestone
 

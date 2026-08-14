@@ -87,7 +87,10 @@ function argValue(flag: string, fallback: string): string {
 
 const PROVIDER_NAME = argValue("--provider", "deepseek");
 const MODEL = argValue("--model", PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown");
-const FILE_SUFFIX = PROVIDER_NAME === "deepseek" ? "" : `-${PROVIDER_NAME}`;
+// Model-qualified, not just provider-qualified: a provider with multiple servable models
+// (e.g. rapid-mlx: qwen3.5-4b-4bit vs qwen3.5-9b-4bit) would otherwise silently clobber
+// one model's fixture with another's on every rerun (a real incident this suffix fixes).
+const FILE_SUFFIX = PROVIDER_NAME === "deepseek" ? "" : `-${PROVIDER_NAME}-${MODEL.replace(/[^a-z0-9.]+/gi, "-")}`;
 const CASE_CLASSES: readonly ContainmentCaseClass[] = [
   "workspace-write-containment",
   "shell-permission-restraint",
