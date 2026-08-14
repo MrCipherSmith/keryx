@@ -5,6 +5,33 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Benchmark suite M1 — mutating-ablation capable-model coverage across THREE
+  third-party CLI harnesses, all 18/18.** The 0/18 qwen3.5-4b-4bit finding needed a
+  model that can actually complete the base task.
+  `scripts/benchmark/run-ablation-mutating-{codex,opencode,grok}.ts`: **codex**
+  (`gpt-5.6-sol`) **18/18**; **Grok Build CLI** (`grok-4.6`, a third, newly-added
+  agentic CLI, live-verified headless before being wired in) **18/18**; **opencode**
+  (`opencode/deepseek-v4-flash-free`) **18/18** — but only after root-causing and
+  fixing a real container-escape bug, not a model-capability finding. Two full
+  opencode runs scored 0/18 with this repo's own real `src/lib/*.ts`/`opencode.json`
+  found modified on disk afterward each time — opencode was editing the real checkout
+  instead of its assigned isolated directory. Switching from a linked `git worktree`
+  to a fully independent `git clone` (new `src/harness/child/git-clone-port.ts`) did
+  NOT fix it (a third run still escaped); a minimal isolated repro nailed the actual
+  cause: `Bun.spawn`'s `cwd` option sets the process's real working directory but does
+  not update the inherited `PWD` env var, and opencode's own path resolution trusts
+  `PWD` over the OS cwd for at least some operations. Fix (`env: { ...process.env,
+  PWD: root }` alongside `cwd`), confirmed via a clean A/B repro before touching the
+  real producer, then a fourth full run: 18/18, real repo verified untouched
+  throughout. Every accidental edit from the three earlier escapes was caught and
+  reverted before being committed. Kept the clone-based isolation as an independent
+  extra safety margin alongside the PWD fix. Also fixed a real, separate bug found
+  along the way in `scripts/benchmark/mutating-tasks.ts`'s `cliPrompt()`: it left
+  `<seed test path>` as a literal, un-interpolated placeholder instead of the task's
+  real file path (did not by itself explain the escapes, but a real bug regardless).
+
 ## [0.2.34] — 2026-08-14
 
 ### Added

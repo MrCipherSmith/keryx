@@ -429,18 +429,65 @@ disclosed here rather than hidden, matching the honest-negative-result disciplin
 whole document already follows — but any future regeneration of those legs will now run
 leakage-clean by construction.
 
-**Remaining in M1:**
+**Ablation runner, mutating slice — capable-model coverage closed (2026-08-14).** The
+qwen3.5-4b-4bit 0/18 capability floor above needed a model that can actually complete the
+base task. Three third-party CLI harnesses were driven live through the mutating slice
+(`scripts/benchmark/run-ablation-mutating-{codex,opencode,grok}.ts`, same shape as
+`run-ablation-mutating-codex.ts`'s read-only sibling — own built-in tool loop,
+context-on/off via `AGENTS.md`/`.metaproject/` presence, AC-5 gold-artifact strip and
+verification before every case, success decided by an independent `bun test` run, never
+the agent's own claim):
 
-- Ablation runner, mutating slice: needs a model that can actually complete the base
-  task (deepseek-v4-flash or codex, once credentials/access allow) before the
-  context-on/off comparison itself is measurable — the qwen3.5-4b-4bit data above is
-  a real 0/18 capability floor, not a comparison. rapid-mlx token-usage reporting gap
-  (noted for the read-only leg above) still applies. ollama remains broken on this
-  machine if a second local model is later wanted for comparison.
-- Safety track: multi-model coverage for all four landed safety case groups (currently
-  deepseek-v4-flash only) is open. The `attempted:false` cases above are a candidate for
-  a follow-up split (Pragmatist's Option 2: distinct sandbox modes per category) once
-  more data exists on whether the restraint/containment distinction holds up.
+- **codex** (`gpt-5.6-sol`, `--approve-for-me` for headless file-write approval):
+  **18/18**, every task, both variants.
+- **Grok Build CLI** (`grok-4.6`, `--always-approve`) — a third, previously-untried
+  agentic CLI, live-tested and added this session: **18/18**, every task, both variants.
+- **opencode** (`opencode/deepseek-v4-flash-free`, the SAME model family keryx's own
+  harness legs use): **18/18 — but only after root-causing and fixing a real
+  container-escape bug**, not a model-capability finding at all. The first two full runs
+  both scored 0/18: after each, this repository's own real `src/lib/{json,args,fs}.ts`
+  and root `opencode.json` were found modified on disk — opencode had written its
+  (correct!) edits to THIS actual checkout instead of its assigned throwaway directory.
+  Switching from a linked `git worktree` to a fully independent `git clone`
+  (`src/harness/child/git-clone-port.ts`) did NOT fix it — a third full run, cloned,
+  still escaped. A minimal, isolated repro (one `Bun.spawn` call, no other machinery)
+  nailed the actual cause: `Bun.spawn`'s `cwd` option sets the kernel-level working
+  directory but does **not** update the inherited `PWD` environment variable, and
+  opencode's own path resolution trusts `PWD` over the OS-level cwd for at least some
+  file operations — so it silently edited files at the *parent process's* `PWD` (this
+  repo's real checkout) while its own reported cwd, and every other part of the child
+  process, correctly stayed the assigned directory the whole time. Confirmed by a clean
+  A/B repro (identical `Bun.spawn` call, only `env.PWD` differs: escapes without it,
+  does not escape with it) before touching the real producer. Fix — `env: {
+  ...process.env, PWD: root }` alongside the child's `cwd` — applied to
+  `run-ablation-mutating-opencode.ts`, kept on the `git-clone-port.ts` isolation as an
+  extra, independent safety margin (belt-and-suspenders: PWD sync is the actual fix, the
+  clone means even an undiscovered SECOND escape route has no real checkout to reach).
+  Fourth full run: **18/18**, real repo verified untouched throughout. Every accidental
+  edit from the three earlier escapes was caught and reverted (`git checkout --` +
+  deleting stray seed-test files) before ever being committed.
+
+Net result: the mutating-ablation slice now has real, capable-model coverage across
+THREE independent third-party CLI harnesses — codex 18/18, Grok Build CLI 18/18, opencode
+18/18 — proving the harness/tasks/verification are sound end to end; the qwen3.5-4b-4bit
+0/18 finding was correctly diagnosed as a capability floor, not a scorer bug. The
+context-on/off comparison itself (does keryx's context help mutating tasks) is still not
+measurable from any of the three: all three hit 100% on both variants, the same
+ceiling-effect pattern already seen on the read-only ablation's codex leg (a capable
+agent with its own real shell/edit tools needs no help from keryx's context for these
+particular task sizes). The opencode container-escape bug is a genuinely useful, separate
+finding worth carrying forward: any FUTURE live producer giving a third-party CLI real
+write access should sync `env.PWD` to `cwd` defensively, even if that CLI has shown no
+sign of this specific issue — it costs nothing and the failure mode (silently editing the
+wrong checkout) is exactly the kind of thing that would otherwise surface as a
+misleading, confusing null result rather than an obvious error.
+
+**Safety track:** multi-model coverage for all four landed safety case groups (currently
+deepseek-v4-flash only) remains open. The `attempted:false` cases above are a candidate
+for a follow-up split (Pragmatist's Option 2: distinct sandbox modes per category) once
+more data exists on whether the restraint/containment distinction holds up.
+
+**Remaining in M1:** safety-track multi-model coverage (above) is the only open item.
 
 ## M2 — Comparative: one third-party agent harness
 

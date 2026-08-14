@@ -1,0 +1,156 @@
+{
+  "note": "RAW per-seed MUTATING-ablation results, codex CLI leg: codex exec (its own built-in agent loop, --approve-for-me for headless file-write approval) makes a real code edit to make a seeded failing test pass, twice per seed — context-on (unmodified worktree, AGENTS.md + .metaproject/ present) vs context-off (those stripped before codex ever sees the worktree, leaving a real but keryx-blind shell) — each seed in its own fresh git worktree. Success is decided by an independent `bun test` run after codex's turn, never by trusting its own claim. Captured live, no fabricated samples.",
+  "model": "gpt-5.6-sol",
+  "provider": "codex-cli",
+  "generated_by": "bun scripts/benchmark/run-ablation-mutating-codex.ts",
+  "captured": "2026-08-14",
+  "tasks": [
+    {
+      "taskId": "harness:ablation-mutating:atomic-json-write",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 576438,
+            "toolCalls": 23
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 1037874,
+            "toolCalls": 33
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 789574,
+            "toolCalls": 30
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 286252,
+            "toolCalls": 13
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 376501,
+            "toolCalls": 14
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 174670,
+            "toolCalls": 5
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:flag-present",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 479931,
+            "toolCalls": 21
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 667971,
+            "toolCalls": 27
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 613476,
+            "toolCalls": 23
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 185221,
+            "toolCalls": 4
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 260407,
+            "toolCalls": 6
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 154340,
+            "toolCalls": 3
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:read-text-file-or",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 374327,
+            "toolCalls": 19
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 598586,
+            "toolCalls": 25
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 374251,
+            "toolCalls": 23
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 156646,
+            "toolCalls": 3
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 157792,
+            "toolCalls": 3
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 300941,
+            "toolCalls": 6
+          }
+        ]
+      }
+    }
+  ]
+}
