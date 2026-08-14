@@ -1,0 +1,12 @@
+SAC explain (FWK — Facts / Work / Know-how)
+  freshness: fresh
+  receipt: receipt-841f9fedf1614997  decision=allowed
+  Facts (1) — evidence-linked, task-local; not durable knowledge
+    - Evidence reference ./.metaproject/flows/153-2026-08-14-prove-wiki-graph-sac-complementary-stack/description.md  uri=./.metaproject/flows/153-2026-08-14-prove-wiki-graph-sac-complementary-stack/description.md  revision=c792e4ffb3fbe76501e6f8626f07a22d3ebd7118014c53ae685f8c2c485f7c82  freshness=fresh
+  Work (bound) — Flow projection only; SAC does not write flow.json
+    - flow=./.metaproject/flows/153-2026-08-14-prove-wiki-graph-sac-complementary-stack/flow.json  snapshot=in-progress  revision=2026-08-14T20:23:53.834Z
+    - completed=(none)  next=T1,T2,T3,T4,T5,T6,T7  blocked=(none)
+  Know-how (2: wiki=1 memory=1 skill=0) — references to owning stores, not SAC copies
+    - wiki ./.metaproject/wiki/architecture/wiki-graph-sac.md  revision=951b6db90e0a7bcb009cc0fbe688a5335837147f852a2a1b06089297b34741f6  status=fresh
+    - memory ./.metaproject/memory/constraints/stale-installed-keryx-binary.md  revision=fbc298f3901b515f408b581c6903f8f38c91c4fece9e29dfa9a81cacd2a3c6f3  status=fresh
+  Not written here: graph nodes/edges (navigation only), session transcripts, hidden reasoning.

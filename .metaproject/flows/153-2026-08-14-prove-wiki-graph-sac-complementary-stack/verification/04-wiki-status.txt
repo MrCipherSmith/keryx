@@ -1,0 +1,18 @@
+# gdwiki status
+
+enabled: yes
+wiki root: .metaproject/wiki
+total pages: 45
+
+## Pages by type
+- architecture: 5
+- domain-model: 0
+- business-rule: 0
+- user-scenario: 0
+- component: 40
+- service: 0
+- integration: 0
+- decision: 0
+
+last index generated: 2026-08-14T20:25:13.805Z
+last link check: 2026-08-14T18:18:00.711Z (8 broken)

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
+import { formatFwkExplain } from "../sac/fwk-explain";
 import { createHarnessProposalLifecycleService, normalizeProposalLifecycleResult } from "../sac/proposal-lifecycle";
 import { createLocalCollaborationService } from "../sac/collaboration-service";
 import { sessionEvidenceRef } from "../sac/session-wrap-up";
@@ -46,21 +47,27 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(await service().addResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, resource: { kind, uri, ...(revision ? { revision } : {}) } }), null, 2)); return;
     }
     if (subcommand === "overview") {
-      rejectUnknownOptions(args.slice(2), new Set(["--max-items", "--max-tokens"]));
-      const workspaceId = args[1]; if (!workspaceId) throw new Error("Usage: keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]");
+      rejectUnknownOptions(args.slice(2), new Set(["--max-items", "--max-tokens", "--explain"]));
+      const workspaceId = args[1]; if (!workspaceId) throw new Error("Usage: keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]");
       const maxItems = Number(optionValue(args, "--max-items") ?? "32"); const maxTokens = Number(optionValue(args, "--max-tokens") ?? "4096");
       if (!Number.isInteger(maxItems) || !Number.isInteger(maxTokens) || maxItems < 0 || maxTokens < 0) throw new Error("--max-items and --max-tokens must be non-negative integers");
       const result = await createLocalFwkReadService(process.cwd()).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } });
-      console.log(JSON.stringify(normalizeFwkResult(result), null, 2)); return;
+      const normalized = normalizeFwkResult(result);
+      console.log(JSON.stringify(normalized, null, 2));
+      if (args.includes("--explain")) console.error(formatFwkExplain(normalized));
+      return;
     }
     if (subcommand === "read") {
-      rejectUnknownOptions(args.slice(3), new Set(["--max-items", "--max-tokens"]));
+      rejectUnknownOptions(args.slice(3), new Set(["--max-items", "--max-tokens", "--explain"]));
       const workspaceId = args[1]; const itemId = args[2];
-      if (!workspaceId || !itemId) throw new Error("Usage: keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]");
+      if (!workspaceId || !itemId) throw new Error("Usage: keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]");
       const maxItems = Number(optionValue(args, "--max-items") ?? "1"); const maxTokens = Number(optionValue(args, "--max-tokens") ?? "4096");
       if (!Number.isInteger(maxItems) || !Number.isInteger(maxTokens) || maxItems < 0 || maxTokens < 0) throw new Error("--max-items and --max-tokens must be non-negative integers");
       const result = await createLocalFwkReadService(process.cwd()).read({ workspaceId, itemId, request: undefined, requestCorrelationId: randomUUID(), budget: { maxItems, maxTokens } });
-      console.log(JSON.stringify(normalizeFwkResult(result), null, 2)); return;
+      const normalized = normalizeFwkResult(result);
+      console.log(JSON.stringify(normalized, null, 2));
+      if (args.includes("--explain")) console.error(formatFwkExplain(normalized));
+      return;
     }
     if (subcommand === "propose") {
       rejectUnknownOptions(args.slice(2), new Set(["--kind", "--session", "--note", "--proposal-revision"]));
@@ -126,5 +133,5 @@ function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
 }

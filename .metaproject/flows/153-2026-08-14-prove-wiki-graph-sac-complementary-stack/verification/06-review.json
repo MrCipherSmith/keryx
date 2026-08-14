@@ -1,0 +1,63 @@
+{
+  "event": {
+    "schemaVersion": "1.0",
+    "recordType": "proposal-transition",
+    "eventId": "event-857acfea4d864272",
+    "proposalId": "proposal-a41fc4152ad147e2",
+    "proposalRevision": "1",
+    "correlationId": "aa270c91-b7b7-4b77-9151-8b993be1a29f",
+    "workspaceId": "workspace-e1b704272f124ba7",
+    "sequence": 2,
+    "priorEventHash": "ce8b8261e0e67c613ac9359f92e73a0378022e9c33cf6b506f270cddb8a434b1",
+    "fromStatus": "proposed",
+    "toStatus": "accepted",
+    "occurredAt": "2026-08-14T20:28:39.364Z",
+    "idempotencyKey": "flow-153-wiki-update-1",
+    "acceptance": {
+      "reviewDecisionRef": "./proposals/proposal-a41fc4152ad147e2.76a75e924ccc2d2bdcacf3513d319857a089428579055c252a4501ea0cac5de0.decision.json",
+      "writeIntentRef": "./proposals/proposal-a41fc4152ad147e2.76a75e924ccc2d2bdcacf3513d319857a089428579055c252a4501ea0cac5de0.write-intent.json",
+      "reviewer": {
+        "subject": "user:local-502",
+        "authority": "owner",
+        "trustedPrincipalRef": "./principals/local"
+      },
+      "security": {
+        "gate": "pass",
+        "policyRef": "./security/policy/local",
+        "policyRevision": "local-offline-v1"
+      },
+      "freshness": {
+        "state": "fresh",
+        "verifiedAt": "2026-08-14T20:28:39.349Z",
+        "maxEvidenceAgeSeconds": 3600
+      },
+      "targetWrite": {
+        "receiptRef": "./wiki/decisions/sac-proposal-a41fc4152ad147e2.receipt.json",
+        "targetRef": "./wiki/decisions/sac-proposal-a41fc4152ad147e2.md",
+        "completedAt": "2026-08-14T20:28:39.361Z",
+        "binding": {
+          "intentRef": "./proposals/proposal-a41fc4152ad147e2.76a75e924ccc2d2bdcacf3513d319857a089428579055c252a4501ea0cac5de0.write-intent.json",
+          "proposalId": "proposal-a41fc4152ad147e2",
+          "proposalRevision": "1",
+          "workspaceId": "workspace-e1b704272f124ba7",
+          "correlationId": "aa270c91-b7b7-4b77-9151-8b993be1a29f",
+          "idempotencyKey": "flow-153-wiki-update-1",
+          "reviewerSubject": "user:local-502",
+          "reviewerAuthority": "owner",
+          "policyRevision": "local-offline-v1",
+          "owner": "wiki",
+          "bindingHash": "b0089c03c7e6c43590f95aa31f8ab757deddded0916b721edd05cd9e64cb782d"
+        }
+      },
+      "evidence": [
+        {
+          "kind": "session",
+          "uri": "./.metaproject/workspaces/workspace-e1b704272f124ba7/session-evidence/77720896-3aa2-4cc6-84c5-5694efdc4c01.md",
+          "revision": "aad88101313f79c3306cfc9be51c66c94686e5dedadb4c704af7bf56f80dc60e",
+          "observedAt": "2026-08-14T20:28:26.060Z"
+        }
+      ],
+      "idempotencyKey": "flow-153-wiki-update-1"
+    }
+  }
+}

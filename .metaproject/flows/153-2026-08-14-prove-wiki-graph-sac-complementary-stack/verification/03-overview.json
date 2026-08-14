@@ -1,0 +1,95 @@
+{
+  "partial": false,
+  "omittedOptional": [],
+  "manifest": {
+    "schemaVersion": "1.0",
+    "workspaceId": "workspace-e1b704272f124ba7",
+    "generatedAt": "2026-08-14T20:27:40.583Z",
+    "facts": [
+      {
+        "statement": "Evidence reference ./.metaproject/flows/153-2026-08-14-prove-wiki-graph-sac-complementary-stack/description.md",
+        "evidence": [
+          {
+            "kind": "artifact",
+            "uri": "./.metaproject/flows/153-2026-08-14-prove-wiki-graph-sac-complementary-stack/description.md",
+            "revision": "c792e4ffb3fbe76501e6f8626f07a22d3ebd7118014c53ae685f8c2c485f7c82",
+            "observedAt": "2026-08-14T20:27:40.423Z",
+            "trust": "primary"
+          }
+        ],
+        "observedAt": "2026-08-14T20:27:40.423Z",
+        "expiresAt": "9999-12-31T23:59:59Z",
+        "freshness": "fresh"
+      }
+    ],
+    "work": {
+      "state": "bound",
+      "flowRef": {
+        "uri": "./.metaproject/flows/153-2026-08-14-prove-wiki-graph-sac-complementary-stack/flow.json",
+        "snapshot": "in-progress",
+        "revision": "2026-08-14T20:23:53.834Z"
+      },
+      "completed": [],
+      "next": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "blocked": []
+    },
+    "knowHow": [
+      {
+        "kind": "wiki",
+        "uri": "./.metaproject/wiki/architecture/wiki-graph-sac.md",
+        "revision": "951b6db90e0a7bcb009cc0fbe688a5335837147f852a2a1b06089297b34741f6",
+        "trust": "accepted",
+        "status": "fresh"
+      },
+      {
+        "kind": "memory",
+        "uri": "./.metaproject/memory/constraints/stale-installed-keryx-binary.md",
+        "revision": "fbc298f3901b515f408b581c6903f8f38c91c4fece9e29dfa9a81cacd2a3c6f3",
+        "trust": "accepted",
+        "status": "fresh"
+      }
+    ],
+    "freshness": "fresh"
+  },
+  "receipt": {
+    "schemaVersion": "1.0",
+    "id": "receipt-841f9fedf1614997",
+    "workspaceId": "workspace-e1b704272f124ba7",
+    "actor": "user:local-502",
+    "action": "overview",
+    "decision": "allowed",
+    "recordedAt": "2026-08-14T20:27:40.584Z",
+    "cost": {
+      "tokens": 0,
+      "toolCalls": 1,
+      "elapsedMs": 0
+    },
+    "contextAssembly": {
+      "traceRef": "./.metaproject/context-operations/traces/78d59cd81a2286cd2680c492.json",
+      "configurationRevision": "context-operations-v1",
+      "selected": [
+        "./ids/fact-0",
+        "./ids/work",
+        "./ids/knowhow-0",
+        "./ids/knowhow-1"
+      ],
+      "omittedOptional": []
+    },
+    "policy": {
+      "ref": "./security/policy/local",
+      "revision": "local-offline-v1"
+    },
+    "integrity": {
+      "previousRecordHash": "GENESIS",
+      "recordHash": "b3110df5619f6d675b87e236f9ada92b392775ccf844330e544bc9b424f28001"
+    }
+  }
+}

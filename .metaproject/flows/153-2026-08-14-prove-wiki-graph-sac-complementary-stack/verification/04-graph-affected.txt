@@ -1,0 +1,14 @@
+# Affected context for src/sac/service.ts
+
+## Dependencies
+- src/sac/collaboration-service.ts
+- src/sac/fwk-service.ts
+- src/sac/policy-experiment.ts
+- src/sac/proposal-evidence.ts
+- src/sac/proposal-lifecycle.ts
+- src/sac/receipt-integrity.ts
+- src/sac/session-wrap-up.ts
+- src/session/store.ts
+
+## Dependents
+- src/mcp/tools.ts
