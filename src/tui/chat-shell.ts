@@ -43,6 +43,8 @@ import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, createAssistantMessageStream } from "./transcript-blocks";
 import type { VersionCheckResult } from "../lib/version-check";
+import { isFlowsCommand, openFlows } from "./flow-inspector";
+import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
 import {
   buildSessionInfoSnapshot,
   isSessionInfoCommand,
@@ -80,7 +82,7 @@ export type ChatSubmitResult =
   /** A slash command typed mid-turn: refused rather than raced against it. */
   | "deferred"
   /**
-   * A read-only local command (`/session-info` and aliases). Never queued as a
+   * A read-only local command (`/status` or `/flows`). Never queued as a
    * user turn and never deferred — the caller opens the inspector itself.
    */
   | "local"
@@ -265,7 +267,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
         close();
         return "exit";
       }
-      if (isSessionInfoCommand(value)) {
+      if (isSessionInfoCommand(value) || isFlowsCommand(value)) {
         return "local";
       }
       if ((turn || queue.length > 0) && value.startsWith("/")) {
@@ -474,19 +476,34 @@ export async function mountChatShell(
       return;
     }
     if (result === "local") {
-      const snapshot = buildSessionInfoSnapshot({
-        summary: opts.deps.session !== undefined ? latestSession(opts.deps.session.cwd) : undefined,
-        selection,
-        version: packageJson.version,
-        estimateTokens: estimateContextTokens(seen),
-      });
-      openSessionInfo(otui, chrome, {
-        snapshot,
-        copyText: (text) => r.copyToClipboardOSC52(text),
-        toast: (message) => chrome.showToast(message),
-        renderer: r,
-        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
-      });
+      const cwd = opts.deps.session?.cwd;
+      const keys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+      void (async () => {
+        const [workspaces, flows] = cwd === undefined
+          ? [[], []]
+          : await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
+        if (isFlowsCommand(line)) {
+          openFlows(otui, chrome, { items: flows, renderer: r, ...keys });
+          return;
+        }
+        const summary = cwd !== undefined ? latestSession(cwd) : undefined;
+        const snapshot = buildSessionInfoSnapshot({
+          summary,
+          selection,
+          version: packageJson.version,
+          estimateTokens: estimateContextTokens(seen),
+          sessionText: seen.map((message) => message.content).join("\n"),
+          workspaces,
+          flows,
+        });
+        openSessionInfo(otui, chrome, {
+          snapshot,
+          copyText: (text) => r.copyToClipboardOSC52(text),
+          toast: (message) => chrome.showToast(message),
+          renderer: r,
+          ...keys,
+        });
+      })();
       return;
     }
     if (result === "deferred") {

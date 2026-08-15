@@ -101,13 +101,19 @@ describe("AC9 — the readline chat surface derives its commands from the regist
     }
   });
 
-  test("/session-info /status /info dump the same rows and never stream", async () => {
-    for (const name of ["/session-info", "/status", "/info"]) {
+  test("/status dumps session and context rows and never streams", async () => {
+    const output = await chatOutput("/status");
+    expect(output).toContain("Session");
+    expect(output).toContain("Session id");
+    expect(output).toContain("Usage");
+    expect(output).toContain("Context");
+    expect(output).not.toContain("Unknown command");
+  });
+
+  test("/session-info and /info are not registered", async () => {
+    for (const name of ["/session-info", "/info"]) {
       const output = await chatOutput(name);
-      expect(output).toContain("Session");
-      expect(output).toContain("Session id");
-      expect(output).toContain("Usage");
-      expect(output).not.toContain("Unknown command");
+      expect(output).toContain("Unknown command");
     }
   });
 
@@ -130,7 +136,7 @@ describe("AC9 — the readline chat surface derives its commands from the regist
 describe("AC9 — the readline agent surface derives its commands from the registry", () => {
   test("its help text uses the registry's AGENT wording for the commands it implements", () => {
     const help = readlineAgentHelpText();
-    for (const name of ["/help", "/expand", "/new", "/clear", "/compact", "/session-info", "/exit"]) {
+    for (const name of ["/help", "/expand", "/new", "/clear", "/compact", "/status", "/flows", "/exit"]) {
       const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
       expect(command).toBeDefined();
       if (command === undefined) {

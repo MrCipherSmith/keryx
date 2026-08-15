@@ -46,6 +46,8 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
 import packageJson from "../../package.json" with { type: "json" };
+import { isFlowsCommand, openFlows } from "./flow-inspector";
+import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
 import {
   buildSessionInfoSnapshot,
   isSessionInfoCommand,
@@ -2046,21 +2048,40 @@ export async function launchTuiAgentShell(opts: {
 
     paintSessionHeader();
 
+    const inspectorKeys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+    const inspectorCwd = (): string => opts.session?.cwd ?? liveSession.summary.projectPath;
     const showSessionInfo = (): void => {
-      const snapshot = buildSessionInfoSnapshot({
-        summary: liveSession.summary,
-        selection: currentSel,
-        version: packageJson.version,
-        usage: lastUsage,
-        estimateTokens: estimateContextTokens(history),
-      });
-      openSessionInfo(otui, chrome, {
-        snapshot,
-        copyText: (text) => r.copyToClipboardOSC52(text),
-        toast: (message) => chrome.showToast(message),
-        renderer: r,
-        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
-      });
+      void (async () => {
+        const cwd = inspectorCwd();
+        const [workspaces, flows] = await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
+        const snapshot = buildSessionInfoSnapshot({
+          summary: liveSession.summary,
+          selection: currentSel,
+          version: packageJson.version,
+          usage: lastUsage,
+          estimateTokens: estimateContextTokens(history),
+          sessionText: history.map((message) => message.content).join("\n"),
+          workspaces,
+          flows,
+        });
+        openSessionInfo(otui, chrome, {
+          snapshot,
+          copyText: (text) => r.copyToClipboardOSC52(text),
+          toast: (message) => chrome.showToast(message),
+          renderer: r,
+          ...inspectorKeys,
+        });
+      })();
+    };
+    const showFlows = (): void => {
+      void (async () => {
+        const items = await loadInspectorFlows(inspectorCwd());
+        openFlows(otui, chrome, {
+          items,
+          renderer: r,
+          ...inspectorKeys,
+        });
+      })();
     };
 
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
@@ -2313,6 +2334,10 @@ export async function launchTuiAgentShell(opts: {
           showSessionInfo();
           return;
         }
+        if (command !== undefined && isFlowsCommand(command.name)) {
+          showFlows();
+          return;
+        }
         // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
         if (command !== undefined || line.startsWith("/")) {
           transcript.add(
@@ -2475,6 +2500,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isSessionInfoCommand(command.name)) {
           showSessionInfo();
+          return;
+        }
+        if (isFlowsCommand(command.name)) {
+          showFlows();
           return;
         }
         if (command.name === "/copy") {

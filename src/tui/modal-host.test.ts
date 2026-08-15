@@ -227,7 +227,7 @@ otuiTest("fixed panel size does not change when switching short and long tab bod
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });
   const handle = openModal(otui.core, h.chrome, {
-    title: "/session-info",
+    title: "/status",
     tabs: [
       { id: "long", label: "Session" },
       { id: "short", label: "Usage" },
@@ -253,7 +253,7 @@ otuiTest("fixed panel size does not change when switching short and long tab bod
   expect(after.width).toBe(first.width);
   expect(after.height).toBe(first.height);
   const frame = h.captureCharFrame();
-  expect(frame).toContain("/session-info");
+  expect(frame).toContain("/status");
   expect(frame).toContain("[x] esc");
   expect(frame).toContain(formatModalFooter([{ key: "c", label: "copy id" }, { key: "esc", label: "close" }]));
   handle?.close();

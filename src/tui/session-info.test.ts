@@ -13,6 +13,7 @@ import {
   presentSessionInfo,
   sessionBlockCopyText,
   sessionIdCopyText,
+  statusModalTabs,
   type OpenModalFn,
 } from "./session-info";
 
@@ -29,14 +30,14 @@ const SUMMARY = {
   model: "stale-model",
 };
 
-test("isSessionInfoCommand accepts the three tokens and ignores others", () => {
-  expect(SESSION_INFO_COMMANDS).toEqual(["/session-info", "/status", "/info"]);
-  expect(isSessionInfoCommand("/session-info")).toBe(true);
+test("isSessionInfoCommand accepts only /status", () => {
+  expect(SESSION_INFO_COMMANDS).toEqual(["/status"]);
+  expect(isSessionInfoCommand("/status")).toBe(true);
   expect(isSessionInfoCommand("  /status extra")).toBe(true);
-  expect(isSessionInfoCommand("/info")).toBe(true);
+  expect(isSessionInfoCommand("/session-info")).toBe(false);
+  expect(isSessionInfoCommand("/info")).toBe(false);
   expect(isSessionInfoCommand("/sessions")).toBe(false);
   expect(isSessionInfoCommand("/help")).toBe(false);
-  expect(isSessionInfoCommand("session-info")).toBe(false);
 });
 
 test("AC3: live selection wins over summary provider/model", () => {
@@ -163,15 +164,8 @@ test("AC5: presentSessionInfo c copies id and y copies the block via the host cl
   );
   expect(keyHandler).toBeDefined();
   keyHandler?.({ name: "c", sequence: "c" });
-  keyHandler?.({ name: "p", sequence: "p" });
-  keyHandler?.({ name: "m", sequence: "m" });
-  keyHandler?.({ name: "y", sequence: "y" });
   expect(copied[0]).toBe(SUMMARY.id);
-  expect(copied[1]).toBe(SUMMARY.projectPath);
-  expect(copied[2]).toBe("ollama/stale-model");
-  expect(copied[3]).toContain(SUMMARY.id);
-  expect(copied[3]).toContain("\n");
-  expect(toasts).toHaveLength(4);
+  expect(toasts).toEqual(["Copied to clipboard"]);
 });
 
 test("AC2: presentSessionInfo calls host openModal with Session + Usage tabs", () => {
@@ -184,14 +178,11 @@ test("AC2: presentSessionInfo calls host openModal with Session + Usage tabs", (
   presentSessionInfo(openModal, {}, {}, { snapshot: snap, copyText: () => {}, toast: () => {} });
   expect(calls).toHaveLength(1);
   const input = calls[0] as { title: string; tabs: { id: string; label: string }[]; initialTab?: string };
-  expect(input.title).toBe("/session-info");
-  expect(input.tabs.map((t) => t.id)).toEqual(["session", "usage"]);
-  expect(input.initialTab).toBe("session");
+  expect(input.title).toBe("/status");
+  expect(input.tabs.map((t) => t.id)).toEqual(["status", "context"]);
+  expect(input.initialTab).toBe("status");
   expect((input as { footer?: { key: string; label: string }[] }).footer?.map((item) => item.key)).toEqual([
     "c",
-    "p",
-    "m",
-    "y",
     "←/→",
     "esc",
   ]);
@@ -207,6 +198,42 @@ test("AC2: TUI call sites import openModal from the host and do not fork overlay
   expect(`${tui}\n${chat}`).toMatch(/openSessionInfo/);
   expect(local).not.toMatch(/overlayBox/);
   expect(tui).not.toMatch(/overlayBox\([^)]*session-info/);
+});
+
+test("Context tab is always present; Workspaces and Flow only when linked", () => {
+  const empty = buildSessionInfoSnapshot({ summary: SUMMARY, estimateTokens: 40 });
+  expect(statusModalTabs(empty).map((tab) => tab.id)).toEqual(["status", "context"]);
+  expect(empty.context.total).toBe(40);
+  expect(empty.context.estimated).toBe(true);
+  expect(formatSessionInfoText(empty)).toContain("Context");
+
+  const linked = buildSessionInfoSnapshot({
+    summary: SUMMARY,
+    sessionText: `used workspace-alpha and flow 154`,
+    workspaces: [{ id: "workspace-alpha", title: "Alpha", status: "active", resources: [] }],
+    flows: [
+      {
+        id: "154",
+        slug: "modal-chrome",
+        title: "Chrome",
+        status: "in-progress",
+        dir: ".metaproject/flows/154-modal-chrome",
+        tasksDone: 1,
+        tasksTotal: 3,
+        sessionIds: [],
+        prUrl: null,
+        createdAt: SUMMARY.createdAt,
+        updatedAt: SUMMARY.updatedAt,
+        source: "description",
+        tasks: [],
+      },
+    ],
+  });
+  expect(linked.hasWorkspaces).toBe(true);
+  expect(linked.hasFlows).toBe(true);
+  expect(statusModalTabs(linked).map((tab) => tab.id)).toEqual(["status", "context", "workspaces", "flow"]);
+  expect(formatSessionInfoText(linked)).toContain("workspace-alpha");
+  expect(formatSessionInfoText(linked)).toContain("154");
 });
 
 function row(rows: { label: string; value: string }[], label: string): string {
