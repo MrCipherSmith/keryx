@@ -1,0 +1,33 @@
+# Flow Journal
+
+- 2026-08-15T18:55:26.945Z - flow created
+- 2026-08-15T18:56:39.519Z - task-added: T5: Headless/slash tests first (TDD for AC1-AC8)
+- 2026-08-15T18:56:39.652Z - task-added: T6: code-verifier + review-orchestrator; fix until clean
+- 2026-08-15T18:56:39.758Z - task-added: T7: Open draft PR feat/tui-session-info (stack on modal-tabs if needed)
+- 2026-08-15T18:56:40.096Z - frozen: 8 criteria; checksum recorded
+- 2026-08-15T18:56:40.185Z - started
+- 2026-08-15T19:05:00.000Z - T1 context: registry + runLine busy path + chat bridge + readline dumps; host still missing on feat/tui-modal-tabs
+- 2026-08-15T19:06:00.000Z - T5 RED: session-info snapshot/slash/readline/mid-turn/openModal import tests
+- 2026-08-15T19:20:00.000Z - stacked on feat/tui-modal-tabs (PR #289); uses shipped openModal, no overlayBox fork
+- 2026-08-15T19:22:00.000Z - verifier: tsc clean; 65 focused tests pass; OpenTUI host + chat/session-info tests green
+- 2026-08-15T19:16:20.243Z - task-done: T1: Collect remaining context
+- 2026-08-15T19:16:20.329Z - task-done: T5: Headless/slash tests first (TDD for AC1-AC8)
+- 2026-08-15T19:16:20.410Z - task-done: T2: Implement per plan
+- 2026-08-15T19:16:20.495Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-08-15T19:19:43.138Z - task-done: T4: Self-review and prepare draft PR
+- 2026-08-15T19:19:43.241Z - task-done: T6: code-verifier + review-orchestrator; fix until clean
+- 2026-08-15T19:20:34.008Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/290
+- 2026-08-15T19:20:34.102Z - task-done: T7: Open draft PR feat/tui-session-info (stack on modal-tabs if needed)
+- 2026-08-15T19:20:47.478Z - ac-confirmed: AC1: AGENT_SLASH_COMMANDS includes /session-info /status /info in both modes; shell-slash-registry chatOutput asserts streamCalls.count===0 and dumps rows
+- 2026-08-15T19:20:47.571Z - ac-confirmed: AC2: openSessionInfo imports openModal from ./modal-host; session-info.test.ts source/call-site tests; no overlayBox inspector
+- 2026-08-15T19:20:47.651Z - ac-confirmed: AC3: buildSessionInfoSnapshot prefers live TuiSelection over summary provider/model; tests cover post-/model selection
+- 2026-08-15T19:20:47.771Z - ac-confirmed: AC4: Parent row only when parentSessionId is set; session-info.test.ts AC4
+- 2026-08-15T19:20:47.878Z - ac-confirmed: AC5: c copies summary.id; y copies formatSessionInfoText including the id; presentSessionInfo key test
+- 2026-08-15T19:20:47.974Z - ac-confirmed: AC6: runShell and runAgentRepl print formatSessionInfoText; slash-registry dump test; no OpenTUI import on that path
+- 2026-08-15T19:20:48.060Z - ac-confirmed: AC7: createChatBridge returns local for session-info (not deferred/queued); tui-shell busy path opens inspector without interrupt
+- 2026-08-15T19:20:48.180Z - ac-confirmed: AC8: estimated context labelled tokens (estimate); billed usage path is not labelled estimate
+- 2026-08-15T19:20:59.467Z - completing
+- 2026-08-15T19:21:01.991Z - completion-failed: pull-request: PR checks not green | health: no report; run `keryx health run` first
+- 2026-08-15T19:22:25.155Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/290
+- 2026-08-15T19:22:31.714Z - completing
+- 2026-08-15T19:22:33.962Z - done: all gates passed

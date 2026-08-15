@@ -38,13 +38,21 @@ import type { ShellDeps, ShellIO } from "../commands/shell-types";
 import type { DetectedProvider } from "../commands/select";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { saveShellConfig } from "../lib/shell-config";
+import { latestSession } from "../session";
+import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, createAssistantMessageStream } from "./transcript-blocks";
 import type { VersionCheckResult } from "../lib/version-check";
 import {
+  buildSessionInfoSnapshot,
+  isSessionInfoCommand,
+  openSessionInfo,
+} from "./session-info";
+import {
   estimateContextTokens,
   fmtTokens,
   modelsForPicker,
+  onKeypress,
   pickModelInTui,
   selectProviderModelInTui,
   type TuiSelection,
@@ -71,6 +79,11 @@ export type ChatSubmitResult =
   | "exit"
   /** A slash command typed mid-turn: refused rather than raced against it. */
   | "deferred"
+  /**
+   * A read-only local command (`/session-info` and aliases). Never queued as a
+   * user turn and never deferred — the caller opens the inspector itself.
+   */
+  | "local"
   /** Blank, or the stream is already closed. */
   | "ignored";
 
@@ -251,6 +264,9 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
       if (token === "/exit" || token === "/quit") {
         close();
         return "exit";
+      }
+      if (isSessionInfoCommand(value)) {
+        return "local";
       }
       if ((turn || queue.length > 0) && value.startsWith("/")) {
         return "deferred";
@@ -455,6 +471,22 @@ export async function mountChatShell(
     const result = bridge.submit(line);
     if (result === "exit") {
       opts.onExit?.();
+      return;
+    }
+    if (result === "local") {
+      const snapshot = buildSessionInfoSnapshot({
+        summary: opts.deps.session !== undefined ? latestSession(opts.deps.session.cwd) : undefined,
+        selection,
+        version: packageJson.version,
+        estimateTokens: estimateContextTokens(seen),
+      });
+      openSessionInfo(otui, chrome, {
+        snapshot,
+        copyText: (text) => r.copyToClipboardOSC52(text),
+        toast: (message) => chrome.showToast(message),
+        renderer: r,
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      });
       return;
     }
     if (result === "deferred") {

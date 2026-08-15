@@ -115,6 +115,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/resume", description: "Resume a prior session in this project", modes: AGENT_ONLY },
   { name: "/sessions", description: "Open the session list and switch to one", modes: AGENT_ONLY },
   {
+    name: "/session-info",
+    description: "Show session identity and context usage",
+    modes: BOTH,
+  },
+  { name: "/status", description: "Alias of /session-info", modes: BOTH },
+  { name: "/info", description: "Alias of /session-info", modes: BOTH },
+  {
     name: "/compact",
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,

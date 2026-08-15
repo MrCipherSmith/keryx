@@ -44,7 +44,13 @@ import { buildApprovalContext } from "../commands/agent-approval-context";
 import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
-import type { NormalizedMessage } from "../harness/provider/types";
+import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+import packageJson from "../../package.json" with { type: "json" };
+import {
+  buildSessionInfoSnapshot,
+  isSessionInfoCommand,
+  openSessionInfo,
+} from "./session-info";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import {
@@ -1504,6 +1510,12 @@ export async function launchTuiAgentShell(opts: {
         hasExactUsage = true;
       },
     });
+    let lastUsage: NormalizedUsage | undefined;
+    const recordedUsage = io.onUsage?.bind(io);
+    io.onUsage = (usage) => {
+      lastUsage = usage;
+      recordedUsage?.(usage);
+    };
     // Reasoning / tool call / tool result all render as collapsed BLOCKS whose
     // full text is retained (AC1). The event → block mapping itself lives in the
     // exported `attachBlockIo` (headlessly testable); the closure contributes
@@ -2034,6 +2046,23 @@ export async function launchTuiAgentShell(opts: {
 
     paintSessionHeader();
 
+    const showSessionInfo = (): void => {
+      const snapshot = buildSessionInfoSnapshot({
+        summary: liveSession.summary,
+        selection: currentSel,
+        version: packageJson.version,
+        usage: lastUsage,
+        estimateTokens: estimateContextTokens(history),
+      });
+      openSessionInfo(otui, chrome, {
+        snapshot,
+        copyText: (text) => r.copyToClipboardOSC52(text),
+        toast: (message) => chrome.showToast(message),
+        renderer: r,
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      });
+    };
+
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
     const updateModelLabels = (): void => {
       paintSessionHeader();
@@ -2280,6 +2309,10 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.("◇ no active main turn to interrupt.\n");
           return;
         }
+        if (command !== undefined && isSessionInfoCommand(command.name)) {
+          showSessionInfo();
+          return;
+        }
         // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
         if (command !== undefined || line.startsWith("/")) {
           transcript.add(
@@ -2438,6 +2471,10 @@ export async function launchTuiAgentShell(opts: {
           if (toggleNewestBlock("output") === undefined && toggleNewestBlock() === undefined) {
             io.onSystem?.("Nothing to expand — no tool output yet.\n");
           }
+          return;
+        }
+        if (isSessionInfoCommand(command.name)) {
+          showSessionInfo();
           return;
         }
         if (command.name === "/copy") {

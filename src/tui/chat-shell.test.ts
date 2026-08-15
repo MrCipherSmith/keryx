@@ -393,6 +393,11 @@ test("AC11: composer submissions become ShellIO.lines in order, including while 
   // …and a slash command mid-turn is refused rather than raced (plan R2).
   expect(bridge.submit("/compact")).toBe("deferred");
   expect(bridge.pending()).toBe(2);
+  // Session inspector is read-only: it must not cancel, defer, or queue.
+  expect(bridge.submit("/session-info")).toBe("local");
+  expect(bridge.submit("/status")).toBe("local");
+  expect(bridge.submit("/info")).toBe("local");
+  expect(bridge.pending()).toBe(2);
 
   seen.push((await iterator.next()).value as string);
   seen.push((await iterator.next()).value as string);
