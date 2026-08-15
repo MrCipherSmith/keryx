@@ -2,9 +2,18 @@
 // TUI open goes through `openModal` from `./modal-host`. No private overlay.
 
 import type { NormalizedUsage } from "../harness/provider/types";
+import { buildContextUsage, formatContextUsageText, type ContextUsageView } from "./context-usage";
+import {
+  flowsInSession,
+  formatSessionFlowLines,
+  formatWorkspaceLines,
+  workspacesInSession,
+  type FlowInspectorItem,
+  type WorkspaceInfo,
+} from "./inspector-sources";
 import { openModal } from "./modal-host";
 
-export const SESSION_INFO_COMMANDS = ["/session-info", "/status", "/info"] as const;
+export const SESSION_INFO_COMMANDS = ["/status"] as const;
 
 const MISSING = "—";
 
@@ -17,6 +26,11 @@ export type SessionInfoSnapshot = {
   sessionId: string;
   sessionRows: SessionInfoRow[];
   usageRows: SessionInfoRow[];
+  context: ContextUsageView;
+  workspaceLines: string[];
+  flowLines: string[];
+  hasWorkspaces: boolean;
+  hasFlows: boolean;
 };
 
 export type SessionInfoSource = {
@@ -37,6 +51,9 @@ export type SessionInfoSource = {
   version?: string | undefined;
   usage?: Pick<NormalizedUsage, "inputTokens" | "outputTokens" | "totalTokens"> | undefined;
   estimateTokens?: number | undefined;
+  sessionText?: string | undefined;
+  workspaces?: readonly WorkspaceInfo[] | undefined;
+  flows?: readonly FlowInspectorItem[] | undefined;
 };
 
 export type ModalTab = { id: string; label: string };
@@ -45,9 +62,17 @@ export type OpenModalInput = {
   title: string;
   tabs: readonly ModalTab[];
   initialTab?: string;
+  footer?: readonly { key: string; label: string }[];
   renderTab: (tabId: string, body: unknown) => void | (() => void);
   onClose?: () => void;
 };
+
+/** One-line hints; keep `formatModalFooter(...)` within the 72-col panel. */
+export const SESSION_INFO_FOOTER = [
+  { key: "c", label: "copy id" },
+  { key: "←/→", label: "tabs" },
+  { key: "esc", label: "close" },
+] as const;
 
 export type ModalHandle = {
   close(): void;
@@ -149,8 +174,29 @@ export function buildSessionInfoSnapshot(source: SessionInfoSource): SessionInfo
     },
     { label: "Context estimate", value: estimate },
   ];
+  const context = buildContextUsage({
+    estimateTokens: source.estimateTokens,
+    usage: source.usage,
+  });
+  const sessionWorkspaces = workspacesInSession(source.workspaces ?? [], {
+    sessionId: id,
+    ...(source.sessionText !== undefined ? { sessionText: source.sessionText } : {}),
+  });
+  const sessionFlows = flowsInSession(source.flows ?? [], {
+    sessionId: id,
+    ...(source.sessionText !== undefined ? { sessionText: source.sessionText } : {}),
+  });
 
-  return { sessionId: id, sessionRows, usageRows };
+  return {
+    sessionId: id,
+    sessionRows,
+    usageRows,
+    context,
+    workspaceLines: formatWorkspaceLines(sessionWorkspaces),
+    flowLines: formatSessionFlowLines(sessionFlows),
+    hasWorkspaces: sessionWorkspaces.length > 0,
+    hasFlows: sessionFlows.length > 0,
+  };
 }
 
 function formatSection(title: string, rows: readonly SessionInfoRow[]): string {
@@ -159,7 +205,15 @@ function formatSection(title: string, rows: readonly SessionInfoRow[]): string {
 }
 
 export function formatSessionInfoText(snapshot: SessionInfoSnapshot): string {
-  return `${formatSection("Session", snapshot.sessionRows)}\n\n${formatSection("Usage", snapshot.usageRows)}\n`;
+  const extra: string[] = [];
+  extra.push(formatContextUsageText(snapshot.context));
+  if (snapshot.hasWorkspaces) {
+    extra.push(["Workspaces", ...snapshot.workspaceLines.map((line) => `  ${line}`), ""].join("\n"));
+  }
+  if (snapshot.hasFlows) {
+    extra.push(["Flow", ...snapshot.flowLines.map((line) => `  ${line}`), ""].join("\n"));
+  }
+  return `${formatSection("Session", snapshot.sessionRows)}\n\n${formatSection("Usage", snapshot.usageRows)}\n\n${extra.join("\n")}`;
 }
 
 export function sessionIdCopyText(snapshot: SessionInfoSnapshot): string {
@@ -170,6 +224,20 @@ export function sessionBlockCopyText(snapshot: SessionInfoSnapshot): string {
   return formatSessionInfoText(snapshot);
 }
 
+export function statusModalTabs(snapshot: SessionInfoSnapshot): { id: string; label: string }[] {
+  const tabs = [
+    { id: "status", label: "Status" },
+    { id: "context", label: "Context" },
+  ];
+  if (snapshot.hasWorkspaces) {
+    tabs.push({ id: "workspaces", label: "Workspaces" });
+  }
+  if (snapshot.hasFlows) {
+    tabs.push({ id: "flow", label: "Flow" });
+  }
+  return tabs;
+}
+
 export type PresentSessionInfoOptions = {
   snapshot: SessionInfoSnapshot;
   copyText: (text: string) => void;
@@ -178,7 +246,7 @@ export type PresentSessionInfoOptions = {
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 };
 
-function paintRows(otui: unknown, renderer: unknown, body: unknown, rows: readonly SessionInfoRow[]): void {
+function paintContent(otui: unknown, renderer: unknown, body: unknown, content: string): void {
   if (otui === undefined || otui === null || body === undefined || body === null) {
     return;
   }
@@ -188,13 +256,12 @@ function paintRows(otui: unknown, renderer: unknown, body: unknown, rows: readon
   if (parent.add === undefined || ctor === undefined) {
     return;
   }
+  parent.add(new ctor(renderer, { id: "session-info-body", content }));
+}
+
+function paintRows(otui: unknown, renderer: unknown, body: unknown, rows: readonly SessionInfoRow[]): void {
   const width = rows.reduce((max, row) => Math.max(max, row.label.length), 0);
-  parent.add(
-    new ctor(renderer, {
-      id: "session-info-body",
-      content: rows.map((row) => `${row.label.padEnd(width)}  ${row.value}`).join("\n"),
-    }),
-  );
+  paintContent(otui, renderer, body, rows.map((row) => `${row.label.padEnd(width)}  ${row.value}`).join("\n"));
 }
 
 export function presentSessionInfo(
@@ -217,17 +284,26 @@ export function presentSessionInfo(
   };
   let unsubscribeKey: (() => void) | undefined;
   const handle = openModal(otui, chrome, {
-    title: "Session",
-    tabs: [
-      { id: "session", label: "Session" },
-      { id: "usage", label: "Usage" },
-    ],
-    initialTab: "session",
+    title: "/status",
+    tabs: statusModalTabs(snapshot),
+    initialTab: "status",
+    footer: SESSION_INFO_FOOTER,
     renderTab: (tabId, body) => {
-      const rows = tabId === "usage" ? snapshot.usageRows : snapshot.sessionRows;
       const renderer =
         options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
-      paintRows(otui, renderer, body, rows);
+      if (tabId === "context") {
+        paintContent(otui, renderer, body, formatContextUsageText(snapshot.context).trimEnd());
+        return;
+      }
+      if (tabId === "workspaces") {
+        paintContent(otui, renderer, body, snapshot.workspaceLines.join("\n"));
+        return;
+      }
+      if (tabId === "flow") {
+        paintContent(otui, renderer, body, snapshot.flowLines.join("\n"));
+        return;
+      }
+      paintRows(otui, renderer, body, snapshot.sessionRows);
     },
     onClose: () => {
       unsubscribeKey?.();
@@ -241,15 +317,13 @@ export function presentSessionInfo(
       const token = key.name || key.sequence;
       if (token === "c") {
         copy(sessionIdCopyText(snapshot));
-      } else if (token === "y") {
-        copy(sessionBlockCopyText(snapshot));
       }
     });
   }
   return handle;
 }
 
-/** Open the shared host on Session + Usage. No-op when OpenTUI/chrome is missing. */
+/** Open the shared host on Status + Context. No-op when OpenTUI/chrome is missing. */
 export function openSessionInfo(
   otui: Parameters<typeof openModal>[0],
   chrome: Parameters<typeof openModal>[1],

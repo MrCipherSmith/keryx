@@ -46,6 +46,8 @@ import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
+import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
+import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -133,9 +135,8 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/new",
   "/clear",
   "/compact",
-  "/session-info",
   "/status",
-  "/info",
+  "/flows",
   "/exit",
 ];
 
@@ -261,6 +262,11 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         continue;
       }
       if (isSessionInfoCommand(command)) {
+        const cwd = deps.session?.cwd;
+        const [workspaces, flows] =
+          cwd === undefined
+            ? [[], []]
+            : await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
         system(
           formatSessionInfoText(
             buildSessionInfoSnapshot({
@@ -268,9 +274,24 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
               selection: { provider: providerName, model: modelName },
               version: packageJson.version,
               estimateTokens: estimateContextTokens(history),
+              sessionText: history.map((message) => message.content).join("\n"),
+              workspaces,
+              flows,
             }),
           ),
         );
+        continue;
+      }
+      if (isFlowsCommand(command)) {
+        const cwd = deps.session?.cwd;
+        const items = cwd === undefined ? [] : await loadInspectorFlows(cwd);
+        const query = argument.trim();
+        if (query.length > 0) {
+          const found = findFlowItem(items, query);
+          system(found !== undefined ? formatFlowDetailText(found) : `No flow matching '${query}'.\n`);
+          continue;
+        }
+        system(formatFlowListText(items));
         continue;
       }
       if (command === "/clear" || command === "/new") {
@@ -1050,6 +1071,11 @@ async function runAgentRepl(
       if (command === "/help") {
         agentIo.onSystem?.(readlineAgentHelpText());
       } else if (isSessionInfoCommand(command)) {
+        const cwd = sessionCwd;
+        const [workspaces, flows] = await Promise.all([
+          loadInspectorWorkspaces(cwd),
+          loadInspectorFlows(cwd),
+        ]);
         agentIo.onSystem?.(
           formatSessionInfoText(
             buildSessionInfoSnapshot({
@@ -1058,9 +1084,22 @@ async function runAgentRepl(
               version: packageJson.version,
               usage: lastUsage,
               estimateTokens: estimateContextTokens(history),
+              sessionText: history.map((message) => message.content).join("\n"),
+              workspaces,
+              flows,
             }),
           ),
         );
+      } else if (isFlowsCommand(command)) {
+        const items = await loadInspectorFlows(sessionCwd);
+        if (rest.length > 0) {
+          const found = findFlowItem(items, rest);
+          agentIo.onSystem?.(
+            found !== undefined ? formatFlowDetailText(found) : `No flow matching '${rest}'.\n`,
+          );
+        } else {
+          agentIo.onSystem?.(formatFlowListText(items));
+        }
       } else if (command === "/expand") {
         const expanded = expandedToolOutput(lastToolName, lastToolOutput);
         if (expanded !== undefined) {
