@@ -16,10 +16,14 @@ type Text = InstanceType<OpenTui["TextRenderable"]>;
 
 export type ModalTab = { id: string; label: string };
 
+export type ModalFooterAction = { key: string; label: string };
+
 export type OpenModalInput = {
   title: string;
   tabs: readonly ModalTab[];
   initialTab?: string;
+  /** Footer key-hints. Default: tab switch + Esc close. */
+  footer?: readonly ModalFooterAction[];
   renderTab: (tabId: string, body: unknown) => void | (() => void);
   onClose?: () => void;
 };
@@ -53,15 +57,33 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
 const BACKDROP_ID = "modal-backdrop";
 const PANEL_ID = "modal-panel";
 const BACKDROP_OPACITY = 0.45;
+/** Fixed panel so tab bodies of different lengths do not resize the chrome. */
+export const MODAL_PANEL_WIDTH = 72;
+export const MODAL_PANEL_HEIGHT = 18;
+/** Inner columns after rounded border + horizontal padding. */
+export const MODAL_PANEL_INNER_WIDTH = MODAL_PANEL_WIDTH - 4;
+const CLOSE_HINT = "[x] esc";
+const DEFAULT_FOOTER: readonly ModalFooterAction[] = [
+  { key: "←/→", label: "tabs" },
+  { key: "esc", label: "close" },
+];
+
+export function formatModalFooter(actions: readonly ModalFooterAction[]): string {
+  return actions.map((action) => `${action.key} ${action.label}`).join(" · ");
+}
 
 type HostState = {
   otui: OpenTui;
   chrome: ModalChrome;
   backdrop: Box;
   panel: Box;
+  header: Box;
   titleText: Text;
+  closeText: Text;
   tabStrip: Box;
   body: Box;
+  footer: Box;
+  footerText: Text;
   open: boolean;
   generation: number;
   tabs: readonly ModalTab[];
@@ -116,6 +138,16 @@ function paintTabs(state: HostState): void {
       content: state.otui.t`${state.otui.dim(labels)}`,
     }),
   );
+}
+
+function paintHeader(state: HostState, title: string): void {
+  state.titleText.content = state.otui.t`${state.otui.bold(title)}`;
+  state.closeText.content = state.otui.t`${state.otui.dim(CLOSE_HINT)}`;
+}
+
+function paintFooter(state: HostState, actions: readonly ModalFooterAction[] | undefined): void {
+  const items = actions !== undefined && actions.length > 0 ? actions : DEFAULT_FOOTER;
+  state.footerText.content = state.otui.t`${state.otui.dim(formatModalFooter(items))}`;
 }
 
 function unmountActiveTab(state: HostState): void {
@@ -180,10 +212,10 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   });
   const panel = new otui.BoxRenderable(r, {
     id: PANEL_ID,
-    width: "80%",
-    maxWidth: 72,
-    maxHeight: "80%",
+    width: MODAL_PANEL_WIDTH,
+    height: MODAL_PANEL_HEIGHT,
     flexShrink: 0,
+    flexGrow: 0,
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
@@ -193,26 +225,57 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     paddingRight: 1,
     zIndex: 101,
   });
+  const header = new otui.BoxRenderable(r, {
+    id: "modal-header",
+    width: "100%",
+    height: 1,
+    flexShrink: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  });
   const titleText = new otui.TextRenderable(r, {
     id: "modal-title",
     content: "",
+    flexGrow: 1,
   });
+  const closeText = new otui.TextRenderable(r, {
+    id: "modal-close",
+    content: "",
+    flexShrink: 0,
+  });
+  header.add(titleText);
+  header.add(closeText);
   const tabStrip = new otui.BoxRenderable(r, {
     id: "modal-tab-strip",
     flexShrink: 0,
     width: "100%",
+    height: 1,
     flexDirection: "row",
     focusable: true,
   });
   const body = new otui.BoxRenderable(r, {
     id: "modal-body",
     width: "100%",
+    flexGrow: 1,
     minHeight: 1,
     flexDirection: "column",
   });
-  panel.add(titleText);
+  const footer = new otui.BoxRenderable(r, {
+    id: "modal-footer",
+    width: "100%",
+    height: 1,
+    flexShrink: 0,
+    flexDirection: "row",
+  });
+  const footerText = new otui.TextRenderable(r, {
+    id: "modal-footer-text",
+    content: "",
+  });
+  footer.add(footerText);
+  panel.add(header);
   panel.add(tabStrip);
   panel.add(body);
+  panel.add(footer);
   backdrop.add(panel);
   r.root.add(backdrop);
 
@@ -221,9 +284,13 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     chrome,
     backdrop,
     panel,
+    header,
     titleText,
+    closeText,
     tabStrip,
     body,
+    footer,
+    footerText,
     open: false,
     generation: 0,
     tabs: [],
@@ -241,7 +308,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     if (!state.open || state.input === undefined) {
       return;
     }
-    if (key.name === "escape") {
+    if (key.name === "escape" || key.name === "x" || key.sequence === "x") {
       closeHost(state, { restoreFocus: true, runOnClose: true });
       key.preventDefault();
       key.stopPropagation();
@@ -343,7 +410,8 @@ export function openModal(
   state.input = input;
   state.tabs = input.tabs;
   state.onClose = input.onClose;
-  state.titleText.content = otui.t`${otui.bold(input.title)}`;
+  paintHeader(state, input.title);
+  paintFooter(state, input.footer);
   mountTab(state, input, resolveInitialTab(input.tabs, input.initialTab));
   state.tabStrip.focus();
   return makeHandle(state, generation);

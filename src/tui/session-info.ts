@@ -45,9 +45,20 @@ export type OpenModalInput = {
   title: string;
   tabs: readonly ModalTab[];
   initialTab?: string;
+  footer?: readonly { key: string; label: string }[];
   renderTab: (tabId: string, body: unknown) => void | (() => void);
   onClose?: () => void;
 };
+
+/** One-line hints; keep `formatModalFooter(...)` within the 72-col panel. */
+export const SESSION_INFO_FOOTER = [
+  { key: "c", label: "copy id" },
+  { key: "p", label: "path" },
+  { key: "m", label: "model" },
+  { key: "y", label: "all" },
+  { key: "←/→", label: "tabs" },
+  { key: "esc", label: "close" },
+] as const;
 
 export type ModalHandle = {
   close(): void;
@@ -170,6 +181,26 @@ export function sessionBlockCopyText(snapshot: SessionInfoSnapshot): string {
   return formatSessionInfoText(snapshot);
 }
 
+function copyable(value: string | undefined): string {
+  return value === undefined || value === MISSING ? "" : value;
+}
+
+export function sessionProjectCopyText(snapshot: SessionInfoSnapshot): string {
+  return copyable(snapshot.sessionRows.find((row) => row.label === "Project")?.value);
+}
+
+export function sessionModelCopyText(snapshot: SessionInfoSnapshot): string {
+  const provider = copyable(snapshot.sessionRows.find((row) => row.label === "Provider")?.value);
+  const model = copyable(snapshot.sessionRows.find((row) => row.label === "Model")?.value);
+  if (provider.length === 0) {
+    return model;
+  }
+  if (model.length === 0) {
+    return provider;
+  }
+  return `${provider}/${model}`;
+}
+
 export type PresentSessionInfoOptions = {
   snapshot: SessionInfoSnapshot;
   copyText: (text: string) => void;
@@ -217,12 +248,13 @@ export function presentSessionInfo(
   };
   let unsubscribeKey: (() => void) | undefined;
   const handle = openModal(otui, chrome, {
-    title: "Session",
+    title: "/session-info",
     tabs: [
       { id: "session", label: "Session" },
       { id: "usage", label: "Usage" },
     ],
     initialTab: "session",
+    footer: SESSION_INFO_FOOTER,
     renderTab: (tabId, body) => {
       const rows = tabId === "usage" ? snapshot.usageRows : snapshot.sessionRows;
       const renderer =
@@ -241,6 +273,10 @@ export function presentSessionInfo(
       const token = key.name || key.sequence;
       if (token === "c") {
         copy(sessionIdCopyText(snapshot));
+      } else if (token === "p") {
+        copy(sessionProjectCopyText(snapshot));
+      } else if (token === "m") {
+        copy(sessionModelCopyText(snapshot));
       } else if (token === "y") {
         copy(sessionBlockCopyText(snapshot));
       }

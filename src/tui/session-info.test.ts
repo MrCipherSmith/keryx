@@ -3,8 +3,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { MODAL_PANEL_INNER_WIDTH, formatModalFooter } from "./modal-host";
 import {
   SESSION_INFO_COMMANDS,
+  SESSION_INFO_FOOTER,
   buildSessionInfoSnapshot,
   formatSessionInfoText,
   isSessionInfoCommand,
@@ -161,11 +163,15 @@ test("AC5: presentSessionInfo c copies id and y copies the block via the host cl
   );
   expect(keyHandler).toBeDefined();
   keyHandler?.({ name: "c", sequence: "c" });
+  keyHandler?.({ name: "p", sequence: "p" });
+  keyHandler?.({ name: "m", sequence: "m" });
   keyHandler?.({ name: "y", sequence: "y" });
   expect(copied[0]).toBe(SUMMARY.id);
-  expect(copied[1]).toContain(SUMMARY.id);
-  expect(copied[1]).toContain("\n");
-  expect(toasts).toEqual(["Copied to clipboard", "Copied to clipboard"]);
+  expect(copied[1]).toBe(SUMMARY.projectPath);
+  expect(copied[2]).toBe("ollama/stale-model");
+  expect(copied[3]).toContain(SUMMARY.id);
+  expect(copied[3]).toContain("\n");
+  expect(toasts).toHaveLength(4);
 });
 
 test("AC2: presentSessionInfo calls host openModal with Session + Usage tabs", () => {
@@ -178,9 +184,18 @@ test("AC2: presentSessionInfo calls host openModal with Session + Usage tabs", (
   presentSessionInfo(openModal, {}, {}, { snapshot: snap, copyText: () => {}, toast: () => {} });
   expect(calls).toHaveLength(1);
   const input = calls[0] as { title: string; tabs: { id: string; label: string }[]; initialTab?: string };
-  expect(input.title).toBe("Session");
+  expect(input.title).toBe("/session-info");
   expect(input.tabs.map((t) => t.id)).toEqual(["session", "usage"]);
   expect(input.initialTab).toBe("session");
+  expect((input as { footer?: { key: string; label: string }[] }).footer?.map((item) => item.key)).toEqual([
+    "c",
+    "p",
+    "m",
+    "y",
+    "←/→",
+    "esc",
+  ]);
+  expect(formatModalFooter(SESSION_INFO_FOOTER).length).toBeLessThanOrEqual(MODAL_PANEL_INNER_WIDTH);
 });
 
 test("AC2: TUI call sites import openModal from the host and do not fork overlayBox", () => {
