@@ -5,6 +5,26 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.36] — 2026-08-15
+
+### Added
+
+- **Reusable OpenTUI modal + tab host (flow 154).** `src/tui/modal-host.ts`
+  opens a titled panel over a dimmed backdrop (not a full-screen `overlayBox`
+  replacement of chrome), with an optional tab strip, Esc dismiss, composer
+  focus restore, and `shell-chrome` overlay registration so the `/`-menu and
+  Ctrl+O stay inert. Two callers can share the same host with different
+  titles, tabs, and `initialTab`. Headless tests cover open, tab switch,
+  replace-not-stack, and OpenTUI-unavailable no-op.
+- **`/session-info` inspector (flow 155).** Slash commands `/session-info`,
+  `/status`, and `/info` (chat and agent) open that host on Session and Usage
+  tabs: title, keryx version, session id, project path, provider/model (live
+  selection wins), parent id for forks, timestamps, message/archive/compact
+  counts, last-turn tokens, and a labelled context **estimate** when the
+  provider did not report a window. `c` copies the session id; `y` copies the
+  block. Readline/`--no-tui` prints the same rows. The command never starts a
+  model turn.
+
 ## [0.2.35] — 2026-08-15
 
 ### Added
@@ -1534,4 +1554,5 @@ runtime dependencies, no sockets).
 [0.2.33]: https://github.com/MrCipherSmith/keryx/compare/v0.2.32...v0.2.33
 [0.2.34]: https://github.com/MrCipherSmith/keryx/compare/v0.2.33...v0.2.34
 [0.2.35]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...v0.2.35
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...HEAD
+[0.2.36]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...v0.2.36
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.36...HEAD
