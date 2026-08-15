@@ -3,9 +3,9 @@
   "id": "157",
   "slug": "slate-phase-1-skeleton-and-bundled-sac-h",
   "title": "Slate Phase 1: Skeleton and bundled SAC hardening",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-08-15T22:34:47.121Z",
-  "updatedAt": "2026-08-15T23:18:58.213Z",
+  "updatedAt": "2026-08-15T23:51:12.467Z",
   "source": {
     "type": "description",
     "ref": null
@@ -13,7 +13,7 @@
   "acChecksum": "sha256:05d4c4ce03e94fd0414bcadb3b78d41dea768e1dfcf6134a7f5138afb41876e3",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/297"
   },
   "tasks": [
     {
@@ -110,6 +110,11 @@
       "at": "2026-08-15T23:18:58.213Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-15T23:51:12.467Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/297"
     }
   ]
 }
