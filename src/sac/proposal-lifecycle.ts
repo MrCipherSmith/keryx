@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { withFileLock, writeFileAtomic } from "../lib/fs";
+import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./trusted-wrap-up";
@@ -10,6 +10,9 @@ import { resolveSessionWrapUp } from "./session-wrap-up";
 import { createRealMemoryOwnerWriter } from "./memory-owner-writer";
 import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
 import { createRealSkillOwnerWriter } from "./skill-owner-writer";
+import { readWorkspaceFileNoFollow } from "./secure-resource-read";
+import { detectSecrets } from "../security/detect/secrets";
+import { detectPii } from "../security/detect/pii";
 
 type Evidence = { kind: string; uri: string; revision: string; observedAt: string };
 type ProposalKind = "decision" | "wiki-update" | "memory-entry" | "follow-up" | "contract-change" | "risk";
@@ -56,7 +59,8 @@ export class ProposalLifecycleService {
     const wrapUp = this.options.wrapUpAuthority.verify(input.wrapUp, { actor, workspaceId: input.workspaceId });
     if (wrapUp !== "ok") throw new ProposalLifecycleError("trusted_wrap_up_required", `trusted wrap-up ${wrapUp}`);
     const createdAt = this.timestamp();
-    const proposal: Proposal = { schemaVersion: "1.0", recordType: "proposal-created", id: input.id, proposalRevision: input.proposalRevision, correlationId: input.requestCorrelationId, workspaceId: "", kind: input.kind, status: "proposed", summary: "trusted wrap-up reference", evidence: [...input.wrapUp.evidence], wrapUp: { id: input.wrapUp.id, source: input.wrapUp.source, sourceRef: input.wrapUp.sourceRef, sourceRevision: input.wrapUp.sourceRevision, issuedAt: input.wrapUp.issuedAt, expiresAt: input.wrapUp.expiresAt }, author: actor.subject, security: { gate: "pass", redacted: true, policyRef: this.options.policyRef, policyRevision }, createdAt };
+    const gate = await this.scanEvidenceSecurityGate(input.wrapUp.evidence);
+    const proposal: Proposal = { schemaVersion: "1.0", recordType: "proposal-created", id: input.id, proposalRevision: input.proposalRevision, correlationId: input.requestCorrelationId, workspaceId: "", kind: input.kind, status: "proposed", summary: "trusted wrap-up reference", evidence: [...input.wrapUp.evidence], wrapUp: { id: input.wrapUp.id, source: input.wrapUp.source, sourceRef: input.wrapUp.sourceRef, sourceRevision: input.wrapUp.sourceRevision, issuedAt: input.wrapUp.issuedAt, expiresAt: input.wrapUp.expiresAt }, author: actor.subject, security: { gate, redacted: true, policyRef: this.options.policyRef, policyRevision }, createdAt };
     // The workspace is derived from the caller's explicit workspace-bound evidence
     // request in v1. The public operation accepts it through a separate field to
     // keep the stored record exactly schema-shaped.
@@ -186,6 +190,57 @@ export class ProposalLifecycleService {
   private async actor(request: unknown, correlationId: string): Promise<TrustedActorContext> { const actor = await this.options.authorizationServer.actorContextFor(request, correlationId); if (!actor) throw new ProposalLifecycleError("access_denied", "trusted ActorContext is required"); return actor; }
   private async strict(expected?: string): Promise<string> { const gate = await evaluateStrictSacGuard({ guard: this.options.guard, operation: "write" }); const revision = this.options.guard.mode === "strict" ? this.options.guard.policyRevision : undefined; if (!gate.allowed || !revision || revision !== this.options.policyRevision || (expected && revision !== expected)) throw new ProposalLifecycleError("guard_denied", "strict SAC guard/policy revision denied lifecycle write"); return revision; }
   private async validateEvidence(evidence: Evidence[], requireRevision = false, actor?: TrustedActorContext, workspaceId?: string): Promise<void> { for (const item of evidence) { if (requireRevision) { if (!actor || !workspaceId) throw new ProposalLifecycleError("stale", "missing owner-use actor"); const content = await this.options.workspaces.readEvidenceAtUse({ actorContext: actor, workspaceId, uri: item.uri }); if (hash(content.toString("utf8")) !== item.revision) throw new ProposalLifecycleError("stale", "evidence revision changed"); } else await resolveWorkspaceReference({ workspaceRoot: this.root, kind: item.kind as "evidence", uri: item.uri }); } }
+  /**
+   * `security.gate` set at proposal creation (SLATE-12): a real detectSecrets/
+   * detectPii scan of each evidence item's content, resolved the same
+   * containment-checked way `validateEvidence`'s non-revision branch does —
+   * never `workspaces.readEvidenceAtUse`, which requires `action: "review"`
+   * authorization `create()`'s actor (authorized for `"write"`) may not hold.
+   * Content is read through `readWorkspaceFileNoFollow` (descriptor-chain,
+   * O_NOFOLLOW at every path component) rather than a plain `readFile`, to
+   * close the same TOCTOU/symlink-follow gap `readEvidenceAtUse` already
+   * closes for its own read.
+   *
+   * Before trusting a scan result, the read content is hashed and compared
+   * against `item.revision` — the sha256 the evidence was pinned to when the
+   * trusted wrap-up issued it (the same comparison `validateEvidence`'s
+   * revision-check branch and `transition()` already perform via `hash()`).
+   * Content can legitimately or maliciously differ between when `revision`
+   * was computed and when this scan runs moments later; if it no longer
+   * matches, a "nothing found" result from the detectors would be dishonest
+   * (we did not actually scan the evidence the proposal is pinned to), so
+   * that item is treated as a "needs approval" signal and the detectors are
+   * not consulted for it — fail-closed, matching the posture the rest of
+   * this file already takes for the identical situation.
+   *
+   * A read/resolve failure on an individual item (binary content, an item
+   * that fails containment, ENOENT, etc.) is treated as "nothing scannable"
+   * for that item rather than crashing `create()` or auto-escalating to
+   * `needs-approval` — escalating on every unreadable item would make a
+   * binary/missing evidence file indistinguishable from a real secret/PII
+   * finding for a reviewer. Evidence containment/existence is validated
+   * separately by `validateEvidence()` right after this call. This is
+   * distinct from — and unaffected by — the revision-mismatch case above,
+   * which only applies once content was read successfully.
+   */
+  private async scanEvidenceSecurityGate(evidence: readonly Evidence[]): Promise<"pass" | "needs-approval"> {
+    for (const item of evidence) {
+      let content: string;
+      try {
+        const resolved = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: item.kind as "evidence", uri: item.uri });
+        content = readWorkspaceFileNoFollow(this.root, resolved).toString("utf8");
+      } catch {
+        // Couldn't read/resolve this item at all (binary, ENOENT, containment
+        // failure, etc.) — "nothing scannable" for this item, not a finding.
+        // validateEvidence() re-checks containment/existence right after this
+        // call, so a missing/unreadable item is never silently accepted.
+        continue;
+      }
+      if (hash(content) !== item.revision) return "needs-approval";
+      if (detectSecrets(content).length > 0 || detectPii(content).length > 0) return "needs-approval";
+    }
+    return "pass";
+  }
   private async validateProposal(proposal: Proposal): Promise<void> { const validation = await validateSacContract({ schema: "workspace-proposal", document: proposal }); if (!validation.valid) throw new ProposalLifecycleError("invalid_proposal", validation.errors.map((error) => error.code).join(",")); }
   private async validateRecord(record: LedgerRecord): Promise<void> { const validation = await validateSacContract({ schema: "workspace-proposal", document: record }); if (!validation.valid) throw new ProposalLifecycleError("invalid_proposal", validation.errors.map((error) => error.code).join(",")); }
   private async validateTransition(event: Transition): Promise<void> { const validation = await validateSacContract({ schema: "workspace-proposal", document: event }); if (!validation.valid) throw new ProposalLifecycleError("invalid_proposal", validation.errors.map((error) => error.code).join(",")); }
@@ -209,10 +264,19 @@ export class ProposalLifecycleService {
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function eventHash(value: Transition): string { return hash(JSON.stringify(value)); }
 function recordHash(value: LedgerRecord): string { return hash(JSON.stringify(value)); }
-function isNotFound(error: unknown): boolean { return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"; }
 
-/** Local CLI/stdin MCP composition has no owning knowledge writer, so it can
- * record proposals and non-accepting decisions but can never self-accept. */
+/**
+ * NOT a self-accept protection in the real request path: `src/commands/workspace.ts`
+ * and `src/mcp/tools.ts` never construct this composition — both exclusively call
+ * `createHarnessProposalLifecycleService` for every real CLI/MCP `propose`/`review`
+ * request. What this composition actually evaluates to, for any caller that did
+ * construct it directly, is the fail-closed local owner-writer adapters from
+ * `createLocalOwnerWriterAdapters()` below: it can still record proposals and
+ * non-accepting decisions, but a `review({ decision: "accepted" })` against it always
+ * fails at the owner write, since every local adapter's `persist` unconditionally
+ * returns `owner_writer_unavailable`. That is a property of this specific
+ * composition, not a guarantee enforced anywhere along the live request path.
+ */
 export function createLocalProposalLifecycleService(cwd: string): ProposalLifecycleService {
   const authorizationServer = localWorkspaceAuthorizationServer();
   const workspaces = new WorkspaceService({ workspaceRoot: cwd, authorizationServer, strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } });

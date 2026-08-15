@@ -155,10 +155,8 @@ test("a skill owner receipt is REJECTED (lands as stale) when targetRef uses the
 });
 
 // --- WSL-1/WSL-3 interaction with proposal lifecycle (AC-3, AC-4, AC-6) ---
-// `WorkspaceService.archive`/`removeResource` do not exist yet (see
-// workspace-service.test.ts and docs/requirements/sac-workspace-lifecycle/).
-// These tests are expected to fail red until task-implementer lands WSL-1..4
-// AND wires the archived-workspace guard into ProposalLifecycleService.create.
+// `WorkspaceService.archive`/`removeResource` land via
+// docs/requirements/sac-workspace-lifecycle/ (merged ahead of slate).
 
 test("propose (create) against an archived workspace is rejected with a typed guard_denied ProposalLifecycleError (AC-3)", async () => {
   const { service, workspaces } = await setup();
@@ -188,4 +186,74 @@ test("removeResource never causes a pending/accepted proposal's evidence resolut
   await (workspaces as any).removeResource({ request: undefined, requestCorrelationId: "workspace-removeresource-0001", workspaceId: "workspace-a", uri: "./src/a.ts" });
   const result = await service.review({ request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted", idempotencyKey: "proposal-review-idempotency-0001" });
   expect(result.event.toStatus).toBe("accepted");
+});
+
+// SLATE-12 / AC-3: `create()`'s `security.gate` must come from a real
+// detectSecrets/detectPii scan of the evidence content, never a hardcoded
+// "pass" literal. These two tests share the exact same evidence path
+// (`./evidence/e.md`, the one `setup()`/`wrapUp()` already wire the proposal
+// to) and differ only in that file's content, which is what proves the gate
+// genuinely depends on what the scan sees rather than being a constant.
+test("clean evidence content legitimately resolves security.gate to \"pass\" via a real scan", async () => {
+  const { service } = await setup(); // setup() writes plain "evidence" content with no secret/PII pattern
+  const proposal = await propose(service);
+  expect(proposal.security.gate).toBe("pass");
+});
+
+test("evidence content containing a detectable secret flips security.gate to \"needs-approval\"", async () => {
+  const { root, service } = await setup();
+  // A real AWS-access-key-shaped value (the canonical AWS docs example key) —
+  // matches `secrets.aws-access-key` in src/security/detect/secrets.ts's
+  // `/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/` exactly, so this is a genuine detector
+  // hit, not a guess. Overwriting the same evidence/e.md `wrapUp()` already
+  // references is enough: `create()`'s default `validateEvidence` only checks
+  // containment/existence, not a revision/content hash match, so the fixed
+  // `revision` `wrapUp()` issues stays valid even though the content changed.
+  await writeFile(path.join(root, "evidence", "e.md"), "AKIAIOSFODNN7EXAMPLE");
+  const proposal = await propose(service);
+  expect(proposal.security.gate).toBe("needs-approval");
+});
+
+// Regression for the reviewed-and-fixed blocker: scanEvidenceSecurityGate must
+// pin scan results to the exact content the trusted wrap-up's revision hash
+// was computed over, not "whatever is currently on disk" at create() time —
+// otherwise a swap-back between wrap-up issuance and create() lets clean
+// replacement content sail through unscanned even though it was never the
+// content the proposal's evidence claims to be pinned to.
+test("evidence content that no longer matches its wrap-up-pinned revision escalates to \"needs-approval\" even though the replacement content is itself clean (regression: swap-back exploit)", async () => {
+  const { root, service } = await setup(); // evidence/e.md starts as "evidence" — the exact content wrapUp()'s revision is pinned to
+  const provenance = await wrapUp(service); // revision hash is pinned to content A ("evidence") while the file still holds it
+  await writeFile(path.join(root, "evidence", "e.md"), "an unrelated clean replacement note"); // content B swapped in after the pin, before create()
+  const proposal = await service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-revision-mismatch", proposalRevision: "r1", kind: "wiki-update", wrapUp: provenance });
+  expect(proposal.security.gate).toBe("needs-approval");
+});
+
+// Branch coverage gap: the existing secret-detection test above uses an
+// AWS-key-shaped value, so `detectSecrets(content).length > 0 || detectPii(...)`
+// short-circuits and detectPii is never actually exercised by any test. This
+// evidence content matches `pii.email` in src/security/detect/pii.ts and no
+// rule in src/security/detect/secrets.ts, and its revision is pinned to
+// exactly this content (via a one-off wrapUpAuthority/service, mirroring the
+// "persists only trusted wrap-up reference..." test's inline construction
+// above) so this isolates the detectPii branch from the revision-mismatch
+// branch covered by the regression test above.
+test("evidence content with a detectable PII pattern but no secret pattern flips security.gate to \"needs-approval\" via the detectPii branch (isolated from the revision-mismatch branch)", async () => {
+  const { root, service } = await setup();
+  const piiContent = "contact: jane.doe@example.com";
+  await writeFile(path.join(root, "evidence", "e.md"), piiContent);
+  const piiWrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async () => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: "pii wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update(piiContent).digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
+  const piiService = new ProposalLifecycleService({ workspaceRoot: root, workspaces: (service as any).options.workspaces, authorizationServer: (service as any).options.authorizationServer, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: (service as any).options.targetWriters, wrapUpAuthority: piiWrapUpAuthority, now: () => new Date(time) });
+  const actor = await (piiService as any).options.authorizationServer.actorContextFor(undefined, "proposal-create-correlation-0001");
+  const provenance = await piiWrapUpAuthority.issue({ actor, source: "session", sourceRef: "./evidence/e.md" });
+  const proposal = await piiService.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-pii", proposalRevision: "r1", kind: "wiki-update", wrapUp: provenance });
+  expect(proposal.security.gate).toBe("needs-approval");
+});
+
+// SLATE-14 / AC-4 (cheap regression guard): the misleading self-accept claim
+// must be gone from the source comment. review-orchestrator independently
+// confirms the corrected wording by direct code read; this only guards
+// against the old string silently coming back.
+test("the createLocalProposalLifecycleService comment no longer claims a self-accept protection that isn't real", async () => {
+  const source = await readFile(new URL("./proposal-lifecycle.ts", import.meta.url), "utf8");
+  expect(source).not.toContain("can never self-accept");
 });

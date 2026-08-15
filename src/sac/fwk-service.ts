@@ -594,10 +594,18 @@ export function createLocalFwkReadService(cwd: string): FwkReadService {
         return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? revision, trust: "accepted" as const, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const, accepted, visible: true };
       }));
       const work = flow ? await (async () => {
-        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource: flow, encoding: "utf8" }) as string;
-        const snapshot = JSON.parse(raw) as { id?: string; status?: string; updatedAt?: string; tasks?: Array<{ id: string; status: string }> };
-        if (!snapshot.id || !snapshot.status || !snapshot.updatedAt || !Array.isArray(snapshot.tasks)) return undefined;
-        return { flowRef: { uri: flow.uri, snapshot: snapshot.status, revision: snapshot.updatedAt }, completed: snapshot.tasks.filter((task) => task.status === "done").map((task) => task.id), next: snapshot.tasks.filter((task) => task.status !== "done").map((task) => task.id), blocked: snapshot.status === "blocked" ? [snapshot.id] : [] };
+        // A deleted/permission-denied flow resource or malformed JSON must not
+        // break the whole Facts+Work+Know-how assembly for overview/read: any
+        // failure here yields `undefined`, which `FwkReadService.resolve()`
+        // already maps to `work.state === "unbound"` rather than throwing.
+        try {
+          const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource: flow, encoding: "utf8" }) as string;
+          const snapshot = JSON.parse(raw) as { id?: string; status?: string; updatedAt?: string; tasks?: Array<{ id: string; status: string }> };
+          if (!snapshot.id || !snapshot.status || !snapshot.updatedAt || !Array.isArray(snapshot.tasks)) return undefined;
+          return { flowRef: { uri: flow.uri, snapshot: snapshot.status, revision: snapshot.updatedAt }, completed: snapshot.tasks.filter((task) => task.status === "done").map((task) => task.id), next: snapshot.tasks.filter((task) => task.status !== "done").map((task) => task.id), blocked: snapshot.status === "blocked" ? [snapshot.id] : [] };
+        } catch {
+          return undefined;
+        }
       })() : undefined;
       return {
         facts: facts.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),

@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { withFileLock, writeFileAtomic } from "../lib/fs";
+import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readWorkspaceFileNoFollow } from "./secure-resource-read";
 import {
   authorizeSacUse,
@@ -369,8 +369,6 @@ function currentRole(manifest: WorkspaceManifest, subject: string): { role: "own
 function currentRoleOrRevoked(manifest: WorkspaceManifest, subject: string) {
   return currentRole(manifest, subject) ?? { role: "revoked" as const, revision: `${manifest.updatedAt}:absent`, workspaceId: manifest.id };
 }
-function isNotFound(error: unknown): boolean { return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"; }
-
 export function localWorkspaceAuthorizationServer(subject = `user:local-${process.getuid?.() ?? process.pid}`): SacAuthorizationServer {
   // This function is intentionally the local CLI composition boundary. It
   // reads no caller-supplied subject/role and exports no client minting path.
