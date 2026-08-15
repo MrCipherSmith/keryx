@@ -1,11 +1,22 @@
 # Keryx Shared Agent Context — Specification
-Version: 1.1.0
+Version: 1.2.0
+
+## Documentation truth
+
+This specification describes the **current** SAC runtime (`src/sac/`, shipped
+through `v0.2.32` and present on `main` as of `v0.2.35`). Earlier revisions
+labelled the CLI/MCP surface `planned` and stated that "the current runtime
+exposes none of these SAC commands or tools." That claim is false against
+today's code. Remaining `future` items are listed explicitly at the end of
+the CLI/MCP section and in satellite RP-01…RP-12 packages. Those satellite
+packages are **not** the source of truth for shipped SAC-1…SAC-12 behavior.
 
 ## Identity and ownership
 
-**Package id:** `shared-agent-context` (`SAC`). SAC является будущим
-collaboration/entry-point layer. Он хранит local references, roles, derived
-context receipts и proposals; не заменяет существующие sources of truth.
+**Package id:** `shared-agent-context` (`SAC`). SAC is the implemented
+local-first collaboration/entry-point layer. It stores local references, roles,
+derived context receipts and proposals; it does not replace existing sources
+of truth.
 
 | Concern | Owner | SAC responsibility |
 |---|---|---|
@@ -15,41 +26,50 @@ context receipts и proposals; не заменяет существующие so
 | Long-lived knowledge | Wiki, Memory, Skills | Reads accepted knowledge; proposal acceptance делегируется guarded writers. |
 | Security and transport redaction | Security, MCP | Applies existing output/write seams; SAC не создаёт bypass. |
 
-## Future storage structure
+## Storage structure
 
 ```text
 .metaproject/workspaces/
   <workspace-id>/
-    workspace.json          # primary manifest
-    fwk-receipt.json        # derived, regenerable snapshot
-    access-receipts.jsonl   # append-only metadata, no raw content
-    proposals/<id>.json     # candidate; keyed write-intents/decisions/receipts are immutable metadata
-    activity.jsonl          # append-only lifecycle events
+    workspace.json          # primary manifest (WorkspaceService)
+    proposals/<id>.json     # immutable proposed record
+    proposals/<id>.<hash>.decision.json
+    proposals/<id>.<hash>.approval.json
+    proposals/<id>.<hash>.write-intent.json
+    proposals/<id>.<hash>.write-result.json
+    activity.jsonl          # append-only proposal/collaboration events
+
+.metaproject/context-operations/
+  access-receipts.jsonl              # hash-chained access-receipt ledger
+  access-receipts.checkpoint.json    # fast-path integrity checkpoint
 ```
 
-`workspace.json` is the only SAC primary record. All referenced content stays
-in its owning module. Derived files may be removed and rebuilt. Writes require
-atomic replace plus the repository's established lock/write discipline.
-`access-receipts.jsonl` and `activity.jsonl` are diagnostic/audit metadata,
-not a claim of tamper-evident storage: future implementation must define their
-integrity owner and protection before using them as security evidence.
+`workspace.json` is the only SAC primary record. All referenced knowledge stays
+in its owning module. FWK receipts are derived response objects, not a
+persisted `fwk-receipt.json` file. Writes use atomic replace plus the
+repository lock/write discipline. Access-receipt integrity is owned by
+`src/sac/receipt-integrity.ts` (`sealAccessReceipt` /
+`verifyAccessReceiptLedger`): each record carries `integrity.recordHash` and
+`previousRecordHash` (`GENESIS` or the prior hash). `activity.jsonl` is
+append-only audit metadata for proposal transitions, not a second knowledge
+store.
 
 ## Functional surface
 
-| ID | Function | Короткое пояснение | Future implementation proposal |
+| ID | Function | Короткое пояснение | Current implementation |
 |---|---|---|---|
-| SAC-1 | Workspace registry | Связывает работу без копирования knowledge. | `WorkspaceService` validates manifest schema, resolves typed refs and writes atomically. |
-| SAC-2 | Facts resolver | Строит task-local verified facts. | Resolve evidence revisions; reject unresolved/denied evidence; compute freshness and expiry. |
-| SAC-3 | Work projection | Показывает единое состояние работы. | Read `FlowService` snapshot; map only status, AC, next, blockers and evidence; expose no mutation method. |
-| SAC-4 | Know-how resolver | Возвращает reusable reviewed knowledge. | Query accepted wiki/memory/skills through Context Operations; preserve trust/applicability/revision. |
-| SAC-5 | Compact overview | Даёт стартовый bounded context. | Assemble identity, policies and FWK summary under explicit token/item limits; required-item overflow returns typed `context_overflow`; optional omission returns `partial` plus `omittedOptional` IDs; emit trace. |
-| SAC-6 | Progressive retrieval | Раскрывает детали по необходимости. | Future read-only CLI/MCP adapters call resolver after visibility, budget and freshness checks. |
-| SAC-7 | Access policy | Делает доступ reproducible и economical. | Versioned deterministic rule function over role, phase, source trust/freshness and remaining budget. |
-| SAC-8 | Access receipt | Даёт аудит решения и результата доступа. | Append schema-validated metadata; no raw retrieved content, prompts or hidden reasoning. |
-| SAC-9 | Wrap-up proposal | Делает результат сессии reviewable. | Harness/Flow integration builds proposal only from explicit summary and EvidenceRef IDs. |
-| SAC-10 | Review queue | Отделяет proposal от принятого знания. | State machine validates owner/reviewer, security decision and target guarded write result. |
-| SAC-11 | Freshness/invalidation | Не скрывает устаревание. | Compare stored revisions/ACL/TTL; mark stale and regenerate rather than mutate source knowledge. |
-| SAC-12 | Permission boundary | Делает disclosure least-privilege. | Role check before discovery/read/propose/review; MCP tool registry applies existing visibility/redaction seam. |
+| SAC-1 | Workspace registry | Связывает работу без копирования knowledge. | `WorkspaceService` (`src/sac/workspace-service.ts`) validates the manifest schema, resolves typed refs and writes `workspace.json` atomically. CLI: `create`/`list`/`show`/`add-resource`. |
+| SAC-2 | Facts resolver | Строит task-local verified facts. | `createLocalFwkReadService` (`src/sac/fwk-service.ts`) resolves evidence revisions, rejects unresolved/denied evidence, computes freshness and expiry. |
+| SAC-3 | Work projection | Показывает единое состояние работы. | Same FWK service reads a Flow snapshot; maps status, AC, next, blockers and evidence; exposes no mutation method. Unbound work is explicit. |
+| SAC-4 | Know-how resolver | Возвращает reusable reviewed knowledge. | Queries accepted wiki/memory/skills; preserves trust/applicability/revision. Know-how kinds are only `wiki \| memory \| skill`. |
+| SAC-5 | Compact overview | Даёт стартовый bounded context. | `overview` assembles identity, policies and FWK summary under `maxItems`/`maxTokens`; required overflow → typed `context_overflow`; optional omission → `partial` + `omittedOptional`. |
+| SAC-6 | Progressive retrieval | Раскрывает детали по необходимости. | `read` after overview: CLI `keryx workspace read`, MCP `sac.read`, harness `workspace_read`. Visibility, budget and freshness are re-checked. |
+| SAC-7 | Access policy | Делает доступ reproducible и economical. | Deterministic rule over role, phase, source trust/freshness and remaining budget. Phase 6a: `resolvePolicySelection` opt-in guard. |
+| SAC-8 | Access receipt | Даёт аудит решения и результата доступа. | Append-only hash-chained ledger at `.metaproject/context-operations/access-receipts.jsonl`. No raw retrieved content, prompts or hidden reasoning. |
+| SAC-9 | Wrap-up proposal | Делает результат сессии reviewable. | `ProposalLifecycleService.create` accepts only a server-issued one-time wrap-up from a completed session (`resolveSessionWrapUp`). CLI `workspace propose`, MCP `sac.propose`. Flow wrap-up as a propose source is not wired. |
+| SAC-10 | Review queue | Отделяет proposal от принятого знания. | `review` is a terminal state machine. `accepted` requires a durable write-intent then a correlation-bound owner receipt. Owner map: `wiki-update` → wiki, `memory-entry` → memory, other kinds → skill. |
+| SAC-11 | Freshness/invalidation | Не скрывает устаревание. | Stored revisions/ACL/TTL are compared; stale is observable. Evidence is re-validated immediately before owner write (TOCTOU → `stale`). |
+| SAC-12 | Permission boundary | Делает disclosure least-privilege. | Role check before discover/read/propose/review. MCP SAC tools refuse HTTP (`sac_transport_denied`); local stdio only. |
 
 ## FWK semantics
 
@@ -107,29 +127,72 @@ revision/transition sequence and may not rewrite an earlier decision.
 An `EvidenceRef` carries `kind`, `uri`, `revision`, `observedAt` and `trust`.
 Schemas intentionally forbid fields for transcript/prompt/secret payloads.
 
-The schemas in this package are normative contracts, but they are not proof
-that the existing runtime validates them. Future implementation must run the
-pinned schema validator and application-level semantic checks before persistence
-or egress.
+The schemas in this package are normative contracts. The runtime validates
+them through `validateSacContract` (`src/sac/index.ts`) before persistence:
+workspace manifests, proposals, transitions, review decisions and access
+receipts. Format assertion plus application-level checks (SubjectId, realpath
+containment, timestamp order, ledger idempotency) run in that path.
 
-## Future CLI and MCP surface
+## Current CLI, MCP and harness surface
 
-All names below are **planned**, not currently available CLI/MCP claims.
+These names are **shipped**. They live in `src/commands/workspace.ts`,
+`src/mcp/tools.ts` and `src/harness/tool/builtin/workspace-context-tool.ts`.
+Older spec names (`workspace.fwk`, `workspace.proposal create --from-flow`,
+MCP `workspace.get` / `workspace.overview`) were never implemented and must
+not be treated as the current contract.
 
 ```text
-keryx workspace create --title <title> --component <ref>
-keryx workspace add-resource <workspace-id> <typed-ref>
-keryx workspace overview <workspace-id> [--flow <flow-id>] [--budget <n>]
-keryx workspace fwk <workspace-id> --flow <flow-id>
-keryx workspace proposal create <workspace-id> --from-flow <flow-id>
-keryx workspace proposal review <workspace-id> <proposal-id> --accept|--reject|--dismiss
+keryx workspace create --title <title> [--component <workspace-relative-ref>]
+keryx workspace list
+keryx workspace show <workspace-id>
+keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]
+keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]
+keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]
+keryx workspace propose <workspace-id> --kind <decision|wiki-update|memory-entry|follow-up|contract-change|risk> --session <session-id> [--note <one-line note>]
+keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]
+keryx workspace collaboration <workspace-id>
+keryx workspace policy-readiness
 ```
 
-Planned MCP read tools: `workspace.get`, `workspace.overview`, `workspace.fwk`,
-`workspace.resources`. Planned mutation tools are not exposed in the first MCP
-release; CLI mutations require actor identity, role check, schema validation
-and normal security/write gate. CLI and MCP share one normalized service API.
-The current runtime exposes none of these SAC commands or tools.
+MCP tools (local stdio only; HTTP returns `sac_transport_denied`):
+
+| Tool | Mutating | Implementation |
+|---|---|---|
+| `sac.overview` | no | `createLocalFwkReadService().overview` |
+| `sac.read` | no | `createLocalFwkReadService().read` |
+| `sac.propose` | yes | `createHarnessProposalLifecycleService().create` from a completed session |
+| `sac.review` | yes | same composition `.review` through guarded owner-writers |
+| `sac.collaboration` | no | `createLocalCollaborationService().overview` |
+
+Harness tools (local `keryx shell` turn; `risk: "read"`; no session↔workspace
+auto-binding — caller must pass `workspaceId`):
+
+| Tool | Implementation |
+|---|---|
+| `workspace_overview` | same FWK overview as the CLI |
+| `workspace_read` | same FWK read as the CLI |
+
+CLI and MCP read results share `normalizeFwkResult`. Propose/review share
+`normalizeProposalLifecycleResult`. `createLocalProposalLifecycleService` is
+fail-closed for accept (no real owner writers). Accept is only possible
+through `createHarnessProposalLifecycleService`, which wires:
+
+| Proposal kind | Owner | Writer | Target prefix |
+|---|---|---|---|
+| `wiki-update` | wiki | `createRealWikiOwnerWriter` | `./wiki` (decision page under `.metaproject/wiki/decisions/`) |
+| `memory-entry` | memory | `createRealMemoryOwnerWriter` | `./memory` (same guarded seam as `keryx memory new`) |
+| `decision`, `follow-up`, `contract-change`, `risk` | skill | `createRealSkillOwnerWriter` | `./project-skills` (`keryx skills create` path) |
+
+### Still future (do not treat as current)
+
+- Automatic session↔workspace linkage (`--workspace` on `keryx shell`, RP-03).
+- Propose from a Flow wrap-up snapshot (only `source: "session"` is wired).
+- MCP/HTTP or other remote SAC transports.
+- Phase 6b runtime re-ingestion of raw receipts/outcomes.
+- Public collaboration *writer* (only a read-only overview exists).
+- Satellite RP-01…RP-12 capabilities (runtime truth rewrite, source-owned
+  ports, promotion-integrity extras, generational memory, worktree handoffs,
+  unified operation registry, etc.).
 
 ## Permission model and security invariants
 
@@ -164,11 +227,15 @@ only cross-contract acceptance requirements.
 
 - `src/flow`: read-only Flow snapshot and its verification evidence.
 - `src/gdgraph`: component/repository/dependency references.
-- `src/wiki`, `src/memory`, `src/gdskills`: accepted Know-how and eventual
-  guarded promotion target.
-- Context Operations: bounded assembly, retrieval trace and feedback model.
-- `src/harness`: session/worktree references and explicit wrap-up trigger.
-- `src/mcp`: future adapter/visibility filter; never the execution core.
+- `src/wiki`, `src/memory`, `src/gdskills`: accepted Know-how and the guarded
+  promotion targets (`wiki-owner-writer`, `memory-owner-writer`,
+  `skill-owner-writer`).
+- Context Operations: bounded assembly, retrieval trace, and the access-receipt
+  ledger path under `.metaproject/context-operations/`.
+- `src/harness`: session archive for trusted wrap-up; in-process
+  `workspace_overview` / `workspace_read` tools. No session↔workspace field.
+- `src/mcp`: local-stdio adapters `sac.overview|read|propose|review|collaboration`;
+  HTTP is denied. MCP is never the execution core.
 - `src/security`: input/output scan, redaction and guarded writes.
 
 Runtime implementation depends on stable typed reference APIs from these

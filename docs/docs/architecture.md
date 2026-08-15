@@ -49,7 +49,7 @@ flowchart LR
 
   subgraph K["keryx"]
     direction TB
-    W["`.metaproject/` workspace<br/>graph · wiki · memory · health · skills"]
+    W["`.metaproject/` workspace<br/>graph · wiki · memory · health · skills · SAC"]
     S["Agent harness<br/>policy · session · tools"]
   end
 
@@ -124,7 +124,8 @@ Two invariants define the system and recur across every module:
 | **capability** | `src/capability/` | — (substrate) | The opt-in seam every feature layer instantiates: `resolveCapability(cwd, spec)` gates on manifest + optional dep + verified asset, returns an adapter or `null`. Never throws. |
 | **assets** | `src/assets/` | `assets` (per module) | Local-only, sha256-verified asset resolution (`resolveAsset`); `pullAsset` is the sole network path (verify-or-refuse); `assets.lock.json` pins provenance; `assets list\|verify\|pull`. |
 | **eval** | `src/eval/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
-| **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry, read-only `metaproject://` Resources, single redaction choke point. |
+| **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry (including mutating `sac.propose` / `sac.review`, HTTP-denied), read-only `metaproject://` Resources, single redaction choke point. |
+| **sac** | `src/sac/` | `workspace` | Shared Agent Context: file-backed workspace registry, FWK overview/read, propose/review via guarded wiki/memory/skill writers, hash-chained access receipts. Not a default `init` module. See [the operator guide](./guides/shared-agent-context.md). |
 
 | **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation. See "The agent harness" above, and [the feature-level tour](./harness.md). |
 | **sandbox** | `src/harness/process/sandbox/` | — (via `harness exec`) | OS-enforced containment: Seatbelt and bubblewrap launchers, the loopback allowlist proxy, the ephemeral run CA, credential masking. Two capability tiers with a hard platform split. |

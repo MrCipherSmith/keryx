@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.14.0
+Version: 0.14.1
 
 ## Status
 
@@ -7,6 +7,11 @@ This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
 > **Changelog**
+> - **0.14.1** — Reconciled `shared-agent-context` package prose with the
+>   shipped `src/sac/` runtime (CLI `keryx workspace`, MCP `sac.*`, harness
+>   `workspace_*`, guarded owner-writers, access-receipt integrity). Earlier
+>   package text still said CLI/MCP were planned and that the runtime exposed
+>   none of those tools. Satellite RP-01…RP-12 stay future / spec-ready.
 > - **0.14.0** — Truth-synced the implemented Shared Agent Context core and
 >   added twelve future improvement packages plus the SAC Improvements Program.
 >   The new packages define dependency-ordered requirements, validation,

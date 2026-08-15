@@ -1,5 +1,5 @@
 # Shared Agent Context — Documentation Truth (RP-12)
-Version: 0.1.0
+Version: 0.1.1
 
 ## Purpose
 
@@ -12,6 +12,13 @@ commit-pinned evidence so documentation cannot overstate delivery.
 
 **Future requirements · spec-ready.** The CI, generation, graph/wiki coverage,
 and executable-documentation controls described here are planned only.
+
+Parent package [`shared-agent-context`](../shared-agent-context/README.md)
+1.5.0 / specification 1.2.0 now describe the **shipped** runtime
+(`src/sac/`, `keryx workspace`, `sac.*`, harness `workspace_*`). That
+reconciliation does **not** implement RP-12. A validator must not treat
+this RP's future CI/taxonomy gates as current, and must not treat the
+parent package's pre-1.5.0 `future/planned` CLI/MCP sentences as current.
 
 ## Document index
 

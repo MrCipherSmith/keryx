@@ -685,6 +685,24 @@ Task kinds: `context`, `implement`, `test`, `review`, and `docs`.
 | `keryx security eval --corpus all` | Run deterministic security corpora. |
 | `keryx security eval --corpus all --with-model` | Include configured model backends. |
 
+### Shared Agent Context
+
+| Command | Description |
+|---|---|
+| `keryx workspace --help` | Full SAC surface (`keryx commands` omits this verb). |
+| `keryx workspace create --title <t> [--component <ref>]` | Create a file-backed workspace. |
+| `keryx workspace list` | List workspaces. |
+| `keryx workspace show <id>` | Print the manifest. |
+| `keryx workspace add-resource <id> --kind <k> --uri <ref>` | Attach a workspace-relative resource. |
+| `keryx workspace overview <id>` | Bounded Facts / Work / Know-how overview. |
+| `keryx workspace read <id> <item-id>` | Progressive FWK read. |
+| `keryx workspace propose <id> --kind <k> --session <sid>` | Propose from a completed session. |
+| `keryx workspace review <id> <proposal-id> --decision <d>` | Accept / reject / dismiss through owner writers. |
+| `keryx workspace collaboration <id>` | Read-only collaboration overview. |
+| `keryx workspace policy-readiness` | Diagnose the opt-in policy-experiment chain. |
+
+Operator guide: [Shared Agent Context](guides/shared-agent-context.md).
+
 ### MCP
 
 | Command | Description |

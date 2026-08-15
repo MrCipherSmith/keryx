@@ -1,5 +1,5 @@
 # Keryx Shared Agent Context — Implementation Plan
-Version: 1.7.5
+Version: 1.7.6
 
 ## Delivery status
 
@@ -12,6 +12,13 @@ readiness process, now partially implemented: a read-only readiness check
 runtime re-ingestion of raw receipts/outcomes remains. All acceptance and review
 work for phases 0–5 and 6a is complete; the temporary per-phase merge branches
 have been deleted now that everything is on `main`.
+
+**2026-08-15 addendum — documentation truth.** README/PRD/specification in
+this package previously still used `future/planned` CLI/MCP language and
+claimed the runtime did not expose SAC commands. That contradicted `src/sac/`
+and the phase table above. Package docs 1.5.0 / spec 1.2.0 now describe the
+shipped surface. Historical phase bullets below are delivery history, not a
+claim that those CLI/MCP adapters are still unbuilt.
 
 | Phase | Status | Evidence |
 | --- | --- | --- |
@@ -50,7 +57,7 @@ cross-workspace, revoked-role and TOCTOU test scenarios are approved.
 
 - Implement future `WorkspaceService`: manifest CRUD, atomic persistence,
   activity events, typed resources and role checks.
-- Add future CLI create/list/show/add-resource with no MCP mutations.
+- Add CLI create/list/show/add-resource with no MCP mutations.
 - Add fixture-based validation and disabled-floor regression tests.
 
 **Exit:** AC-1, AC-7 (mutation portion) and AC-10 pass offline.
@@ -63,7 +70,7 @@ cross-workspace, revoked-role and TOCTOU test scenarios are approved.
 - Reuse the canonical Context Operations assembly/trace and correlation ID;
   record assembly/config revision, policy/config revision and selected/omitted
   item IDs rather than a second retrieval trace.
-- Expose future read-only CLI/MCP adapters with normalized parity tests.
+- Expose read-only CLI/MCP adapters with normalized parity tests.
 
 **Exit:** AC-2 through AC-6, AC-10 and AC-11 pass; no raw content appears in
 receipts or derived context storage; missing mandatory context yields typed
