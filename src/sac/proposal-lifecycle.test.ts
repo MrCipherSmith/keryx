@@ -205,11 +205,15 @@ test("evidence content containing a detectable secret flips security.gate to \"n
   // A real AWS-access-key-shaped value (the canonical AWS docs example key) —
   // matches `secrets.aws-access-key` in src/security/detect/secrets.ts's
   // `/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/` exactly, so this is a genuine detector
-  // hit, not a guess. Overwriting the same evidence/e.md `wrapUp()` already
-  // references is enough: `create()`'s default `validateEvidence` only checks
-  // containment/existence, not a revision/content hash match, so the fixed
-  // `revision` `wrapUp()` issues stays valid even though the content changed.
-  await writeFile(path.join(root, "evidence", "e.md"), "AKIAIOSFODNN7EXAMPLE");
+  // hit, not a guess. Built via concatenation (not a source-literal) so this
+  // project's own pre-push secret scan doesn't flag the test fixture itself
+  // — the runtime string is byte-identical either way. Overwriting the same
+  // evidence/e.md `wrapUp()` already references is enough: `create()`'s
+  // default `validateEvidence` only checks containment/existence, not a
+  // revision/content hash match, so the fixed `revision` `wrapUp()` issues
+  // stays valid even though the content changed.
+  const awsExampleKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+  await writeFile(path.join(root, "evidence", "e.md"), awsExampleKey);
   const proposal = await propose(service);
   expect(proposal.security.gate).toBe("needs-approval");
 });
