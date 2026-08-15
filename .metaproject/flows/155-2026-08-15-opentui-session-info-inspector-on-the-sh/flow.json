@@ -3,17 +3,50 @@
   "id": "155",
   "slug": "opentui-session-info-inspector-on-the-sh",
   "title": "OpenTUI session-info inspector on the shared modal host",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-15T18:55:26.945Z",
-  "updatedAt": "2026-08-15T19:16:20.495Z",
+  "updatedAt": "2026-08-15T19:22:33.962Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:73432b04ea97782b5c22314f377adcc2bcd4d728d93e07c979f9b31ad4c28ca4",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-08-15T19:20:47.478Z",
+      "note": "AGENT_SLASH_COMMANDS includes /session-info /status /info in both modes; shell-slash-registry chatOutput asserts streamCalls.count===0 and dumps rows"
+    },
+    "AC2": {
+      "at": "2026-08-15T19:20:47.571Z",
+      "note": "openSessionInfo imports openModal from ./modal-host; session-info.test.ts source/call-site tests; no overlayBox inspector"
+    },
+    "AC3": {
+      "at": "2026-08-15T19:20:47.651Z",
+      "note": "buildSessionInfoSnapshot prefers live TuiSelection over summary provider/model; tests cover post-/model selection"
+    },
+    "AC4": {
+      "at": "2026-08-15T19:20:47.771Z",
+      "note": "Parent row only when parentSessionId is set; session-info.test.ts AC4"
+    },
+    "AC5": {
+      "at": "2026-08-15T19:20:47.878Z",
+      "note": "c copies summary.id; y copies formatSessionInfoText including the id; presentSessionInfo key test"
+    },
+    "AC6": {
+      "at": "2026-08-15T19:20:47.974Z",
+      "note": "runShell and runAgentRepl print formatSessionInfoText; slash-registry dump test; no OpenTUI import on that path"
+    },
+    "AC7": {
+      "at": "2026-08-15T19:20:48.060Z",
+      "note": "createChatBridge returns local for session-info (not deferred/queued); tui-shell busy path opens inspector without interrupt"
+    },
+    "AC8": {
+      "at": "2026-08-15T19:20:48.180Z",
+      "note": "estimated context labelled tokens (estimate); billed usage path is not labelled estimate"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/290"
   },
   "tasks": [
     {
@@ -65,7 +98,7 @@
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -73,7 +106,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -94,7 +128,7 @@
       "id": "T6",
       "title": "code-verifier + review-orchestrator; fix until clean",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -102,13 +136,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Open draft PR feat/tui-session-info (stack on modal-tabs if needed)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -116,7 +151,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -167,6 +203,89 @@
       "at": "2026-08-15T19:16:20.495Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-15T19:19:43.138Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-08-15T19:19:43.241Z",
+      "event": "task-done",
+      "detail": "T6: code-verifier + review-orchestrator; fix until clean"
+    },
+    {
+      "at": "2026-08-15T19:20:34.008Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/290"
+    },
+    {
+      "at": "2026-08-15T19:20:34.102Z",
+      "event": "task-done",
+      "detail": "T7: Open draft PR feat/tui-session-info (stack on modal-tabs if needed)"
+    },
+    {
+      "at": "2026-08-15T19:20:47.478Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: AGENT_SLASH_COMMANDS includes /session-info /status /info in both modes; shell-slash-registry chatOutput asserts streamCalls.count===0 and dumps rows"
+    },
+    {
+      "at": "2026-08-15T19:20:47.571Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: openSessionInfo imports openModal from ./modal-host; session-info.test.ts source/call-site tests; no overlayBox inspector"
+    },
+    {
+      "at": "2026-08-15T19:20:47.651Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: buildSessionInfoSnapshot prefers live TuiSelection over summary provider/model; tests cover post-/model selection"
+    },
+    {
+      "at": "2026-08-15T19:20:47.771Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Parent row only when parentSessionId is set; session-info.test.ts AC4"
+    },
+    {
+      "at": "2026-08-15T19:20:47.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: c copies summary.id; y copies formatSessionInfoText including the id; presentSessionInfo key test"
+    },
+    {
+      "at": "2026-08-15T19:20:47.974Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: runShell and runAgentRepl print formatSessionInfoText; slash-registry dump test; no OpenTUI import on that path"
+    },
+    {
+      "at": "2026-08-15T19:20:48.060Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: createChatBridge returns local for session-info (not deferred/queued); tui-shell busy path opens inspector without interrupt"
+    },
+    {
+      "at": "2026-08-15T19:20:48.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: estimated context labelled tokens (estimate); billed usage path is not labelled estimate"
+    },
+    {
+      "at": "2026-08-15T19:20:59.467Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-15T19:21:01.991Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-08-15T19:22:25.155Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/290"
+    },
+    {
+      "at": "2026-08-15T19:22:31.714Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-15T19:22:33.962Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
