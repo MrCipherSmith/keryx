@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 2,
+  "id": "155",
+  "slug": "opentui-session-info-inspector-on-the-sh",
+  "title": "OpenTUI session-info inspector on the shared modal host",
+  "status": "in-progress",
+  "createdAt": "2026-08-15T18:55:26.945Z",
+  "updatedAt": "2026-08-15T19:16:20.495Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:73432b04ea97782b5c22314f377adcc2bcd4d728d93e07c979f9b31ad4c28ca4",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Headless/slash tests first (TDD for AC1-AC8)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "code-verifier + review-orchestrator; fix until clean",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Open draft PR feat/tui-session-info (stack on modal-tabs if needed)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-15T18:55:26.945Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-15T18:56:39.519Z",
+      "event": "task-added",
+      "detail": "T5: Headless/slash tests first (TDD for AC1-AC8)"
+    },
+    {
+      "at": "2026-08-15T18:56:39.652Z",
+      "event": "task-added",
+      "detail": "T6: code-verifier + review-orchestrator; fix until clean"
+    },
+    {
+      "at": "2026-08-15T18:56:39.758Z",
+      "event": "task-added",
+      "detail": "T7: Open draft PR feat/tui-session-info (stack on modal-tabs if needed)"
+    },
+    {
+      "at": "2026-08-15T18:56:40.096Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-15T18:56:40.185Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-15T19:16:20.243Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-15T19:16:20.329Z",
+      "event": "task-done",
+      "detail": "T5: Headless/slash tests first (TDD for AC1-AC8)"
+    },
+    {
+      "at": "2026-08-15T19:16:20.410Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-15T19:16:20.495Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}

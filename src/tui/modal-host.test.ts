@@ -104,11 +104,9 @@ test("AC5: openModal is a no-op when OpenTUI is unavailable", () => {
 test("AC7: modal-host has no static optional-core import and adds no /session-info", async () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const host = await readFile(path.join(here, "modal-host.ts"), "utf8");
-  const commands = await readFile(path.join(here, "../commands/agent-commands.ts"), "utf8");
   expect(host).not.toMatch(/\bimport\b[^()]*?\bfrom\s*['"]@opentui\/core['"]/s);
   expect(host).not.toMatch(/\bimport\s*['"]@opentui\/core['"]/);
   expect(host).not.toMatch(/session-info/);
-  expect(commands).not.toMatch(/session-info/);
 });
 
 otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu stays closed on /", async () => {

@@ -44,8 +44,13 @@ import type { SearchProviderDescriptor, SearchProviderId } from "../harness/sear
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
-import { launchTuiAgentShell } from "../tui/tui-shell";
+import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
+import {
+  buildSessionInfoSnapshot,
+  formatSessionInfoText,
+  isSessionInfoCommand,
+} from "../tui/session-info";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import {
   collapseToolOutput,
@@ -128,6 +133,9 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/new",
   "/clear",
   "/compact",
+  "/session-info",
+  "/status",
+  "/info",
   "/exit",
 ];
 
@@ -250,6 +258,19 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       }
       if (command === "/help") {
         system(HELP_TEXT);
+        continue;
+      }
+      if (isSessionInfoCommand(command)) {
+        system(
+          formatSessionInfoText(
+            buildSessionInfoSnapshot({
+              summary: live?.summary,
+              selection: { provider: providerName, model: modelName },
+              version: packageJson.version,
+              estimateTokens: estimateContextTokens(history),
+            }),
+          ),
+        );
         continue;
       }
       if (command === "/clear" || command === "/new") {
@@ -1028,6 +1049,18 @@ async function runAgentRepl(
       }
       if (command === "/help") {
         agentIo.onSystem?.(readlineAgentHelpText());
+      } else if (isSessionInfoCommand(command)) {
+        agentIo.onSystem?.(
+          formatSessionInfoText(
+            buildSessionInfoSnapshot({
+              summary: live?.summary,
+              selection: { provider: deps.providerId, model: deps.modelId },
+              version: packageJson.version,
+              usage: lastUsage,
+              estimateTokens: estimateContextTokens(history),
+            }),
+          ),
+        );
       } else if (command === "/expand") {
         const expanded = expandedToolOutput(lastToolName, lastToolOutput);
         if (expanded !== undefined) {
