@@ -57,11 +57,29 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
 const BACKDROP_ID = "modal-backdrop";
 const PANEL_ID = "modal-panel";
 const BACKDROP_OPACITY = 0.45;
-/** Fixed panel so tab bodies of different lengths do not resize the chrome. */
-export const MODAL_PANEL_WIDTH = 72;
-export const MODAL_PANEL_HEIGHT = 18;
-/** Inner columns after rounded border + horizontal padding. */
+/** Floor so a 24-row test TTY still fits; live shells grow toward the target. */
+export const MODAL_PANEL_MIN_WIDTH = 72;
+export const MODAL_PANEL_MIN_HEIGHT = 18;
+export const MODAL_PANEL_TARGET_WIDTH = 96;
+export const MODAL_PANEL_TARGET_HEIGHT = 28;
+/** Header + tab strip + footer + rounded border. */
+export const MODAL_CHROME_ROWS = 5;
+/** @deprecated Use resolveModalPanelSize; kept as the floor for footer-fit tests. */
+export const MODAL_PANEL_WIDTH = MODAL_PANEL_MIN_WIDTH;
+export const MODAL_PANEL_HEIGHT = MODAL_PANEL_MIN_HEIGHT;
+/** Inner columns after rounded border + horizontal padding at the floor width. */
 export const MODAL_PANEL_INNER_WIDTH = MODAL_PANEL_WIDTH - 4;
+
+export function resolveModalPanelSize(cols: number, rows: number): { width: number; height: number } {
+  return {
+    width: Math.min(MODAL_PANEL_TARGET_WIDTH, Math.max(MODAL_PANEL_MIN_WIDTH, cols - 4)),
+    height: Math.min(MODAL_PANEL_TARGET_HEIGHT, Math.max(MODAL_PANEL_MIN_HEIGHT, rows - 4)),
+  };
+}
+
+export function modalBodyRows(panelHeight: number): number {
+  return Math.max(1, panelHeight - MODAL_CHROME_ROWS);
+}
 const CLOSE_HINT = "[x] esc";
 const DEFAULT_FOOTER: readonly ModalFooterAction[] = [
   { key: "←/→", label: "tabs" },
@@ -391,6 +409,9 @@ export function openModal(
   }
 
   const state = ensureHost(otui, chrome);
+  const size = resolveModalPanelSize(chrome.renderer.width, chrome.renderer.height);
+  state.panel.width = size.width;
+  state.panel.height = size.height;
 
   if (state.open) {
     unmountActiveTab(state);

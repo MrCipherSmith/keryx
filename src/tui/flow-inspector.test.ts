@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import type { FlowInspectorItem } from "./inspector-sources";
 import {
+  clampScroll,
   findFlowItem,
   formatFlowDetailLines,
   formatFlowListLines,
   formatFlowListText,
   isFlowsCommand,
   presentFlows,
+  windowLines,
 } from "./flow-inspector";
 
 const ITEM: FlowInspectorItem = {
@@ -76,4 +78,55 @@ test("presentFlows opens list+detail and Enter switches to Detail", () => {
   expect(calls[0]?.tabs.map((tab) => tab.id)).toEqual(["list", "detail"]);
   expect(active).toBe("detail");
   expect(formatFlowListText([ITEM])).toContain("154");
+});
+
+test("windowLines and clampScroll keep a viewport over long bodies", () => {
+  const lines = ["a", "b", "c", "d", "e"];
+  expect(windowLines(lines, 0, 3)).toEqual(["a", "b", "c"]);
+  expect(windowLines(lines, 3, 3)).toEqual(["c", "d", "e"]);
+  expect(clampScroll(99, 5, 3)).toBe(2);
+  expect(clampScroll(-1, 5, 3)).toBe(0);
+});
+
+test("on Detail, ↑/↓ scroll instead of changing the selected flow; [ ] switch", () => {
+  const older: FlowInspectorItem = { ...ITEM, id: "001", title: "Older" };
+  const newer: FlowInspectorItem = { ...ITEM, id: "154", title: "Newer" };
+  let active = "detail";
+  let node: { content: string } | undefined;
+  presentFlows(
+    (_otui, _chrome, input) => {
+      input.renderTab("detail", {
+        add: (child: { content?: string }) => {
+          node = child as { content: string };
+        },
+      });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    { TextRenderable: class {
+      content: string;
+      constructor(_r: unknown, opts: { content: string }) {
+        this.content = opts.content;
+      }
+    } },
+    {},
+    {
+      items: [older, newer],
+      visibleRows: 20,
+      onKeypress: (handler) => {
+        expect(node?.content).toContain("Newer");
+        handler({ name: "down", sequence: "down" });
+        expect(node?.content).toContain("Newer");
+        handler({ name: "]", sequence: "]" });
+        expect(node?.content).toContain("Older");
+        expect(node?.content).not.toContain("Newer");
+        return () => {};
+      },
+    },
+  );
 });

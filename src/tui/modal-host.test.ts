@@ -12,11 +12,12 @@ import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import {
-  MODAL_PANEL_HEIGHT,
   MODAL_PANEL_INNER_WIDTH,
-  MODAL_PANEL_WIDTH,
+  MODAL_PANEL_MIN_HEIGHT,
+  MODAL_PANEL_MIN_WIDTH,
   formatModalFooter,
   openModal,
+  resolveModalPanelSize,
 } from "./modal-host";
 
 async function loadOpenTui(): Promise<{
@@ -65,7 +66,7 @@ async function mountChrome(
   otui: OtuiBundle,
   opts: { width?: number; height?: number; chrome?: Partial<ShellChromeOptions> } = {},
 ): Promise<TestSetup & { chrome: ShellChrome; destroy: () => void }> {
-  const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 90, height: opts.height ?? 24 });
+  const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 120, height: opts.height ?? 40 });
   const chrome = await createShellChrome(otui.core, setup.renderer, {
     title: TITLE,
     status: STATUS,
@@ -113,8 +114,14 @@ test("formatModalFooter is a single hint line that fits the panel", () => {
     { key: "esc", label: "close" },
   ]);
   expect(line).toBe("c copy id · esc close");
-  expect(MODAL_PANEL_INNER_WIDTH).toBe(MODAL_PANEL_WIDTH - 4);
+  expect(MODAL_PANEL_INNER_WIDTH).toBe(MODAL_PANEL_MIN_WIDTH - 4);
   expect(line.length).toBeLessThanOrEqual(MODAL_PANEL_INNER_WIDTH);
+});
+
+test("resolveModalPanelSize grows toward the target and never shrinks below the floor", () => {
+  expect(resolveModalPanelSize(80, 24)).toEqual({ width: 76, height: 20 });
+  expect(resolveModalPanelSize(120, 40)).toEqual({ width: 96, height: 28 });
+  expect(resolveModalPanelSize(40, 10)).toEqual({ width: MODAL_PANEL_MIN_WIDTH, height: MODAL_PANEL_MIN_HEIGHT });
 });
 
 test("AC7: modal-host has no static optional-core import and adds no /session-info", async () => {
@@ -127,7 +134,7 @@ test("AC7: modal-host has no static optional-core import and adds no /session-in
 
 otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu stays closed on /", async () => {
   const otui = requireOtui();
-  const h = await mountChrome(otui, { width: 90, height: 24 });
+  const h = await mountChrome(otui);
   h.chrome.transcript.add(
     new otui.core.TextRenderable(h.renderer, { id: "keep-me", content: "transcript stays mounted" }),
   );
@@ -153,8 +160,9 @@ otuiTest("AC1: one tab paints a titled panel and dimmed backdrop; slash menu sta
   const panel = h.renderer.root.findDescendantById("modal-panel");
   expect(backdrop).toBeDefined();
   expect(panel).toBeDefined();
-  expect((panel as { width: number }).width).toBe(MODAL_PANEL_WIDTH);
-  expect((panel as { height: number }).height).toBe(MODAL_PANEL_HEIGHT);
+  const sized = resolveModalPanelSize(h.renderer.width, h.renderer.height);
+  expect((panel as { width: number }).width).toBe(sized.width);
+  expect((panel as { height: number }).height).toBe(sized.height);
   expect(frame).toContain("[x] esc");
   expect(frame.toLowerCase()).toContain("esc close");
   expect((backdrop as { opacity?: number }).opacity).toBeLessThan(1);
@@ -225,7 +233,7 @@ otuiTest("AC2: initialTab mounts only that body; switching unmounts the previous
 
 otuiTest("fixed panel size does not change when switching short and long tab bodies", async () => {
   const otui = requireOtui();
-  const h = await mountChrome(otui, { width: 90, height: 24 });
+  const h = await mountChrome(otui);
   const handle = openModal(otui.core, h.chrome, {
     title: "/status",
     tabs: [
@@ -244,8 +252,9 @@ otuiTest("fixed panel size does not change when switching short and long tab bod
   });
   await h.flush();
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
-  expect(panel.width).toBe(MODAL_PANEL_WIDTH);
-  expect(panel.height).toBe(MODAL_PANEL_HEIGHT);
+  const sized = resolveModalPanelSize(h.renderer.width, h.renderer.height);
+  expect(panel.width).toBe(sized.width);
+  expect(panel.height).toBe(sized.height);
   const first = { width: panel.width, height: panel.height };
   h.mockInput.pressArrow("right");
   await h.flush();
