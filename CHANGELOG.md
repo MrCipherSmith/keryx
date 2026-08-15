@@ -5,6 +5,30 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.37] — 2026-08-16
+
+### Added
+
+- **`/status` inspector tabs.** The shared modal now has a fixed 72×18 chrome
+  (title + `[x] esc` header, one-line footer). `/status` (chat and agent) opens
+  Status plus a Context bar of known usage — last-turn tokens and a labelled
+  estimate, never a guessed window. Workspaces and Flow tabs appear only when
+  the session actually referenced a SAC workspace or a flow (`runLink.sessionId`
+  or an explicit `flow 154` / `/flows 154` mention). `c` copies the session id.
+- **`/flows` inspector.** Lists project flows; `↑/↓` selects, Enter or `→`
+  opens the adjacent Detail tab (status, dir, tasks, PR). Readline/`--no-tui`
+  prints the list, or `/flows 154` for one package.
+
+### Changed
+
+- **`/session-info` and `/info` removed.** They are no longer aliases. The
+  slash menu advertises only `/status`.
+
+### Fixed
+
+- **Modal size no longer jumps on tab switch.** The host no longer shrink-wraps
+  to each tab body.
+
 ## [0.2.36] — 2026-08-15
 
 ### Added
@@ -1555,4 +1579,5 @@ runtime dependencies, no sockets).
 [0.2.34]: https://github.com/MrCipherSmith/keryx/compare/v0.2.33...v0.2.34
 [0.2.35]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...v0.2.35
 [0.2.36]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...v0.2.36
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.36...HEAD
+[0.2.37]: https://github.com/MrCipherSmith/keryx/compare/v0.2.36...v0.2.37
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.37...HEAD
