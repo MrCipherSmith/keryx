@@ -68,7 +68,7 @@ inside one `openModal` call.
 - Slash menu: inert while overlay active (already tested in
   `shell-chrome.test.ts`).
 - Block nav (`Ctrl+O`): already disabled when overlay is up.
-- First consumer: [session-info](../keryx-opentui-session-info/specification.md).
+- First consumer: session-info (follow-up flow; not shipped here).
 - Later consumer (out of scope here): remount `selectProviderModelInTui`
   steps as tab bodies (`Providers` / `Models`) instead of stacked
   full-screen `overlayBox` calls.
@@ -111,5 +111,5 @@ Keryx must copy the **host pattern**, not Grok's catalog contents.
 ## Delivery order
 
 1. This package (host + tests).
-2. [Session info](../keryx-opentui-session-info/README.md).
+2. Session info (follow-up flow).
 3. Optional later: model picker on the same host.

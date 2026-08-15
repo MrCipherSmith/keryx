@@ -31,8 +31,7 @@ share before any one feature is built.
 
 ## Non-goals
 
-- Implementing `/session-info` (see
-  [keryx-opentui-session-info](../keryx-opentui-session-info/README.md)).
+- Implementing `/session-info` (sibling requirements package; follow-up flow).
 - Rewriting `selectProviderModelInTui` in this package (a later consumer).
 - Mouse-only UX; click-to-copy; settings/extensions catalogs.
 - Changing the readline fallback.
@@ -42,7 +41,6 @@ share before any one feature is built.
 
 - [Keryx OpenTUI Interactive Shell](../keryx-opentui-shell/README.md) —
   existing chrome, `/`-menu, `withOverlay`.
-- [Session info](../keryx-opentui-session-info/README.md) — first feature
-  consumer; blocked on this package.
+- Session info — first feature consumer (follow-up flow; not in this package).
 - Code: `src/tui/shell-chrome.ts`, `src/tui/tui-shell.ts` (`overlayBox`,
   `selectProviderModelInTui`), `src/tui/composer-choice.ts`.
