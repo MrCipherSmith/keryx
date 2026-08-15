@@ -23,3 +23,5 @@
 - 2026-08-15T19:13:50.177Z - ac-confirmed: AC5: AC5 test always runs without OpenTUI: openModal(undefined) returns undefined and does not call renderTab
 - 2026-08-15T19:13:50.258Z - ac-confirmed: AC6: 7 headless tests in src/tui/modal-host.test.ts via createTestRenderer; no TTY required
 - 2026-08-15T19:13:50.334Z - ac-confirmed: AC7: static scan of modal-host.ts + agent-commands.ts: no from '@opentui/core', no session-info; no-optional-imports.test.ts pass
+- 2026-08-15T19:20:38.232Z - completing
+- 2026-08-15T19:20:40.657Z - done: all gates passed

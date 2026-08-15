@@ -3,9 +3,9 @@
   "id": "154",
   "slug": "opentui-reusable-modal-and-tab-host",
   "title": "OpenTUI reusable modal and tab host",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-15T18:55:25.962Z",
-  "updatedAt": "2026-08-15T19:13:50.334Z",
+  "updatedAt": "2026-08-15T19:20:40.657Z",
   "source": {
     "type": "description",
     "ref": null
@@ -254,6 +254,15 @@
       "at": "2026-08-15T19:13:50.334Z",
       "event": "ac-confirmed",
       "detail": "AC7: static scan of modal-host.ts + agent-commands.ts: no from '@opentui/core', no session-info; no-optional-imports.test.ts pass"
+    },
+    {
+      "at": "2026-08-15T19:20:38.232Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-08-15T19:20:40.657Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
