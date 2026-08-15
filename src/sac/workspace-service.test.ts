@@ -29,7 +29,7 @@ test("Viewer, foreign actor, revoked role, and role revision change cannot mutat
   const workspaceRoot = await root(); const owner = service(workspaceRoot);
   await owner.create({ request, requestCorrelationId: "registry-create-2", id: "workspace-beta", title: "Beta" });
   const file = path.join(workspaceRoot, ".metaproject", "workspaces", "workspace-beta", "workspace.json");
-  const manifest = JSON.parse(await readFile(file, "utf8")) as { members: Array<{ subject: string; role: string }> };
+  const manifest = JSON.parse(await readFile(file, "utf8")) as { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> };
   manifest.members.push({ subject: "user:viewer", role: "viewer" }); await writeFile(file, `${JSON.stringify(manifest)}\n`);
   const viewer = service(workspaceRoot, "user:viewer");
   await expect(viewer.list({ request, requestCorrelationId: "registry-list-viewer" })).resolves.toHaveLength(1);
@@ -71,4 +71,95 @@ test("TOCTOU role revalidation denies a write when membership changes after init
     manifest.members = [{ subject: "user:other", role: "owner" }]; await writeFile(file, `${JSON.stringify(manifest)}\n`);
   });
   await expect(pending).rejects.toMatchObject({ code: "access_denied" });
+});
+
+// --- WSL-1..4 lifecycle completion (archive / removeResource / rename / list --include-archived) ---
+// See docs/requirements/sac-workspace-lifecycle/specification.md.
+
+test("archive is owner-only (editor/viewer denied access_denied); sets status archived, bumps updatedAt, and leaves title/id/resources/members otherwise unchanged", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "registry-archive-create-0001", id: "workspace-archive-alpha", title: "Archive Alpha", component: { kind: "component", uri: "./src/a.ts" } });
+  const file = path.join(workspaceRoot, ".metaproject", "workspaces", created.id, "workspace.json");
+  const manifest = JSON.parse(await readFile(file, "utf8")) as { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> };
+  manifest.members.push({ subject: "user:editor", role: "editor" }, { subject: "user:viewer", role: "viewer" });
+  await writeFile(file, `${JSON.stringify(manifest)}\n`);
+  const editor = service(workspaceRoot, "user:editor"); const viewer = service(workspaceRoot, "user:viewer");
+  await expect(editor.archive({ request, requestCorrelationId: "registry-archive-editor-0001", workspaceId: created.id })).rejects.toMatchObject({ code: "access_denied" });
+  await expect(viewer.archive({ request, requestCorrelationId: "registry-archive-viewer-0001", workspaceId: created.id })).rejects.toMatchObject({ code: "access_denied" });
+  const archived = await owner.archive({ request, requestCorrelationId: "registry-archive-owner-0001", workspaceId: created.id });
+  expect(archived.status).toBe("archived");
+  expect(archived.updatedAt).not.toBe(created.updatedAt);
+  expect(archived.id).toBe(created.id);
+  expect(archived.title).toBe(created.title);
+  expect(archived.resources).toEqual(created.resources);
+  expect(archived.members).toEqual(manifest.members);
+});
+
+test("removeResource is owner-only (editor denied access_denied), not_found when uri is absent, and removes exactly the targeted resource while bumping updatedAt", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "registry-remove-create-0001", id: "workspace-remove-alpha", title: "Remove Alpha", component: { kind: "component", uri: "./src/a.ts" } });
+  const withB = await owner.addResource({ request, requestCorrelationId: "registry-remove-add-0001", workspaceId: created.id, resource: { kind: "component", uri: "./src/b.ts" } });
+  expect(withB.resources.map((resource) => resource.uri)).toEqual(["./src/a.ts", "./src/b.ts"]);
+  const file = path.join(workspaceRoot, ".metaproject", "workspaces", created.id, "workspace.json");
+  const manifest = JSON.parse(await readFile(file, "utf8")) as { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> };
+  manifest.members.push({ subject: "user:editor", role: "editor" });
+  await writeFile(file, `${JSON.stringify(manifest)}\n`);
+  const editor = service(workspaceRoot, "user:editor");
+  await expect(editor.removeResource({ request, requestCorrelationId: "registry-remove-editor-0001", workspaceId: created.id, uri: "./src/b.ts" })).rejects.toMatchObject({ code: "access_denied" });
+  await expect(owner.removeResource({ request, requestCorrelationId: "registry-remove-missing-0001", workspaceId: created.id, uri: "./src/missing.ts" })).rejects.toMatchObject({ code: "not_found" });
+  const removed = await owner.removeResource({ request, requestCorrelationId: "registry-remove-owner-0001", workspaceId: created.id, uri: "./src/a.ts" });
+  expect(removed.resources.map((resource: { uri: string }) => resource.uri)).toEqual(["./src/b.ts"]);
+  expect(removed.updatedAt).not.toBe(withB.updatedAt);
+  expect(removed.id).toBe(created.id);
+  expect(removed.title).toBe(created.title);
+  expect(removed.members).toEqual(manifest.members);
+});
+
+test("rename is owner-only (editor denied access_denied) and updates only title and updatedAt, visible immediately via show", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "registry-rename-create-0001", id: "workspace-rename-alpha", title: "Original Title", component: { kind: "component", uri: "./src/a.ts" } });
+  const file = path.join(workspaceRoot, ".metaproject", "workspaces", created.id, "workspace.json");
+  const manifest = JSON.parse(await readFile(file, "utf8")) as { members: Array<{ subject: string; role: "owner" | "editor" | "viewer" }> };
+  manifest.members.push({ subject: "user:editor", role: "editor" });
+  await writeFile(file, `${JSON.stringify(manifest)}\n`);
+  const editor = service(workspaceRoot, "user:editor");
+  await expect(editor.rename({ request, requestCorrelationId: "registry-rename-editor-0001", workspaceId: created.id, title: "Hijacked" })).rejects.toMatchObject({ code: "access_denied" });
+  const renamed = await owner.rename({ request, requestCorrelationId: "registry-rename-owner-0001", workspaceId: created.id, title: "New Title" });
+  expect(renamed.title).toBe("New Title");
+  expect(renamed.updatedAt).not.toBe(created.updatedAt);
+  expect(renamed.id).toBe(created.id);
+  expect(renamed.resources).toEqual(created.resources);
+  expect(renamed.members).toEqual(manifest.members);
+  expect((await owner.show({ request, requestCorrelationId: "registry-rename-show-0001", workspaceId: created.id })).title).toBe("New Title");
+});
+
+test("list excludes archived workspaces by default, includes them with includeArchived: true, and never discloses a workspace to an actor without any role", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const active = await owner.create({ request, requestCorrelationId: "registry-list-active-0001", id: "workspace-list-active", title: "Active" });
+  const toArchive = await owner.create({ request, requestCorrelationId: "registry-list-toarchive-0001", id: "workspace-list-toarchive", title: "ToArchive" });
+  await owner.archive({ request, requestCorrelationId: "registry-list-archive-0001", workspaceId: toArchive.id });
+  const defaultList = await owner.list({ request, requestCorrelationId: "registry-list-default-0001" });
+  expect(defaultList.map((workspace) => workspace.id)).toEqual([active.id]);
+  const explicitFalse = await owner.list({ request, requestCorrelationId: "registry-list-explicitfalse-0001", includeArchived: false });
+  expect(explicitFalse.map((workspace) => workspace.id)).toEqual([active.id]);
+  const withArchived = await owner.list({ request, requestCorrelationId: "registry-list-witharchived-0001", includeArchived: true });
+  expect(withArchived.map((workspace) => workspace.id).sort()).toEqual([active.id, toArchive.id].sort());
+  const foreign = service(workspaceRoot, "user:foreign");
+  await expect(foreign.list({ request, requestCorrelationId: "registry-list-foreign-0001", includeArchived: true })).resolves.toHaveLength(0);
+});
+
+test("addResource against an already-archived workspace is rejected with guard_denied even for an otherwise-authorized owner", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "registry-archived-addresource-create-0001", id: "workspace-archived-add", title: "Archived Add" });
+  await owner.archive({ request, requestCorrelationId: "registry-archived-addresource-archive-0001", workspaceId: created.id });
+  await expect(owner.addResource({ request, requestCorrelationId: "registry-archived-addresource-attempt-0001", workspaceId: created.id, resource: { kind: "component", uri: "./src/a.ts" } })).rejects.toMatchObject({ code: "guard_denied" });
+});
+
+test("show on an archived workspace still succeeds for a role-visible actor — archive changes discovery via list, not direct read", async () => {
+  const workspaceRoot = await root(); const owner = service(workspaceRoot);
+  const created = await owner.create({ request, requestCorrelationId: "registry-archived-show-create-0001", id: "workspace-archived-show", title: "Archived Show" });
+  await owner.archive({ request, requestCorrelationId: "registry-archived-show-archive-0001", workspaceId: created.id });
+  const shown = await owner.show({ request, requestCorrelationId: "registry-archived-show-attempt-0001", workspaceId: created.id });
+  expect(shown.status).toBe("archived");
+  expect(shown.id).toBe(created.id);
 });

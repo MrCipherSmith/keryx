@@ -34,7 +34,11 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const workspace = await service().create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
       console.log(JSON.stringify(workspace, null, 2)); return;
     }
-    if (subcommand === "list") { rejectUnknownOptions(args.slice(1), new Set()); console.log(JSON.stringify(await service().list({ request: undefined, requestCorrelationId: randomUUID() }), null, 2)); return; }
+    if (subcommand === "list") {
+      rejectUnknownOptions(args.slice(1), new Set(["--include-archived"]));
+      const includeArchived = args.includes("--include-archived");
+      console.log(JSON.stringify(await service().list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived }), null, 2)); return;
+    }
     if (subcommand === "show") {
       rejectUnknownOptions(args.slice(2), new Set());
       const id = args[1]; if (!id) throw new Error("Usage: keryx workspace show <workspace-id>");
@@ -45,6 +49,23 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const workspaceId = args[1]; const kind = optionValue(args, "--kind") as WorkspaceResource["kind"] | undefined; const uri = optionValue(args, "--uri"); const revision = optionValue(args, "--revision");
       if (!workspaceId || !kind || !uri) throw new Error("Usage: keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]");
       console.log(JSON.stringify(await service().addResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, resource: { kind, uri, ...(revision ? { revision } : {}) } }), null, 2)); return;
+    }
+    if (subcommand === "archive") {
+      rejectUnknownOptions(args.slice(2), new Set());
+      const workspaceId = args[1]; if (!workspaceId) throw new Error("Usage: keryx workspace archive <workspace-id>");
+      console.log(JSON.stringify(await service().archive({ request: undefined, requestCorrelationId: randomUUID(), workspaceId }), null, 2)); return;
+    }
+    if (subcommand === "remove-resource") {
+      rejectUnknownOptions(args.slice(2), new Set(["--uri"]));
+      const workspaceId = args[1]; const uri = optionValue(args, "--uri");
+      if (!workspaceId || !uri) throw new Error("Usage: keryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>");
+      console.log(JSON.stringify(await service().removeResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, uri }), null, 2)); return;
+    }
+    if (subcommand === "rename") {
+      rejectUnknownOptions(args.slice(2), new Set(["--title"]));
+      const workspaceId = args[1]; const title = optionValue(args, "--title");
+      if (!workspaceId || !title) throw new Error("Usage: keryx workspace rename <workspace-id> --title <title>");
+      console.log(JSON.stringify(await service().rename({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, title }), null, 2)); return;
     }
     if (subcommand === "overview") {
       rejectUnknownOptions(args.slice(2), new Set(["--max-items", "--max-tokens", "--explain"]));
@@ -133,5 +154,5 @@ function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness");
 }

@@ -80,7 +80,7 @@ export class WorkspaceService {
     return manifest;
   }
 
-  async list(input: { request: unknown; requestCorrelationId: string }): Promise<WorkspaceManifest[]> {
+  async list(input: { request: unknown; requestCorrelationId: string; includeArchived?: boolean }): Promise<WorkspaceManifest[]> {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
     await this.requireStrict("read");
     try { await mkdir(this.storageRoot, { recursive: true, mode: 0o700 }); } catch { return []; }
@@ -91,7 +91,7 @@ export class WorkspaceService {
       try {
         const manifest = await this.readManifest(entry.name);
         const role = currentRole(manifest, actor.subject);
-        if (role) visible.push(manifest);
+        if (role && (input.includeArchived === true || manifest.status !== "archived")) visible.push(manifest);
       } catch { /* corrupt or inaccessible workspaces are never disclosed by discovery */ }
     }
     return visible.sort((left, right) => left.id.localeCompare(right.id));
@@ -213,6 +213,7 @@ export class WorkspaceService {
       const manifest = await this.readManifest(input.workspaceId);
       const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, actor.subject));
       if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+      if (manifest.status === "archived") throw new WorkspaceServiceError("guard_denied", "workspace is archived");
       if (manifest.resources.some((resource) => resource.uri === input.resource.uri)) throw new WorkspaceServiceError("conflict", "resource already exists");
       const next: WorkspaceManifest = { ...manifest, resources: [...manifest.resources, input.resource], updatedAt: this.timestamp() };
       await this.validateManifest(next);
@@ -220,6 +221,69 @@ export class WorkspaceService {
       result = next;
     });
     return result!;
+  }
+
+  /** Owner-only: sets status to "archived". Archive changes discovery (list), never direct read (show). */
+  async archive(input: { request: unknown; requestCorrelationId: string; workspaceId: string }): Promise<WorkspaceManifest> {
+    const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.withAuthorizedActor({
+      actorContext: actor,
+      workspaceId: input.workspaceId,
+      action: "write",
+      execute: async (manifest) => {
+        this.requireOwner(manifest, actor);
+        const next: WorkspaceManifest = { ...manifest, status: "archived", updatedAt: this.timestamp() };
+        await this.validateManifest(next);
+        await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+        return next;
+      },
+    });
+  }
+
+  /** Owner-only: sets title. No other field is touched besides updatedAt. */
+  async rename(input: { request: unknown; requestCorrelationId: string; workspaceId: string; title: string }): Promise<WorkspaceManifest> {
+    const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    return this.withAuthorizedActor({
+      actorContext: actor,
+      workspaceId: input.workspaceId,
+      action: "write",
+      execute: async (manifest) => {
+        this.requireOwner(manifest, actor);
+        const next: WorkspaceManifest = { ...manifest, title: input.title, updatedAt: this.timestamp() };
+        await this.validateManifest(next);
+        await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+        return next;
+      },
+    });
+  }
+
+  /** Owner-only mirror of addResource's write mechanics: not_found if the uri is absent, otherwise filters it out of resources[]. */
+  async removeResource(input: { request: unknown; requestCorrelationId: string; workspaceId: string; uri: string }): Promise<WorkspaceManifest> {
+    const actor = await this.requireActor(input.request, input.requestCorrelationId);
+    await this.requireStrict("write");
+    const initial = await this.readManifest(input.workspaceId);
+    const authorization = await this.requireAuthorization(actor, initial.id, "write");
+    let result: WorkspaceManifest | undefined;
+    await withFileLock(this.lockPath(input.workspaceId), async () => {
+      const manifest = await this.readManifest(input.workspaceId);
+      const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, actor.subject));
+      if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+      this.requireOwner(manifest, actor);
+      const resource = manifest.resources.find((candidate) => candidate.uri === input.uri);
+      if (!resource) throw new WorkspaceServiceError("not_found", "workspace resource not found");
+      const next: WorkspaceManifest = { ...manifest, resources: manifest.resources.filter((candidate) => candidate.uri !== input.uri), updatedAt: this.timestamp() };
+      await this.validateManifest(next);
+      await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
+      result = next;
+    });
+    return result!;
+  }
+
+  /** Local owner-only gate — mirrors the inline check already established in collaboration-service.ts's record(). Not a change to authorizeSacUse. */
+  private requireOwner(manifest: WorkspaceManifest, actor: TrustedActorContext): void {
+    if (manifest.members.find((member) => member.subject === actor.subject)?.role !== "owner") {
+      throw new WorkspaceServiceError("access_denied", "owner authority is required");
+    }
   }
 
   private async requireActor(request: unknown, correlationId: string): Promise<TrustedActorContext> {

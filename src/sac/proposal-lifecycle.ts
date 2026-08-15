@@ -64,7 +64,8 @@ export class ProposalLifecycleService {
     proposal.workspaceId = workspaceId;
     await this.validateProposal(proposal);
     await this.validateEvidence(proposal.evidence);
-    return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId, action: "write", execute: async () => {
+    return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId, action: "write", execute: async (manifest) => {
+      if (manifest.status === "archived") throw new ProposalLifecycleError("guard_denied", "workspace is archived");
       const file = this.proposalPath(workspaceId, proposal.id);
       await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
       return withFileLock(`${file}.lock`, async () => {
