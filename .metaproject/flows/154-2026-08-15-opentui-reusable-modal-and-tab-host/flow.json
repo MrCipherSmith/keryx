@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 2,
+  "id": "154",
+  "slug": "opentui-reusable-modal-and-tab-host",
+  "title": "OpenTUI reusable modal and tab host",
+  "status": "in-progress",
+  "createdAt": "2026-08-15T18:55:25.962Z",
+  "updatedAt": "2026-08-15T19:11:49.394Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:646712fbbb4c62afb3742e45a953c6e0085f941531e19173d5aa9a52a88eed07",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Headless tests first (TDD for AC1-AC6)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "code-verifier + review-orchestrator; fix until clean",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Open draft PR feat/tui-modal-tabs that can pass review",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-08-15T18:55:25.962Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-08-15T18:56:39.125Z",
+      "event": "task-added",
+      "detail": "T5: Headless tests first (TDD for AC1-AC6)"
+    },
+    {
+      "at": "2026-08-15T18:56:39.241Z",
+      "event": "task-added",
+      "detail": "T6: code-verifier + review-orchestrator; fix until clean"
+    },
+    {
+      "at": "2026-08-15T18:56:39.344Z",
+      "event": "task-added",
+      "detail": "T7: Open draft PR feat/tui-modal-tabs that can pass review"
+    },
+    {
+      "at": "2026-08-15T18:56:39.880Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-08-15T18:56:39.985Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-08-15T19:05:44.065Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-08-15T19:11:49.122Z",
+      "event": "task-done",
+      "detail": "T5: Headless tests first (TDD for AC1-AC6)"
+    },
+    {
+      "at": "2026-08-15T19:11:49.223Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-08-15T19:11:49.306Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-08-15T19:11:49.394Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}
